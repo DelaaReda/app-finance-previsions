@@ -13,6 +13,7 @@ Sprint-5 livré à ~80%.
 - Fusion importante : `feat/backtests-eval-pages` → `main` (merge `sprint-5 2/5`).
 - Nouveaux artefacts ajoutés : pages `/backtests`, `/evaluation` et agents `backtest_agent`, `evaluation_agent`.
 - Actions requises : validation UX complète (MCP + web_eval_agent), génération de données par les agents, et ajout d'artifacts/logs.
+ - Actions requises : validation UX complète via `dash.testing`, génération de données par les agents, et ajout d'artifacts/logs.
 
 ---
 
@@ -53,20 +54,20 @@ make evaluate || PYTHONPATH=src python -m src.agents.evaluation_agent --horizon 
 ```bash
 make dash-restart-bg
 make dash-smoke        # vérifie HTTP 200 sur routes connues
-make dash-mcp-test     # exécute le script MCP (UX automatisé)
 pytest -q              # exécute les tests unitaires
 ```
 
-5. Lancer `web_eval_agent` (facultatif / visible) pour naviguer et capturer screenshots :
+5. Exécuter les tests UI automatisés basés sur `dash.testing` :
 
-```json
-{ "url": "http://localhost:8050", "task": "Navigate through all pages including Backtests and Evaluation; verify data tables, metrics, charts and absence of console errors.", "headless_browser": false }
+```bash
+# Activer les e2e Dash tests (les tests e2e sont gatés par la variable d'env)
+ENABLE_DASH_E2E=1 pytest -q tests/e2e
 ```
 
 6. Collecter et joindre les sorties :
 
-- `logs/mcp_ui_test.log` (stdout/stderr du script MCP)
-- `artifacts/web_eval/report.json` et `artifacts/web_eval/screenshots/*`
+- `logs/ui_tests.log` (stdout/stderr des tests UI)
+- `artifacts/ui_eval/report.json` et `artifacts/ui_eval/screenshots/*` (générés par les tests dash.testing)
 - Exemplaires de `data/backtest/dt=*/details.parquet` et `data/evaluation/dt=*/metrics.json` si possible
 
 ---
@@ -77,7 +78,7 @@ pytest -q              # exécute les tests unitaires
 - Les DataTables et graphiques se chargent sans erreurs de callback.
 - Fichiers datés produits par les agents (dt=YYYYMMDD) présents.
 - Aucun stacktrace dans `logs/` et pas de secrets exposés.
-- MCP / web_eval_agent produit un rapport et des screenshots (artifacts/web_eval/).
+- Les tests `dash.testing` produisent les rapports et screenshots attendus (artifacts/ui_eval/).
 
 ---
 
@@ -93,7 +94,7 @@ pytest -q              # exécute les tests unitaires
 ## Recommandations & Next steps
 
 1. Exécuter la séquence de validation ci‑dessus et joindre les logs/screenshots à ce rapport.
-2. Si des erreurs MCP apparaissent, open a bug PR with failing artefacts (screenshots + console errors).
+2. Si des erreurs apparaissent dans les tests dash.testing, ouvrir une bug PR avec les artefacts (screenshots + console errors) et les logs des tests.
 3. Ajouter `data/backtest/` et `data/evaluation/` aux patterns de `.gitignore` si des fichiers temporaires locaux apparaissent par erreur.
 4. Après validation, marquer Sprint-5 comme `4/5` dans `docs/PROGRESS.md` et appliquer le tag Git `sprint-5-complete` si souhaité.
 
