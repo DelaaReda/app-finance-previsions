@@ -29,6 +29,8 @@ import warnings
 import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple, Any
+import sys
+sys.modules[__name__] = sys.modules[__name__]
 
 import numpy as np
 import pandas as pd
