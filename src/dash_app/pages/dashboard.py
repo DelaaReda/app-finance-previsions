@@ -47,6 +47,53 @@ def _top_final(dt: str | None = None) -> dbc.Card:
         return dbc.Card(dbc.CardBody([html.Small(f"Erreur lecture final: {e}")]))
 
 
+def _top_commodities(dt: str | None = None) -> dbc.Card:
+    """Display top commodity forecasts"""
+    try:
+        if dt:
+            target = Path('data/forecast') / f'dt={dt}' / 'commodities.parquet'
+            if not target.exists():
+                return dbc.Card(dbc.CardBody([html.Small(f"Aucun commodities.parquet pour dt={dt}.")]))
+            df = pd.read_parquet(target)
+        else:
+            parts = sorted(Path('data/forecast').glob('dt=*/commodities.parquet'))
+            if not parts:
+                return dbc.Card(dbc.CardBody([html.Small("Aucune donnée commodities.parquet trouvée.")]))
+            df = pd.read_parquet(parts[-1])
+
+        if df.empty:
+            return dbc.Card(dbc.CardBody([html.Small("commodities.parquet vide.")]))
+
+        # Get top commodities by confidence for 1m horizon
+        top = df[df.get('horizon', pd.Series())=='1m'].sort_values('confidence', ascending=False).head(5)
+
+        if top.empty or 'commodity_name' not in top.columns or 'confidence' not in top.columns:
+            return dbc.Card(dbc.CardBody([html.Small("Données insuffisantes (colonnes manquantes).")]))
+
+        # Format display data
+        display_data = []
+        for _, row in top.iterrows():
+            display_data.append({
+                'Actif': row.get('commodity_name', 'N/A'),
+                'Symbole': row.get('ticker', 'N/A'),
+                'Prix': f"{row.get('current_price', 0):.2f}",
+                'Confiance': f"{row.get('confidence', 0):.1%}",
+                'Direction': row.get('direction', 'flat').upper()
+            })
+
+        table = dbc.Table.from_dataframe(
+            pd.DataFrame(display_data),
+            striped=True, bordered=False, hover=True, size='sm'
+        )
+
+        return dbc.Card([
+            dbc.CardHeader("Top Commodities (1m)"),
+            dbc.CardBody(table),
+        ])
+    except Exception as e:
+        return dbc.Card(dbc.CardBody([html.Small(f"Erreur lecture commodities: {e}")]))
+
+
 def _macro_kpis(dt: str | None = None) -> dbc.Card:
     try:
         base = Path('data/macro/forecast')
@@ -60,7 +107,7 @@ def _macro_kpis(dt: str | None = None) -> dbc.Card:
             if parts:
                 fp = parts[-1]
         if fp is None or not fp.exists():
-            return dbc.Card([dbc.CardHeader("Macro — KPIs"), dbc.CardBody([html.Small("Aucun macro_forecast.parquet trouvé." )])])
+            return dbc.Card([dbc.CardHeader("Macro — KPIs"), dbc.CardBody([html.Small("Aucun macro_forecast.parquet trouvé.")])])
         df = pd.read_parquet(fp)
         if df is None or df.empty:
             return dbc.Card([dbc.CardHeader("Macro — KPIs"), dbc.CardBody([html.Small("macro_forecast.parquet vide.")])])
@@ -140,7 +187,10 @@ def layout():
     return html.Div([
         header,
         controls,
-        html.Div(id='dash-top-final', children=_top_final(default_dt), className="mb-3"),
+        dbc.Row([
+            dbc.Col(html.Div(id='dash-top-final', children=_top_final(default_dt)), md=6),
+            dbc.Col(_top_commodities(default_dt), md=6),
+        ], className="mb-3"),
         _macro_kpis(default_dt),
     ])
 

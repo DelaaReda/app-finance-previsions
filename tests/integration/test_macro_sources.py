@@ -11,8 +11,8 @@ PROJECT_SRC = PROJECT_ROOT / "src"
 @pytest.mark.integration
 def test_fred_series_csv_or_api():
     sys.path.insert(0, str(PROJECT_SRC))
-    mod = __import__("apps.macro_sector_app", fromlist=["load_fred_series"])  # reuse robust loader
-    load_fred_series = getattr(mod, "load_fred_series")
+    # Import the real function directly from the project source tree
+    from apps.macro_sector_app import load_fred_series
     fred_key = os.getenv("FRED_API_KEY")
     df = load_fred_series("CPIAUCSL", fred_key=fred_key, start="2015-01-01")
     assert isinstance(df, pd.DataFrame)
@@ -26,10 +26,11 @@ def test_gscpi_and_gpr_fetchers():
     if not os.getenv("AF_ALLOW_INTERNET"):
         pytest.skip("Set AF_ALLOW_INTERNET=1 to run network integration tests")
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("apps.macro_sector_app")
-    gscpi = macro.fetch_gscpi()
+    # import specific fetchers directly
+    from apps.macro_sector_app import fetch_gscpi, fetch_gpr
+    gscpi = fetch_gscpi()
     assert gscpi is None or isinstance(gscpi, pd.DataFrame)
-    gpr = macro.fetch_gpr()
+    gpr = fetch_gpr()
     assert gpr is None or isinstance(gpr, pd.DataFrame)
 
 
@@ -38,8 +39,8 @@ def test_yfinance_multi_prices():
     if not os.getenv("AF_ALLOW_INTERNET"):
         pytest.skip("Set AF_ALLOW_INTERNET=1 to run network integration tests")
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("apps.macro_sector_app")
-    prices = macro.get_multi_yf(["SPY", "QQQ"], start="2020-01-01")
+    from apps.macro_sector_app import get_multi_yf
+    prices = get_multi_yf(["SPY", "QQQ"], start="2020-01-01")
     assert isinstance(prices, pd.DataFrame)
     assert prices.shape[1] >= 1
 
@@ -58,9 +59,9 @@ def test_fred_api_real_json(monkeypatch):
         pytest.skip("FRED_API_KEY not set; export it to run this test")
 
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("analytics.phase3_macro", fromlist=["fetch_fred_series"])  # real module
+    from analytics.phase3_macro import fetch_fred_series
 
-    df = macro.fetch_fred_series(["CPIAUCSL", "UNRATE"], start="2015-01-01")
+    df = fetch_fred_series(["CPIAUCSL", "UNRATE"], start="2015-01-01")
     # Inputs respected (columns present)
     assert set(["CPIAUCSL", "UNRATE"]).issubset(df.columns)
     # Outputs validated (non-empty, datetime index, recent range)
@@ -82,9 +83,9 @@ def test_fred_api_real_csv_fallback(monkeypatch):
     monkeypatch.delenv("FRED_API_KEY", raising=False)
 
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("analytics.phase3_macro", fromlist=["fetch_fred_series"])  # real module
+    from analytics.phase3_macro import fetch_fred_series
 
-    df = macro.fetch_fred_series(["CPIAUCSL"], start="2018-01-01")
+    df = fetch_fred_series(["CPIAUCSL"], start="2018-01-01")
     assert "CPIAUCSL" in df.columns
     assert isinstance(df.index, pd.DatetimeIndex)
     assert len(df["CPIAUCSL"].dropna()) > 0
@@ -100,9 +101,9 @@ def test_get_macro_features_real():
         pytest.skip("Set AF_ALLOW_INTERNET=1 to run network integration tests")
 
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("analytics.phase3_macro", fromlist=["get_macro_features"])  # real module
+    from analytics.phase3_macro import get_macro_features
 
-    feats = macro.get_macro_features()
+    feats = get_macro_features()
     assert isinstance(feats, dict)
     # Either a top-level error (fatal) or a valid structure
     if "error" in feats:
@@ -144,9 +145,9 @@ def test_fred_api_key_from_config_real_json(monkeypatch):
     monkeypatch.setattr(_url, "urlopen", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("CSV disabled for test")))
 
     sys.path.insert(0, str(PROJECT_SRC))
-    macro = __import__("analytics.phase3_macro", fromlist=["fetch_fred_series"])  # real module
+    from analytics.phase3_macro import fetch_fred_series
 
-    df = macro.fetch_fred_series(["CPIAUCSL"], start="2018-01-01")
+    df = fetch_fred_series(["CPIAUCSL"], start="2018-01-01")
     assert "CPIAUCSL" in df.columns
     assert isinstance(df.index, pd.DatetimeIndex)
     assert len(df["CPIAUCSL"].dropna()) > 0
@@ -161,7 +162,7 @@ def test_fred_api_series_missing_is_nonfatal(monkeypatch):
     import requests
 
     sys.path.insert(0, str(PROJECT_SRC))
-    mod = __import__("analytics.phase3_macro", fromlist=["fetch_fred_series"])  # real module
+    from analytics.phase3_macro import fetch_fred_series
 
     # Force a key so JSON path is used
     monkeypatch.setenv("FRED_API_KEY", "test_key_123")
@@ -191,7 +192,7 @@ def test_fred_api_series_missing_is_nonfatal(monkeypatch):
 
     monkeypatch.setattr("requests.get", fake_get)
 
-    df = mod.fetch_fred_series(["NAPM", "CPIAUCSL"], start="2015-01-01")
+    df = fetch_fred_series(["NAPM", "CPIAUCSL"], start="2015-01-01")
     # The valid series should be present
     assert "CPIAUCSL" in df.columns
     assert len(df["CPIAUCSL"]) >= 1
@@ -206,7 +207,7 @@ def test_fred_api_invalid_key_is_fatal(monkeypatch):
     import requests
 
     sys.path.insert(0, str(PROJECT_SRC))
-    mod = __import__("analytics.phase3_macro", fromlist=["fetch_fred_series"])  # real module
+    from analytics.phase3_macro import fetch_fred_series
 
     monkeypatch.setenv("FRED_API_KEY", "bad_key")
 
@@ -224,4 +225,4 @@ def test_fred_api_invalid_key_is_fatal(monkeypatch):
     monkeypatch.setattr("requests.get", fake_get)
 
     with pytest.raises(RuntimeError):
-        mod.fetch_fred_series(["CPIAUCSL"], start="2015-01-01")
+        fetch_fred_series(["CPIAUCSL"], start="2015-01-01")

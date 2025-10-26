@@ -1,4 +1,20 @@
 ```markdown
+🎯 SPRINT-7 : AGENT COMMODITIES + STABILISATION ! 🚀
+
+Livré:
+- ✅ Agent Commodities: prévisions pour 5 matières premières (Or, Pétrole, Argent, Cuivre, Maïs)
+- ✅ Intégration Dashboard: section Top Commodities avec prix et confiance
+- ✅ Page Forecasts: support multi-actifs (Actions + Commodities)
+- ✅ Tests smoke: inclut /backtests et /evaluation
+- ✅ Données corrigées: dates historiques alignées avec prix disponibles
+
+Prochaines étapes:
+- Enrichissement macro: PMI/ISM, VIX, spreads de crédit
+- Page Qualité: anomalies détectées par data_quality
+- Tests UI automatisés: dash.testing + Playwright
+
+⸻
+
 🎯 SPRINT-5 : 2/5 PAGES COMPLÈTEMENT FONCTIONNELLES ! 🚀
 
 Pages migrées selon plan ATLAS :

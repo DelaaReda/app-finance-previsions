@@ -834,7 +834,7 @@ def test_fred_data_failures():
     assert components["Commodities_YoY"] is not None
 
 
-def test_app_error_termination_handling():
+def test_app_error_termination_handling(caplog, capsys):
     """
     Test que l'app gère correctement les erreurs de terminaison du processus.
     """
@@ -917,7 +917,10 @@ def test_app_error_termination_handling():
     assert macro_result["macro_nowcast"]["components"]["GPR"] is None
 
     # Vérifier que les warnings sont loggués (pas avec pytest.warns car interceptés par trace_call)
-    warning_logged = any("NameResolutionError" in record.message for record in caplog.records)
+    # Accept warnings captured by caplog OR printed to stdout (some loggers write JSON to stdout)
+    warning_logged = any("NameResolutionError" in record.message for record in caplog.records) or (
+        "NameResolutionError" in capsys.readouterr().out
+    )
     assert warning_logged, "Warning NameResolutionError non trouvé dans les logs"
 
 
@@ -971,5 +974,8 @@ def test_app_error_termination_handling():
     assert macro_result["macro_nowcast"]["components"]["GSCPI"] is None
 
     # Vérifier que les warnings sont loggués (pas avec pytest.warns car interceptés par trace_call)
-    warning_logged = any("404 Client Error" in record.message for record in caplog.records)
+    # Accept warnings captured by caplog OR printed to stdout
+    warning_logged = any("404 Client Error" in record.message for record in caplog.records) or (
+        "404 Client Error" in capsys.readouterr().out
+    )
     assert warning_logged, "Warning 404 Client Error non trouvé dans les logs"

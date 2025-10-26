@@ -8,7 +8,7 @@ import dash
 
 
 def _load_forecasts_data() -> pd.DataFrame:
-    """Load latest forecasts data"""
+    """Load latest equity forecasts data"""
     try:
         parts = sorted(Path('data/forecast').glob('dt=*'))
         if parts:
@@ -21,7 +21,39 @@ def _load_forecasts_data() -> pd.DataFrame:
         return pd.DataFrame({'error': [f"Erreur chargement forecasts: {e}"]})
 
 
+def _load_commodity_forecasts_data() -> pd.DataFrame:
+    """Load latest commodity forecasts data"""
+    try:
+        parts = sorted(Path('data/forecast').glob('dt=*'))
+        if parts:
+            latest = parts[-1]
+            commodities_path = latest / 'commodities.parquet'
+            if commodities_path.exists():
+                return pd.read_parquet(commodities_path)
+        return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame({'error': [f"Erreur chargement commodities: {e}"]})
+
+
 def layout():
+    # Asset type selector
+    asset_selector = dbc.Row([
+        dbc.Col([
+            html.Small("Type d'actif: "),
+            dcc.Dropdown(
+                id='forecasts-asset-type',
+                options=[
+                    {'label': 'Actions', 'value': 'equity'},
+                    {'label': 'Matières Premières', 'value': 'commodity'},
+                    {'label': 'Tous', 'value': 'all'}
+                ],
+                value='all',
+                clearable=False,
+                style={"minWidth": "200px"}
+            )
+        ], md=4),
+    ], className="mb-3")
+
     # Controls
     controls = dbc.Row([
         dbc.Col([
@@ -40,19 +72,19 @@ def layout():
             )
         ], md=3),
         dbc.Col([
-            html.Small("Recherche ticker: "),
-            dcc.Input(id='forecasts-ticker-search', type='text', placeholder='AAPL, MSFT...', debounce=True)
+            html.Small("Recherche: "),
+            dcc.Input(id='forecasts-search', type='text', placeholder='AAPL, Gold, Oil...', debounce=True)
         ], md=3),
         dbc.Col([
             html.Small("Trier par: "),
             dcc.Dropdown(
                 id='forecasts-sort-by',
                 options=[
-                    {'label': 'Score final', 'value': 'final_score'},
-                    {'label': 'Ticker', 'value': 'ticker'},
+                    {'label': 'Score/Confiance', 'value': 'score'},
+                    {'label': 'Nom', 'value': 'name'},
                     {'label': 'Horizon', 'value': 'horizon'}
                 ],
-                value='final_score',
+                value='score',
                 clearable=False,
                 style={"minWidth": "150px"}
             )
@@ -60,54 +92,125 @@ def layout():
     ], className="mb-3")
 
     return html.Div([
-        html.H3("Forecasts - Prévisions Multi-Tickers"),
+        html.H3("Forecasts - Prévisions Multi-Actifs"),
+        asset_selector,
         controls,
-        html.Div(id='forecasts-table', className="mb-3"),
-        html.Div(id='forecasts-summary', className="mb-3"),
+        html.Div(id='forecasts-content', className="mb-3"),
     ])
 
 
 @dash.callback(
-    dash.Output('forecasts-table', 'children'),
-    dash.Output('forecasts-summary', 'children'),
+    dash.Output('forecasts-content', 'children'),
+    dash.Input('forecasts-asset-type', 'value'),
     dash.Input('forecasts-horizon-filter', 'value'),
-    dash.Input('forecasts-ticker-search', 'value'),
+    dash.Input('forecasts-search', 'value'),
     dash.Input('forecasts-sort-by', 'value')
 )
-def update_forecasts(horizon, ticker_search, sort_by):
+def update_forecasts(asset_type, horizon, search, sort_by):
     try:
-        df = _load_forecasts_data()
+        # Load data based on asset type
+        if asset_type == 'equity':
+            df = _load_forecasts_data()
+            asset_name = "Actions"
+        elif asset_type == 'commodity':
+            df = _load_commodity_forecasts_data()
+            asset_name = "Matières Premières"
+        else:  # 'all'
+            # Load both datasets
+            equity_df = _load_forecasts_data()
+            commodity_df = _load_commodity_forecasts_data()
+
+            # Combine them
+            if not equity_df.empty and 'error' not in equity_df.columns:
+                equity_df['asset_type'] = 'equity'
+                if not commodity_df.empty and 'error' not in commodity_df.columns:
+                    commodity_df['asset_type'] = 'commodity'
+                    df = pd.concat([equity_df, commodity_df], ignore_index=True)
+                else:
+                    df = equity_df
+            elif not commodity_df.empty and 'error' not in commodity_df.columns:
+                commodity_df['asset_type'] = 'commodity'
+                df = commodity_df
+            else:
+                df = pd.DataFrame()
 
         if df.empty or 'error' in df.columns:
-            return (
-                dbc.Alert("Aucune prévision disponible.", color="warning"),
-                dbc.Alert("Erreur lors du chargement des prévisions.", color="danger")
-            )
+            return dbc.Alert("Aucune prévision disponible.", color="warning")
 
         # Filter by horizon
         if horizon != 'all':
             df = df[df['horizon'] == horizon]
 
-        # Filter by ticker search
-        if ticker_search:
-            tickers = [t.strip().upper() for t in ticker_search.split(',') if t.strip()]
-            df = df[df['ticker'].isin(tickers)]
+        # Filter by search
+        if search:
+            search_terms = [t.strip().lower() for t in search.split(',') if t.strip()]
+            mask = pd.Series(False, index=df.index)
+            for term in search_terms:
+                # Search in ticker, commodity_name, or category
+                if 'commodity_name' in df.columns:
+                    mask |= df['ticker'].str.lower().str.contains(term, na=False)
+                    mask |= df['commodity_name'].str.lower().str.contains(term, na=False)
+                    mask |= df['category'].str.lower().str.contains(term, na=False)
+                else:
+                    mask |= df['ticker'].str.lower().str.contains(term, na=False)
+            df = df[mask]
 
         if df.empty:
-            return (
-                dbc.Alert("Aucune prévision trouvée avec ces critères.", color="info"),
-                html.Small("Aucune donnée à résumer.")
-            )
+            return dbc.Alert("Aucune prévision trouvée avec ces critères.", color="info")
 
-        # Sort
-        if sort_by in df.columns:
-            df = df.sort_values(sort_by, ascending=(sort_by != 'final_score'))
+        # Sort based on asset type
+        if asset_type == 'commodity' or (asset_type == 'all' and 'confidence' in df.columns):
+            # For commodities, sort by confidence
+            sort_column = 'confidence' if 'confidence' in df.columns else 'expected_return'
+            df = df.sort_values(sort_column, ascending=False)
+        elif 'final_score' in df.columns:
+            # For equity, sort by final_score
+            df = df.sort_values('final_score', ascending=False)
+        else:
+            # Default sort by expected_return
+            df = df.sort_values('expected_return', ascending=False)
 
-        # Prepare display data
-        display_df = df[['ticker', 'horizon', 'final_score', 'direction', 'confidence', 'expected_return']].copy()
-        display_df['confidence'] = display_df['confidence'].fillna(0).apply(lambda x: f"{x:.1%}")
-        display_df['expected_return'] = display_df['expected_return'].fillna(0).apply(lambda x: f"{x:.2%}")
-        display_df['final_score'] = display_df['final_score'].fillna(0).apply(lambda x: f"{x:.2f}")
+        # Prepare display data based on asset type
+        if asset_type == 'commodity' or (asset_type == 'all' and 'commodity_name' in df.columns):
+            # Commodity display format
+            display_columns = ['commodity_name', 'ticker', 'category', 'horizon', 'current_price', 'expected_price', 'expected_return', 'direction', 'confidence', 'unit']
+            available_columns = [col for col in display_columns if col in df.columns]
+
+            display_df = df[available_columns].copy()
+            display_df['confidence'] = display_df['confidence'].fillna(0).apply(lambda x: f"{x:.1%}")
+            display_df['expected_return'] = display_df['expected_return'].fillna(0).apply(lambda x: f"{x:.2%}")
+            display_df['current_price'] = display_df['current_price'].fillna(0).apply(lambda x: f"{x:.2f}")
+            display_df['expected_price'] = display_df['expected_price'].fillna(0).apply(lambda x: f"{x:.2f}")
+
+            # Rename columns for display
+            display_df = display_df.rename(columns={
+                'commodity_name': 'Nom',
+                'ticker': 'Symbole',
+                'category': 'Catégorie',
+                'horizon': 'Horizon',
+                'current_price': 'Prix Actuel',
+                'expected_price': 'Prix Cible',
+                'expected_return': 'Rendement Attendu',
+                'direction': 'Direction',
+                'confidence': 'Confiance',
+                'unit': 'Unité'
+            })
+        else:
+            # Equity display format
+            display_df = df[['ticker', 'horizon', 'final_score', 'direction', 'confidence', 'expected_return']].copy()
+            display_df['confidence'] = display_df['confidence'].fillna(0).apply(lambda x: f"{x:.1%}")
+            display_df['expected_return'] = display_df['expected_return'].fillna(0).apply(lambda x: f"{x:.2%}")
+            display_df['final_score'] = display_df['final_score'].fillna(0).apply(lambda x: f"{x:.2f}")
+
+            # Rename columns for display
+            display_df = display_df.rename(columns={
+                'ticker': 'Symbole',
+                'horizon': 'Horizon',
+                'final_score': 'Score Final',
+                'direction': 'Direction',
+                'confidence': 'Confiance',
+                'expected_return': 'Rendement Attendu'
+            })
 
         # Create table
         table = dbc.Table.from_dataframe(
@@ -115,34 +218,45 @@ def update_forecasts(horizon, ticker_search, sort_by):
             striped=True, bordered=False, hover=True, size='sm'
         )
 
-        table_card = dbc.Card([
-            dbc.CardHeader(f"Prévisions ({len(df)} résultats)"),
-            dbc.CardBody(table)
-        ])
-
         # Summary
         summary_items = []
         summary_items.append(html.Li(f"Total prévisions: {len(df)}"))
-        summary_items.append(html.Li(f"Tickers uniques: {df['ticker'].nunique()}"))
+
+        if 'commodity_name' in df.columns:
+            summary_items.append(html.Li(f"Actifs uniques: {df['commodity_name'].nunique()}"))
+            summary_items.append(html.Li(f"Catégories: {', '.join(df['category'].unique())}"))
+        else:
+            summary_items.append(html.Li(f"Tickers uniques: {df['ticker'].nunique()}"))
+
         summary_items.append(html.Li(f"Horizons: {', '.join(df['horizon'].unique())}"))
 
+        # Calculate average score/confidence
         if 'final_score' in df.columns:
-                try:
-                    avg_score = float(df['final_score'].mean())
-                    summary_items.append(html.Li(f"Score moyen: {avg_score:.2f}"))
-                except Exception:
-                    # ignore formatting errors
-                    pass
+            try:
+                avg_score = float(df['final_score'].mean())
+                summary_items.append(html.Li(f"Score moyen: {avg_score:.2f}"))
+            except Exception:
+                pass
+        elif 'confidence' in df.columns:
+            try:
+                avg_confidence = float(df['confidence'].mean())
+                summary_items.append(html.Li(f"Confiance moyenne: {avg_confidence:.1%}"))
+            except Exception:
+                pass
 
-        summary_card = dbc.Card([
-            dbc.CardHeader("Résumé"),
-            dbc.CardBody(html.Ul(summary_items))
+        content = dbc.Card([
+            dbc.CardHeader(f"Prévisions {asset_name} ({len(df)} résultats)"),
+            dbc.CardBody([
+                table,
+                html.Hr(),
+                dbc.Card([
+                    dbc.CardHeader("Résumé"),
+                    dbc.CardBody(html.Ul(summary_items))
+                ])
+            ])
         ])
 
-        return table_card, summary_card
+        return content
 
     except Exception as e:
-        return (
-            dbc.Alert("Erreur affichage prévisions.", color="danger"),
-            dbc.Alert(f"Erreur résumé: {e}", color="danger")
-        )
+        return dbc.Alert(f"Erreur affichage prévisions: {e}", color="danger")
