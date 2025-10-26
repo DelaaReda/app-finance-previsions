@@ -80,8 +80,8 @@ def _create_forecasts_table(forecasts_df: pd.DataFrame) -> dbc.Table:
 
     # Prepare display data
     display_df = forecasts_df[['horizon', 'final_score', 'direction', 'confidence', 'expected_return']].copy()
-    display_df['confidence'] = display_df['confidence'].fillna(0).apply(lambda x: f"{x".1%"}")
-    display_df['expected_return'] = display_df['expected_return'].fillna(0).apply(lambda x: f"{x".2%"}")
+    display_df['confidence'] = display_df['confidence'].fillna(0).apply(lambda x: f"{x:.1%}")
+    display_df['expected_return'] = display_df['expected_return'].fillna(0).apply(lambda x: f"{x:.2%}")
 
     return dbc.Table.from_dataframe(
         display_df.reset_index(drop=True),
@@ -181,11 +181,11 @@ def analyze_ticker(n_clicks, ticker):
             stats_items = []
             if 'close' in prices_df.columns:
                 current_price = prices_df['close'].iloc[-1]
-                stats_items.append(html.Li(f"Prix actuel: ${current_price".2f"}"))
+                stats_items.append(html.Li(f"Prix actuel: ${current_price:.2f}"))
 
                 if len(prices_df) > 1:
                     change_1d = prices_df['close'].iloc[-1] - prices_df['close'].iloc[-2]
-                    stats_items.append(html.Li(f"Variation 1j: ${change_1d"+.2f"}"))
+                    stats_items.append(html.Li(f"Variation 1j: ${change_1d:.2f}"))
 
             if stats_items:
                 sections.append(dbc.Card([

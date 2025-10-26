@@ -1,3 +1,20 @@
+```markdown
+🎯 SPRINT-5 : 2/5 PAGES COMPLÈTEMENT FONCTIONNELLES ! 🚀
+
+Pages migrées selon plan ATLAS :
+- ✅ News/Aggregation : Filtres, synthèse IA, table actualités
+- ✅ Deep Dive : Analyse ticker complète avec graphiques et données
+
+Prochaines étapes (priorités ATLAS) :
+- Forecasts multi-ticker - DataTable avec filtres par horizon/ticker
+- Backtests/Evaluation - Agents + pages pour métriques de performance
+- Quality dashboard - Anomalies détectées par data_quality
+
+L'application Dash compte maintenant 10 pages fonctionnelles !
+
+⸻
+
+Progress & Roadmap (Investor App)
 Progress & Roadmap (Investor App)
 
 Recent (UI/Ops)
