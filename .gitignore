@@ -56,6 +56,9 @@ credentials.json
 .github/instructions/codacy.instructions.md
 data/macro/forecast/dt=20251026/
 data/quality/dt=20251026/
+## Generated agent outputs (ignore dated partitions from local runs)
+data/backtest/dt=*
+data/evaluation/dt=*
 data/
 docs/old-context/chat.md
 .codacy/
