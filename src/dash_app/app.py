@@ -62,7 +62,7 @@ def sidebar() -> html.Div:
 
 def _page_registry() -> Dict[str, Callable[[], html.Div]]:
     # Use absolute imports so running as script works with PYTHONPATH=src
-    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts
+    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation
 
     return {
         "/": dashboard.layout,
@@ -75,6 +75,8 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/news": news.layout,
         "/deep_dive": deep_dive.layout,
         "/forecasts": forecasts.layout,
+    "/backtests": backtests.layout,
+    "/evaluation": evaluation.layout,
         "/agents": agents_status.layout,
         "/observability": observability.layout,
     }

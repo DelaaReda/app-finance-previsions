@@ -200,6 +200,14 @@ equity-forecast:
 forecast-aggregate:
 	PYTHONPATH=$$PWD/src $(PYTHON) -m src.agents.forecast_aggregator_agent
 
+.PHONY: backtest evaluate
+
+backtest:
+	PYTHONPATH=$$PWD/src $(PYTHON) -m src.agents.backtest_agent
+
+evaluate:
+	PYTHONPATH=$$PWD/src $(PYTHON) -m src.agents.evaluation_agent
+
 # --- Macro & freshness agents ---
 .PHONY: macro-forecast update-monitor
 

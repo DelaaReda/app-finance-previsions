@@ -127,8 +127,12 @@ def update_forecasts(horizon, ticker_search, sort_by):
         summary_items.append(html.Li(f"Horizons: {', '.join(df['horizon'].unique())}"))
 
         if 'final_score' in df.columns:
-            avg_score = df['final_score'].mean()
-            summary_items.append(html.Li(f"Score moyen: {avg_score".2f"}"))
+                try:
+                    avg_score = float(df['final_score'].mean())
+                    summary_items.append(html.Li(f"Score moyen: {avg_score:.2f}"))
+                except Exception:
+                    # ignore formatting errors
+                    pass
 
         summary_card = dbc.Card([
             dbc.CardHeader("Résumé"),
