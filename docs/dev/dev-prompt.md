@@ -125,6 +125,13 @@ D. Tests unitaires / UI
 	•	Mets à jour docs/PROGRESS.md (Delivered / In progress / Next + comment valider : URLs + commandes).
 	•	Documente rapidement dans docs/architecture/dash_overview.md toute nouvelle page/agent (I/O + fichiers lus/écrits).
 
+	•	Commit messages requirements:
+		- Inclure le numéro de sprint et l'état d'avancement au début du message sous la forme `sprint-<N> <A/B>` où `<A/B>` est le nombre d'items livrés sur le total du sprint (ex.: `sprint-5 1/5 feat(ui): add forecasts page`).
+		- Exemple complet : `sprint-5 2/5 feat(agents): add backtest agent and tests`.
+		- Raison : facilite le tracking de l'avancement par sprint dans les logs et les releases.
+
+ 
+
 ⸻
 
 🧯 Dépannage rapide (FAQ)
