@@ -157,3 +157,12 @@ Planned/Started (agents)
 Phase 2 (in progress)
 - Macro forecast agent: writes `data/macro/forecast/dt=YYYYMMDD/macro_forecast.{json,parquet}` with CPI YoY, yield curve slope, unemployment and a crude recession probability across horizons (1m/3m/12m). Target: `make macro-forecast`.
 - Update monitor agent: writes `data/quality/dt=YYYYMMDD/freshness.json` with latest partition dates and coverage checks; target: `make update-monitor`. Observability reads and displays the summary.
+Sprint‑7 — Livrables validés
+- Pages: News, Deep Dive, Forecasts, Backtests, Evaluation intégrées; macro pages enrichies (courbes/badges) selon couverture disponible; badge global Observability en sidebar.
+- Agents: commodity_forecast_agent ajouté; mise à jour docs QA/Dev; smoke 200 sur routes.
+
+Sprint‑8 — Objectifs et avancement
+- Qualité: page Quality (anomalies + freshness) — livré.
+- Tests UI: activer dash.testing sur Dashboard/Signals/Agents/Backtests/Evaluation — en cours.
+- MCP UX: stabiliser make dash-mcp-test + doc QA_REPORT.md — à faire en local (Playwright).
+- Process: commits préfixés `sprint-8 X/Y`, PROGRESS maintenu à jour — en cours.
