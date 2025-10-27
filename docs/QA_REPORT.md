@@ -64,10 +64,22 @@ pytest -q              # exécute les tests unitaires
 ENABLE_DASH_E2E=1 pytest -q tests/e2e
 ```
 
-6. Collecter et joindre les sorties :
+6. (Optionnel) Évaluation MCP/Playwright (UX automatisée) :
+
+Pré‑requis: Node/npm installés, Playwright MCP disponible.
+
+```bash
+make dash-mcp-test   # lance ops/ui/mcp_dash_smoke.mjs; produit un rapport et des captures
+```
+
+Sorties attendues:
+- `data/reports/dt=YYYYMMDD/dash_smoke_mcp_report.json`
+- `artifacts/smoke/dash_mcp/*.png` (captures par route)
+
+7. Collecter et joindre les sorties :
 
 - `logs/ui_tests.log` (stdout/stderr des tests UI)
-- `artifacts/ui_eval/report.json` et `artifacts/ui_eval/screenshots/*` (générés par les tests dash.testing)
+- `artifacts/ui_eval/report.json` et `artifacts/ui_eval/screenshots/*` (si configurés par les tests dash.testing)
 - Exemplaires de `data/backtest/dt=*/details.parquet` et `data/evaluation/dt=*/metrics.json` si possible
 
 ---
