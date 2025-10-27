@@ -76,8 +76,12 @@ def layout():
         html.Small(f"Macro aujourd'hui: {'Oui' if checks.get('macro_today') else 'Non'}"), html.Br(),
     ]
 
+    guide = html.Small([
+        "Voir le guide ", html.A("Partitions & Freshness", href="https://github.com/DelaaReda/app-finance-previsions/blob/main/docs/PARTITIONS_FRESHNESS.md", target="_blank"),
+    ], className="text-muted")
+
     return html.Div([
-        html.H3("Agents Status"),
+        html.H3("Agents Status"), guide,
         dbc.Card([
             dbc.CardHeader("Fichiers clés — Derniers états"),
             dbc.CardBody(table),

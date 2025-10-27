@@ -81,10 +81,12 @@ def _summary_card(rep: dict | None, fresh: dict | None, rep_path: Path | None, f
 def layout():
     rep, rep_path = _read_latest('data/quality/dt=*/report.json')
     fresh, fresh_path = _read_latest('data/quality/dt=*/freshness.json')
+    guide = html.Small([
+        "Détails: ", html.A("Partitions & Freshness", href="https://github.com/DelaaReda/app-finance-previsions/blob/main/docs/PARTITIONS_FRESHNESS.md", target="_blank")
+    ], className="text-muted")
     return html.Div([
-        html.H3("Qualité des données"),
+        html.H3("Qualité des données"), guide,
         _summary_card(rep, fresh, rep_path, fresh_path),
         html.Div(className="mb-3"),
         _issues_table(rep),
     ])
-

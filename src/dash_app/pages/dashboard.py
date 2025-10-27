@@ -140,6 +140,51 @@ def _macro_kpis(dt: str | None = None) -> dbc.Card:
         return dbc.Card([dbc.CardHeader("Macro — KPIs"), dbc.CardBody([html.Small(f"Erreur macro: {e}")])])
 
 
+def _insights_card(dt: str | None = None) -> dbc.Card:
+    try:
+        # Count assets from final.parquet
+        fp = None
+        if dt:
+            cand = Path('data/forecast') / f'dt={dt}' / 'final.parquet'
+            if cand.exists():
+                fp = cand
+        if fp is None:
+            parts = sorted(Path('data/forecast').glob('dt=*/final.parquet'))
+            if parts:
+                fp = parts[-1]
+
+        assets = 0
+        if fp and fp.exists():
+            df = pd.read_parquet(fp)
+            if not df.empty and 'ticker' in df.columns:
+                assets = int(df['ticker'].nunique())
+
+        # Freshness coverage and status
+        parts = sorted(Path('data/quality').glob('dt=*/freshness.json'))
+        cov_txt = "n/a"; status = dbc.Badge("Qualité: n/a", color="secondary")
+        if parts:
+            fresh = json.loads(parts[-1].read_text(encoding='utf-8'))
+            checks = fresh.get('checks') or {}
+            cov = checks.get('prices_5y_coverage_ratio')
+            if isinstance(cov, (int, float)):
+                cov_txt = f"{int(cov*100)}%"
+                if cov >= 0.9:
+                    status = dbc.Badge("Qualité: 🟢", color="success")
+                elif cov >= 0.7:
+                    status = dbc.Badge("Qualité: 🟡", color="warning")
+                else:
+                    status = dbc.Badge("Qualité: 🔴", color="danger")
+
+        items = [
+            html.Small(f"Actifs suivis (Final): {assets}"), html.Br(),
+            html.Small(f"Couverture prix ≥5y: {cov_txt}"), html.Br(),
+            status,
+        ]
+        return dbc.Card([dbc.CardHeader("📊 Insights rapides"), dbc.CardBody(items)])
+    except Exception as e:
+        return dbc.Card([dbc.CardHeader("📊 Insights rapides"), dbc.CardBody([html.Small(f"Erreur insights: {e}")])])
+
+
 def layout():
     # Optional alerts badge (from latest quality report)
     badge = None
@@ -191,6 +236,7 @@ def layout():
             dbc.Col(html.Div(id='dash-top-final', children=_top_final(default_dt)), md=6),
             dbc.Col(_top_commodities(default_dt), md=6),
         ], className="mb-3"),
+        _insights_card(default_dt),
         _macro_kpis(default_dt),
     ])
 
