@@ -229,6 +229,12 @@ ui-health:
 	# Generate UI health report JSON + screenshots
 	DASH_BASE=$${DASH_BASE-http://127.0.0.1:8050} node ops/ui/ui_health_report.mjs || true
 
+.PHONY: snap-url
+snap-url:
+	# Take a Playwright screenshot of a single URL
+	# Usage: make snap-url URL=http://localhost:5556 OUT=artifacts/ui_health/legacy.png
+	URL=$${URL-http://127.0.0.1:8050} OUT=$${OUT-artifacts/ui_health/snap.png} node ops/ui/snap_url.mjs || true
+
 # --- Full refresh pipeline and restart (parallel agents)
 .PHONY: refresh-all
 refresh-all:

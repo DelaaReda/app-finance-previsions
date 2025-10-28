@@ -72,6 +72,27 @@ make dash-mcp-test
 
 	•	Si erreur TypeError [ERR_INVALID_ARG_TYPE]: "file" must be string : vérifier les chemins d’artifacts/screenshot dans le script MCP, et que name → fname n’est jamais undefined.
 
+E. Playwright — Screenshot obligatoire avant commit
+
+	•	Objectif: à la fin de chaque développement UI, prendre une capture Playwright de la/les page(s) modifiées et vérifier qu’aucune erreur critique n’est visible (banneaux d’erreur, 500, composants manquants).
+	1.	Installer une fois:
+
+make ui-health-setup   # installe Chromium pour Playwright
+
+	2.	Dash (routes connues): génère un rapport + screenshots pour toutes les pages cibles
+
+make ui-health         # écrit data/reports/dt=YYYYMMDD/ui_health_report.json
+# Screenshots: artifacts/ui_health/*.png
+
+	3.	Page unique (ex. legacy Streamlit 5556): screenshot ciblé
+
+make snap-url URL=http://127.0.0.1:5556 OUT=artifacts/ui_health/forecast_5556.png
+
+	4.	Critères de validation:
+	•	Aucun "alert-danger" ni trace d’erreur visible
+	•	Composants clés présents (table/graph/contrôles)
+	•	Joindre le screenshot au PR si applicable (ou référencer le chemin dans le commit)
+
 D. Tests unitaires / UI
 	•	pytest (si présent) : pytest -q
 	•	dash.testing : ajoute des assertions simples (existence d’un DataTable/Graph sur une route) dans tests/.
@@ -147,6 +168,7 @@ D. Tests unitaires / UI
 ✅ Definition of Done (DoD)
 	•	Fonction réellement implémentée (pas seulement docs) et accessible via URL locale.
 	•	Smoke OK (make dash-smoke) et MCP OK (make dash-mcp-test sans erreur bloquante).
+	•	Playwright exécuté: screenshots générés (make ui-health ou make snap-url) et vérifiés; aucune erreur critique.
 	•	Observability vert et partitions du jour présentes.
 	•	Docs à jour (PROGRESS + dash_overview) avec étapes de validation.
 	•	Commits propres, atomiques, conventionnels.
