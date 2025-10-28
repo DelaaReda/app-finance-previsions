@@ -1,11 +1,17 @@
 ```markdown
-📌 Today — LLM Judge + fixed ops
+📌 Today — LLM Judge + fixed ops + legacy Forecasts enriched
 
 Delivered:
 - LLM Judge page (Dash): lists LLM verdicts (table `#judge-table`) + summary `#judge-reasoning`; buttons to build contexts and run LLM agent.
 - Deep Dive: adds “Verdict LLM” card (`#deep-dive-llm`) showing direction/expected_return/confidence for selected ticker.
 - Pipeline: `make llm-context` + `make llm-forecast` wired into `scripts/refresh_all_and_restart.sh` before `forecast-aggregate`.
 - Ops: fixed‑port Streamlit launchers (5556/5557/5558) and Dash (8050) with stop/restart; group restart `make apps-full-restart`.
+ - Legacy Forecasts (Streamlit 5556):
+   - Lecture partitions (dt selector), filtres tickers/horizon/tri, export CSV
+   - Détails par ticker (graphe prix + métriques + prix cible)
+   - Prévisions secteur via proxy commodity (Gold/Oil) si disponibles (`commodities.parquet`)
+   - Macro pays/global depuis `macro_forecast.parquet`
+   - Actualités multi‑niveaux (Ticker / Secteur / Pays / Global) depuis `data/news`
 
 How to run:
 - Start legacy apps: `make streamlit-apps-start` (stop: `make streamlit-apps-stop`).

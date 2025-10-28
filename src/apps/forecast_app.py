@@ -143,11 +143,13 @@ else:
 
         # ===== Détails par ticker (graphiques + métriques) =====
         st.subheader("Détails par Ticker")
-        c1, c2 = st.columns([1,1])
+        c1, c2, c3 = st.columns([1,1,1])
         with c1:
             top_n_details = st.slider("Nombre de tickers à détailler", min_value=1, max_value=min(10, int(df['ticker'].nunique() if 'ticker' in df.columns else 1)), value=min(5, int(df['ticker'].nunique() if 'ticker' in df.columns else 1)))
         with c2:
             detail_horizon = st.selectbox("Horizon pour l'affichage détaillé", options=[opt for opt in ["1w","1m","1y"] if (df['horizon'].eq(opt).any() if 'horizon' in df.columns else False)] or ["1m"], index=0)
+        with c3:
+            focus_ticker = st.selectbox("Ticker à détailler (optionnel)", options=["(auto)"] + sorted(df['ticker'].unique().tolist() if 'ticker' in df.columns else []))
 
         # helper: read local prices parquet
         def _load_prices(t: str) -> pd.DataFrame:
@@ -193,6 +195,8 @@ else:
         # build per-ticker detail up to top_n_details
         show_cols_pref = ['ticker','horizon','final_score','direction','confidence','expected_return']
         display_df = df.sort_values(['final_score'] if 'final_score' in df.columns else ['expected_return'], ascending=False)
+        if focus_ticker and focus_ticker != "(auto)" and 'ticker' in display_df.columns:
+            display_df = display_df[display_df['ticker'] == focus_ticker]
         shown = 0
         for t, g in display_df.groupby('ticker'):
             if shown >= top_n_details:
