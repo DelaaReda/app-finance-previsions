@@ -11,6 +11,12 @@ import dash_bootstrap_components as dbc
 from dash import html
 from dash import dash_table
 from typing import Optional
+from dash_app.data.loader import read_parquet
+from dash_app.data.paths import (
+    p_eval_metrics_parquet,
+    p_eval_metrics_json,
+    p_eval_details,
+)
 
 
 def layout():
@@ -22,25 +28,46 @@ def layout():
 
 
 def _load_latest_metrics() -> Optional[dict]:
-    parts = sorted(Path('data/evaluation').glob('dt=*'))
-    if not parts:
-        return None
-    latest = parts[-1]
-    mfile = latest / 'metrics.json'
-    if not mfile.exists():
-        return None
-    try:
-        return json.loads(mfile.read_text(encoding='utf-8'))
-    except Exception:
-        return None
+    # Prefer metrics.parquet → render table style from parquet if present
+    mp = p_eval_metrics_parquet()
+    if mp is not None and mp.exists():
+        try:
+            pdf = read_parquet(mp)
+            if not pdf.empty:
+                # Convert to metrics-like dict grouped by (model,horizon) if columns present
+                rows = []
+                gcols = [c for c in ['model', 'horizon'] if c in pdf.columns]
+                vcols = [c for c in ['mae', 'rmse', 'mape', 'hit_ratio'] if c in pdf.columns]
+                if gcols and vcols:
+                    agg = pdf.groupby(gcols)[vcols].mean().reset_index()
+                    for _, r in agg.iterrows():
+                        key = ' / '.join([str(r[c]) for c in gcols])
+                        rows.append({
+                            'group': key,
+                            'count': int(pdf.shape[0]),
+                            'mae': float(r.get('mae')) if 'mae' in r else None,
+                            'rmse': float(r.get('rmse')) if 'rmse' in r else None,
+                            'hit_ratio': float(r.get('hit_ratio')) if 'hit_ratio' in r else None,
+                        })
+                    return {'by': ','.join(gcols), 'results': {row['group']: {k: row[k] for k in ['count','mae','rmse','hit_ratio']} for row in rows}}
+        except Exception:
+            pass
+    # Fallback to metrics.json
+    mj = p_eval_metrics_json()
+    if mj is not None and mj.exists():
+        try:
+            return json.loads(mj.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+    return None
 
 
 def _load_latest_details() -> Optional[pd.DataFrame]:
-    parts = sorted(Path('data/evaluation').glob('dt=*/details.parquet'))
-    if not parts:
+    p = p_eval_details()
+    if p is None:
         return None
     try:
-        return pd.read_parquet(parts[-1])
+        return read_parquet(p)
     except Exception:
         return None
 

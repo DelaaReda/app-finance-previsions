@@ -16,47 +16,47 @@ import pandas as pd
 from dash import html, dcc
 import plotly.express as px
 import dash_bootstrap_components as dbc
+from dash_app.data.loader import read_parquet
+from dash_app.data.paths import (
+    p_backtests_results,
+    p_backtest_details,
+)
 
 
 def _latest_details_parquet() -> Optional[Path]:
-    parts = sorted(Path('data/backtest').glob('dt=*'))
-    if not parts:
-        return None
-    latest = parts[-1]
-    p = latest / 'details.parquet'
-    if p.exists():
-        return p
-    return None
+    return p_backtest_details()
 
 
-def _latest_summary_json() -> Optional[Path]:
-    parts = sorted(Path('data/backtest').glob('dt=*/summary.json'))
-    return parts[-1] if parts else None
+def _latest_results_parquet() -> Optional[Path]:
+    return p_backtests_results()
 
 
 def _build_topn_figure() -> Optional[dict]:
+    # Prefer consolidated results.parquet if present
+    rp = _latest_results_parquet()
+    if rp and rp.exists():
+        rdf = read_parquet(rp)
+        if not rdf.empty and {'date', 'strategy', 'equity'} <= set(rdf.columns):
+            try:
+                rdf['date'] = pd.to_datetime(rdf['date'], errors='coerce')
+                fig = px.line(rdf, x='date', y='equity', color='strategy', title='Equity Curve (par stratégie)')
+                fig.update_layout(margin=dict(l=40, r=20, t=40, b=30), template='plotly_dark')
+                return fig
+            except Exception:
+                pass
+
+    # Fallback: build cumulative basket from details.parquet
     p = _latest_details_parquet()
     if not p:
         return None
-    try:
-        df = pd.read_parquet(p)
-    except Exception:
-        return None
-
+    df = read_parquet(p)
     if df.empty or 'realized_return' not in df.columns:
         return None
-
-    # ensure dt as datetime and compute daily basket mean
     if 'dt' in df.columns:
         df['dt'] = pd.to_datetime(df['dt'], errors='coerce')
-    else:
-        df['dt'] = pd.NaT
-
     series = df.dropna(subset=['dt', 'realized_return']).groupby('dt')['realized_return'].mean().sort_index()
     if series.empty:
         return None
-
-    # cumulative return (start at 0)
     cum = (1 + series).cumprod() - 1
     fig = px.line(x=cum.index, y=cum.values, labels={'x': 'Date', 'y': 'Cumulative return'}, title='Top-N Basket - Cumulative')
     fig.update_layout(margin=dict(l=40, r=20, t=40, b=30), template='plotly_dark')

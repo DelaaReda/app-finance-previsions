@@ -3,8 +3,10 @@
 
 Delivered:
  - Data loaders (Dash): `src/dash_app/data/{loader.py,paths.py}` pour lecture robuste (JSON/JSONL/Parquet) + helpers paths.
- - Quality (bug fix): guards type‑safe sur freshness/report; carte anomalies agrégées si `anomalies.parquet` présent.
- - Tests: unit (deep_dive_logic.filter_prices), intégration (freshness.json + sources).
+- Quality (bug fix): guards type‑safe sur freshness/report; carte anomalies agrégées si `anomalies.parquet` présent.
+- Tests: unit (deep_dive_logic.filter_prices), intégration (freshness.json + sources).
+- Deep Dive: comparateur multi‑tickers (liste, plage de dates, normalisation base 100) en plus de l’analyse par ticker.
+- E2E: sélecteurs stables (#forecasts-table, #risk-body, #regimes-body) + tests de rendu Risk/Regimes.
 
 Next (Sprint‑10)
 - Backtests/Evaluation: brancher loaders, empty states FR, graphiques + tableau.
