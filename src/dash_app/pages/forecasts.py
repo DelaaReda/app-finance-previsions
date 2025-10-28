@@ -213,9 +213,11 @@ def update_forecasts(asset_type, horizon, search, sort_by):
             })
 
         # Create table
-        table = dbc.Table.from_dataframe(
-            display_df.reset_index(drop=True),
-            striped=True, bordered=False, hover=True, size='sm'
+        table = html.Div(
+            dbc.Table.from_dataframe(
+                display_df.reset_index(drop=True),
+                striped=True, bordered=False, hover=True, size='sm'
+            ), id='forecasts-table'
         )
 
         # Summary
