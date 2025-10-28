@@ -14,6 +14,8 @@ from plotly.subplots import make_subplots
 from utils import get_st
 st = get_st()
 import ta
+import requests
+from io import StringIO
 
 from core_runtime import new_trace_id, set_trace_id, get_trace_id
 
@@ -193,18 +195,59 @@ def get_company_info(ticker):
         return {}
 
 def load_fred_series(series_id, start_date=None):
-    """Récupère une série temporelle depuis FRED (CSV public)."""
+    """Récupère une série temporelle depuis FRED (CSV public) de manière robuste.
+
+    - Tente d'utiliser fredgraph.csv avec en-tête "DATE".
+    - Fallback si l'en-tête diffère (ex. "observation_date" ou première colonne anonyme).
+    - Convertit proprement les valeurs ('.' -> NaN, to_numeric).
+    """
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    if start_date:
+        url += f"&startdate={start_date.strftime('%Y-%m-%d')}"
     try:
-        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
-        if start_date:
-            url += f"&startdate={start_date.strftime('%Y-%m-%d')}"
-        df = pd.read_csv(url)
-        df["DATE"] = pd.to_datetime(df["DATE"])
-        df = df.set_index("DATE").replace(".", np.nan).astype(float)
-        df.columns = [series_id]
-        return df
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; StockAnalysisApp/1.0)",
+                "Accept": "text/csv, */*;q=0.1",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP {resp.status_code}")
+
+        df = pd.read_csv(StringIO(resp.text))
+        # Déterminer la colonne date
+        date_col = None
+        for cand in ["DATE", "Date", "date", "observation_date"]:
+            if cand in df.columns:
+                date_col = cand
+                break
+        if date_col is None and df.shape[1] >= 2:
+            # Heuristique: première colonne date si convertible
+            try:
+                pd.to_datetime(df.iloc[:, 0])
+                date_col = df.columns[0]
+            except Exception:
+                pass
+        if date_col is None:
+            raise KeyError("Aucune colonne de date trouvée dans le CSV FRED")
+
+        # Déterminer la colonne valeur (habituellement 2nde colonne)
+        value_cols = [c for c in df.columns if c != date_col]
+        if not value_cols:
+            raise KeyError("Aucune colonne de valeur trouvée dans le CSV FRED")
+        value_col = value_cols[0]
+
+        # Nettoyage et typage
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col])
+        df = df.set_index(date_col)
+        series = pd.to_numeric(df[value_col].replace(".", np.nan), errors="coerce")
+        out = pd.DataFrame({series_id: series})
+        return out
     except Exception as e:
-        st.warning(f"Échec de récupération de {series_id} depuis FRED: {e}")
+        st.info(f"Donnée FRED indisponible pour {series_id} (raison: {e}).")
         return pd.DataFrame(columns=[series_id])
 
 def get_fred_data(series_ids, start_date=None):
