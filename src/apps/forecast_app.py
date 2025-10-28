@@ -478,13 +478,26 @@ else:
             if 'published' in ndf.columns:
                 ndf['published'] = pd.to_datetime(ndf['published'], errors='coerce')
 
+            def _render_news_table(df: pd.DataFrame):
+                if df is None or df.empty:
+                    st.info("Aucune actualité pour ce filtre.")
+                    return
+                cols = [c for c in ['published','source','title','summary'] if c in df.columns]
+                if not cols:
+                    st.dataframe(df.reset_index(drop=True).head(25), use_container_width=True)
+                else:
+                    view = df[cols].copy()
+                    if 'published' in view.columns:
+                        view['published'] = pd.to_datetime(view['published'], errors='coerce')
+                    st.dataframe(view.reset_index(drop=True).head(25), use_container_width=True)
+
             with tabs[0]:
                 if first_ticker and 'tickers' in ndf.columns:
                     tdf = ndf[ndf['tickers'].apply(lambda arr: (first_ticker in arr) if isinstance(arr, (list, tuple)) else False)]
                 else:
                     # fallback: text contains ticker
                     tdf = ndf[(ndf['title'].str.contains(first_ticker or '', case=False, na=False)) | (ndf['summary'].str.contains(first_ticker or '', case=False, na=False))]
-                st.dataframe(tdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+                _render_news_table(tdf)
 
             with tabs[1]:
                 # sector keywords by proxy
@@ -497,7 +510,7 @@ else:
                     sdf = ndf[ndf['title'].str.contains('|'.join(kw), case=False, na=False) | ndf['summary'].str.contains('|'.join(kw), case=False, na=False)]
                 else:
                     sdf = pd.DataFrame(columns=ndf.columns)
-                st.dataframe(sdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+                _render_news_table(sdf)
 
             with tabs[2]:
                 # country keywords
@@ -507,10 +520,12 @@ else:
                 else:
                     ckw = ['United States','US','Fed','Treasury']
                 cdf = ndf[ndf['title'].str.contains('|'.join(ckw), case=False, na=False) | ndf['summary'].str.contains('|'.join(ckw), case=False, na=False)]
-                st.dataframe(cdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+                _render_news_table(cdf)
 
             with tabs[3]:
-                gdf = ndf.sort_values('published', ascending=False).head(25)
-                st.dataframe(gdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+                gdf = ndf.copy()
+                if 'published' in gdf.columns:
+                    gdf = gdf.sort_values('published', ascending=False)
+                _render_news_table(gdf.head(25))
 
 st.caption("UI en lecture seule: lit la dernière partition sous data/forecast/. Pour rafraîchir les données, utilisez le Makefile (voir docs/README.md).")
