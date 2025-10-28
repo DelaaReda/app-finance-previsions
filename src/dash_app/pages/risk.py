@@ -115,4 +115,4 @@ def layout():
         html.H3("Risk"),
         html.Small("Marché par défaut: États‑Unis (US)."),
         _risk_container(),
-    ])
+    ], id='risk-body')

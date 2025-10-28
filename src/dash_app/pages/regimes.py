@@ -113,4 +113,4 @@ def layout():
         html.H3("Regimes"),
         html.Small("Marché par défaut: États‑Unis (US)."),
         _body(),
-    ])
+    ], id='regimes-body')
