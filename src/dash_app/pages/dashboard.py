@@ -53,13 +53,23 @@ def _top_commodities(dt: str | None = None) -> dbc.Card:
         if dt:
             target = Path('data/forecast') / f'dt={dt}' / 'commodities.parquet'
             if not target.exists():
-                return dbc.Card(dbc.CardBody([html.Small(f"Aucun commodities.parquet pour dt={dt}.")]))
-            df = pd.read_parquet(target)
+                # Fallback to latest available commodities parquet
+                parts = sorted(Path('data/forecast').glob('dt=*/commodities.parquet'))
+                if not parts:
+                    return dbc.Card(dbc.CardBody([html.Small(f"Aucun commodities.parquet pour dt={dt}.")]))
+                fallback = parts[-1]
+                df = pd.read_parquet(fallback)
+                fallback_dt = fallback.parent.name.split('=')[-1]
+                note = html.Small(f"(dt {dt} indisponible, affichage dt={fallback_dt})", className="text-muted ms-2")
+            else:
+                df = pd.read_parquet(target)
+                note = None
         else:
             parts = sorted(Path('data/forecast').glob('dt=*/commodities.parquet'))
             if not parts:
                 return dbc.Card(dbc.CardBody([html.Small("Aucune donnée commodities.parquet trouvée.")]))
             df = pd.read_parquet(parts[-1])
+            note = None
 
         if df.empty:
             return dbc.Card(dbc.CardBody([html.Small("commodities.parquet vide.")]))
@@ -86,8 +96,11 @@ def _top_commodities(dt: str | None = None) -> dbc.Card:
             striped=True, bordered=False, hover=True, size='sm'
         )
 
+        header_children = ["Top Commodities (1m)"]
+        if note is not None:
+            header_children.append(note)
         return dbc.Card([
-            dbc.CardHeader("Top Commodities (1m)"),
+            dbc.CardHeader(header_children),
             dbc.CardBody(table),
         ])
     except Exception as e:
@@ -116,10 +129,12 @@ def _macro_kpis(dt: str | None = None) -> dbc.Card:
         def last(col: str):
             return df[col].dropna().iloc[-1] if col in df.columns and not df[col].dropna().empty else None
 
-        cpi = last('cpi_yoy') or last('CPI_YoY') or last('cpi_yoy_pct')
+        # CPI / inflation
+        cpi = last('cpi_yoy') or last('CPI_YoY') or last('cpi_yoy_pct') or last('inflation_yoy')
+        # Yields and slope
         y10 = last('y10') or last('yield_10y')
         y2 = last('y2') or last('yield_2y')
-        slope = (y10 - y2) if (y10 is not None and y2 is not None) else (last('slope_10y_2y') or last('yc_10y_2y'))
+        slope = (y10 - y2) if (y10 is not None and y2 is not None) else (last('slope_10y_2y') or last('yc_10y_2y') or last('yield_curve_slope'))
         rec = last('recession_prob') or last('recession_probability')
 
         items = []

@@ -41,14 +41,20 @@ def _watchlist() -> list[str]:
 def _signals_table(horizon: str | None = None) -> dbc.Card:
     try:
         df = _read_signals()
-        if df is None:
-            return dbc.Card(dbc.CardBody([html.Small("Aucune prévision disponible.")]))
-        if horizon and 'horizon' in df.columns:
+        alert = None
+        if df is None or df.empty:
+            alert = dbc.Alert("Aucune prévision disponible.", color="info")
+            df = pd.DataFrame(columns=['ticker','horizon','final_score','direction','confidence','expected_return'])
+        elif horizon and 'horizon' in df.columns:
             df = df[df['horizon'] == horizon]
-        cols = [c for c in ['ticker','horizon','final_score','direction','confidence','expected_return'] if c in df.columns]
-        if not cols:
-            return dbc.Card(dbc.CardBody([html.Small("Colonnes attendues manquantes.")]))
-        df = df[cols].sort_values(['final_score','confidence'] if 'final_score' in cols else ['confidence'], ascending=False, na_position='last').head(200)
+
+        cols_existing = [c for c in ['ticker','horizon','final_score','direction','confidence','expected_return'] if c in df.columns]
+        if not cols_existing:
+            # ensure minimal columns for empty table
+            df = pd.DataFrame(columns=['ticker','horizon','final_score','direction','confidence','expected_return'])
+            cols_existing = list(df.columns)
+        else:
+            df = df[cols_existing].sort_values(['final_score','confidence'] if 'final_score' in cols_existing else ['confidence'], ascending=False, na_position='last').head(200)
 
         wl = _watchlist()
         styles = []
@@ -57,7 +63,7 @@ def _signals_table(horizon: str | None = None) -> dbc.Card:
 
         dt = dash_table.DataTable(
             id='signals-table',
-            columns=[{"name": c, "id": c} for c in df.columns],
+            columns=[{"name": c, "id": c} for c in cols_existing],
             data=df.reset_index(drop=True).to_dict('records'),
             sort_action='native',
             filter_action='native',
@@ -67,7 +73,10 @@ def _signals_table(horizon: str | None = None) -> dbc.Card:
             style_cell={"fontSize": 13},
             style_data_conditional=styles,
         )
-        return dbc.Card([dbc.CardHeader("Signals — Top (joint final/forecasts)"), dbc.CardBody(dt)])
+        body_children = [dt]
+        if alert is not None:
+            body_children.insert(0, alert)
+        return dbc.Card([dbc.CardHeader("Signals — Top (joint final/forecasts)"), dbc.CardBody(body_children)])
     except Exception as e:
         return dbc.Card(dbc.CardBody([html.Small(f"Erreur Signals: {e}")]))
 

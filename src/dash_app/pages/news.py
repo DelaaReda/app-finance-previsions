@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash
+from dash import dash_table
 import dash
 
 
@@ -125,12 +126,16 @@ def update_news(sector, search):
         if not df.empty:
             # Prepare display data
             display_df = df[['title', 'summary', 'source', 'published', 'sentiment']].copy()
-            display_df['published'] = display_df['published'].dt.strftime('%Y-%m-%d %H:%M')
+            display_df['published'] = pd.to_datetime(display_df['published'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M')
             display_df['sentiment'] = display_df['sentiment'].fillna('neutral')
 
-            table = dbc.Table.from_dataframe(
-                display_df.reset_index(drop=True),
-                striped=True, bordered=False, hover=True, size='sm'
+            table = dash_table.DataTable(
+                id='news-table-dt',
+                columns=[{"id": c, "name": c} for c in display_df.columns],
+                data=display_df.reset_index(drop=True).to_dict('records'),
+                sort_action='native', filter_action='native', page_size=15,
+                export_format='csv', style_table={'overflowX':'auto'},
+                style_cell={'padding':'6px','textAlign':'left','minWidth':'120px'}
             )
             table_card = dbc.Card([
                 dbc.CardHeader(f"Actualités ({len(df)} articles)"),

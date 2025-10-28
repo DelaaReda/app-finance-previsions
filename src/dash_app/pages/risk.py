@@ -113,5 +113,6 @@ def _risk_container() -> dbc.Container:
 def layout():
     return html.Div([
         html.H3("Risk"),
+        html.Small("Marché par défaut: États‑Unis (US)."),
         _risk_container(),
     ])

@@ -43,6 +43,33 @@ def _freshness_card() -> dbc.Card:
     return dbc.Card([dbc.CardHeader("Données — Fraîcheur"), dbc.CardBody(body)])
 
 
+def _dash_controls_card() -> dbc.Card:
+    return dbc.Card([
+        dbc.CardHeader("Actions (Dash) — démarrage/arrêt"),
+        dbc.CardBody([
+            html.Div([
+                dbc.Button("Dash Start (bg)", id="btn-dash-start", color="success", size="sm", className="me-2"),
+                dbc.Button("Dash Restart (bg)", id="btn-dash-restart", color="warning", size="sm", className="me-2"),
+                dbc.Button("Dash Stop", id="btn-dash-stop", color="danger", size="sm"),
+            ], className="mb-2"),
+            dcc.Textarea(id="dash-script-output", style={"width": "100%", "height": "120px"}),
+        ])
+    ])
+
+
+def _refresh_all_card() -> dbc.Card:
+    return dbc.Card([
+        dbc.CardHeader("Pipeline — Générer toutes les données & redémarrer Dash"),
+        dbc.CardBody([
+            html.Div([
+                dbc.Button("Refresh all (agents en parallèle)", id="btn-refresh-all", color="primary", size="sm"),
+                html.Small("  Exécute backfill, forecasts, macro, backtests, evaluation, puis restart Dash."),
+            ], className="mb-2"),
+            dcc.Textarea(id="refresh-all-output", style={"width": "100%", "height": "160px"}),
+        ])
+    ])
+
+
 def _admin_controls_card() -> dbc.Card:
     return dbc.Card([
         dbc.CardHeader("Actions (Admin) — Ancienne UI (Streamlit — legacy)"),
@@ -54,6 +81,16 @@ def _admin_controls_card() -> dbc.Card:
             ], className="mb-2"),
             html.Small("Note: ces actions pilotent l’ancienne interface Streamlit uniquement."),
             dcc.Textarea(id="script-output", style={"width": "100%", "height": "120px"}),
+        ])
+    ])
+
+
+def _dash_logs_card() -> dbc.Card:
+    return dbc.Card([
+        dbc.CardHeader("Logs Dash (live)"),
+        dbc.CardBody([
+            dcc.Interval(id="dash-log-interval", interval=4000, n_intervals=0),
+            html.Pre(id="dash-log-view", style={"maxHeight": "300px", "overflowY": "auto"}),
         ])
     ])
 
@@ -75,6 +112,13 @@ def layout():
         dbc.Row([
             dbc.Col(_ui_health_card(), md=6),
             dbc.Col(_freshness_card(), md=6),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Col(_dash_controls_card(), md=6),
+            dbc.Col(_dash_logs_card(), md=6),
+        ], className="mb-3"),
+        dbc.Row([
+            dbc.Col(_refresh_all_card(), md=12),
         ], className="mb-3"),
         dbc.Row([
             dbc.Col(_admin_controls_card(), md=6),
@@ -110,6 +154,21 @@ def on_stop(n):
     return _run_script("scripts/ui_stop.sh")
 
 
+@dash.callback(Output("dash-script-output", "value"), Input("btn-dash-start", "n_clicks"), prevent_initial_call=True)
+def on_dash_start(n):
+    return _run_script("scripts/dash_start_bg.sh")
+
+
+@dash.callback(Output("dash-script-output", "value"), Input("btn-dash-restart", "n_clicks"), prevent_initial_call=True)
+def on_dash_restart(n):
+    return _run_script("scripts/dash_restart_bg.sh")
+
+
+@dash.callback(Output("dash-script-output", "value"), Input("btn-dash-stop", "n_clicks"), prevent_initial_call=True)
+def on_dash_stop(n):
+    return _run_script("scripts/dash_stop.sh")
+
+
 @dash.callback(Output("log-view", "children"), Input("log-interval", "n_intervals"))
 def refresh_log(_):
     try:
@@ -122,6 +181,25 @@ def refresh_log(_):
         return "(log introuvable)"
     except Exception as e:
         return f"(erreur lecture log: {e})"
+
+
+@dash.callback(Output("dash-log-view", "children"), Input("dash-log-interval", "n_intervals"))
+def refresh_dash_log(_):
+    try:
+        repo_root = Path(__file__).resolve().parents[3]
+        port = os.getenv("AF_DASH_PORT", "8050")
+        logfile = repo_root / 'logs' / 'dash' / f'dash_{port}.log'
+        if logfile.exists():
+            lines = logfile.read_text(encoding='utf-8', errors='ignore').splitlines()[-200:]
+            return "\n".join(lines)
+        return "(log Dash introuvable)"
+    except Exception as e:
+        return f"(erreur lecture log Dash: {e})"
+
+
+@dash.callback(Output("refresh-all-output", "value"), Input("btn-refresh-all", "n_clicks"), prevent_initial_call=True)
+def on_refresh_all(n):
+    return _run_script("scripts/refresh_all_and_restart.sh")
 
 
 @dash.callback(Output("dash-http-status", "children"), Input("dash-http-ping", "n_intervals"))

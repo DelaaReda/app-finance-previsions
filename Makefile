@@ -132,6 +132,58 @@ ui-status:
 ui-logs:
 	tail -f logs/ui/streamlit_$${AF_UI_PORT-5555}.log
 
+# --- Launch specific legacy Streamlit apps (for comparison) ---
+.PHONY: streamlit-forecast-start streamlit-forecast-stop
+streamlit-forecast-start:
+	AF_UI_PORT=5556 AF_UI_APP=src/apps/forecast_app.py bash scripts/ui_start_bg.sh
+streamlit-forecast-stop:
+	AF_UI_APP=src/apps/forecast_app.py bash scripts/ui_stop_app.sh || true
+
+.PHONY: streamlit-forecast-restart
+streamlit-forecast-restart:
+	$(MAKE) streamlit-forecast-stop || true
+	$(MAKE) streamlit-forecast-start
+
+.PHONY: streamlit-stock-start streamlit-stock-stop
+streamlit-stock-start:
+	AF_UI_PORT=5557 AF_UI_APP=src/apps/stock_analysis_app.py bash scripts/ui_start_bg.sh
+streamlit-stock-stop:
+	AF_UI_APP=src/apps/stock_analysis_app.py bash scripts/ui_stop_app.sh || true
+
+.PHONY: streamlit-stock-restart
+streamlit-stock-restart:
+	$(MAKE) streamlit-stock-stop || true
+	$(MAKE) streamlit-stock-start
+
+.PHONY: streamlit-macro-start streamlit-macro-stop
+streamlit-macro-start:
+	AF_UI_PORT=5558 AF_UI_APP=src/apps/macro_sector_app.py bash scripts/ui_start_bg.sh
+streamlit-macro-stop:
+	AF_UI_APP=src/apps/macro_sector_app.py bash scripts/ui_stop_app.sh || true
+
+.PHONY: streamlit-macro-restart
+streamlit-macro-restart:
+	$(MAKE) streamlit-macro-stop || true
+	$(MAKE) streamlit-macro-start
+
+.PHONY: streamlit-apps-start streamlit-apps-stop
+streamlit-apps-start: streamlit-forecast-start streamlit-stock-start streamlit-macro-start
+streamlit-apps-stop: streamlit-forecast-stop streamlit-stock-stop streamlit-macro-stop
+
+.PHONY: streamlit-apps-restart
+streamlit-apps-restart:
+	$(MAKE) streamlit-apps-stop || true
+	$(MAKE) streamlit-apps-start
+
+# Restart everything (canonical Streamlit 5555 + legacy Streamlit apps + Dash) with fixed ports
+.PHONY: apps-full-restart
+apps-full-restart:
+	$(MAKE) streamlit-apps-stop || true
+	$(MAKE) dash-stop || true
+	$(MAKE) ui-restart-bg
+	$(MAKE) streamlit-apps-start
+	$(MAKE) dash-restart-bg
+
 # --- Dash (experimental UI) ---
 .PHONY: dash-start
 dash-start:
@@ -165,6 +217,23 @@ dash-restart:
 dash-mcp-test:
 	node ops/ui/mcp_dash_smoke.mjs || true
 
+# --- UI Health (Playwright) ---
+.PHONY: ui-health-setup ui-health
+
+ui-health-setup:
+	# Installs Playwright Chromium for UI health report
+	npm i -D playwright || true
+	npx playwright install chromium
+
+ui-health:
+	# Generate UI health report JSON + screenshots
+	DASH_BASE=$${DASH_BASE-http://127.0.0.1:8050} node ops/ui/ui_health_report.mjs || true
+
+# --- Full refresh pipeline and restart (parallel agents)
+.PHONY: refresh-all
+refresh-all:
+	bash scripts/refresh_all_and_restart.sh
+
 .PHONY: ui-watch
 ui-watch:
 	AF_UI_PORT=$${AF_UI_PORT-5555} AF_UI_WATCH_INTERVAL=$${AF_UI_WATCH_INTERVAL-5} bash scripts/ui_watch.sh
@@ -190,6 +259,15 @@ searx-down:
 
 searx-logs:
 	docker compose -f ops/web/searxng-local/docker-compose.yml logs -f
+
+# --- LLM context + forecast (for Judge)
+.PHONY: llm-context llm-forecast
+
+llm-context:
+	PYTHONPATH=$$PWD/src $(PYTHON) -m src.agents.llm_context_builder_agent
+
+llm-forecast:
+	$(PYTHON) scripts/llm_forecast_agent.py
 
 # --- Forecast agents (no orchestrator; callable via Makefile/cron) ---
 .PHONY: equity-forecast forecast-aggregate

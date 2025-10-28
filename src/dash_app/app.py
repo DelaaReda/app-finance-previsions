@@ -10,6 +10,20 @@ import pandas as pd
 import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc
+import time
+try:
+    from flask import request, g
+except Exception:  # fallback if not available in context
+    request = None  # type: ignore
+    g = None  # type: ignore
+
+try:
+    from hub import profiler as _prof
+except Exception:  # never fail app if profiler import fails
+    class _Dummy:
+        def log_event(self, *a, **k):
+            pass
+    _prof = _Dummy()  # type: ignore
 
 
 # Dash app (theme: dark Bootstrap)
@@ -21,6 +35,32 @@ app = dash.Dash(
     title="Finance Agent — Dash",
 )
 server = app.server
+
+# --- Profiler HTTP hooks (opt-in to avoid any startup risk) ---
+if os.getenv("AF_PROFILER", "0") == "1" and request is not None:
+    @server.before_request
+    def _prof_before():  # type: ignore
+        try:
+            if g is not None:
+                g._t0 = time.perf_counter()
+        except Exception:
+            pass
+
+    @server.after_request
+    def _prof_after(resp):  # type: ignore
+        try:
+            dur_ms = None
+            if g is not None and hasattr(g, "_t0"):
+                dur_ms = int((time.perf_counter() - getattr(g, "_t0", time.perf_counter())) * 1000)
+            _prof.log_event("http", {
+                "method": getattr(request, 'method', None),
+                "path": getattr(request, 'path', None),
+                "status": getattr(resp, 'status_code', None),
+                "duration_ms": dur_ms,
+            })
+        except Exception:
+            pass
+        return resp
 
 
 def sidebar() -> html.Div:
@@ -35,7 +75,10 @@ def sidebar() -> html.Div:
                     dbc.NavLink("Portfolio", href="/portfolio", active="exact"),
                     dbc.NavLink("News", href="/news", active="exact"),
                     dbc.NavLink("Deep Dive", href="/deep_dive", active="exact"),
+                    dbc.NavLink("LLM Judge", href="/llm_judge", active="exact"),
                     dbc.NavLink("Forecasts", href="/forecasts", active="exact"),
+                    dbc.NavLink("Backtests", href="/backtests", active="exact"),
+                    dbc.NavLink("Evaluation", href="/evaluation", active="exact"),
                     dbc.NavLink("Regimes", href="/regimes", active="exact"),
                     dbc.NavLink("Risk", href="/risk", active="exact"),
                     dbc.NavLink("Recession", href="/recession", active="exact"),
@@ -49,6 +92,7 @@ def sidebar() -> html.Div:
                 [
                     dbc.NavLink("Agents Status", href="/agents", active="exact"),
                     dbc.NavLink("Quality", href="/quality", active="exact"),
+                    dbc.NavLink("Profiler", href="/profiler", active="exact"),
                     dbc.NavLink("Observability", href="/observability", active="exact"),
                 ],
                 vertical=True,
@@ -63,7 +107,7 @@ def sidebar() -> html.Div:
 
 def _page_registry() -> Dict[str, Callable[[], html.Div]]:
     # Use absolute imports so running as script works with PYTHONPATH=src
-    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality
+    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler
 
     return {
         "/": dashboard.layout,
@@ -75,14 +119,18 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/recession": recession.layout,
         "/news": news.layout,
         "/deep_dive": deep_dive.layout,
+        "/llm_judge": llm_judge.layout,
         "/forecasts": forecasts.layout,
     "/backtests": backtests.layout,
     "/evaluation": evaluation.layout,
         "/agents": agents_status.layout,
         "/quality": quality.layout,
+        "/profiler": profiler.layout,
         "/observability": observability.layout,
     }
 
+
+from dash_app.pages import dashboard as _dashboard_initial
 
 app.layout = dbc.Container(
     [
@@ -90,7 +138,8 @@ app.layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col(sidebar(), width=2),
-                dbc.Col(html.Div(id="page-content", style={"padding": "0.75rem"}), width=10),
+                # Pre-render Dashboard as initial content so tests and users see content immediately
+                dbc.Col(html.Div(id="page-content", children=_dashboard_initial.layout(), style={"padding": "0.75rem"}), width=10),
             ],
             className="g-0",
         ),

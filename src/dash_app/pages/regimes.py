@@ -111,5 +111,6 @@ def _body() -> dbc.Container:
 def layout():
     return html.Div([
         html.H3("Regimes"),
+        html.Small("Marché par défaut: États‑Unis (US)."),
         _body(),
     ])

@@ -1,4 +1,18 @@
 ```markdown
+📌 Today — LLM Judge + fixed ops
+
+Delivered:
+- LLM Judge page (Dash): lists LLM verdicts (table `#judge-table`) + summary `#judge-reasoning`; buttons to build contexts and run LLM agent.
+- Deep Dive: adds “Verdict LLM” card (`#deep-dive-llm`) showing direction/expected_return/confidence for selected ticker.
+- Pipeline: `make llm-context` + `make llm-forecast` wired into `scripts/refresh_all_and_restart.sh` before `forecast-aggregate`.
+- Ops: fixed‑port Streamlit launchers (5556/5557/5558) and Dash (8050) with stop/restart; group restart `make apps-full-restart`.
+
+How to run:
+- Start legacy apps: `make streamlit-apps-start` (stop: `make streamlit-apps-stop`).
+- Start Dash in background: `make dash-start-bg` (restart: `make dash-restart-bg`).
+- Full data refresh + restart Dash: `make refresh-all`.
+- LLM only: `make llm-context && make llm-forecast`.
+
 🎯 SPRINT-7 : AGENT COMMODITIES + STABILISATION ! 🚀
 
 Livré:
@@ -150,6 +164,10 @@ How to validate Dash quickly
 - Générer données: `make equity-forecast && make forecast-aggregate && make macro-forecast && make update-monitor`.
 - Redémarrer UI: `make dash-restart-bg`; statut: `make dash-status`; logs: `make dash-logs`.
 - Smoke HTTP: `make dash-smoke` (200 sur routes clés, incl. /agents).
+- UI Health (Playwright):
+  - Préparation: `make ui-health-setup` (installe Chromium pour Playwright)
+  - Rapport: `make ui-health` → écrit `data/reports/dt=YYYYMMDD/ui_health_report.json` et screenshots sous `artifacts/ui_health/`
+  - Utilise des sélecteurs stables (ex: `#port-proposal`, `#evaluation-table`, `#backtests-topn-curve`).
 Planned/Started (agents)
 - Equity forecast agent: generates dt=YYYYMMDD/forecasts.parquet with baseline (momentum/vol) for 1w/1m/1y.
 - Forecast aggregator: reads latest forecasts.parquet, computes final_score, writes dt=YYYYMMDD/final.parquet.

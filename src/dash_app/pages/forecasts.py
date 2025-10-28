@@ -73,7 +73,7 @@ def layout():
         ], md=3),
         dbc.Col([
             html.Small("Recherche: "),
-            dcc.Input(id='forecasts-search', type='text', placeholder='AAPL, Gold, Oil...', debounce=True)
+            dcc.Input(id='forecasts-search', type='text', placeholder='AAPL, Gold, Oil...', value='NGD.TO, OR, Gold', debounce=True)
         ], md=3),
         dbc.Col([
             html.Small("Trier par: "),

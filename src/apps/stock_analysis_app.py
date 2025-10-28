@@ -290,7 +290,7 @@ st.title("📊 Analyse Approfondie d'Action")
 
 with st.sidebar:
     st.header("Paramètres")
-    ticker = st.text_input("Symbole de l'action", value=DEFAULT_TICKER)
+    ticker = st.text_input("Symbole de l'action", value=DEFAULT_TICKER, key="ticker_input_sidebar")
     period = st.selectbox("Période d'analyse", ["1y", "2y", "3y", "5y", "10y", "max"], index=2)
     benchmark = st.selectbox("Indice de référence", list(BENCHMARKS.keys()), format_func=lambda x: f"{x} - {BENCHMARKS[x]}")
     
@@ -1549,17 +1549,3 @@ def render_stock(default_ticker: str = "AAPL"):
     """Fonction exportable pour afficher l'onglet Action dans le hub."""
     # Interface complète disponible via l’app principale.
     pass
-
-# Exécution directe
-if __name__ == "__main__":
-    import streamlit as st
-    st.set_page_config(page_title="Analyse Approfondie d'Action", layout="wide")
-    st.title("📊 Analyse Approfondie d'Action")
-    with st.sidebar:
-        st.header("Paramètres")
-        ticker = st.text_input("Symbole de l'action", value="NGD.TO")
-    if ticker:
-        st.header(f"Analyse pour {ticker}")
-        st.info("Analyse complète disponible dans le hub principal.")
-    else:
-        st.warning("Veuillez entrer un symbole d'action valide.")
