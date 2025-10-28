@@ -5,6 +5,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from dash import html, dcc
+from dash_app.data.loader import read_parquet
+from dash_app.data.paths import p_risk as p_risk_path
 
 
 def _risk_chart(df: pd.DataFrame) -> dcc.Graph:
@@ -76,13 +78,19 @@ def _risk_badge(last_val: float | None, label: str) -> dbc.Badge:
 
 def _risk_container() -> dbc.Container:
     try:
-        parts = sorted(Path('data/macro/forecast').glob('dt=*/macro_forecast.parquet'))
-        if not parts:
-            return dbc.Container([dbc.Alert("Aucun macro_forecast.parquet trouvé.", color="warning")])
-
-        df = pd.read_parquet(parts[-1])
+        # Prefer dedicated risk.parquet if present
+        rp = p_risk_path()
+        df = None
+        if rp is not None and rp.exists():
+            df = read_parquet(rp)
         if df is None or df.empty:
-            return dbc.Container([dbc.Alert("macro_forecast.parquet vide.", color="warning")])
+            # Fallback: latest macro_forecast.parquet
+            parts = sorted(Path('data/macro/forecast').glob('dt=*/macro_forecast.parquet'))
+            if not parts:
+                return dbc.Container([dbc.Alert("Aucun macro_forecast.parquet trouvé.", color="warning")])
+            df = read_parquet(parts[-1])
+            if df is None or df.empty:
+                return dbc.Container([dbc.Alert("macro_forecast.parquet vide.", color="warning")])
 
         # Chart
         chart = _risk_chart(df)
@@ -92,8 +100,8 @@ def _risk_container() -> dbc.Container:
         if 'unemployment' in df.columns:
             badges.append(_risk_badge(df['unemployment'].iloc[-1], "Chômage"))
 
-        # Table
-        key_cols = ['vix', 'credit_spread', 'bamlh0a0hym2', 'drawdown_prob', 'risk_index', 'nfci', 'nfc_i']
+        # Table (show most relevant available columns)
+        key_cols = ['vix', 'credit_spread', 'bamlh0a0hym2', 'drawdown_prob', 'risk_index', 'nfci', 'nfc_i', 'unemployment']
         available_cols = [c for c in df.columns if c in key_cols]
         if available_cols:
             out = df[available_cols].tail(5).reset_index(drop=True)
@@ -104,7 +112,7 @@ def _risk_container() -> dbc.Container:
         return dbc.Container([
             dbc.Row(dbc.Col(html.Div(badges), className="mb-3")),
             dbc.Row(dbc.Col(chart, className="mb-3")),
-            dbc.Row(dbc.Col([html.H5("Derniers talons"), table]))
+            dbc.Row(dbc.Col([html.H5("Dernières valeurs"), table]))
         ], fluid=True)
     except Exception as e:
         return dbc.Container([dbc.Alert(f"Erreur Risk: {e}", color="danger")])

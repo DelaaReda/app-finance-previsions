@@ -372,6 +372,20 @@ def layout():
         ]),
         dbc.Row([
             dbc.Col(dcc.Graph(id='dd-prices-norm'), md=12)
+        ]),
+        html.H4("Prévisions (overlay)"),
+        dbc.Row([
+            dbc.Col([
+                html.Small("Horizon:"),
+                dcc.Dropdown(id='dd-forecast-horizon', options=[
+                    {"label": "1w", "value": "1w"},
+                    {"label": "1m", "value": "1m"},
+                    {"label": "1y", "value": "1y"},
+                ], value='1m', clearable=False, style={"minWidth": "120px"})
+            ], md=2)
+        ], className='mb-2'),
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='dd-forecasts-overlay'), md=12)
         ])
     ])
 
@@ -478,3 +492,45 @@ def _update_multi_prices(tickers, start_date, end_date, normalize_flags):
         return fig1, fig2
     except Exception:
         return {}, {}
+
+
+def _load_final_parquet():
+    try:
+        parts = sorted(Path('data/forecast').glob('dt=*/final.parquet'))
+        if parts:
+            return pd.read_parquet(parts[-1])
+    except Exception:
+        return pd.DataFrame()
+    return pd.DataFrame()
+
+
+@dash.callback(
+    Output('dd-forecasts-overlay', 'figure'),
+    Input('dd-tickers', 'value'),
+    Input('dd-forecast-horizon', 'value')
+)
+def _update_multi_forecasts(tickers, horizon):
+    try:
+        tickers = tickers or []
+        if not tickers:
+            return {}
+        fdf = _load_final_parquet()
+        if fdf is None or fdf.empty:
+            return {}
+        cols = [c for c in ['ticker', 'horizon', 'final_score', 'expected_return', 'direction', 'confidence'] if c in fdf.columns]
+        f = fdf[cols].copy()
+        f = f[f['ticker'].isin(tickers)]
+        if 'horizon' in f.columns and horizon:
+            f = f[f['horizon'] == horizon]
+        if f.empty:
+            return {}
+        # Prefer final_score; fallback expected_return
+        ycol = 'final_score' if 'final_score' in f.columns else ('expected_return' if 'expected_return' in f.columns else None)
+        if not ycol:
+            return {}
+        fig = px.bar(f, x='ticker', y=ycol, color='direction' if 'direction' in f.columns else None,
+                     title=f"Prévisions ({horizon})", labels={ycol: ycol})
+        fig.update_layout(template='plotly_dark')
+        return fig
+    except Exception:
+        return {}

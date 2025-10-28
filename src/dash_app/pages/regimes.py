@@ -6,6 +6,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from dash import html, dcc
+from dash_app.data.loader import read_parquet
+from dash_app.data.paths import p_regimes as p_regimes_path
 
 
 def _regimes_chart(df: pd.DataFrame) -> dcc.Graph:
@@ -72,13 +74,18 @@ def _trend_badge(last_val: float | None, label: str) -> dbc.Badge:
 
 def _body() -> dbc.Container:
     try:
-        parts = sorted(Path('data/macro/forecast').glob('dt=*/macro_forecast.parquet'))
-        if not parts:
-            return dbc.Container([dbc.Alert("Aucun macro_forecast.parquet trouvé.", color="warning")])
-
-        df = pd.read_parquet(parts[-1])
+        # Prefer dedicated regimes.parquet if present
+        rp = p_regimes_path()
+        df = None
+        if rp is not None and rp.exists():
+            df = read_parquet(rp)
         if df is None or df.empty:
-            return dbc.Container([dbc.Alert("macro_forecast.parquet vide.", color="warning")])
+            parts = sorted(Path('data/macro/forecast').glob('dt=*/macro_forecast.parquet'))
+            if not parts:
+                return dbc.Container([dbc.Alert("Aucun macro_forecast.parquet trouvé.", color="warning")])
+            df = read_parquet(parts[-1])
+            if df is None or df.empty:
+                return dbc.Container([dbc.Alert("macro_forecast.parquet vide.", color="warning")])
 
         # Chart section
         chart = _regimes_chart(df)

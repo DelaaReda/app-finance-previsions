@@ -6,6 +6,8 @@ Delivered:
 - Quality (bug fix): guards type‑safe sur freshness/report; carte anomalies agrégées si `anomalies.parquet` présent.
 - Tests: unit (deep_dive_logic.filter_prices), intégration (freshness.json + sources).
 - Deep Dive: comparateur multi‑tickers (liste, plage de dates, normalisation base 100) en plus de l’analyse par ticker.
+- Overlay prévisions Deep Dive (bar chart par ticker, horizon sélectionnable).
+- Risk/Regimes: lecture risk.parquet/regimes.parquet si présents; fallback macro_forecast; ids stables (#risk-body, #regimes-body).
 - E2E: sélecteurs stables (#forecasts-table, #risk-body, #regimes-body) + tests de rendu Risk/Regimes.
 
 Next (Sprint‑10)
