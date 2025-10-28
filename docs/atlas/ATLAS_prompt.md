@@ -1,113 +1,89 @@
-Voici un **prompt interne structuré et très spécifique** que vous pourrez relire avant chaque itération. Il rappelle vos responsabilités de manager QA et d’architecte, les URL/commandes à utiliser, la manière de définir les sprints et les bonnes pratiques à suivre. Il est pensé pour être simple à suivre et complet, afin de ne rien oublier.
+Voici la vision complète et cadrée de l’application app-finance-previsions, afin que les futures analyses, plans de sprint et décisions de conception restent alignés à 100 % avec la finalité du produit.
 
----
+⸻
 
-## 🧾 Rappel des responsabilités et étapes à suivre à chaque itération
+🌍 Vision du projet app-finance-previsions
 
-### 1. Vérifier les derniers commits
+🎯 Objectif général
 
-1. **Accéder à l’historique Git** :
+Créer une plateforme intelligente de prévisions financières combinant :
+	•	des agents analytiques automatisés (prévisions macroéconomiques, sectorielles et d’actifs),
+	•	une interface Dash hautement visuelle et interactive,
+	•	et un pipeline de qualité et d’observabilité complet permettant au manager et au client final de suivre les performances, les anomalies et la cohérence des données.
 
-   * Ouvrez la page des commits sur GitHub :
-     `https://github.com/DelaaReda/app-finance-previsions/commits/main`
-   * Notez l’ID (hash) et le message des derniers commits, en particulier ceux préfixés `Sprint-X:` ou `chore:`.
-   * Pour consulter le diff d’un commit, cliquez sur son hash (par ex. `f419aa1`) et notez les fichiers modifiés et les fonctionnalités impactées (ex.: correction du filtre Watchlist, ajout d’un badge).
+L’application doit rendre la compréhension des marchés et la prise de décision financière :
+	•	plus transparente (visualisation claire des signaux et indicateurs),
+	•	plus fiable (données vérifiées, frais d’observation mesurables),
+	•	et surtout plus intelligente grâce à une intégration entre agents IA, tableaux analytiques, et tests qualité automatisés.
 
-2. **Mettre à jour la documentation** :
+⸻
 
-   * Inscrivez dans `docs/PROGRESS.md` la liste des commits depuis la dernière itération, en précisant ce qui a été livré et les problèmes résolus ou ouverts.
-   * Respectez la numérotation : un nouveau sprint correspond à un nouveau préfixe `Sprint-<num>:` dans les commits et une nouvelle section dans `PROGRESS.md`.
+🧩 Architecture conceptuelle
 
-### 2. Redémarrer et tester l’interface Dash
+1. Cœur analytique – Agents
 
-1. **Générer les données** (si nécessaire) :
+Des modules “agents” autonomes génèrent et mettent à jour des données :
+	•	macro_forecast_agent → prévisions macroéconomiques (PIB, inflation, chômage…)
+	•	equity_forecast_agent → prévisions boursières et signaux par ticker
+	•	commodity_forecast_agent → prévisions matières premières (pétrole, or, etc.)
+	•	update_monitor_agent → vérifie la fraîcheur et la complétude des fichiers
+	•	forecast_aggregator_agent → consolide les prévisions multi-actifs
 
-   ```bash
-   make equity-forecast && make forecast-aggregate && make macro-forecast && make update-monitor
-   ```
+Les résultats sont enregistrés en Parquet ou JSON, lus ensuite par les pages Dash.
 
-   Ces commandes créent respectivement `forecasts.parquet`, `final.parquet`, `macro_forecast.parquet` et `freshness.json` sous `data/.../dt=YYYYMMDD/`.
+⸻
 
-2. **Redémarrer l’UI** :
+2. Côté utilisateur – Interface Dash
 
-   * En ligne de commande :
+Chaque page Dash représente une dimension analytique :
 
-     ```bash
-     make dash-restart-bg      # redémarre l’interface Dash en arrière‑plan
-     make dash-status          # affiche le port (généralement 8050), le PID et la fin du log
-     ```
-   * Ou via l’interface : ouvrez Observability et utilisez les boutons *Redémarrer (bg)* avec confirmation.
+Page	Fonction principale	Indicateurs & Graphiques
+Dashboard	Vue synthétique du portefeuille et des signaux clés	Graphiques comparatifs, tendances globales
+Signals	Liste triable des signaux de trading / score final	DataTable + barres de confiance
+Portfolio	Suivi des positions et performances simulées	Pie chart, table rendement, heatmap corrélations
+Regimes / Risk / Recession	Indicateurs macro, cycles, volatilité, stress	Graphiques Plotly interactifs, badges de tendances
+Deep Dive	Analyse détaillée par ticker (prévisions, news, courbes)	Multi-onglets, chartes de prix + sentiments
+Forecasts	Comparaison inter-actifs (macro vs equities vs commodities)	Graphes synchronisés, tableaux de scores
+Agents	Suivi du statut et de la fraîcheur des agents	Table dynamique + badges d’état
+Observability	Logs, métriques techniques et monitoring	TextArea + graphes d’exécution, temps de réponse
+Quality	Anomalies de données et vérification de fraîcheur	Graphes et heatmaps de cohérence
+Evaluation / Backtests	Évaluation des modèles et retour de performance	Graphiques de rendement, Sharpe, confusion matrices
 
-3. **Accéder à l’UI** :
 
-   * Ouvrez le navigateur à l’adresse : **[http://localhost:8050](http://localhost:8050)**.
+⸻
 
-     * Pour aller directement à une page :
+3. Qualité, Observabilité et Tests
 
-       * Dashboard : `http://localhost:8050/dashboard`
-       * Signals : `http://localhost:8050/signals`
-       * Portfolio : `http://localhost:8050/portfolio`
-       * Regimes : `http://localhost:8050/regimes`
-       * Risk : `http://localhost:8050/risk`
-       * Recession : `http://localhost:8050/recession`
-       * Agents Status : `http://localhost:8050/agents`
-       * Observability : `http://localhost:8050/observability`
+Le projet repose sur un workflow de test automatisé :
+	•	La commande make ui-health génère :
+	•	un rapport JSON complet de santé UI,
+	•	des screenshots de chaque page pour revue visuelle.
+	•	Ces artefacts servent de base à mes analyses QA et permettent :
+	•	la détection d’anomalies visuelles,
+	•	la validation de la cohérence des données,
+	•	la priorisation des corrections pour le sprint suivant.
 
-4. **Tester chaque page** :
+⸻
 
-   * **Dashboard** : vérifiez le sélecteur de date, la table Top‑10 (final 1m), le bloc macro KPIs et le filtre Watchlist (saisir `AAPL,MSFT` pour vérifier la filtration).
-   * **Signals** : vérifiez que le DataTable affiche `ticker`, `horizon`, `final_score`, `direction`, `confidence` et `expected_return`, et que le filtre d’horizon fonctionne (1w, 1m, 1y).
-   * **Portfolio** : testez le slider Top‑N (1 à 25) et le choix de pondération (égalitaire vs proportionnel) ; vérifiez que le tableau se met à jour.
-   * **Regimes, Risk, Recession** : vérifiez que les graphiques Plotly multivariés et les badges de tendance s’affichent correctement. S’ils n’apparaissent pas, vérifiez que `macro_forecast.parquet` contient bien les colonnes nécessaires (CPI, curve, LEI, PMI, VIX…).
-   * **Agents Status** : vérifiez la présence et la date des fichiers `forecasts.parquet`, `final.parquet`, `macro_forecast.parquet` et `freshness.json`; consultez le résumé des « Forecasts aujourd’hui ».
-   * **Observability** : vérifiez la santé de l’UI (port, PID, latence), le badge global (vert/jaune/rouge) et le lien *Détails* vers `/agents`.
+4. Valeur ajoutée pour chaque profil
 
-### 3. Tests automatisés
+Rôle	Attente principale
+Manager	Avoir une vue claire sur l’état du produit et les livrables du sprint
+Client	Obtenir des visualisations claires, crédibles et démonstratives
+Développeur	Recevoir des directives claires et exécuter sans flou technique
+Architecte	Maintenir la structure, la cohérence et la scalabilité du code
+QA / PO	Vérifier la qualité, rédiger les priorités du prochain sprint
+UX Designer	Rendre l’app intuitive, fluide et esthétiquement crédible
 
-1. **Smoke test** : lancez
 
-   ```bash
-   make dash-smoke
-   ```
+⸻
 
-   Cela vérifie que toutes les routes (`/dashboard`, `/signals`, `/portfolio`, `/regimes`, `/risk`, `/recession`, `/agents`, `/observability`) retournent un HTTP 200.
+5. Vision long terme
+	1.	Transformer cette app Dash en une plateforme multi-tenant (dashboards personnalisables).
+	2.	Intégrer un moteur d’intelligence financière : agents auto-correctifs, scoring dynamique, etc.
+	3.	Ajouter un module Streamlit ou FastAPI secondaire pour la version mobile / légère.
+	4.	Mettre en place une chaîne CI/CD complète avec tests Dash + UI health automatiques.
 
-2. **Tests MCP** (dès que le script sera corrigé) :
+⸻
 
-   ```bash
-   make dash-mcp-test
-   ```
-
-   Ce test utilise le web‑eval‑agent pour évaluer l’UX sur les pages. Examinez le rapport généré dans `data/reports/dt=.../dash_ux_eval_report.json`.
-
-3. **Tests unitaires** :
-
-   ```bash
-   pytest -q
-   ```
-
-   pour valider la logique métier des agents et des services.
-
-### 4. Définir et communiquer les tâches du prochain sprint
-
-1. **Numérotation** : le prochain sprint devra être identifié par un préfixe `Sprint-<num>:` dans tous les messages de commit.
-2. **Contenu du sprint** : précisez les tâches à réaliser. Par exemple :
-
-   * *Sprint‑5* : finaliser le script MCP, ajouter l’agent `commodity_forecast_agent`, enrichir les pages macro avec davantage d’indicateurs (PMI/ISM/VIX/spreads), mettre en place des tests UI automatisés avec `dash.testing`, implémenter la page Backtests, etc.
-3. **Guides techniques** :
-
-   * Donnez au développeur des instructions concrètes (ex. comment lire les séries macro, comment créer un badge via `dbc.Badge`, comment structurer un callback Dash).
-   * Insistez sur les bonnes pratiques : commit atomique et préfixé, tests locaux avant push, mises à jour de `PROGRESS.md`.
-
-### 5. Règles et bonnes pratiques à rappeler
-
-* **Conventions de commit** : toujours préfixer le message par `Sprint-<num>:` et y décrire clairement l’objectif.
-* **Pas de duplication** : avant de créer un nouvel agent, vérifier qu’il n’existe pas déjà une fonctionnalité similaire.
-* **Sorties datées** : les agents doivent écrire leurs sorties dans `data/.../dt=YYYYMMDD/` et ne jamais écraser les données d’un autre jour.
-* **Pas d’instructions shell en UI** : toutes les tâches de génération ou de mise à jour doivent être lancées via Makefile ou orchestrateur, pas via un message dans l’interface.
-* **Sécurité** : ne jamais exposer de clés API ; masquer les noms dans l’UI ; ne pas versionner `.env`.
-* **Documentation** : mettre à jour ou créer `docs/architecture/dash_overview.md` et `docs/PROGRESS.md` à chaque sprint, archiver l’ancienne doc Streamlit.
-
----
-
-Ce prompt vous servira de check‑list à chaque itération. Il cite explicitement les URL, les commandes et les actions à réaliser, ainsi que les attentes vis‑à‑vis du développeur (Grok) pour le prochain sprint. En respectant ces étapes et en les adaptant au contenu de chaque sprint, vous maintiendrez la cohérence et la qualité du projet.
+Souhaites-tu que je t’intègre maintenant cette vision complète directement dans le prompt interne (au-dessus de la section “Étapes 1 à 9”), de manière à avoir un seul fichier docs/internal_prompt.md final prêt à pousser dans ton dépôt ?

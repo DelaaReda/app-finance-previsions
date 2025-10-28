@@ -5,6 +5,8 @@ import json
 import dash_bootstrap_components as dbc
 import pandas as pd
 from dash import html
+from dash_app.data.loader import read_parquet, read_json
+from dash_app.data.paths import p_quality_anoms, p_quality_fresh
 
 
 def _read_latest(glob_pat: str) -> tuple[dict | None, Path | None]:
@@ -24,14 +26,26 @@ def _issues_table(rep: dict | None) -> dbc.Card:
         return dbc.Card([dbc.CardHeader("Anomalies"), dbc.CardBody([html.Small("Aucun report.json — exécutez l'agent de qualité." )])])
     rows = []
     try:
-        for section, payload in rep.items():
-            issues = (payload or {}).get('issues') or []
-            for it in issues:
-                rows.append({
-                    'section': section,
-                    'sev': str(it.get('sev','')).lower() or 'n/a',
-                    'msg': it.get('msg') or it.get('message') or '—',
-                })
+        # rep might not be a dict; guard
+        items = rep.items() if isinstance(rep, dict) else []
+        for section, payload in items:
+            issues = []
+            if isinstance(payload, dict):
+                issues = payload.get('issues') or []
+            # Coerce to list
+            if isinstance(issues, dict):
+                issues = [issues]
+            if isinstance(issues, str):
+                issues = [{"msg": issues}]
+            for it in issues or []:
+                sev = 'n/a'
+                msg = '—'
+                if isinstance(it, dict):
+                    sev = str(it.get('sev', '')).lower() or 'n/a'
+                    msg = it.get('msg') or it.get('message') or '—'
+                else:
+                    msg = str(it)
+                rows.append({'section': section, 'sev': sev, 'msg': msg})
     except Exception:
         rows = []
     if not rows:
@@ -79,14 +93,33 @@ def _summary_card(rep: dict | None, fresh: dict | None, rep_path: Path | None, f
 
 
 def layout():
+    # Prefer robust loader + path helpers
+    # Keep report.json via legacy reader (structure is agent-specific)
     rep, rep_path = _read_latest('data/quality/dt=*/report.json')
-    fresh, fresh_path = _read_latest('data/quality/dt=*/freshness.json')
+    fresh = read_json(p_quality_fresh)
+    fresh_path = p_quality_fresh()
+    # Optional anomalies parquet (if agent writes it)
+    anoms_df = read_parquet(p_quality_anoms)
+    if anoms_df is not None and not anoms_df.empty:
+        # Show aggregated anomalies as a compact table above issues
+        try:
+            g = (
+                anoms_df.groupby(['dataset', 'severity'], as_index=False)['count']
+                .sum().sort_values(['dataset', 'severity'])
+            )
+            agg_tbl = dbc.Table.from_dataframe(g, striped=True, bordered=False, hover=True, size='sm')
+            anoms_card = dbc.Card([dbc.CardHeader("Anomalies (agrégées)"), dbc.CardBody(agg_tbl)], className="mb-3")
+        except Exception:
+            anoms_card = None
+    else:
+        anoms_card = None
     guide = html.Small([
         "Détails: ", html.A("Partitions & Freshness", href="https://github.com/DelaaReda/app-finance-previsions/blob/main/docs/PARTITIONS_FRESHNESS.md", target="_blank")
     ], className="text-muted")
     return html.Div([
         html.H3("Qualité des données"), guide,
         _summary_card(rep, fresh, rep_path, fresh_path),
+        anoms_card or html.Div(),
         html.Div(className="mb-3"),
         _issues_table(rep),
     ])
