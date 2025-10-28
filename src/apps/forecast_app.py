@@ -262,4 +262,176 @@ else:
         else:
             st.info("Aucune prévision sur 1 an disponible dans la partition sélectionnée.")
 
+        # ===== Secteur / Commodity associé =====
+        st.subheader("Prévision liée au secteur / matière première")
+
+        # Map rudimentaire ticker -> commodity proxy
+        GOLD_MINERS = {"ABX","ABX.TO","K","K.TO","AEM","AEM.TO","BTO","BTO.TO","NGD","NGD.TO","IMG","IMG.TO","OR","OR.TO","EDR.TO","FR.TO"}
+        ENERGY_PROXIES = {"XOM","CVX","SU","SU.TO"}
+
+        def _commodity_proxy_for(t: str) -> str | None:
+            u = t.upper()
+            if u in GOLD_MINERS:
+                return "GC=F"  # Gold futures
+            if u in ENERGY_PROXIES:
+                return "CL=F"  # WTI Oil
+            return None
+
+        def _load_commodities(dt_val: str | None) -> pd.DataFrame:
+            parts = sorted(Path('data/forecast').glob('dt=*'))
+            target = None
+            if dt_val:
+                cand = Path('data/forecast')/f'dt={dt_val}'/'commodities.parquet'
+                if cand.exists():
+                    target = cand
+            if target is None:
+                for p in reversed(parts):
+                    cp = p/'commodities.parquet'
+                    if cp.exists():
+                        target = cp
+                        break
+            if target is None:
+                return pd.DataFrame()
+            try:
+                return pd.read_parquet(target)
+            except Exception:
+                return pd.DataFrame()
+
+        comm_df = _load_commodities(dt)
+        proxy = None
+        # choose first ticker in current display_df as anchor
+        try:
+            first_ticker = str(display_df['ticker'].iloc[0]) if 'ticker' in display_df.columns and len(display_df) else None
+        except Exception:
+            first_ticker = None
+        if first_ticker:
+            proxy = _commodity_proxy_for(first_ticker)
+
+        if proxy and not comm_df.empty:
+            cdf = comm_df[comm_df['ticker'] == proxy].copy()
+            if not cdf.empty:
+                st.caption(f"Proxy secteur détecté pour {first_ticker}: {proxy} ({cdf['commodity_name'].iloc[0]})")
+                cdisp = cdf[['commodity_name','ticker','category','horizon','current_price','expected_price','expected_return','direction','confidence','unit']].copy()
+                # format
+                for col in ['confidence','expected_return']:
+                    if col in cdisp.columns:
+                        cdisp[col] = pd.to_numeric(cdisp[col], errors='coerce').fillna(0).apply(lambda x: f"{x:.1%}" if col=='confidence' else f"{x:.2%}")
+                for col in ['current_price','expected_price']:
+                    if col in cdisp.columns:
+                        cdisp[col] = pd.to_numeric(cdisp[col], errors='coerce').fillna(0).apply(lambda x: f"{x:.2f}")
+                st.dataframe(cdisp.reset_index(drop=True), use_container_width=True)
+            else:
+                st.info("Aucune prévision de matière première correspondante trouvée dans la partition.")
+        else:
+            st.info("Aucun proxy secteur détecté ou pas de fichier commodities.parquet.")
+
+        # ===== Macro pays / global =====
+        st.subheader("Macro (pays/global)")
+
+        # Heuristique pour le pays via suffixe
+        def _country_for(t: str) -> str:
+            if t.endswith('.TO'):
+                return 'Canada'
+            return 'États-Unis / Global'
+
+        country = _country_for(first_ticker or '') if first_ticker else 'Global'
+        st.caption(f"Pays détecté: {country}")
+
+        def _load_macro(dt_val: str | None) -> pd.DataFrame:
+            base = Path('data/macro/forecast')
+            target = None
+            if dt_val:
+                cand = base/f'dt={dt_val}'/'macro_forecast.parquet'
+                if cand.exists():
+                    target = cand
+            if target is None:
+                parts = sorted(base.glob('dt=*/macro_forecast.parquet'))
+                target = parts[-1] if parts else None
+            if target is None:
+                return pd.DataFrame()
+            try:
+                return pd.read_parquet(target)
+            except Exception:
+                return pd.DataFrame()
+
+        mdf = _load_macro(dt)
+        if not mdf.empty:
+            # standardize expected column names if needed
+            ren = {}
+            for c in ['inflation_yoy','yield_curve_slope','unemployment','recession_prob']:
+                if c not in mdf.columns:
+                    # try alternative names
+                    if c == 'inflation_yoy' and 'cpi_yoy' in mdf.columns: ren['cpi_yoy'] = c
+            if ren:
+                mdf = mdf.rename(columns=ren)
+            cols = [c for c in ['horizon','inflation_yoy','yield_curve_slope','unemployment','recession_prob'] if c in mdf.columns]
+            st.dataframe(mdf[cols].reset_index(drop=True), use_container_width=True)
+        else:
+            st.info("Aucun macro_forecast.parquet trouvé.")
+
+        # ===== Actualités multi-niveaux =====
+        st.subheader("Actualités pertinentes (Ticker / Secteur / Pays / Global)")
+
+        def _load_news() -> pd.DataFrame:
+            try:
+                parts = sorted(Path('data/news').glob('dt=*'))
+                if parts:
+                    files = sorted(parts[-1].glob('news_*.parquet'))
+                    if files:
+                        return pd.read_parquet(files[-1])
+                if Path('data/news.jsonl').exists():
+                    return pd.read_json('data/news.jsonl', lines=True)
+            except Exception:
+                pass
+            return pd.DataFrame()
+
+        ndf = _load_news()
+        if ndf.empty:
+            st.info("Aucune actualité locale trouvée (data/news).")
+        else:
+            # Build filters
+            tabs = st.tabs(["Ticker","Secteur/Commodity","Pays","Global"])
+            # Ensure columns
+            if 'title' not in ndf.columns:
+                ndf['title'] = ndf.get('headline') if 'headline' in ndf.columns else ''
+            if 'summary' not in ndf.columns:
+                ndf['summary'] = ndf.get('description', '')
+            if 'published' in ndf.columns:
+                ndf['published'] = pd.to_datetime(ndf['published'], errors='coerce')
+
+            with tabs[0]:
+                if first_ticker and 'tickers' in ndf.columns:
+                    tdf = ndf[ndf['tickers'].apply(lambda arr: (first_ticker in arr) if isinstance(arr, (list, tuple)) else False)]
+                else:
+                    # fallback: text contains ticker
+                    tdf = ndf[(ndf['title'].str.contains(first_ticker or '', case=False, na=False)) | (ndf['summary'].str.contains(first_ticker or '', case=False, na=False))]
+                st.dataframe(tdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+
+            with tabs[1]:
+                # sector keywords by proxy
+                kw = []
+                if proxy == 'GC=F':
+                    kw = ['gold','or','GDX','AEM','Barrick','Newmont']
+                elif proxy == 'CL=F':
+                    kw = ['oil','pétrole','WTI','OPEC','OPEP']
+                if kw:
+                    sdf = ndf[ndf['title'].str.contains('|'.join(kw), case=False, na=False) | ndf['summary'].str.contains('|'.join(kw), case=False, na=False)]
+                else:
+                    sdf = pd.DataFrame(columns=ndf.columns)
+                st.dataframe(sdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+
+            with tabs[2]:
+                # country keywords
+                ckw = []
+                if country.startswith('Canada'):
+                    ckw = ['Canada','Toronto','TSX']
+                else:
+                    ckw = ['United States','US','Fed','Treasury']
+                cdf = ndf[ndf['title'].str.contains('|'.join(ckw), case=False, na=False) | ndf['summary'].str.contains('|'.join(ckw), case=False, na=False)]
+                st.dataframe(cdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+
+            with tabs[3]:
+                gdf = ndf.sort_values('published', ascending=False).head(25)
+                st.dataframe(gdf[['published','source','title','summary']].dropna(how='all', axis=1).reset_index(drop=True), use_container_width=True)
+
 st.caption("UI en lecture seule: lit la dernière partition sous data/forecast/. Pour rafraîchir les données, utilisez le Makefile (voir docs/README.md).")
