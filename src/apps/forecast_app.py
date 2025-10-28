@@ -51,6 +51,28 @@ def _load_forecasts(dt: str | None) -> tuple[str | None, pd.DataFrame]:
         return target_dir.name.replace('dt=', ''), pd.DataFrame({"error": [f"Chargement impossible: {e}"]})
 
 
+@st.cache_data(ttl=300)
+def _load_features(dt: str | None) -> tuple[str | None, pd.DataFrame]:
+    """Load latest features_flat to enrich with sector/industry/country info (read-only)."""
+    base = Path('data/features')
+    target = None
+    if dt:
+        cand = base / f'dt={dt}' / 'features_flat.parquet'
+        if cand.exists():
+            target = cand
+    if target is None:
+        parts = sorted(base.glob('dt=*/features_flat.parquet'))
+        target = parts[-1] if parts else None
+    if target is None:
+        return None, pd.DataFrame()
+    try:
+        fdf = pd.read_parquet(target)
+        fdt = target.parent.name.replace('dt=', '')
+        return fdt, fdf
+    except Exception:
+        return None, pd.DataFrame()
+
+
 default_watch = os.getenv("WATCHLIST", "AAPL,MSFT,NVDA,SPY")
 
 # Controls in-page (plus visible than sidebar)
@@ -71,11 +93,12 @@ with col4:
     sort_by = st.selectbox("Trier par", options=["final_score","expected_return","confidence","ticker"], index=0, key="fc_sort_by")
 
 dt, df = _load_forecasts(selected_dt if (dt_options if 'dt_options' in locals() else []) else None)
+fdt, fdf = _load_features(dt)
 
 if df.empty or ('error' in df.columns and not df.dropna().empty):
     st.info("Aucune prévision disponible dans data/forecast/dt=YYYYMMDD/. Consultez la page Agents Status ou exécutez le pipeline via Makefile (voir docs).")
 else:
-    st.caption(f"Partition lue: dt={dt}")
+    st.caption(f"Partition lue: dt={dt}{' | features dt=' + fdt if fdt else ''}")
 
     # Filtrage tickers/horizon
     tickers_list = [t.strip().upper() for t in tickers.split(',') if t.strip()]
@@ -192,6 +215,19 @@ else:
 
         llm_map = _llm_consensus(dt or "")
 
+        # feature lookup helpers
+        def _feature_lookup(t: str, col: str) -> str | None:
+            if fdf is None or fdf.empty or 'ticker' not in fdf.columns:
+                return None
+            try:
+                row = fdf[fdf['ticker'] == t].tail(1)
+                if not row.empty and col in row.columns:
+                    val = row[col].iloc[0]
+                    return None if pd.isna(val) else str(val)
+            except Exception:
+                return None
+            return None
+
         # build per-ticker detail up to top_n_details
         show_cols_pref = ['ticker','horizon','final_score','direction','confidence','expected_return']
         display_df = df.sort_values(['final_score'] if 'final_score' in df.columns else ['expected_return'], ascending=False)
@@ -213,7 +249,15 @@ else:
             fscore = float(pd.to_numeric(pd.Series([r.get('final_score')]), errors='coerce').fillna(0).iloc[0]) if 'final_score' in row.columns else None
             llm = llm_map.get(str(t))
 
-            with st.expander(f"{t} — {detail_horizon} | dir={direction} conf={conf:.1%} ER={exp_ret:.2%} {'' if fscore is None else f' score={fscore:.2f}'}"):
+            sector = _feature_lookup(str(t), 'sector') or _feature_lookup(str(t), 'y_sector')
+            industry = _feature_lookup(str(t), 'industry') or _feature_lookup(str(t), 'y_industry')
+            country_feat = _feature_lookup(str(t), 'country') or _feature_lookup(str(t), 'y_country')
+            header = f"{t} — {detail_horizon} | dir={direction} conf={conf:.1%} ER={exp_ret:.2%}"
+            if fscore is not None:
+                header += f" score={fscore:.2f}"
+            if sector:
+                header += f" | secteur={sector}"
+            with st.expander(header):
                 pdf = _load_prices(str(t))
                 if not pdf.empty and 'Close' in pdf.columns:
                     last_close = float(pd.to_numeric(pdf['Close'].iloc[-1], errors='coerce'))
@@ -236,6 +280,14 @@ else:
                 if last_close is not None and exp_ret is not None:
                     exp_price = last_close * (1.0 + exp_ret)
                     st.caption(f"Prix actuel ≈ {last_close:.2f} → Prix cible ({detail_horizon}) ≈ {exp_price:.2f}")
+
+                # context chips
+                if sector or industry or country_feat:
+                    chips = []
+                    if sector: chips.append(f"Secteur: {sector}")
+                    if industry: chips.append(f"Industrie: {industry}")
+                    if country_feat: chips.append(f"Pays: {country_feat}")
+                    st.caption(" | ".join(chips))
 
                 # price chart (last 252 sessions if available)
                 if not pdf.empty and {'Open','High','Low','Close'}.issubset(set(pdf.columns)):
@@ -269,15 +321,18 @@ else:
         # ===== Secteur / Commodity associé =====
         st.subheader("Prévision liée au secteur / matière première")
 
-        # Map rudimentaire ticker -> commodity proxy
+        # Map rudimentaire ticker -> commodity proxy, enrichi par features
         GOLD_MINERS = {"ABX","ABX.TO","K","K.TO","AEM","AEM.TO","BTO","BTO.TO","NGD","NGD.TO","IMG","IMG.TO","OR","OR.TO","EDR.TO","FR.TO"}
         ENERGY_PROXIES = {"XOM","CVX","SU","SU.TO"}
 
         def _commodity_proxy_for(t: str) -> str | None:
             u = t.upper()
-            if u in GOLD_MINERS:
+            # Features-driven hints
+            sec = _feature_lookup(u, 'sector') or ''
+            ind = _feature_lookup(u, 'industry') or ''
+            if 'gold' in ind.lower() or 'gold' in sec.lower() or u in GOLD_MINERS:
                 return "GC=F"  # Gold futures
-            if u in ENERGY_PROXIES:
+            if 'energy' in sec.lower() or u in ENERGY_PROXIES:
                 return "CL=F"  # WTI Oil
             return None
 
@@ -338,7 +393,9 @@ else:
                 return 'Canada'
             return 'États-Unis / Global'
 
-        country = _country_for(first_ticker or '') if first_ticker else 'Global'
+        # Prefer features country if available
+        ft_country = _feature_lookup(str(first_ticker), 'country') if first_ticker else None
+        country = ft_country or (_country_for(first_ticker or '') if first_ticker else 'Global')
         st.caption(f"Pays détecté: {country}")
 
         def _load_macro(dt_val: str | None) -> pd.DataFrame:
@@ -372,6 +429,24 @@ else:
             st.dataframe(mdf[cols].reset_index(drop=True), use_container_width=True)
         else:
             st.info("Aucun macro_forecast.parquet trouvé.")
+
+        # ===== Agrégats secteur/pays (équities) =====
+        st.subheader("Agrégats secteur / pays (actions)")
+        if fdf is not None and not fdf.empty and 'ticker' in fdf.columns and 'sector' in fdf.columns:
+            try:
+                # latest per ticker
+                fdf2 = fdf.sort_values(['ticker','dt'] if 'dt' in fdf.columns else ['ticker']).groupby('ticker', as_index=False).tail(1)
+                join_cols = ['ticker','sector'] + ([ 'country'] if 'country' in fdf2.columns else [])
+                j = df.merge(fdf2[join_cols], on='ticker', how='left')
+                with st.expander("Agrégats secteur"):
+                    g = j.groupby('sector')['final_score' if 'final_score' in j.columns else 'expected_return'].mean().sort_values(ascending=False)
+                    st.dataframe(g.reset_index().rename(columns={g.name: 'score_moyen'}), use_container_width=True)
+                if 'country' in j.columns:
+                    with st.expander("Agrégats pays"):
+                        gc = j.groupby('country')['final_score' if 'final_score' in j.columns else 'expected_return'].mean().sort_values(ascending=False)
+                        st.dataframe(gc.reset_index().rename(columns={gc.name: 'score_moyen'}), use_container_width=True)
+            except Exception:
+                pass
 
         # ===== Actualités multi-niveaux =====
         st.subheader("Actualités pertinentes (Ticker / Secteur / Pays / Global)")
