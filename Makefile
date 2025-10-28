@@ -229,6 +229,47 @@ ui-health:
 	# Generate UI health report JSON + screenshots
 	DASH_BASE=$${DASH_BASE-http://127.0.0.1:8050} node ops/ui/ui_health_report.mjs || true
 
+# --- UI DEV ---
+.PHONY: open-ui dash-dev dash-start-and-open
+open-ui:
+	python -c "import webbrowser; webbrowser.open('http://127.0.0.1:8050')"
+
+dash-dev:
+	PYTHONPATH=$$PWD/src FLASK_ENV=development DASH_DEBUG=1 \
+	python -m src.dash_app.app
+
+dash-start-and-open: dash-start-bg open-ui
+
+# --- Logged wrappers ---
+.PHONY: log-dash-smoke log-ui-health
+log-dash-smoke:
+	PYTHONPATH=$$PWD/src python -m ops.run_and_log make dash-smoke
+
+log-ui-health:
+	PYTHONPATH=$$PWD/src python -m ops.run_and_log make ui-health
+
+# --- Git hooks ---
+.PHONY: git-hooks
+git-hooks:
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-push || true
+
+# --- Pack artifacts ---
+.PHONY: artifacts-zip
+artifacts-zip:
+	PYTHONPATH=$$PWD/src python -m ops.pack_artifacts
+
+# --- LLM Summary (hourly partitions) ---
+.PHONY: llm-summary-run llm-summary-hourly llm-summary-scheduler-start
+llm-summary-run:
+	PYTHONPATH=$$PWD/src python -m src.agents.llm.run_once
+
+llm-summary-hourly:
+	watch -n 3600 make llm-summary-run
+
+llm-summary-scheduler-start:
+	PYTHONPATH=$$PWD/src python -m src.agent_runner.scheduler
+
 .PHONY: snap-url
 snap-url:
 	# Take a Playwright screenshot of a single URL

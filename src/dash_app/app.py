@@ -76,13 +76,16 @@ def sidebar() -> html.Div:
                     dbc.NavLink("News", href="/news", active="exact"),
                     dbc.NavLink("Deep Dive", href="/deep_dive", active="exact"),
                     dbc.NavLink("LLM Judge", href="/llm_judge", active="exact"),
+                    dbc.NavLink("LLM Summary", href="/llm_summary", active="exact"),
                     dbc.NavLink("Forecasts", href="/forecasts", active="exact"),
                     dbc.NavLink("Backtests", href="/backtests", active="exact"),
                     dbc.NavLink("Evaluation", href="/evaluation", active="exact"),
                     dbc.NavLink("Regimes", href="/regimes", active="exact"),
                     dbc.NavLink("Risk", href="/risk", active="exact"),
                     dbc.NavLink("Recession", href="/recession", active="exact"),
-                ],
+                ] + (
+                    [dbc.NavLink("DevTools", href="/devtools", active="exact")] if os.getenv("DEVTOOLS_ENABLED", "0") == "1" else []
+                ),
                 vertical=True,
                 pills=True,
                 className="mb-3",
@@ -107,9 +110,11 @@ def sidebar() -> html.Div:
 
 def _page_registry() -> Dict[str, Callable[[], html.Div]]:
     # Use absolute imports so running as script works with PYTHONPATH=src
-    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler
+    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler, llm_summary
+    if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
+        from dash_app.pages import devtools  # type: ignore
 
-    return {
+    pages = {
         "/": dashboard.layout,
         "/dashboard": dashboard.layout,
         "/signals": signals.layout,
@@ -120,6 +125,7 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/news": news.layout,
         "/deep_dive": deep_dive.layout,
         "/llm_judge": llm_judge.layout,
+        "/llm_summary": llm_summary.layout,
         "/forecasts": forecasts.layout,
     "/backtests": backtests.layout,
     "/evaluation": evaluation.layout,
@@ -128,6 +134,9 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/profiler": profiler.layout,
         "/observability": observability.layout,
     }
+    if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
+        pages["/devtools"] = devtools.layout  # type: ignore
+    return pages
 
 
 from dash_app.pages import dashboard as _dashboard_initial

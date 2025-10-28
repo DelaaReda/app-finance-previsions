@@ -28,3 +28,4 @@ pyarrow>=17.0.0
 dash>=2.16.0
 dash-bootstrap-components>=1.6.0
 dash[testing]>=2.16.0
+APScheduler>=3.10.1

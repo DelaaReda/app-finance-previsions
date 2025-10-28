@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+echo "[pre-push] UI health check..."
+make ui-health || {
+  echo "[pre-push] ui-health KO — corrige avant push."
+  exit 1
+}
+exit 0
+

@@ -10,6 +10,12 @@ Delivered:
 - Risk/Regimes: lecture risk.parquet/regimes.parquet si présents; fallback macro_forecast; ids stables (#risk-body, #regimes-body).
 - E2E: sélecteurs stables (#forecasts-table, #risk-body, #regimes-body) + tests de rendu Risk/Regimes.
 
+New (LLM Summary + Agent Continuous):
+- ✅ LLM Summary page (Dash): `src/dash_app/pages/llm_summary.py` lit la dernière partition `data/llm_summary/dt=*/summary.json`, affiche facteurs clés et contributeurs, bouton "Relancer maintenant" (Make: `llm-summary-run`).
+- ✅ Orchestrateur LLM (g4f): `src/agents/llm/{runtime.py,schemas.py,toolkit.py,arbiter_agent.py,run_once.py}` (déjà présent) — écrit `data/llm_summary/dt=YYYYMMDDHH`.
+- ✅ Horaire continu (sans boucle infinie): `src/agent_runner/scheduler.py` (APScheduler) exécute le résumé au début de chaque heure.
+- ✅ Makefile: `llm-summary-scheduler-start` démarre le scheduler; `llm-summary-run` lance une exécution à la demande.
+
 Next (Sprint‑10)
 - Backtests/Evaluation: brancher loaders, empty states FR, graphiques + tableau.
 - Risk/Regimes: robuste aux colonnes manquantes, badges trends.
@@ -21,6 +27,8 @@ How to run:
 - Start Dash in background: `make dash-start-bg` (restart: `make dash-restart-bg`).
 - Full data refresh + restart Dash: `make refresh-all`.
 - LLM only: `make llm-context && make llm-forecast`.
+ - LLM summary (one‑shot): `make llm-summary-run` → consultez Dash: `/llm_summary`.
+ - LLM summary (horaire, 24/7): `make llm-summary-scheduler-start` (Ctrl‑C pour arrêter).
 
 🎯 SPRINT-7 : AGENT COMMODITIES + STABILISATION ! 🚀
 
