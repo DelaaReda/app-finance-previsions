@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import dash_bootstrap_components as dbc
-from dash import html, dcc, dash
+from dash import html, dcc, dash, Input, Output, State
 from dash import dash_table
 import dash
 
@@ -321,17 +321,58 @@ def _render_ticker_sections(ticker: str):
 
 
 def layout():
+    # Try to seed a multi-ticker list from latest final.parquet
+    tickers = []
+    try:
+        parts = sorted(Path('data/forecast').glob('dt=*/final.parquet'))
+        if parts:
+            df = pd.read_parquet(parts[-1])
+            if 'ticker' in df.columns:
+                tickers = sorted(df['ticker'].dropna().astype(str).unique().tolist())[:500]
+    except Exception:
+        tickers = []
+
     default_ticker = 'NGD.TO'
     return html.Div([
         html.H3("Deep Dive - Analyse d'un titre"),
+        # Single ticker analyzer (legacy)
         dbc.Row([
             dbc.Col([
                 html.Small("Entrez un ticker (ex: AAPL, MSFT): "),
                 dcc.Input(id='deep-dive-ticker', type='text', placeholder='NGD.TO', value=default_ticker, debounce=True, style={"minWidth": "200px"}),
                 html.Button("Analyser", id='deep-dive-analyze', n_clicks=0, className="ms-2 btn btn-primary")
-            ], md=6)
+            ], md=8)
         ], className="mb-3"),
-        html.Div(id='deep-dive-content', children=_render_ticker_sections(default_ticker))
+        html.Div(id='deep-dive-content', children=_render_ticker_sections(default_ticker)),
+        html.Hr(),
+        # Multi tickers comparator
+        html.H4("Comparaison multi‑tickers"),
+        dbc.Row([
+            dbc.Col([
+                dcc.Dropdown(
+                    id='dd-tickers',
+                    options=[{"label": t, "value": t} for t in tickers],
+                    multi=True,
+                    placeholder="Choisir 1..N tickers",
+                )
+            ], md=6),
+            dbc.Col([
+                dcc.DatePickerRange(id='dd-range')
+            ], md=4),
+            dbc.Col([
+                dcc.Checklist(
+                    id='dd-normalize',
+                    options=[{"label": "Normaliser (base 100)", "value": "norm"}],
+                    value=["norm"], inline=True,
+                )
+            ], md=2),
+        ], className="mb-2"),
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='dd-prices'), md=12)
+        ]),
+        dbc.Row([
+            dbc.Col(dcc.Graph(id='dd-prices-norm'), md=12)
+        ])
     ])
 
 
@@ -374,3 +415,66 @@ def toggle_explain(n_open, n_close, is_open, ticker):
     elif 'deep-dive-explain-close' in triggered:
         return False, dash.no_update
     return is_open, dash.no_update
+
+
+# === Multi‑tickers overlay ===
+
+def _load_price_series(ticker: str) -> pd.DataFrame:
+    p = Path(f'data/prices/ticker={ticker}/prices.parquet')
+    if not p.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_parquet(p)
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')
+            df = df.set_index('date').sort_index()
+        col = 'Close' if 'Close' in df.columns else ('close' if 'close' in df.columns else None)
+        if not col:
+            return pd.DataFrame()
+        return df[[col]].rename(columns={col: 'close'})
+    except Exception:
+        return pd.DataFrame()
+
+
+@dash.callback(
+    Output('dd-prices', 'figure'),
+    Output('dd-prices-norm', 'figure'),
+    Input('dd-tickers', 'value'),
+    Input('dd-range', 'start_date'),
+    Input('dd-range', 'end_date'),
+    Input('dd-normalize', 'value')
+)
+def _update_multi_prices(tickers, start_date, end_date, normalize_flags):
+    try:
+        tickers = tickers or []
+        if not tickers:
+            return {}, {}
+        frames = []
+        for t in tickers:
+            df = _load_price_series(str(t))
+            if df.empty:
+                continue
+            sub = df.copy()
+            if start_date:
+                sub = sub[sub.index >= pd.to_datetime(start_date)]
+            if end_date:
+                sub = sub[sub.index <= pd.to_datetime(end_date)]
+            sub = sub.rename(columns={'close': t})
+            frames.append(sub)
+        if not frames:
+            return {}, {}
+        wide = pd.concat(frames, axis=1).dropna(how='all')
+        # Regular prices chart
+        fig1 = px.line(wide, x=wide.index, y=wide.columns, title="Prix (overlay)")
+        fig1.update_layout(hovermode='x unified', template='plotly_dark')
+
+        # Normalized chart
+        if 'norm' in (normalize_flags or []):
+            norm = wide.apply(lambda s: (s / s.dropna().iloc[0]) * 100.0)
+            fig2 = px.line(norm, x=norm.index, y=norm.columns, title="Prix normalisés (base 100)")
+            fig2.update_layout(hovermode='x unified', template='plotly_dark')
+        else:
+            fig2 = {}
+        return fig1, fig2
+    except Exception:
+        return {}, {}

@@ -1,17 +1,16 @@
 ```markdown
-📌 Today — LLM Judge + fixed ops + legacy Forecasts enriched
+📌 Today — Sprint‑10 kickoff (stability + parity + tests)
 
 Delivered:
-- LLM Judge page (Dash): lists LLM verdicts (table `#judge-table`) + summary `#judge-reasoning`; buttons to build contexts and run LLM agent.
-- Deep Dive: adds “Verdict LLM” card (`#deep-dive-llm`) showing direction/expected_return/confidence for selected ticker.
-- Pipeline: `make llm-context` + `make llm-forecast` wired into `scripts/refresh_all_and_restart.sh` before `forecast-aggregate`.
-- Ops: fixed‑port Streamlit launchers (5556/5557/5558) and Dash (8050) with stop/restart; group restart `make apps-full-restart`.
- - Legacy Forecasts (Streamlit 5556):
-   - Lecture partitions (dt selector), filtres tickers/horizon/tri, export CSV
-   - Détails par ticker (graphe prix + métriques + prix cible)
-   - Prévisions secteur via proxy commodity (Gold/Oil) si disponibles (`commodities.parquet`)
-   - Macro pays/global depuis `macro_forecast.parquet`
-   - Actualités multi‑niveaux (Ticker / Secteur / Pays / Global) depuis `data/news`
+ - Data loaders (Dash): `src/dash_app/data/{loader.py,paths.py}` pour lecture robuste (JSON/JSONL/Parquet) + helpers paths.
+ - Quality (bug fix): guards type‑safe sur freshness/report; carte anomalies agrégées si `anomalies.parquet` présent.
+ - Tests: unit (deep_dive_logic.filter_prices), intégration (freshness.json + sources).
+
+Next (Sprint‑10)
+- Backtests/Evaluation: brancher loaders, empty states FR, graphiques + tableau.
+- Risk/Regimes: robuste aux colonnes manquantes, badges trends.
+- Deep Dive: multi‑tickers + filtres dates (parity Streamlit).
+- E2E tests: parcours Forecasts/Deep‑Dive/Quality/Backtests/Evaluation.
 
 How to run:
 - Start legacy apps: `make streamlit-apps-start` (stop: `make streamlit-apps-stop`).
