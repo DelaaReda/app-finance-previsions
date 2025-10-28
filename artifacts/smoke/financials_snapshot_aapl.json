@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "ticker": "AAPL",
+  "asof_utc": "2025-09-14T16:32:51.163273Z",
+  "yahoo": {
+    "ticker": "AAPL",
+    "source": "YahooFinance",
+    "ok": true,
+    "asof_utc": "2025-09-14T16:32:49.779630Z",
+    "price": 234.07000732421875,
+    "market_cap": 3473692426240.0,
+    "pe": 35.465153,
+    "beta": 1.109,
+    "sector": "Technology",
+    "industry": "Consumer Electronics",
+    "dividend_yield": 0.44,
+    "earnings_dates": [],
+    "short_name": "Apple Inc.",
+    "currency": "USD",
+    "exchange": "NMS",
+    "source_used": "yfinance",
+    "short_percent_float": null
+  },
+  "sec_profile": null,
+  "filings_head": [],
+  "insiders": {
+    "ok": false
+  },
+  "thirteenF": {
+    "ok": false,
+    "error": "No 13F filings found"
+  },
+  "options_overview": {
+    "expiries": null,
+    "chosen_expiry": null,
+    "calls_count": 0,
+    "puts_count": 0
+  },
+  "signals": {
+    "insider_alert": null
+  },
+  "sources_used": [
+    "YahooFinance",
+    "SEC EDGAR"
+  ],
+  "notes": "Best-effort; pour Form 4 détaillé et montants, parser les XML ownership filing individuels."
+}

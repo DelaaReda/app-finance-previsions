@@ -16,7 +16,8 @@ build/
 
 # Projet
 cache/
-artifacts/
+artifacts/net
+artifacts/security
 artifacts_phase1/
 logs/
 *.log
