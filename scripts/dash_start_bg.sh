@@ -22,13 +22,12 @@ fi
 echo "[dash-bg] Starting Dash on port $PORT (log: $LOGFILE) ..."
 (
   echo "==== $(date '+%F %T') — dash start (port $PORT) ===="
-  PY_BIN="$REPO_ROOT/.venv/bin/python3"
-  if [ -x "$PY_BIN" ]; then
-    RUN_PY="$PY_BIN"
-  else
-    RUN_PY="python3"
+  RUN_PY="$REPO_ROOT/.venv/bin/python3"
+  if [ ! -x "$RUN_PY" ]; then
+    echo "[dash-bg] ERROR: Virtual environment not properly set up.  Please run 'python3 -m venv .venv && source .venv/bin/activate'"
+    exit 1
   fi
-  AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH=${PYTHONPATH:-"$REPO_ROOT/src"} "$RUN_PY" "$APP"
+  AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT/src" exec "$RUN_PY" "$APP"
 ) >>"$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 echo "[dash-bg] PID $(cat "$PIDFILE")"
