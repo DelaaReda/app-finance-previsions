@@ -1,9 +1,60 @@
-#!/usr/bin/env bash
-set -e
-echo "[pre-push] UI health check..."
-make ui-health || {
-  echo "[pre-push] ui-health KO — corrige avant push."
-  exit 1
-}
-exit 0
+#!/bin/bash
 
+# --- Code Pattern Check ---
+if [ "${SKIP_UI_CHECKS:-0}" = "1" ]; then
+  echo "[pre-push] SKIP_UI_CHECKS=1 set — skipping UI checks."
+  exit 0
+fi
+
+FORBIDDEN_PATTERNS=("dash_html_components" "dash.register_page(")
+PAGES_DIR="src/dash_app/pages/"
+ERROR_FOUND=0
+AFFECTED_FILES=""
+
+echo "Running Git pre-push hook..."
+echo "Checking for forbidden patterns in $PAGES_DIR..."
+
+for PATTERN in "${FORBIDDEN_PATTERNS[@]}"; do
+    # Use git grep to search only in staged/committed files within the specified directory
+    # -l: print only the names of files that contain matches
+    # -E: interpret pattern as an extended regular expression
+    # --cached: search in the index (staged files)
+    # --: separates options from file patterns
+    MATCHING_FILES=$(git grep -l -E "$PATTERN" --cached -- "$PAGES_DIR")
+    if [ -n "$MATCHING_FILES" ]; then
+        echo "Error: Forbidden pattern '$PATTERN' found in the following files:"
+        echo "$MATCHING_FILES"
+        AFFECTED_FILES+="$MATCHING_FILES\n"
+        ERROR_FOUND=1
+    fi
+done
+
+if [ "$ERROR_FOUND" -eq 1 ]; then
+    echo -e "\nPre-push hook failed: Forbidden code patterns detected."
+    echo -e "Please remove these patterns before pushing:\n$AFFECTED_FILES"
+    exit 1
+fi
+
+echo "Code pattern check passed."
+
+# --- UI Health Checks ---
+echo "Running UI health checks..."
+
+echo "Running 'make dash-smoke'..."
+make dash-smoke
+if [ $? -ne 0 ]; then
+    echo "Pre-push hook failed: 'make dash-smoke' failed."
+    exit 1
+fi
+echo "'make dash-smoke' passed."
+
+echo "Running 'make ui-health'..."
+make ui-health
+if [ $? -ne 0 ]; then
+    echo "Pre-push hook failed: 'make ui-health' failed."
+    exit 1
+fi
+echo "'make ui-health' passed."
+
+echo "Git pre-push hook completed successfully."
+exit 0
