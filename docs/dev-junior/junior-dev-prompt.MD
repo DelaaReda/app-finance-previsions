@@ -100,3 +100,23 @@ Communication
 Toujours lister: objectifs, fichiers touchés, commandes lancées, résultats (codes retour, extraits logs), captures
 En cas d’échec, donne un “plan de reprise” (hypothèse + prochaine action testable)
 Si tu dois créer une page d’expérimentation, fais‑la sous src/dash_app/pages/integration_<nom>.py, sans register_page, avec imports modernes, et assure‑toi qu’elle ne s’affiche qu’en DEV (DEVTOOLS_ENABLED=1). Toute exposition “prod” est strictement hors de ton périmètre sans revue explicite.
+
+Réutilisation d’abord — lis ces docs avant toute tâche
+- Règles de développement (profondeur) : `docs/dev/engineering_rules.md`
+- Playbook d’intégration Dash (DEV‑only, tests, patterns) : `docs/dev/integration_playbook.md`
+- Index des modules/fonctions clés : `docs/dev/module_index.md`
+
+Guides « recherche & vérification » (anti‑duplication)
+- Avant de créer du code, cherche l’existant:
+  - `rg -n "<mot_clé>" src` (ex.: freshness, forecast, parquet, llm)
+  - parcourir `docs/dev/module_index.md` pour repérer le bon module
+- Si le besoin est proche: factoriser dans `src/tools/` (wrapper réutilisable) + tests unitaires.
+- Toujours préférer un utilitaire central à des copies locales.
+
+Hooks & CI
+- Active les hooks: `make git-hooks`. Le pre‑push bloque les patterns interdits et lance `make dash-smoke` + `make ui-health`.
+- Besoin d’un bypass exceptionnel (docs/tests only): `SKIP_UI_CHECKS=1 git push`.
+
+Tests réalistes (références exactes)
+- LLM Summary: stub `src.agents.llm.runtime.LLMClient` et appelle `src.agents.llm.arbiter_agent.run_llm_summary(save_base=...)`.
+- Parquet IO: utilise `src/tools/parquet_io.{latest_partition, read_parquet_latest}` avec signatures exactes.

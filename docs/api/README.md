@@ -1,0 +1,47 @@
+# API Reference
+
+Modules documented here (auto-generated):
+
+- src/core/data_store.py
+- src/core/config.py
+- src/core/prompt_context.py
+- src/core/models.py
+- src/core/stock_utils.py
+- src/core/market_data.py
+- src/core/io_utils.py
+- src/tools/git_patcher.py
+- src/tools/parquet_io.py
+- src/tools/make.py
+- src/agents/llm_context_builder_agent.py
+- src/agents/recession_agent.py
+- src/agents/evaluation_agent.py
+- src/agents/macro_forecast_agent.py
+- src/agents/macro_regime_agent.py
+- src/agents/forecast_aggregator_agent.py
+- src/agents/commodity_forecast_agent.py
+- src/agents/update_monitor_agent.py
+- src/agents/orchestrator.py
+- src/agents/investment_memo_agent.py
+- src/agents/equity_forecast_agent.py
+- src/agents/backtest_agent.py
+- src/agents/risk_monitor_agent.py
+- src/agents/g4f_model_watcher.py
+- src/agents/data_harvester.py
+- src/agents/data_quality.py
+- src/agents/llm/toolkit.py
+- src/agents/llm/run_once.py
+- src/agents/llm/runtime.py
+- src/agents/llm/schemas.py
+- src/agents/llm/arbiter_agent.py
+- src/analytics/econ_llm_agent.py
+- src/analytics/phase5_fusion.py
+- src/analytics/backtest_news_impact.py
+- src/analytics/ml_baseline.py
+- src/analytics/phase1_fundamental.py
+- src/analytics/phase4_sentiment.py
+- src/analytics/phase3_macro.py
+- src/analytics/news_aggregator.py
+- src/analytics/forecaster.py
+- src/analytics/market_intel.py
+- src/analytics/phase2_technical.py
+- src/analytics/recommender.py
