@@ -120,3 +120,108 @@ Hooks & CI
 Tests réalistes (références exactes)
 - LLM Summary: stub `src.agents.llm.runtime.LLMClient` et appelle `src.agents.llm.arbiter_agent.run_llm_summary(save_base=...)`.
 - Parquet IO: utilise `src/tools/parquet_io.{latest_partition, read_parquet_latest}` avec signatures exactes.
+
+Cheatsheet — Modules existants à réutiliser au maximum
+- IO & utilitaires (src/tools, src/core)
+  - `src/tools/parquet_io.py` — `latest_partition(base) -> Path|None`, `read_parquet_latest(base, filename) -> pd.DataFrame|None`
+  - `src/tools/make.py` — `run_make(target, args=None, timeout=900) -> Dict` (exécuter une cible Make proprement)
+  - `src/tools/git_patcher.py` — appliquer un patch Git ou commiter (DEV‑tools seulement)
+  - `src/core/io_utils.py` — `read_jsonl/write_jsonl`, `read_parquet/write_parquet`, `ensure_dir`, `setup_logging`
+  - `src/core/market_data.py` — `get_price_history`, `get_fred_series` (agents uniquement; jamais depuis l’UI)
+
+- Agents (écrire/rafraîchir partitions)
+  - Fraîcheur/Qualité: `src/agents/update_monitor_agent.py:run_once()` → `data/quality/dt=*/freshness.json`
+  - Équities (baseline): `src/agents/equity_forecast_agent.py:run_once()` → `data/forecast/dt=*/forecasts.parquet`
+  - Agrégateur: `src/agents/forecast_aggregator_agent.py` (si présent) → `data/forecast/dt=*/final.parquet`
+  - Macro: `src/agents/macro_forecast_agent.py:run_once()` → `data/macro/forecast/dt=*/macro_forecast.*`
+  - LLM: `src/agents/llm/arbiter_agent.py:run_llm_summary(save_base="data/llm_summary")` → résumé horaire
+
+- UI Dash (lecture partitions)
+  - `src/dash_app/data/loader.py` et `paths.py` — helpers pour trouver/charger les fichiers (si présents)
+  - Patrons: lire la dernière partition avec `parquet_io`, gérer empty state (Alert FR), DataTable/Graph
+
+- Analytics (combinaisons/logiques)
+  - `src/analytics/phase2_technical.py` / `phase3_macro.py` / `phase5_fusion.py` — fonctions de fusion/scoring à réutiliser
+  - `src/analytics/phase4_sentiment.py` — scoring news & agrégations
+
+Recettes courantes (ne pas réinventer)
+- « Afficher un tableau de prévisions » (UI):
+  1) `part = latest_partition("data/forecast")`; 2) `df = read_parquet_latest("data/forecast", "final.parquet")`; 3) si `df is None` → Alert FR; sinon DataTable triable.
+- « Rafraîchir LLM summary (DEV bouton) »:
+  - `run_make("llm-summary-run")` (via src/tools/make.py); recharger la page; lire `data/llm_summary/dt=*/summary.json`.
+- « Vérifier fraîcheur » (badge/page):
+  - Lire `data/quality/dt=*/freshness.json`; calculer heures de décalage; badges 🟢/🟡/🔴.
+
+Rappels d’interdictions (réutilisation avant création)
+- Ne pas appeler des clients réseau (ingestion, FRED, yfinance) depuis l’UI; utiliser les partitions écrites par les agents.
+- Ne pas dupliquer un “loader” ou un “aggregator”: chercher dans `docs/dev/module_index.md` puis `docs/api/` avant d’ajouter quoi que ce soit.
+- Si une fonctionnalité manque, créer un petit wrapper générique dans `src/tools/` + tests unitaires.
+
+Orchestrations “composition‑only” — ce que tu peux livrer
+- Principe: tu composes des sections UI à partir de données déjà disponibles sous `data/**/dt=…` et de modules existants. Zéro logique métier nouvelle, zéro réseau.
+- DEV‑only: toute nouvelle page est sous `src/dash_app/pages/integration_<nom>.py` (affichée uniquement si `DEVTOOLS_ENABLED=1`). Tu ne modifies pas la navigation prod.
+- Lecture: via `src/tools/parquet_io.py` (ou loaders), ex:
+  - `part = latest_partition("data/forecast")  # Path|None`
+  - `df = read_parquet_latest("data/forecast", "final.parquet")  # DataFrame|None`
+- Relance agents (facultatif): via `src/tools/make.py: run_make("llm-summary-run")`, en affichant le log (dcc.Loading) et sans bloquer l’UI.
+
+Sections prêtes à intégrer (modèles)
+- Investor Overview (intégration Dashboard)
+  - Inputs: `final.parquet` (Top‑N), `macro_forecast.*` (régime/risque), `freshness.json`, `llm_summary/summary.json` (key_drivers)
+  - Output: 3–4 cartes (Régime, Risque, Top‑5 final, Facteurs LLM) + bouton “Relancer LLM summary” (run_make)
+  - Empty states FR systématiques; aucun crash si une source manque.
+- Deep Ticker Snapshot (intégration Deep‑Dive)
+  - Inputs: `final.parquet` filtré par ticker; prix (si partition prix dispo); `llm_summary.contributors` filtrés ticker
+  - Output: tableau horizons (score/direction), graphique overlay (si prix), mini‑justification LLM
+- Agents Health Panel (intégration Observability/Agents)
+  - Inputs: `freshness.json` + existence `final.parquet`, `macro_forecast.*`, `llm_summary/summary.json`
+  - Output: badges 🟢/🟡/🔴 par agent + dt; boutons relance `update-monitor`, `equity-forecast`, `forecast-aggregate`, `macro-forecast`, `llm-summary-run`
+
+Références utiles (à lire pour t’inspirer)
+- Ancienne UI Streamlit 5557: `src/apps/stock_analysis_app.py` ("📊 Analyse Approfondie d'Action") — structure des blocs et métriques UI.
+- LLM Judge (Dash): `src/dash_app/pages/llm_judge.py` — présentation verdicts/justifications; pattern de table + badges.
+- Forecasts/Deep‑Dive (Dash): `src/dash_app/pages/forecasts.py`, `src/dash_app/pages/deep_dive.py` — DataTable, filtres, overlay.
+
+Patron de code (extraits)
+```python
+from dash import html, dcc, dash_table
+import dash_bootstrap_components as dbc
+from src.tools.parquet_io import latest_partition, read_parquet_latest
+from src.tools.make import run_make
+
+def _load_final():
+    df = read_parquet_latest("data/forecast", "final.parquet")
+    return df  # DataFrame|None
+
+def card_top_final():
+    df = _load_final()
+    if df is None or df.empty:
+        return dbc.Alert("Aucune prévision disponible (final.parquet).", color="info")
+    cols = [c for c in df.columns if c in ("ticker","horizon","final_score")]
+    return dash_table.DataTable(data=df[cols].to_dict("records"), columns=[{"id":c,"name":c} for c in cols], sort_action="native")
+
+def btn_llm_refresh():
+    log_id = "llm-run-log"
+    # callback côté page pour appeler run_make(["llm-summary-run"]) et écrire le log dans ce <pre>
+    return html.Div([
+        dbc.Button("Relancer LLM summary", id="llm-run", color="primary"),
+        dcc.Loading(html.Pre(id=log_id, style={"whiteSpace":"pre-wrap"}))
+    ])
+
+def layout():
+    return html.Div([card_top_final(), html.Hr(), btn_llm_refresh()])
+```
+
+Tâches concrètes (priorisées)
+1) Investor Overview — `src/dash_app/pages/integration_overview.py`
+   - 4 cartes + bouton LLM (run_make); tests (route 200) + screenshots ui-health.
+2) Deep Ticker Snapshot — `src/dash_app/pages/integration_deep_snapshot.py`
+   - Tableau horizons + (optionnel) overlay si prix dispo; empty states propres.
+3) Agents Health Panel — `src/dash_app/pages/integration_agents_health.py`
+   - Badges statut agents + dt; boutons relance; tests/snapshots.
+
+Acceptance
+- Lecture partitions uniquement; aucun réseau.
+- Empty states FR; pas d’erreurs console; boutons run_make opérationnels (logs visibles).
+- `make dash-smoke` + `make ui-health` OK; `pytest -q` pour helpers ajoutés.
+- PR DEV‑only (integration_*), docs/PROGRESS.md à jour, screenshots joints.

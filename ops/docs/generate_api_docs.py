@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import List, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC_DIRS = [ROOT / "src" / p for p in ("core", "tools", "agents", "analytics")]
+# Scan ALL modules under src (apps, dash_app, analytics, agents, core, tools, ingestion, taxonomy, research, runners, etc.)
+SRC_DIRS = [ROOT / "src"]
 OUT_BASE = ROOT / "docs" / "api"
 
 
@@ -84,7 +85,7 @@ def _doc_title(path: Path) -> str:
     return str(rel)
 
 
-def document_file(py_path: Path) -> Optional[str]:
+def document_file(py_path: Path) -> Optional[tuple[str, dict]]:
     src = _read(py_path)
     if not src:
         return None
@@ -96,6 +97,8 @@ def document_file(py_path: Path) -> Optional[str]:
     mod_doc = ast.get_docstring(tree) or ""
 
     out: List[str] = []
+    # coverage counters
+    cov = {"fn_total": 0, "fn_doc": 0, "cls_total": 0, "cls_doc": 0, "meth_total": 0, "meth_doc": 0}
     out.append(f"# {py_path.name}\n")
     if mod_doc:
         out.append(mod_doc.strip() + "\n")
@@ -106,11 +109,13 @@ def document_file(py_path: Path) -> Optional[str]:
             # skip private/dunder helpers
             if node.name.startswith("_"):
                 continue
+            cov["fn_total"] += 1
             out.append(f"## Function: `{node.name}`\n")
             out.append(f"Signature: `{_fn_sig(node)}`\n")
             ds = ast.get_docstring(node) or ""
             if ds:
                 out.append(ds.strip() + "\n")
+                cov["fn_doc"] += 1
             out.append("Inputs:")
             pd = _params_details(node)
             if pd:
@@ -122,48 +127,57 @@ def document_file(py_path: Path) -> Optional[str]:
         elif isinstance(node, ast.ClassDef):
             if node.name.startswith("_"):
                 continue
+            cov["cls_total"] += 1
             out.append(f"## Class: `{node.name}`\n")
             cds = ast.get_docstring(node) or ""
             if cds:
                 out.append(cds.strip() + "\n")
+                cov["cls_doc"] += 1
             # methods
             for item in node.body:
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and not item.name.startswith("_"):
+                    cov["meth_total"] += 1
                     out.append(f"### Method: `{node.name}.{item.name}`\n")
                     out.append(f"Signature: `{_fn_sig(item)}`\n")
                     ids = ast.get_docstring(item) or ""
                     if ids:
                         out.append(ids.strip() + "\n")
+                        cov["meth_doc"] += 1
                     out.append("Inputs:")
                     pd = _params_details(item)
                     out.extend(pd if pd else ["- (none)"])
                     out.append(f"Returns: `{_ann_to_str(item.returns) or 'Any'}`\n")
 
-    return "\n".join(out)
+    return "\n".join(out), cov
 
 
 def main() -> int:
     OUT_BASE.mkdir(parents=True, exist_ok=True)
     index_lines: List[str] = ["# API Reference\n", "Modules documented here (auto-generated):\n"]
+    cov_rows: List[str] = ["\n## Coverage Summary\n", "| Module | Fn (doc/total) | Cls (doc/total) | Meth (doc/total) |", "|---|---:|---:|---:|"]
     for base in SRC_DIRS:
         for py in base.rglob("*.py"):
-            # skip __init__ and UI pages
+            # skip package initializers only
             if py.name == "__init__.py":
                 continue
             rel = py.relative_to(ROOT)
             out_path = OUT_BASE / (str(rel).replace(os.sep, "__") + ".md")
-            md = document_file(py)
-            if not md:
+            res = document_file(py)
+            if not res:
                 continue
+            md, cov = res
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(md, encoding="utf-8")
             index_lines.append(f"- {rel}")
+            cov_rows.append(
+                f"| {rel} | {cov['fn_doc']}/{cov['fn_total']} | {cov['cls_doc']}/{cov['cls_total']} | {cov['meth_doc']}/{cov['meth_total']} |"
+            )
 
-    (OUT_BASE / "README.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    readme = "\n".join(index_lines + cov_rows) + "\n"
+    (OUT_BASE / "README.md").write_text(readme, encoding="utf-8")
     print(f"[api-docs] written under {OUT_BASE}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

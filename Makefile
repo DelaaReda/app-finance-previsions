@@ -259,6 +259,15 @@ git-hooks:
 artifacts-zip:
 	PYTHONPATH=$$PWD/src python -m ops.pack_artifacts
 
+# --- API docs ---
+.PHONY: api-docs-generate
+api-docs-generate:
+	@if [ -x .venv/bin/python ]; then \
+		.venv/bin/python ops/docs/generate_api_docs.py ; \
+	else \
+		echo "[api-docs] venv python not found. Run: python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt" ; \
+	fi
+
 # --- LLM Summary (hourly partitions) ---
 .PHONY: llm-summary-run llm-summary-hourly llm-summary-scheduler-start
 llm-summary-run:
