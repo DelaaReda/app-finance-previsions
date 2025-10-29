@@ -46,6 +46,10 @@ Objectif: éviter la dette, maximiser la réutilisation et garantir la stabilit�
 - Activer hooks: `make git-hooks`.
 - pre-push rejette `dash_html_components` et `dash.register_page(` sous `src/dash_app/pages/` et lance `make dash-smoke` + `make ui-health`.
 - Bypass exceptionnel: `SKIP_UI_CHECKS=1 git push` (ex: PR docs/tests uniquement).
+- CI GitHub (`.github/workflows/ci.yml`):
+  - Job `api-docs`: regénère les docs API (AST) et échoue si `docs/api/` n’est pas à jour.
+  - Job `ui-validate`: démarre Dash, exécute `make dash-smoke` et `make ui-health`, puis upload des artefacts (screenshots + rapports).
+  - Conseillé: lancer `make api-docs-generate` localement après ajout/modif de fonctions publiques.
 
 ## 8) Git & PRs
 - Branches: `feature/<slug>`, `fix/<slug>`, `test/<slug>`.
@@ -72,4 +76,3 @@ Objectif: éviter la dette, maximiser la réutilisation et garantir la stabilit�
 ## 12) Liens utiles
 - Module index: `docs/dev/module_index.md`
 - Playbook intégration (tests, patterns): `docs/dev/integration_playbook.md`
-

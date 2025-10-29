@@ -159,7 +159,7 @@ Modules documented here (auto-generated):
 | src/ingestion/finnews.py | 5/17 | 0/1 | 0/0 |
 | src/ingestion/finviz_client.py | 6/8 | 0/1 | 0/1 |
 | src/tools/git_patcher.py | 0/4 | 0/0 | 0/0 |
-| src/tools/parquet_io.py | 0/2 | 0/0 | 0/0 |
+| src/tools/parquet_io.py | 2/2 | 0/0 | 0/0 |
 | src/tools/make.py | 1/1 | 0/0 | 0/0 |
 | src/core/data_store.py | 0/4 | 0/0 | 0/0 |
 | src/core/config.py | 0/0 | 1/1 | 5/5 |

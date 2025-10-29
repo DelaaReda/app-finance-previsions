@@ -1,57 +1,72 @@
-name: CI
+name: ci
 
 on:
   push:
   pull_request:
 
 jobs:
-  build-test:
+  api-docs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
-      - name: Install deps
+          python-version: '3.11'
+      - name: Setup venv + install deps
         run: |
-          python -m pip install --upgrade pip
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -U pip
           pip install -r requirements.txt
-          pip install playwright
-          python -m playwright install chromium
-
-      - name: Run tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
+      - name: Generate API docs
         run: |
-          make test
-
-      - name: Start Streamlit (background)
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
-          AF_UI_PORT: 5555
+          . .venv/bin/activate
+          python ops/docs/generate_api_docs.py
+      - name: Check API docs up-to-date
         run: |
-          nohup bash -lc 'AF_UI_PORT=5555 bash scripts/ui_start.sh >/dev/null 2>&1 &' 
-          for i in {1..20}; do curl -sf http://localhost:5555/_stcore/health && break || sleep 2; done
+          if ! git diff --quiet -- docs/api; then
+            echo 'API docs changed. Please run: make api-docs-generate and commit the updates.'
+            git status --porcelain
+            git --no-pager diff -- docs/api | head -n 200 || true
+            exit 1
+          fi
 
-      - name: UI smoke (Playwright)
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
-          UI_BASE: http://localhost:5555
+  ui-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Setup venv + install deps
         run: |
-          python ops/ui/ui_smoke.py || true
-
-      - name: Security audit
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -U pip
+          pip install -r requirements.txt
+      - name: Start Dash (background)
         run: |
-          bash ops/security/security_scan.sh || true
-
-      - name: Upload artifacts
+          . .venv/bin/activate
+          nohup python -m src.dash_app.app > dash.out 2>&1 &
+          sleep 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: UI Health (Playwright)
+        run: |
+          npm i -D playwright
+          npx playwright install chromium
+          make ui-health || true
+      - name: Smoke routes
+        run: |
+          . .venv/bin/activate
+          make dash-smoke
+      - name: Upload UI artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-artifacts
+          name: ui-health-artifacts
           path: |
-            artifacts/**
-            data/reports/**
+            artifacts/ui_health
+            data/reports
+            dash.out
