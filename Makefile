@@ -270,6 +270,11 @@ llm-summary-hourly:
 llm-summary-scheduler-start:
 	PYTHONPATH=$$PWD/src python -m src.agent_runner.scheduler
 
+# --- Minimal agent orchestrator (sequential) ---
+.PHONY: agent-run-once
+agent-run-once:
+	PYTHONPATH=$$PWD/src python -m src.agents.orchestrator
+
 .PHONY: snap-url
 snap-url:
 	# Take a Playwright screenshot of a single URL

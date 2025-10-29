@@ -15,6 +15,8 @@ New (LLM Summary + Agent Continuous):
 - ✅ Orchestrateur LLM (g4f): `src/agents/llm/{runtime.py,schemas.py,toolkit.py,arbiter_agent.py,run_once.py}` (déjà présent) — écrit `data/llm_summary/dt=YYYYMMDDHH`.
 - ✅ Horaire continu (sans boucle infinie): `src/agent_runner/scheduler.py` (APScheduler) exécute le résumé au début de chaque heure.
 - ✅ Makefile: `llm-summary-scheduler-start` démarre le scheduler; `llm-summary-run` lance une exécution à la demande.
+- ✅ Outils agent: `src/tools/make.py` (runner Make structuré), `src/tools/git_patcher.py` (apply diff + commit), `src/tools/parquet_io.py` (lecture partition Parquet la plus récente).
+- ✅ Orchestrateur minimal séquentiel: `src/agents/orchestrator.py` (pipeline best‑effort freshness → equity → aggregate → macro → llm_summary → ui_health). Target: `make agent-run-once`.
 
 Next (Sprint‑10)
 - Backtests/Evaluation: brancher loaders, empty states FR, graphiques + tableau.
@@ -29,6 +31,7 @@ How to run:
 - LLM only: `make llm-context && make llm-forecast`.
  - LLM summary (one‑shot): `make llm-summary-run` → consultez Dash: `/llm_summary`.
  - LLM summary (horaire, 24/7): `make llm-summary-scheduler-start` (Ctrl‑C pour arrêter).
+ - Orchestrateur (séquentiel, borné): `make agent-run-once`.
 
 🎯 SPRINT-7 : AGENT COMMODITIES + STABILISATION ! 🚀
 
