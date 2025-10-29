@@ -98,11 +98,16 @@ def sidebar() -> html.Div:
                     dbc.NavLink("Quality", href="/quality", active="exact"),
                     dbc.NavLink("Profiler", href="/profiler", active="exact"),
                     dbc.NavLink("Observability", href="/observability", active="exact"),
-                ] + [
-                   dbc.NavLink("Integration Agent Status", href="/integration_agent_status", active="exact"),
-               ],
-               vertical=True,
-               pills=True,
+                ] + (
+                    [
+                        dbc.NavLink("Integration Agent Status", href="/integration_agent_status", active="exact"),
+                        dbc.NavLink("Integration Data Quality", href="/integration_data_quality", active="exact"),
+                        dbc.NavLink("Integration Macro Data", href="/integration_macro_data", active="exact"),
+                        dbc.NavLink("Integration LLM Scoreboard", href="/integration_llm_scoreboard", active="exact"),
+                    ] if os.getenv("DEVTOOLS_ENABLED", "0") == "1" else []
+                ),
+                vertical=True,
+                pills=True,
             ),
             html.Div(id='global-status-badge', className="mt-3"),
             html.Small([dbc.NavLink("Détails", href="/agents", className="text-muted", style={"fontSize": "0.8rem"})], className="mb-2"),
@@ -113,9 +118,11 @@ def sidebar() -> html.Div:
 
 def _page_registry() -> Dict[str, Callable[[], html.Div]]:
     # Use absolute imports so running as script works with PYTHONPATH=src
-    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler, llm_summary, integration_agent_status
+    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler, llm_summary
     if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
         from dash_app.pages import devtools  # type: ignore
+        # Import integration pages only in DEV mode
+        from dash_app.pages import integration_agent_status, integration_data_quality, integration_macro_data, integration_llm_scoreboard  # type: ignore
 
     pages = {
         "/": dashboard.layout,
@@ -136,10 +143,13 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/quality": quality.layout,
         "/profiler": profiler.layout,
         "/observability": observability.layout,
-        "/integration_agent_status": integration_agent_status.layout,
     }
     if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
         pages["/devtools"] = devtools.layout  # type: ignore
+        pages["/integration_agent_status"] = integration_agent_status.layout  # type: ignore
+        pages["/integration_data_quality"] = integration_data_quality.layout  # type: ignore
+        pages["/integration_macro_data"] = integration_macro_data.layout  # type: ignore
+        pages["/integration_llm_scoreboard"] = integration_llm_scoreboard.layout  # type: ignore
     return pages
 
 
