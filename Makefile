@@ -132,6 +132,23 @@ ui-status:
 ui-logs:
 	tail -f logs/ui/streamlit_$${AF_UI_PORT-5555}.log
 
+# --- New Streamlit skeleton (separate from canonical 5555) ---
+.PHONY: streamlit-run streamlit-test streamlit-shots streamlit-lint
+
+STREAMLIT_PORT ?= 5566
+
+streamlit-run:
+	AF_UI_PORT=$${STREAMLIT_PORT} PYTHONPATH=$$PWD/src streamlit run src/apps/streamlit/app.py --server.port $${STREAMLIT_PORT} --server.headless false
+
+streamlit-test:
+	@echo "[stub] add smoke tests for streamlit skeleton"
+
+streamlit-shots:
+	@echo "[stub] add playwright screenshots for streamlit skeleton"
+
+streamlit-lint:
+	@echo "[stub] ruff/mypy for streamlit skeleton"
+
 # --- Launch specific legacy Streamlit apps (for comparison) ---
 .PHONY: streamlit-forecast-start streamlit-forecast-stop
 streamlit-forecast-start:

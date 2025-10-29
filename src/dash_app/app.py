@@ -9,8 +9,7 @@ from typing import Callable, Dict
 import pandas as pd
 import dash
 import dash_bootstrap_components as dbc
-import dash_table
-from dash import html, dcc
+from dash import html, dcc, dash_table
 import time
 try:
     from flask import request, g
@@ -74,10 +73,20 @@ def sidebar() -> html.Div:
                     dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
                     dbc.NavLink("Signals", href="/signals", active="exact"),
                     dbc.NavLink("Portfolio", href="/portfolio", active="exact"),
+                    dbc.NavLink("Watchlist", href="/watchlist", active="exact"),
+                    dbc.NavLink("Alerts", href="/alerts", active="exact"),
                     dbc.NavLink("News", href="/news", active="exact"),
                     dbc.NavLink("Deep Dive", href="/deep_dive", active="exact"),
+                    dbc.NavLink("Memos", href="/memos", active="exact"),
+                    dbc.NavLink("Notes", href="/notes", active="exact"),
+                    dbc.NavLink("Changes", href="/changes", active="exact"),
+                    dbc.NavLink("Events", href="/events", active="exact"),
+                    dbc.NavLink("Earnings", href="/earnings", active="exact"),
+                    dbc.NavLink("Reports", href="/reports", active="exact"),
+                    dbc.NavLink("Advisor", href="/advisor", active="exact"),
                     dbc.NavLink("LLM Judge", href="/llm_judge", active="exact"),
                     dbc.NavLink("LLM Summary", href="/llm_summary", active="exact"),
+                    dbc.NavLink("LLM Models", href="/llm_models", active="exact"),
                     dbc.NavLink("Forecasts", href="/forecasts", active="exact"),
                     dbc.NavLink("Backtests", href="/backtests", active="exact"),
                     dbc.NavLink("Evaluation", href="/evaluation", active="exact"),
@@ -98,6 +107,7 @@ def sidebar() -> html.Div:
                     dbc.NavLink("Quality", href="/quality", active="exact"),
                     dbc.NavLink("Profiler", href="/profiler", active="exact"),
                     dbc.NavLink("Observability", href="/observability", active="exact"),
+                    dbc.NavLink("Settings", href="/settings", active="exact"),
                 ] + (
                     [
                         dbc.NavLink("Integration Agent Status", href="/integration_agent_status", active="exact"),
@@ -118,7 +128,11 @@ def sidebar() -> html.Div:
 
 def _page_registry() -> Dict[str, Callable[[], html.Div]]:
     # Use absolute imports so running as script works with PYTHONPATH=src
-    from dash_app.pages import dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler, llm_summary
+    from dash_app.pages import (
+        dashboard, signals, portfolio, observability, agents_status, regimes, risk, recession, 
+        news, deep_dive, forecasts, backtests, evaluation, quality, llm_judge, profiler, llm_summary, 
+        alerts, settings, watchlist, memos, notes, changes, events, earnings, reports, advisor, llm_models, home
+    )
     if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
         from dash_app.pages import devtools  # type: ignore
         # Import integration pages only in DEV mode
@@ -126,6 +140,7 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
 
     pages = {
         "/": dashboard.layout,
+        "/home": home.layout,
         "/dashboard": dashboard.layout,
         "/signals": signals.layout,
         "/portfolio": portfolio.layout,
@@ -136,13 +151,24 @@ def _page_registry() -> Dict[str, Callable[[], html.Div]]:
         "/deep_dive": deep_dive.layout,
         "/llm_judge": llm_judge.layout,
         "/llm_summary": llm_summary.layout,
+        "/llm_models": llm_models.layout,
         "/forecasts": forecasts.layout,
-    "/backtests": backtests.layout,
-    "/evaluation": evaluation.layout,
+        "/backtests": backtests.layout,
+        "/evaluation": evaluation.layout,
         "/agents": agents_status.layout,
         "/quality": quality.layout,
         "/profiler": profiler.layout,
         "/observability": observability.layout,
+        "/alerts": alerts.layout,
+        "/watchlist": watchlist.layout,
+        "/memos": memos.layout,
+        "/notes": notes.layout,
+        "/settings": settings.layout,
+        "/changes": changes.layout,
+        "/events": events.layout,
+        "/earnings": earnings.layout,
+        "/reports": reports.layout,
+        "/advisor": advisor.layout,
     }
     if os.getenv("DEVTOOLS_ENABLED", "0") == "1":
         pages["/devtools"] = devtools.layout  # type: ignore

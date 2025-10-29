@@ -14,6 +14,9 @@ from dash.testing.application_runners import import_app
         "/agents",
         "/observability",
         "/news",
+        "/integration_overview",
+        "/integration_agents_health",
+        "/integration_deep_snapshot",
     ],
 )
 def test_routes_200(dash_duo, route):

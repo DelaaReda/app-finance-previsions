@@ -31,6 +31,8 @@ def main() -> int:
         "/regimes",
         "/risk",
         "/recession",
+        "/alerts",
+        "/settings",
     ]
     ok = True
     for p in targets:

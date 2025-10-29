@@ -34,6 +34,8 @@ def test_all_pages_render(dash_duo):
         'dashboard': ['#dash-top-final'],
         'agents': ['#global-status-badge'],
         'observability': ['#page-content'],
+        'alerts': ['#alerts-quality-body', '#alerts-threshold'],
+        'settings': ['#settings-watchlist-textarea', '#settings-save'],
     }
 
     for path in pages:
