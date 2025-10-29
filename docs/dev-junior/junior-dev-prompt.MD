@@ -80,6 +80,27 @@ make dash-logs
 
 * Lancement type (prompt E2E prêt à coller dans Kilo) : voir **Annexe A** (démarre l’app, visite chaque route, prend les screenshots, collecte les logs, génère un JSON + zip).
 
+Canonique UI et ports
+- Streamlit canonique: `src/apps/agent_app.py` sur port `5555`.
+  - Démarrer: `make ui-start` (premier plan) ou `make ui-start-bg` (arrière-plan)
+  - Redémarrer: `make ui-restart` ou `make ui-restart-bg`
+  - Logs: `make ui-logs` (fichier: `logs/ui/streamlit_5555.log`)
+- UIs legacy comparatives (pour debug seulement):
+  - Port `5556`: `src/apps/forecast_app.py` → `make streamlit-forecast-restart`
+  - Port `5557`: `src/apps/stock_analysis_app.py` → `make streamlit-stock-restart`
+  - Port `5558`: `src/apps/macro_sector_app.py` → `make streamlit-macro-restart`
+- Dash (UI cible): port `8050` → `make dash-restart-bg`
+
+Redémarrer toutes les UIs
+- `make apps-full-restart`
+  - Stoppe les UIs legacy, arrête Dash, redémarre la Streamlit canonique (5555), relance les UIs legacy (5556–5558) puis Dash (8050).
+  - Utiliser après un patch de navigation/pages pour garantir un état propre.
+
+Bonnes pratiques UI (Streamlit)
+- Donnez une `key` unique à chaque widget pour éviter `StreamlitDuplicateElementId`.
+- Évitez les actions réseau en UI; l’UI lit les partitions locales (Parquet/JSON) les plus récentes.
+- Préférez des ids stables (ex: `#dashboard-root`) pour les tests UI.
+
 ---
 
 ## 📌 Ce que tu fais en priorité (tests / docs / outillage)

@@ -16,6 +16,9 @@ Quickstart
   - Statut/Logs: `make ui-status` / `make ui-logs`.
   - Maintenance ponctuelle uniquement pendant la migration vers Dash.
 
+- Redémarrer tout (Dash + Streamlit): `make apps-full-restart`
+  - Canonique 5555 (`src/apps/agent_app.py`) + legacy 5556/5557/5558 + Dash 8050.
+
 MCP & Codex CLI
 - Codex config: `~/.codex/config.toml` (browser MCP, architecture analyzer, filesystem, memory, mermaid, sqlite, serper/tavily/firecrawl, spec‑workflow, taskmanager, FRED/Finnhub, Playwright MCP).
 - First time: Node/npm required; Playwright MCP downloads browsers on first run.
