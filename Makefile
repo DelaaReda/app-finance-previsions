@@ -187,7 +187,7 @@ apps-full-restart:
 # --- Dash (experimental UI) ---
 .PHONY: dash-start
 dash-start:
-	AF_DASH_PORT=$${AF_DASH_PORT-8050} PYTHONPATH=$$PWD/src $(PYTHON) src/dash_app/app.py
+	AF_DASH_PORT=$${AF_DASH_PORT-8050} PYTHONPATH=$$PWD:$$PWD/src $(PYTHON) src/dash_app/app.py
 
 .PHONY: dash-smoke
 dash-smoke:
@@ -235,7 +235,7 @@ open-ui:
 	python -c "import webbrowser; webbrowser.open('http://127.0.0.1:8050')"
 
 dash-dev:
-	PYTHONPATH=$$PWD/src FLASK_ENV=development DASH_DEBUG=1 \
+	PYTHONPATH=$$PWD:$$PWD/src FLASK_ENV=development DASH_DEBUG=1 \
 	python -m src.dash_app.app
 
 dash-start-and-open: dash-start-bg open-ui

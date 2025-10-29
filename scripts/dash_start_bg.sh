@@ -27,7 +27,7 @@ echo "[dash-bg] Starting Dash on port $PORT (log: $LOGFILE) ..."
     echo "[dash-bg] ERROR: Virtual environment not properly set up.  Please run 'python3 -m venv .venv && source .venv/bin/activate'"
     exit 1
   fi
-  AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT/src" exec "$RUN_PY" "$APP"
+  AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src" exec "$RUN_PY" "$APP"
 ) >>"$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 echo "[dash-bg] PID $(cat "$PIDFILE")"
