@@ -3,7 +3,7 @@ from dash import dash_table, html
 import pandas as pd
 from integration.agent_status import get_agent_status_data
 
-dash.register_page(__name__)
+
 
 def layout():
     data = get_agent_status_data()
