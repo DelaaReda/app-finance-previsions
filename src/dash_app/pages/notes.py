@@ -1,190 +1,104 @@
-"""
-Page Notes — Journal personnel
-Permet d'éditer et visualiser des notes quotidiennes en Markdown.
-"""
 from __future__ import annotations
 
-import datetime as dt
 from pathlib import Path
-
+import json
+from datetime import datetime
 import dash_bootstrap_components as dbc
-from dash import html, dcc, Input, Output, State, callback
+from dash import html, dcc, Input, Output, State
+import dash
 
 
-def layout() -> html.Div:
-    """Layout principal de la page Notes."""
+def _load_notes() -> list:
+    """Charge les notes depuis data/notes"""
+    parts = sorted(Path('data/notes').glob('dt=*/notes.json'), reverse=True)
+    notes = []
+    for p in parts[:10]:  # Dernières 10 partitions
+        try:
+            data = json.loads(p.read_text(encoding='utf-8'))
+            if isinstance(data, list):
+                notes.extend(data)
+        except Exception:
+            pass
+    return notes
+
+
+def layout():
+    """
+    Page Notes — Journal d'investissement personnel
+    """
+    notes = _load_notes()
+    
+    cards = []
+    for note in notes:
+        if isinstance(note, dict):
+            cards.append(dbc.Card([
+                dbc.CardHeader(f"📅 {note.get('date', 'N/A')} - {note.get('ticker', 'Général')}"),
+                dbc.CardBody(html.P(note.get('content', '')))
+            ], className="mb-2"))
+    
+    if not cards:
+        cards.append(dbc.Alert("Aucune note enregistrée.", color="info"))
+    
     return html.Div([
-        html.H3("📝 Notes — Journal personnel", className="mb-3"),
+        html.H3("📓 Notes"),
+        html.Small("Journal d'investissement personnel"),
+        html.Hr(),
         
-        dbc.Row([
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader(html.H5("Dates")),
-                    dbc.CardBody([
-                        dcc.Dropdown(
-                            id='notes-date-dropdown',
-                            placeholder="Sélectionnez une date...",
-                            className="mb-3"
-                        ),
-                        dbc.Button(
-                            "➕ Nouveau (aujourd'hui)",
-                            id="notes-new-btn",
-                            color="primary",
-                            className="w-100"
-                        ),
-                        html.Div(id="notes-new-feedback", className="mt-2"),
-                    ]),
-                ]),
-            ], width=3),
-            
-            dbc.Col([
-                html.Div(id="notes-editor-container"),
-            ], width=9),
-        ]),
-    ])
-
-
-@callback(
-    Output("notes-date-dropdown", "options"),
-    Output("notes-date-dropdown", "value"),
-    Input("notes-date-dropdown", "id"),  # trigger on mount
-    Input("notes-new-btn", "n_clicks"),  # refresh after new
-)
-def load_dates(_, n_clicks):
-    """Charge les dates disponibles."""
-    base = Path('data/notes')
-    base.mkdir(parents=True, exist_ok=True)
-    
-    today = dt.datetime.utcnow().strftime('%Y%m%d')
-    dates = sorted([p.name for p in base.glob('dt=*')], reverse=True)
-    
-    # Ensure today exists
-    today_dir = base / f"dt={today}"
-    if not today_dir.exists():
-        today_dir.mkdir(parents=True, exist_ok=True)
-        notes_file = today_dir / 'notes.md'
-        if not notes_file.exists():
-            notes_file.write_text("", encoding='utf-8')
-        dates = sorted([p.name for p in base.glob('dt=*')], reverse=True)
-    
-    options = [{'label': d, 'value': d} for d in dates]
-    value = dates[0] if dates else None
-    
-    return options, value
-
-
-@callback(
-    Output("notes-new-feedback", "children"),
-    Input("notes-new-btn", "n_clicks"),
-    prevent_initial_call=True,
-)
-def create_new_note(n_clicks):
-    """Crée une nouvelle note pour aujourd'hui."""
-    try:
-        base = Path('data/notes')
-        base.mkdir(parents=True, exist_ok=True)
-        today = dt.datetime.utcnow().strftime('%Y%m%d')
-        today_dir = base / f"dt={today}"
-        today_dir.mkdir(parents=True, exist_ok=True)
+        dbc.Card([
+            dbc.CardHeader("➕ Nouvelle note"),
+            dbc.CardBody([
+                dcc.Input(id='note-ticker', placeholder="Ticker (optionnel)", style={"width": "100%"}, className="mb-2"),
+                dcc.Textarea(
+                    id='note-content',
+                    placeholder="Votre note...",
+                    style={"width": "100%", "height": "100px"}
+                ),
+                dbc.Button("💾 Enregistrer", id="note-save-btn", color="primary", className="mt-2"),
+                html.Div(id='note-result', className="mt-2"),
+            ])
+        ], className="mb-3"),
         
-        notes_file = today_dir / 'notes.md'
-        if not notes_file.exists():
-            notes_file.write_text("", encoding='utf-8')
-        
-        return dbc.Alert(
-            f"✓ Note créée pour {today}",
-            color="success",
-            duration=3000,
-        )
-    except Exception as e:
-        return dbc.Alert(
-            f"❌ Erreur: {e}",
-            color="danger"
-        )
+        html.H5("Historique"),
+        html.Div(cards)
+    ], id='notes-root')
 
 
-@callback(
-    Output("notes-editor-container", "children"),
-    Input("notes-date-dropdown", "value"),
+@dash.callback(
+    Output('note-result', 'children'),
+    Output('note-content', 'value'),
+    Output('note-ticker', 'value'),
+    Input('note-save-btn', 'n_clicks'),
+    State('note-ticker', 'value'),
+    State('note-content', 'value'),
+    prevent_initial_call=True
 )
-def display_editor(date_folder):
-    """Affiche l'éditeur de notes."""
-    if not date_folder:
-        return dbc.Alert(
-            "Sélectionnez une date pour éditer les notes.",
-            color="info"
-        )
+def save_note(n_clicks, ticker, content):
+    """Enregistre une nouvelle note"""
+    if not n_clicks or not content:
+        return dash.no_update, dash.no_update, dash.no_update
     
     try:
-        base = Path('data/notes')
-        target_dir = base / date_folder
-        target_dir.mkdir(parents=True, exist_ok=True)
-        notes_path = target_dir / 'notes.md'
+        dt = datetime.now().strftime('%Y%m%d')
+        notes_dir = Path(f'data/notes/dt={dt}')
+        notes_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load existing content
-        text = ""
-        if notes_path.exists():
-            text = notes_path.read_text(encoding='utf-8')
+        # Load existing notes
+        notes_file = notes_dir / 'notes.json'
+        notes = []
+        if notes_file.exists():
+            notes = json.loads(notes_file.read_text(encoding='utf-8'))
         
-        return html.Div([
-            dbc.Card([
-                dbc.CardHeader(html.H5(f"Éditer: {date_folder}/notes.md")),
-                dbc.CardBody([
-                    dcc.Textarea(
-                        id='notes-textarea',
-                        value=text,
-                        style={
-                            'width': '100%',
-                            'height': '320px',
-                            'fontFamily': 'monospace',
-                        },
-                        className="form-control mb-3"
-                    ),
-                    dbc.Button(
-                        "💾 Enregistrer",
-                        id="notes-save-btn",
-                        color="primary",
-                    ),
-                    html.Div(id="notes-save-feedback", className="mt-2"),
-                    dcc.Store(id='notes-current-path', data=str(notes_path)),
-                ]),
-            ], className="mb-3"),
-            
-            dbc.Card([
-                dbc.CardHeader(html.H5("Aperçu")),
-                dbc.CardBody([
-                    dcc.Markdown(id='notes-preview', children=text),
-                ]),
-            ]),
-        ])
+        # Add new note
+        notes.append({
+            'date': datetime.now().isoformat(),
+            'ticker': ticker.upper() if ticker else 'Général',
+            'content': content
+        })
+        
+        # Save
+        notes_file.write_text(json.dumps(notes, ensure_ascii=False, indent=2), encoding='utf-8')
+        
+        return dbc.Alert("✅ Note enregistrée", color="success"), '', ''
     
     except Exception as e:
-        return dbc.Alert(
-            f"Erreur lors du chargement des notes: {e}",
-            color="danger"
-        )
-
-
-@callback(
-    Output("notes-save-feedback", "children"),
-    Output("notes-preview", "children"),
-    Input("notes-save-btn", "n_clicks"),
-    State("notes-textarea", "value"),
-    State("notes-current-path", "data"),
-    prevent_initial_call=True,
-)
-def save_notes(n_clicks, text_value, path_str):
-    """Sauvegarde les notes et met à jour l'aperçu."""
-    try:
-        notes_path = Path(path_str)
-        notes_path.write_text(text_value or "", encoding='utf-8')
-        
-        return (
-            dbc.Alert("✓ Enregistré", color="success", duration=3000),
-            text_value or ""
-        )
-    except Exception as e:
-        return (
-            dbc.Alert(f"❌ Erreur: {e}", color="danger"),
-            text_value or ""
-        )
+        return dbc.Alert(f"❌ Erreur: {e}", color="danger"), dash.no_update, dash.no_update

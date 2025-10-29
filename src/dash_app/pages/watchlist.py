@@ -1,140 +1,105 @@
-"""
-Page Watchlist — Gestion de la liste de surveillance
-Permet de visualiser et modifier la watchlist des tickers suivis.
-"""
 from __future__ import annotations
 
+from pathlib import Path
 import json
 import os
-from pathlib import Path
-
 import dash_bootstrap_components as dbc
-from dash import html, dcc, Input, Output, State, callback
+from dash import html, dcc, Input, Output, State
+import dash
 
 
-def layout() -> html.Div:
-    """Layout principal de la page Watchlist."""
-    # Load current watchlist from env or default
-    current = os.getenv('WATCHLIST') or "NGD.TO,AEM.TO,ABX.TO,K.TO,GDX"
+def _current_watchlist() -> str:
+    """Récupère la watchlist actuelle depuis l'env ou le fichier"""
+    wl = os.getenv('WATCHLIST', '')
+    if not wl:
+        fp = Path('data/watchlist.json')
+        if fp.exists():
+            try:
+                data = json.loads(fp.read_text(encoding='utf-8'))
+                wl = ','.join(data.get('watchlist', []))
+            except Exception:
+                pass
+    return wl if wl else "NGD.TO,AEM.TO,ABX.TO,K.TO,GDX"
+
+
+def layout():
+    """
+    Page Watchlist — Gestion de la liste de surveillance
+    """
+    current = _current_watchlist()
     
     return html.Div([
-        html.H3("📜 Watchlist — Gestion", className="mb-3"),
+        html.H3("📜 Watchlist"),
+        html.Small("Gestion de la liste de tickers à surveiller"),
+        html.Hr(),
         
-        dbc.Alert(
-            "La plupart des scripts utilisent la variable d'environnement WATCHLIST.",
-            color="info",
-            className="mb-3"
-        ),
-        
-        # Current watchlist
         dbc.Card([
-            dbc.CardHeader(html.H5("Watchlist Actuelle")),
+            dbc.CardHeader("Watchlist actuelle"),
             dbc.CardBody([
-                html.Pre(
-                    current,
-                    id="watchlist-current-display",
-                    style={
-                        'backgroundColor': '#212529',
-                        'color': '#00ff00',
-                        'padding': '1rem',
-                        'borderRadius': '4px',
-                        'fontFamily': 'monospace',
-                    }
-                ),
-            ]),
-        ], className="mb-4"),
+                html.Small("Variable d'environnement WATCHLIST ou data/watchlist.json"),
+                html.Code(current, className="d-block mt-2 p-2 bg-dark text-light"),
+            ])
+        ], className="mb-3"),
         
-        # Editor
         dbc.Card([
-            dbc.CardHeader(html.H5("Modifier (local)")),
+            dbc.CardHeader("Modifier"),
             dbc.CardBody([
-                dbc.Label("Tickers séparés par des virgules:"),
                 dcc.Textarea(
-                    id='watchlist-editor',
+                    id='watchlist-text',
                     value=current,
-                    style={'width': '100%', 'height': '120px', 'fontFamily': 'monospace'},
-                    className="form-control mb-3"
+                    style={"width": "100%", "height": "120px", "fontFamily": "monospace"},
+                    placeholder="Tickers séparés par des virgules (ex: AAPL,MSFT,GOOGL)"
                 ),
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Button(
-                            "💾 Enregistrer dans data/watchlist.json",
-                            id="watchlist-save-btn",
-                            color="primary",
-                            className="w-100"
-                        ),
-                    ], width=6),
-                    dbc.Col([
-                        dbc.Button(
-                            "📋 Générer commande export",
-                            id="watchlist-export-btn",
-                            color="secondary",
-                            className="w-100"
-                        ),
-                    ], width=6),
+                html.Div([
+                    dbc.Button("💾 Enregistrer", id="watchlist-save-btn", color="primary", className="me-2 mt-2"),
+                    dbc.Button("📋 Générer commande export", id="watchlist-export-btn", color="secondary", className="mt-2"),
                 ]),
-                html.Div(id="watchlist-feedback", className="mt-3"),
-            ]),
-        ], className="mb-4"),
-    ])
+                html.Div(id='watchlist-result', className="mt-3"),
+            ])
+        ])
+    ], id='watchlist-root')
 
 
-@callback(
-    Output("watchlist-feedback", "children"),
-    Input("watchlist-save-btn", "n_clicks"),
-    Input("watchlist-export-btn", "n_clicks"),
-    State("watchlist-editor", "value"),
-    prevent_initial_call=True,
+@dash.callback(
+    Output('watchlist-result', 'children'),
+    Input('watchlist-save-btn', 'n_clicks'),
+    Input('watchlist-export-btn', 'n_clicks'),
+    State('watchlist-text', 'value'),
+    prevent_initial_call=True
 )
-def handle_watchlist_actions(save_clicks, export_clicks, text_value):
-    """Gère les actions de sauvegarde et génération de commande."""
-    from dash import ctx
-    
+def handle_watchlist_action(save_clicks, export_clicks, text):
+    """Gère les actions sur la watchlist"""
+    ctx = dash.callback_context
     if not ctx.triggered:
-        return None
+        return dash.no_update
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     
     try:
         # Parse tickers
-        tickers = [x.strip().upper() for x in (text_value or "").split(',') if x.strip()]
+        tickers = [x.strip().upper() for x in (text or '').split(',') if x.strip()]
         
-        if not tickers:
-            return dbc.Alert("⚠️ Veuillez entrer au moins un ticker.", color="warning")
-        
-        if button_id == "watchlist-save-btn":
-            # Save to data/watchlist.json
+        if button_id == 'watchlist-save-btn':
+            # Save to file
             Path('data').mkdir(parents=True, exist_ok=True)
-            watchlist_path = Path('data/watchlist.json')
-            watchlist_path.write_text(
+            Path('data/watchlist.json').write_text(
                 json.dumps({'watchlist': tickers}, ensure_ascii=False, indent=2),
                 encoding='utf-8'
             )
-            return dbc.Alert(
-                f"✓ data/watchlist.json enregistré avec {len(tickers)} ticker(s).",
-                color="success"
-            )
+            return dbc.Alert(f"✅ Enregistré: {len(tickers)} tickers dans data/watchlist.json", color="success")
         
-        elif button_id == "watchlist-export-btn":
+        elif button_id == 'watchlist-export-btn':
             # Generate export command
             cmd = f"export WATCHLIST={','.join(tickers)}"
-            return html.Div([
-                dbc.Alert("Commande générée:", color="info"),
-                html.Pre(
-                    cmd,
-                    style={
-                        'backgroundColor': '#212529',
-                        'color': '#00ff00',
-                        'padding': '1rem',
-                        'borderRadius': '4px',
-                        'fontFamily': 'monospace',
-                    }
-                ),
-                html.Small(
-                    "Copiez/collez dans votre shell pour l'utiliser dans les scripts.",
-                    className="text-muted"
-                ),
+            return dbc.Card([
+                dbc.CardBody([
+                    html.Small("Commande à exécuter dans votre shell:"),
+                    html.Code(cmd, className="d-block mt-2 p-2 bg-dark text-light"),
+                    html.Small("Copiez/collez cette commande pour l'utiliser dans les scripts.", className="mt-2 d-block"),
+                ])
             ])
     
     except Exception as e:
         return dbc.Alert(f"❌ Erreur: {e}", color="danger")
+    
+    return dash.no_update
