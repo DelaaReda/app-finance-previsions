@@ -5,6 +5,11 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
+try:
+    import polars as pl  # type: ignore
+except Exception:  # polars is optional
+    pl = None  # type: ignore
+
 from .config import get_config
 from .cache import cache_data
 from src.tools.parquet_io import latest_partition, read_parquet_latest
@@ -26,6 +31,23 @@ def get_forecasts(tickers: Optional[Iterable[str]] = None) -> pd.DataFrame:
     """
     cfg = get_config()
     base = cfg.data_base / "forecast"
+    # Fast path with polars if available
+    if pl is not None:
+        part = latest_partition(base)
+        if not part:
+            return pd.DataFrame()
+        fp = part / "final.parquet"
+        if not fp.exists():
+            return pd.DataFrame()
+        try:
+            ldf = pl.read_parquet(fp.as_posix())
+            if tickers and "ticker" in ldf.columns:
+                ldf = ldf.filter(pl.col("ticker").is_in(_as_list(tickers)))
+            return ldf.to_pandas()
+        except Exception:
+            # Fallback to pandas path
+            pass
+
     df = read_parquet_latest(base, "final.parquet")
     if df is None:
         return pd.DataFrame()
@@ -55,4 +77,3 @@ def get_partitions_status() -> pd.DataFrame:
             "path": str(part) if part else None,
         })
     return pd.DataFrame(rows)
-

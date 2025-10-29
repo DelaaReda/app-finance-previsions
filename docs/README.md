@@ -28,6 +28,7 @@ Docs Map
 - UI: `ui/ui_audit.md` — audit, decisions, and action plan.
 - Progress: `PROGRESS.md` — what’s done, what’s next, run discipline.
 - QA: `qa/ATLAS_QA.md` — procedure for ATLAS to verify commits, restart UI, test pages, and report.
+- Team process: `dev/team-process.md` — multi‑agents workflow (dev/arch/qa), PR/issue templates, CI & pre‑commit
 
 Dev Workflow (Codex)
 - **After changements UI/Sprint** : relancer l'UI (`make dash-restart-bg`), lancer `make dash-mcp-test` pour évaluation UX IA (rapports sous `data/reports/`, corrections si erreurs).

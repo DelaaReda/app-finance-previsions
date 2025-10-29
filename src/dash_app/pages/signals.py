@@ -93,7 +93,7 @@ def layout():
         html.H3("Signals"),
         controls,
         _signals_table('1m'),
-    ])
+    ], id='signals-root')
 
 
 @dash.callback(dash.Output('signals-table','data'), dash.Input('signals-horizon','value'))

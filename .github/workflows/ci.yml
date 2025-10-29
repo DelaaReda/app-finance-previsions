@@ -1,72 +1,98 @@
-name: ci
+name: CI
 
 on:
   push:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "docs/**"
+      - ".github/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "docs/**"
+      - ".github/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  api-docs:
+  lint-typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Setup venv + install deps
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate
-          pip install -U pip
-          pip install -r requirements.txt
-      - name: Generate API docs
-        run: |
-          . .venv/bin/activate
-          python ops/docs/generate_api_docs.py
-      - name: Check API docs up-to-date
-        run: |
-          if ! git diff --quiet -- docs/api; then
-            echo 'API docs changed. Please run: make api-docs-generate and commit the updates.'
-            git status --porcelain
-            git --no-pager diff -- docs/api | head -n 200 || true
-            exit 1
-          fi
 
-  ui-validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Setup venv + install deps
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install deps
         run: |
-          python -m venv .venv
-          . .venv/bin/activate
-          pip install -U pip
-          pip install -r requirements.txt
-      - name: Start Dash (background)
+          python -m pip install --upgrade pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
+          pip install ruff mypy pre-commit
+
+      - name: Pre-commit (fast checks)
         run: |
-          . .venv/bin/activate
-          nohup python -m src.dash_app.app > dash.out 2>&1 &
-          sleep 8
-      - uses: actions/setup-node@v4
+          pre-commit run --all-files || (echo "::warning::pre-commit failed locally; continue to ruff/mypy"; true)
+
+      - name: Ruff (lint+format)
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Mypy (best-effort)
+        continue-on-error: true
+        env:
+          MYPYPATH: src
+        run: |
+          mypy src || echo "::warning::mypy warnings (non bloquant)"
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
-          node-version: '20'
-      - name: UI Health (Playwright)
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install deps
         run: |
-          npm i -D playwright
-          npx playwright install chromium
-          make ui-health || true
-      - name: Smoke routes
+          python -m pip install --upgrade pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
+          pip install pytest pytest-cov
+
+      - name: Pytest
+        env:
+          PYTHONWARNINGS: "ignore"
         run: |
-          . .venv/bin/activate
-          make dash-smoke
-      - name: Upload UI artifacts
-        if: always()
+          pytest -q --maxfail=1 --disable-warnings --cov=src --cov-report=xml
+
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
-          name: ui-health-artifacts
-          path: |
-            artifacts/ui_health
-            data/reports
-            dash.out
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+

@@ -124,7 +124,7 @@ def layout():
             dbc.Col(_admin_controls_card(), md=6),
             dbc.Col(_logs_card(), md=6),
         ]),
-    ])
+    ], id='observability-root')
 
 
 def _run_script(rel_path: str) -> str:

@@ -1,0 +1,18 @@
+# Default owner
+*       @DelaaReda
+
+# Apps
+/src/apps/                @DelaaReda
+/src/dash_app/            @DelaaReda
+
+# Agents & analytics
+/src/agents/              @DelaaReda
+/src/analytics/           @DelaaReda
+
+# Data & docs & tests
+/data/                    @DelaaReda
+/docs/                    @DelaaReda
+/tests/                   @DelaaReda
+
+# Add teammates or teams here, e.g. @org/data-team @teammateA @teammateB
+

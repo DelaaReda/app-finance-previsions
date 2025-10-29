@@ -141,7 +141,7 @@ streamlit-run:
 	AF_UI_PORT=$${STREAMLIT_PORT} PYTHONPATH=$$PWD/src streamlit run src/apps/streamlit/app.py --server.port $${STREAMLIT_PORT} --server.headless false
 
 streamlit-test:
-	@echo "[stub] add smoke tests for streamlit skeleton"
+	STREAMLIT_PORT=$${STREAMLIT_PORT-5566} PYTHONPATH=$$PWD/src $(PYTHON) ops/ui/streamlit_smoke.py
 
 streamlit-shots:
 	@echo "[stub] add playwright screenshots for streamlit skeleton"

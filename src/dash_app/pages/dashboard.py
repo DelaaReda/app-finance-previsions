@@ -200,6 +200,25 @@ def _insights_card(dt: str | None = None) -> dbc.Card:
         return dbc.Card([dbc.CardHeader("📊 Insights rapides"), dbc.CardBody([html.Small(f"Erreur insights: {e}")])])
 
 
+def _last_updated_label(default_dt: str | None) -> html.Small:
+    try:
+        def _fmt(dt: str) -> str:
+            s = str(dt)
+            if len(s) == 8 and s.isdigit():
+                return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
+            return s
+        if default_dt:
+            return html.Small(f"Dernière mise à jour: {_fmt(default_dt)}", id='dashboard-last-updated', className='text-muted ms-2')
+        # fallback to latest dt from forecast
+        parts = sorted(Path('data/forecast').glob('dt=*'))
+        if parts:
+            dt = parts[-1].name.split('=')[-1]
+            return html.Small(f"Dernière mise à jour: {_fmt(dt)}", id='dashboard-last-updated', className='text-muted ms-2')
+    except Exception:
+        pass
+    return html.Small("Dernière mise à jour: n/a", id='dashboard-last-updated', className='text-muted ms-2')
+
+
 def layout():
     # Optional alerts badge (from latest quality report)
     badge = None
@@ -246,6 +265,7 @@ def layout():
 
     return html.Div([
         header,
+        _last_updated_label(default_dt),
         controls,
         dbc.Row([
             dbc.Col(html.Div(id='dash-top-final', children=_top_final(default_dt)), md=6),
@@ -253,7 +273,7 @@ def layout():
         ], className="mb-3"),
         _insights_card(default_dt),
         _macro_kpis(default_dt),
-    ])
+    ], id='dashboard-root')
 
 
 def _parse_watchlist(raw: str | None) -> list[str]:

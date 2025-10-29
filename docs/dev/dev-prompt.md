@@ -42,28 +42,14 @@ make dash-status && make dash-logs  # puis ouvrir http://localhost:8050
 
 ✅ Standards de code & qualité
 	•	Typing obligatoire (fonctions publiques) + docstrings (Google/Numpy).
-	•	Formatage/lint : Black + isort + Flake8 ; mypy (warn-only au début).
-	•	pre-commit actif localement.
+	•	Formatage/lint : Ruff (check + format) ; mypy (warn-only au début).
+	•	pre-commit actif localement (voir `.pre-commit-config.yaml`).
 
-.pre-commit-config.yaml
-
-repos:
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks: [{id: black}]
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks: [{id: isort}]
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.1.1
-    hooks: [{id: flake8}]
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - {id: end-of-file-fixer}
-      - {id: trailing-whitespace}
-      - {id: check-ast}
-      - {id: detect-private-key}
+Exécution rapide:
+```bash
+pip install pre-commit && pre-commit install
+pre-commit run -a
+```
 
 pytest.ini
 
@@ -88,7 +74,7 @@ sprint-10 1/9 feat(quality): robust JSON parsing
 sprint-10 2/9 fix(risk): NaN-safe VaR card
 	•	PR atomique (≤ ~400 lignes). Rebase avant merge.
 
-.github/pull_request_template.md
+.github/PULL_REQUEST_TEMPLATE.md
 
 ## Objet
 - [ ] Bugfix / [ ] Feature / [ ] Tests / [ ] Docs
@@ -101,12 +87,18 @@ _(ce que fait la PR et pourquoi)_
 - Risques: …
 - Rollback: …
 
-## Check-list
-- [ ] Lint/format ok
+## Check-list (DoD)
+- [ ] pre‑commit OK
+- [ ] CI verte (lint/type/tests)
 - [ ] Tests unitaires ajoutés
-- [ ] E2E pertinents passent
+- [ ] Smoke/E2E pertinents passent
 - [ ] Empty states gérés
 - [ ] Logs & erreurs utiles
+- [ ] docs/PROGRESS.md mis à jour
+
+Références:
+- Process multi‑agents: `docs/dev/team-process.md`
+- CODEOWNERS: `.github/CODEOWNERS`
 
 ⚙️ Config & environnements
 

@@ -38,7 +38,7 @@ def _regimes_chart(df: pd.DataFrame) -> dcc.Graph:
             template='plotly_dark',
             barmode='group'
         )
-        return dcc.Graph(figure=fig)
+        return dcc.Graph(figure=fig, id='regimes-graph')
     else:
         # Fallback to line chart if multiple time points
         fig = go.Figure()
@@ -50,7 +50,7 @@ def _regimes_chart(df: pd.DataFrame) -> dcc.Graph:
             yaxis_title="Valeur",
             template='plotly_dark'
         )
-        return dcc.Graph(figure=fig)
+        return dcc.Graph(figure=fig, id='regimes-graph')
 
 
 def _trend_badge(last_val: float | None, label: str) -> dbc.Badge:

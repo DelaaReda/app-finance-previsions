@@ -65,7 +65,7 @@ def layout():
         html.H3("Portfolio"),
         controls,
         html.Div(id='port-proposal', children=_compute_proposal(5, 'equal')),
-    ])
+    ], id='portfolio-root')
 
 
 @dash.callback(dash.Output('port-proposal','children'), dash.Input('port-topn','value'), dash.Input('port-weight-mode','value'))

@@ -46,16 +46,13 @@ Objectif: éviter la dette, maximiser la réutilisation et garantir la stabilit�
 - Activer hooks: `make git-hooks`.
 - pre-push rejette `dash_html_components` et `dash.register_page(` sous `src/dash_app/pages/` et lance `make dash-smoke` + `make ui-health`.
 - Bypass exceptionnel: `SKIP_UI_CHECKS=1 git push` (ex: PR docs/tests uniquement).
-- CI GitHub (`.github/workflows/ci.yml`):
-  - Job `api-docs`: regénère les docs API (AST) et échoue si `docs/api/` n’est pas à jour.
-  - Job `ui-validate`: démarre Dash, exécute `make dash-smoke` et `make ui-health`, puis upload des artefacts (screenshots + rapports).
-  - Conseillé: lancer `make api-docs-generate` localement après ajout/modif de fonctions publiques.
+- CI GitHub (`.github/workflows/ci.yml`): ruff (lint+format), mypy (best‑effort), tests (3.11/3.12), coverage artifact. Conserver jobs UI/API dédiés si configurés.
 
 ## 8) Git & PRs
 - Branches: `feature/<slug>`, `fix/<slug>`, `test/<slug>`.
 - Commits conventionnels, petits (≤ ~400 lignes par PR). Ex: `feat(ui): add forecasts filters`.
 - PR: décrire objectifs, fichiers touchés, commandes exécutées (codes retour), screenshots.
-- Màj `docs/PROGRESS.md` (Delivered/Next/How‑to‑run) à chaque PR.
+- Màj `docs/PROGRESS.md` (Delivered/Next/How‑to‑run) à chaque PR. Utiliser `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ## 9) Observabilité
 - Badge sidebar: vert si HTTP 200 + fraîcheur ≤ 25h; jaune si data stales; rouge si down.

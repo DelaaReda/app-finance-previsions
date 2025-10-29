@@ -159,6 +159,28 @@ def test_llm_summary_writes_partition(monkeypatch, tmp_path):
 
 ## 🧯 Garde-fous exécutables
 
+### Pre‑commit & CI (obligatoires)
+
+- Installe et utilise pre‑commit localement:
+
+  ```bash
+  pip install pre-commit && pre-commit install
+  pre-commit run -a
+  ```
+
+- Baseline secrets (optionnel, recommandé): `detect-secrets scan > .secrets.baseline`
+
+- CI GitHub déclenche lint/type/tests (voir `.github/workflows/ci.yml`). **Tes PR doivent passer CI**.
+
+### CODEOWNERS & PR Template
+
+- Les reviews sont auto‑assignées par `.github/CODEOWNERS`.
+- Remplis systématiquement `.github/PULL_REQUEST_TEMPLATE.md` (DoD, risques, tests, mise à jour `docs/PROGRESS.md`).
+
+### Team process (alignement)
+
+- Lis `docs/dev/team-process.md` (branche, message de commit `Sprint-<N>: …`, rôles dev/archi/QA, DoD, cadence `PROGRESS.md`).
+
 ### Hook **pre-push** (recommandé)
 
 Active via `make git-hooks`. Il doit :
@@ -183,7 +205,7 @@ if [ "${SKIP_UI_CHECKS:-}" != "1" ]; then
 fi
 ```
 
-### Template PR GitHub (`.github/pull_request_template.md`)
+### Template PR GitHub (`.github/PULL_REQUEST_TEMPLATE.md`)
 
 ```md
 ## Objet
@@ -193,10 +215,16 @@ fi
 - [ ] Docs / Outillage
 
 ## Résumé
-_Que fait la PR ? Pourquoi ?_
+_Que fait la PR ? Pourquoi ? (lier #issue, #sprint)_
 
 ## Portée & Risques
 _Fichiers touchés, surface de risque, plan de rollback_
+
+## DoD
+- [ ] pre‑commit OK
+- [ ] CI verte (lint/type/tests)
+- [ ] Smoke UI OK (Dash/Streamlit si pertinent)
+- [ ] `docs/PROGRESS.md` mis à jour
 
 ## How to run
 _Commandes lancées, URLs, où voir le résultat_

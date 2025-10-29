@@ -12,10 +12,12 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 import time
 try:
-    from flask import request, g
+    from flask import request, g, send_file
 except Exception:  # fallback if not available in context
     request = None  # type: ignore
     g = None  # type: ignore
+    def send_file(*a, **k):  # type: ignore
+        raise RuntimeError("send_file unavailable")
 
 try:
     from hub import profiler as _prof
@@ -70,9 +72,9 @@ def sidebar() -> html.Div:
             html.Small("Analyse & Prévisions", className="text-muted"),
             dbc.Nav(
                 [
-                    dbc.NavLink("Dashboard", href="/dashboard", active="exact"),
-                    dbc.NavLink("Signals", href="/signals", active="exact"),
-                    dbc.NavLink("Portfolio", href="/portfolio", active="exact"),
+                    dbc.NavLink("Dashboard", href="/dashboard", active="exact", id="nav-dashboard"),
+                    dbc.NavLink("Signals", href="/signals", active="exact", id="nav-signals"),
+                    dbc.NavLink("Portfolio", href="/portfolio", active="exact", id="nav-portfolio"),
                     dbc.NavLink("Watchlist", href="/watchlist", active="exact"),
                     dbc.NavLink("Alerts", href="/alerts", active="exact"),
                     dbc.NavLink("News", href="/news", active="exact"),
@@ -90,9 +92,9 @@ def sidebar() -> html.Div:
                     dbc.NavLink("Forecasts", href="/forecasts", active="exact"),
                     dbc.NavLink("Backtests", href="/backtests", active="exact"),
                     dbc.NavLink("Evaluation", href="/evaluation", active="exact"),
-                    dbc.NavLink("Regimes", href="/regimes", active="exact"),
-                    dbc.NavLink("Risk", href="/risk", active="exact"),
-                    dbc.NavLink("Recession", href="/recession", active="exact"),
+                    dbc.NavLink("Regimes", href="/regimes", active="exact", id="nav-regimes"),
+                    dbc.NavLink("Risk", href="/risk", active="exact", id="nav-risk"),
+                    dbc.NavLink("Recession", href="/recession", active="exact", id="nav-recession"),
                 ] + (
                     [dbc.NavLink("DevTools", href="/devtools", active="exact")] if os.getenv("DEVTOOLS_ENABLED", "0") == "1" else []
                 ),
@@ -103,10 +105,10 @@ def sidebar() -> html.Div:
             html.Small("Administration", className="text-muted"),
             dbc.Nav(
                 [
-                    dbc.NavLink("Agents Status", href="/agents", active="exact"),
+                    dbc.NavLink("Agents Status", href="/agents", active="exact", id="nav-agents"),
                     dbc.NavLink("Quality", href="/quality", active="exact"),
                     dbc.NavLink("Profiler", href="/profiler", active="exact"),
-                    dbc.NavLink("Observability", href="/observability", active="exact"),
+                    dbc.NavLink("Observability", href="/observability", active="exact", id="nav-observability"),
                     dbc.NavLink("Settings", href="/settings", active="exact"),
                 ] + (
                     [
@@ -253,6 +255,15 @@ def update_global_status(n):
     except:
         return dbc.Badge("? Err", color="secondary")
 
+
+# Serve QA tester HTML under same origin so the tester can inspect the app DOM via iframe
+@server.route("/qa/tester")
+def _qa_tester():  # type: ignore
+    try:
+        p = Path("src/apps/app_tester_qa/finance_app_test-v2.html").resolve()
+        return send_file(str(p))
+    except Exception as e:
+        return (f"Tester not available: {e}", 404)
 
 if __name__ == "__main__":
     port = int(os.getenv("AF_DASH_PORT", "8050"))
