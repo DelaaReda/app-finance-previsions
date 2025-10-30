@@ -1,323 +1,269 @@
+# src/research/scoring.py
 """
-Scoring Composite - Pilier central du copilote
-Combine macro(40) + technique(40) + news(20) pour produire signaux/risques/picks.
+Composite scoring system: Macro (40%) + Technical (40%) + News (20%)
+Generates Top 3 Signals and Top 3 Risks
 """
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import pandas as pd
+from __future__ import annotations
+from typing import Dict, List, Optional, Tuple
+from dataclind import pd
+from datetime import datetime
 
-# Imports des modules existants
-from core.market_data import get_fred_series, get_price_history
-from analytics.phase2_technical import compute_indicators, technical_signals
-from analytics.phase3_macro import get_us_macro_bundle
-from ingestion.finnews import run_pipeline as run_news_pipeline
-
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-MACRO_WEIGHT = 0.40
-TECH_WEIGHT = 0.40
-NEWS_WEIGHT = 0.20
-
-# Séries macro clés pour scoring
-MACRO_SERIES = {
-    "CPIAUCSL": "CPI",
-    "VIXCLS": "VIX",
-    "T10Y2Y": "Yield Curve",
-    "UNRATE": "Unemployment",
+# Scoring weights (configurable)
+WEIGHTS = {
+    "macro": 0.40,
+    "technical": 0.40,
+    "news": 0.20
 }
 
+# ============================= MACRO SCORING =================================
 
-# ============================================================================
-# SCORING MACRO
-# ============================================================================
-def score_macro() -> Dict[str, Any]:
+def score_macro_conditions() -> Dict[str, float]:
     """
-    Score macro basé sur séries FRED clés.
-    Retourne: {score: float, signals: List, risks: List, sources: List}
-    """
-    signals = []
-    risks = []
-    sources = []
+    Score macro conditions based on:
+    - Inflation trend (lower = better)
+    - Yield curve (steep positive = better)
+    - Unemployment (lower = better)
+    - Recession probability (lower = better)
     
+    Returns dict with scores 0-100 for each indicator
+    """
     try:
-        # Récupérer séries clés
-        for series_id, name in MACRO_SERIES.items():
-            df = get_fred_series(series_id, start=None)
-            if df is None or df.empty:
-                continue
-            
-            # Extraire dernière valeur
-            last_value = df["value"].iloc[-1]
-            prev_value = df["value"].iloc[-2] if len(df) >= 2 else None
-            
-            # Ajouter source
-            sources.append({
-                "type": "macro",
-                "series": series_id,
-                "name": name,
-                "value": float(last_value),
-                "date": df.index[-1].isoformat()
-            })
-            
-            # Logique de signaux (simplifié - à enrichir)
-            if series_id == "VIXCLS":
-                if last_value < 15:
-                    signals.append(f"VIX bas ({last_value:.1f}) - Faible volatilité")
-                elif last_value > 25:
-                    risks.append(f"VIX élevé ({last_value:.1f}) - Volatilité élevée")
-            
-            elif series_id == "T10Y2Y":
-                if last_value < 0:
-                    risks.append(f"Courbe inversée ({last_value:.2f}%) - Signal récession")
-            
-            elif series_id == "CPIAUCSL":
-                if len(df) >= 12:
-                    yoy = ((last_value / df["value"].iloc[-13]) - 1) * 100
-                    if yoy > 4:
-                        risks.append(f"Inflation élevée ({yoy:.1f}% YoY)")
-                    elif yoy < 2:
-                        signals.append(f"Inflation modérée ({yoy:.1f}% YoY)")
+        from core.data_access import load_macro_forecast_rows
+        result = load_macro_forecast_rows(limit=1)
+        if not result.get("ok") or not result.get("rows"):
+            return {"macro_score": 50.0, "detail": "no_data"}
         
-        # Score global macro (0-100)
-        score = 50  # Neutre par défaut
-        score += len(signals) * 10
-        score -= len(risks) * 10
-        score = max(0, min(100, score))
+        row = result["rows"][0]
         
-    except Exception as e:
-        print(f"Erreur score_macro: {e}")
-        score = 50
-    
-    return {
-        "score": score,
-        "signals": signals,
-        "risks": risks,
-        "sources": sources
-    }
-
-
-# ============================================================================
-# SCORING TECHNIQUE
-# ============================================================================
-def score_technical(universe: List[str]) -> Dict[str, Any]:
-    """
-    Score technique pour un univers de tickers.
-    Retourne: {score: float, signals: List, risks: List, picks: List, sources: List}
-    """
-    signals = []
-    risks = []
-    picks = []
-    sources = []
-    
-    try:
-        for ticker in universe:
-            df = get_price_history(ticker, start=None, interval="1d")
-            if df is None or df.empty:
-                continue
-            
-            # Calculer indicateurs
-            df_ind = compute_indicators(df)
-            if df_ind.empty:
-                continue
-            
-            last = df_ind.iloc[-1]
-            close = last["Close"]
-            rsi = last.get("RSI")
-            sma_20 = last.get("SMA_20")
-            sma_50 = last.get("SMA_50")
-            
-            # Source
-            sources.append({
-                "type": "technical",
-                "ticker": ticker,
-                "price": float(close),
-                "rsi": float(rsi) if pd.notna(rsi) else None,
-                "date": df_ind.index[-1].isoformat()
-            })
-            
-            # Signaux techniques
-            if pd.notna(rsi):
-                if rsi < 30:
-                    signals.append(f"{ticker} survendu (RSI={rsi:.1f})")
-                    picks.append({
-                        "ticker": ticker,
-                        "rationale": f"RSI survendu à {rsi:.1f}",
-                        "score": 70,
-                        "type": "buy_signal"
-                    })
-                elif rsi > 70:
-                    risks.append(f"{ticker} suracheté (RSI={rsi:.1f})")
-            
-            # Croisement SMA
-            if pd.notna(sma_20) and pd.notna(sma_50):
-                if close > sma_20 > sma_50:
-                    signals.append(f"{ticker} tendance haussière (Prix > SMA20 > SMA50)")
-                elif close < sma_20 < sma_50:
-                    risks.append(f"{ticker} tendance baissière (Prix < SMA20 < SMA50)")
+        # Individual scores (0-100)
+        inflation = row.get("inflation_yoy", 0.03)
+        inflation_score = max(0, min(100, (1 - abs(inflation - 0.02) / 0.08) * 100))
         
-        # Score global technique
-        score = 50
-        score += len(signals) * 5
-        score -= len(risks) * 5
-        score = max(0, min(100, score))
+        yield_curve = row.get("yield_curve_slope", 0)
+        yield_score = max(0, min(100, (yield_curve + 1) / 2 * 100))
         
-    except Exception as e:
-        print(f"Erreur score_technical: {e}")
-        score = 50
-    
-    return {
-        "score": score,
-        "signals": signals,
-        "risks": risks,
-        "picks": picks,
-        "sources": sources
-    }
-
-
-# ============================================================================
-# SCORING NEWS
-# ============================================================================
-def score_news(universe: List[str], window: str = "last_week") -> Dict[str, Any]:
-    """
-    Score news basé sur le pipeline finnews.
-    Retourne: {score: float, signals: List, risks: List, sources: List}
-    """
-    signals = []
-    risks = []
-    sources = []
-    
-    try:
-        # Récupérer news via pipeline
-        items = run_news_pipeline(
-            regions=["US", "CA", "INTL"],
-            window=window,
-            query="",
-            tgt_ticker=None,
-            per_source_cap=None,
-            limit=50
+        unemployment = row.get("unemployment", 4.5)
+        unemployment_score = max(0, min(100, (1 - (unemployment - 3) / 7) * 100))
+        
+        recession_prob = row.get("recession_prob", 0.3)
+        recession_score = max(0, min(100, (1 - recession_prob) * 100))
+        
+        # Composite macro score
+        macro_score = (
+            inflation_score * 0.3 +
+            yield_score * 0.3 +
+            unemployment_score * 0.2 +
+            recession_score * 0.2
         )
         
-        # Analyser sentiment et scoring
-        for item in items[:20]:  # Top 20
-            score = item.get("score", 0)
-            sentiment = item.get("sentiment")
-            ticker_mentions = item.get("tickers", [])
-            
-            # Filtrer par univers si pertinent
-            relevant = not universe or any(t in universe for t in ticker_mentions)
-            
-            if not relevant:
-                continue
-            
-            # Ajouter source
-            sources.append({
-                "type": "news",
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "score": score,
-                "sentiment": sentiment,
-                "published": item.get("published", "")
-            })
-            
-            # Catégoriser selon sentiment et score
-            title = item.get("title", "")
-            if sentiment == "positive" and score > 0.7:
-                signals.append(f"News positive: {title[:80]}...")
-            elif sentiment == "negative" and score > 0.7:
-                risks.append(f"News négative: {title[:80]}...")
-        
-        # Score global news
-        avg_score = sum(s["score"] for s in sources) / len(sources) if sources else 0.5
-        score = avg_score * 100
+        return {
+            "macro_score": round(macro_score, 2),
+            "inflation_score": round(inflation_score, 2),
+            "yield_score": round(yield_score, 2),
+            "unemployment_score": round(unemployment_score, 2),
+            "recession_score": round(recession_score, 2),
+            "inflation_yoy": inflation,
+            "yield_curve": yield_curve,
+            "unemployment": unemployment,
+            "recession_prob": recession_prob
+        }
         
     except Exception as e:
-        print(f"Erreur score_news: {e}")
-        score = 50
-    
-    return {
-        "score": score,
-        "signals": signals,
-        "risks": risks,
-        "sources": sources
-    }
+        return {"macro_score": 50.0, "error": str(e)}
 
+# ============================ TECHNICAL SCORING ==============================
 
-# ============================================================================
-# SCORING COMPOSITE
-# ============================================================================
-def compute_composite_brief(period: str = "weekly", universe: List[str] = None) -> Dict[str, Any]:
+def score_technical(ticker: str) -> Dict[str, float]:
     """
-    Génère le Market Brief complet avec scoring composite.
+    Score technical indicators for a ticker:
+    - Trend (SMA20 vs SMA50)
+    - Momentum (RSI)
+    - Volume
     
-    Args:
-        period: "daily" ou "weekly"
-        universe: Liste de tickers (ex: ["SPY", "QQQ"])
+    Returns dict with scores 0-100
+    """
+    try:
+        from core.data_access import get_close_series
+        series = get_close_series(ticker)
+        
+        if series is None or len(series) < 50:
+            return {"technical_score": 50.0, "ticker": ticker, "detail": "insufficient_data"}
+        
+        # Calculate SMA
+        sma20 = series.rolling(20).mean()
+        sma50 = series.rolling(50).mean()
+        
+        # Trend score: is price above SMAs and SMAs aligned?
+        current_price = series.iloc[-1]
+        current_sma20 = sma20.iloc[-1]
+        current_sma50 = sma50.iloc[-1]
+        
+        trend_score = 0
+        if current_price > current_sma20:
+            trend_score += 40
+        if current_sma20 > current_sma50:
+            trend_score += 30
+        if current_price > current_sma50:
+            trend_score += 30
+        
+        # Simple RSI calculation (14 periods)
+        delta = series.diff()
+        gain = delta.where(delta > 0, 0).rolling(14).mean()
+        loss = -delta.where(delta < 0, 0).rolling(14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        current_rsi = rsi.iloc[-1] if not pd.isna(rsi.iloc[-1]) else 50
+        
+        # RSI score: favor 40-70 range
+        if 40 <= current_rsi <= 70:
+            rsi_score = 100
+        elif current_rsi < 40:
+            rsi_score = max(0, current_rsi / 40 * 100)
+        else:  # > 70
+            rsi_score = max(0, (100 - current_rsi) / 30 * 100)
+        
+        # Composite technical score
+        technical_score = trend_score * 0.6 + rsi_score * 0.4
+        
+        return {
+            "technical_score": round(technical_score, 2),
+            "ticker": ticker,
+            "trend_score": round(trend_score, 2),
+            "rsi_score": round(rsi_score, 2),
+            "current_price": round(current_price, 2),
+            "sma20": round(current_sma20, 2),
+            "sma50": round(current_sma50, 2),
+            "rsi": round(current_rsi, 2)
+        }
+        
+    except Exception as e:
+        return {"technical_score": 50.0, "ticker": ticker, "error": str(e)}
+
+# ============================== NEWS SCORING =================================
+
+def score_news_sentiment(ticker: Optional[str] = None) -> Dict[str, float]:
+    """
+    Score news sentiment:
+    - Overall sentiment (positive = higher score)
+    - News freshness
+    - News volume
+    
+    Returns dict with scores 0-100
+    """
+    try:
+        from core.data_access import load_news_features
+        result = load_news_features(limit=100)
+        
+        if not result.get("ok") or not result.get("rows"):
+            return {"news_score": 50.0, "detail": "no_news"}
+        
+        rows = result["rows"]
+        
+        # Filter by ticker if specified
+        if ticker:
+            rows = [r for r in rows if r.get("symbol") == ticker]
+        
+        if not rows:
+            return {"news_score": 50.0, "ticker": ticker, "detail": "no_news_for_ticker"}
+        
+        # Calculate average sentiment (assume scale -1 to 1)
+        sentiments = [r.get("news_score_mean", 0) for r in rows if r.get("news_score_mean")]
+        avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+        
+        # Convert to 0-100 scale (0 = very negative, 50 = neutral, 100 = very positive)
+        news_score = (avg_sentiment + 1) / 2 * 100
+        
+        # Freshness bonus: recent news (last 24h) adds points
+        recent_count = len([r for r in rows if r.get("hours_since_publish", 999) < 24])
+        freshness_bonus = min(20, recent_count * 2)
+        
+        news_score = min(100, news_score + freshness_bonus)
+        
+        return {
+            "news_score": round(news_score, 2),
+            "avg_sentiment": round(avg_sentiment, 3),
+            "news_count": len(rows),
+            "recent_count": recent_count,
+            "ticker": ticker
+        }
+        
+    except Exception as e:
+        return {"news_score": 50.0, "ticker": ticker, "error": str(e)}
+
+# =========================== COMPOSITE SCORING ===============================
+
+def calculate_composite_score(ticker: str) -> Dict[str, float]:
+    """
+    Calculate composite score for a ticker using 40/40/20 weighting.
     
     Returns:
-        {
-            top_signals: List[Dict],
-            top_risks: List[Dict],
-            picks: List[Dict],
-            sources: List[Dict],
-            scores: Dict[str, float],
-            generated_at: str
-        }
+        Dict with composite_score and component scores
     """
-    if universe is None:
-        universe = ["SPY", "QQQ", "AAPL", "MSFT", "NVDA"]
+    macro = score_macro_conditions()
+    technical = score_technical(ticker)
+    news = score_news_sentiment(ticker)
     
-    window = "last_week" if period == "weekly" else "last_day"
-    
-    # 1. Scorer chaque pilier
-    macro_result = score_macro()
-    tech_result = score_technical(universe)
-    news_result = score_news(universe, window)
-    
-    # 2. Score composite pondéré
     composite_score = (
-        macro_result["score"] * MACRO_WEIGHT +
-        tech_result["score"] * TECH_WEIGHT +
-        news_result["score"] * NEWS_WEIGHT
+        macro["macro_score"] * WEIGHTS["macro"] +
+        technical["technical_score"] * WEIGHTS["technical"] +
+        news["news_score"] * WEIGHTS["news"]
     )
     
-    # 3. Agréger signaux et risques
-    all_signals = []
-    all_signals.extend([{"text": s, "pillar": "macro", "weight": MACRO_WEIGHT} for s in macro_result["signals"]])
-    all_signals.extend([{"text": s, "pillar": "technical", "weight": TECH_WEIGHT} for s in tech_result["signals"]])
-    all_signals.extend([{"text": s, "pillar": "news", "weight": NEWS_WEIGHT} for s in news_result["signals"]])
+    return {
+        "ticker": ticker,
+        "composite_score": round(composite_score, 2),
+        "macro_score": macro["macro_score"],
+        "technical_score": technical["technical_score"],
+        "news_score": news["news_score"],
+        "weights": WEIGHTS,
+        "timestamp": datetime.utcnow().isoformat(),
+        "components": {
+            "macro": macro,
+            "technical": technical,
+            "news": news
+        }
+    }
+
+def get_top_signals_and_risks(tickers: List[str], top_n: int = 3) -> Dict[str, List]:
+    """
+    Calculate composite scores for all tickers and return top signals and risks.
     
-    all_risks = []
-    all_risks.extend([{"text": r, "pillar": "macro", "weight": MACRO_WEIGHT} for r in macro_result["risks"]])
-    all_risks.extend([{"text": r, "pillar": "technical", "weight": TECH_WEIGHT} for r in tech_result["risks"]])
-    all_risks.extend([{"text": r, "pillar": "news", "weight": NEWS_WEIGHT} for r in news_result["risks"]])
+    Args:
+        tickers: List of ticker symbols
+        top_n: Number of top/bottom to return
+        
+    Returns:
+        Dict with 'signals' (top N) and 'risks' (bottom N)
+    """
+    scores = []
     
-    # 4. Top 3 de chaque
-    top_signals = all_signals[:3]
-    top_risks = all_risks[:3]
+    for ticker in tickers:
+        try:
+            score = calculate_composite_score(ticker)
+            scores.append(score)
+        except Exception as e:
+            print(f"Error scoring {ticker}: {e}")
+            continue
     
-    # 5. Picks (de tech_result)
-    picks = tech_result.get("picks", [])[:5]
-    
-    # 6. Agréger toutes les sources
-    all_sources = []
-    all_sources.extend(macro_result["sources"])
-    all_sources.extend(tech_result["sources"])
-    all_sources.extend(news_result["sources"])
+    # Sort by composite score
+    scores.sort(key=lambda x: x["composite_score"], reverse=True)
     
     return {
-        "top_signals": top_signals,
-        "top_risks": top_risks,
-        "picks": picks,
-        "sources": all_sources,
-        "scores": {
-            "composite": composite_score,
-            "macro": macro_result["score"],
-            "technical": tech_result["score"],
-            "news": news_result["score"]
-        },
-        "generated_at": datetime.utcnow().isoformat(),
-        "period": period,
-        "universe": universe
+        "signals": scores[:top_n],
+        "risks": scores[-top_n:][::-1],  # reverse to show worst first
+        "scoring_method": "composite_40_40_20",
+        "weights": WEIGHTS,
+        "timestamp": datetime.utcnow().isoformat(),
+        "total_analyzed": len(scores)
     }
+
+# ================================= EXPORT ====================================
+
+__all__ = [
+    "score_macro_conditions",
+    "score_technical",
+    "score_news_sentiment",
+    "calculate_composite_score",
+    "get_top_signals_and_risks",
+    "WEIGHTS"
+]

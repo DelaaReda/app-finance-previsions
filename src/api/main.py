@@ -301,19 +301,43 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/signals/top")
     async def signals_top():
-        """Get Top 3 signals + Top 3 risks."""
-        # TODO: Compute composite scores (40/40/20)
-        return _ok({
-            "signals": [],
-            "risks": [],
-            "scoring": {"macro": 0.4, "technical": 0.4, "news": 0.2}
-        })
+        """Get Top 3 signals + Top 3 risks using 40/40/20 composite scoring."""
+        try:
+            from research.scoring import get_top_signals_and_risks
+            
+            # Get tracked tickers (reuse universe)
+            tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
+            
+            # Calculate scores
+            result = get_top_signals_and_risks(tickers, top_n=3)
+            return _ok(result)
+            
+        except Exception as e:
+            return _ok({
+                "signals": [],
+                "risks": [],
+                "scoring": {"macro": 0.4, "technical": 0.4, "news": 0.2},
+                "error": str(e)
+            })
 
     @app.get("/api/signals/composite")
     async def signals_composite(ticker: Optional[str] = Query(None)):
         """Get composite scores (macro 40% + tech 40% + news 20%)."""
-        # TODO: Implement composite scoring
-        return _ok({"scores": [], "count": 0})
+        try:
+            from research.scoring import calculate_composite_score
+            
+            if not ticker:
+                # Return all tracked tickers
+                tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
+                scores = [calculate_composite_score(t) for t in tickers]
+                return _ok({"scores": scores, "count": len(scores)})
+            else:
+                # Single ticker
+                score = calculate_composite_score(ticker.upper())
+                return _ok({"scores": [score], "count": 1})
+                
+        except Exception as e:
+            return _ok({"scores": [], "count": 0, "error": str(e)})
 
     # ========================= FORECASTS (EXISTING) ======================
 
