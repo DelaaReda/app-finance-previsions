@@ -1,0 +1,24 @@
+# API Requirements (FastAPI backend v0.1)
+
+# Core FastAPI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Already in main requirements.txt but listed here for reference
+# pandas>=2.0.0
+# numpy>=1.24.0
+# yfinance>=0.2.32
+# feedparser>=6.0.10
+# requests>=2.31.0
+
+# Optional but recommended
+python-dotenv==1.0.0  # For .env file support
+loguru==0.7.2  # Better logging (if not already)
+
+# For OpenAPI type generation (dev)
+openapi-python-client==0.15.2  # Generate Python client from OpenAPI
+
+# For contract testing (dev)
+schemathesis==3.27.1  # OpenAPI contract testing
