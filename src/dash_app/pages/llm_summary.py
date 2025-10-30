@@ -3,10 +3,28 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+import time
 
 import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc, callback, Input, Output
+
+# Logger + profiler
+try:
+    from hub.logging_setup import get_logger  # type: ignore
+    from hub import profiler as _prof  # type: ignore
+    _log = get_logger("llm_summary")  # type: ignore
+except Exception:
+    class _P:
+        def log_event(self, *a, **k):
+            pass
+    class _L:
+        def info(self, *a, **k): pass
+        def debug(self, *a, **k): pass
+        def warning(self, *a, **k): pass
+        def exception(self, *a, **k): pass
+    _prof = _P()  # type: ignore
+    _log = _L()   # type: ignore
 
 
 def _latest_partition(base: Path) -> Path | None:
@@ -92,10 +110,18 @@ def layout() -> html.Div:
 )
 def _run_now(n):
     try:
+        t0 = time.perf_counter()
+        _log.info("llm_summary.run.start")
         p = subprocess.Popen(["make", "llm-summary-run"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         out, _ = p.communicate(timeout=600)
+        rc = p.returncode
+        ms = int((time.perf_counter()-t0)*1000)
+        _prof.log_event("subprocess", {"cmd": ["make","llm-summary-run"], "returncode": rc, "duration_ms": ms, "stdout_len": len(out or '')})
+        _log.info("llm_summary.run.done", extra={"ctx": {"rc": rc, "ms": ms, "stdout_snip": (out or '').strip().replace('\n',' ')[:300]}})
         # re-render content after run
         body = _render_body()
         return out[-40000:], body
     except Exception as e:
+        _prof.log_event("error", {"where": "llm_summary.run", "error": str(e)})
+        _log.exception("llm_summary.run.fail", extra={"ctx": {"error": str(e)}})
         return f"Erreur lors de l'exécution: {e}", dash.no_update

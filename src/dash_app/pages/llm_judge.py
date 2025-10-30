@@ -16,6 +16,24 @@ except Exception:
             pass
     _prof = _Dummy()  # type: ignore
 
+# Page-level logger (console/file) — complements profiler JSONL
+try:
+    from hub.logging_setup import get_logger  # type: ignore
+    _log = get_logger("llm_judge")  # type: ignore
+except Exception:
+    class _L:
+        def debug(self, *a, **k):
+            pass
+        def info(self, *a, **k):
+            pass
+        def warning(self, *a, **k):
+            pass
+        def error(self, *a, **k):
+            pass
+        def exception(self, *a, **k):
+            pass
+    _log = _L()  # type: ignore
+
 
 def _latest_llm_agents() -> dict:
     base = Path('data/forecast')
@@ -58,6 +76,10 @@ def _judge_rows_and_summary() -> tuple[list[dict], dict]:
         'avg_exp': (sum(exp)/len(exp)) if exp else 0.0,
         'avg_conf': (sum(conf)/len(conf)) if conf else 0.0,
     }
+    try:
+        _log.debug("llm_judge.data", extra={"ctx": {"rows": total, **summary}})  # type: ignore
+    except Exception:
+        pass
     return rows, summary
 
 
@@ -230,6 +252,10 @@ def _run_cmd(cmd: list[str], extra_env: dict | None = None) -> str:
         if extra_env:
             import os as _os
             env = {**_os.environ.copy(), **{k: str(v) for k,v in extra_env.items()}}
+        try:
+            _log.info("subprocess.start", extra={"ctx": {"cmd": cmd, "with_env": bool(extra_env)}})  # type: ignore
+        except Exception:
+            pass
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
         dt_ms = int((__import__('time').perf_counter() - t0) * 1000)
         _prof.log_event("subprocess", {
@@ -239,9 +265,24 @@ def _run_cmd(cmd: list[str], extra_env: dict | None = None) -> str:
             "stdout_len": len(out.stdout or ''),
             "stderr_len": len(out.stderr or ''),
         })
+        try:
+            # Log a compact summary to console/file
+            snip = (out.stdout or '').strip().replace('\n', ' ')[:300]
+            _log.info(
+                "subprocess.done",
+                extra={"ctx": {"cmd": cmd, "rc": out.returncode, "ms": dt_ms, "stdout_snip": snip, "stderr_len": len(out.stderr or '')}},  # type: ignore
+            )
+            if out.returncode != 0:
+                _log.warning("subprocess.nonzero", extra={"ctx": {"rc": out.returncode, "cmd": cmd}})  # type: ignore
+        except Exception:
+            pass
         return (out.stdout or '').strip() + ("\nSTDERR:\n" + (out.stderr or '').strip() if out.stderr else '')
     except Exception as e:
         _prof.log_event("error", {"where": "_run_cmd", "cmd": cmd, "error": str(e)})
+        try:
+            _log.exception("subprocess.fail", extra={"ctx": {"cmd": cmd, "error": str(e)}})  # type: ignore
+        except Exception:
+            pass
         return f"Erreur: {e}"
 
 
@@ -255,10 +296,15 @@ def _run_cmd(cmd: list[str], extra_env: dict | None = None) -> str:
     State('judge-model','value'),
     State('judge-max-er','value'),
     State('judge-min-conf','value'),
+    State('judge-tickers','value'),
     prevent_initial_call=True)
 def on_actions(_n_ctx, _n_llm, model, max_er, min_conf, tickers):
     # For reliability: always run both steps on any click (fast + idempotent)
     _prof.log_event("callback", {"id": "llm_judge.on_actions", "action": "start"})
+    try:
+        _log.info("llm_judge.on_actions.start", extra={"ctx": {"model": model, "max_er": max_er, "min_conf": min_conf, "tickers": tickers}})  # type: ignore
+    except Exception:
+        pass
     cmd_ctx = ["python3", "-m", "src.agents.llm_context_builder_agent"]
     if tickers and str(tickers).strip():
         cmd_ctx += ["--tickers", str(tickers).strip()]
@@ -271,9 +317,17 @@ def on_actions(_n_ctx, _n_llm, model, max_er, min_conf, tickers):
     })
     combined = (out1 or '').strip() + "\n----\n" + (out2 or '').strip()
     table = _judge_table()
+    rows, s = _judge_rows_and_summary()
     summary_div = _judge_reasoning().children
     _prof.log_event("callback", {"id": "llm_judge.on_actions", "action": "end"})
     cards = _build_cards(min_conf)
+    try:
+        _log.info(
+            "llm_judge.on_actions.done",
+            extra={"ctx": {"rows": len(rows), "ups": s.get('ups'), "downs": s.get('downs'), "flats": s.get('flats')}}
+        )  # type: ignore
+    except Exception:
+        pass
     return combined, table, summary_div, cards
 
 
@@ -282,7 +336,15 @@ def on_actions(_n_ctx, _n_llm, model, max_er, min_conf, tickers):
 
 @dash.callback(Output('judge-cards','children'), Input('judge-min-conf','value'))
 def on_filter_cards(min_conf):
-    return _build_cards(min_conf or 0.6)
+    cards = _build_cards(min_conf or 0.6)
+    try:
+        cnt = 0
+        if isinstance(cards, dbc.Row):
+            cnt = len(cards.children or [])
+        _log.debug("llm_judge.cards", extra={"ctx": {"min_conf": float(min_conf or 0.6), "count": cnt}})  # type: ignore
+    except Exception:
+        pass
+    return cards
 
 
 def _build_exec_summary(min_conf: float, buy_thres: float) -> str:
@@ -309,6 +371,10 @@ def _build_exec_summary(min_conf: float, buy_thres: float) -> str:
 @dash.callback(Output('judge-exec-summary','children'), Input('judge-min-conf','value'), Input('judge-buy-thres','value'))
 def on_summary(min_conf, buy_thres):
     txt = _build_exec_summary(float(min_conf or 0.6), float(buy_thres or 0.02))
+    try:
+        _log.debug("llm_judge.summary", extra={"ctx": {"min_conf": float(min_conf or 0.6), "buy_thres": float(buy_thres or 0.02), "text_len": len(txt or '')}})  # type: ignore
+    except Exception:
+        pass
     return dbc.Alert(html.Small(txt), color='secondary')
 
 
@@ -334,6 +400,10 @@ def on_download_csv(n, min_conf, buy_thres):
             })
     if not picks:
         return dash.no_update
+    try:
+        _log.info("llm_judge.download", extra={"ctx": {"count": len(picks), "min_conf": min_conf, "buy_thres": buy_thres}})  # type: ignore
+    except Exception:
+        pass
     # build CSV string
     cols = ['ticker','direction','expected_return','confidence','provider']
     lines = [','.join(cols)]

@@ -9,6 +9,32 @@ Quickstart
   - Statut/Logs: `make dash-status` / `make dash-logs`
   - Smoke test: `make dash-smoke` (codes 200) ; MCP: `make dash-smoke-mcp` (Playwright MCP)
   - Hot reload: lancer avec `AF_DASH_DEBUG=true`.
+- OpenTelemetry (optionnel):
+    - Tout‑en‑un: `make ui-otel-restart` → (tente) démarrer le collector (4318) et redémarre Dash instrumenté (8050) avec health‑check. Si Docker indisponible, bascule automatiquement en exporter `console` (traces visibles dans les logs Dash).
+    - Démarrages séparés:
+      - Collector: `make otel-up` (compose sous `ops/otel/`), logs: `make otel-logs`, arrêt: `make otel-down`. Sur macOS: lancez Docker Desktop (`open -a Docker`) au préalable.
+      - Dash instrumenté: `make dash-restart-otel-bg` (ou `make dash-start-otel-bg`).
+    - Variables utiles: `OTEL_EXPORTER_OTLP_ENDPOINT` (défaut `http://127.0.0.1:4318`), `OTEL_SERVICE_NAME`, `OTEL_PYTHON_LOG_CORRELATION=true`, `DASH_HOT_RELOAD=false`.
+
+  - Logs en console (foreground):
+    - Sans OTel: `make dash-fore` (debug ON, profiler ON, hot‑reload OFF).
+    - Avec OTel (console par défaut): `make ui-otel-fore`.
+    - Niveau configurable: `AF_LOG_LEVEL=INFO`.
+
+  - Suivi live des logs (BG):
+    - Dash uniquement: `make dash-logs`
+    - Dash + Collector: `make ui-otel-follow` (si Docker actif)
+
+- React (nouveau frontend)
+  - Dev server: `make react-dev` (Vite sur `http://127.0.0.1:5173`, proxy `/api` → Dash `8050`).
+  - Build: `make react-build`, preview: `make react-preview`.
+  - API fournies par le serveur Dash/Flask (mêmes process):
+    - `GET /api/forecasts?asset_type=all|equity|commodity&horizon=all|1w|1m|1y&search=...&sort_by=score`
+    - `GET /api/news?sector=all|tech|finance|energy&search=...`
+    - `GET /api/watchlist`, `POST /api/watchlist {"tickers":["AAPL","MSFT"]}`
+    - `GET /api/settings`, `POST /api/settings {"move_abs_pct":1.0,"tilt":"balanced"}`
+    - `POST /api/llm/judge/run {"model":"...","max_er":0.08,"min_conf":0.6,"tickers":"AAPL,MSFT"}`
+
 
 - Streamlit (ancienne UI — legacy, pas de nouvelles features)
   - Port: `5555`. Démarrer: `make ui-start`, Redémarrer: `make ui-restart`.

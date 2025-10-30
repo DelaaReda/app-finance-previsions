@@ -11,6 +11,33 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 import time
+import os as _os_logging
+import logging as _logging
+# Initialize global logging early (bridges stdlib -> Loguru and captures warnings)
+try:
+    import hub.logging_setup as _boot_logging  # side-effect: configure root logging
+    # Optional level override via env
+    lvl = _os_logging.getenv("AF_LOG_LEVEL")
+    if lvl:
+        try:
+            _boot_logging.setup_logging(level=lvl.upper())
+        except Exception:
+            pass
+    # Expose a named logger and ensure a trace id exists for correlation
+    from hub.logging_setup import get_logger, ensure_trace  # type: ignore
+    log = get_logger("dash-ui")  # type: ignore
+    ensure_trace()  # type: ignore
+    # Propagate framework logs to root so they're visible in console/file
+    for name, lvl in [("werkzeug", "INFO"), ("dash", "INFO"), ("engineio", "WARNING"), ("socketio", "WARNING")] :
+        try:
+            lg = _logging.getLogger(name)
+            lg.handlers = []
+            lg.propagate = True
+            lg.setLevel(getattr(_logging, lvl, _logging.INFO))
+        except Exception:
+            pass
+except Exception:
+    pass
 try:
     from flask import request, g, send_file
 except Exception:  # fallback if not available in context
@@ -60,6 +87,13 @@ if os.getenv("AF_PROFILER", "0") == "1" and request is not None:
                 "status": getattr(resp, 'status_code', None),
                 "duration_ms": dur_ms,
             })
+            try:
+                # Also log to console/file via our logger
+                msg = f"HTTP {getattr(request,'method',None)} {getattr(request,'path',None)} -> {getattr(resp,'status_code',None)} ({dur_ms} ms)"
+                if 'log' in globals():
+                    log.info(msg)  # type: ignore
+            except Exception:
+                pass
         except Exception:
             pass
         return resp
@@ -208,13 +242,33 @@ def render_page(pathname: str):
         if not fn:
             return html.Div([html.H4("Page introuvable"), html.Small(pathname or "/")])
         try:
+            try:
+                # Trace route selection to console logs
+                if 'log' in globals():
+                    log.info("nav.select", extra={"ctx": {"path": pathname, "target": getattr(fn, '__module__', str(fn))}})  # type: ignore
+            except Exception:
+                pass
             return fn()
         except Exception as e:
+            # Log the rendering error for visibility (UI still shows friendly message)
+            try:
+                import traceback as _tb
+                _prof.log_event("error", {"where": "render_page.fn", "path": pathname, "error": repr(e)})
+                _tb.print_exc()
+            except Exception:
+                pass
             return html.Div([
                 html.H4("Erreur lors du rendu de la page"),
                 html.Small(str(e)),
             ])
     except Exception as e:
+        # Log navigation errors as well
+        try:
+            import traceback as _tb
+            _prof.log_event("error", {"where": "render_page", "path": pathname, "error": repr(e)})
+            _tb.print_exc()
+        except Exception:
+            pass
         return html.Div([
             html.H4("Erreur de navigation"),
             html.Small(str(e)),
@@ -265,8 +319,111 @@ def _qa_tester():  # type: ignore
     except Exception as e:
         return (f"Tester not available: {e}", 404)
 
+# ------------------------------- API (React) ------------------------------- #
+try:
+    from flask import jsonify, request as _flask_req
+    from dash_app import api as _api
+except Exception:
+    _flask_req = None  # type: ignore
+    _api = None  # type: ignore
+
+def _cors(resp):
+    try:
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Trace-Id'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    except Exception:
+        pass
+    return resp
+
+@server.route('/api/health', methods=['GET'])
+def _api_health():  # type: ignore
+    if _api is None:
+        r = jsonify({"ok": True, "status": "up"})
+        return _cors(r)
+    r = jsonify({"ok": True, "status": "up"})
+    return _cors(r)
+
+@server.route('/api/forecasts', methods=['GET', 'OPTIONS'])
+def _api_forecasts():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    asset_type = _flask_req.args.get('asset_type', 'all')
+    horizon = _flask_req.args.get('horizon', 'all')
+    search = _flask_req.args.get('search')
+    sort_by = _flask_req.args.get('sort_by', 'score')
+    data = _api.forecasts(asset_type, horizon, search, sort_by) if _api else {"ok": False, "error": "api not available"}
+    return _cors(jsonify(data))
+
+@server.route('/api/news', methods=['GET', 'OPTIONS'])
+def _api_news():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    sector = _flask_req.args.get('sector', 'all')
+    search = _flask_req.args.get('search')
+    data = _api.news(sector, search) if _api else {"ok": False, "error": "api not available"}
+    return _cors(jsonify(data))
+
+@server.route('/api/watchlist', methods=['GET','POST','OPTIONS'])
+def _api_watchlist():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    if _flask_req.method == 'GET':
+        data = _api.watchlist_get() if _api else {"ok": False, "error": "api not available"}
+        return _cors(jsonify(data))
+    try:
+        js = _flask_req.get_json(silent=True) or {}
+        ticks = js.get('tickers') or []
+        data = _api.watchlist_set([str(t).upper() for t in ticks]) if _api else {"ok": False, "error": "api not available"}
+        return _cors(jsonify(data))
+    except Exception as e:
+        return _cors(jsonify({"ok": False, "error": str(e)}))
+
+@server.route('/api/settings', methods=['GET','POST','OPTIONS'])
+def _api_settings():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    if _flask_req.method == 'GET':
+        data = _api.settings_get() if _api else {"ok": False, "error": "api not available"}
+        return _cors(jsonify(data))
+    try:
+        js = _flask_req.get_json(silent=True) or {}
+        data = _api.settings_set(float(js.get('move_abs_pct', 1.0)), str(js.get('tilt', 'balanced'))) if _api else {"ok": False, "error": "api not available"}
+        return _cors(jsonify(data))
+    except Exception as e:
+        return _cors(jsonify({"ok": False, "error": str(e)}))
+
+@server.route('/api/llm/judge/run', methods=['POST','OPTIONS'])
+def _api_llm_judge_run():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    try:
+        js = _flask_req.get_json(silent=True) or {}
+        model = str(js.get('model') or 'deepseek-ai/DeepSeek-V3-0324-Turbo')
+        max_er = float(js.get('max_er', 0.08))
+        min_conf = float(js.get('min_conf', 0.6))
+        tickers = js.get('tickers')
+        if isinstance(tickers, list):
+            tickers = ','.join([str(t).upper() for t in tickers])
+        data = _api.llm_judge_run(model, max_er, min_conf, tickers) if _api else {"ok": False, "error": "api not available"}
+        return _cors(jsonify(data))
+    except Exception as e:
+        return _cors(jsonify({"ok": False, "error": str(e)}))
+
 if __name__ == "__main__":
     port = int(os.getenv("AF_DASH_PORT", "8050"))
     debug = os.getenv("AF_DASH_DEBUG", "false").lower() == "true"
+    # Optional devtools controls to reduce console spam when hot reload is not desired
+    hot_reload = os.getenv("DASH_HOT_RELOAD", "true").lower() == "true"
+    devtools_ui = os.getenv("DASH_DEVTOOLS_UI", "true").lower() == "true"
+    try:
+        if 'log' in globals():
+            log.info(
+                "dash.start",
+                extra={"ctx": {"port": port, "debug": debug, "hot_reload": hot_reload, "devtools_ui": devtools_ui}},  # type: ignore
+            )
+    except Exception:
+        pass
     # Dash >=3 replaced run_server with run
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host="0.0.0.0", port=port, debug=debug,
+            dev_tools_hot_reload=hot_reload, dev_tools_ui=devtools_ui)

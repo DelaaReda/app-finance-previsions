@@ -5,6 +5,18 @@ import json
 import dash_bootstrap_components as dbc
 from dash import html, dcc, Input, Output, State
 import dash
+try:
+    from hub.logging_setup import get_logger  # type: ignore
+    from hub import profiler as _prof  # type: ignore
+    _log = get_logger("settings")  # type: ignore
+except Exception:
+    class _P:
+        def log_event(self,*a,**k): pass
+    class _L:
+        def info(self,*a,**k): pass
+        def exception(self,*a,**k): pass
+    _prof = _P()  # type: ignore
+    _log = _L()   # type: ignore
 
 
 def _load_settings() -> dict:
@@ -74,6 +86,11 @@ def save_settings(n_clicks, threshold, tilt):
         return dash.no_update
     
     try:
+        _prof.log_event("callback", {"id": "settings.save", "move_abs_pct": threshold, "tilt": tilt})
+        try:
+            _log.info("settings.save.start", extra={"ctx": {"move_abs_pct": threshold, "tilt": tilt}})
+        except Exception:
+            pass
         config_dir = Path('data/config')
         config_dir.mkdir(parents=True, exist_ok=True)
         
@@ -86,8 +103,16 @@ def save_settings(n_clicks, threshold, tilt):
             json.dumps(settings, ensure_ascii=False, indent=2),
             encoding='utf-8'
         )
-        
+        try:
+            _log.info("settings.save.ok", extra={"ctx": settings})
+        except Exception:
+            pass
         return dbc.Alert("✅ Paramètres enregistrés avec succès", color="success")
     
     except Exception as e:
+        _prof.log_event("error", {"where": "settings.save", "error": str(e)})
+        try:
+            _log.exception("settings.save.fail", extra={"ctx": {"error": str(e)}})
+        except Exception:
+            pass
         return dbc.Alert(f"❌ Erreur: {e}", color="danger")

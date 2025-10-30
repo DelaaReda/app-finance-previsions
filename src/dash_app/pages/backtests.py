@@ -31,6 +31,15 @@ def _latest_results_parquet() -> Optional[Path]:
     return p_backtests_results()
 
 
+def _latest_summary_json() -> Optional[Path]:
+    """Latest backtest summary.json under data/backtest/dt=*/summary.json.
+
+    Returns None if no partition exists.
+    """
+    parts = sorted(Path('data/backtest').glob('dt=*/summary.json'))
+    return parts[-1] if parts else None
+
+
 def _build_topn_figure() -> Optional[dict]:
     # Prefer consolidated results.parquet if present
     rp = _latest_results_parquet()

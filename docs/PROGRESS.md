@@ -5,6 +5,9 @@ Small fixes (today)
 - Streamlit canonique confirmé sur `5555` via `src/apps/agent_app.py` + scripts `ui_*`.
 - Correction duplicate Streamlit widget id (clé explicite `ticker_input_sidebar`) dans `src/apps/stock_analysis_app.py` (port 5557). Conseillé: `make streamlit-stock-restart` ou `make apps-full-restart`.
 - Docs mises à jour: junior-dev, README (ajout `make apps-full-restart`).
+- Dash: ajout cibles OpenTelemetry (`dash-start-otel-bg`, `dash-restart-otel-bg`) + support `AF_DASH_OTEL=1` dans `scripts/dash_start_bg.sh`.
+- Collector OTEL Docker: cibles `otel-up` / `otel-down` / `otel-logs` (compose sous `ops/otel/`).
+- Dash: logs d'erreurs de rendu (routeur) désormais envoyés au profiler + stacktrace console.
 
 Delivered:
 - ✅ **MIGRATION 100% COMPLÈTE**: Toutes les 28 pages Streamlit migrées vers Dash (13 nouvelles pages + 15 existantes)

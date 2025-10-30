@@ -27,7 +27,26 @@ echo "[dash-bg] Starting Dash on port $PORT (log: $LOGFILE) ..."
     echo "[dash-bg] ERROR: Virtual environment not properly set up.  Please run 'python3 -m venv .venv && source .venv/bin/activate'"
     exit 1
   fi
-  AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src" exec "$RUN_PY" "$APP"
+  # Optional OpenTelemetry auto-instrumentation
+  # Enable by exporting AF_DASH_OTEL=1 (and OTEL_* envs as needed)
+  if [ "${AF_DASH_OTEL:-0}" = "1" ]; then
+    if command -v opentelemetry-instrument >/dev/null 2>&1; then
+      : "${OTEL_SERVICE_NAME:=af-dash}"
+      : "${OTEL_TRACES_EXPORTER:=otlp}"
+      : "${OTEL_METRICS_EXPORTER:=otlp}"
+      : "${OTEL_LOGS_EXPORTER:=otlp}"
+      : "${OTEL_EXPORTER_OTLP_ENDPOINT:=http://127.0.0.1:4318}"
+      : "${OTEL_PYTHON_LOG_CORRELATION:=true}"
+      : "${OTEL_RESOURCE_ATTRIBUTES:=deployment.environment=dev}"
+      echo "[dash-bg] OpenTelemetry enabled (endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT})"
+      AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src" exec opentelemetry-instrument "$RUN_PY" "$APP"
+    else
+      echo "[dash-bg] WARNING: AF_DASH_OTEL=1 but 'opentelemetry-instrument' not found. Starting without OTel." >&2
+      AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src" exec "$RUN_PY" "$APP"
+    fi
+  else
+    AF_DASH_DEBUG=${AF_DASH_DEBUG:-false} PYTHONPATH="$REPO_ROOT:$REPO_ROOT/src" exec "$RUN_PY" "$APP"
+  fi
 ) >>"$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 echo "[dash-bg] PID $(cat "$PIDFILE")"

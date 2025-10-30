@@ -5,6 +5,19 @@ import pandas as pd
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash
 import dash
+try:
+    from hub.logging_setup import get_logger  # type: ignore
+    from hub import profiler as _prof  # type: ignore
+    _log = get_logger("forecasts")  # type: ignore
+except Exception:
+    class _P:
+        def log_event(self,*a,**k): pass
+    class _L:
+        def info(self,*a,**k): pass
+        def debug(self,*a,**k): pass
+        def exception(self,*a,**k): pass
+    _prof = _P()  # type: ignore
+    _log = _L()   # type: ignore
 
 
 def _load_forecasts_data() -> pd.DataFrame:
@@ -108,6 +121,8 @@ def layout():
 )
 def update_forecasts(asset_type, horizon, search, sort_by):
     try:
+        _prof.log_event("callback", {"id": "forecasts.update", "asset_type": asset_type, "horizon": horizon, "sort_by": sort_by, "search": search})
+        _log.debug("forecasts.update.start", extra={"ctx": {"asset_type": asset_type, "horizon": horizon, "sort_by": sort_by, "search": search}})
         # Load data based on asset type
         if asset_type == 'equity':
             df = _load_forecasts_data()
@@ -258,7 +273,10 @@ def update_forecasts(asset_type, horizon, search, sort_by):
             ])
         ])
 
+        _log.info("forecasts.update.ok", extra={"ctx": {"rows": int(len(df)), "asset_type": asset_type}})
         return content
 
     except Exception as e:
+        _prof.log_event("error", {"where": "forecasts.update", "error": str(e)})
+        _log.exception("forecasts.update.fail", extra={"ctx": {"error": str(e)}})
         return dbc.Alert(f"Erreur affichage prévisions: {e}", color="danger")

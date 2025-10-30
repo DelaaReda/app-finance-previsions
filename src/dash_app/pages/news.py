@@ -7,6 +7,19 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash
 from dash import dash_table
 import dash
+try:
+    from hub.logging_setup import get_logger  # type: ignore
+    from hub import profiler as _prof  # type: ignore
+    _log = get_logger("news")  # type: ignore
+except Exception:
+    class _P:
+        def log_event(self,*a,**k): pass
+    class _L:
+        def info(self,*a,**k): pass
+        def debug(self,*a,**k): pass
+        def exception(self,*a,**k): pass
+    _prof = _P()  # type: ignore
+    _log = _L()   # type: ignore
 
 
 def _load_news_data() -> pd.DataFrame:
@@ -91,6 +104,8 @@ def layout():
 )
 def update_news(sector, search):
     try:
+        _prof.log_event("callback", {"id": "news.update", "sector": sector, "search": search})
+        _log.debug("news.update.start", extra={"ctx": {"sector": sector, "search": search}})
         df = _load_news_data()
 
         if df.empty or 'error' in df.columns:
@@ -144,9 +159,12 @@ def update_news(sector, search):
         else:
             table_card = dbc.Alert("Aucune actualité trouvée avec ces critères.", color="info")
 
+        _log.info("news.update.ok", extra={"ctx": {"rows": int(len(df))}})
         return summary_card, table_card
 
     except Exception as e:
+        _prof.log_event("error", {"where": "news.update", "error": str(e)})
+        _log.exception("news.update.fail", extra={"ctx": {"error": str(e)}})
         return (
             dbc.Alert("Erreur génération synthèse.", color="danger"),
             dbc.Alert(f"Erreur affichage actualités: {e}", color="danger")

@@ -217,8 +217,140 @@ dash-start-bg:
 dash-restart-bg:
 	AF_DASH_PORT=$${AF_DASH_PORT-8050} bash scripts/dash_restart_bg.sh
 
-dash-status:
+# --- Dash + OpenTelemetry (optional) ---
+.PHONY: dash-start-otel-bg dash-restart-otel-bg
+
+dash-start-otel-bg:
+	AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	AF_DASH_OTEL=1 \
+	OTEL_SERVICE_NAME=$${OTEL_SERVICE_NAME-af-dash} \
+	OTEL_TRACES_EXPORTER=$${OTEL_TRACES_EXPORTER-otlp} \
+	OTEL_METRICS_EXPORTER=$${OTEL_METRICS_EXPORTER-otlp} \
+	OTEL_LOGS_EXPORTER=$${OTEL_LOGS_EXPORTER-otlp} \
+	OTEL_EXPORTER_OTLP_ENDPOINT=$${OTEL_EXPORTER_OTLP_ENDPOINT-http://127.0.0.1:4318} \
+	OTEL_PYTHON_LOG_CORRELATION=$${OTEL_PYTHON_LOG_CORRELATION-true} \
+	OTEL_PYTHON_FLASK_EXCLUDED_URLS=$${OTEL_PYTHON_FLASK_EXCLUDED_URLS-/_reload-hash,/_favicon.ico,/assets} \
+	DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	bash scripts/dash_start_bg.sh
+
+dash-restart-otel-bg:
+	AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	AF_DASH_OTEL=1 \
+	OTEL_SERVICE_NAME=$${OTEL_SERVICE_NAME-af-dash} \
+	OTEL_TRACES_EXPORTER=$${OTEL_TRACES_EXPORTER-otlp} \
+	OTEL_METRICS_EXPORTER=$${OTEL_METRICS_EXPORTER-otlp} \
+	OTEL_LOGS_EXPORTER=$${OTEL_LOGS_EXPORTER-otlp} \
+	OTEL_EXPORTER_OTLP_ENDPOINT=$${OTEL_EXPORTER_OTLP_ENDPOINT-http://127.0.0.1:4318} \
+	OTEL_PYTHON_LOG_CORRELATION=$${OTEL_PYTHON_LOG_CORRELATION-true} \
+	OTEL_PYTHON_FLASK_EXCLUDED_URLS=$${OTEL_PYTHON_FLASK_EXCLUDED_URLS-/_reload-hash,/_favicon.ico,/assets} \
+	DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	bash scripts/dash_restart_bg.sh
+
+# --- OpenTelemetry Collector (Docker) ---
+.PHONY: otel-up otel-down otel-logs otel-restart
+
+otel-up:
+	cd ops/otel && docker compose up -d
+
+otel-down:
+	cd ops/otel && docker compose down
+
+otel-logs:
+	cd ops/otel && docker compose logs -f --tail=200
+
+otel-restart: otel-down otel-up
+
+# --- One-shot: start/restart full observability (collector + Dash instrumenté) ---
+.PHONY: ui-otel-start ui-otel-restart
+
+# Start collector if available, then start Dash with OTEL. Falls back to console exporter when Docker/collector unavailable.
+ui-otel-start:
+	@set -e; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+	  echo "[otel] Docker running → starting collector (4318)"; \
+	  $(MAKE) otel-up; \
+	  AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	  AF_DASH_OTEL=1 \
+	  OTEL_TRACES_EXPORTER=$${OTEL_TRACES_EXPORTER-otlp} \
+	  OTEL_METRICS_EXPORTER=$${OTEL_METRICS_EXPORTER-otlp} \
+	  OTEL_LOGS_EXPORTER=$${OTEL_LOGS_EXPORTER-otlp} \
+	  OTEL_EXPORTER_OTLP_ENDPOINT=$${OTEL_EXPORTER_OTLP_ENDPOINT-http://127.0.0.1:4318} \
+	  OTEL_PYTHON_LOG_CORRELATION=$${OTEL_PYTHON_LOG_CORRELATION-true} \
+	  OTEL_PYTHON_FLASK_EXCLUDED_URLS=$${OTEL_PYTHON_FLASK_EXCLUDED_URLS-/_reload-hash,/_favicon.ico,/assets} \
+	  DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	  bash scripts/dash_start_bg.sh; \
+	else \
+	  echo "[otel] Docker unavailable → using OTEL console exporter"; \
+	  AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	  AF_DASH_OTEL=1 \
+	  OTEL_TRACES_EXPORTER=console \
+	  DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	  bash scripts/dash_start_bg.sh; \
+	fi; \
+	$(MAKE) dash-status
+
+ui-otel-restart:
+	@set -e; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+	  echo "[otel] Docker running → (re)starting collector + Dash"; \
+	  $(MAKE) otel-up; \
+	  AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	  AF_DASH_OTEL=1 \
+	  OTEL_TRACES_EXPORTER=$${OTEL_TRACES_EXPORTER-otlp} \
+	  OTEL_METRICS_EXPORTER=$${OTEL_METRICS_EXPORTER-otlp} \
+	  OTEL_LOGS_EXPORTER=$${OTEL_LOGS_EXPORTER-otlp} \
+	  OTEL_EXPORTER_OTLP_ENDPOINT=$${OTEL_EXPORTER_OTLP_ENDPOINT-http://127.0.0.1:4318} \
+	  OTEL_PYTHON_LOG_CORRELATION=$${OTEL_PYTHON_LOG_CORRELATION-true} \
+	  OTEL_PYTHON_FLASK_EXCLUDED_URLS=$${OTEL_PYTHON_FLASK_EXCLUDED_URLS-/_reload-hash,/_favicon.ico,/assets} \
+	  DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	  bash scripts/dash_restart_bg.sh; \
+	else \
+	  echo "[otel] Docker unavailable → using OTEL console exporter"; \
+	  AF_DASH_PORT=$${AF_DASH_PORT-8050} \
+	  AF_DASH_OTEL=1 \
+	  OTEL_TRACES_EXPORTER=console \
+	  DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	  bash scripts/dash_restart_bg.sh; \
+	fi; \
+	$(MAKE) dash-status
+
+	dash-status:
 	AF_DASH_PORT=$${AF_DASH_PORT-8050} bash scripts/dash_status.sh
+
+# --- Foreground runs (live console logs) ---
+.PHONY: dash-fore ui-otel-fore ui-otel-follow
+
+dash-fore:
+	PYTHONPATH=$$PWD:$$PWD/src AF_DASH_DEBUG=$${AF_DASH_DEBUG-true} AF_PROFILER=$${AF_PROFILER-1} DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} $(PYTHON) -m src.dash_app.app
+
+ui-otel-fore:
+	@set -e; \
+	if command -v opentelemetry-instrument >/dev/null 2>&1; then \
+	  echo "[ui-otel-fore] starting Dash in foreground with OpenTelemetry"; \
+	  PYTHONPATH=$$PWD:$$PWD/src \
+	  OTEL_TRACES_EXPORTER=$${OTEL_TRACES_EXPORTER-console} \
+	  OTEL_EXPORTER_OTLP_ENDPOINT=$${OTEL_EXPORTER_OTLP_ENDPOINT-http://127.0.0.1:4318} \
+	  OTEL_PYTHON_LOG_CORRELATION=$${OTEL_PYTHON_LOG_CORRELATION-true} \
+	  DASH_HOT_RELOAD=$${DASH_HOT_RELOAD-false} \
+	  opentelemetry-instrument $(PYTHON) -m src.dash_app.app; \
+	else \
+	  echo "[ui-otel-fore] opentelemetry-instrument not found → running plain foreground"; \
+	  $(MAKE) dash-fore; \
+	fi
+
+# Tail both collector and Dash logs concurrently (if collector available)
+ui-otel-follow:
+	@bash -c ' \
+	  set -e; \
+	  DASH_PORT="$${AF_DASH_PORT-8050}"; \
+	  DASH_LOG="logs/dash/dash_$${DASH_PORT}.log"; \
+	  echo "[follow] tailing $$DASH_LOG"; \
+	  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+	    (tail -n +1 -f "$$DASH_LOG") & \
+	    cd ops/otel && docker compose logs -f --tail=50; \
+	  else \
+	    tail -n +1 -f "$$DASH_LOG"; \
+	  fi'
 
 dash-logs:
 	tail -f logs/dash/dash_$${AF_DASH_PORT-8050}.log
@@ -375,3 +507,15 @@ macro-forecast:
 
 update-monitor:
 	PYTHONPATH=$$PWD/src $(PYTHON) -m src.agents.update_monitor_agent
+# --- React (Vite) ---
+.PHONY: react-dev react-build react-preview
+
+react-dev:
+	@echo "[react] starting Vite dev server on http://127.0.0.1:5173 (proxy /api->8050)"
+	@cd webapp && if command -v npm >/dev/null 2>&1; then npm run dev; else echo "npm not found — install Node.js" && exit 1; fi
+
+react-build:
+	@cd webapp && if command -v npm >/dev/null 2>&1; then npm run build; else echo "npm not found — install Node.js" && exit 1; fi
+
+react-preview:
+	@cd webapp && if command -v npm >/dev/null 2>&1; then npm run preview; else echo "npm not found — install Node.js" && exit 1; fi
