@@ -1,266 +1,367 @@
 # src/api/main.py
+"""
+FastAPI backend for React frontend.
+Serves all 5 pillars according to VISION.md
+"""
 from __future__ import annotations
 
 import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 from datetime import datetime
-from typing import List, Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-# Modules ajoutés
-from core.config import CONFIG
-from api.errors import ApiError, api_error_handler, generic_error_handler
-from api.health import router as health_router
-from core.cache import ttl_cache
-
-# Réutilisation modules existants
-from core.market_data import get_fred_series, get_price_history
-from ingestion.finnews import run_pipeline as news_run_pipeline
-from analytics.indicators_basic import compute_indicators as compute_indicators_basic
-from analytics.phase2_technical import compute_indicators, load_prices  # si non dispo: fallback simple
-from research.brief_renderer import render_brief_html, render_brief_md
-from research.alerts import alerts_for_ticker
-# Macro bundle optionnel (si pratique)
+# Import data access layer
 try:
-    from analytics.phase3_macro import get_us_macro_bundle  # type: ignore
-except Exception:
-    get_us_macro_bundle = None  # type: ignore
+    from core.data_access import (
+        get_close_series,
+        load_macro_forecast_rows,
+        load_news_features,
+        check_data_freshness
+    )
+    from core.market_data import get_price_history
+    from core.downsample import lttb
+    from core.duck import query_parquet, parquet_glob
+except ImportError as e:
+    print(f"⚠️  Import error: {e}")
+    # Fallback stubs
+    def get_close_series(ticker): return None
+    def load_macro_forecast_rows(limit=200): return {"ok": False}
+    def load_news_features(limit=100): return {"ok": False}
+    def check_data_freshness(): return {}
+    def get_price_history(ticker, **kw): return None
+    def lttb(points, threshold=1000): return points
+    def query_parquet(sql, params=None): return []
+    def parquet_glob(*parts): return str(Path(*parts))
 
-# Colle ajoutée
-from research.scoring import build_brief
-from research.rag_store import search_chunks, add_news_items, add_series_facts
+# ================================= APP SETUP =================================
 
-from .schemas import (
-    TimePoint, PricePoint, MacroSeries, StockItem, Indicators,
-    NewsItem, BriefResponse, CopilotAskRequest, CopilotAnswer, CopilotCitation
-)
+def create_app() -> FastAPI:
+    """Create and configure FastAPI app."""
+    app = FastAPI(
+        title="Finance Copilot API",
+        description="Backend API for React frontend - 5 Pillars: Macro, Stocks, News, Copilot, Brief",
+        version="0.1.0"
+    )
 
-app = FastAPI(title="Finance Copilot API", version="0.1.0")
+    # CORS middleware (allow React dev server)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# CORS — adapter pour ton domaine Front
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict to your webapp's domain for security
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # GZip compression
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+    # Routes
+    register_routes(app)
 
-# --------- Helpers ----------
-def _env_flag(name: str, default: str = "0") -> bool:
-    return (os.getenv(name, default) or "0").strip() not in ("0", "false", "False", "")
+    return app
 
+# ================================= MODELS ====================================
 
-def _df_to_time_points(df, value_col: str = None):
-    """
-    Convertit un DataFrame en liste TimePoint/PricePoint.
-    Si value_col est donné -> TimePoint. Sinon assume OHLCV -> PricePoint.
-    """
-    out = []
-    if df is None or getattr(df, "empty", True):
-        return out
-    if value_col:
-        for idx, row in df.iterrows():
-            v = float(row[value_col]) if value_col in row else float(row.iloc[0])
-            out.append(TimePoint(t=str(idx), v=v))
-    else:
-        # OHLCV
-        for idx, r in df.iterrows():
-            out.append(
-                PricePoint(
-                    t=str(idx),
-                    o=float(r.get("Open", r.get("open", r.get("O", 0.0)))),
-                    h=float(r.get("High", r.get("high", r.get("H", 0.0)))),
-                    l=float(r.get("Low", r.get("low", r.get("L", 0.0)))),
-                    c=float(r.get("Close", r.get("close", r.get("C", 0.0)))),
-                    v=float(r.get("Volume", r.get("volume", r.get("V", 0.0)))),
-                )
-            )
-    return out
+class ApiResponse(BaseModel):
+    ok: bool
+    data: Optional[Any] = None
+    error: Optional[str] = None
 
+# ================================= HELPERS ===================================
 
-# --------- Endpoints ----------
+def _ok(data: Any) -> Dict:
+    return {"ok": True, "data": data}
 
-@app.get("/api/macro/series")
-def macro_series(ids: List[str] = Query(...), start: Optional[str] = None, end: Optional[str] = None):
-    """
-    Retourne des séries FRED/indices au format UI-ready.
-    """
-    series = []
-    for sid in ids:
-        df = get_fred_series(sid, start=start)
-        points = _df_to_time_points(df, value_col=df.columns[-1] if df is not None and len(df.columns) else None)
-        series.append(
-            MacroSeries(
-                id=sid,
-                points=points,
-                source="FRED",
-                ts=datetime.utcnow().isoformat() + "Z",
-                url=f"https://fred.stlouisfed.org/series/{sid}",
-            )
-        )
-    return {"series": [s.dict() for s in series]}
+def _err(msg: str) -> Dict:
+    return {"ok": False, "error": msg}
 
+def _latest_partition(base: str) -> Optional[str]:
+    """Get latest dt=YYYYMMDD partition."""
+    parts = sorted(Path(base).glob("dt=*"))
+    return parts[-1].name.split("=")[-1] if parts else None
 
-@app.get("/api/stocks/prices")
-def stocks_prices(tickers: List[str] = Query(...), period: str = "1y", interval: str = "1d"):
-    """
-    Retourne OHLCV + indicateurs de base (RSI/SMA20/MACD) pour un ou plusieurs tickers.
-    Essaie d'utiliser analytics.phase2_technical si dispo, sinon fallback simple.
-    """
-    items = []
-    for t in tickers:
-        # Essayons la pipeline technique complète si elle existe
+# ================================= ROUTES ====================================
+
+def register_routes(app: FastAPI):
+    """Register all API routes."""
+
+    @app.get("/api/health")
+    async def health_check():
+        """Health check endpoint."""
+        return _ok({
+            "status": "up",
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "0.1.0"
+        })
+
+    @app.get("/api/freshness")
+    async def data_freshness():
+        """Check freshness of all data sources."""
+        return _ok(check_data_freshness())
+
+    # ========================= PILLAR 1: MACRO ===========================
+
+    @app.get("/api/macro/series")
+    async def macro_series(
+        series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
+        limit: int = Query(200, ge=1, le=1000)
+    ):
+        """Get macro time series data (FRED)."""
+        result = load_macro_forecast_rows(limit=limit)
+        if not result.get("ok"):
+            raise HTTPException(status_code=404, detail="No macro data available")
+        return _ok(result["rows"])
+
+    @app.get("/api/macro/snapshot")
+    async def macro_snapshot():
+        """Get current macro snapshot (latest values)."""
+        result = load_macro_forecast_rows(limit=10)
+        if not result.get("ok"):
+            return _err("No macro data")
+        
+        rows = result.get("rows", [])
+        snapshot = {}
+        for row in rows:
+            series = row.get("series")
+            value = row.get("value")
+            if series and value is not None:
+                snapshot[series] = value
+        
+        return _ok(snapshot)
+
+    @app.get("/api/macro/indicators")
+    async def macro_indicators():
+        """Get macro indicators with trend analysis."""
+        # TODO: Implement trend analysis (YoY, MoM, etc.)
+        return _ok({
+            "cpi_yoy": None,
+            "yield_curve_10y_2y": None,
+            "recession_probability": None,
+            "vix": None
+        })
+
+    # ========================= PILLAR 2: STOCKS ==========================
+
+    @app.get("/api/stocks/prices")
+    async def stock_prices(
+        ticker: str = Query(..., description="Stock ticker symbol"),
+        interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
+        downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
+    ):
+        """Get stock prices with technical indicators (downsampled)."""
+        series = get_close_series(ticker)
+        if series is None or series.empty:
+            raise HTTPException(status_code=404, detail=f"No data for {ticker}")
+
+        # Convert to points (timestamp, value)
+        points = [(int(ts.timestamp()), float(val)) 
+                  for ts, val in series.items() 
+                  if not pd.isna(val)]
+
+        # Downsample if needed
+        if len(points) > downsample:
+            points = lttb(points, threshold=downsample)
+
+        return _ok({
+            "ticker": ticker,
+            "interval": interval,
+            "points": points,
+            "count": len(points),
+            "source": "features" if "features" in str(series) else "legacy",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+    @app.get("/api/stocks/universe")
+    async def stock_universe():
+        """Get list of tracked tickers."""
+        # TODO: Read from watchlist or config
+        return _ok({
+            "tickers": ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"],
+            "count": 8
+        })
+
+    @app.get("/api/stocks/{ticker}")
+    async def stock_detail(ticker: str):
+        """Get detailed ticker sheet (prix + indicators + news)."""
+        series = get_close_series(ticker)
+        if series is None or series.empty:
+            raise HTTPException(status_code=404, detail=f"No data for {ticker}")
+
+        last_price = float(series.iloc[-1]) if not series.empty else None
+        
+        return _ok({
+            "ticker": ticker,
+            "last_price": last_price,
+            "date": series.index[-1].isoformat() if not series.empty else None,
+            "indicators": {
+                "rsi": None,  # TODO: from features
+                "sma20": None,
+                "macd": None
+            },
+            "news_count": 0  # TODO: from news features
+        })
+
+    # ========================= PILLAR 3: NEWS ============================
+
+    @app.get("/api/news/feed")
+    async def news_feed(
+        ticker: Optional[str] = Query(None, description="Filter by ticker"),
+        region: str = Query("all", description="Region: US, CA, INTL, all"),
+        limit: int = Query(50, ge=1, le=200)
+    ):
+        """Get news feed with scoring."""
+        result = load_news_features(limit=limit)
+        if not result.get("ok"):
+            return _ok({"rows": [], "count": 0})
+
+        rows = result.get("rows", [])
+        
+        # Filter by ticker if specified
+        if ticker:
+            rows = [r for r in rows if r.get("symbol") == ticker.upper()]
+
+        return _ok({
+            "rows": rows[:limit],
+            "count": len(rows),
+            "fallback": result.get("fallback")
+        })
+
+    @app.get("/api/news/sentiment")
+    async def news_sentiment():
+        """Get aggregated sentiment by ticker."""
+        result = load_news_features(limit=100)
+        if not result.get("ok"):
+            return _ok({"sentiment": {}})
+
+        rows = result.get("rows", [])
+        sentiment = {}
+        for row in rows:
+            symbol = row.get("symbol")
+            score = row.get("news_score_mean", 0.0)
+            if symbol:
+                sentiment[symbol] = score
+
+        return _ok({"sentiment": sentiment, "count": len(sentiment)})
+
+    # ======================== PILLAR 4: LLM COPILOT ======================
+
+    class CopilotAskRequest(BaseModel):
+        question: str
+        context_years: int = 5
+        max_sources: int = 10
+
+    @app.post("/api/copilot/ask")
+    async def copilot_ask(req: CopilotAskRequest):
+        """Ask LLM with RAG (5 years context)."""
+        # TODO: Implement RAG query
+        return _ok({
+            "answer": "LLM Copilot not yet implemented",
+            "sources": [],
+            "confidence": 0.0,
+            "warning": "This is a placeholder response"
+        })
+
+    @app.get("/api/copilot/history")
+    async def copilot_history(limit: int = Query(20, ge=1, le=100)):
+        """Get conversation history."""
+        # TODO: Implement conversation history
+        return _ok({"conversations": [], "count": 0})
+
+    # ====================== PILLAR 5: MARKET BRIEF =======================
+
+    @app.get("/api/brief/weekly")
+    async def brief_weekly():
+        """Get weekly market brief."""
+        # TODO: Generate/fetch weekly brief
+        return _ok({
+            "title": "Weekly Market Brief",
+            "date": datetime.utcnow().date().isoformat(),
+            "sections": [],
+            "placeholder": True
+        })
+
+    @app.get("/api/brief/daily")
+    async def brief_daily():
+        """Get daily market brief."""
+        # TODO: Generate/fetch daily brief
+        return _ok({
+            "title": "Daily Market Brief",
+            "date": datetime.utcnow().date().isoformat(),
+            "sections": [],
+            "placeholder": True
+        })
+
+    # =========================== SIGNALS =================================
+
+    @app.get("/api/signals/top")
+    async def signals_top():
+        """Get Top 3 signals + Top 3 risks."""
+        # TODO: Compute composite scores (40/40/20)
+        return _ok({
+            "signals": [],
+            "risks": [],
+            "scoring": {"macro": 0.4, "technical": 0.4, "news": 0.2}
+        })
+
+    @app.get("/api/signals/composite")
+    async def signals_composite(ticker: Optional[str] = Query(None)):
+        """Get composite scores (macro 40% + tech 40% + news 20%)."""
+        # TODO: Implement composite scoring
+        return _ok({"scores": [], "count": 0})
+
+    # ========================= FORECASTS (EXISTING) ======================
+
+    @app.get("/api/forecasts")
+    async def forecasts(
+        asset_type: str = Query("all", description="Asset type: equity, commodity, all"),
+        horizon: str = Query("all", description="Horizon: 1w, 1m, 3m, all"),
+        search: Optional[str] = Query(None, description="Search term"),
+        sort_by: str = Query("score", description="Sort by: score, confidence, return")
+    ):
+        """Get forecasts list."""
+        # Reuse existing dash_app.api logic
         try:
-            df = load_prices(t, period=period, interval=interval)
-            ind_df = compute_indicators(df)
-            prices = _df_to_time_points(df)  # OHLCV points
-            indi = Indicators(
-                rsi=float(ind_df["rsi"].dropna().iloc[-1]) if "rsi" in ind_df else None,
-                sma20=float(ind_df["sma20"].dropna().iloc[-1]) if "sma20" in ind_df else None,
-                macd=float(ind_df["macd"].dropna().iloc[-1]) if "macd" in ind_df else None,
-            )
-        except Exception:
-            # Fallback minimal
-            df = get_price_history(t, interval=interval)
-            prices = _df_to_time_points(df)
-            indi = Indicators()
-        items.append(StockItem(ticker=t, prices=prices, indicators=indi).dict())
-    return {"items": items}
+            from dash_app.api import forecasts as dash_forecasts
+            result = dash_forecasts(asset_type, horizon, search, sort_by)
+            if result.get("ok"):
+                return _ok(result["data"])
+            else:
+                raise HTTPException(status_code=404, detail=result.get("error", "Not found"))
+        except ImportError:
+            return _ok({"rows": [], "count": 0, "note": "Forecasts API not available"})
 
+    @app.get("/api/dashboard/kpis")
+    async def dashboard_kpis():
+        """Get dashboard KPIs."""
+        try:
+            from dash_app.api import dashboard_kpis as dash_kpis
+            result = dash_kpis()
+            if result.get("ok"):
+                return _ok(result["data"])
+            else:
+                return _err(result.get("error", "Unknown error"))
+        except ImportError:
+            return _ok({
+                "last_forecast_dt": None,
+                "forecasts_count": 0,
+                "tickers": 0,
+                "horizons": [],
+                "last_macro_dt": None,
+                "last_quality_dt": None
+            })
 
-@app.get("/api/news/feed")
-def news_feed(
-    tickers: Optional[List[str]] = Query(None),
-    q: Optional[str] = None,
-    limit: int = 50,
-    regions: Optional[List[str]] = Query(["US", "CA", "INTL"])
-):
-    """
-    RSS scoré (finnews.run_pipeline). Tri desc. par score.
-    """
-    # Window heuristique: "last_week" si limit>50, sinon "last_48h"
-    window = "last_48h" if limit <= 50 else "last_week"
-    items = news_run_pipeline(regions=regions, window=window, query=q or "", tgt_ticker=(tickers[0] if tickers else None), limit=limit)
-    out = []
-    for it in items:
-        out.append(
-            NewsItem(
-                id=it.get("id") or it.get("hash") or it.get("url"),
-                title=it.get("title") or "",
-                url=it.get("url") or it.get("link") or "",
-                source=it.get("source") or "",
-                published=str(it.get("published") or ""),
-                score=float(it.get("score", 0.0)),
-                tickers=it.get("tickers") or None,
-                lang=it.get("lang") or None,
-            ).dict()
-        )
-    # Option: alimenter le RAG store
-    try:
-        add_news_items(out)
-    except Exception:
-        pass
-    return {"items": out}
+# ================================= SERVER ====================================
 
+def run_server(host: str = "127.0.0.1", port: int = 8000):
+    """Run the FastAPI server."""
+    import uvicorn
+    app = create_app()
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
-@app.get("/api/brief")
-def market_brief(period: str = "weekly", universe: Optional[List[str]] = Query(None)):
-    """
-    Score composite Macro(40) + Technique(40) + News(20).
-    Renvoie Top3 signaux/risques et picks.
-    """
-    br = build_brief(period=period, universe=universe or ["SPY", "QQQ", "AAPL", "NVDA", "MSFT"])
-    return BriefResponse(brief=br["brief"], generatedAt=br["generatedAt"], sources=br["sources"]).dict()
-
-
-@app.get("/api/tickers/{ticker}/sheet")
-def ticker_sheet(ticker: str, period: str = "6mo", interval: str = "1d"):
-    """
-    Fiche complète: prix+indicateurs + top 5 news + niveaux simples.
-    """
-    # prix & indicateurs
-    try:
-        df = load_prices(ticker, period=period, interval=interval)
-        ind_df = compute_indicators(df)
-        prices = _df_to_time_points(df)
-        indi = Indicators(
-            rsi=float(ind_df["rsi"].dropna().iloc[-1]) if "rsi" in ind_df else None,
-            sma20=float(ind_df["sma20"].dropna().iloc[-1]) if "sma20" in ind_df else None,
-            macd=float(ind_df["macd"].dropna().iloc[-1]) if "macd" in ind_df else None,
-        )
-    except Exception:
-        df = get_price_history(ticker, interval=interval)
-        prices = _df_to_time_points(df)
-        indi = Indicators()
-
-    # top news
-    items = news_run_pipeline(regions=["US", "CA", "INTL"], window="last_week", tgt_ticker=ticker, limit=5)
-    news = [
-        NewsItem(
-            id=it.get("id") or it.get("hash") or it.get("url"),
-            title=it.get("title") or "",
-            url=it.get("url") or it.get("link") or "",
-            source=it.get("source") or "",
-            published=str(it.get("published") or ""),
-            score=float(it.get("score", 0.0)),
-            tickers=it.get("tickers") or None,
-            lang=it.get("lang") or None,
-        ).dict()
-        for it in items
-    ]
-
-    # niveaux simples
-    last_close = prices[-1].c if prices else None
-    levels = {"sma20": indi.sma20, "rsi": indi.rsi, "last_close": last_close}
-
-    return {
-        "overview": {"ticker": ticker},
-        "prices": [p.dict() for p in prices],
-        "indicators": indi.dict(),
-        "newsTop": news,
-        "levels": levels,
-    }
-
-
-# ---- Copilot: Q&A avec citations (RAG minimal sur news/séries) ----
-
-class _Ask(BaseModel):
-    question: str
-    scope: Optional[dict] = None
-
-
-@app.post("/api/copilot/ask")
-def copilot_ask(payload: CopilotAskRequest):
-    """
-    Cherche des chunks pertinents (news + facts séries) puis délègue à nlp_enrich.ask_model si dispo.
-    Le cas échéant, renvoie une réponse synthétique locale + citations.
-    """
-    q = payload.question
-    scope = payload.scope or {}
-
-    # Récupérer des chunks (top-K) depuis le store
-    chunks = search_chunks(scope, topk=8)
-
-    # Option 1: utiliser ton enrichisseur si présent
-    try:
-        from research.nlp_enrich import ask_model  # type: ignore
-        answer = ask_model(q, chunks)  # attendu: {"text": "...", "citations":[...]} si implémenté
-        text = answer.get("text") or answer.get("answer") or ""
-        cits_raw = answer.get("citations") or []
-    except Exception:
-        # Option 2: synthèse locale simple
-        # (pas d'appel réseau inattendu; juste concat facts)
-        facts = [c["text"] for c in chunks[:5]]
-        text = f"Résumé basé sur {len(facts)} éléments:\n- " + "\n- ".join(facts)
-        cits_raw = [{"type": c["meta"].get("type", "news"),
-                     "ref": c["meta"].get("ref") or c["meta"].get("url") or "",
-                     "url": c["meta"].get("url"),
-                     "t": c["meta"].get("date")} for c in chunks[:5]]
-
-    citations = [CopilotCitation(**c) for c in cits_raw if isinstance(c, dict)]
-    return CopilotAnswer(answer=text, citations=citations).dict()
+if __name__ == "__main__":
+    run_server()

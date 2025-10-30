@@ -1,33 +1,38 @@
-// Types communs pour toute l'application
-
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string }
-
-export type TimeHorizon = 'CT' | 'MT' | 'LT' // Court, Moyen, Long terme
-
-export type Signal = {
-  id: string
-  type: 'bullish' | 'bearish' | 'neutral'
-  title: string
-  description: string
-  score: number // 0-100
-  horizon: TimeHorizon
-  sources: Source[]
-  timestamp: string
-  ticker?: string
-  category?: string
+// webapp/src/types/common.types.ts
+export interface ApiResponse<T> {
+  ok: boolean
+  data?: T
+  error?: string
 }
 
-export type Source = {
-  type: 'news' | 'macro' | 'technical' | 'fundamental'
+export interface TimeSeriesPoint {
+  timestamp: number
+  value: number
+}
+
+export interface DataSource {
   name: string
   url?: string
-  date: string
-  reliability?: number // 0-1
+  timestamp: string
 }
 
-export type ScoreBreakdown = {
-  macro: number    // 40%
-  technical: number // 40%
-  news: number     // 20%
-  composite: number // Score final
+export interface Signal {
+  ticker: string
+  type: 'opportunity' | 'risk'
+  score: number
+  reason: string
+  sources: DataSource[]
+}
+
+export interface CompositeScore {
+  ticker: string
+  macro_score: number
+  technical_score: number
+  news_score: number
+  final_score: number
+  weights: {
+    macro: number
+    technical: number
+    news: number
+  }
 }

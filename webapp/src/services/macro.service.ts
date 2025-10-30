@@ -1,23 +1,28 @@
-// Service pour les données macro (Pilier 1)
+// webapp/src/services/macro.service.ts
 import { apiGet } from '../api/client'
-import type { ApiResponse } from '../types/common'
-import type { MacroSeriesResponse } from '../types/macro'
+import type { MacroSeries, MacroSnapshot, MacroIndicators } from '../types/macro.types'
 
-export async function fetchMacroSeries(
-  ids: string[],
-  start?: string,
-  end?: string
-): Promise<ApiResponse<MacroSeriesResponse>> {
-  const params: Record<string, string> = {}
-  
-  // Note: apiGet n'accepte pas les tableaux directement, on passe des params multiples
-  // Pour l'instant, on va construire la query string manuellement
-  const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join('&')
-  const fullPath = `/macro/series?${query}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`
-  
-  return apiGet<MacroSeriesResponse>(fullPath.replace('/macro', ''))
-}
+export const macroService = {
+  /**
+   * Get macro time series data
+   */
+  getSeries: async (seriesIds?: string, limit = 200) => {
+    const params: Record<string, string> = { limit: String(limit) }
+    if (seriesIds) params.series_ids = seriesIds
+    return apiGet<MacroSeries[]>('/macro/series', params)
+  },
 
-export async function fetchMacroBundle(): Promise<ApiResponse<any>> {
-  return apiGet<any>('/macro/bundle')
+  /**
+   * Get current macro snapshot (latest values)
+   */
+  getSnapshot: async () => {
+    return apiGet<MacroSnapshot>('/macro/snapshot')
+  },
+
+  /**
+   * Get macro indicators with trend analysis
+   */
+  getIndicators: async () => {
+    return apiGet<MacroIndicators>('/macro/indicators')
+  }
 }

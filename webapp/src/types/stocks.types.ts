@@ -1,74 +1,30 @@
-// Types pour le pilier Actions (yfinance, indicateurs techniques)
+// webapp/src/types/stocks.types.ts
+import { TimeSeriesPoint } from './common.types'
 
-import { Source, ScoreBreakdown } from './common.types'
-
-export type Stock = {
+export interface StockPriceData {
   ticker: string
-  name: string
-  sector: string
-  industry?: string
-  price: number
-  previousClose: number
-  change: number
-  changePercent: number
-  volume: number
-  marketCap?: number
-  lastUpdate: string
-}
-
-export type TechnicalIndicators = {
-  ticker: string
-  sma20: number
-  sma50: number
-  sma200: number
-  rsi: number
-  macd: {
-    value: number
-    signal: number
-    histogram: number
-  }
-  bollingerBands: {
-    upper: number
-    middle: number
-    lower: number
-  }
-}
-export type StockAnalysis = {
-  stock: Stock
-  technicals: TechnicalIndicators
-  score: ScoreBreakdown
-  signals: StockSignal[]
-  priceHistory: PricePoint[]
-  levels: PriceLevels
-  lastUpdate: string
-}
-
-export type StockSignal = {
-  type: 'buy' | 'sell' | 'hold'
-  indicator: string // Ex: "RSI", "SMA_Cross", "MACD"
-  strength: number // 0-100
-  description: string
+  interval: string
+  points: TimeSeriesPoint[]
+  count: number
+  source: string
   timestamp: string
 }
 
-export type PricePoint = {
-  date: string
-  open: number
-  high: number
-  low: number
-  close: number
-  volume: number
+export interface TechnicalIndicators {
+  rsi: number | null
+  sma20: number | null
+  macd: number | null
 }
 
-export type PriceLevels = {
-  support: number[]
-  resistance: number[]
+export interface TickerDetail {
+  ticker: string
+  last_price: number | null
+  date: string | null
+  indicators: TechnicalIndicators
+  news_count: number
 }
 
-export type Watchlist = {
-  id: string
-  name: string
+export interface Universe {
   tickers: string[]
-  createdAt: string
-  updatedAt: string
+  count: number
 }

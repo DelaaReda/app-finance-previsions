@@ -1,19 +1,30 @@
-// Service pour les stocks (Pilier 2)
+// webapp/src/services/stocks.service.ts
 import { apiGet } from '../api/client'
-import type { ApiResponse } from '../types/common'
-import type { StocksResponse } from '../types/stocks'
+import type { StockPriceData, TickerDetail, Universe } from '../types/stocks.types'
 
-export async function fetchStockPrices(
-  tickers: string[],
-  range: string = '1y',
-  interval: string = '1d'
-): Promise<ApiResponse<StocksResponse>> {
-  const query = tickers.map(t => `tickers=${encodeURIComponent(t)}`).join('&')
-  const fullPath = `/stocks/prices?${query}&range=${range}&interval=${interval}`
-  
-  return apiGet<StocksResponse>(fullPath.replace('/stocks', ''))
-}
+export const stocksService = {
+  /**
+   * Get stock prices with technical indicators (downsampled)
+   */
+  getPrices: async (ticker: string, interval = '1d', downsample = 1000) => {
+    return apiGet<StockPriceData>('/stocks/prices', {
+      ticker,
+      interval,
+      downsample: String(downsample)
+    })
+  },
 
-export async function fetchStockFundamentals(ticker: string): Promise<ApiResponse<any>> {
-  return apiGet<any>(`/stocks/fundamentals/${ticker}`)
+  /**
+   * Get list of tracked tickers
+   */
+  getUniverse: async () => {
+    return apiGet<Universe>('/stocks/universe')
+  },
+
+  /**
+   * Get detailed ticker sheet (prix + indicators + news)
+   */
+  getTickerDetail: async (ticker: string) => {
+    return apiGet<TickerDetail>(`/stocks/${ticker}`)
+  }
 }
