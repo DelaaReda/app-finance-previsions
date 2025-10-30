@@ -1,34 +1,23 @@
-// Service pour le pilier Macro
+// Service pour les données macro (Pilier 1)
+import { apiGet } from '../api/client'
+import type { ApiResponse } from '../types/common'
+import type { MacroSeriesResponse } from '../types/macro'
 
-import { apiGet } from './api'
-import { MacroDashboard, MacroIndicator, MacroSeries } from '@/types/macro.types'
-import type { ApiResult } from './api'
+export async function fetchMacroSeries(
+  ids: string[],
+  start?: string,
+  end?: string
+): Promise<ApiResponse<MacroSeriesResponse>> {
+  const params: Record<string, string> = {}
+  
+  // Note: apiGet n'accepte pas les tableaux directement, on passe des params multiples
+  // Pour l'instant, on va construire la query string manuellement
+  const query = ids.map(id => `ids=${encodeURIComponent(id)}`).join('&')
+  const fullPath = `/macro/series?${query}${start ? `&start=${start}` : ''}${end ? `&end=${end}` : ''}`
+  
+  return apiGet<MacroSeriesResponse>(fullPath.replace('/macro', ''))
+}
 
-export const macroService = {
-  // Dashboard macro complet
-  getDashboard: async (): Promise<ApiResult<MacroDashboard>> => {
-    return apiGet<MacroDashboard>('/macro/dashboard')
-  },
-
-  // Liste des indicateurs macro
-  getIndicators: async (category?: string): Promise<ApiResult<MacroIndicator[]>> => {
-    return apiGet<MacroIndicator[]>('/macro/indicators', category ? { category } : undefined)
-  },
-
-  // Série temporelle d'un indicateur
-  getSeries: async (
-    symbol: string, 
-    startDate?: string, 
-    endDate?: string
-  ): Promise<ApiResult<MacroSeries>> => {
-    const params: Record<string, string> = { symbol }
-    if (startDate) params.start_date = startDate
-    if (endDate) params.end_date = endDate
-    return apiGet<MacroSeries>('/macro/series', params)
-  },
-
-  // Régime macro actuel
-  getRegime: async (): Promise<ApiResult<{ current: string; confidence: number; changeDate: string }>> => {
-    return apiGet('/macro/regime')
-  }
+export async function fetchMacroBundle(): Promise<ApiResponse<any>> {
+  return apiGet<any>('/macro/bundle')
 }

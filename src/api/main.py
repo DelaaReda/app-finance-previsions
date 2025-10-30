@@ -19,7 +19,10 @@ from core.cache import ttl_cache
 # Réutilisation modules existants
 from core.market_data import get_fred_series, get_price_history
 from ingestion.finnews import run_pipeline as news_run_pipeline
+from analytics.indicators_basic import compute_indicators as compute_indicators_basic
 from analytics.phase2_technical import compute_indicators, load_prices  # si non dispo: fallback simple
+from research.brief_renderer import render_brief_html, render_brief_md
+from research.alerts import alerts_for_ticker
 # Macro bundle optionnel (si pratique)
 try:
     from analytics.phase3_macro import get_us_macro_bundle  # type: ignore

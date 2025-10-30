@@ -1,13 +1,5 @@
-/**
- * Application principale React
- * Migration Dash/Streamlit → React
- * Basé sur VISION: 5 piliers + Dashboard + Copilot
- */
-
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import AppProviders from './app/providers'
-import Header from './components/layout/Header'
-import Footer from './components/layout/Footer'
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -15,59 +7,108 @@ import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
 
-// Nouvelles pages (à créer)
+// Nouvelles pages selon VISION
 import Macro from './pages/Macro'
 import Stocks from './pages/Stocks'
 import News from './pages/News'
 import Copilot from './pages/Copilot'
-import MarketBrief from './pages/MarketBrief'
 import TickerSheet from './pages/TickerSheet'
+import MarketBrief from './pages/MarketBrief'
 
 export default function App() {
   return (
     <AppProviders>
       <BrowserRouter>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: '100vh',
-          backgroundColor: '#0a0a0a',
-          color: '#e0e0e0',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}>
-          <Header />
-          
-          <main style={{
-            flex: 1,
-            padding: '2rem',
-            maxWidth: '1400px',
-            width: '100%',
-            margin: '0 auto',
+        <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+          {/* Sidebar Navigation */}
+          <nav style={{
+            width: 240,
+            background: '#1a1a1a',
+            padding: 20,
+            color: 'white',
+            position: 'fixed',
+            height: '100vh',
+            overflowY: 'auto'
           }}>
-            <Routes>
-              {/* Dashboard principal */}
-              <Route path="/" element={<Dashboard />} />
+            <h1 style={{ fontSize: 20, marginBottom: 24, fontWeight: 600 }}>
+              💼 Finance Copilot
+            </h1>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <NavSection title="📊 Vue d'ensemble">
+                <NavLink to="/">Dashboard</NavLink>
+                <NavLink to="/brief">Market Brief</NavLink>
+              </NavSection>
               
-              {/* 5 Piliers selon VISION */}
+              <NavSection title="🔬 5 Piliers">
+                <NavLink to="/macro">1. Macro</NavLink>
+                <NavLink to="/stocks">2. Stocks</NavLink>
+                <NavLink to="/news">3. News</NavLink>
+                <NavLink to="/copilot">4. Copilot LLM</NavLink>
+              </NavSection>
+              
+              <NavSection title="📈 Analyse">
+                <NavLink to="/forecasts">Prévisions</NavLink>
+                <NavLink to="/backtests">Backtests</NavLink>
+              </NavSection>
+              
+              <NavSection title="🛠️ Outils">
+                <NavLink to="/judge">LLM Judge</NavLink>
+              </NavSection>
+            </div>
+          </nav>
+
+          {/* Main Content */}
+          <main style={{ marginLeft: 240, flex: 1, padding: 32, background: '#f5f5f5' }}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/brief" element={<MarketBrief />} />
               <Route path="/macro" element={<Macro />} />
               <Route path="/stocks" element={<Stocks />} />
-              <Route path="/stocks/:ticker" element={<TickerSheet />} />
               <Route path="/news" element={<News />} />
               <Route path="/copilot" element={<Copilot />} />
-              
-              {/* Market Brief */}
-              <Route path="/brief" element={<MarketBrief />} />
-              
-              {/* Pages existantes */}
+              <Route path="/ticker/:symbol" element={<TickerSheet />} />
               <Route path="/forecasts" element={<Forecasts />} />
               <Route path="/backtests" element={<Backtests />} />
               <Route path="/judge" element={<LLMJudge />} />
             </Routes>
           </main>
-          
-          <Footer />
         </div>
       </BrowserRouter>
     </AppProviders>
+  )
+}
+
+// Helper Components
+function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.6, marginBottom: 8, fontWeight: 600 }}>
+        {title}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      style={{
+        padding: '8px 12px',
+        borderRadius: 6,
+        textDecoration: 'none',
+        color: 'white',
+        fontSize: 14,
+        transition: 'all 0.2s',
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.background = '#333'}
+      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+    >
+      {children}
+    </Link>
   )
 }
