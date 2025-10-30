@@ -14,6 +14,8 @@ React — direction actée et premières livraisons
 - Make: `react-dev`, `react-build`, `react-preview` (proxy `/api` → 8050).
 - Doc: `docs/architecture/react_migration.md` (plan), README (section React).
 - Dash: logs d'erreurs de rendu (routeur) désormais envoyés au profiler + stacktrace console.
+ - OpenAPI brouillon: `docs/api/openapi.yaml`; génération types: `npx openapi-typescript docs/api/openapi.yaml -o webapp/src/shared/types.d.ts`.
+ - Guides juniors: `docs/dev-junior/react_onboarding.md`, `docs/architecture/react_integration.md`.
 
 Delivered:
 - ✅ **MIGRATION 100% COMPLÈTE**: Toutes les 28 pages Streamlit migrées vers Dash (13 nouvelles pages + 15 existantes)
