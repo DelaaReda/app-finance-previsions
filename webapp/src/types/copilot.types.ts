@@ -1,59 +1,62 @@
-/**
- * Types pour le Pilier 4: LLM COPILOT
- * Q&A + what-if + RAG avec ≥5 ans de contexte
- */
+// Types pour le pilier Copilot (LLM Q&A + RAG)
 
 import { Source } from './common.types'
 
 export type CopilotMessage = {
   id: string
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant'
   content: string
   timestamp: string
   sources?: Source[]
-  context_used?: ContextReference[]
+  metadata?: {
+    tokens?: number
+    model?: string
+    confidence?: number
+  }
 }
 
-export type ContextReference = {
-  type: 'news' | 'price_series' | 'macro_series' | 'document'
+export type CopilotSession = {
   id: string
-  title: string
-  date: string
-  relevance_score: number
-  snippet?: string
+  messages: CopilotMessage[]
+  context: RAGContext
+  createdAt: string
+  updatedAt: string
 }
 
-export type CopilotQuery = {
-  query: string
-  tickers?: string[]
-  date_range?: {
+export type RAGContext = {
+  timeRange: {
     start: string
     end: string
   }
-  include_context?: boolean
-  max_context_items?: number
+  tickers?: string[]
+  topics?: string[]
+  dataTypes: ('news' | 'macro' | 'prices' | 'notes')[]
+  documentsCount: number
+}
+export type CopilotQuery = {
+  question: string
+  context?: RAGContext
+  options?: {
+    maxSources?: number
+    includeCharts?: boolean
+    temperature?: number
+  }
 }
 
 export type CopilotResponse = {
   answer: string
   sources: Source[]
-  context_used: ContextReference[]
+  charts?: ChartData[]
   confidence: number
-  limitations?: string[]
+  limitations?: string[] // Limites explicites de la réponse
   timestamp: string
-  query_id: string
 }
 
-export type RAGContext = {
-  news_items: number      // Nombre de news indexées
-  price_series: number    // Nombre de séries de prix
-  macro_series: number    // Nombre de séries macro
-  date_range: {
-    start: string
-    end: string
-  }
-  total_documents: number
-  last_indexed: string
+export type ChartData = {
+  type: 'line' | 'bar' | 'candlestick'
+  title: string
+  data: any[] // Format dépend du type de chart
+  source: Source
 }
 
 export type WhatIfScenario = {
@@ -61,9 +64,10 @@ export type WhatIfScenario = {
   name: string
   description: string
   parameters: Record<string, number>
-  impact_summary: string
-  affected_tickers: string[]
-  confidence: number
-  sources: Source[]
-  created_at: string
+  results: {
+    impact: string
+    probability: number
+    timeframe: string
+  }
+  createdAt: string
 }

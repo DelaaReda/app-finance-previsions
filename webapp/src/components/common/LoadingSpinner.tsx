@@ -1,34 +1,24 @@
-/**
- * Composant LoadingSpinner
- */
+// Composant LoadingSpinner
 
-export default function LoadingSpinner({ message = 'Chargement...' }: { message?: string }) {
+export default function LoadingSpinner({ size = 40 }: { size?: number }) {
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      gap: '1rem',
-    }}>
-      <div style={{
-        border: '3px solid #333',
-        borderTop: '3px solid #4a9eff',
-        borderRadius: '50%',
-        width: '40px',
-        height: '40px',
-        animation: 'spin 1s linear infinite',
-      }} />
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
-      <small style={{ color: '#888' }}>{message}</small>
+    <div style={styles.container}>
+      <div style={{ ...styles.spinner, width: size, height: size }} />
     </div>
   )
+}
+
+const styles = {
+  container: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  } as React.CSSProperties,
+  spinner: {
+    border: '3px solid #333',
+    borderTop: '3px solid #fff',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  } as React.CSSProperties,
 }

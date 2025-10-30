@@ -1,57 +1,74 @@
-/**
- * Header principal de l'application
- * Navigation et titre
- */
+// Header principal de l'application
 
 import { Link } from 'react-router-dom'
 
 export default function Header() {
   return (
-    <header style={{
-      backgroundColor: '#1a1a1a',
-      borderBottom: '1px solid #333',
-      padding: '1rem 2rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-        <Link to="/" style={{ 
-          fontSize: '1.5rem', 
-          fontWeight: 'bold', 
-          textDecoration: 'none',
-          color: '#fff',
-        }}>
-          📊 Copilote Financier
+    <header style={styles.header}>
+      <div style={styles.container}>
+        <Link to="/" style={styles.logo}>
+          <h1 style={styles.logoText}>📊 Copilote Financier</h1>
         </Link>
         
-        <nav style={{ display: 'flex', gap: '1.5rem' }}>
-          <NavLink to="/">Dashboard</NavLink>
-          <NavLink to="/macro">Macro</NavLink>
-          <NavLink to="/stocks">Actions</NavLink>
-          <NavLink to="/news">News</NavLink>
-          <NavLink to="/copilot">Copilot</NavLink>
-          <NavLink to="/brief">Brief</NavLink>
+        <nav style={styles.nav}>
+          <Link to="/" style={styles.navLink}>Dashboard</Link>
+          <Link to="/macro" style={styles.navLink}>Macro</Link>
+          <Link to="/stocks" style={styles.navLink}>Actions</Link>
+          <Link to="/news" style={styles.navLink}>News</Link>
+          <Link to="/copilot" style={styles.navLink}>Copilot</Link>
+          <Link to="/brief" style={styles.navLink}>Brief</Link>
         </nav>
+
+        <div style={styles.actions}>
+          <span style={styles.updateTime}>Mise à jour: {new Date().toLocaleTimeString('fr-FR')}</span>
+        </div>
       </div>
     </header>
   )
 }
 
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
-  return (
-    <Link 
-      to={to}
-      style={{
-        color: '#aaa',
-        textDecoration: 'none',
-        fontSize: '0.95rem',
-        transition: 'color 0.2s',
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-      onMouseLeave={(e) => e.currentTarget.style.color = '#aaa'}
-    >
-      {children}
-    </Link>
-  )
+const styles = {
+  header: {
+    backgroundColor: '#1a1a1a',
+    borderBottom: '1px solid #333',
+    padding: '12px 0',
+  } as React.CSSProperties,
+  container: {
+    maxWidth: 1400,
+    margin: '0 auto',
+    padding: '0 24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  } as React.CSSProperties,
+  logo: {
+    textDecoration: 'none',
+    color: 'inherit',
+  } as React.CSSProperties,
+  logoText: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 600,
+    color: '#fff',
+  } as React.CSSProperties,
+  nav: {
+    display: 'flex',
+    gap: 24,
+  } as React.CSSProperties,
+  navLink: {
+    textDecoration: 'none',
+    color: '#999',
+    fontSize: 14,
+    fontWeight: 500,
+    transition: 'color 0.2s',
+  } as React.CSSProperties,
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  } as React.CSSProperties,
+  updateTime: {
+    fontSize: 12,
+    color: '#666',
+  } as React.CSSProperties,
 }

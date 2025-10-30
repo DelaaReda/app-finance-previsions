@@ -1,71 +1,106 @@
-/**
- * Composant TopRisks
- * Affiche les Top 3 risques
- * Basé sur VISION: Signal > Bruit
- */
+// Composant pour afficher les Top 3 Risques
 
-import Card from '../common/Card'
-import type { Signal } from '@/types'
+import { Signal } from '@/types/common.types'
+import Card from '@/components/common/Card'
 
 type TopRisksProps = {
   risks: Signal[]
-  loading?: boolean
+  title?: string
 }
 
-export default function TopRisks({ risks, loading }: TopRisksProps) {
-  if (loading) {
-    return <Card title="⚠️ Top 3 Risques"><div style={{ color: '#888' }}>Chargement...</div></Card>
-  }
+export default function TopRisks({ risks, title = 'Top 3 Risques' }: TopRisksProps) {
+  const topRisks = risks.slice(0, 3)
 
   return (
-    <Card title="⚠️ Top 3 Risques">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {risks.slice(0, 3).map((risk, idx) => (
-          <RiskCard key={risk.id} risk={risk} rank={idx + 1} />
-        ))}
-        
-        {risks.length === 0 && (
-          <div style={{ color: '#888', textAlign: 'center', padding: '1rem' }}>
-            Aucun risque identifié
+    <Card title={title}>
+      <div style={styles.container}>
+        {topRisks.map((risk, index) => (
+          <div key={risk.id} style={styles.riskCard}>
+            <div style={styles.header}>
+              <span style={styles.rank}>#{index + 1}</span>
+              <span style={styles.icon}>⚠️</span>
+              <span style={styles.severity}>
+                {risk.score > 70 ? 'Élevé' : risk.score > 40 ? 'Moyen' : 'Faible'}
+              </span>
+            </div>
+            <h4 style={styles.title}>{risk.title}</h4>
+            <p style={styles.description}>{risk.description}</p>
+            <div style={styles.footer}>
+              <span style={styles.horizon}>{risk.horizon}</span>
+              <span style={styles.score}>{risk.score.toFixed(0)}/100</span>
+            </div>
           </div>
-        )}
+        ))}
       </div>
     </Card>
   )
 }
-function RiskCard({ risk, rank }: { risk: Signal; rank: number }) {
-  return (
-    <div style={{
-      backgroundColor: '#2a1a1a',
-      border: '1px solid #4a2a2a',
-      borderRadius: '6px',
-      padding: '0.75rem',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-        <div style={{
-          backgroundColor: '#5a2a2a',
-          color: '#ff6f6f',
-          width: '24px',
-          height: '24px',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 'bold',
-          fontSize: '0.85rem',
-        }}>
-          {rank}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, color: '#ff6f6f' }}>{risk.title}</div>
-          <div style={{ fontSize: '0.8rem', color: '#888' }}>
-            {risk.category} • {risk.horizon} • Score: {risk.score.toFixed(1)}
-          </div>
-        </div>
-      </div>
-      <div style={{ fontSize: '0.9rem', color: '#ccc', marginBottom: '0.5rem' }}>
-        {risk.description}
-      </div>
-    </div>
-  )
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 16,
+  },
+  riskCard: {
+    backgroundColor: '#2a1515',
+    borderRadius: 6,
+    padding: 16,
+    border: '1px solid #4a2020',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  rank: {
+    backgroundColor: '#4a2020',
+    borderRadius: 4,
+    padding: '2px 8px',
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#ff6b6b',
+  },
+  icon: {
+    fontSize: 18,
+  },
+  severity: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#ff6b6b',
+  },
+  title: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 600,
+    marginBottom: 6,
+    color: '#fff',
+  },
+  description: {
+    margin: 0,
+    fontSize: 13,
+    color: '#ccc',
+    lineHeight: 1.5,
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTop: '1px solid #4a2020',
+  },
+  horizon: {
+    fontSize: 12,
+    padding: '2px 8px',
+    backgroundColor: '#3a2a1a',
+    borderRadius: 4,
+    color: '#ffb74d',
+  },
+  score: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#ff6b6b',
+  },
 }

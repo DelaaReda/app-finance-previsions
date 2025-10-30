@@ -1,41 +1,58 @@
-/**
- * Service API pour le Pilier 4: LLM COPILOT
- * Q&A, RAG, what-if scenarios
- */
+// Service pour le pilier Copilot (LLM + RAG)
 
-import { apiPost, apiGet } from '@/api/client'
-import type { 
+import { apiGet, apiPost } from './api'
+import { 
+  CopilotSession, 
   CopilotQuery, 
-  CopilotResponse,
-  RAGContext,
-  WhatIfScenario 
-} from '@/types'
+  CopilotResponse, 
+  WhatIfScenario,
+  RAGContext 
+} from '@/types/copilot.types'
+import type { ApiResult } from './api'
 
 export const copilotService = {
-  /**
-   * Envoie une question au copilot avec RAG
-   */
-  query: async (query: CopilotQuery): Promise<CopilotResponse> => {
-    const result = await apiPost<CopilotResponse>('/copilot/query', query)
-    if (!result.ok) throw new Error(result.error)
-    return result.data
+  // Créer une nouvelle session
+  createSession: async (context?: RAGContext): Promise<ApiResult<CopilotSession>> => {
+    return apiPost<CopilotSession>('/copilot/session', { context })
   },
 
-  /**
-   * Récupère les informations sur le contexte RAG disponible
-   */
-  getRAGContext: async (): Promise<RAGContext> => {
-    const result = await apiGet<RAGContext>('/copilot/rag/context')
-    if (!result.ok) throw new Error(result.error)
-    return result.data
+  // Obtenir une session
+  getSession: async (sessionId: string): Promise<ApiResult<CopilotSession>> => {
+    return apiGet<CopilotSession>(`/copilot/session/${sessionId}`)
   },
 
-  /**
-   * Crée un scénario what-if
-   */
-  createScenario: async (scenario: Omit<WhatIfScenario, 'id' | 'created_at'>): Promise<WhatIfScenario> => {
-    const result = await apiPost<WhatIfScenario>('/copilot/scenario', scenario)
-    if (!result.ok) throw new Error(result.error)
-    return result.data
+  // Poser une question
+  ask: async (
+    sessionId: string, 
+    query: CopilotQuery
+  ): Promise<ApiResult<CopilotResponse>> => {
+    return apiPost<CopilotResponse>(`/copilot/session/${sessionId}/ask`, query)
   },
+
+  // Question rapide sans session
+  quickAsk: async (query: CopilotQuery): Promise<ApiResult<CopilotResponse>> => {
+    return apiPost<CopilotResponse>('/copilot/ask', query)
+  },
+  // Scénarios what-if
+  getScenarios: async (): Promise<ApiResult<WhatIfScenario[]>> => {
+    return apiGet<WhatIfScenario[]>('/copilot/scenarios')
+  },
+
+  createScenario: async (scenario: Omit<WhatIfScenario, 'id' | 'createdAt'>): Promise<ApiResult<WhatIfScenario>> => {
+    return apiPost<WhatIfScenario>('/copilot/scenarios', scenario)
+  },
+
+  runScenario: async (scenarioId: string): Promise<ApiResult<any>> => {
+    return apiPost(`/copilot/scenarios/${scenarioId}/run`, {})
+  },
+
+  // Stats RAG
+  getRAGStats: async (): Promise<ApiResult<{
+    documentsIndexed: number
+    timeRange: { start: string; end: string }
+    lastUpdate: string
+    coverage: { news: number; macro: number; prices: number }
+  }>> => {
+    return apiGet('/copilot/rag/stats')
+  }
 }

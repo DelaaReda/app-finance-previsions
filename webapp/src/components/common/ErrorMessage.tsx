@@ -1,24 +1,29 @@
-/**
- * Composant ErrorMessage
- */
+// Composant ErrorMessage
 
-export default function ErrorMessage({ error }: { error: string | Error }) {
-  const message = typeof error === 'string' ? error : error.message
-
+export default function ErrorMessage({ message }: { message: string }) {
   return (
-    <div style={{
-      backgroundColor: '#2a1a1a',
-      border: '1px solid #ff4444',
-      borderRadius: '8px',
-      padding: '1rem',
-      color: '#ff6666',
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>
-        ⚠️ Erreur
-      </div>
-      <div style={{ fontSize: '0.9rem' }}>
-        {message}
-      </div>
+    <div style={styles.container}>
+      <div style={styles.icon}>⚠️</div>
+      <div style={styles.message}>{message}</div>
     </div>
   )
+}
+
+const styles = {
+  container: {
+    backgroundColor: '#2a1515',
+    border: '1px solid #4a2020',
+    borderRadius: 8,
+    padding: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  } as React.CSSProperties,
+  icon: {
+    fontSize: 24,
+  } as React.CSSProperties,
+  message: {
+    color: '#ff6b6b',
+    fontSize: 14,
+  } as React.CSSProperties,
 }

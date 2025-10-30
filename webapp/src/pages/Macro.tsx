@@ -1,104 +1,134 @@
-/**
- * Page Macro - Pilier 1
- * FRED, VIX, GSCPI, GPR, inflation, emploi, liquidité
- */
+// Page Macro - Pilier 1: FRED, VIX, GSCPI, GPR
 
-import { useMacroDashboard } from '@/hooks/useMacroData'
+import { useQuery } from '@tanstack/react-query'
+import { macroService } from '@/services/macro.service'
+import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 
 export default function Macro() {
-  const { data, isLoading, error } = useMacroDashboard()
+  const { data: dashboard, isLoading, error } = useQuery({
+    queryKey: ['macro-dashboard'],
+    queryFn: async () => {
+      const result = await macroService.getDashboard()
+      if (!result.ok) throw new Error(result.error)
+      return result.data
+    },
+    staleTime: 30_000,
+  })
 
-  if (isLoading) return <LoadingSpinner message="Chargement des données macro..." />
-  if (error) return <ErrorMessage error={error as Error} />
-  if (!data) return <div>Aucune donnée disponible</div>
+  if (isLoading) return <MainLayout><LoadingSpinner /></MainLayout>
+  if (error) return <MainLayout><ErrorMessage message={String(error)} /></MainLayout>
 
   return (
-    <div>
-      <h1 style={{ marginBottom: '2rem' }}>📊 Macro Dashboard</h1>
-      
-      <div style={{
-        display: 'grid',
-        gap: '1.5rem',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        marginBottom: '2rem',
-      }}>
-        <IndicatorCard indicator={data.vix} />
-        <IndicatorCard indicator={data.gscpi} />
-        <IndicatorCard indicator={data.gpr} />
-        <IndicatorCard indicator={data.fed_funds_rate} />
-        <IndicatorCard indicator={data.unemployment} />
-        <IndicatorCard indicator={data.cpi} />
-      </div>
-
-      {data.custom_indicators && data.custom_indicators.length > 0 && (
-        <div>
-          <h2 style={{ marginBottom: '1rem' }}>Indicateurs personnalisés</h2>
-          <div style={{
-            display: 'grid',
-            gap: '1.5rem',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          }}>
-            {data.custom_indicators.map((indicator) => (
-              <IndicatorCard key={indicator.id} indicator={indicator} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#666' }}>
-        Dernière mise à jour: {data.last_updated}
-      </div>
-    </div>
-  )
-}
-import type { MacroIndicator } from '@/types'
-
-function IndicatorCard({ indicator }: { indicator: MacroIndicator }) {
-  const trendColor = indicator.trend === 'up' ? '#4ade80' : indicator.trend === 'down' ? '#f87171' : '#94a3b8'
-  const alertColor = indicator.alert_level === 'critical' ? '#ef4444' : indicator.alert_level === 'warning' ? '#f59e0b' : '#6b7280'
-  
-  return (
-    <Card
-      title={indicator.name}
-      footer={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{indicator.source.name}</span>
-          <span>{new Date(indicator.timestamp).toLocaleDateString()}</span>
-        </div>
-      }
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
-          {indicator.current_value.toFixed(2)}
-        </div>
+    <MainLayout>
+      <div style={styles.container}>
+        <h2 style={styles.pageTitle}>📊 Macro - Indicateurs Économiques</h2>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ color: trendColor, fontWeight: 600 }}>
-            {indicator.trend === 'up' ? '↑' : indicator.trend === 'down' ? '↓' : '→'}
-            {' '}
-            {Math.abs(indicator.change_pct).toFixed(2)}%
-          </span>
-          <span style={{ color: '#888', fontSize: '0.9rem' }}>
-            vs {indicator.previous_value.toFixed(2)}
-          </span>
+        {/* Régime actuel */}
+        {dashboard?.regime && (
+          <Card title="Régime Macro Actuel">
+            <div style={styles.regimeContainer}>
+              <div style={styles.regimeValue}>{dashboard.regime.current}</div>
+              <div style={styles.confidence}>
+                Confiance: {(dashboard.regime.confidence * 100).toFixed(0)}%
+              </div>
+              <div style={styles.changeDate}>
+                Depuis: {new Date(dashboard.regime.changeDate).toLocaleDateString('fr-FR')}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Indicateurs par catégorie */}
+        <div style={styles.indicatorsGrid}>
+          {dashboard?.indicators && dashboard.indicators.map((indicator) => (
+            <Card key={indicator.id} title={indicator.name}>
+              <div style={styles.indicatorContent}>
+                <div style={styles.indicatorValue}>
+                  {indicator.value.toFixed(2)} {indicator.unit || ''}
+                </div>
+                <div style={indicator.change >= 0 ? styles.changePositive : styles.changeNegative}>
+                  {indicator.change >= 0 ? '↗' : '↘'} {Math.abs(indicator.changePercent).toFixed(2)}%
+                </div>
+                <div style={styles.category}>{indicator.category}</div>
+                <div style={styles.timestamp}>
+                  MAJ: {new Date(indicator.timestamp).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
 
-        {indicator.alert_level && indicator.alert_level !== 'normal' && (
-          <div style={{
-            padding: '0.5rem',
-            backgroundColor: alertColor + '22',
-            border: `1px solid ${alertColor}`,
-            borderRadius: '4px',
-            fontSize: '0.85rem',
-            color: alertColor,
-          }}>
-            ⚠️ {indicator.alert_level === 'critical' ? 'Critique' : 'Attention'}
-          </div>
+        {/* Alertes */}
+        {dashboard?.alerts && dashboard.alerts.length > 0 && (
+          <Card title="Alertes Macro">
+            <div style={styles.alertsList}>
+              {dashboard.alerts.map((alert, index) => (
+                <div key={index} style={getSeverityStyle(alert.severity)}>
+                  <div style={styles.alertHeader}>
+                    <span style={styles.alertType}>{alert.type}</span>
+                    <span style={styles.alertSeverity}>{alert.severity}</span>
+                  </div>
+                  <div style={styles.alertMessage}>{alert.message}</div>
+                  <div style={styles.alertTime}>
+                    {new Date(alert.timestamp).toLocaleString('fr-FR')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         )}
       </div>
-    </Card>
+    </MainLayout>
   )
+}
+
+function getSeverityStyle(severity: 'low' | 'medium' | 'high') {
+  const baseStyle = {
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+    border: '1px solid',
+  }
+  
+  const colors = {
+    low: { bg: '#1a2a1a', border: '#2a4a2a', color: '#4caf50' },
+    medium: { bg: '#2a2a1a', border: '#4a4a2a', color: '#ffb74d' },
+    high: { bg: '#2a1515', border: '#4a2020', color: '#f44336' },
+  }
+  
+  return {
+    ...baseStyle,
+    backgroundColor: colors[severity].bg,
+    borderColor: colors[severity].border,
+    color: colors[severity].color,
+  }
+}
+
+const styles = {
+  container: { display: 'flex', flexDirection: 'column' as const, gap: 24 },
+  pageTitle: { margin: 0, fontSize: 28, fontWeight: 700, color: '#fff' },
+  regimeContainer: { display: 'flex', flexDirection: 'column' as const, gap: 8 },
+  regimeValue: { fontSize: 32, fontWeight: 700, color: '#4caf50' },
+  confidence: { fontSize: 14, color: '#999' },
+  changeDate: { fontSize: 13, color: '#666' },
+  indicatorsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: 16,
+  },
+  indicatorContent: { display: 'flex', flexDirection: 'column' as const, gap: 8 },
+  indicatorValue: { fontSize: 28, fontWeight: 700, color: '#fff' },
+  changePositive: { fontSize: 16, color: '#4caf50', fontWeight: 600 },
+  changeNegative: { fontSize: 16, color: '#f44336', fontWeight: 600 },
+  category: { fontSize: 12, color: '#999', textTransform: 'uppercase' as const },
+  timestamp: { fontSize: 11, color: '#666' },
+  alertsList: { display: 'flex', flexDirection: 'column' as const },
+  alertHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: 4 },
+  alertType: { fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const },
+  alertSeverity: { fontSize: 12, fontWeight: 600 },
+  alertMessage: { fontSize: 14, marginBottom: 4 },
+  alertTime: { fontSize: 11, opacity: 0.7 },
 }

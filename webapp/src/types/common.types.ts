@@ -1,41 +1,33 @@
-/**
- * Types communs utilisés à travers l'application
- * Basé sur la VISION: Traçabilité (sources, dates, versions)
- */
+// Types communs pour toute l'application
 
-export type Source = {
-  name: string
-  url?: string
-  timestamp: string
-  version?: string
-}
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string }
+
+export type TimeHorizon = 'CT' | 'MT' | 'LT' // Court, Moyen, Long terme
 
 export type Signal = {
   id: string
-  type: 'opportunity' | 'risk'
+  type: 'bullish' | 'bearish' | 'neutral'
   title: string
   description: string
-  score: number
-  horizon: 'CT' | 'MT' | 'LT' // Court, Moyen, Long terme
+  score: number // 0-100
+  horizon: TimeHorizon
   sources: Source[]
-  tickers?: string[]
-  category: string
   timestamp: string
+  ticker?: string
+  category?: string
 }
 
-export type Horizon = 'CT' | 'MT' | 'LT' | 'ALL'
+export type Source = {
+  type: 'news' | 'macro' | 'technical' | 'fundamental'
+  name: string
+  url?: string
+  date: string
+  reliability?: number // 0-1
+}
 
 export type ScoreBreakdown = {
-  macro: number      // 40%
-  technical: number  // 40%
-  news: number       // 20%
-  composite: number  // Score final
-}
-
-export type ApiResponse<T> = {
-  ok: true
-  data: T
-} | {
-  ok: false
-  error: string
+  macro: number    // 40%
+  technical: number // 40%
+  news: number     // 20%
+  composite: number // Score final
 }

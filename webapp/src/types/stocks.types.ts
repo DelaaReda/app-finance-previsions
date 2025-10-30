@@ -1,78 +1,74 @@
-/**
- * Types pour le Pilier 2: ACTIONS
- * yfinance, SMA/RSI/MACD, comparaisons secteurs
- */
+// Types pour le pilier Actions (yfinance, indicateurs techniques)
 
 import { Source, ScoreBreakdown } from './common.types'
 
-export type StockPrice = {
+export type Stock = {
   ticker: string
+  name: string
+  sector: string
+  industry?: string
+  price: number
+  previousClose: number
+  change: number
+  changePercent: number
+  volume: number
+  marketCap?: number
+  lastUpdate: string
+}
+
+export type TechnicalIndicators = {
+  ticker: string
+  sma20: number
+  sma50: number
+  sma200: number
+  rsi: number
+  macd: {
+    value: number
+    signal: number
+    histogram: number
+  }
+  bollingerBands: {
+    upper: number
+    middle: number
+    lower: number
+  }
+}
+export type StockAnalysis = {
+  stock: Stock
+  technicals: TechnicalIndicators
+  score: ScoreBreakdown
+  signals: StockSignal[]
+  priceHistory: PricePoint[]
+  levels: PriceLevels
+  lastUpdate: string
+}
+
+export type StockSignal = {
+  type: 'buy' | 'sell' | 'hold'
+  indicator: string // Ex: "RSI", "SMA_Cross", "MACD"
+  strength: number // 0-100
+  description: string
+  timestamp: string
+}
+
+export type PricePoint = {
   date: string
   open: number
   high: number
   low: number
   close: number
   volume: number
-  adj_close?: number
 }
 
-export type TechnicalIndicators = {
-  ticker: string
-  timestamp: string
-  sma_20?: number
-  sma_50?: number
-  sma_200?: number
-  rsi?: number
-  macd?: number
-  macd_signal?: number
-  macd_histogram?: number
-  bollinger_upper?: number
-  bollinger_lower?: number
-  bollinger_middle?: number
+export type PriceLevels = {
+  support: number[]
+  resistance: number[]
 }
 
-export type StockAnalysis = {
-  ticker: string
+export type Watchlist = {
+  id: string
   name: string
-  sector: string
-  current_price: number
-  change_pct: number
-  volume: number
-  technical: TechnicalIndicators
-  score: ScoreBreakdown
-  signals: string[]
-  alerts: StockAlert[]
-  sources: Source[]
-  last_updated: string
-}
-
-export type StockAlert = {
-  type: 'sma_crossover' | 'rsi_overbought' | 'rsi_oversold' | 'volume_spike' | 'breakout' | 'breakdown'
-  severity: 'info' | 'warning' | 'critical'
-  message: string
-  timestamp: string
-  value?: number
-}
-
-export type SectorComparison = {
-  sector: string
   tickers: string[]
-  avg_return: number
-  avg_score: number
-  momentum: 'strong_up' | 'up' | 'neutral' | 'down' | 'strong_down'
-  timestamp: string
-}
-
-export type TickerSheet = {
-  ticker: string
-  name: string
-  sector: string
-  price_history: StockPrice[]
-  technical: TechnicalIndicators
-  score: ScoreBreakdown
-  related_news: any[] // NewsItem from news.types
-  peers: string[]
-  analysis_summary: string
-  sources: Source[]
-  last_updated: string
+  createdAt: string
+  updatedAt: string
 }

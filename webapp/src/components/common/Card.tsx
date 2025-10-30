@@ -1,51 +1,53 @@
-/**
- * Composant Card réutilisable
- * Basé sur la VISION: affichage uniforme des données
- */
+// Composant Card réutilisable
 
-import { CSSProperties, ReactNode } from 'react'
+import { PropsWithChildren, CSSProperties } from 'react'
 
-type CardProps = {
+type CardProps = PropsWithChildren<{
   title?: string
-  children: ReactNode
+  subtitle?: string
+  className?: string
   style?: CSSProperties
-  footer?: ReactNode
-}
+}>
 
-export default function Card({ title, children, style, footer }: CardProps) {
+export default function Card({ title, subtitle, children, style }: CardProps) {
   return (
-    <div style={{
-      backgroundColor: '#1e1e1e',
-      border: '1px solid #333',
-      borderRadius: '8px',
-      overflow: 'hidden',
-      ...style,
-    }}>
-      {title && (
-        <div style={{
-          padding: '1rem',
-          borderBottom: '1px solid #333',
-          fontWeight: 600,
-          fontSize: '1rem',
-        }}>
-          {title}
+    <div style={{ ...styles.card, ...style }}>
+      {(title || subtitle) && (
+        <div style={styles.header}>
+          {title && <h3 style={styles.title}>{title}</h3>}
+          {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
         </div>
       )}
-      
-      <div style={{ padding: '1rem' }}>
+      <div style={styles.content}>
         {children}
       </div>
-
-      {footer && (
-        <div style={{
-          padding: '0.75rem 1rem',
-          borderTop: '1px solid #333',
-          fontSize: '0.85rem',
-          color: '#888',
-        }}>
-          {footer}
-        </div>
-      )}
     </div>
   )
+}
+
+const styles = {
+  card: {
+    backgroundColor: '#1a1a1a',
+    border: '1px solid #2a2a2a',
+    borderRadius: 8,
+    overflow: 'hidden',
+  } as CSSProperties,
+  header: {
+    padding: '16px 20px',
+    borderBottom: '1px solid #2a2a2a',
+  } as CSSProperties,
+  title: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 600,
+    color: '#fff',
+  } as CSSProperties,
+  subtitle: {
+    margin: '4px 0 0',
+    fontSize: 13,
+    color: '#999',
+  } as CSSProperties,
+  content: {
+    padding: 20,
+  } as CSSProperties,
 }

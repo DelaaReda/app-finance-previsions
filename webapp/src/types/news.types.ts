@@ -1,53 +1,60 @@
-/**
- * Types pour le Pilier 3: NEWS
- * RSS robuste + scoring fraîcheur/source/pertinence
- */
+// Types pour le pilier News (RSS, scoring, sentiment)
 
 import { Source } from './common.types'
 
-export type NewsItem = {
+export type NewsArticle = {
   id: string
   title: string
   summary: string
   content?: string
   url: string
   source: Source
-  published_at: string
-  ingested_at: string
-  tickers: string[]
-  topics: string[]
-  sentiment: 'positive' | 'negative' | 'neutral'
-  sentiment_score: number
-  relevance_score: number
-  freshness_score: number
-  source_quality_score: number
-  composite_score: number
-  hash: string // Pour déduplication (source|title|published)
+  publishedAt: string
+  author?: string
+  tags: string[]
+  tickers: string[] // Tickers mentionnés
+  sentiment: Sentiment
+  score: NewsScore
   language: string
+  imageUrl?: string
+}
+
+export type Sentiment = {
+  polarity: 'positive' | 'negative' | 'neutral'
+  score: number // -1 à 1
+  confidence: number // 0 à 1
 }
 
 export type NewsScore = {
-  freshness: number      // 0-100, basé sur l'âge
-  source_quality: number // 0-100, basé sur la réputation
-  relevance: number      // 0-100, pertinence ticker/topic
-  composite: number      // Score final pondéré
+  freshness: number // 0-100, basé sur l'âge
+  sourceReliability: number // 0-100
+  relevance: number // 0-100, pertinence pour le ticker
+  composite: number // Score final (20% dans score global)
 }
-
 export type NewsFeed = {
-  items: NewsItem[]
+  articles: NewsArticle[]
   total: number
   page: number
-  page_size: number
+  pageSize: number
   filters: NewsFilters
-  last_updated: string
+  lastUpdate: string
 }
 
 export type NewsFilters = {
   tickers?: string[]
-  topics?: string[]
-  sentiment?: 'positive' | 'negative' | 'neutral' | 'all'
   sources?: string[]
-  date_from?: string
-  date_to?: string
-  min_score?: number
+  sentiment?: 'positive' | 'negative' | 'neutral'
+  dateFrom?: string
+  dateTo?: string
+  minScore?: number
+  tags?: string[]
+}
+
+export type NewsAggregation = {
+  ticker: string
+  articlesCount: number
+  averageSentiment: number
+  sentimentTrend: 'improving' | 'declining' | 'stable'
+  topTopics: string[]
+  lastUpdate: string
 }
