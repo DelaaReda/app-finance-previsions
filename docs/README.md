@@ -34,6 +34,8 @@ Quickstart
     - `GET /api/watchlist`, `POST /api/watchlist {"tickers":["AAPL","MSFT"]}`
     - `GET /api/settings`, `POST /api/settings {"move_abs_pct":1.0,"tilt":"balanced"}`
     - `POST /api/llm/judge/run {"model":"...","max_er":0.08,"min_conf":0.6,"tickers":"AAPL,MSFT"}`
+  - Types API (OpenAPI): `docs/api/openapi.yaml` → `npx openapi-typescript docs/api/openapi.yaml -o webapp/src/shared/types.d.ts`
+  - Guide junior React: `docs/dev-junior/react_onboarding.md` et `docs/architecture/react_integration.md`
 
 
 - Streamlit (ancienne UI — legacy, pas de nouvelles features)
