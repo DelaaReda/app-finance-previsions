@@ -1,0 +1,137 @@
+openapi: 3.0.3
+info:
+  title: Finance Agent API
+  version: 0.1.0
+servers:
+  - url: http://127.0.0.1:8050
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { ok: {type: boolean}, status: {type: string} }, required: [ok,status] } } } }
+  /api/forecasts:
+    get:
+      summary: Forecasts table
+      parameters:
+        - in: query
+          name: asset_type
+          schema: { type: string, enum: [all,equity,commodity] }
+        - in: query
+          name: horizon
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: sort_by
+          schema: { type: string, enum: [score,er] }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { : '#/components/schemas/ForecastsResponse' } } } }
+  /api/news:
+    get:
+      summary: News feed
+      parameters:
+        - in: query
+          name: sector
+          schema: { type: string, enum: [all,tech,finance,energy] }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { : '#/components/schemas/NewsResponse' } } } }
+  /api/watchlist:
+    get:
+      summary: Get watchlist
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { ok: {type: boolean}, data: { type: object, properties: { watchlist: { type: array, items: { type: string } } } } } } } } }
+    post:
+      summary: Save watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { tickers: { type: array, items: { type: string } } }, required: [tickers] }
+      responses:
+        '200': { description: OK }
+  /api/settings:
+    get:
+      summary: Get settings
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Save settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { move_abs_pct: { type: number }, tilt: { type: string } }, required: [move_abs_pct, tilt] }
+      responses:
+        '200': { description: OK }
+  /api/llm/judge/run:
+    post:
+      summary: Run LLM judge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { model: { type: string }, max_er: { type: number }, min_conf: { type: number }, tickers: { oneOf: [ {type: string}, {type: array, items: {type: string}} ] } } }
+      responses:
+        '200': { description: OK }
+  /api/dashboard/kpis:
+    get:
+      summary: KPIs for dashboard
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { : '#/components/schemas/DashboardKpis' } } } }
+  /api/backtests:
+    get:
+      summary: Backtests summary
+      responses:
+        '200': { description: OK }
+components:
+  schemas:
+    ForecastsResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: object
+                properties:
+                  asset_type: { type: string }
+                  ticker: { type: string }
+                  commodity_name: { type: string }
+                  horizon: { type: string }
+                  final_score: { type: number }
+                  direction: { type: string }
+                  confidence: { type: number }
+                  expected_return: { type: number }
+            count: { type: integer }
+    NewsResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items: { type: object, properties: { title: {type:string}, summary: {type:string}, source: {type:string}, sentiment: {type: number} } }
+            count: { type: integer }
+    DashboardKpis:
+      type: object
+      properties:
+        ok: { type: boolean }
+        data:
+          type: object
+          properties:
+            last_forecast_dt: { type: string, nullable: true }
+            forecasts_count: { type: integer }
+            tickers: { type: integer }
+            horizons: { type: array, items: { type: string } }
+            last_macro_dt: { type: string, nullable: true }
+            last_quality_dt: { type: string, nullable: true }
