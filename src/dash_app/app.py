@@ -410,6 +410,20 @@ def _api_llm_judge_run():  # type: ignore
     except Exception as e:
         return _cors(jsonify({"ok": False, "error": str(e)}))
 
+@server.route('/api/dashboard/kpis', methods=['GET','OPTIONS'])
+def _api_dashboard_kpis():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    data = _api.dashboard_kpis() if _api else {"ok": False, "error": "api not available"}
+    return _cors(jsonify(data))
+
+@server.route('/api/backtests', methods=['GET','OPTIONS'])
+def _api_backtests():  # type: ignore
+    if _flask_req.method == 'OPTIONS':
+        return _cors(jsonify({"ok": True}))
+    data = _api.backtests() if _api else {"ok": False, "error": "api not available"}
+    return _cors(jsonify(data))
+
 if __name__ == "__main__":
     port = int(os.getenv("AF_DASH_PORT", "8050"))
     debug = os.getenv("AF_DASH_DEBUG", "false").lower() == "true"

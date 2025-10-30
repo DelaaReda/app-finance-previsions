@@ -34,9 +34,16 @@ Données & Intégrations
 - FRED via MCP + `src/analytics/data_sources/*` internes.
 - Finnhub (si clés) pour quotes/fondamentaux/News en temps réel.
 - Crawlers pour documents/actualités (Tavily/Firecrawl/Serper).
- - SearXNG local pour recherche robuste: `ops/web/searxng-local` (port 8082).
+- SearXNG local pour recherche robuste: `ops/web/searxng-local` (port 8082).
 
 Sécurité & Posture MCP
 - MCP activés: browser (@playwright/mcp), architecture analyzer, filesystem, memory, mermaid, sqlite, spec‑workflow, taskmanager, FRED, Finnhub, Serper/Tavily/Firecrawl.
 - Désactiver les MCP non officiels non indispensables; pins de versions et timeouts.
 - UI smoke automatisé (Playwright) pour vérifier navbar/footer, pages clés, codes 200.
+
+Direction UI — Migration React
+- Cible: React (Vite + TypeScript) sous `webapp/` consommant l'API Flask (`/api/*`) exposée par le serveur Dash.
+- Convivialité: Dash reste présent (Admin/Observabilité/transition), Streamlit conservé comme référence.
+- Dev: `make react-dev` (proxy `/api` → `http://127.0.0.1:8050`).
+- Prod: build servi par Flask (static) ou via reverse‑proxy (Nginx).
+- Observabilité: logs d’actions (trace_id), Profiler JSONL, OTel OTLP 4318 optionnel.

@@ -91,6 +91,11 @@ Canonique UI et ports
   - Port `5558`: `src/apps/macro_sector_app.py` → `make streamlit-macro-restart`
 - Dash (UI cible): port `8050` → `make dash-restart-bg`
 
+UI React (nouvelle direction)
+- Démarrer: `make react-dev` → http://127.0.0.1:5173 (proxy `/api` → `8050`).
+- API disponibles côté serveur Dash/Flask: `/api/forecasts`, `/api/news`, `/api/watchlist` (GET/POST), `/api/settings` (GET/POST), `/api/llm/judge/run`.
+- Ajouter un écran: créer `webapp/src/pages/...` et déclarer dans `webapp/src/App.tsx`.
+
 Redémarrer toutes les UIs
 - `make apps-full-restart`
   - Stoppe les UIs legacy, arrête Dash, redémarre la Streamlit canonique (5555), relance les UIs legacy (5556–5558) puis Dash (8050).

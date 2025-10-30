@@ -303,3 +303,10 @@ Critères d’acceptation (par ticket)
 ⸻
 
 Si tu veux, je peux te générer un squelette de page (par ex. pages/quality.py) ou un agent type avec lecture/écriture partitionnée + tests unitaires minimalistes.
+## UI React — Consignes Dev
+
+- Démarrer l'API Dash/Flask: `make dash-restart-bg` (health: `GET /api/health`).
+- Démarrer le front React: `make react-dev` → http://127.0.0.1:5173 (proxy `/api`).
+- Endpoints disponibles (extrait): `/api/forecasts`, `/api/news`, `/api/watchlist`, `/api/settings`, `/api/llm/judge/run`.
+- Observabilité: `make dash-fore` (console), `make dash-logs`, `make ui-otel-follow` (si Docker).
+- Ajout d'une page React: créer `webapp/src/pages/NomPage.tsx` + router dans `App.tsx`. Utiliser `src/api/client.ts`.

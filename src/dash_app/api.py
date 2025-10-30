@@ -31,6 +31,70 @@ def _err(msg: str) -> Dict[str, Any]:
     return {"ok": False, "error": msg}
 
 
+# ----------------------------- Dashboard KPIs ------------------------------ #
+
+def _latest_dt_under(base: str) -> str | None:
+    parts = sorted(Path(base).glob('dt=*'))
+    return parts[-1].name.split('=')[-1] if parts else None
+
+
+def dashboard_kpis() -> Dict[str, Any]:
+    """Return lightweight KPIs for the dashboard card set.
+
+    - last_forecast_dt (string YYYYMMDD)
+    - forecasts_count (rows)
+    - tickers (unique)
+    - horizons (list)
+    - last_macro_dt (string or None)
+    - last_quality_dt (string or None)
+    """
+    try:
+        _prof.log_event("http", {"path": "/api/dashboard/kpis"})
+        # Forecasts KPIs
+        last_f_dt = _latest_dt_under('data/forecast')
+        forecasts_count = 0
+        tickers = 0
+        horizons: List[str] = []
+        try:
+            if last_f_dt:
+                fp = Path('data/forecast') / f'dt={last_f_dt}' / 'final.parquet'
+                if fp.exists():
+                    df = pd.read_parquet(fp)
+                    forecasts_count = int(len(df))
+                    if 'ticker' in df.columns:
+                        tickers = int(df['ticker'].nunique())
+                    if 'horizon' in df.columns:
+                        horizons = sorted([str(x) for x in df['horizon'].dropna().unique().tolist()])
+        except Exception:
+            pass
+
+        # Macro freshness
+        last_macro_dt = None
+        try:
+            last_macro_dt = _latest_dt_under('data/macro/forecast')
+        except Exception:
+            pass
+
+        # Quality freshness
+        last_quality_dt = None
+        try:
+            last_quality_dt = _latest_dt_under('data/quality')
+        except Exception:
+            pass
+
+        return _ok({
+            'last_forecast_dt': last_f_dt,
+            'forecasts_count': forecasts_count,
+            'tickers': tickers,
+            'horizons': horizons,
+            'last_macro_dt': last_macro_dt,
+            'last_quality_dt': last_quality_dt,
+        })
+    except Exception as e:
+        _log.exception("api.dashboard_kpis.fail", extra={"ctx": {"error": str(e)}})
+        return _err(str(e))
+
+
 # ----------------------------- Forecasts ---------------------------------- #
 
 def _load_equity_final() -> pd.DataFrame:
@@ -206,7 +270,15 @@ def llm_judge_run(model: str, max_er: float = 0.08, min_conf: float = 0.6, ticke
             'LLM_MODEL': model,
             'LLM_MAX_ER': str(max_er),
         }
-        out2 = subprocess.run(["python3", "scripts/llm_forecast_agent.py"], capture_output=True, text=True, timeout=300, env={**dict(Path), **env} if False else None)
+        # Preserve current environment (PATH, locale, proxies, etc.) and override with our vars
+        import os as _os
+        out2 = subprocess.run(
+            ["python3", "scripts/llm_forecast_agent.py"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env={**_os.environ, **env},
+        )
         # Read latest llm_agents.json
         base = Path('data/forecast')
         parts = sorted(base.glob('dt=*/llm_agents.json'))
@@ -237,3 +309,48 @@ def llm_judge_run(model: str, max_er: float = 0.08, min_conf: float = 0.6, ticke
         _log.exception("api.llm_judge.fail", extra={"ctx": {"error": str(e)}})
         return _err(str(e))
 
+
+# -------------------------------- Backtests -------------------------------- #
+
+def backtests() -> Dict[str, Any]:
+    """Return backtests summary and curve when possible.
+
+    Prefers consolidated results.parquet; falls back to details.parquet to
+    build a cumulative basket curve.
+    """
+    try:
+        _prof.log_event("http", {"path": "/api/backtests"})
+        # Prefer consolidated results
+        rp = Path('data/backtests/results.parquet')
+        if rp.exists():
+            rdf = pd.read_parquet(rp)
+            rows = []
+            if not rdf.empty:
+                use_cols = [c for c in ['date','strategy','equity'] if c in rdf.columns]
+                tmp = rdf[use_cols].copy()
+                if 'date' in tmp.columns:
+                    tmp['date'] = pd.to_datetime(tmp['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+                rows = tmp.tail(1500).to_dict('records')
+                # Latest equity per strategy
+                latest = {}
+                if {'date','strategy','equity'} <= set(rdf.columns):
+                    srt = rdf.sort_values('date')
+                    latest = srt.groupby('strategy')['equity'].last().to_dict()
+            return _ok({'mode': 'results', 'rows': rows, 'latest': latest})
+
+        # Fallback: details.parquet cumulative curve
+        parts = sorted(Path('data/backtest').glob('dt=*/details.parquet'))
+        if parts:
+            df = pd.read_parquet(parts[-1])
+            if not df.empty and {'dt','realized_return'} <= set(df.columns):
+                df['dt'] = pd.to_datetime(df['dt'], errors='coerce')
+                series = df.dropna(subset=['dt','realized_return']).groupby('dt')['realized_return'].mean().sort_index()
+                if not series.empty:
+                    cum = (1 + series).cumprod() - 1
+                    dates = [d.strftime('%Y-%m-%d') for d in cum.index]
+                    values = [float(x) for x in cum.values]
+                    return _ok({'mode': 'details', 'curve': {'dates': dates, 'values': values}})
+        return _ok({'mode': 'empty'})
+    except Exception as e:
+        _log.exception("api.backtests.fail", extra={"ctx": {"error": str(e)}})
+        return _err(str(e))

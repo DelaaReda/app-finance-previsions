@@ -96,3 +96,10 @@
   - AC: tableau UI Évaluation; export.
 - US21: Sentiment & News — score par actif/thème.
   - AC: feed enrichi; score [-1,1].
+## EPIC: Migration React (UI cible)
+- US-R1: En tant qu’utilisateur, je veux accéder à une UI React moderne consommant l’API `/api/*` pour les pages clés (Forecasts, LLM Judge, Dashboard) afin d’avoir une expérience fluide et réactive.
+  - AC: pages Forecasts et LLM Judge en React, proxy Vite `/api` → 8050, empty‑states FR, logs d’actions visibles, e2e OK.
+- US-R2: En tant qu’owner, je veux des endpoints REST stables et testés.
+  - AC: `/api/dashboard/kpis`, `/api/backtests`, `/api/evaluation` versionnés et testés (pytest), doc des schémas.
+- US-R3: En tant qu’owner, je veux pouvoir basculer progressivement l’UI.
+  - AC: flags d’activation, cutover par paliers, rollback simple vers Dash.

@@ -34,6 +34,7 @@ flowchart LR
   subgraph UI[UI]
     st[Streamlit]
     dash[Dash]
+    react[React (Vite)]
   end
   user[(Users)]
 
@@ -51,12 +52,16 @@ flowchart LR
   mon --> qual
   fcast --> dash
   fcast --> st
+  fcast --> react
   macro --> dash
   macro --> st
+  macro --> react
   qual --> dash
   qual --> st
+  qual --> react
   user --> st
   user --> dash
+  user --> react
 ```
 
 Notes

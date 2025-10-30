@@ -7,6 +7,12 @@ Small fixes (today)
 - Docs mises à jour: junior-dev, README (ajout `make apps-full-restart`).
 - Dash: ajout cibles OpenTelemetry (`dash-start-otel-bg`, `dash-restart-otel-bg`) + support `AF_DASH_OTEL=1` dans `scripts/dash_start_bg.sh`.
 - Collector OTEL Docker: cibles `otel-up` / `otel-down` / `otel-logs` (compose sous `ops/otel/`).
+
+React — direction actée et premières livraisons
+- API Flask intégrée: `/api/health`, `/api/forecasts`, `/api/news`, `/api/watchlist` (GET/POST), `/api/settings` (GET/POST), `/api/llm/judge/run`.
+- Frontend React (Vite + TS) `webapp/` avec pages Forecasts et LLM Judge.
+- Make: `react-dev`, `react-build`, `react-preview` (proxy `/api` → 8050).
+- Doc: `docs/architecture/react_migration.md` (plan), README (section React).
 - Dash: logs d'erreurs de rendu (routeur) désormais envoyés au profiler + stacktrace console.
 
 Delivered:

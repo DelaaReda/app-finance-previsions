@@ -510,6 +510,9 @@ update-monitor:
 # --- React (Vite) ---
 .PHONY: react-dev react-build react-preview
 
+react-install:
+	@cd webapp && if command -v npm >/dev/null 2>&1; then npm install; else echo "npm not found — install Node.js" && exit 1; fi
+
 react-dev:
 	@echo "[react] starting Vite dev server on http://127.0.0.1:5173 (proxy /api->8050)"
 	@cd webapp && if command -v npm >/dev/null 2>&1; then npm run dev; else echo "npm not found — install Node.js" && exit 1; fi
