@@ -16,8 +16,9 @@ if str(SRC) not in sys.path:
 import pandas as pd
 
 from ingestion.bronze_pipeline import BronzeIngestionConfig, ingest_bronze_for_date
-from ingestion.gold_features_pipeline import GoldConfig, build_daily_features
-from ingestion.silver_pipeline import SilverConfig, transform_to_silver
+from pipelines.news.to_silver_v2 import to_silver_v2
+from pipelines.news.build_features_daily_v2 import build_features_daily_v2
+from pipelines.news.extract_events_v1 import extract_events_v1
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,31 +56,46 @@ def validate_bronze(target: date) -> None:
         raise AssertionError(f"Bronze partition missing columns: {missing}")
 
 
-def validate_silver(target: date) -> None:
-    path = Path("data/news/silver") / f"dt={target.isoformat()}"
+def validate_silver_v2(target: date) -> None:
+    path = Path("data/news/silver_v2") / f"dt={target.isoformat()}" / "silver.parquet"
     if not path.exists():
-        raise AssertionError(f"Silver partition missing: {path}")
-    files = list(path.glob("*.parquet"))
-    if not files:
-        raise AssertionError(f"No Parquet files in silver partition {path}")
-    df = pd.read_parquet(files[-1])
-    required = {"tickers", "sentiment", "quality", "hash_text"}
-    missing = required.difference(df.columns)
-    if missing:
-        raise AssertionError(f"Silver partition missing columns: {missing}")
-    if df["hash_text"].duplicated().any():
-        raise AssertionError("Silver partition contains duplicate hash_text values")
-
-
-def validate_gold(target: date) -> None:
-    path = Path("data/news/gold/features_daily") / f"dt={target.isoformat()}" / "features.parquet"
-    if not path.exists():
-        raise AssertionError(f"Gold features missing: {path}")
+        raise AssertionError(f"Silver v2 partition missing: {path}")
     df = pd.read_parquet(path)
-    required = {"ticker", "article_count", "avg_sentiment"}
+    required = {
+        "tickers",
+        "sentiment",
+        "quality",
+        "impact_proxy",
+        "hash_text",
+        "market_window_ref",
+    }
     missing = required.difference(df.columns)
     if missing:
-        raise AssertionError(f"Gold features missing columns: {missing}")
+        raise AssertionError(f"Silver v2 missing columns: {missing}")
+    if df["hash_text"].duplicated().any():
+        raise AssertionError("Silver v2 contains duplicate hash_text values")
+
+
+def validate_gold_v2(target: date) -> None:
+    path = Path("data/news/gold/features_daily_v2") / f"dt={target.isoformat()}" / "features.parquet"
+    if not path.exists():
+        raise AssertionError(f"Gold v2 features missing: {path}")
+    df = pd.read_parquet(path)
+    required = {"ticker", "news_count", "impact_proxy_mean", "novelty"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise AssertionError(f"Gold v2 features missing columns: {missing}")
+
+
+def validate_events_v1(target: date) -> None:
+    path = Path("data/news/gold/events_v1") / f"dt={target.isoformat()}" / "events.parquet"
+    if not path.exists():
+        raise AssertionError(f"Events v1 parquet missing: {path}")
+    df = pd.read_parquet(path)
+    required = {"event_id", "event_type", "tickers", "confidence", "needs_review"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise AssertionError(f"Events parquet missing columns: {missing}")
 
 
 def main() -> int:
@@ -95,12 +111,14 @@ def main() -> int:
 
     if args.ingest:
         ingest_bronze_for_date(partition_date, BronzeIngestionConfig(regions=args.regions))
-        transform_to_silver(partition_date, SilverConfig())
-        build_daily_features(partition_date, GoldConfig())
+        to_silver_v2(partition_date.isoformat())
+        build_features_daily_v2(partition_date.isoformat())
+        extract_events_v1(partition_date.isoformat())
 
     validate_bronze(partition_date)
-    validate_silver(partition_date)
-    validate_gold(partition_date)
+    validate_silver_v2(partition_date)
+    validate_gold_v2(partition_date)
+    validate_events_v1(partition_date)
     print(f"✅ News pipeline validated for {partition_date}")
     return 0
 

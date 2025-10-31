@@ -8,6 +8,9 @@ from typing import Any, Dict, List, Optional
 
 from api.schemas import (
     NewsArticle,
+    NewsEvent,
+    NewsEventValue,
+    NewsEventsData,
     NewsFeedData,
     NewsFeedFilters,
     NewsScore,
@@ -18,6 +21,7 @@ from core.duck import query_parquet
 
 SILVER_PARQUET = "data/news/silver_v2/dt=*/silver.parquet"
 FEATURES_PARQUET = "data/news/gold/features_daily_v2/dt=*/features.parquet"
+EVENTS_PARQUET = "data/news/gold/events_v1/dt=*/events.parquet"
 
 REGION_MAP: Dict[str, List[str]] = {
     "US": ["US"],
@@ -32,6 +36,19 @@ SOURCE_TIER_SCORE: Dict[str, float] = {
     "Tier2": 0.7,
     "Tier3": 0.5,
 }
+
+
+def _normalize_list(raw: Any) -> List[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple)):
+        iterable = raw
+    else:
+        try:
+            iterable = list(raw)
+        except TypeError:
+            iterable = [raw]
+    return [str(item) for item in iterable if item]
 
 
 def _hash_data(data: Any) -> str:
@@ -145,7 +162,7 @@ def get_news_feed(
         row_region = row.get("region")
         if region_targets and row_region not in region_targets:
             continue
-        row_tickers = [str(t).upper() for t in (row.get("tickers") or [])]
+        row_tickers = [t.upper() for t in _normalize_list(row.get("tickers"))]
         if ticker_targets and not (set(row_tickers) & ticker_targets):
             continue
 
@@ -226,3 +243,109 @@ def get_sentiment(limit: int = 100) -> SentimentData:
         count=len(sentiment),
         trace=trace,
     )
+
+
+def _normalize_event_values(raw: Any) -> List[NewsEventValue]:
+    values: List[NewsEventValue] = []
+    if not isinstance(raw, list):
+        return values
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        values.append(
+            NewsEventValue(
+                name=str(item.get("name", "value")),
+                value=float(item["value"]) if item.get("value") is not None else None,
+                unit=item.get("unit"),
+            )
+        )
+    return values
+
+
+def get_news_events(
+    tickers: Optional[List[str]] = None,
+    event_types: Optional[List[str]] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: int = 200,
+) -> NewsEventsData:
+    conditions: List[str] = []
+    params: List[Any] = []
+
+    if tickers:
+        clauses = []
+        for ticker in tickers:
+            clauses.append("list_contains(tickers, ?)")
+            params.append(ticker.upper())
+        conditions.append("(" + " OR ".join(clauses) + ")")
+
+    if event_types:
+        clauses = []
+        for etype in event_types:
+            clauses.append("event_type = ?")
+            params.append(etype)
+        conditions.append("(" + " OR ".join(clauses) + ")")
+
+    if start:
+        conditions.append("event_date >= ?::DATE")
+        params.append(start)
+    if end:
+        conditions.append("event_date <= ?::DATE")
+        params.append(end)
+
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    sql = f"""
+        SELECT event_id, event_type, tickers, company_name, event_date,
+               values, qualifiers, source_id, confidence, needs_review, extracted_at
+        FROM read_parquet('{EVENTS_PARQUET}')
+        {where_clause}
+        ORDER BY event_date DESC, confidence DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
+    try:
+        rows = query_parquet(sql, params)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️  news events query failed: {exc}")
+        rows = []
+
+    events: List[NewsEvent] = []
+    for row in rows:
+        event_date = _ensure_datetime(row.get("event_date"))
+        extracted_at = _ensure_datetime(row.get("extracted_at"))
+        values = _normalize_event_values(row.get("values"))
+        qualifiers = row.get("qualifiers")
+        if not isinstance(qualifiers, list):
+            qualifiers = []
+        confidence = _clamp(float(row.get("confidence", 0.0)))
+        needs_review = bool(row.get("needs_review", True))
+        trace = _create_trace(
+            "news_events_v1",
+            (event_date.date() if event_date else date.today()),
+            row.get("event_id"),
+        )
+        events.append(
+            NewsEvent(
+                event_id=str(row.get("event_id")),
+                event_type=str(row.get("event_type")),
+                tickers=[t.upper() for t in _normalize_list(row.get("tickers"))],
+                company_name=row.get("company_name"),
+                event_date=event_date.date() if event_date else None,
+                values=values,
+                qualifiers=[str(q) for q in qualifiers],
+                source_id=row.get("source_id"),
+                confidence=confidence,
+                needs_review=needs_review,
+                extracted_at=extracted_at,
+                trace=trace,
+            )
+        )
+
+    trace = _create_trace(
+        "news_events_v1",
+        date.today(),
+        {"count": len(events), "tickers": tickers, "event_types": event_types},
+    )
+
+    return NewsEventsData(events=events, count=len(events), trace=trace)

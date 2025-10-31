@@ -260,6 +260,38 @@ class NewsFeedResponse(BaseModel):
     data: NewsFeedData
 
 
+class NewsEventValue(BaseModel):
+    name: str
+    value: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class NewsEvent(BaseModel):
+    event_id: str
+    event_type: str
+    tickers: List[str]
+    company_name: Optional[str]
+    event_date: Optional[date]
+    values: List[NewsEventValue] = Field(default_factory=list)
+    qualifiers: List[str] = Field(default_factory=list)
+    source_id: Optional[str]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    needs_review: bool = True
+    extracted_at: Optional[datetime] = None
+    trace: TraceMetadata
+
+
+class NewsEventsData(BaseModel):
+    events: List[NewsEvent]
+    count: int
+    trace: TraceMetadata
+
+
+class NewsEventsResponse(BaseModel):
+    ok: bool = True
+    data: NewsEventsData
+
+
 class SentimentData(BaseModel):
     """Aggregated sentiment by ticker."""
     sentiment: Dict[str, float]

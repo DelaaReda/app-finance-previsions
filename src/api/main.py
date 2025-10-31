@@ -37,7 +37,11 @@ except ImportError as e:
     def query_parquet(sql, params=None): return []
     def parquet_glob(*parts): return str(Path(*parts))
 
-from api.services.news_service import get_news_feed as lakehouse_news_feed, get_sentiment as lakehouse_news_sentiment
+from api.services.news_service import (
+    get_news_events as lakehouse_news_events,
+    get_news_feed as lakehouse_news_feed,
+    get_sentiment as lakehouse_news_sentiment,
+)
 
 # ================================= APP SETUP =================================
 
@@ -241,6 +245,29 @@ def register_routes(app: FastAPI):
         data = lakehouse_news_sentiment(limit=limit)
         response = {
             "sentiment": data.sentiment,
+            "count": data.count,
+            "trace": data.trace.model_dump(),
+        }
+        return _ok(response)
+
+    @app.get("/api/news/events")
+    async def news_events(
+        tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
+        event_types: Optional[List[str]] = Query(None, description="Filter by event types"),
+        start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+        limit: int = Query(200, ge=1, le=1000)
+    ):
+        """Fetch structured events extracted from news articles."""
+        data = lakehouse_news_events(
+            tickers=tickers,
+            event_types=event_types,
+            start=start,
+            end=end,
+            limit=limit,
+        )
+        response = {
+            "events": [event.model_dump() for event in data.events],
             "count": data.count,
             "trace": data.trace.model_dump(),
         }
