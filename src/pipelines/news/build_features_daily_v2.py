@@ -49,8 +49,10 @@ def _explode_tickers(df: pd.DataFrame) -> pd.DataFrame:
 def _novelty_ratio(group: pd.DataFrame) -> float:
     if group.empty:
         return 0.0
-    dup = group["parent_id"].notna().sum() if "parent_id" in group else 0
-    return float(1.0 - dup / max(len(group), 1))
+    if "hash_text" in group:
+        unique_hash = group["hash_text"].nunique(dropna=True)
+        return float(unique_hash / max(len(group), 1))
+    return 1.0
 
 
 def _sentiment_stats(group: pd.DataFrame) -> Dict[str, float]:
@@ -92,6 +94,30 @@ def _impact_proxy(group: pd.DataFrame) -> float:
     return float(series.mean()) if not series.empty else 0.0
 
 
+def _source_impact_factor(group: pd.DataFrame) -> float:
+    if "impact_proxy" not in group or group.empty:
+        return 0.0
+    mask_tier1 = group.get("source_tier") == "Tier1"
+    series = group["impact_proxy"].dropna()
+    if mask_tier1 is not None and mask_tier1.any():
+        tier1 = group.loc[mask_tier1, "impact_proxy"].dropna()
+        if not tier1.empty:
+            return float(tier1.mean())
+    return float(series.mean()) * 0.8 if not series.empty else 0.0
+
+
+def _intraday_intensity(group: pd.DataFrame) -> float:
+    if group.empty or "published_at" not in group:
+        return 0.0
+    times = pd.to_datetime(group["published_at"], utc=True, errors="coerce").dropna()
+    if times.empty:
+        return 0.0
+    span = (times.max() - times.min()).total_seconds() / 3600.0
+    if span <= 0:
+        return float(len(times))
+    return float(len(times) / span)
+
+
 def build_features_daily_v2(dt_glob: str = "*") -> None:
     partitions = list(_iter_silver_partitions(dt_glob))
     if not partitions:
@@ -125,9 +151,9 @@ def build_features_daily_v2(dt_glob: str = "*") -> None:
             "sent_neg_share": stats["neg_share"],
             "tier1_share": _tier1_share(group),
             "top_topics": _collect_topics(group),
-            "intraday_intensity": None,
+            "intraday_intensity": _intraday_intensity(group),
             "impact_proxy_mean": _impact_proxy(group),
-            "source_impact_factor": None,
+            "source_impact_factor": _source_impact_factor(group),
             "features_version": 2,
         }
 
