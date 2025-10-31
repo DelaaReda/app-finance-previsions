@@ -1,281 +1,228 @@
 # src/api/services/news_service.py
-"""
-News service facade - wraps ingestion/finnews.py
-Provides news feed with scoring and filtering.
-"""
+"""News service backed by the lakehouse parquet outputs (v2)."""
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, date, timedelta
-from typing import List, Optional, Dict, Any
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from api.schemas import (
-    NewsFeedData, NewsArticle, NewsScore, NewsFeedFilters,
-    SentimentData, TraceMetadata
+    NewsArticle,
+    NewsFeedData,
+    NewsFeedFilters,
+    NewsScore,
+    SentimentData,
+    TraceMetadata,
 )
+from core.duck import query_parquet
 
-# Try to import finnews
-try:
-    from ingestion.finnews import (
-        run_pipeline,
-        build_news_features,
-        NewsItem
-    )
-    HAS_FINNEWS = True
-except ImportError:
-    HAS_FINNEWS = False
-    NewsItem = None
+SILVER_PARQUET = "data/news/silver_v2/dt=*/silver.parquet"
+FEATURES_PARQUET = "data/news/gold/features_daily_v2/dt=*/features.parquet"
+
+REGION_MAP: Dict[str, List[str]] = {
+    "US": ["US"],
+    "CA": ["CA"],
+    "EU": ["FR", "DE"],
+    "INTL": ["INTL", "GEO"],
+    "all": [],
+}
+
+SOURCE_TIER_SCORE: Dict[str, float] = {
+    "Tier1": 1.0,
+    "Tier2": 0.7,
+    "Tier3": 0.5,
+}
 
 
 def _hash_data(data: Any) -> str:
-    """Generate SHA256 hash of data."""
-    content = str(data).encode('utf-8')
+    content = str(data).encode("utf-8")
     return hashlib.sha256(content).hexdigest()[:32]
 
 
-def _create_trace(source: str, asof: date, data: Any) -> TraceMetadata:
-    """Create trace metadata."""
+def _create_trace(source: str, asof: date, payload: Any) -> TraceMetadata:
     return TraceMetadata(
         created_at=datetime.utcnow(),
         source=source,
         asof_date=asof,
-        hash=_hash_data(data)
+        hash=_hash_data(payload),
     )
 
 
-def _parse_since(since: str) -> str:
-    """Convert since parameter to finnews window format."""
+def _clamp(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _since_to_timedelta(since: str) -> timedelta:
     mapping = {
-        "1h": "1h",
-        "6h": "6h",
-        "1d": "24h",
-        "3d": "48h",  # Approximate
-        "7d": "last_week",
-        "14d": "last_week",  # Fallback
-        "30d": "last_month",
-        "90d": "last_month",  # Fallback
+        "1h": timedelta(hours=1),
+        "6h": timedelta(hours=6),
+        "1d": timedelta(days=1),
+        "3d": timedelta(days=3),
+        "7d": timedelta(days=7),
+        "14d": timedelta(days=14),
+        "30d": timedelta(days=30),
+        "90d": timedelta(days=90),
     }
-    return mapping.get(since, "last_week")
+    return mapping.get(since, timedelta(days=7))
 
 
-def _convert_news_item(item: NewsItem, score_min: float = 0.0) -> Optional[NewsArticle]:
-    """
-    Convert finnews NewsItem to API NewsArticle schema.
-    
-    Args:
-        item: finnews.NewsItem object
-        score_min: Minimum score filter
-    
-    Returns:
-        NewsArticle or None if filtered out
-    """
-    try:
-        # Calculate scores
-        importance = getattr(item, 'importance', None) or 0.5
-        freshness = getattr(item, 'freshness', None) or 0.5
-        relevance = getattr(item, 'relevance', None) or 0.5
-        
-        # Total score (composite)
-        total_score = importance * 0.4 + freshness * 0.4 + relevance * 0.2
-        
-        # Filter by minimum score
-        if total_score < score_min:
+def _ensure_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+    if isinstance(value, str):
+        try:
+            dt_value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
             return None
-        
-        # Create NewsScore
-        score = NewsScore(
-            total=total_score,
-            freshness=freshness,
-            source_quality=importance,  # Use importance as proxy
-            relevance=relevance
-        )
-        
-        # Parse published date
-        published = item.published
-        if isinstance(published, str):
-            published = datetime.fromisoformat(published.replace('Z', '+00:00'))
-        
-        # Get tickers
-        tickers = getattr(item, 'tickers', []) or []
-        if not isinstance(tickers, list):
-            tickers = [str(tickers)]
-        
-        # Create trace
-        trace = _create_trace(
-            source=item.source or "RSS",
-            asof=published.date() if isinstance(published, datetime) else date.today(),
-            data=item.id
-        )
-        
-        # Build NewsArticle
-        article = NewsArticle(
-            id=item.id,
-            title=item.title,
-            summary=item.summary,
-            url=item.link,
-            source=item.source or "Unknown",
-            published_at=published if isinstance(published, datetime) else datetime.fromisoformat(published.replace('Z', '+00:00')),
-            tickers=tickers,
-            score=score,
-            trace=trace
-        )
-        
-        return article
-        
-    except Exception as e:
-        print(f"⚠️  Failed to convert news item: {e}")
-        return None
+        if dt_value.tzinfo is not None:
+            dt_value = dt_value.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt_value
+    return None
+
+
+def _compute_score(row: Dict[str, Any], now: datetime, published: datetime) -> NewsScore:
+    hours = max((now - published).total_seconds() / 3600.0, 0.0)
+    freshness = _clamp(1.0 / (1.0 + hours / 6.0))
+    tier = (row.get("source_tier") or "Tier3")
+    source_quality = _clamp(SOURCE_TIER_SCORE.get(tier, 0.5))
+    relevance_input = row.get("impact_proxy")
+    if relevance_input is None:
+        relevance_input = row.get("relevance", 0.4)
+    relevance = _clamp(relevance_input)
+    total = _clamp(0.5 * freshness + 0.3 * source_quality + 0.2 * relevance)
+    return NewsScore(
+        total=total,
+        freshness=freshness,
+        source_quality=source_quality,
+        relevance=relevance,
+    )
+
+
+def _summarise(row: Dict[str, Any]) -> str:
+    summary = row.get("summary") or ""
+    if summary:
+        return summary
+    text = row.get("text") or ""
+    return text[:280]
 
 
 def get_news_feed(
-    tickers: Optional[str] = None,
+    tickers: Optional[List[str]] = None,
     since: str = "7d",
     score_min: float = 0.0,
     region: str = "all",
-    limit: int = 50
+    limit: int = 50,
 ) -> NewsFeedData:
+    now = datetime.utcnow()
+    start_time = now - _since_to_timedelta(since)
+    limit_fetch = max(limit * 5, limit * 2)
+
+    sql = f"""
+        SELECT id, title, summary, text, source_domain, source_name, region,
+               published_at, tickers, impact_proxy, relevance, source_tier
+        FROM read_parquet('{SILVER_PARQUET}')
+        WHERE published_at >= ?
+        ORDER BY published_at DESC
+        LIMIT ?
     """
-    Get news feed with scoring and filtering.
-    
-    Args:
-        tickers: Comma-separated ticker symbols (e.g., "AAPL,MSFT")
-        since: Time period (1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d)
-        score_min: Minimum composite score (0.0 to 1.0)
-        region: Geographic region (US, CA, EU, INTL, all)
-        limit: Maximum number of articles
-    
-    Returns:
-        NewsFeedData with filtered articles
-    """
-    if not HAS_FINNEWS:
-        # Return empty feed with warning
-        trace = _create_trace("mock", date.today(), "finnews_unavailable")
-        return NewsFeedData(
-            articles=[],
-            count=0,
-            total=0,
-            filters=NewsFeedFilters(
-                tickers=None,
-                since=since,
-                score_min=score_min,
-                region=region
-            ),
-            trace=trace
-        )
-    
-    # Parse parameters
-    ticker_list = [t.strip() for t in tickers.split(",")] if tickers else None
-    window = _parse_since(since)
-    
-    # Map region to finnews regions
-    region_map = {
-        "US": ["US"],
-        "CA": ["CA"],
-        "EU": ["FR", "DE"],
-        "INTL": ["INTL", "GEO"],
-        "all": ["US", "CA", "FR", "DE", "INTL", "GEO"]
-    }
-    regions = region_map.get(region, ["US", "INTL"])
-    
-    # Build query for tickers if specified
-    query = " OR ".join(ticker_list) if ticker_list else ""
-    
-    # Run finnews pipeline
     try:
-        items = run_pipeline(
-            regions=regions,
-            window=window,
-            query=query,
-            tgt_ticker=ticker_list[0] if ticker_list and len(ticker_list) == 1 else None,
-            per_source_cap=20,  # Limit per source to avoid overload
-            limit=limit * 2  # Fetch more to account for filtering
-        )
-    except Exception as e:
-        print(f"⚠️  Finnews pipeline failed: {e}")
-        items = []
-    
-    # Convert to API schema
-    articles = []
-    for item in items:
-        article = _convert_news_item(item, score_min=score_min)
-        if article:
-            articles.append(article)
+        rows = query_parquet(sql, [start_time, limit_fetch])
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️  news feed query failed: {exc}")
+        rows = []
+
+    ticker_targets = {t.upper() for t in (tickers or [])}
+    region_targets = set(REGION_MAP.get(region, []))
+    count_total = 0
+    articles: List[NewsArticle] = []
+
+    for row in rows:
+        published = _ensure_datetime(row.get("published_at"))
+        if published is None:
+            continue
+        row_region = row.get("region")
+        if region_targets and row_region not in region_targets:
+            continue
+        row_tickers = [str(t).upper() for t in (row.get("tickers") or [])]
+        if ticker_targets and not (set(row_tickers) & ticker_targets):
+            continue
+
+        score = _compute_score(row, now, published)
+        if score.total < score_min:
+            continue
+
+        count_total += 1
         if len(articles) >= limit:
-            break
-    
-    # Create filters object
+            continue
+
+        source_label = row.get("source_name") or row.get("source_domain") or "Unknown"
+        article = NewsArticle(
+            id=str(row.get("id")),
+            title=row.get("title") or "",
+            summary=_summarise(row),
+            url=row.get("canonical_url") or row.get("url") or "",
+            source=source_label,
+            published_at=published,
+            tickers=row_tickers,
+            score=score,
+            trace=_create_trace("news_lakehouse_v2", published.date(), row.get("id")),
+        )
+        articles.append(article)
+
     filters = NewsFeedFilters(
-        tickers=ticker_list,
+        tickers=[t.upper() for t in (tickers or [])] or None,
         since=since,
         score_min=score_min,
-        region=region
+        region=region,
     )
-    
-    # Create trace
-    trace = _create_trace(
-        source="finnews",
-        asof=date.today(),
-        data={"count": len(articles), "total": len(items)}
+
+    feed_trace = _create_trace(
+        "news_lakehouse_v2",
+        date.today(),
+        {"count": len(articles), "total": count_total, "since": since},
     )
-    
+
     return NewsFeedData(
         articles=articles,
         count=len(articles),
-        total=len(items),
+        total=count_total,
         filters=filters,
-        trace=trace
+        trace=feed_trace,
     )
 
 
 def get_sentiment(limit: int = 100) -> SentimentData:
+    start_date = (datetime.utcnow() - timedelta(days=30)).date()
+    sql = f"""
+        SELECT ticker, avg(sent_mean) AS avg_sentiment
+        FROM read_parquet('{FEATURES_PARQUET}')
+        WHERE date >= ?
+        GROUP BY ticker
+        ORDER BY abs(avg_sentiment) DESC
+        LIMIT ?
     """
-    Get aggregated sentiment by ticker.
-    
-    Args:
-        limit: Max articles to analyze
-    
-    Returns:
-        SentimentData with sentiment scores
-    """
-    if not HAS_FINNEWS:
-        trace = _create_trace("mock", date.today(), "finnews_unavailable")
-        return SentimentData(
-            sentiment={},
-            count=0,
-            trace=trace
-        )
-    
     try:
-        # Fetch recent news
-        items = run_pipeline(
-            regions=["US", "INTL"],
-            window="last_week",
-            query="",
-            limit=limit
-        )
-        
-        # Build features (aggregates by ticker)
-        features = build_news_features(items)
-        
-        # Extract mean sentiment per ticker
-        sentiment = {}
-        for ticker, feats in features.items():
-            mean_sent = feats.get("mean_sentiment", 0.0)
-            sentiment[ticker] = mean_sent
-        
-        trace = _create_trace("finnews", date.today(), sentiment)
-        
-        return SentimentData(
-            sentiment=sentiment,
-            count=len(sentiment),
-            trace=trace
-        )
-        
-    except Exception as e:
-        print(f"⚠️  Sentiment aggregation failed: {e}")
-        trace = _create_trace("finnews/error", date.today(), str(e))
-        return SentimentData(
-            sentiment={},
-            count=0,
-            trace=trace
-        )
+        rows = query_parquet(sql, [start_date, limit])
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️  sentiment query failed: {exc}")
+        rows = []
+
+    sentiment = {
+        row["ticker"]: float(row.get("avg_sentiment") or 0.0)
+        for row in rows
+        if row.get("ticker")
+    }
+
+    trace = _create_trace(
+        "news_features_v2",
+        date.today(),
+        {"tickers": list(sentiment.keys())},
+    )
+
+    return SentimentData(
+        sentiment=sentiment,
+        count=len(sentiment),
+        trace=trace,
+    )
