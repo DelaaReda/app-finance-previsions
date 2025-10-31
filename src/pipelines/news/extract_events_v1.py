@@ -7,7 +7,6 @@ more advanced hybrid rules/LLM extractor later.
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
