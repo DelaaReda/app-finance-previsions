@@ -21,7 +21,6 @@ try:
     from core.data_access import (
         get_close_series,
         load_macro_forecast_rows,
-        load_news_features,
         check_data_freshness
     )
     from core.market_data import get_price_history
@@ -32,12 +31,13 @@ except ImportError as e:
     # Fallback stubs
     def get_close_series(ticker): return None
     def load_macro_forecast_rows(limit=200): return {"ok": False}
-    def load_news_features(limit=100): return {"ok": False}
     def check_data_freshness(): return {}
     def get_price_history(ticker, **kw): return None
     def lttb(points, threshold=1000): return points
     def query_parquet(sql, params=None): return []
     def parquet_glob(*parts): return str(Path(*parts))
+
+from api.services.news_service import get_news_feed as lakehouse_news_feed, get_sentiment as lakehouse_news_sentiment
 
 # ================================= APP SETUP =================================
 
@@ -211,43 +211,66 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/news/feed")
     async def news_feed(
-        ticker: Optional[str] = Query(None, description="Filter by ticker"),
-        region: str = Query("all", description="Region: US, CA, INTL, all"),
+        tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
+        since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
+        region: str = Query("all", description="Region filter"),
+        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score"),
         limit: int = Query(50, ge=1, le=200)
     ):
-        """Get news feed with scoring."""
-        result = load_news_features(limit=limit)
-        if not result.get("ok"):
-            return _ok({"rows": [], "count": 0})
+        """Get news feed with scoring from the lakehouse."""
+        data = lakehouse_news_feed(
+            tickers=tickers,
+            since=since,
+            score_min=score_min,
+            region=region,
+            limit=limit,
+        )
 
-        rows = result.get("rows", [])
-        
-        # Filter by ticker if specified
-        if ticker:
-            rows = [r for r in rows if r.get("symbol") == ticker.upper()]
-
-        return _ok({
-            "rows": rows[:limit],
-            "count": len(rows),
-            "fallback": result.get("fallback")
-        })
+        response = {
+            "articles": [article.model_dump() for article in data.articles],
+            "count": data.count,
+            "total": data.total,
+            "filters": data.filters.model_dump(exclude_none=True),
+            "trace": data.trace.model_dump(),
+        }
+        return _ok(response)
 
     @app.get("/api/news/sentiment")
-    async def news_sentiment():
+    async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
         """Get aggregated sentiment by ticker."""
-        result = load_news_features(limit=100)
-        if not result.get("ok"):
-            return _ok({"sentiment": {}})
+        data = lakehouse_news_sentiment(limit=limit)
+        response = {
+            "sentiment": data.sentiment,
+            "count": data.count,
+            "trace": data.trace.model_dump(),
+        }
+        return _ok(response)
 
-        rows = result.get("rows", [])
-        sentiment = {}
-        for row in rows:
-            symbol = row.get("symbol")
-            score = row.get("news_score_mean", 0.0)
-            if symbol:
-                sentiment[symbol] = score
+    @app.get("/api/news/features/daily")
+    async def news_features_daily(
+        ticker: Optional[str] = Query(None, description="Ticker filter"),
+        start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+        end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+        limit: int = Query(365, ge=1, le=1095)
+    ):
+        """Return daily aggregated news features from gold layer v2."""
+        sql = """
+            SELECT *
+            FROM read_parquet('data/news/gold/features_daily_v2/dt=*/features.parquet')
+            WHERE (? IS NULL OR ticker = ?)
+              AND (? IS NULL OR date >= ?::DATE)
+              AND (? IS NULL OR date <= ?::DATE)
+            ORDER BY date DESC, ticker
+            LIMIT ?
+        """
+        params = [ticker, ticker, start, start, end, end, limit]
+        try:
+            rows = query_parquet(sql, params)
+        except Exception as exc:  # noqa: BLE001
+            print(f"⚠️  news features query failed: {exc}")
+            rows = []
 
-        return _ok({"sentiment": sentiment, "count": len(sentiment)})
+        return _ok({"rows": rows, "count": len(rows)})
 
     # ======================== PILLAR 4: LLM COPILOT ======================
 
