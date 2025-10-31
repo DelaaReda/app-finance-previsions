@@ -15,7 +15,10 @@ class AgentState(TypedDict):
     result: dict
 def node_plan(state: AgentState) -> AgentState:
     llm = get_llm("plan")
-    prompt = f"Plan minimal et safe pour l'objectif: {state['goal']}\nRéponds en JSON avec { '{"steps":[...], "files":[...]}' }."
+    prompt = (
+        f"Plan minimal et safe pour l'objectif: {state['goal']}\n"
+        "Reponds en JSON avec {\"steps\":[...], \"files\":[...]}."
+    )
     out = llm.invoke(as_messages(prompt))
     plan = {"steps": [], "files": []}
     try:
@@ -28,7 +31,7 @@ def node_retrieve(state: AgentState) -> AgentState:
     return state
 def node_patch(state: AgentState) -> AgentState:
     llm = get_llm("code")
-    prompt = ("Tu es un agent d'édition de code. Réponds STRICTEMENT en JSON: "
+    prompt = ("Tu es un agent d'edition de code. Reponds STRICTEMENT en JSON: "
               "{\"diff\":\"<unified patch>\", \"touched\":[...]}.\n"
               f"Objectif: {state['goal']}\nContexte: {state.get('context_docs', [])}\n"
               f"Fichiers ciblés: {state.get('plan',{}).get('files', [])}")
