@@ -100,6 +100,7 @@ python scripts/debug_react.py launch
 ## 📚 RESSOURCES
 
 - **Guide complet** : `docs/REACT_DEVELOPER_TOOLS_GUIDE.md`
+- **Agent-based debugging** : `docs/technical/AGENT_BASED_REACT_DEBUGGING.md`
 - **Documentation officielle** : https://react.dev/learn/react-developer-tools
 - **Aide** : `python scripts/debug_react.py help`
 

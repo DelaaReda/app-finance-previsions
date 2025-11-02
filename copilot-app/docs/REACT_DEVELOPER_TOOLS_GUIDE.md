@@ -261,6 +261,9 @@ Dans l'onglet **Components** :
 - [React Developer Tools Documentation](https://react.dev/learn/react-developer-tools)
 - [Debugging the UI with React DevTools](https://react.dev/blog/2019/08/15/new-react-devtools)
 
+### Agent-Based Debugging
+- [Agent-based React Debugging Guide](./technical/AGENT_BASED_REACT_DEBUGGING.md) - Automated diagnostic approach for Finance Copilot
+
 ### Tutoriels
 - [React DevTools Tutorial](https://www.youtube.com/watch?v=rb1GWqveUG0)
 - [Advanced React Debugging](https://www.youtube.com/watch?v=lxjqBHRsG1A)
