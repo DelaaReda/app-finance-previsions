@@ -30,7 +30,7 @@ node_modules/
 
 # Virtual envs
 .venv/
-
+.claude/
 # OS/IDE
 .DS_Store
 .vscode/

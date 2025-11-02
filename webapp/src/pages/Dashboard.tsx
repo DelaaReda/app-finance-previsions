@@ -31,7 +31,7 @@ type DashboardData = {
 export default function Dashboard() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => apiGet<DashboardData>('/dashboard').then(r => 
+    queryFn: () => apiGet<DashboardData>('/dashboard/kpis').then(r => 
       r.ok ? r.data : Promise.reject(r.error)
     ),
     staleTime: 15_000,

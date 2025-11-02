@@ -1,33 +1,21 @@
-// Service pour les news (Pilier 3)
-import { apiGet, apiPost } from '../api/client'
-import type { ApiResponse } from '../types/common'
-import type { NewsFeedResponse, NewsItem } from '../types/news'
+// webapp/src/services/news.service.ts
+import { apiGet } from '../api/client'
+import type { NewsFeed, NewsSentiment } from '../types/news.types'
 
-export async function fetchNews(params: {
-  tickers?: string[]
-  q?: string
-  limit?: number
-  window?: string
-}): Promise<ApiResponse<NewsFeedResponse>> {
-  const queryParts: string[] = []
-  
-  if (params.tickers) {
-    queryParts.push(...params.tickers.map(t => `tickers=${encodeURIComponent(t)}`))
-  }
-  if (params.q) {
-    queryParts.push(`q=${encodeURIComponent(params.q)}`)
-  }
-  if (params.limit) {
-    queryParts.push(`limit=${params.limit}`)
-  }
-  if (params.window) {
-    queryParts.push(`window=${params.window}`)
-  }
-  
-  const query = queryParts.length > 0 ? `?${queryParts.join('&')}` : ''
-  return apiGet<NewsFeedResponse>(`/news/feed${query}`)
-}
+export const newsService = {
+  /**
+   * Get news feed with scoring
+   */
+  getFeed: async (ticker?: string, region = 'all', limit = 50) => {
+    const params: Record<string, string> = { region, limit: String(limit) }
+    if (ticker) params.ticker = ticker
+    return apiGet<NewsFeed>('/news/feed', params)
+  },
 
-export async function saveNewsToMemory(item: NewsItem): Promise<ApiResponse<{ message: string }>> {
-  return apiPost<{ message: string }>('/news/save', item)
+  /**
+   * Get aggregated sentiment by ticker
+   */
+  getSentiment: async () => {
+    return apiGet<NewsSentiment>('/news/sentiment')
+  }
 }
