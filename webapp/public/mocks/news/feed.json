@@ -1,0 +1,22 @@
+[
+  {
+    "id": "mock-1",
+    "ticker": "AAPL",
+    "title": "Apple annonce un nouveau SoC",
+    "text": "Performance et efficacité en hausse.",
+    "url": "https://example.com/aapl1",
+    "source": "ExampleWire",
+    "published_at": "2025-10-31T12:00:00Z",
+    "sentiment": 0.35
+  },
+  {
+    "id": "mock-2",
+    "ticker": "NVDA",
+    "title": "NVIDIA étend son offre datacenter",
+    "text": "Focus AI et accélérateurs.",
+    "url": "https://example.com/nvda1",
+    "source": "ExampleWire",
+    "published_at": "2025-10-31T13:00:00Z",
+    "sentiment": 0.42
+  }
+]

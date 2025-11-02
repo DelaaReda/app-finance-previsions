@@ -1,30 +1,36 @@
-/**
- * Custom hooks pour les news
- */
+// webapp/src/hooks/useNews.ts
+import { useEffect, useState, useCallback } from "react";
+import { normalizeFeed, NewsItem } from "@/types/news.types";
+import { getNewsFeed } from "@/services/news.service";
 
-import { useQuery } from '@tanstack/react-query'
-import { newsService } from '@/services'
-import type { NewsFilters, NewsFeed, NewsItem } from '@/types'
-
-/**
- * Hook pour récupérer le feed de news
- */
-export function useNewsFeed(filters?: NewsFilters, page = 1, pageSize = 20) {
-  return useQuery({
-    queryKey: ['news', 'feed', filters, page, pageSize],
-    queryFn: () => newsService.getNewsFeed(filters, page, pageSize),
-    staleTime: 2 * 60 * 1000, // 2 minutes (news fraiches)
-  })
+export interface NewsFilters {
+  ticker?: string; q?: string; start?: string; end?: string;
 }
 
-/**
- * Hook pour récupérer une news spécifique
- */
-export function useNewsItem(id: string) {
-  return useQuery({
-    queryKey: ['news', 'item', id],
-    queryFn: () => newsService.getNewsItem(id),
-    enabled: !!id,
-    staleTime: 10 * 60 * 1000,
-  })
+export function useNews(initial: NewsFilters = {}) {
+  const [filters, setFilters] = useState<NewsFilters>(initial);
+  const [page, setPage] = useState<number>(1);
+  const [items, setItems] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchPage = useCallback(async (reset: boolean) => {
+    setLoading(true); setError(null);
+    try {
+      const resp = await getNewsFeed({ ...filters, page, limit: 50 });
+      const { items: chunk, next_page } = normalizeFeed(resp);
+      setItems(prev => reset ? chunk : [...prev, ...chunk]);
+      setHasMore(Boolean(next_page) || (chunk.length === 50));
+    } catch (e: any) {
+      setError(e.message ?? "Erreur");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, page]);
+
+  useEffect(() => { setPage(1); fetchPage(true); }, [filters, fetchPage]);
+  useEffect(() => { if (page > 1) fetchPage(false); }, [page, fetchPage]);
+
+  return { items, filters, setFilters, loading, error, hasMore, loadMore: () => setPage(p => p + 1) };
 }

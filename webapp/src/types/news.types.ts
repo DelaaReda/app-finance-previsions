@@ -1,24 +1,17 @@
 // webapp/src/types/news.types.ts
 export interface NewsItem {
-  symbol?: string
-  title?: string
-  summary?: string
-  url?: string
-  published?: string
-  source?: string
-  score?: number
-  news_score_mean?: number
-  news_count?: number
-  asof?: string
+  id: string;
+  ticker?: string;
+  title: string;
+  text?: string;
+  url: string;
+  source: string;
+  published_at: string; // ISO
+  sentiment?: number;   // -1..+1 éventuel
 }
 
-export interface NewsFeed {
-  rows: NewsItem[]
-  count: number
-  fallback?: string
-}
+export type NewsFeedResponse = { items: NewsItem[]; next_page?: number } | NewsItem[];
 
-export interface NewsSentiment {
-  sentiment: Record<string, number>
-  count: number
+export function normalizeFeed(resp: NewsFeedResponse): { items: NewsItem[]; next_page?: number } {
+  return Array.isArray(resp) ? { items: resp, next_page: undefined } : resp;
 }
