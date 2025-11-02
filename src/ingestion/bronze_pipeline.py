@@ -66,7 +66,7 @@ def _fetch_html(url: str, timeout: int = 10) -> Optional[str]:
     return None
 
 
-@dataclass(slots=True)
+@dataclass()
 class BronzeIngestionConfig:
     base_dir: Path = DEFAULT_BASE_DIR
     regions: Optional[List[str]] = None

@@ -47,6 +47,5 @@ mkdir -p docs
 [[ -f docs/README.md ]] || echo "Agent OSS doc placeholder" > docs/README.md
 
 echo "Running agent with HF_EMBED_MODEL=$HF_EMBED_MODEL"
-PYTHONPATH=. python -m src.agent.run --goal "$GOAL"
+PYTHONPATH=. python -m src.agent.run --verbose --goal "$GOAL"
 popd >/dev/null
-

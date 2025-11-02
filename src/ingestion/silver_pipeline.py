@@ -48,7 +48,7 @@ UPPER_TOKEN = re.compile(r"\\b[A-Z]{2,6}\\b")
 TICKER_STOPWORDS = {"THE", "AND", "FOR", "WITH", "THIS", "FROM", "HAVE", "UNITED"}
 
 
-@dataclass(slots=True)
+@dataclass()
 class SilverConfig:
     bronze_dir: Path = BRONZE_DIR
     silver_dir: Path = SILVER_DIR

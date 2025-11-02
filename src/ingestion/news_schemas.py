@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover - pyarrow is optional at runtime
 # Bronze (raw ingestion)
 # ---------------------------------------------------------------------------
 
-@dataclass(slots=True)
+@dataclass()
 class BronzeRecord:
     """Minimal immutable snapshot of a raw RSS article."""
 
@@ -64,7 +64,7 @@ BRONZE_FIELDS: List[tuple[str, str]] = [
 # Silver (clean text + enrichment)
 # ---------------------------------------------------------------------------
 
-@dataclass(slots=True)
+@dataclass()
 class SilverRecord:
     """Cleaned and enriched representation of an article."""
 
@@ -114,7 +114,7 @@ SILVER_FIELDS: List[tuple[str, str]] = [
 # Gold (daily ticker features)
 # ---------------------------------------------------------------------------
 
-@dataclass(slots=True)
+@dataclass()
 class GoldDailyFeatures:
     """Aggregated features per ticker and date."""
 

@@ -19,7 +19,7 @@ SILVER_DIR = Path("data/news/silver")
 GOLD_DIR = Path("data/news/gold/features_daily")
 
 
-@dataclass(slots=True)
+@dataclass()
 class GoldConfig:
     silver_dir: Path = SILVER_DIR
     gold_dir: Path = GOLD_DIR

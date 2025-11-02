@@ -74,7 +74,7 @@ agent-run:
 	&& export G4F_RETRIES=$${G4F_RETRIES:-1} \
 	&& export G4F_MODELS=$${G4F_MODELS:-deepseek-ai/DeepSeek-R1-0528,deepseek-ai/DeepSeek-V3-0324-Turbo,deepseek-ai/DeepSeek-V3,Qwen/Qwen3-235B-A22B-Thinking-2507,Qwen/Qwen3-235B-A22B-Instruct-2507,Qwen/Qwen3-Next-80B-A3B-Instruct,zai-org/GLM-4.5,meta-llama/Llama-3.3-70B-Instruct-Turbo,openai/gpt-oss-120b} \
 	&& mkdir -p docs && [ -f docs/README.md ] || echo "Agent OSS doc placeholder" > docs/README.md \
-	&& PYTHONPATH=. python -m src.agent.run --goal "$(GOAL)"
+	&& PYTHONPATH=. python -m src.agent.run --verbose --goal "$(GOAL)"
 
 agent-doc:
 	$(MAKE) agent-run GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."

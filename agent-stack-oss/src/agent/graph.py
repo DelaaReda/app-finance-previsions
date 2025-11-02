@@ -6,6 +6,7 @@ from .models.router import get_llm, as_messages
 from .tools.git_tools import ensure_safe_branch, apply_patch_text, commit_all, restore_worktree
 from .tools.ci_tools import run_pytests, run_linters, build_webapp
 from .tools.rag_tools import query_index
+from .tools.fs_tools import write_file
 class AgentState(TypedDict):
     goal: str
     plan: dict
@@ -60,6 +61,35 @@ def node_patch(state: AgentState) -> AgentState:
     diff: str = str(patch.get("diff", ""))
     ok = apply_patch_text(diff)
     if not ok:
+        # Fallback: attempt direct write if the LLM returned structured files
+        written = False
+        try:
+            # Accept several shapes: {files:[{path,content}]}, {direct:[...]}, {write:[...]}
+            candidates = []
+            for key in ("files", "direct", "write", "documents"):
+                v = patch.get(key)
+                if isinstance(v, list):
+                    candidates.extend(v)
+            # Also accept single {path, content} at top-level
+            if not candidates and all(k in patch for k in ("path", "content")):
+                candidates = [patch]
+            # Ensure candidate dicts
+            safe_items = []
+            for item in candidates:
+                if isinstance(item, dict) and "path" in item and "content" in item:
+                    safe_items.append({"path": str(item["path"]), "content": str(item["content"])})
+            for it in safe_items:
+                # Only allow writing within repo docs/ by default for safety
+                p = it["path"]
+                if p.startswith("docs/") or p.startswith("./docs/") or "/docs/" in p:
+                    write_file(p, it["content"])  # will enforce SAFE_PATHS internally
+                    written = True
+            if written:
+                state["patch"] = patch
+                state["result"] = {"ok": True, "direct_write": True, "written": len(safe_items)}
+                return state
+        except Exception:
+            pass
         state["result"] = {"ok": False, "error": "apply failed"}
         return state
     state["patch"] = patch
