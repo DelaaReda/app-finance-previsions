@@ -24,7 +24,7 @@ def _ensure_embed_model() -> None:
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding  # type: ignore
     except Exception:
         return
-    model_name = os.getenv("HF_EMBED_MODEL", "intfloat/multilingual-e5-large")
+    model_name = os.getenv("HF_EMBED_MODEL", "intfloat/multilingual-e5-large-instruct")
     Settings.embed_model = HuggingFaceEmbedding(model_name=model_name)
 
 

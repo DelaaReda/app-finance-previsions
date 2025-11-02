@@ -20,7 +20,7 @@ class VectorMemory:
         if self.cfg.provider == "ollama":
             base = OllamaEmbeddings(model=self.cfg.ollama_model, base_url=self.cfg.ollama_base_url)
         elif self.cfg.provider == "g4f" or not self.cfg.openai_api_key:
-            model_name = os.getenv("HF_EMBED_MODEL", "intfloat/multilingual-e5-large")
+            model_name = os.getenv("HF_EMBED_MODEL", "intfloat/multilingual-e5-large-instruct")
             base = HuggingFaceEmbeddings(model_name=model_name)
         else:
             base = OpenAIEmbeddings(

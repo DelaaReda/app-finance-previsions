@@ -1,6 +1,7 @@
 # Makefile for Finance Copilot Project
 
 .PHONY: help install run-api-v2 test-api-v2 run-webapp health docs clean
+.PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc
 
 # Default target
 help:
@@ -27,6 +28,56 @@ help:
 	@echo "Cleanup:"
 	@echo "  make clean           Remove cache and temp files"
 	@echo ""
+	@echo "Agent (agent-stack-oss):"
+	@echo "  make agent-help      Show agent-related commands"
+	@echo "  make agent-venv      Create venv for agent-stack-oss"
+	@echo "  make agent-deps      Install agent dependencies"
+	@echo "  make agent-check     Run ruff + mypy + pytest for agent"
+	@echo "  make agent-smoke     Run pytest smoke for agent"
+	@echo "  make agent-run GOAL=\"...\" [HF_EMBED_MODEL=...]  Run agent with G4F + strong embeddings"
+	@echo "  make agent-doc       Generate architecture/integration plan (doc-first)"
+
+AGENT_DIR := agent-stack-oss
+AGENT_VENV := $(AGENT_DIR)/.venv
+ACTIVATE := . $(AGENT_VENV)/bin/activate
+
+agent-help:
+	@echo "Agent commands (in $(AGENT_DIR))"
+	@echo "  make agent-venv      # Create Python venv"
+	@echo "  make agent-deps      # Install requirements"
+	@echo "  make agent-check     # ruff + mypy + pytest"
+	@echo "  make agent-smoke     # pytest"
+	@echo "  make agent-run GOAL=\"...\" [HF_EMBED_MODEL=...]"
+	@echo "  make agent-doc       # Doc-first run to draft integration plan"
+
+agent-venv:
+	python3 -m venv $(AGENT_VENV)
+
+agent-deps: agent-venv
+	$(ACTIVATE) && python -m pip install --upgrade pip && pip install -r $(AGENT_DIR)/requirements.txt
+
+agent-check:
+	$(ACTIVATE) && cd $(AGENT_DIR) && ruff check --fix && mypy src && PYTHONPATH=. pytest -q
+
+agent-smoke:
+	$(ACTIVATE) && cd $(AGENT_DIR) && PYTHONPATH=. pytest -q
+
+# Usage: make agent-run GOAL="Refactor module X" [HF_EMBED_MODEL=BAAI/bge-large-en-v1.5]
+agent-run:
+	@[ -n "$(GOAL)" ] || (echo "ERROR: provide GOAL=\"...\"" && exit 1)
+	$(ACTIVATE) && cd $(AGENT_DIR) \
+	&& export LLM_PROVIDER=g4f \
+	&& export HF_EMBED_MODEL=$${HF_EMBED_MODEL:-intfloat/multilingual-e5-large-instruct} \
+	&& export G4F_TEMPERATURE=$${G4F_TEMPERATURE:-0.2} \
+	&& export G4F_MAX_TOKENS=$${G4F_MAX_TOKENS:-2048} \
+	&& export G4F_TIMEOUT=$${G4F_TIMEOUT:-60} \
+	&& export G4F_RETRIES=$${G4F_RETRIES:-1} \
+	&& export G4F_MODELS=$${G4F_MODELS:-deepseek-ai/DeepSeek-R1-0528,deepseek-ai/DeepSeek-V3-0324-Turbo,deepseek-ai/DeepSeek-V3,Qwen/Qwen3-235B-A22B-Thinking-2507,Qwen/Qwen3-235B-A22B-Instruct-2507,Qwen/Qwen3-Next-80B-A3B-Instruct,zai-org/GLM-4.5,meta-llama/Llama-3.3-70B-Instruct-Turbo,openai/gpt-oss-120b} \
+	&& mkdir -p docs && [ -f docs/README.md ] || echo "Agent OSS doc placeholder" > docs/README.md \
+	&& PYTHONPATH=. python -m src.agent.run --goal "$(GOAL)"
+
+agent-doc:
+	$(MAKE) agent-run GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
 
 # Installation
 install:

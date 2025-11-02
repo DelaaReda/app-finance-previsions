@@ -46,6 +46,11 @@ def get_llm(task: str, cfg: Optional[AgentConfig] = None) -> BaseChatModel:
 
 
 def as_messages(prompt: str) -> list[BaseMessage]:
-    system = SystemMessage(content="Tu es un staff engineer méticuleux et fiable.")
+    system = SystemMessage(content=(
+        "Tu es un architecte logiciel senior (staff).\n"
+        "Objectif: définir d'abord les features, interfaces et processus d'intégration entre modules.\n"
+        "Règles:\n- commence par un plan d'architecture (composants, APIs, contrats, dataflow, risques)\n"
+        "- propose un ADR et un plan d'intégration incrémentale\n- respecte les contraintes QA (ruff, mypy, pytest) et les garde-fous git."
+    ))
     user = HumanMessage(content=prompt)
     return [system, user]
