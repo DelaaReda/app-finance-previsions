@@ -192,24 +192,112 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/stocks/{ticker}")
     async def stock_detail(ticker: str):
-        """Get detailed ticker sheet (prix + indicators + news)."""
-        series = get_close_series(ticker)
-        if series is None or series.empty:
-            raise HTTPException(status_code=404, detail=f"No data for {ticker}")
-
-        last_price = float(series.iloc[-1]) if not series.empty else None
-        
-        return _ok({
-            "ticker": ticker,
-            "last_price": last_price,
-            "date": series.index[-1].isoformat() if not series.empty else None,
-            "indicators": {
-                "rsi": None,  # TODO: from features
-                "sma20": None,
-                "macd": None
-            },
-            "news_count": 0  # TODO: from news features
-        })
+        """Get detailed ticker sheet (prix + indicators + news + fundamentals)."""
+        try:
+            from core.market_data import get_price_history, get_fundamentals
+            from analytics.phase2_technical import compute_indicators
+            
+            # Get price history
+            series = get_close_series(ticker)
+            if series is None or series.empty:
+                # Try fallback approach with get_price_history
+                df_prices = get_price_history(ticker, start=None, interval="1d")
+                if df_prices is None or df_prices.empty:
+                    raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
+            else:
+                # Convert series to DataFrame format for indicators
+                df_prices = pd.DataFrame({'Close': series})
+                df_prices.index.name = 'Date'  # Make sure index has a name
+            
+            # Get fundamentals if available
+            fundamentals = {}
+            try:
+                fundamentals = get_fundamentals(ticker)
+            except Exception:
+                # If fundamentals not available, use placeholder
+                fundamentals = {
+                    "sector": "N/A",
+                    "market_cap": "N/A",
+                    "pe_ratio": "N/A",
+                    "dividend_yield": "N/A",
+                    "beta": "N/A"
+                }
+            
+            # Calculate technical indicators
+            try:
+                df_with_indicators = compute_indicators(df_prices)
+                last_row = df_with_indicators.iloc[-1] if len(df_with_indicators) > 0 else {}
+                
+                technical_indicators = {
+                    "rsi": float(last_row.get("RSI", 0)) if pd.notna(last_row.get("RSI")) else None,
+                    "sma20": float(last_row.get("SMA_20", 0)) if pd.notna(last_row.get("SMA_20")) else None,
+                    "sma50": float(last_row.get("SMA_50", 0)) if pd.notna(last_row.get("SMA_50")) else None,
+                    "sma200": float(last_row.get("SMA_200", 0)) if pd.notna(last_row.get("SMA_200")) else None,
+                    "macd": float(last_row.get("MACD", 0)) if pd.notna(last_row.get("MACD")) else None,
+                    "macd_signal": float(last_row.get("MACD_Signal", 0)) if pd.notna(last_row.get("MACD_Signal")) else None,
+                    "bollinger_upper": float(last_row.get("BB_upper", 0)) if pd.notna(last_row.get("BB_upper")) else None,
+                    "bollinger_lower": float(last_row.get("BB_lower", 0)) if pd.notna(last_row.get("BB_lower")) else None,
+                    "volume_sma": float(last_row.get("Volume_SMA", 0)) if pd.notna(last_row.get("Volume_SMA")) else None,
+                }
+            except Exception:
+                # If indicators computation fails, return basic values
+                last_price = float(df_prices['Close'].iloc[-1]) if 'Close' in df_prices.columns else None
+                technical_indicators = {
+                    "rsi": None,
+                    "sma20": None,
+                    "sma50": None,
+                    "sma200": None,
+                    "macd": None,
+                    "macd_signal": None,
+                    "bollinger_upper": None,
+                    "bollinger_lower": None,
+                    "volume_sma": None,
+                }
+            
+            # Get recent news count for this ticker
+            try:
+                from api.services.news_service import get_news_feed
+                news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
+                news_count = news_data.count if hasattr(news_data, 'count') else 0
+            except Exception:
+                # If news service is not available, use a fallback
+                news_count = 0
+            
+            # Calculate additional metrics
+            last_price = float(df_prices['Close'].iloc[-1]) if 'Close' in df_prices.columns else None
+            price_change_pct = None
+            if len(df_prices) > 1 and 'Close' in df_prices.columns:
+                prev_close = float(df_prices['Close'].iloc[-2])
+                if prev_close != 0:
+                    price_change_pct = ((last_price - prev_close) / prev_close) * 100
+            
+            # Create comprehensive ticker sheet
+            ticker_sheet = {
+                "ticker": ticker.upper(),
+                "current_price": last_price,
+                "price_change_pct": price_change_pct,
+                "date": df_prices.index[-1].isoformat() if not df_prices.empty else None,
+                "fundamentals": fundamentals,
+                "technical_indicators": technical_indicators,
+                "news_count": news_count,
+                "trading_levels": {
+                    "resistance": technical_indicators.get("sma50"),  # Example: 50-day SMA as resistance
+                    "support": technical_indicators.get("sma200"),    # Example: 200-day SMA as support
+                },
+                "momentum": {
+                    "rsi_level": "neutral" if technical_indicators.get("rsi") and 30 <= technical_indicators["rsi"] <= 70 else 
+                                "overbought" if technical_indicators.get("rsi") and technical_indicators["rsi"] > 70 else 
+                                "oversold" if technical_indicators.get("rsi") and technical_indicators["rsi"] < 30 else "neutral",
+                    "trend": "bullish" if technical_indicators.get("sma20") and last_price and last_price > technical_indicators["sma20"] else "bearish"
+                }
+            }
+            
+            return _ok(ticker_sheet)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"Error retrieving data for {ticker}: {str(e)}")
 
     # ========================= PILLAR 3: NEWS ============================
 
@@ -589,6 +677,55 @@ def register_routes(app: FastAPI):
         except ImportError:
             return _ok({"rows": [], "count": 0, "note": "Forecasts API not available"})
 
+    @app.get("/api/backtests")
+    async def backtests(
+        horizon: str = Query("1m", description="Backtest horizon: 1w, 1m, 1y"),
+        top_n: int = Query(5, ge=1, le=20, description="Top-N basket size"),
+        days_back: int = Query(180, ge=30, le=365, description="Days to look back")
+    ):
+        """Run backtesting analysis on Top-N baskets."""
+        try:
+            # Import and execute the backtest agent logic
+            from agents.backtest_agent import run_backtest
+            
+            result = run_backtest(horizon=horizon, top_n=top_n, days_back=days_back)
+            
+            if result.get("ok"):
+                return _ok({
+                    "results": result,
+                    "params": {
+                        "horizon": horizon,
+                        "top_n": top_n,
+                        "days_back": days_back
+                    },
+                    "generated_at": datetime.utcnow().isoformat()
+                })
+            else:
+                # Return partial results or error information
+                return _ok({
+                    "results": result,
+                    "params": {
+                        "horizon": horizon,
+                        "top_n": top_n,
+                        "days_back": days_back
+                    },
+                    "warning": "Backtesting executed but no results available - check if forecast data exists",
+                    "generated_at": datetime.utcnow().isoformat()
+                })
+                
+        except ImportError:
+            return _ok({
+                "results": {"ok": False, "error": "Backtest agent not available"},
+                "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
+                "note": "Backtesting functionality requires forecast data and proper data setup"
+            })
+        except Exception as e:
+            return _ok({
+                "results": {"ok": False, "error": str(e)},
+                "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
+                "error": "Backtest execution failed"
+            })
+
     @app.get("/api/dashboard/kpis")
     async def dashboard_kpis():
         """Get dashboard KPIs."""
@@ -607,6 +744,72 @@ def register_routes(app: FastAPI):
                 "horizons": [],
                 "last_macro_dt": None,
                 "last_quality_dt": None
+            })
+
+    @app.get("/api/alerts")
+    async def alerts(
+        tickers: List[str] = Query([], description="List of tickers to get alerts for"),
+        limit: int = Query(50, ge=1, le=200, description="Max alerts to return")
+    ):
+        """Get market alerts based on technical indicators and news (SMA/RSI/sentiment/news)."""
+        try:
+            from research.alerts import alerts_for_ticker
+            from core.data_access import get_close_series
+            from analytics.phase2_technical import compute_indicators
+            
+            all_alerts = []
+            
+            # If no tickers provided, use default universe
+            tickers_to_check = tickers if tickers else ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
+            
+            for ticker in tickers_to_check:
+                try:
+                    # Get price data
+                    series = get_close_series(ticker)
+                    if series is None or series.empty:
+                        continue
+                    
+                    # Convert series to DataFrame for indicators
+                    df_prices = pd.DataFrame({'Close': series})
+                    df_prices.index.name = 'Date'
+                    
+                    # Calculate technical indicators
+                    df_indicators = compute_indicators(df_prices)
+                    
+                    # Get recent news score (simplified - using last value as placeholder)
+                    recent_news_score = 0.5  # This would typically come from news scoring system
+                    
+                    # Generate alerts for this ticker
+                    ticker_alerts = alerts_for_ticker(df_prices, df_indicators, recent_news_score, ticker.upper())
+                    
+                    for alert in ticker_alerts:
+                        all_alerts.append(alert)
+                        
+                except Exception as e:
+                    # Continue with other tickers if one fails
+                    continue
+            
+            # Sort alerts by severity and limit results
+            severity_order = {"critical": 0, "warning": 1, "info": 2}
+            all_alerts.sort(key=lambda x: severity_order.get(x.get("severity", "info"), 999))
+            
+            # Return top alerts
+            top_alerts = all_alerts[:limit]
+            
+            return _ok({
+                "alerts": top_alerts,
+                "count": len(top_alerts),
+                "total_available": len(all_alerts),
+                "tickers_queried": tickers_to_check,
+                "generated_at": datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            return _ok({
+                "alerts": [],
+                "count": 0,
+                "error": str(e),
+                "message": "Alerts generation failed, returning empty list"
             })
 
 # ================================= SERVER ====================================
