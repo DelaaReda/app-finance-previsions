@@ -1,56 +1,95 @@
 # Architecture Integration Plan
 
-## 1. Features
-- **Feature A**: Description fonctionnelle et critères d'acceptance
-- **Feature B**: Capacités principales avec contraintes techniques
-- **Feature C**: Exigences de performance et de sécurité
+## 1. Features Overview
+- **Core Functionality**: Agent-based code editing system with JSON command interface
+- **Validation System**: Strict input validation for JSON commands and SAFE_PATHS
+- **Documentation Handling**: Focused markdown documentation generation
+- **Safety Mechanisms**: Path sanitization and write restrictions
 
-## 2. Interfaces
-### Module X ↔ Module Y
-- **Contract**: Protobuf schema v3 (x_to_y.proto)
-- **Protocol**: gRPC unary calls
-- **Error Handling**: Retry policy (exponential backoff)
+## 2. Interfaces and Contracts
+### Input Interface
+```json
+{
+  "files": [
+    {
+      "path": "relative/path/to/file.ext",
+      "content": "full content without partial updates"
+    }
+  ]
+}
+```
+**Contracts**:
+- `path` must be relative and match SAFE_PATHS patterns
+- `content` must be complete file content (no diffs)
 
-### Service Z API
-- **Endpoint**: POST /v1/process
-- **Input**: JSON payload with mandatory {id, timestamp}
-- **Output**: Standard envelope {status, data, error}
+### Output Interface
+```json
+{
+  "files": [
+    {
+      "path": "docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md",
+      "content": "..."
+    }
+  ]
+}
+```
+**Contracts**:
+- Only modifies files in SAFE_PATHS
+- Returns full file content
 
-## 3. Dataflows
+## 3. Data Flow
 ```mermaid
 graph LR
-  A[Ingestion Service] -->|Kafka Topic| B[Stream Processor]
-  B --> C[(Database)]
-  C --> D[API Gateway]
+A[User Request] --> B(JSON Parser)
+B --> C[Validation Engine]
+C --> D[Architecture Planner]
+D --> E[Document Generator]
+E --> F[Output Formatter]
+F --> G[Response JSON]
 ```
-- **Critical Path**: Validation → Enrichment → Persistence
-- **Data Formats**: Avro for streaming, JSON for REST APIs
 
-## 4. ADR
-### ADR-001: Event-Driven Core
-- **Status**: Accepted
-- **Context**: Need for decoupled processing
-- **Decision**: Kafka-based event bus with exactly-once semantics
-- **Consequences**: +Scalability -Operational complexity
+## 4. Architectural Decision Record (ADR)
+### ADR-001: Strict File-Based Operations
+**Context**: Need to prevent partial modifications and ensure atomic writes
+**Decision**:
+- Require complete file content in all operations
+- Prohibit patch/diff formats
+**Consequences**:
++ Eliminates merge conflicts
++ Simplifies version control
+- Larger payload sizes
+
+### ADR-002: Path Validation Layer
+**Context**: Critical security requirement for file system access
+**Decision**:
+- Implement SAFE_PATHS allowlist
+- Reject absolute paths and parent directory traversal
+**Consequences**:
++ Prevents unauthorized access
+- Requires strict path pattern validation
 
 ## 5. Incremental Integration Plan
 ### Phase 1: Foundation
-1. Implement core messaging infrastructure
-2. Deploy monitoring (Prometheus/Grafana)
+- Implement JSON command parser
+- Build SAFE_PATHS validation module
+- Create markdown template engine
 
-### Phase 2: Vertical Integration
-1. Integrate Feature A with mock dependencies
-2. End-to-end testing with contract validation
+### Phase 2: Core Functionality
+- Integrate architecture planning logic
+- Connect validation to documentation generator
+- Implement output formatting
 
-### Phase 3: Horizontal Scale
-1. Add load balancing for critical services
-2. Implement circuit breakers
+### Phase 3: Validation & QA
+- Add ruff/mypy checks
+- Implement pytest suite
+- Establish git pre-commit hooks
 
-### Phase 4: Optimization
-1. Introduce caching layer
-2. Performance tuning
+### Phase 4: Productionization
+- Error handling for invalid requests
+- Logging for audit trails
+- Performance benchmarking
 
 ## Risk Mitigation
-- **Contract Drift**: Schema registry enforcement
-- **Data Loss**: Idempotent consumers with dead-letter queues
-- **Integration Failures**: Canary deployments with feature flags
+- **Path Injection**: Sanitize all input paths
+- **Data Loss**: Require full file content
+- **Scope Creep**: Strict SAFE_PATHS enforcement

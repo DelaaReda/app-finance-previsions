@@ -40,16 +40,29 @@ def node_plan(state: AgentState) -> AgentState:
     state["plan"] = plan
     return state
 def node_retrieve(state: AgentState) -> AgentState:
+    from pathlib import Path
+    topk = 5
+    results: list[str] = []
+    # 1) Agent docs
     try:
-        hits = query_index(state["goal"], topk=5, data_dir="docs")
-        if not hits:
-            # Try absolute path in case cwd differs
-            from pathlib import Path
-            hits = query_index(state["goal"], topk=5, data_dir=str(Path("docs").resolve()))
+        hits_agent = query_index(state["goal"], topk=topk, data_dir="docs") or []
+        results.extend(hits_agent)
     except Exception as e:
-        hits = []
-        state["retrieval_error"] = str(e)
-    state["context_docs"] = hits
+        state["retrieval_error"] = f"agent_docs: {e}"
+    # 2) Root repo docs
+    try:
+        root_docs = str((Path.cwd() / ".." / "docs").resolve())
+        hits_root = query_index(state["goal"], topk=topk, data_dir=root_docs) or []
+        if hits_root:
+            seen = set(results)
+            for t in hits_root:
+                if t not in seen:
+                    results.append(t)
+                    seen.add(t)
+    except Exception as e:
+        prev = state.get("retrieval_error")
+        state["retrieval_error"] = (prev + f"; root_docs: {e}") if prev else f"root_docs: {e}"
+    state["context_docs"] = results[:topk]
     return state
 def node_patch(state: AgentState) -> AgentState:
     cfg = AgentConfig()

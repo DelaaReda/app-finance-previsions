@@ -5,7 +5,7 @@ Generates Top 3 Signals and Top 3 Risks
 """
 from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
-from dataclind import pd
+import pandas as pd
 from datetime import datetime
 
 # Scoring weights (configurable)
