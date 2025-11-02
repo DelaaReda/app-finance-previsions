@@ -21,8 +21,9 @@ from core.market_data import get_price_history, get_fundamentals, get_fred_serie
 from ingestion.finnews import run_pipeline as run_news_pipeline, list_sources
 from analytics.phase2_technical import load_prices, compute_indicators, technical_signals
 from analytics.phase3_macro import get_us_macro_bundle
-from research.scoring import compute_composite_brief  # Nouveau module à créer
-from research.rag_store import RAGStore  # Nouveau module à créer
+from research.scoring import compute_composite_brief
+from research.rag_store import RAGStore
+from core.data_access import get_close_series, load_macro_forecast_rows, load_news_features  # Already implemented
 
 # ============================================================================
 # APP CONFIG

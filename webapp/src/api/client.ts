@@ -19,3 +19,33 @@ export async function apiGet<T>(path: string, params?: Record<string, any>): Pro
   if (!res.ok) throw new Error(`GET ${path} ${res.status}`);
   return res.json();
 }
+
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string }
+
+export async function apiPost<T>(path: string, data?: any): Promise<ApiResult<T>> {
+  if (USE_MOCK) {
+    // For mock, we'll treat POSTs as GETs with query params
+    const params = data ? { ...data, _method: 'POST' } : {};
+    const mockPath = `/mocks${path}.json`;
+    const res = await fetch(mockPath + qs(params));
+    if (!res.ok) return { ok: false, error: `MOCK POST ${mockPath} ${res.status}` };
+    return { ok: true, data: await res.json() };
+  }
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!res.ok) return { ok: false, error: `POST ${path} ${res.status}` };
+    
+    const result = await res.json();
+    return { ok: true, data: result };
+  } catch (error) {
+    return { ok: false, error: `Network error: ${error.message}` };
+  }
+}

@@ -270,9 +270,12 @@ class EnhancedMentor:
                     "session_id": self.monitor.metrics.session_id,
                     "goal": self.monitor.metrics.goal,
                     "mode": self.monitor.metrics.mode,
+                    "complexity": getattr(self.monitor.metrics, 'complexity', 'medium'),
                     "success": completed_successfully,
                     "duration": self.monitor.metrics.duration or 0,
-                    "tests": {"standard_tests": {}, "architecture_validation": {}, "security_checks": {}}
+                    "tests": {"standard_tests": {}, "architecture_validation": {}, "security_checks": {}},
+                    "error_messages": getattr(self.monitor.metrics, 'error_messages', []),
+                    "output_messages": getattr(self.monitor.metrics, 'output_messages', [])
                 }
                 mentor_feedback = self.mentorship_program.provide_mentorship_feedback(dummy_result)
                 report += f"\n\n{mentor_feedback}"

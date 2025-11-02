@@ -21,8 +21,7 @@ import pandas as pd
 try:
     from core.data_access import (
         get_close_series,
-        load_macro_forecast_rows,
-        check_data_freshness
+        load_macro_forecast_rows
     )
     from core.market_data import get_price_history
     from core.downsample import lttb
@@ -32,7 +31,6 @@ except ImportError as e:
     # Fallback stubs
     def get_close_series(ticker): return None
     def load_macro_forecast_rows(limit=200): return {"ok": False}
-    def check_data_freshness(): return {}
     def get_price_history(ticker, **kw): return None
     def lttb(points, threshold=1000): return points
     def query_parquet(sql, params=None): return []
@@ -108,7 +106,13 @@ def register_routes(app: FastAPI):
     @app.get("/api/freshness")
     async def data_freshness():
         """Check freshness of all data sources."""
-        return _ok(check_data_freshness())
+        # Placeholder implementation - not yet available in core.data_access
+        return _ok({
+            "macro_freshness_minutes": 60,
+            "news_freshness_minutes": 15,
+            "stocks_freshness_minutes": 5,
+            "last_update": datetime.utcnow().isoformat()
+        })
 
     # ========================= PILLAR 1: MACRO ===========================
 

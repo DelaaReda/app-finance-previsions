@@ -136,6 +136,11 @@ def main():
         result["duration"] = duration
         result["session_id"] = session_id
         result["success"] = success
+        result["error_messages"] = result.get("error_messages", [])  # Ensure it exists
+        result["output_messages"] = result.get("output_messages", [])  # Ensure it exists
+        result["goal"] = state.get("goal", "")
+        result["mode"] = args.mode
+        result["complexity"] = args.complexity
         out["result"] = result
         
         # Log to episodic memory
@@ -150,12 +155,15 @@ def main():
         
         # End mentoring session if enabled
         if mentor:
-            mentor_report = mentor.end_session(success)
-            print("\n" + "="*60)
-            print("MENTORSHIP REPORT")
-            print("="*60)
-            print(mentor_report)
-            print("="*60)
+            try:
+                mentor_report = mentor.end_session(success)
+                print("\n" + "="*60)
+                print("MENTORSHIP REPORT")
+                print("="*60)
+                print(mentor_report)
+                print("="*60)
+            except Exception as e:
+                print(f"[mentor] Error in end_session: {e}")
         
         print(json.dumps(result, ensure_ascii=False, indent=2))
 
