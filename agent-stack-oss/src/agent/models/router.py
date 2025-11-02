@@ -14,6 +14,14 @@ from .g4f_chat import G4FChat
 
 def get_llm(task: str, cfg: Optional[AgentConfig] = None) -> BaseChatModel:
     cfg = cfg or AgentConfig()
+    # Baseten: OpenAI-compatible endpoint
+    if cfg.provider == "baseten":
+        return ChatOpenAI(
+            model=cfg.model,
+            api_key=SecretStr(cfg.openai_api_key) if cfg.openai_api_key else None,
+            base_url=cfg.openai_base_url or "https://inference.baseten.co/v1",
+            temperature=0.1,
+        )
     if cfg.provider == "openai":
         return ChatOpenAI(
             model=cfg.model,

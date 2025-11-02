@@ -141,3 +141,24 @@ Planned/Started (agents)
 Phase 2 (in progress)
 - Macro forecast agent: writes `data/macro/forecast/dt=YYYYMMDD/macro_forecast.{json,parquet}` with CPI YoY, yield curve slope, unemployment and a crude recession probability across horizons (1m/3m/12m). Target: `make macro-forecast`.
 - Update monitor agent: writes `data/quality/dt=YYYYMMDD/freshness.json` with latest partition dates and coverage checks; target: `make update-monitor`. Observability reads and displays the summary.
+
+## Sprint-6: React Migration & QA Gates
+
+Objectives
+- Finalize React migration for core pages: Dashboard, Macro, Stocks, News, MarketBrief, TickerSheet
+- Implement TypeScript types, services, hooks matching FastAPI contracts
+- Set up QA gates: ruff/mypy/pytest + tsc/eslint/build + e2e smoke
+- Update docs: api_contracts.md, ui/*.md, lakehouse.md, roadmap.md
+
+Delivered (in progress)
+- ✅ Docs updated: api_contracts.md, ui/Dashboard.md, Macro.md, Stocks.md, News.md, MarketBrief.md, TickerSheet.md
+- ✅ Lakehouse docs: data/lakehouse.md with bronze/silver/gold rules
+- ✅ Roadmap v1/v2/v3 defined
+- ⏳ React components skeletons created
+- ⏳ API smoke tests aligned with contracts
+- ⏳ QA Gates implemented (backend front)
+
+Next (nice to have)
+- Copilot LLM page with RAG
+- Backtests/Forecasts stubs
+- Export Brief to MD

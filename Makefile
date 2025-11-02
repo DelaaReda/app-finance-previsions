@@ -3,6 +3,7 @@
 .PHONY: help install run-api-v2 test-api-v2 run-webapp health docs clean
 .PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc agent-doc-direct
 .PHONY: agent-index
+.PHONY: agent-run-baseten agent-doc-baseten agent-doc-direct-baseten
 
 # Default target
 help:
@@ -39,6 +40,9 @@ help:
 	@echo "  make agent-doc       Generate architecture/integration plan (doc-first)"
 	@echo "  make agent-doc-direct  Generate docs via direct file write (no git)"
 	@echo "  make agent-index     Build/refresh agent RAG index (agent docs + repo docs)"
+	@echo "  make agent-run-baseten GOAL=\"...\"  Run agent using Baseten OpenAI-compatible provider"
+	@echo "  make agent-doc-baseten               Generate doc using Baseten provider"
+	@echo "  make agent-doc-direct-baseten        Direct-write doc using Baseten provider"
 
 AGENT_DIR := agent-stack-oss
 AGENT_VENV := $(AGENT_DIR)/.venv
@@ -90,6 +94,24 @@ agent-doc-direct:
 agent-index:
 	$(ACTIVATE) && cd $(AGENT_DIR) \
 	&& AGENT_DEBUG=1 PYTHONPATH=. python -c "from pathlib import Path; from src.agent.tools.rag_tools import build_or_load_index as b; print('[index] agent docs -> docs'); b('docs'); root=str((Path.cwd()/'..'/'docs').resolve()); print(f'[index] root docs -> {root}'); b(root); print('[index] done')"
+
+# Run agent via Baseten (OpenAI-compatible). Requires BASETEN_API_KEY in env.
+agent-run-baseten:
+	@[ -n "$(GOAL)" ] || (echo "ERROR: provide GOAL=\"...\"" && exit 1)
+	@[ -n "$(BASETEN_API_KEY)" ] || (echo "ERROR: set BASETEN_API_KEY in environment" && exit 1)
+	$(ACTIVATE) && cd $(AGENT_DIR) \
+	&& export LLM_PROVIDER=baseten \
+	&& export LLM_MODEL=$${LLM_MODEL:-moonshotai/Kimi-K2-Instruct-0905} \
+	&& export OPENAI_BASE_URL=$${OPENAI_BASE_URL:-https://inference.baseten.co/v1} \
+	&& export OPENAI_API_KEY=$${OPENAI_API_KEY:-$(BASETEN_API_KEY)} \
+	&& export TOKENIZERS_PARALLELISM=false \
+	&& PYTHONPATH=. python -m src.agent.run --verbose --goal "$(GOAL)"
+
+agent-doc-baseten:
+	$(MAKE) agent-run-baseten GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
+
+agent-doc-direct-baseten:
+	ALLOW_DIRECT_WRITE=1 $(MAKE) agent-run-baseten GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
 
 # Installation
 install:
