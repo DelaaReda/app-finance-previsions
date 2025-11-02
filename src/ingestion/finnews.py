@@ -554,6 +554,29 @@ def filter_items(items: List[NewsItem],
     return out
 
 
+def dedup_items(items: List[Dict[str, Any]], source: str = "") -> List[Dict[str, Any]]:
+    """
+    Deduplicate news items using hash of (source|title|published).
+    This helps eliminate duplicate articles across feeds and sources.
+    """
+    seen = set()
+    unique_items = []
+    
+    for item in items:
+        # Create a unique identifier based on source, title, and published date
+        title = item.get("title", "").strip().lower()
+        published = item.get("published", "").strip()
+        
+        # Create hash using source, title, and published date (as mentioned in Agent Guide)
+        identifier = hashlib.sha256(f"{source}|{title}|{published}".encode("utf-8")).hexdigest()
+        
+        if identifier not in seen:
+            seen.add(identifier)
+            unique_items.append(item)
+    
+    return unique_items
+
+
 # ======================
 # Main pipeline (fetch)
 # ======================

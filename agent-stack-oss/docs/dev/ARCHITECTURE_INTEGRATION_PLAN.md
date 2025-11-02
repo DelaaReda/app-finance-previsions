@@ -1,56 +1,128 @@
 # Architecture Integration Plan
 
-## 1. Features
-- **Feature A**: Description fonctionnelle et critères d'acceptance
-- **Feature B**: Capacités principales avec contraintes techniques
-- **Feature C**: Exigences de performance et de sécurité
+## 1. Features Overview
+- **Core Functionality**: Agent-based code editing system with JSON command interface
+- **Validation System**: Strict input validation for JSON commands and SAFE_PATHS
+- **Documentation Handling**: Focused markdown documentation generation
+- **Safety Mechanisms**: Path sanitization and write restrictions
+- **Cross-Cutting Concerns**:
+  - Error Handling (atomic writes/full content requirement)
+  - Security Enforcement (path validation)
+  - Quality Assurance (automated checks)
 
-## 2. Interfaces
-### Module X ↔ Module Y
-- **Contract**: Protobuf schema v3 (x_to_y.proto)
-- **Protocol**: gRPC unary calls
-- **Error Handling**: Retry policy (exponential backoff)
+## 2. Interfaces and Contracts
+### Input Interface
+```json
+{
+  "files": [
+    {
+      "path": "relative/path/to/file.ext",
+      "content": "full content without partial updates"
+    }
+  ]
+}
+```
+**Contracts**:
+- `path` must be relative and match SAFE_PATHS patterns
+- `content` must contain complete file content (no partial updates)
+- All paths validated against allowlist patterns
 
-### Service Z API
-- **Endpoint**: POST /v1/process
-- **Input**: JSON payload with mandatory {id, timestamp}
-- **Output**: Standard envelope {status, data, error}
+### Output Interface
+```json
+{
+  "files": [
+    {
+      "path": "docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md",
+      "content": "..."
+    }
+  ]
+}
+```
+**Contracts**:
+- Only modifies files in SAFE_PATHS
+- Returns full file content
+- Maintains atomic write operations
 
-## 3. Dataflows
+## 3. Data Flow
 ```mermaid
 graph LR
-  A[Ingestion Service] -->|Kafka Topic| B[Stream Processor]
-  B --> C[(Database)]
-  C --> D[API Gateway]
+A[User Request] --> B(JSON Parser)
+B --> C[Validation Engine]
+C --> D[Architecture Planner]
+D --> E[Document Generator]
+E --> F[Output Formatter]
+F --> G[Response JSON]
 ```
-- **Critical Path**: Validation → Enrichment → Persistence
-- **Data Formats**: Avro for streaming, JSON for REST APIs
 
-## 4. ADR
-### ADR-001: Event-Driven Core
-- **Status**: Accepted
-- **Context**: Need for decoupled processing
-- **Decision**: Kafka-based event bus with exactly-once semantics
-- **Consequences**: +Scalability -Operational complexity
+## 4. Architectural Decision Records (ADRs)
+### ADR-001: Strict File-Based Operations
+**Status**: Approved
+**Context**: Need to prevent partial modifications and ensure atomic writes
+**Decision**:
+- Require complete file content in all operations
+- Prohibit patch/diff formats
+**Consequences**:
++ Eliminates merge conflicts
++ Simplifies version control
+- Larger payload sizes
+
+### ADR-002: Path Validation Layer
+**Status**: Approved
+**Context**: Critical security requirement for file system access
+**Decision**:
+- Implement SAFE_PATHS allowlist
+- Reject absolute paths and parent directory traversal
+**Consequences**:
++ Prevents unauthorized access
+- Requires strict path pattern validation
+
+### ADR-003: Incremental Integration Strategy
+**Status**: Proposed
+**Context**: Need phased rollout with zero regression risk
+**Decision**:
+- Phase-based implementation with validation gates
+- Automated contract verification at each phase
+**Consequences**:
++ Reduces integration risks
++ Enables continuous validation
 
 ## 5. Incremental Integration Plan
 ### Phase 1: Foundation
-1. Implement core messaging infrastructure
-2. Deploy monitoring (Prometheus/Grafana)
+- [ ] Implement JSON command parser
+- [ ] Build SAFE_PATHS validation module
+- [ ] Create markdown template engine
+- [ ] Setup monitoring for core operations
 
-### Phase 2: Vertical Integration
-1. Integrate Feature A with mock dependencies
-2. End-to-end testing with contract validation
+### Phase 2: Core Functionality
+- [ ] Integrate architecture planning logic
+- [ ] Connect validation to documentation generator
+- [ ] Implement output formatting
+- [ ] Add dead-letter handling for invalid requests
 
-### Phase 3: Horizontal Scale
-1. Add load balancing for critical services
-2. Implement circuit breakers
+### Phase 3: Validation & QA
+- [ ] Integrate ruff/mypy static checks
+- [ ] Implement pytest test suite
+- [ ] Establish git pre-commit hooks
+- [ ] Achieve 90%+ test coverage
 
-### Phase 4: Optimization
-1. Introduce caching layer
-2. Performance tuning
+### Phase 4: Productionization
+- [ ] Error handling for invalid requests
+- [ ] Logging for audit trails
+- [ ] Performance benchmarking
+- [ ] Blue/green deployment validation
 
 ## Risk Mitigation
-- **Contract Drift**: Schema registry enforcement
-- **Data Loss**: Idempotent consumers with dead-letter queues
-- **Integration Failures**: Canary deployments with feature flags
+- **Path Injection**: Sanitize all input paths using SAFE_PATHS
+- **Data Loss**: Require full file content in all operations
+- **Integration Failures**: Automated contract verification
+- **Quality Regressions**: Enforce QA gates (ruff/mypy/pytest)
+
+## QA Safeguards
+- All changes require:
+  - `ruff check` passing
+  - `mypy --strict` compliance
+  - 90%+ pytest coverage
+- Git branch protection:
+  - 2 approvals minimum
+  - Status checks mandatory
+  - SAFE_PATHS validation in CI pipeline

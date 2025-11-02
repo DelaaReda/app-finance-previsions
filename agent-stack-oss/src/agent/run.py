@@ -6,6 +6,13 @@ import traceback
 from .graph import build_graph
 from .memory.episodic_store import EpisodicMemory
 def main():
+    # Silence noisy Pydantic warnings to keep CLI output clean
+    try:
+        import warnings
+        from pydantic._internal._generate_schema import UnsupportedFieldAttributeWarning
+        warnings.filterwarnings("ignore", category=UnsupportedFieldAttributeWarning)
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description="Run OSS Agent (LangGraph)")
     ap.add_argument("--goal", required=True, help="Objective for the agent (e.g., refactor News page)")
     ap.add_argument("--verbose", action="store_true", help="Stream node-by-node execution logs")

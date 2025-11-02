@@ -26,3 +26,13 @@ export const macroService = {
     return apiGet<MacroIndicators>('/macro/indicators')
   }
 }
+
+/**
+ * Fetch macro series data (alias for use in components)
+ */
+export const fetchMacroSeries = async (seriesIds: string[], start?: string) => {
+  const seriesIdsParam = seriesIds.join(',')
+  const params: Record<string, string> = { series_ids: seriesIdsParam }
+  if (start) params.start = start
+  return macroService.getSeries(seriesIdsParam)
+}

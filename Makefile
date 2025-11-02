@@ -2,6 +2,7 @@
 
 .PHONY: help install run-api-v2 test-api-v2 run-webapp health docs clean
 .PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc agent-doc-direct
+.PHONY: agent-index
 
 # Default target
 help:
@@ -37,6 +38,7 @@ help:
 	@echo "  make agent-run GOAL=\"...\" [HF_EMBED_MODEL=...]  Run agent with G4F + strong embeddings"
 	@echo "  make agent-doc       Generate architecture/integration plan (doc-first)"
 	@echo "  make agent-doc-direct  Generate docs via direct file write (no git)"
+	@echo "  make agent-index     Build/refresh agent RAG index (agent docs + repo docs)"
 
 AGENT_DIR := agent-stack-oss
 AGENT_VENV := $(AGENT_DIR)/.venv
@@ -83,6 +85,11 @@ agent-doc:
 # Same as agent-doc but forces direct file write mode (bypass git apply/commit).
 agent-doc-direct:
 	ALLOW_DIRECT_WRITE=1 $(MAKE) agent-run GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
+
+# Build/refresh the vector index for both agent docs and repo root docs
+agent-index:
+	$(ACTIVATE) && cd $(AGENT_DIR) \
+	&& AGENT_DEBUG=1 PYTHONPATH=. python -c "from pathlib import Path; from src.agent.tools.rag_tools import build_or_load_index as b; print('[index] agent docs -> docs'); b('docs'); root=str((Path.cwd()/'..'/'docs').resolve()); print(f'[index] root docs -> {root}'); b(root); print('[index] done')"
 
 # Installation
 install:
