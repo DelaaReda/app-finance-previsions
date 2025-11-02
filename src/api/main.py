@@ -156,13 +156,30 @@ def register_routes(app: FastAPI):
     @app.get("/api/stocks/prices")
     async def stock_prices(
         ticker: str = Query(..., description="Stock ticker symbol"),
+        range: str = Query("1y", description="Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
         interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
         downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
     ):
         """Get stock prices with technical indicators (downsampled)."""
-        series = get_close_series(ticker)
-        if series is None or series.empty:
+        # Use get_price_history which supports range filtering
+        from core.market_data import get_price_history
+        from datetime import datetime, timedelta
+        
+        # Convert range to start date
+        range_map = {
+            "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, 
+            "1y": 365, "2y": 730, "5y": 1825
+        }
+        
+        days_back = range_map.get(range, 365)  # Default to 1 year
+        start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+        
+        df = get_price_history(ticker, start=start_date, interval=interval)
+        if df is None or df.empty:
             raise HTTPException(status_code=404, detail=f"No data for {ticker}")
+
+        # Extract Close prices as series
+        series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]  # Fallback to first column
 
         # Convert to points (timestamp, value)
         points = [(int(ts.timestamp()), float(val)) 
@@ -171,14 +188,16 @@ def register_routes(app: FastAPI):
 
         # Downsample if needed
         if len(points) > downsample:
+            from core.downsample import lttb
             points = lttb(points, threshold=downsample)
 
         return _ok({
             "ticker": ticker,
+            "range": range,
             "interval": interval,
             "points": points,
             "count": len(points),
-            "source": "features" if "features" in str(series) else "legacy",
+            "start_date": start_date,
             "timestamp": datetime.utcnow().isoformat()
         })
 

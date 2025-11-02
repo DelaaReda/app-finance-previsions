@@ -161,6 +161,32 @@ openapi:
 	@echo "📄 OpenAPI specification:"
 	@curl -s http://localhost:8050/api/openapi.json | python -m json.tool
 
+# Backup & Maintenance
+backup:
+	@echo "📦 Creating backup..."
+	python scripts/backup.py create
+
+backup-list:
+	@echo "📋 Listing backups..."
+	python scripts/backup.py list
+
+backup-restore:
+	@echo "🔄 Restoring from backup..."
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Please specify BACKUP_FILE"; \
+		echo "   Usage: make backup-restore BACKUP_FILE=path/to/backup.tar.gz"; \
+		exit 1; \
+	fi
+	python scripts/backup.py restore --backup-file "$(BACKUP_FILE)"
+
+backup-clean:
+	@echo "🧹 Cleaning old backups..."
+	python scripts/backup.py clean
+
+backup-stats:
+	@echo "📊 Backup statistics..."
+	python scripts/backup.py stats
+
 # Cleanup
 clean:
 	@echo "🧹 Cleaning up..."

@@ -177,7 +177,7 @@ class AgentMentorshipProgram:
         
         # Vérifier les performances du code
         performance_metrics = result.get("tests", {}).get("performance_metrics", {})
-        lines_changed = performance_metrics.get("net_lines", 0)
+        lines_changed = performance_metrics.get("net_lines", 0) if isinstance(result.get("tests"), dict) else 0
         
         if abs(lines_changed) < 50:  # Changements modérés
             efficiency_score += 10
