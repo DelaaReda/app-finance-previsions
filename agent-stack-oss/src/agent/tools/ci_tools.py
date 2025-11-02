@@ -1,6 +1,7 @@
 
 from __future__ import annotations
-import subprocess, shlex
+import subprocess
+import shlex
 def _run(cmd: str, timeout: int | None = None) -> tuple[int, str]:
     p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     out, _ = p.communicate(timeout=timeout)

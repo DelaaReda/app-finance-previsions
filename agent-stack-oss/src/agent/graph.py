@@ -1,6 +1,6 @@
 
 from __future__ import annotations
-from typing import TypedDict, List
+from typing import TypedDict, List, Optional
 from langgraph.graph import StateGraph, END
 from .models.router import get_llm, as_messages
 from .tools.git_tools import ensure_safe_branch, apply_patch_text, commit_all, restore_worktree
@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     patch: dict
     tests: dict
     result: dict
+    retrieval_error: Optional[str]
 def node_plan(state: AgentState) -> AgentState:
     llm = get_llm("plan")
     prompt = (
@@ -20,31 +21,49 @@ def node_plan(state: AgentState) -> AgentState:
         "Reponds en JSON avec {\"steps\":[...], \"files\":[...]}."
     )
     out = llm.invoke(as_messages(prompt))
-    plan = {"steps": [], "files": []}
+    plan: dict = {"steps": [], "files": []}
     try:
-        import json; plan = json.loads(out.content)
-    except Exception: pass
-    state["plan"] = plan; return state
+        import json
+        raw = getattr(out, "content", "")
+        content = raw if isinstance(raw, str) else ""
+        plan = json.loads(content)
+    except Exception:
+        pass
+    state["plan"] = plan
+    return state
 def node_retrieve(state: AgentState) -> AgentState:
-    hits = query_index(state["goal"], topk=5, data_dir="docs")
+    try:
+        hits = query_index(state["goal"], topk=5, data_dir="docs")
+    except Exception as e:
+        hits = []
+        state["retrieval_error"] = str(e)
     state["context_docs"] = hits
     return state
 def node_patch(state: AgentState) -> AgentState:
     llm = get_llm("code")
-    prompt = ("Tu es un agent d'edition de code. Reponds STRICTEMENT en JSON: "
-              "{\"diff\":\"<unified patch>\", \"touched\":[...]}.\n"
-              f"Objectif: {state['goal']}\nContexte: {state.get('context_docs', [])}\n"
-              f"Fichiers ciblés: {state.get('plan',{}).get('files', [])}")
+    prompt = (
+        "Tu es un agent d'edition de code. Reponds STRICTEMENT en JSON: "
+        "{\"diff\":\"<unified patch>\", \"touched\":[...]}.\n"
+        f"Objectif: {state['goal']}\nContexte: {state.get('context_docs', [])}\n"
+        f"Fichiers ciblés: {state.get('plan',{}).get('files', [])}"
+    )
     out = llm.invoke(as_messages(prompt))
-    patch = {"diff": "", "touched": []}
+    patch: dict = {"diff": "", "touched": []}
     try:
-        import json; patch = json.loads(out.content)
-    except Exception: pass
+        import json
+        raw = getattr(out, "content", "")
+        content = raw if isinstance(raw, str) else ""
+        patch = json.loads(content)
+    except Exception:
+        pass
     ensure_safe_branch()
-    ok = apply_patch_text(patch.get("diff",""))
+    diff: str = str(patch.get("diff", ""))
+    ok = apply_patch_text(diff)
     if not ok:
-        state["result"] = {"ok": False, "error": "apply failed"}; return state
-    state["patch"] = patch; return state
+        state["result"] = {"ok": False, "error": "apply failed"}
+        return state
+    state["patch"] = patch
+    return state
 def node_qa(state: AgentState) -> AgentState:
     lin = run_linters()
     pyt = run_pytests()

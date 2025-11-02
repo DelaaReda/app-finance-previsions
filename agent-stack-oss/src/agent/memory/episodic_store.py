@@ -1,6 +1,9 @@
 
 from __future__ import annotations
-import duckdb, os, time, json
+import duckdb
+import os
+import time
+import json
 from ..config import AgentConfig
 class EpisodicMemory:
     def __init__(self, cfg: AgentConfig | None = None):

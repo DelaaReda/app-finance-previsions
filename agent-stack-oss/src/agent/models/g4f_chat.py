@@ -8,8 +8,9 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from pydantic import Field
 
+_g4f_import_error: Optional[Exception] = None
 try:  # pragma: no cover - optional dependency at runtime
-    from g4f.client import Client as G4FClient
+    from g4f.client import Client as G4FClient  # type: ignore[import-untyped]
 except Exception as exc:  # noqa: BLE001
     G4FClient = None  # type: ignore
     _g4f_import_error = exc
@@ -33,10 +34,16 @@ def _convert_role(message: BaseMessage) -> Dict[str, str]:
 
 
 class G4FChat(BaseChatModel):
-    """Minimal LangChain chat wrapper around the g4f client."""
+    """LangChain chat wrapper around g4f with model fallbacks and tuning."""
 
     model: str = Field(default="gpt-4o-mini")
+    models: Optional[List[str]] = Field(
+        default=None, description="Ordered list of model candidates to try"
+    )
     temperature: float = Field(default=0.1)
+    max_tokens: int = Field(default=2048)
+    timeout: int = Field(default=60)
+    retries: int = Field(default=1)
 
     @property
     def _llm_type(self) -> str:
@@ -49,13 +56,24 @@ class G4FChat(BaseChatModel):
                 f"(import error: {_g4f_import_error})"
             )
         client = G4FClient()
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=self.temperature,
-        )
-        choice = response.choices[0]
-        return choice.message.content
+        candidates = self.models or [self.model]
+        last_err: Optional[Exception] = None
+        for model in candidates:
+            for _ in range(max(1, self.retries)):
+                try:
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        timeout=self.timeout,
+                    )
+                    choice = response.choices[0]
+                    return choice.message.content
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    continue
+        raise RuntimeError(f"All g4f candidates failed: {last_err}")
 
     def _generate(
         self,
@@ -72,4 +90,3 @@ class G4FChat(BaseChatModel):
         ai_message = AIMessage(content=content)
         generation = ChatGeneration(message=ai_message)
         return ChatResult(generations=[generation])
-
