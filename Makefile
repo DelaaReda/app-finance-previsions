@@ -1,6 +1,7 @@
 # Makefile for Finance Copilot Project
 
 .PHONY: help install run-api-v2 test-api-v2 run-webapp health docs clean
+.PHONY: copilot-start copilot-stop copilot-restart copilot-status copilot-test
 .PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc agent-doc-direct
 .PHONY: agent-index
 .PHONY: agent-run-baseten agent-doc-baseten agent-doc-direct-baseten
@@ -26,6 +27,13 @@ help:
 	@echo "Documentation:"
 	@echo "  make docs            Open API documentation in browser"
 	@echo "  make openapi         View OpenAPI spec"
+	@echo ""
+	@echo "Copilot App (migrated):"
+	@echo "  make copilot-start   Start backend + frontend under copilot-app/"
+	@echo "  make copilot-stop    Stop both services"
+	@echo "  make copilot-restart Restart both services"
+	@echo "  make copilot-status  Show status of both services"
+	@echo "  make copilot-test    Run basic smoke tests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean           Remove cache and temp files"
@@ -117,7 +125,7 @@ agent-doc-direct-baseten:
 install:
 	pip install -r requirements.txt
 	pip install -r requirements-api-v2.txt
-	cd webapp && npm install
+	cd copilot-app/frontend/webapp && npm install
 
 install-api:
 	pip install -r requirements-api-v2.txt
@@ -125,12 +133,12 @@ install-api:
 # API v2
 run-api-v2:
 	@echo "🚀 Starting FastAPI backend v0.1 on port 8050..."
-	python scripts/run_api_v2.py --port 8050
+	cd copilot-app/backend && python run_api.py
 
 # Frontend
 run-webapp:
 	@echo "🚀 Starting React frontend on port 5173..."
-	cd webapp && npm run dev
+	cd copilot-app/frontend/webapp && npm run dev
 
 # Full stack
 fullstack:
@@ -146,7 +154,7 @@ fullstack:
 # Testing
 test-api-v2:
 	@echo "🧪 Running API v0.1 smoke tests..."
-	python scripts/test_api_v2.py
+	cd copilot-app/scripts/migrated && python test_api_v2.py
 
 health:
 	@echo "🏥 Checking API health..."
@@ -161,14 +169,32 @@ openapi:
 	@echo "📄 OpenAPI specification:"
 	@curl -s http://localhost:8050/api/openapi.json | python -m json.tool
 
+# ================== Copilot App commands ==================
+COPILOT_SH := ./copilot.sh
+
+copilot-start:
+	@$(COPILOT_SH) start
+
+copilot-stop:
+	@$(COPILOT_SH) stop
+
+copilot-restart:
+	@$(COPILOT_SH) restart
+
+copilot-status:
+	@$(COPILOT_SH) status
+
+copilot-test:
+	@$(COPILOT_SH) test
+
 # Backup & Maintenance
 backup:
 	@echo "📦 Creating backup..."
-	python scripts/backup.py create
+	cd copilot-app/scripts/migrated && python backup.py create
 
 backup-list:
 	@echo "📋 Listing backups..."
-	python scripts/backup.py list
+	cd copilot-app/scripts/migrated && python backup.py list
 
 backup-restore:
 	@echo "🔄 Restoring from backup..."
@@ -177,15 +203,15 @@ backup-restore:
 		echo "   Usage: make backup-restore BACKUP_FILE=path/to/backup.tar.gz"; \
 		exit 1; \
 	fi
-	python scripts/backup.py restore --backup-file "$(BACKUP_FILE)"
+	cd copilot-app/scripts/migrated && python backup.py restore --backup-file "$(BACKUP_FILE)"
 
 backup-clean:
 	@echo "🧹 Cleaning old backups..."
-	python scripts/backup.py clean
+	cd copilot-app/scripts/migrated && python backup.py clean
 
 backup-stats:
 	@echo "📊 Backup statistics..."
-	python scripts/backup.py stats
+	cd copilot-app/scripts/migrated && python backup.py stats
 
 # Cleanup
 clean:

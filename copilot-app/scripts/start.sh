@@ -6,9 +6,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-BACKEND_DIR="$PROJECT_DIR/copilot-app/backend"
-FRONTEND_DIR="$PROJECT_DIR/copilot-app/frontend/webapp"
+# Project dir is the copilot-app root
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKEND_DIR="$PROJECT_DIR/backend"
+FRONTEND_DIR="$PROJECT_DIR/frontend/webapp"
+ENV_FILE="$PROJECT_DIR/.env"
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
@@ -78,11 +80,7 @@ check_dependencies() {
     # Activer le virtualenv
     source "$BACKEND_DIR/.venv/bin/activate"
     
-    # Vérifier les dépendances Python
-    if [ ! -f "$BACKEND_DIR/requirements.txt" ]; then
-        log_error "requirements.txt non trouvé"
-        exit 1
-    fi
+    # Installer les dépendances Python si requirements disponibles
     
     # Vérifier les dépendances Node
     if [ ! -f "$FRONTEND_DIR/package.json" ]; then
@@ -99,11 +97,24 @@ install_dependencies() {
     
     # Backend
     source "$BACKEND_DIR/.venv/bin/activate"
-    
-    # Vérifier si uvicorn est installé
+    # Installer requirements s'ils existent, sinon packages minimum
+    if [ -f "$BACKEND_DIR/requirements.txt" ]; then
+        log "Installation des dépendances backend (local requirements.txt)..."
+        pip install -r "$BACKEND_DIR/requirements.txt"
+    elif [ -f "$PROJECT_DIR/../requirements.txt" ]; then
+        log "Installation des dépendances backend (racine requirements.txt)..."
+        pip install -r "$PROJECT_DIR/../requirements.txt"
+    elif [ -f "$PROJECT_DIR/../requirements-api-v2.txt" ]; then
+        log "Installation des dépendances backend (requirements-api-v2.txt)..."
+        pip install -r "$PROJECT_DIR/../requirements-api-v2.txt"
+    else
+        log_warning "Aucun requirements.txt trouvé, installation minimale (fastapi, uvicorn, pandas)..."
+        pip install fastapi uvicorn pandas
+    fi
+    # Assurer la présence d'uvicorn même si les requirements ne l'incluent pas
     if ! python -c "import uvicorn" 2>/dev/null; then
-        log "Installation de uvicorn et fastapi..."
-        pip install uvicorn fastapi
+        log_warning "uvicorn manquant après installation, installation ..."
+        pip install uvicorn
     fi
     
     # Frontend
@@ -126,6 +137,10 @@ start_backend() {
     
     # Démarrer le backend
     cd "$BACKEND_DIR"
+    # Propager l'environnement (.env à la racine de copilot-app)
+    if [ -f "$ENV_FILE" ]; then
+        cp -f "$ENV_FILE" "$BACKEND_DIR/.env"
+    fi
     source "$BACKEND_DIR/.venv/bin/activate"
     
     nohup python run_api.py > api.log 2>&1 &

@@ -86,20 +86,24 @@ fi
 
 echo ""
 
-# Test 4: Vérifier les logs
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJ_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKEND_DIR="$PROJ_DIR/backend"
+FRONTEND_DIR="$PROJ_DIR/frontend/webapp"
+
 echo "📋 Vérification des logs:"
 echo "------------------------"
 
 # Backend logs
-if [ -f "../api.log" ] && [ -s "../api.log" ]; then
-    echo -e "   Backend logs: ${GREEN}PRÉSENTS ($(wc -l < ../api.log) lignes)${NC}"
+if [ -f "$BACKEND_DIR/api.log" ] && [ -s "$BACKEND_DIR/api.log" ]; then
+    echo -e "   Backend logs: ${GREEN}PRÉSENTS ($(wc -l < "$BACKEND_DIR/api.log") lignes)${NC}"
 else
     echo -e "   Backend logs: ${YELLOW}ABSENTS OU VIDES${NC}"
 fi
 
 # Frontend logs
-if [ -f "../webapp/frontend.log" ] && [ -s "../webapp/frontend.log" ]; then
-    echo -e "   Frontend logs: ${GREEN}PRÉSENTS ($(wc -l < ../webapp/frontend.log) lignes)${NC}"
+if [ -f "$FRONTEND_DIR/frontend.log" ] && [ -s "$FRONTEND_DIR/frontend.log" ]; then
+    echo -e "   Frontend logs: ${GREEN}PRÉSENTS ($(wc -l < "$FRONTEND_DIR/frontend.log") lignes)${NC}"
 else
     echo -e "   Frontend logs: ${YELLOW}ABSENTS OU VIDES${NC}"
 fi
