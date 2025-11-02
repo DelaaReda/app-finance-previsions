@@ -1,30 +1,50 @@
 // Types pour le brief et dashboard
-import { Source } from './common'
+import { Signal, Source } from './common.types'
 
-export interface Signal {
-  text: string
-  pillar: 'macro' | 'technical' | 'news'
-  weight: number
-}
-
-export interface Pick {
-  ticker: string
-  rationale: string
-  score: number
-  type: string
-}
-
+// Updated to match actual backend response
 export interface BriefData {
-  top_signals: Signal[]
-  top_risks: Signal[]
-  picks: Pick[]
-  sources: Source[]
-  scores: {
-    composite: number
-    macro: number
-    technical: number
-    news: number
-  }
+  top_signals: any[]
+  top_risks: any[]
+  picks: any[]
+  sources: any[]
+  generated_at: string
+  period: string
+  universe: string[]
+}
+
+// More detailed interface based on actual backend structure
+export interface DetailedBriefData {
+  top_signals: Array<{
+    ticker: string
+    composite_score: number
+    macro_score: number
+    technical_score: number
+    news_score: number
+    reason: string
+    confidence: number
+  }>
+  top_risks: Array<{
+    ticker: string
+    composite_score: number
+    macro_score: number
+    technical_score: number
+    news_score: number
+    reason: string
+  }>
+  picks: Array<{
+    ticker: string
+    composite_score: number
+    action: 'BUY' | 'HOLD' | 'SELL'
+    price: number | null
+    targets: {
+      support: number | null
+      resistance: number | null
+    }
+  }>
+  sources: Array<{
+    type: string
+    [key: string]: any
+  }>
   generated_at: string
   period: string
   universe: string[]

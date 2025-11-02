@@ -32,10 +32,10 @@ export function useBrief(id: string) {
 /**
  * Hook pour récupérer le dernier brief
  */
-export function useLatestBrief(type: 'daily' | 'weekly' = 'daily') {
+export function useLatestBrief(type: 'daily' | 'weekly' = 'daily', universe: string[] = ['SPY', 'QQQ']) {
   return useQuery({
-    queryKey: ['briefs', 'latest', type],
-    queryFn: () => briefService.getLatest(type),
+    queryKey: ['briefs', 'latest', type, universe],
+    queryFn: () => briefService.getLatest(type, universe),
     staleTime: 5 * 60 * 1000,
   })
 }

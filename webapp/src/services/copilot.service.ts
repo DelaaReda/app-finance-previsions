@@ -15,5 +15,19 @@ export const copilotService = {
    */
   getHistory: async (limit = 20) => {
     return apiGet<CopilotHistory>('/copilot/history', { limit: String(limit) })
+  },
+  
+  /**
+   * Get RAG store statistics
+   */
+  getRAGStats: async () => {
+    return apiGet<any>('/rag/stats')
+  },
+  
+  /**
+   * Create a new conversation session
+   */
+  createSession: async () => {
+    return apiPost<any>('/copilot/session', {})
   }
 }

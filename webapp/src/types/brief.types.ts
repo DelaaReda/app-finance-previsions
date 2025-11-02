@@ -3,8 +3,8 @@
  * Daily/Weekly briefs avec Top 3 signaux/risques
  */
 
-import { Signal, Source, ScoreBreakdown } from './common.types'
-import { MacroIndicator } from './macro.types'
+import { Signal } from './common.types'
+import { MacroSnapshot } from './macro.types'
 import { NewsItem } from './news.types'
 
 export type MarketBrief = {
@@ -34,7 +34,7 @@ export type MarketBrief = {
 
 export type MacroSnapshot = {
   headline: string
-  key_indicators: MacroIndicator[]
+  key_indicators: Array<{name: string, value: number, trend: 'up' | 'down' | 'flat'}>
   trend: 'bullish' | 'bearish' | 'neutral'
   alert_level: 'normal' | 'warning' | 'critical'
 }

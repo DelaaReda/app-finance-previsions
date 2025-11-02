@@ -15,19 +15,22 @@ export default function TopSignals({ signals, title = 'Top 3 Signaux' }: TopSign
     <Card title={title}>
       <div style={styles.container}>
         {topSignals.map((signal, index) => (
-          <div key={signal.id} style={styles.signalCard}>
+          <div key={index} style={styles.signalCard}>
             <div style={styles.header}>
               <span style={styles.rank}>#{index + 1}</span>
-              <span style={getTypeStyle(signal.type)}>
-                {signal.type === 'bullish' ? '📈' : signal.type === 'bearish' ? '📉' : '➡️'}
-              </span>
-              <span style={styles.score}>{signal.score.toFixed(0)}/100</span>
+              {signal.composite_score !== undefined ? (
+                <span style={styles.score}>{signal.composite_score.toFixed(0)}</span>
+              ) : (
+                <span style={styles.score}>{signal.score?.toFixed(0) || 'N/A'}</span>
+              )}
             </div>
-            <h4 style={styles.title}>{signal.title}</h4>
-            <p style={styles.description}>{signal.description}</p>
+            <h4 style={styles.title}>{signal.ticker}</h4>
+            <p style={styles.description}>{signal.reason || signal.description || 'Aucune raison fournie'}</p>
             <div style={styles.footer}>
-              <span style={styles.horizon}>{signal.horizon}</span>
-              <span style={styles.sources}>{signal.sources.length} source(s)</span>
+              {signal.confidence !== undefined && (
+                <span style={styles.horizon}>Conf: {(signal.confidence * 100).toFixed(0)}%</span>
+              )}
+              <span style={styles.sources}>Score: {signal.composite_score?.toFixed(1) || signal.score?.toFixed(1) || 'N/A'}</span>
             </div>
           </div>
         ))}

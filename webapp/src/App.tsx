@@ -1,5 +1,5 @@
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
-import AppProviders from './app/providers'
+import { AppProviders } from './app/providers'
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'

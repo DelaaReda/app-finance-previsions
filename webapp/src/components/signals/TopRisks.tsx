@@ -15,19 +15,29 @@ export default function TopRisks({ risks, title = 'Top 3 Risques' }: TopRisksPro
     <Card title={title}>
       <div style={styles.container}>
         {topRisks.map((risk, index) => (
-          <div key={risk.id} style={styles.riskCard}>
+          <div key={index} style={styles.riskCard}>
             <div style={styles.header}>
               <span style={styles.rank}>#{index + 1}</span>
               <span style={styles.icon}>⚠️</span>
               <span style={styles.severity}>
-                {risk.score > 70 ? 'Élevé' : risk.score > 40 ? 'Moyen' : 'Faible'}
+                {risk.composite_score !== undefined 
+                  ? (risk.composite_score < 30 ? 'Élevé' : risk.composite_score < 60 ? 'Moyen' : 'Faible')
+                  : (risk.score > 70 ? 'Élevé' : risk.score > 40 ? 'Moyen' : 'Faible')
+                }
               </span>
             </div>
-            <h4 style={styles.title}>{risk.title}</h4>
-            <p style={styles.description}>{risk.description}</p>
+            <h4 style={styles.title}>{risk.ticker || risk.title}</h4>
+            <p style={styles.description}>{risk.reason || risk.description || 'Aucune raison fournie'}</p>
             <div style={styles.footer}>
-              <span style={styles.horizon}>{risk.horizon}</span>
-              <span style={styles.score}>{risk.score.toFixed(0)}/100</span>
+              {risk.confidence !== undefined && (
+                <span style={styles.horizon}>Conf: {(risk.confidence * 100).toFixed(0)}%</span>
+              )}
+              <span style={styles.score}>
+                {risk.composite_score !== undefined 
+                  ? risk.composite_score.toFixed(0) 
+                  : risk.score?.toFixed(0) || 'N/A'
+                }/100
+              </span>
             </div>
           </div>
         ))}

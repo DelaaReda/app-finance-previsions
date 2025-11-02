@@ -12,31 +12,12 @@ import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
 
 type DashboardData = {
-  kpis: {
-    last_forecast_dt?: string | null
-    forecasts_count?: number
-    tickers?: number
-    horizons?: string[]
-    last_macro_dt?: string | null
-    last_quality_dt?: string | null
-  }
-  top_signals: Signal[]
-  top_risks: Signal[]
-  market_overview?: {
-    sp500_change: number
-    vix_level: number
-    market_sentiment: 'bullish' | 'bearish' | 'neutral'
-  }
-  filtered_signals?: Signal[]
-  filtered_risks?: Signal[]
-  filter_applied?: {
-    sectors: string[]
-    horizons: string[]
-    themes: string[]
-    tickers: string[]
-  }
-  filtered_ticker_count?: number
-  generated_at?: string
+  last_forecast_dt?: string | null
+  forecasts_count?: number
+  tickers?: number
+  horizons?: string[]
+  last_macro_dt?: string | null
+  last_quality_dt?: string | null
 }
 
 export default function Dashboard() {
@@ -53,13 +34,9 @@ export default function Dashboard() {
   const themeOptions = ["growth", "value", "momentum", "dividend", "quality"]
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard', sectors, horizons, themes, tickers],
-    queryFn: () => apiGet<DashboardData>('/dashboard/kpis', {
-      sectors: sectors.join(','),
-      horizons: horizons.join(','),
-      themes: themes.join(','),
-      tickers: tickers.join(',')
-    }).then(r => r.ok ? r.data : Promise.reject(r.error)),
+    queryKey: ['dashboard'],
+    queryFn: () => apiGet<DashboardData>('/dashboard/kpis')
+      .then(r => r.ok ? r.data : Promise.reject(r.error)),
     staleTime: 15_000,
   })
 
@@ -177,34 +154,29 @@ export default function Dashboard() {
         {/* KPIs Grid */}
         <div style={styles.kpisGrid}>
           <Card title="Dernière prévision">
-            <div style={styles.kpiValue}>{data?.kpis.last_forecast_dt || '—'}</div>
+            <div style={styles.kpiValue}>{data?.last_forecast_dt || '—'}</div>
           </Card>
           <Card title="Nombre de prévisions">
-            <div style={styles.kpiValue}>{data?.kpis.forecasts_count ?? 0}</div>
+            <div style={styles.kpiValue}>{data?.forecasts_count ?? 0}</div>
           </Card>
           <Card title="Tickers suivis">
-            <div style={styles.kpiValue}>{data?.kpis.tickers ?? 0}</div>
+            <div style={styles.kpiValue}>{data?.tickers ?? 0}</div>
           </Card>
           <Card title="Horizons">
             <div style={styles.kpiValue}>
-              {(data?.kpis.horizons || []).join(', ') || '—'}
+              {(data?.horizons || []).join(', ') || '—'}
             </div>
           </Card>
-          {data?.filtered_ticker_count !== undefined && (
-            <Card title="Tickers filtrés">
-              <div style={styles.kpiValue}>{data.filtered_ticker_count}</div>
-            </Card>
-          )}
         </div>
 
-        {/* Signaux et Risques */}
+        {/* Signaux et Risques - Using mock data for now */}
         {isLoading && <LoadingSpinner />}
         {error && <ErrorMessage message={String(error)} />}
         
-        {!isLoading && !error && data && (
+        {!isLoading && !error && (
           <div style={styles.signalsGrid}>
-            <TopSignals signals={data.filtered_signals || data.top_signals || []} />
-            <TopRisks risks={data.filtered_risks || data.top_risks || []} />
+            <TopSignals signals={[]} title="Top 3 Signaux (Données à venir)" />
+            <TopRisks risks={[]} title="Top 3 Risques (Données à venir)" />
           </div>
         )}
       </div>

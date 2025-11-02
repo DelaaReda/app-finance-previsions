@@ -13,40 +13,64 @@ import TopRisks from '@/components/signals/TopRisks'
 
 export default function MarketBrief() {
   const [type, setType] = useState<'daily' | 'weekly'>('daily')
-  const { data: brief, isLoading, error } = useLatestBrief(type)
+  const [universe, setUniverse] = useState<string[]>(['SPY', 'QQQ'])
+  const { data: brief, isLoading, error } = useLatestBrief(type, universe)
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1>📋 Market Brief</h1>
         
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={() => setType('daily')}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: type === 'daily' ? '#4a9eff' : '#333',
-              border: 'none',
-              borderRadius: '6px',
-              color: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            Quotidien
-          </button>
-          <button
-            onClick={() => setType('weekly')}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: type === 'weekly' ? '#4a9eff' : '#333',
-              border: 'none',
-              borderRadius: '6px',
-              color: '#fff',
-              cursor: 'pointer',
-            }}
-          >
-            Hebdomadaire
-          </button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setType('daily')}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: type === 'daily' ? '#4a9eff' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              Quotidien
+            </button>
+            <button
+              onClick={() => setType('weekly')}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: type === 'weekly' ? '#4a9eff' : '#333',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              Hebdomadaire
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label htmlFor="universe-select">Univers:</label>
+            <select
+              id="universe-select"
+              value={universe.join(',')}
+              onChange={(e) => setUniverse(e.target.value ? e.target.value.split(',') : ['SPY', 'QQQ'])}
+              style={{
+                padding: '0.5rem',
+                backgroundColor: '#333',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                color: '#fff',
+              }}
+            >
+              <option value="SPY,QQQ">SPY,QQQ (Défaut)</option>
+              <option value="SPY,AAPL,NVDA,MSFT">SPY,AAPL,NVDA,MSFT</option>
+              <option value="QQQ,AAPL,GOOGL,AMZN">QQQ,AAPL,GOOGL,AMZN</option>
+              <option value="SPY,TSLA,META,NVDA">SPY,TSLA,META,NVDA</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -56,17 +80,19 @@ export default function MarketBrief() {
       {brief && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <Card>
-            <h2 style={{ margin: '0 0 1rem 0' }}>{brief.title}</h2>
+            <h2 style={{ margin: '0 0 1rem 0' }}>Market Brief {brief.period === 'daily' ? 'Journalier' : 'Hebdomadaire'}</h2>
             <div style={{ color: '#888', marginBottom: '1rem' }}>
-              {new Date(brief.date).toLocaleDateString('fr-FR', {
+              {new Date(brief.generated_at).toLocaleDateString('fr-FR', {
                 weekday: 'long',
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
               })}
             </div>
             <div style={{ lineHeight: 1.6 }}>
-              {brief.executive_summary}
+              Analyse générée pour l'univers: {brief.universe.join(', ')}
             </div>
           </Card>
           {/* Top 3 Signaux et Top 3 Risques */}
@@ -75,45 +101,55 @@ export default function MarketBrief() {
             <TopRisks risks={brief.top_risks} />
           </div>
 
-          {/* Snapshots par pilier */}
-          <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            <Card title="📊 Macro">
-              <div style={{ marginBottom: '0.75rem', fontWeight: 600 }}>
-                {brief.macro_snapshot.headline}
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Tendance: <span style={{
-                  color: brief.macro_snapshot.trend === 'bullish' ? '#4ade80' : brief.macro_snapshot.trend === 'bearish' ? '#f87171' : '#94a3b8',
-                  fontWeight: 600,
-                }}>
-                  {brief.macro_snapshot.trend}
-                </span>
+          {/* Picks */}
+          {brief.picks && brief.picks.length > 0 && (
+            <Card title="🎯 Picks">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {brief.picks.map((pick: any, index: number) => (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '0.5rem',
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '4px'
+                  }}>
+                    <div>
+                      <strong>{pick.ticker}</strong> - Score: {pick.composite_score?.toFixed(1)}
+                    </div>
+                    <div style={{ 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '4px',
+                      backgroundColor: pick.action === 'BUY' ? '#4caf50' : 
+                                      pick.action === 'SELL' ? '#f44336' : '#2196f3',
+                      color: 'white',
+                      fontSize: '0.8rem'
+                    }}>
+                      {pick.action}
+                    </div>
+                  </div>
+                ))}
               </div>
             </Card>
+          )}
 
-            <Card title="📈 Marchés">
-              <div style={{ marginBottom: '0.75rem', fontWeight: 600 }}>
-                {brief.market_snapshot.headline}
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Sentiment: <span style={{
-                  color: brief.market_snapshot.market_sentiment === 'bullish' ? '#4ade80' : brief.market_snapshot.market_sentiment === 'bearish' ? '#f87171' : '#94a3b8',
-                  fontWeight: 600,
-                }}>
-                  {brief.market_snapshot.market_sentiment}
-                </span>
-              </div>
-            </Card>
-
-            <Card title="📰 News">
-              <div style={{ marginBottom: '0.75rem', fontWeight: 600 }}>
-                {brief.news_snapshot.headline}
-              </div>
-              <div style={{ fontSize: '0.85rem', color: '#888' }}>
-                {brief.news_snapshot.top_stories.length} articles majeurs
+          {/* Sources */}
+          {brief.sources && brief.sources.length > 0 && (
+            <Card title="📚 Sources">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {brief.sources.map((source: any, index: number) => (
+                  <span key={index} style={{ 
+                    padding: '0.25rem 0.5rem', 
+                    backgroundColor: '#333',
+                    borderRadius: '12px',
+                    fontSize: '0.8rem'
+                  }}>
+                    {source.type}: {source.series_id || source.count || 'N/A'}
+                  </span>
+                ))}
               </div>
             </Card>
-          </div>
+          )}
 
           {/* Key Takeaways */}
           {brief.key_takeaways && brief.key_takeaways.length > 0 && (
