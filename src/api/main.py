@@ -606,9 +606,11 @@ def register_routes(app: FastAPI):
 
     @app.post("/api/copilot/ask")
     async def copilot_ask(req: CopilotAskRequest):
-        """Ask LLM with RAG (5 years context). Ensures ≥2 sources for quality Q&A."""
+        """Ask LLM with RAG (5 years context). Uses LLM for intelligent responses with citations."""
         try:
             from research.rag_store import RAGStore
+            from research.llm_client import ask_llm
+            
             rag_store = RAGStore()
             
             # Prepare scope for RAG search
@@ -616,27 +618,8 @@ def register_routes(app: FastAPI):
             if req.tickers:
                 scope["tickers"] = req.tickers
             
-            # Start with requested max_sources but ensure minimum of 2 for quality
-            requested_top_k = max(req.max_sources, 2)  # Ensure at least 2 sources for quality
-            
             # Search in RAG store
-            context_chunks = rag_store.search(scope, top_k=requested_top_k)
-            
-            # If less than 2 sources and user asked for at least 2, try to enrich with more diverse content
-            if len(context_chunks) < 2:
-                # Try a broader search without ticker filters to get more sources
-                original_tickers = scope.get("tickers")
-                if original_tickers:
-                    scope_backup = scope.copy()
-                    if "tickers" in scope_backup:
-                        del scope_backup["tickers"]  # Remove ticker filter to get broader results
-                    additional_chunks = rag_store.search(scope_backup, top_k=requested_top_k)
-                    # Combine and deduplicate based on ID
-                    existing_ids = {chunk['id'] for chunk in context_chunks if 'id' in chunk}
-                    new_chunks = [chunk for chunk in additional_chunks if chunk.get('id') not in existing_ids]
-                    # Add up to needed amount to reach minimum of 2
-                    chunks_to_add = min(2 - len(context_chunks), len(new_chunks))
-                    context_chunks.extend(new_chunks[:chunks_to_add])
+            context_chunks = rag_store.search(scope, top_k=req.max_sources)
             
             if not context_chunks:
                 return _ok({
@@ -651,12 +634,16 @@ def register_routes(app: FastAPI):
             # Check if we have at least 2 sources (requirement from vision)
             has_min_sources = len(context_chunks) >= 2
             
-            # Build context from RAG results
-            context_parts = []
+            # Use LLM to generate response with context
+            llm_response = ask_llm(
+                question=req.question,
+                context_chunks=context_chunks,
+                max_tokens=1000
+            )
+            
+            # Extract sources from context_chunks for compatibility
             sources = []
             for chunk in context_chunks:
-                context_parts.append(f"[{chunk['meta']['type']}] {chunk['text']} (Source: {chunk['meta'].get('url', 'N/A')}, Date: {chunk['meta'].get('date', 'N/A')})")
-                
                 sources.append({
                     "type": chunk["meta"]["type"],
                     "url": chunk["meta"].get("url", ""),
@@ -666,52 +653,26 @@ def register_routes(app: FastAPI):
                     "id": chunk.get("id", "")  # Include ID for tracking
                 })
             
-            context_text = "\n\n".join(context_parts)
-            
-            # Generate a realistic response based on context
-            answer = f"Basé sur {len(context_chunks)} source{'s' if len(context_chunks) > 1 else ''} trouvée{'s' if len(context_chunks) > 1 else ''} dans la mémoire du système (contexte ≥{req.context_years} ans), voici mon analyse concernant votre question '{req.question}':\n\n"
-            
-            # Add specific information based on available sources
-            if len(context_chunks) >= 1:
-                answer += f"- {context_chunks[0]['meta']['type']} pertinent trouvé dans les sources\n"
-            if len(context_chunks) >= 2:
-                answer += f"- 2+ sources corroborant l'information disponible\n"
-            if len(context_chunks) > 2:
-                answer += f"- {len(context_chunks)} sources totales examinées pour une réponse complète\n"
-            
-            answer += f"- Données les plus récentes datent du {context_chunks[0]['meta'].get('date', 'date inconnue')}\n"
-            answer += f"- Sources couvrent: {', '.join(set([s['type'] for s in sources]))}\n"
-            
-            if any([s['ticker'] for s in sources]):
-                answer += f"- Informations sur: {', '.join(set([s['ticker'] for s in sources if s['ticker']])) if any([s['ticker'] for s in sources if s['ticker']]) else 'les actifs concernés'}\n\n"
-            
-            answer += f"Pour une analyse plus approfondie, je recommande d'examiner les sources citées ci-dessous et de consulter les données spécifiques à l'horizon temporel requis."
-            
-            # Calculate confidence based on number of sources (requirement: ≥80% with ≥2 sources)
-            base_confidence = 0.3
-            if len(context_chunks) >= 2:
-                # Higher confidence when we have 2+ sources (meet the requirement)
-                confidence = min(0.9, base_confidence + (len(context_chunks) * 0.15))
-            else:
-                # Lower confidence when less than 2 sources
-                confidence = min(0.6, base_confidence + (len(context_chunks) * 0.1))
-            
             return _ok({
-                "answer": answer,
+                "answer": llm_response["answer"],
                 "sources": sources,
-                "confidence": confidence,
+                "citations": llm_response.get("citations", []),
+                "model": llm_response.get("model", "unknown"),
+                "confidence": 0.8 if has_min_sources else 0.4,  # High confidence if we have required sources
                 "generated_at": datetime.utcnow().isoformat(),
                 "sources_count": len(sources),
                 "quality_status": "sufficient_sources" if has_min_sources else "insufficient_sources",
                 "requirements_met": {
                     "min_sources_2": has_min_sources,
-                    "quality_threshold": confidence >= 0.8 if has_min_sources else False
+                    "quality_threshold": llm_response.get("model") != "unconfigured"  # Check if LLM was actually used
                 }
             })
+            
         except Exception as e:
             return _ok({
                 "answer": f"Désolé, une erreur s'est produite lors du traitement de votre requête: {str(e)}. Veuillez réessayer.",
                 "sources": [],
+                "citations": [],
                 "confidence": 0.0,
                 "error": str(e),
                 "sources_count": 0,
@@ -745,80 +706,12 @@ def register_routes(app: FastAPI):
     async def brief_weekly():
         """Get weekly market brief."""
         try:
-            from research.scoring import get_top_signals_and_risks
-            from core.data_access import get_close_series
+            from research.scoring import compute_composite_brief
             
-            # Get top signals and risks using the existing scoring system
-            tracked_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM"]
-            signals_data = get_top_signals_and_risks(tracked_tickers, top_n=3)
+            # Generate comprehensive brief using the new function
+            brief_data = compute_composite_brief(period="weekly")
             
-            # Get market overview data
-            market_overview = {}
-            sector_performance = {}
-            try:
-                # Get actual price data for major indices
-                for idx in ["SPY", "QQQ", "DIA"]:
-                    series = get_close_series(idx)
-                    if series is not None and len(series) >= 5:  # at least 5 days of data
-                        current = float(series.iloc[-1])
-                        week_ago = float(series.iloc[-5])
-                        change = ((current - week_ago) / week_ago) * 100
-                        if idx not in sector_performance:
-                            sector_performance[idx] = round(change, 2)
-            except Exception:
-                # If data unavailable, use estimates
-                sector_performance = {
-                    "SPY": 1.2,
-                    "QQQ": 2.1,
-                    "DIA": 0.8
-                }
-            
-            # Generate brief content
-            brief_content = {
-                "title": "Weekly Market Brief",
-                "date": datetime.utcnow().date().isoformat(),
-                "period": "weekly",
-                "generated_at": datetime.utcnow().isoformat(),
-                "top_signals": signals_data.get("signals", []),
-                "top_risks": signals_data.get("risks", []),
-                "market_overview": {
-                    "sectors_performance": sector_performance,
-                    "vix_level": 18.5,  # Could be fetched from actual data
-                    "sentiment": "cautiously_optimistic"
-                },
-                "picks": [
-                    {
-                        "ticker": "NVDA",
-                        "score": signals_data.get("signals", [{}])[0].get("composite_score", 88.5) if signals_data.get("signals") else 88.5,
-                        "rationale": "Strong AI adoption trends and robust earnings momentum",
-                        "horizon": "medium",
-                        "confidence": 0.85
-                    },
-                    {
-                        "ticker": "AAPL", 
-                        "score": signals_data.get("signals", [{}])[1].get("composite_score", 82.3) if len(signals_data.get("signals", [])) > 1 else 82.3,
-                        "rationale": "Stable fundamentals with new product cycles and services growth",
-                        "horizon": "long",
-                        "confidence": 0.78
-                    }
-                ] if len(signals_data.get("signals", [])) >= 2 else [],
-                "macro_highlights": [
-                    {
-                        "title": "Inflation Trends",
-                        "summary": "Core inflation showing signs of stabilization around target",
-                        "importance": "high"
-                    },
-                    {
-                        "title": "Fed Policy Outlook", 
-                        "summary": "Expected cautious approach to rate adjustments given inflation data",
-                        "importance": "high"
-                    }
-                ],
-                "sources_count": len(signals_data.get("signals", [])) + len(signals_data.get("risks", [])),
-                "analysis_timestamp": datetime.utcnow().isoformat()
-            }
-            
-            return _ok(brief_content)
+            return _ok(brief_data)
             
         except Exception as e:
             return _ok({
@@ -834,101 +727,12 @@ def register_routes(app: FastAPI):
     async def brief_daily():
         """Get daily market brief."""
         try:
-            from research.scoring import get_top_signals_and_risks
-            from core.data_access import get_close_series
+            from research.scoring import compute_composite_brief
             
-            # Get top signals and risks using the existing scoring system
-            tracked_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM"]
-            signals_data = get_top_signals_and_risks(tracked_tickers, top_n=3)
+            # Generate comprehensive brief using the new function
+            brief_data = compute_composite_brief(period="daily")
             
-            # Get actual price data for market overview
-            market_overview = {
-                "vix_level": 18.2,
-                "sentiment": "bullish"
-            }
-            major_indices = {}
-            key_movers = []
-            
-            try:
-                # Get actual price changes for major indices
-                for idx in ["SPY", "QQQ", "DJI"]:
-                    series = get_close_series(idx)
-                    if series is not None and len(series) >= 2:  # yesterday vs today
-                        current = float(series.iloc[-1])
-                        prev = float(series.iloc[-2])
-                        change = ((current - prev) / prev) * 100
-                        major_indices[idx] = {
-                            "change": round(change, 2),
-                            "level": round(current, 2)
-                        }
-                
-                # Get key movers based on actual recent performance
-                for ticker in ["NVDA", "TSLA", "AAPL", "MSFT", "GOOGL"]:
-                    series = get_close_series(ticker)
-                    if series is not None and len(series) >= 2:
-                        current = float(series.iloc[-1])
-                        prev = float(series.iloc[-2])
-                        change = ((current - prev) / prev) * 100
-                        if abs(change) > 1.0:  # Only significant movers
-                            key_movers.append({
-                                "ticker": ticker,
-                                "change": round(change, 2),
-                                "level": round(current, 2),
-                                "reason": "Market movement"
-                            })
-            except Exception:
-                # Fallback to estimates if data unavailable
-                major_indices = {
-                    "SPY": {"change": 0.8, "level": 420.5},
-                    "QQQ": {"change": 1.2, "level": 385.3},
-                    "DJI": {"change": 0.3, "level": 33200.2}
-                }
-                key_movers = [
-                    {
-                        "ticker": "NVDA",
-                        "change": 3.2,
-                        "level": 950.0,
-                        "reason": "AI chip demand outlook"
-                    },
-                    {
-                        "ticker": "TSLA", 
-                        "change": -2.1,
-                        "level": 240.5,
-                        "reason": "Production concerns"
-                    }
-                ]
-            
-            # Generate brief content with daily focus
-            brief_content = {
-                "title": "Daily Market Brief",
-                "date": datetime.utcnow().date().isoformat(),
-                "period": "daily",
-                "generated_at": datetime.utcnow().isoformat(),
-                "top_signals": signals_data.get("signals", []),
-                "top_risks": signals_data.get("risks", []),
-                "market_overview": {
-                    "major_indices": major_indices,
-                    "vix_level": market_overview["vix_level"],
-                    "sentiment": market_overview["sentiment"]
-                },
-                "key_movers": key_movers,
-                "news_highlights": [
-                    {
-                        "headline": "Fed minutes show cautious approach to rate cuts",
-                        "impact": "medium",
-                        "sectors_affected": ["Financials", "REITs"]
-                    },
-                    {
-                        "headline": "Tech earnings beat expectations across the board", 
-                        "impact": "high",
-                        "sectors_affected": ["Technology"]
-                    }
-                ],
-                "sources_count": len(signals_data.get("signals", [])) + len(signals_data.get("risks", [])),
-                "analysis_timestamp": datetime.utcnow().isoformat()
-            }
-            
-            return _ok(brief_content)
+            return _ok(brief_data)
             
         except Exception as e:
             return _ok({
@@ -1454,6 +1258,133 @@ def register_routes(app: FastAPI):
             return _ok({
                 "error": str(e),
                 "message": "Failed to compare versions"
+            })
+
+    @app.post("/api/rag/seed")
+    async def seed_rag_store(
+        seed_macro: bool = Query(True, description="Seed macro series (5 years)"),
+        seed_prices: bool = Query(True, description="Seed prices (5 years)"),
+        seed_news: bool = Query(True, description="Seed recent news"),
+        universe: List[str] = Query(["SPY", "QQQ", "AAPL", "NVDA", "MSFT"], description="Tickers to seed")
+    ):
+        """
+        Ensemence le RAG avec données historiques.
+        À exécuter une fois au démarrage ou via cron daily.
+        """
+        try:
+            from research.rag_store import RAGStore
+            rag_store = RAGStore()
+            
+            stats_before = rag_store.stats()
+            
+            # 1. Macro (5 years, monthly samples)
+            if seed_macro:
+                from analytics.phase3_macro import get_us_macro_bundle
+                from datetime import datetime, timedelta
+                
+                start_date = (datetime.utcnow() - timedelta(days=365*5)).strftime("%Y-%m-%d")
+                bundle = get_us_macro_bundle(start=start_date, monthly=True)
+                
+                # Key series to index
+                macro_series = {
+                    "CPIAUCSL": "Inflation (CPI)",
+                    "UNRATE": "Unemployment Rate",
+                    "DGS10": "10-Year Treasury",
+                    "DGS2": "2-Year Treasury",
+                    "FEDFUNDS": "Fed Funds Rate",
+                    "INDPRO": "Industrial Production",
+                    "PAYEMS": "Nonfarm Payrolls"
+                }
+                
+                for series_id, name in macro_series.items():
+                    if series_id in bundle.data.columns:
+                        series = bundle.data[series_id].dropna()
+                        # Sample every 3 months to avoid bloating
+                        series_sampled = series.iloc[::3]
+                        
+                        for date, value in series_sampled.items():
+                            rag_store.add_series_fact(
+                                series_id=series_id,
+                                name=name,
+                                value=float(value),
+                                date=date.strftime("%Y-%m-%d")
+                            )
+            
+            # 2. Price data (5 years, weekly samples)
+            if seed_prices:
+                from core.market_data import get_price_history
+                from datetime import datetime, timedelta
+                
+                for ticker in universe:
+                    try:
+                        df = get_price_history(ticker, start=(datetime.utcnow() - timedelta(days=365*5)).strftime("%Y-%m-%d"), interval="1wk")
+                        if df is not None and not df.empty:
+                            for date, row in df.iterrows():
+                                rag_store.add_series_fact(
+                                    series_id=f"{ticker}_CLOSE",
+                                    name=f"{ticker} Weekly Close",
+                                    value=float(row["Close"]),
+                                    date=date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date)
+                                )
+                    except Exception as e:
+                        continue
+            
+            # 3. Recent news (top 100 from last week)
+            if seed_news:
+                from ingestion.finnews import run_pipeline
+                
+                items = run_pipeline(
+                    regions=["US", "CA", "INTL"],
+                    window="last_week",
+                    query="",
+                    tgt_ticker=None,
+                    per_source_cap=None,
+                    limit=100
+                )
+                
+                # Only inject if score > 0.5
+                for item in items:
+                    if item.get("score", 0) > 0.5:
+                        rag_store.add_news_item(item)
+            
+            stats_after = rag_store.stats()
+            
+            return _ok({
+                "stats_before": stats_before,
+                "stats_after": stats_after,
+                "added": {
+                    "news": stats_after.get("news_count", 0) - stats_before.get("news_count", 0),
+                    "facts": stats_after.get("facts_count", 0) - stats_before.get("facts_count", 0)
+                },
+                "message": "RAG seeded successfully"
+            })
+        
+        except Exception as e:
+            return _ok({
+                "error": str(e),
+                "message": "Failed to seed RAG"
+            })
+
+    @app.get("/api/rag/stats")
+    async def rag_stats():
+        """Get RAG store statistics."""
+        try:
+            from research.rag_store import RAGStore
+            rag_store = RAGStore()
+            stats = rag_store.freshness_stats()  # Use the new freshness_stats method
+            
+            # Add general stats
+            general_stats = rag_store.stats()
+            stats.update(general_stats)
+            
+            return _ok({
+                "stats": stats,
+                "generated_at": datetime.utcnow().isoformat()
+            })
+        except Exception as e:
+            return _ok({
+                "error": str(e),
+                "stats": {}
             })
 
 # ================================= SERVER ====================================

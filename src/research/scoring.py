@@ -257,6 +257,227 @@ def get_top_signals_and_risks(tickers: List[str], top_n: int = 3) -> Dict[str, L
         "total_analyzed": len(scores)
     }
 
+def compute_composite_brief(period: str = "weekly", universe: List[str] = None) -> Dict[str, Any]:
+    """
+    Génère Market Brief complet.
+    
+    Args:
+        period: "daily" ou "weekly"
+        universe: Liste de tickers (ex: ["SPY", "QQQ", "AAPL", "NVDA"])
+    
+    Returns:
+        {
+            "top_signals": [
+                {
+                    "ticker": str,
+                    "composite_score": float (0-100),
+                    "macro_score": float,
+                    "tech_score": float,
+                    "news_score": float,
+                    "reason": str,
+                    "confidence": float
+                },
+                ...  # Top 3
+            ],
+            "top_risks": [...],  # Bottom 3
+            "picks": [
+                {
+                    "ticker": str,
+                    "composite_score": float,
+                    "action": "BUY" | "HOLD" | "SELL",
+                    "price": float,
+                    "targets": {"support": float, "resistance": float}
+                },
+                ...  # Tickers > 65
+            ],
+            "sources": [
+                {"type": "macro", "series_id": str, "last_value": float},
+                {"type": "news", "count": int, "window": str},
+                {"type": "technical", "tickers": List[str]}
+            ],
+            "generated_at": str (ISO),
+            "period": str,
+            "universe": List[str]
+        }
+    """
+    if universe is None:
+        universe = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
+    
+    # 1. Calculer scores pour chaque ticker
+    scores = []
+    for ticker in universe:
+        try:
+            score = calculate_composite_score(ticker)
+            scores.append({
+                "ticker": ticker,
+                **score
+            })
+        except Exception as e:
+            continue
+    
+    if not scores:
+        return {
+            "top_signals": [],
+            "top_risks": [],
+            "picks": [],
+            "sources": [],
+            "generated_at": datetime.utcnow().isoformat(),
+            "period": period,
+            "universe": universe,
+            "error": "No scores computed"
+        }
+    
+    # 2. Trier par composite_score
+    sorted_scores = sorted(scores, key=lambda x: x["composite_score"], reverse=True)
+    
+    # 3. Top 3 signals (meilleurs)
+    top_signals = []
+    for s in sorted_scores[:3]:
+        # Générer raison (composantes dominantes)
+        reasons = []
+        if s["macro_score"] > 65:
+            reasons.append(f"Macro favorable ({s['macro_score']:.0f})")
+        if s["technical_score"] > 65:  # Changed from 'tech_score' to match actual structure
+            reasons.append(f"Technique fort ({s['technical_score']:.0f})")
+        if s["news_score"] > 65:
+            reasons.append(f"Sentiment positif ({s['news_score']:.0f})")
+        
+        reason = ", ".join(reasons) if reasons else "Signal composite"
+        
+        # Confidence (écart-type des composantes)
+        components = [s["macro_score"], s["technical_score"], s["news_score"]]
+        std = np.std(components)
+        confidence = 1.0 - min(std / 50, 1.0)  # Moins de dispersion = plus de confiance
+        
+        top_signals.append({
+            "ticker": s["ticker"],
+            "composite_score": s["composite_score"],
+            "macro_score": s["macro_score"],
+            "technical_score": s["technical_score"],  # Changed from 'tech_score'
+            "news_score": s["news_score"],
+            "reason": reason,
+            "confidence": float(confidence)
+        })
+    
+    # 4. Top 3 risks (pires)
+    top_risks = []
+    for s in sorted_scores[-3:]:
+        reasons = []
+        if s["macro_score"] < 35:
+            reasons.append(f"Macro défavorable ({s['macro_score']:.0f})")
+        if s["technical_score"] < 35:  # Changed from 'tech_score' to match actual structure
+            reasons.append(f"Technique faible ({s['technical_score']:.0f})")
+        if s["news_score"] < 35:
+            reasons.append(f"Sentiment négatif ({s['news_score']:.0f})")
+        
+        reason = ", ".join(reasons) if reasons else "Signal composite faible"
+        
+        top_risks.append({
+            "ticker": s["ticker"],
+            "composite_score": s["composite_score"],
+            "macro_score": s["macro_score"],
+            "technical_score": s["technical_score"],  # Changed from 'tech_score'
+            "news_score": s["news_score"],
+            "reason": reason
+        })
+    
+    # 5. Picks (score >= 65)
+    picks = []
+    for s in sorted_scores:
+        if s["composite_score"] >= 65:
+            # Déterminer action
+            if s["composite_score"] >= 75:
+                action = "BUY"
+            elif s["composite_score"] >= 65:
+                action = "HOLD"
+            else:
+                action = "SELL"
+            
+            # Prix et niveaux (via market_data)
+            try:
+                from core.market_data import get_price_history
+                df = get_price_history(s["ticker"], start=None, interval="1d")
+                if df is not None and not df.empty:
+                    price = float(df["Close"].iloc[-1])
+                    # Support/Resistance simples (20d low/high)
+                    support = float(df["Low"].tail(20).min())
+                    resistance = float(df["High"].tail(20).max())
+                else:
+                    price = None
+                    support = None
+                    resistance = None
+            except:
+                price = None
+                support = None
+                resistance = None
+            
+            picks.append({
+                "ticker": s["ticker"],
+                "composite_score": s["composite_score"],
+                "action": action,
+                "price": price,
+                "targets": {
+                    "support": support,
+                    "resistance": resistance
+                }
+            })
+    
+    # 6. Sources traçabilité
+    sources = []
+    
+    # Macro sources
+    try:
+        from core.data_access import load_macro_forecast_rows
+        macro_data = load_macro_forecast_rows(limit=1)
+        row = macro_data["rows"][0] if macro_data["rows"] else {}
+        if row.get("inflation_yoy") is not None:
+            sources.append({
+                "type": "macro",
+                "series_id": "CPIAUCSL",
+                "last_value": row["inflation_yoy"],
+                "metric": "Inflation YoY (%)"
+            })
+        if row.get("yield_curve_slope") is not None:
+            sources.append({
+                "type": "macro",
+                "series_id": "DGS10-DGS2",
+                "last_value": row["yield_curve_slope"],
+                "metric": "Yield Curve Slope (bp)"
+            })
+    except:
+        pass
+    
+    # News sources
+    try:
+        from core.data_access import load_news_features
+        news_data = load_news_features(limit=50)
+        news_count = len(news_data.get("rows", []))
+        sources.append({
+            "type": "news",
+            "count": news_count,
+            "window": "last_week",
+            "provider": "finnews RSS"
+        })
+    except:
+        pass
+    
+    # Technical sources
+    sources.append({
+        "type": "technical",
+        "tickers": [s["ticker"] for s in scores],
+        "indicators": ["SMA", "RSI", "MACD", "BB"]
+    })
+    
+    return {
+        "top_signals": top_signals,
+        "top_risks": top_risks,
+        "picks": picks,
+        "sources": sources,
+        "generated_at": datetime.utcnow().isoformat(),
+        "period": period,
+        "universe": universe
+    }
+
 # ================================= EXPORT ====================================
 
 __all__ = [
@@ -265,5 +486,6 @@ __all__ = [
     "score_news_sentiment",
     "calculate_composite_score",
     "get_top_signals_and_risks",
+    "compute_composite_brief",  # Add the new function
     "WEIGHTS"
 ]
