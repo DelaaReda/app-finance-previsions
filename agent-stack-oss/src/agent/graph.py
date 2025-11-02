@@ -6,6 +6,7 @@ from .models.router import get_llm, as_messages
 from .tools.git_tools import ensure_safe_branch, apply_patch_text, commit_all, restore_worktree
 from .tools.ci_tools import run_pytests, run_linters, build_webapp
 from .tools.rag_tools import query_index
+from .config import AgentConfig
 from .tools.fs_tools import write_file
 class AgentState(TypedDict):
     goal: str
@@ -29,34 +30,104 @@ def node_plan(state: AgentState) -> AgentState:
         content = raw if isinstance(raw, str) else ""
         plan = json.loads(content)
     except Exception:
-        pass
+        plan = {"steps": [], "files": []}
+    # Infer files from goal if missing (e.g., "docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md")
+    if not plan.get("files") and isinstance(state.get("goal"), str):
+        import re
+        m = re.search(r"(docs/[\w\-/]+\.md)", state["goal"])  # only allow under docs/
+        if m:
+            plan["files"] = [m.group(1)]
     state["plan"] = plan
     return state
 def node_retrieve(state: AgentState) -> AgentState:
     try:
         hits = query_index(state["goal"], topk=5, data_dir="docs")
+        if not hits:
+            # Try absolute path in case cwd differs
+            from pathlib import Path
+            hits = query_index(state["goal"], topk=5, data_dir=str(Path("docs").resolve()))
     except Exception as e:
         hits = []
         state["retrieval_error"] = str(e)
     state["context_docs"] = hits
     return state
 def node_patch(state: AgentState) -> AgentState:
+    cfg = AgentConfig()
     llm = get_llm("code")
-    prompt = (
-        "Tu es un agent d'edition de code. Reponds STRICTEMENT en JSON: "
-        "{\"diff\":\"<unified patch>\", \"touched\":[...]}.\n"
-        f"Objectif: {state['goal']}\nContexte: {state.get('context_docs', [])}\n"
-        f"Fichiers ciblés: {state.get('plan',{}).get('files', [])}"
-    )
+    target_files = state.get('plan',{}).get('files', [])
+    if cfg.allow_direct_write:
+        prompt = (
+            "Tu es un agent d'édition de code. Réponds STRICTEMENT en JSON: "
+            "{\"files\":[{\"path\":\"<relpath>\",\"content\":\"<full file content>\"}]}\n"
+            f"Objectif: {state['goal']}\n"
+            f"Contexte (docs): {state.get('context_docs', [])[:2]}\n"
+            f"Fichiers ciblés (SAFE_PATHS): {target_files}\n"
+            "Règles: chemins relatifs, pas de balises de code, pas de diff; inclure le contenu ENTIER des fichiers."
+        )
+    else:
+        prompt = (
+            "Tu es un agent d'édition de code. Réponds STRICTEMENT en JSON: "
+            "{\"diff\":\"<unified patch>\", \"touched\":[...]}.\n"
+            "Règles pour diff: format patch unifié git, chemins relatifs à la racine du repo, pas de commentaire.\n"
+            "Exemple: \n"
+            "--- a/docs/dev/FILE.md\n"
+            "+++ b/docs/dev/FILE.md\n"
+            "@@\n-ancienne ligne\n+nouvelle ligne\n\n"
+            f"Objectif: {state['goal']}\n"
+            f"Contexte (docs): {state.get('context_docs', [])[:2]}\n"
+            f"Fichiers ciblés: {target_files}"
+        )
     out = llm.invoke(as_messages(prompt))
     patch: dict = {"diff": "", "touched": []}
+    import json
+    raw = getattr(out, "content", "")
+    content = raw if isinstance(raw, str) else ""
     try:
-        import json
-        raw = getattr(out, "content", "")
-        content = raw if isinstance(raw, str) else ""
         patch = json.loads(content)
     except Exception:
-        pass
+        # tolerate fenced JSON or noisy wrappers
+        import re
+        m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
+        if m:
+            try:
+                patch = json.loads(m.group(1))
+            except Exception:
+                pass
+        else:
+            start = content.find("{")
+            end = content.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    patch = json.loads(content[start:end+1])
+                except Exception:
+                    pass
+    if cfg.allow_direct_write:
+        written = 0
+        try:
+            candidates = []
+            for key in ("files", "direct", "write", "documents"):
+                v = patch.get(key)
+                if isinstance(v, list):
+                    candidates.extend(v)
+            if not candidates and all(k in patch for k in ("path", "content")):
+                candidates = [patch]
+            safe_items = []
+            for item in candidates:
+                if isinstance(item, dict) and "path" in item and "content" in item:
+                    safe_items.append({"path": str(item["path"]), "content": str(item["content"])})
+            for it in safe_items:
+                write_file(it["path"], it["content"], cfg)
+                written += 1
+            if written > 0:
+                state["patch"] = patch
+                state["result"] = {"ok": True, "direct_write": True, "written": written}
+                return state
+        except Exception as e:
+            state["result"] = {"ok": False, "error": f"direct write failed: {e}"}
+            return state
+        state["result"] = {"ok": False, "error": "no files to write"}
+        return state
+
     ensure_safe_branch()
     diff: str = str(patch.get("diff", ""))
     ok = apply_patch_text(diff)
@@ -84,24 +155,6 @@ def node_patch(state: AgentState) -> AgentState:
                 if p.startswith("docs/") or p.startswith("./docs/") or "/docs/" in p:
                     write_file(p, it["content"])  # will enforce SAFE_PATHS internally
                     written = True
-            # If nothing to write was provided, try to infer a docs path from the goal
-            if not written:
-                import re
-                m = re.search(r"(docs/[\w\-/]+\.md)", state.get("goal", ""))
-                inferred_path = m.group(1) if m else None
-                if inferred_path and (inferred_path.startswith("docs/") or inferred_path.startswith("./docs/")):
-                    # Build a minimal deterministic draft using retrieved context
-                    ctx = state.get("context_docs", []) or []
-                    preview = "\n\n".join(str(t)[:800] for t in ctx[:3])
-                    content = (
-                        "# Architecture Integration Plan\n\n"
-                        "Goal: autogenerated draft based on retrieved docs.\n\n"
-                        "## Context\n" + (preview if preview else "(no context found)") + "\n\n"
-                        "## Interfaces\n- TBD\n\n## Dataflows\n- TBD\n\n"
-                        "## ADRs\n- ADR-001: TBD\n\n## Incremental Plan\n- Step 1: TBD\n"
-                    )
-                    write_file(inferred_path, content)
-                    written = True
             if written:
                 state["patch"] = patch
                 state["result"] = {"ok": True, "direct_write": True, "written": len(safe_items)}
@@ -123,7 +176,11 @@ def node_qa(state: AgentState) -> AgentState:
         state["result"] = {"ok": False, "error": "qa failed", "tests": tests}
     return state
 def node_commit(state: AgentState) -> AgentState:
+    cfg = AgentConfig()
     if state.get("result",{}).get("ok") is False:
+        return state
+    if cfg.allow_direct_write:
+        state["result"] = {"ok": True, "committed": False}
         return state
     ok = commit_all(f"feat(agent): {state['goal'][:80]}")
     state["result"] = {"ok": ok, "committed": ok}

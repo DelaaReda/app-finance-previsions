@@ -13,6 +13,14 @@ def _default_safe_paths() -> list[str]:
     )
     return [p.strip() for p in raw.split(",") if p.strip()]
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    val = val.strip().lower()
+    return val in ("1", "true", "yes", "y", "on")
+
 @dataclass
 class AgentConfig:
     provider: str = os.getenv("LLM_PROVIDER", "openai")
@@ -25,6 +33,8 @@ class AgentConfig:
     duckdb_path: str = os.getenv("DUCKDB_PATH", "./data/agent/episodic.duckdb")
     safe_branch_prefix: str = os.getenv("SAFE_BRANCH_PREFIX", "feature/")
     safe_paths: list[str] = field(default_factory=_default_safe_paths)
+    # Allow bypassing git patch/commit and write files directly within SAFE_PATHS
+    allow_direct_write: bool = _env_bool("ALLOW_DIRECT_WRITE", False)
     # G4F advanced options
     g4f_models: list[str] = field(
         default_factory=lambda: [

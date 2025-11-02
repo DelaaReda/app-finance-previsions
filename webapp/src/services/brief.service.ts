@@ -7,6 +7,5 @@ export async function fetchBrief(
   period: 'daily' | 'weekly' = 'weekly',
   universe: string[] = ['SPY', 'QQQ']
 ): Promise<ApiResponse<BriefData>> {
-  const universeQuery = universe.map(u => `universe=${encodeURIComponent(u)}`).join('&')
-  return apiGet<BriefData>(`/brief?period=${period}&${universeQuery}`)
+  return apiGet<BriefData>(`/brief/${period}`)
 }

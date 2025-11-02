@@ -1,7 +1,7 @@
 # Makefile for Finance Copilot Project
 
 .PHONY: help install run-api-v2 test-api-v2 run-webapp health docs clean
-.PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc
+.PHONY: agent-help agent-venv agent-deps agent-check agent-smoke agent-run agent-doc agent-doc-direct
 
 # Default target
 help:
@@ -36,6 +36,7 @@ help:
 	@echo "  make agent-smoke     Run pytest smoke for agent"
 	@echo "  make agent-run GOAL=\"...\" [HF_EMBED_MODEL=...]  Run agent with G4F + strong embeddings"
 	@echo "  make agent-doc       Generate architecture/integration plan (doc-first)"
+	@echo "  make agent-doc-direct  Generate docs via direct file write (no git)"
 
 AGENT_DIR := agent-stack-oss
 AGENT_VENV := $(AGENT_DIR)/.venv
@@ -78,6 +79,10 @@ agent-run:
 
 agent-doc:
 	$(MAKE) agent-run GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
+
+# Same as agent-doc but forces direct file write mode (bypass git apply/commit).
+agent-doc-direct:
+	ALLOW_DIRECT_WRITE=1 $(MAKE) agent-run GOAL="Rédige docs/dev/ARCHITECTURE_INTEGRATION_PLAN.md: features, interfaces, dataflows, ADR, plan incrémental; aucune modification code."
 
 # Installation
 install:
