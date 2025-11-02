@@ -35,3 +35,15 @@ export default function Copilot() {
       setMessages(session.messages)
     },
   })
+
+  return (
+    <MainLayout>
+      <div className="space-y-6">
+        <Card>
+          <h1 className="text-2xl font-bold">Copilot LLM</h1>
+          <p>Q&A avec contexte historique (RAG ≥5 ans)</p>
+        </Card>
+      </div>
+    </MainLayout>
+  )
+}

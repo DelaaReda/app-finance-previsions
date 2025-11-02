@@ -63,3 +63,10 @@ export default function Macro() {
         return (
           <div key={seriesId} style={{ background: 'white', padding: 24, borderRadius: 8, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
             <h3 style={{ marginBottom: 8, fontSize: 18, fontWeight: 600 }}>{series?.name || seriesId}</h3>
+            <div>Chart placeholder</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

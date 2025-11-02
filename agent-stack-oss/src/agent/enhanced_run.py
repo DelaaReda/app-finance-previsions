@@ -12,9 +12,12 @@ from __future__ import annotations
 import argparse
 import json
 import traceback
+import time
+from datetime import datetime, timezone
 from .graph import build_graph
 from .memory.episodic_store import EpisodicMemory
 from .nodes.g4f_model_selector import refresh_working_models_if_needed
+from .monitoring_system import EnhancedMentor
 
 
 def main():
@@ -34,9 +37,18 @@ def main():
                     help="Task complexity for model selection")
     ap.add_argument("--verbose", action="store_true", help="Stream node-by-node execution logs")
     ap.add_argument("--no-model-refresh", action="store_true", help="Skip refreshing G4F working models")
+    ap.add_argument("--mentor", action="store_true", help="Enable mentor monitoring and feedback")
     
     args = ap.parse_args()
 
+    # Create mentor if requested
+    mentor = None
+    if args.mentor:
+        mentor = EnhancedMentor("/Users/venom/Documents/analyse-financiere/agent-stack-oss")
+    
+    # Generate a session ID
+    session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    
     # Refresh working models if needed
     if not args.no_model_refresh:
         try:
@@ -45,6 +57,11 @@ def main():
         except Exception as e:
             if args.verbose:
                 print(f"[agent] Warning: Failed to refresh models: {e}")
+
+    # Start mentoring session if enabled
+    if mentor:
+        mentor.monitor_session(session_id, args.goal, args.mode, args.complexity)
+        print(f"[mentor] 🔍 Début de la session de mentorat: {session_id}")
 
     g = build_graph().compile()
     state = {
@@ -58,9 +75,13 @@ def main():
         "sprint_plan": None,
         "priorities": None,
         "recent_commits": None,
+        "session_id": session_id,
+        "start_time": time.time(),
     }
     
     out = None
+    success = False
+    
     try:
         if args.verbose:
             print(f"[agent] starting run: goal=\"{args.goal}\" mode={args.mode}")
@@ -97,6 +118,8 @@ def main():
             out = last[list(last.keys())[-1]] if last else state
         else:
             out = g.invoke(state)
+        
+        success = True
     except Exception:
         if args.verbose:
             traceback.print_exc()
@@ -104,15 +127,37 @@ def main():
     finally:
         if out is None:
             out = state
+        
+        # Calculate duration
+        duration = time.time() - state["start_time"]
+        
+        # Add metrics to result
+        result = out.get("result", {})
+        result["duration"] = duration
+        result["session_id"] = session_id
+        result["success"] = success
+        out["result"] = result
+        
+        # Log to episodic memory
         EpisodicMemory().log(
             goal=args.goal,
             plan=out.get("plan", {}),
             diff=out.get("patch", {}).get("diff", ""),
             tests=out.get("tests", {}),
-            result=out.get("result", {}),
+            result=result,
             notes=f"run via CLI, mode={args.mode}",
         )
-        print(json.dumps(out.get("result", {}), ensure_ascii=False, indent=2))
+        
+        # End mentoring session if enabled
+        if mentor:
+            mentor_report = mentor.end_session(success)
+            print("\n" + "="*60)
+            print("MENTORSHIP REPORT")
+            print("="*60)
+            print(mentor_report)
+            print("="*60)
+        
+        print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

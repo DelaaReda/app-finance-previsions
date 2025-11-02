@@ -106,7 +106,7 @@ class RAGStore:
         Recherche dans la mémoire RAG.
         
         Args:
-            scope: Filtres optionnels {tickers: [...], horizon: "1w"}
+            scope: Filtres optionnels {tickers: [...], horizon: "1w", max_age_minutes: int}
             top_k: Nombre max de résultats
         
         Returns:
@@ -116,6 +116,7 @@ class RAGStore:
         
         # Extraire filtres
         tickers = scope.get("tickers", []) if scope else []
+        max_age_minutes = scope.get("max_age_minutes", None)  # Filter for fresh content
         
         # Lire news
         try:
@@ -131,6 +132,35 @@ class RAGStore:
                         if chunk_ticker not in tickers:
                             continue
                     
+                    # Filtrer par âge maximum si spécifié
+                    if max_age_minutes and chunk["meta"]["type"] == "news":
+                        try:
+                            import datetime
+                            from datetime import timezone
+                            
+                            date_str = chunk["meta"].get("date", "")
+                            if date_str:
+                                # Parse the date string and calculate age
+                                try:
+                                    pub_date = datetime.datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                                    if pub_date.tzinfo is not None:
+                                        pub_date = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
+                                    else:
+                                        # Ensure naive datetime is treated as UTC
+                                        pass
+                                    
+                                    now = datetime.datetime.utcnow()
+                                    age_minutes = (now - pub_date).total_seconds() / 60
+                                    
+                                    if age_minutes > max_age_minutes:
+                                        continue  # Skip if too old
+                                except ValueError:
+                                    # If date parsing fails, include the item anyway
+                                    pass
+                        except ImportError:
+                            # If datetime parsing fails, include the item
+                            pass
+                    
                     results.append(chunk)
         except Exception as e:
             print(f"Erreur lecture news: {e}")
@@ -142,17 +172,109 @@ class RAGStore:
                     if not line.strip():
                         continue
                     chunk = json.loads(line)
+                    
+                    # Apply max age filter to facts as well if specified
+                    if max_age_minutes and chunk["meta"]["type"] == "series":
+                        try:
+                            import datetime
+                            from datetime import timezone
+                            
+                            date_str = chunk["meta"].get("date", "")
+                            if date_str:
+                                # Parse the date string and calculate age
+                                try:
+                                    pub_date = datetime.datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                                    if pub_date.tzinfo is not None:
+                                        pub_date = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
+                                    else:
+                                        # Ensure naive datetime is treated as UTC
+                                        pass
+                                    
+                                    now = datetime.datetime.utcnow()
+                                    age_minutes = (now - pub_date).total_seconds() / 60
+                                    
+                                    if age_minutes > max_age_minutes:
+                                        continue  # Skip if too old
+                                except ValueError:
+                                    # If date parsing fails, include the item anyway
+                                    pass
+                        except ImportError:
+                            # If datetime parsing fails, include the item
+                            pass
+                    
                     results.append(chunk)
         except Exception as e:
             print(f"Erreur lecture facts: {e}")
         
-        # Trier par score/date (news en priorité)
+        # Trier par score/date (news en priorité, récent en priorité)
         results.sort(key=lambda x: (
-            x["meta"].get("score", 0) if x["meta"]["type"] == "news" else 0.5,
-            x["meta"].get("date", "")
+            x["meta"].get("score", 0) if x["meta"]["type"] == "news" else 0.5,  # Score pour news
+            x["meta"].get("date", "")  # Date pour tri chronologique
         ), reverse=True)
         
         return results[:top_k]
+    
+    def freshness_stats(self) -> Dict[str, float]:
+        """
+        Calculate freshness statistics for news in the store.
+        
+        Returns:
+            Dictionary with median_age_minutes, avg_age_minutes, etc.
+        """
+        import json
+        from datetime import datetime, timezone
+        import statistics
+        
+        time_diffs = []
+        
+        # Check news items
+        try:
+            with open(self.news_file, "r") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line)
+                    
+                    if chunk["meta"]["type"] == "news":
+                        date_str = chunk["meta"].get("date", "")
+                        if date_str:
+                            try:
+                                pub_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                                if pub_date.tzinfo is not None:
+                                    pub_date = pub_date.astimezone(timezone.utc).replace(tzinfo=None)
+                                
+                                now = datetime.utcnow()
+                                age_minutes = (now - pub_date).total_seconds() / 60
+                                time_diffs.append(age_minutes)
+                            except ValueError:
+                                continue  # Skip if date parsing fails
+        except Exception:
+            pass  # File might not exist yet
+        
+        if not time_diffs:
+            return {
+                "median_age_minutes": float('inf'),
+                "avg_age_minutes": float('inf'),
+                "min_age_minutes": float('inf'),
+                "max_age_minutes": float('inf'),
+                "total_items": 0,
+                "fresh_items_10min": 0,  # Items less than 10 minutes old
+                "fresh_items_60min": 0   # Items less than 60 minutes old
+            }
+        
+        time_diffs.sort()
+        n = len(time_diffs)
+        median_age = time_diffs[n//2] if n % 2 == 1 else (time_diffs[n//2-1] + time_diffs[n//2]) / 2
+        
+        return {
+            "median_age_minutes": median_age,
+            "avg_age_minutes": sum(time_diffs) / len(time_diffs),
+            "min_age_minutes": min(time_diffs),
+            "max_age_minutes": max(time_diffs),
+            "total_items": len(time_diffs),
+            "fresh_items_10min": len([d for d in time_diffs if d <= 10]),
+            "fresh_items_60min": len([d for d in time_diffs if d <= 60])
+        }
     
     def clear(self) -> None:
         """Vide la mémoire RAG."""
