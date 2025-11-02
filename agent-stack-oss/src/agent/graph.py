@@ -281,14 +281,29 @@ def node_qa(state: AgentState) -> AgentState:
     
     return state
 def node_commit(state: AgentState) -> AgentState:
-    cfg = AgentConfig()
-    if state.get("result",{}).get("ok") is False:
-        return state
-    if cfg.allow_direct_write:
-        state["result"] = {"ok": True, "committed": False}
-        return state
-    ok = commit_all(f"feat(agent): {state['goal'][:80]}")
-    state["result"] = {"ok": ok, "committed": ok}
+    # Log node execution
+    _log_node_execution(state, "commit", "start", "Starting commit process")
+    
+    try:
+        cfg = AgentConfig()
+        if state.get("result",{}).get("ok") is False:
+            _log_node_execution(state, "commit", "warning", "Skipping commit due to previous failure")
+            return state
+        if cfg.allow_direct_write:
+            state["result"] = {"ok": True, "committed": False}
+            _log_node_execution(state, "commit", "complete", "Direct write mode - no commit needed")
+            return state
+        ok = commit_all(f"feat(agent): {state['goal'][:80]}")
+        state["result"] = {"ok": ok, "committed": ok}
+        
+        if ok:
+            _log_node_execution(state, "commit", "complete", "Changes committed successfully")
+        else:
+            _log_node_execution(state, "commit", "error", "Failed to commit changes")
+    except Exception as e:
+        state["result"] = {"ok": False, "error": str(e)}
+        _log_node_execution(state, "commit", "error", f"Commit process failed: {str(e)}")
+    
     return state
 def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
