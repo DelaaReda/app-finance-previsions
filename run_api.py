@@ -11,13 +11,14 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 if __name__ == "__main__":
     import uvicorn
-    from api.main import app
+    from api.main import create_app
     
     print("🚀 Lancement de l'API Finance Copilot...")
     print("📍 URL: http://127.0.0.1:8050")
     print("📖 Docs: http://127.0.0.1:8050/docs")
     print()
     
+    app = create_app()
     uvicorn.run(
         app,
         host="127.0.0.1",
