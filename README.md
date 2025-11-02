@@ -4,7 +4,8 @@
 
 ```
 analyse-financiere/
-├── copilot-app/                    ← Application Finance Copilot principale
+├── copilot-app/ 
+├──  copilot.sh                    ← Script principal copilot app                   ← Application Finance Copilot principale
 │   ├── backend/                    ← Backend Python (API FastAPI)
 │   │   ├── api/                    ← API principale
 │   │   ├── src/                    ← Source code backend
@@ -26,24 +27,23 @@ analyse-financiere/
 │   ├── src/
 │   ├── training-materials/
 │   └── ...
-└── copilot.sh                    ← Script principal à la racine
 ```
 
 ## 🚀 Démarrage Rapide
 
 ### 1. Démarrer l'application
 ```bash
-./copilot.sh start
+./copilot-app/copilot.sh start
 ```
 
 ### 2. Vérifier l'état
 ```bash
-./copilot.sh status
+./copilot-app/copilot.sh status
 ```
 
 ### 3. Arrêter l'application
 ```bash
-./copilot.sh stop
+./copilot-app/copilot.sh stop
 ```
 
 ## 🌐 URLs Disponibles
