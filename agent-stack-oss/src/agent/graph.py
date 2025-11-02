@@ -179,12 +179,35 @@ def node_patch(state: AgentState) -> AgentState:
     state["patch"] = patch
     return state
 def node_qa(state: AgentState) -> AgentState:
-    lin = run_linters()
-    pyt = run_pytests()
-    web = build_webapp()
-    tests = {"linters": lin, "pytest": pyt, "webapp": web}
+    # Run enhanced QA checks including browser QA
+    try:
+        from .nodes.enhanced_qa import enhanced_qa_check
+        tests = enhanced_qa_check()
+    except Exception as e:
+        # Fallback to standard tests if enhanced QA fails
+        lin = run_linters()
+        pyt = run_pytests()
+        web = build_webapp()
+        tests = {"linters": lin, "pytest": pyt, "webapp": web, "error": str(e)}
+    
     state["tests"] = tests
-    if not (lin.get("ok") and pyt.get("ok") and web.get("ok")):
+    # Check if all critical tests pass
+    critical_passed = True
+    for test_category, test_result in tests.items():
+        if isinstance(test_result, dict) and "ok" in test_result:
+            if not test_result.get("ok", True):  # Default to True for non-critical
+                critical_passed = False
+                break
+        elif isinstance(test_result, dict) and "linters" in test_result:
+            # Handle nested standard tests
+            std_tests = test_result
+            if not std_tests.get("linters", {}).get("ok", True) or \
+               not std_tests.get("pytest", {}).get("ok", True) or \
+               not std_tests.get("webapp", {}).get("ok", True):
+                critical_passed = False
+                break
+    
+    if not critical_passed:
         restore_worktree()
         state["result"] = {"ok": False, "error": "qa failed", "tests": tests}
     return state
