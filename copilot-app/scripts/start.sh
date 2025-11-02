@@ -5,9 +5,10 @@
 
 set -e
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$PROJECT_DIR"
-FRONTEND_DIR="$PROJECT_DIR/webapp"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+BACKEND_DIR="$PROJECT_DIR/copilot-app/backend"
+FRONTEND_DIR="$PROJECT_DIR/copilot-app/frontend/webapp"
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'

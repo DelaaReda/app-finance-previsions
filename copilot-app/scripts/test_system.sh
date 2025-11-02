@@ -91,15 +91,15 @@ echo "📋 Vérification des logs:"
 echo "------------------------"
 
 # Backend logs
-if [ -f "api.log" ] && [ -s "api.log" ]; then
-    echo -e "   Backend logs: ${GREEN}PRÉSENTS ($(wc -l < api.log) lignes)${NC}"
+if [ -f "../api.log" ] && [ -s "../api.log" ]; then
+    echo -e "   Backend logs: ${GREEN}PRÉSENTS ($(wc -l < ../api.log) lignes)${NC}"
 else
     echo -e "   Backend logs: ${YELLOW}ABSENTS OU VIDES${NC}"
 fi
 
 # Frontend logs
-if [ -f "webapp/frontend.log" ] && [ -s "webapp/frontend.log" ]; then
-    echo -e "   Frontend logs: ${GREEN}PRÉSENTS ($(wc -l < webapp/frontend.log) lignes)${NC}"
+if [ -f "../webapp/frontend.log" ] && [ -s "../webapp/frontend.log" ]; then
+    echo -e "   Frontend logs: ${GREEN}PRÉSENTS ($(wc -l < ../webapp/frontend.log) lignes)${NC}"
 else
     echo -e "   Frontend logs: ${YELLOW}ABSENTS OU VIDES${NC}"
 fi
