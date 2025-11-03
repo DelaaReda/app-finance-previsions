@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
+import type { CompositeSignal } from '@/types/common.types'
 
 type DashboardData = {
   last_forecast_dt?: string | null
@@ -17,6 +18,17 @@ type DashboardData = {
   horizons?: string[]
   last_macro_dt?: string | null
   last_quality_dt?: string | null
+  filtered_signals?: CompositeSignal[]
+  filtered_risks?: CompositeSignal[]
+  filtered_ticker_count?: number
+  generated_at?: string
+  filter_applied?: {
+    sectors: string[]
+    horizons: string[]
+    themes: string[]
+    tickers: string[]
+  }
+  error?: string
 }
 
 export default function Dashboard() {
@@ -24,7 +36,7 @@ export default function Dashboard() {
   const [horizons, setHorizons] = useState<string[]>([])
   const [themes, setThemes] = useState<string[]>([])
   const [tickers, setTickers] = useState<string[]>([])
-  
+
   // Sector options
   const sectorOptions = ["Technology", "Healthcare", "Financials", "Consumer", "Industrials", "Energy", "Utilities", "Real Estate"]
   // Horizon options
@@ -32,33 +44,49 @@ export default function Dashboard() {
   // Theme options
   const themeOptions = ["growth", "value", "momentum", "dividend", "quality"]
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => apiGet<DashboardData>('/dashboard/kpis')
-      .then(r => r.ok ? r.data : Promise.reject(r.error)),
+  const { data, isLoading, error, isFetching } = useQuery<DashboardData>({
+    queryKey: ['dashboard', { sectors, horizons, themes, tickers }],
+    queryFn: async () => {
+      const params: Record<string, string> = {}
+      if (sectors.length) params.sectors = sectors.join(',')
+      if (horizons.length) params.horizons = horizons.join(',')
+      if (themes.length) params.themes = themes.join(',')
+      if (tickers.length) params.tickers = tickers.join(',')
+
+      const response = await apiGet<DashboardData>('/dashboard/kpis', params)
+      if (!response.ok) {
+        throw new Error(response.error || 'Échec du chargement du dashboard')
+      }
+      return response.data
+    },
     staleTime: 15_000,
   })
 
+  const signals = data?.filtered_signals ?? []
+  const risks = data?.filtered_risks ?? []
+  const generatedAt = data?.generated_at ? new Date(data.generated_at) : undefined
+  const filtersApplied = data?.filter_applied
+
   const handleSectorChange = (sector: string) => {
-    setSectors(prev => 
-      prev.includes(sector) 
-        ? prev.filter(s => s !== sector) 
+    setSectors(prev =>
+      prev.includes(sector)
+        ? prev.filter(s => s !== sector)
         : [...prev, sector]
     )
   }
 
   const handleHorizonChange = (horizon: string) => {
-    setHorizons(prev => 
-      prev.includes(horizon) 
-        ? prev.filter(h => h !== horizon) 
+    setHorizons(prev =>
+      prev.includes(horizon)
+        ? prev.filter(h => h !== horizon)
         : [...prev, horizon]
     )
   }
 
   const handleThemeChange = (theme: string) => {
-    setThemes(prev => 
-      prev.includes(theme) 
-        ? prev.filter(t => t !== theme) 
+    setThemes(prev =>
+      prev.includes(theme)
+        ? prev.filter(t => t !== theme)
         : [...prev, theme]
     )
   }
@@ -72,7 +100,7 @@ export default function Dashboard() {
     <MainLayout>
       <div style={styles.container}>
         <h2 style={styles.pageTitle}>Dashboard - Vue d'ensemble</h2>
-        
+
         {/* Filtres */}
         <Card title="Filtres (Secteur, Horizon, Thème)">
           <div style={styles.filtersContainer}>
@@ -92,7 +120,7 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-            
+
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Horizons:</label>
               <div style={styles.checkboxGroup}>
@@ -109,7 +137,7 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-            
+
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Thèmes:</label>
               <div style={styles.checkboxGroup}>
@@ -126,7 +154,7 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-            
+
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Tickers (séparés par des virgules):</label>
               <input
@@ -137,19 +165,19 @@ export default function Dashboard() {
                 style={styles.textInput}
               />
             </div>
-            
-            {(sectors.length > 0 || horizons.length > 0 || themes.length > 0 || tickers.length > 0) && (
-              <div style={styles.activeFilters}>
-                <small>Filtres actifs:</small>
-                {sectors.length > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
-                {horizons.length > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
-                {themes.length > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
-                {tickers.length > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
-              </div>
-            )}
+
+        {(sectors.length > 0 || horizons.length > 0 || themes.length > 0 || tickers.length > 0) && (
+          <div style={styles.activeFilters}>
+            <small>Filtres actifs:</small>
+            {sectors.length > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
+            {horizons.length > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
+            {themes.length > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
+            {tickers.length > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
           </div>
-        </Card>
-        
+        )}
+      </div>
+    </Card>
+
         {/* KPIs Grid */}
         <div style={styles.kpisGrid}>
           <Card title="Dernière prévision">
@@ -161,22 +189,53 @@ export default function Dashboard() {
           <Card title="Tickers suivis">
             <div style={styles.kpiValue}>{data?.tickers ?? 0}</div>
           </Card>
-          <Card title="Horizons">
-            <div style={styles.kpiValue}>
-              {(data?.horizons || []).join(', ') || '—'}
-            </div>
-          </Card>
-        </div>
-
-        {/* Signaux et Risques - Using mock data for now */}
-        {isLoading && <LoadingSpinner />}
-        {error && <ErrorMessage message={String(error)} />}
-        
-        {!isLoading && !error && (
-          <div style={styles.signalsGrid}>
-            <TopSignals signals={[]} title="Top 3 Signaux (Données à venir)" />
-            <TopRisks risks={[]} title="Top 3 Risques (Données à venir)" />
+        <Card title="Horizons">
+          <div style={styles.kpiValue}>
+            {(data?.horizons || []).join(', ') || '—'}
           </div>
+        </Card>
+      </div>
+
+        {(isLoading || isFetching) && <LoadingSpinner />}
+        {error && <ErrorMessage message={String(error)} />}
+        {!error && data?.error && <ErrorMessage message={data.error} />}
+
+        {!isLoading && !error && (
+          <>
+            <div style={styles.metaRow}>
+              <span style={styles.metaLabel}>
+                Univers analysé: <strong>{data?.filtered_ticker_count ?? data?.tickers ?? 0}</strong> tickers
+              </span>
+              {filtersApplied && (
+                <span style={styles.metaLabel}>
+                  Filtres appliqués côté API: {[
+                    filtersApplied.sectors?.length ? `Secteurs (${filtersApplied.sectors.length})` : null,
+                    filtersApplied.horizons?.length ? `Horizons (${filtersApplied.horizons.join(', ')})` : null,
+                    filtersApplied.themes?.length ? `Thèmes (${filtersApplied.themes.join(', ')})` : null,
+                    filtersApplied.tickers?.length ? `Tickers (${filtersApplied.tickers.join(', ')})` : null,
+                  ].filter(Boolean).join(' • ') || 'Aucun'}
+                </span>
+              )}
+              {generatedAt && (
+                <span style={styles.metaLabel}>
+                  Mise à jour: {generatedAt.toLocaleString('fr-FR')}
+                </span>
+              )}
+            </div>
+
+            <div style={styles.signalsGrid}>
+              <TopSignals
+                signals={signals}
+                title="Top 3 Signaux"
+                emptyMessage="Aucun signal détecté pour les filtres sélectionnés."
+              />
+              <TopRisks
+                risks={risks}
+                title="Top 3 Risques"
+                emptyMessage="Aucun risque majeur détecté pour les filtres sélectionnés."
+              />
+            </div>
+          </>
         )}
       </div>
     </MainLayout>
@@ -261,6 +320,20 @@ const styles = {
     fontSize: 24,
     fontWeight: 600,
     color: '#4caf50',
+  },
+  metaRow: {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: 6,
+    padding: '12px 16px',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 6,
+    border: '1px solid #2a2a2a',
+    fontSize: 12,
+    color: '#bbb',
+  },
+  metaLabel: {
+    display: 'block',
   },
   signalsGrid: {
     display: 'grid',

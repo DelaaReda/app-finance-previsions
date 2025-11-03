@@ -137,7 +137,8 @@ def register_routes(app: FastAPI):
     ):
         """Get macro time series data (FRED)."""
         result = load_macro_forecast_rows(limit=limit)
-        if not result.get("ok"):
+        # load_macro_forecast_rows returns {"rows": [...]}
+        if not result.get("rows"):
             raise HTTPException(status_code=404, detail="No macro data available")
         return _ok(result["rows"])
 
@@ -145,17 +146,17 @@ def register_routes(app: FastAPI):
     async def macro_snapshot():
         """Get current macro snapshot (latest values)."""
         result = load_macro_forecast_rows(limit=10)
-        if not result.get("ok"):
+        if not result.get("rows"):
             return _err("No macro data")
-        
+
         rows = result.get("rows", [])
         snapshot = {}
         for row in rows:
-            series = row.get("series")
-            value = row.get("value")
-            if series and value is not None:
-                snapshot[series] = value
-        
+            # The data_access function returns rows with keys like "inflation_yoy", "unemployment", etc.
+            for key, value in row.items():
+                if value is not None:
+                    snapshot[key] = value
+
         return _ok(snapshot)
 
     @app.get("/api/macro/indicators")
@@ -173,7 +174,8 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/stocks/prices")
     async def stock_prices(
-        ticker: str = Query(..., description="Stock ticker symbol"),
+        ticker: Optional[str] = Query(None, description="Stock ticker symbol (single ticker)"),
+        tickers: Optional[List[str]] = Query(None, description="Stock ticker symbols (multiple tickers)"),
         range: str = Query("1y", description="Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
         interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
         downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
@@ -182,40 +184,59 @@ def register_routes(app: FastAPI):
         # Use get_price_history which supports range filtering
         from core.market_data import get_price_history
         from datetime import datetime, timedelta
-        
+
+        # Determine which tickers to process
+        tickers_to_process = []
+        if ticker:
+            tickers_to_process = [ticker]
+        elif tickers and len(tickers) > 0:
+            tickers_to_process = tickers
+        else:
+            raise HTTPException(status_code=422, detail="Either 'ticker' or 'tickers' parameter must be provided")
+
         # Convert range to start date
         range_map = {
-            "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, 
+            "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825
         }
-        
+
         days_back = range_map.get(range, 365)  # Default to 1 year
         start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-        
-        df = get_price_history(ticker, start=start_date, interval=interval)
-        if df is None or df.empty:
-            raise HTTPException(status_code=404, detail=f"No data for {ticker}")
 
-        # Extract Close prices as series
-        series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]  # Fallback to first column
+        # Process tickers
+        results = {}
+        for ticker_symbol in tickers_to_process:
+            df = get_price_history(ticker_symbol, start=start_date, interval=interval)
+            if df is None or df.empty:
+                results[ticker_symbol] = {"error": f"No data for {ticker_symbol}"}
+                continue
 
-        # Convert to points (timestamp, value)
-        points = [(int(ts.timestamp()), float(val)) 
-                  for ts, val in series.items() 
-                  if not pd.isna(val)]
+            # Extract Close prices as series
+            series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]  # Fallback to first column
 
-        # Downsample if needed
-        if len(points) > downsample:
-            from core.downsample import lttb
-            points = lttb(points, threshold=downsample)
+            # Convert to points (timestamp, value)
+            points = [(int(ts.timestamp()), float(val))
+                      for ts, val in series.items()
+                      if not pd.isna(val)]
+
+            # Downsample if needed
+            if len(points) > downsample:
+                from core.downsample import lttb
+                points = lttb(points, threshold=downsample)
+
+            results[ticker_symbol] = {
+                "range": range,
+                "interval": interval,
+                "points": points,
+                "count": len(points),
+                "start_date": start_date,
+                "timestamp": datetime.utcnow().isoformat()
+            }
 
         return _ok({
-            "ticker": ticker,
+            "tickers": results,
             "range": range,
             "interval": interval,
-            "points": points,
-            "count": len(points),
-            "start_date": start_date,
             "timestamp": datetime.utcnow().isoformat()
         })
 
@@ -893,13 +914,21 @@ def register_routes(app: FastAPI):
         sectors: List[str] = Query([], description="Filter by sectors (e.g., Technology, Healthcare, Financials)"),
         horizons: List[str] = Query([], description="Filter by horizons (e.g., short, medium, long)"),
         themes: List[str] = Query([], description="Filter by themes (e.g., growth, value, momentum)"),
-        tickers: List[str] = Query([], description="Filter by specific tickers")
+        tickers: List[str] = Query([], description="Filter by specific tickers"),
+        include_signals: bool = Query(False, description="Include heavy scoring for signals/risks. Defaults to false for fast UI loads.")
     ):
-        """Get dashboard KPIs with filtering capabilities (secteur, horizon, thème)."""
+        """Get dashboard KPIs with filtering capabilities (secteur, horizon, thème).
+
+        NOTE: By default this endpoint returns only lightweight KPIs to keep the
+        UI responsive. Set `include_signals=1` to compute signals/risks, which
+        can be slow due to external data fetches.
+        """
         try:
             from dash_app.api import dashboard_kpis as dash_kpis
-            from research.scoring import get_top_signals_and_risks
-            from core.data_access import get_close_series
+            # Heavy scoring imports are delayed and only used when requested
+            # to avoid blocking the UI by default.
+            # from research.scoring import get_top_signals_and_risks
+            # from core.data_access import get_close_series
             
             # Get base dashboard data
             result = dash_kpis()
@@ -915,48 +944,59 @@ def register_routes(app: FastAPI):
             else:
                 base_data = result.get("data", {})
             
+            # If heavy scoring not requested, return lightweight KPIs only
+            if not include_signals:
+                return _ok({
+                    **base_data,
+                    "filtered_signals": [],
+                    "filtered_risks": [],
+                    "filter_applied": {
+                        "sectors": sectors,
+                        "horizons": horizons,
+                        "themes": themes,
+                        "tickers": tickers
+                    },
+                    "filtered_ticker_count": 0,
+                    "generated_at": datetime.utcnow().isoformat()
+                })
+
+            # Heavy path (on-demand): compute signals/risks
+            from research.scoring import get_top_signals_and_risks
+
             # Get tickers to analyze based on filters
-            tracked_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM", "JPM", "JNJ", "V", "WMT"]
-            
-            # Apply sector filtering - need to get sector info for tickers
+            tracked_tickers = [
+                "SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN",
+                "TSLA", "META", "TSM", "JPM", "JNJ", "V", "WMT"
+            ]
+
+            # Apply sector filtering - placeholder (requires sector map)
             if sectors:
-                # This would need sector data in a real implementation
-                sector_filtered_tickers = []
-                for ticker in tracked_tickers:
-                    # In a real scenario, we'd look up the sector for each ticker
-                    sector_filtered_tickers.append(ticker)
-                tracked_tickers = sector_filtered_tickers
-            
+                tracked_tickers = [t for t in tracked_tickers]  # no-op placeholder
+
             # Apply ticker filtering
             if tickers:
                 tracked_tickers = [t for t in tracked_tickers if t in tickers]
-            
+
             # Get filtered signals and risks
-            filtered_signals_data = get_top_signals_and_risks(tracked_tickers, top_n=10)  # Get more for filtering
-            
-            # Apply horizon filtering to signals if needed
+            filtered_signals_data = get_top_signals_and_risks(tracked_tickers, top_n=10)
+
+            # Apply horizon/theme annotations (placeholders)
             if horizons:
-                # In a real system, this would filter by investment horizon
-                # For now, we keep all signals but mark with horizons
                 for signal in filtered_signals_data.get("signals", []):
-                    signal["horizon"] = horizons[0] if horizons else "medium"
+                    signal["horizon"] = horizons[0]
                 for risk in filtered_signals_data.get("risks", []):
-                    risk["horizon"] = horizons[0] if horizons else "medium"
-            
-            # Apply theme filtering to signals if needed
+                    risk["horizon"] = horizons[0]
             if themes:
-                # In a real system, this would filter by trading theme
-                # For now, we keep all signals but mark with themes
                 for signal in filtered_signals_data.get("signals", []):
-                    signal["theme"] = themes[0] if themes else "momentum"
+                    signal["theme"] = themes[0]
                 for risk in filtered_signals_data.get("risks", []):
-                    risk["theme"] = themes[0] if themes else "momentum"
-            
+                    risk["theme"] = themes[0]
+
             # Add filtered data to dashboard
             enhanced_data = {**base_data}
             enhanced_data.update({
-                "filtered_signals": filtered_signals_data.get("signals", [])[:3],  # Top 3 filtered signals
-                "filtered_risks": filtered_signals_data.get("risks", [])[:3],      # Top 3 filtered risks
+                "filtered_signals": filtered_signals_data.get("signals", [])[:3],
+                "filtered_risks": filtered_signals_data.get("risks", [])[:3],
                 "filter_applied": {
                     "sectors": sectors,
                     "horizons": horizons,
@@ -966,7 +1006,7 @@ def register_routes(app: FastAPI):
                 "filtered_ticker_count": len(tracked_tickers),
                 "generated_at": datetime.utcnow().isoformat()
             })
-            
+
             return _ok(enhanced_data)
             
         except ImportError:

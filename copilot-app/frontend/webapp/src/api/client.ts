@@ -2,7 +2,6 @@
 import type { ApiResponse } from '../types/common'
 
 const API_BASE = (import.meta as any).env.VITE_API_BASE_URL ?? "/api";
-const USE_MOCK = ((import.meta as any).env.VITE_API_MOCK ?? "0") === "1";
 
 function qs(params?: Record<string, any>) {
   if (!params) return "";
@@ -24,24 +23,6 @@ function qs(params?: Record<string, any>) {
 }
 
 export async function apiGet<T>(path: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
-  if (USE_MOCK) {
-    const mockPath = `/mocks${path}.json`; // ex: /mocks/news/feed.json
-    const res = await fetch(mockPath);
-    if (!res.ok) return { ok: false, error: `MOCK GET ${mockPath} ${res.status}` };
-    
-    // Check if response has JSON content
-    const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      return { ok: false, error: `Expected JSON for mock ${mockPath}, got ${contentType}` };
-    }
-    
-    try {
-      return { ok: true, data: await res.json() };
-    } catch (parseError: any) {
-      return { ok: false, error: `Failed to parse JSON from mock ${mockPath}: ${parseError.message}` };
-    }
-  }
-  
   try {
     const res = await fetch(`${API_BASE}${path}${qs(params)}`, { headers: { Accept: "application/json" } });
     
@@ -86,26 +67,6 @@ export async function apiGet<T>(path: string, params?: Record<string, any>): Pro
 }
 
 export async function apiPost<T>(path: string, data?: any): Promise<ApiResponse<T>> {
-  if (USE_MOCK) {
-    // For mock, we'll treat POSTs as GETs with query params
-    const params = data ? { ...data, _method: 'POST' } : {};
-    const mockPath = `/mocks${path}.json`;
-    const res = await fetch(mockPath + qs(params));
-    if (!res.ok) return { ok: false, error: `MOCK POST ${mockPath} ${res.status}` };
-    
-    // Check if response has JSON content
-    const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      return { ok: false, error: `Expected JSON for mock ${mockPath}, got ${contentType}` };
-    }
-    
-    try {
-      return { ok: true, data: await res.json() };
-    } catch (parseError: any) {
-      return { ok: false, error: `Failed to parse JSON from mock ${mockPath}: ${parseError.message}` };
-    }
-  }
-  
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',

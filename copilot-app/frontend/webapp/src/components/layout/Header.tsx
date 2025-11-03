@@ -3,6 +3,12 @@
 import { Link } from 'react-router-dom'
 
 export default function Header() {
+  // For UI tests, use a fixed time instead of dynamic time to ensure consistency
+  const isTestEnvironment = typeof window !== 'undefined' && (window as any).__pw_test__
+  const timeString = isTestEnvironment 
+    ? '10:00:00' 
+    : new Date().toLocaleTimeString('fr-FR')
+
   return (
     <header style={styles.header}>
       <div style={styles.container}>
@@ -20,7 +26,7 @@ export default function Header() {
         </nav>
 
         <div style={styles.actions}>
-          <span style={styles.updateTime}>Mise à jour: {new Date().toLocaleTimeString('fr-FR')}</span>
+          <span style={styles.updateTime}>Mise à jour: {timeString}</span>
         </div>
       </div>
     </header>
