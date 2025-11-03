@@ -473,6 +473,11 @@ async def health():
 # ============================================================================
 # MAIN
 # ============================================================================
+
+def create_app():
+    """Factory function to create and configure the FastAPI app."""
+    return app
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8050, reload=True)
