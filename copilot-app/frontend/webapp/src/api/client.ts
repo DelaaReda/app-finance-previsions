@@ -1,7 +1,7 @@
 // webapp/src/api/client.ts
 import type { ApiResponse } from '../types/common'
 
-const API_BASE = (import.meta as any).env.VITE_API_BASE_URL ?? "/api";
+const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? "8050/api";
 
 function qs(params?: Record<string, any>) {
   if (!params) return "";
