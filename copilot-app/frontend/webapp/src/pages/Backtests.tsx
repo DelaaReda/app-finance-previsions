@@ -92,46 +92,46 @@ export default function Backtests() {
         {isLoading && <LoadingSpinner />}
         {error && <ErrorMessage message={String(error)} />}
         
-        {data && (
+        {data && data.results && (
           <Card title="Résultats du Backtest">
             <div style={styles.resultsGrid}>
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Jours de données</div>
-                <div style={styles.metricValue}>{data.results.count_days}</div>
+                <div style={styles.metricValue}>{data?.results?.count_days ?? 0}</div>
               </div>
               
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Retour moyen</div>
                 <div style={styles.metricValue}>
-                  {data.results.avg_basket_return ? (data.results.avg_basket_return * 100).toFixed(2) + '%' : 'N/A'}
+                  {data?.results?.avg_basket_return ? (data?.results?.avg_basket_return * 100).toFixed(2) + '%' : 'N/A'}
                 </div>
               </div>
               
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Écart-type</div>
                 <div style={styles.metricValue}>
-                  {data.results.stdev ? (data.results.stdev * 100).toFixed(2) + '%' : 'N/A'}
+                  {data?.results?.stdev ? (data?.results?.stdev * 100).toFixed(2) + '%' : 'N/A'}
                 </div>
               </div>
               
               <div style={styles.metricCard}>
                 <div style={styles.metricLabel}>Médiane</div>
                 <div style={styles.metricValue}>
-                  {data.results.median ? (data.results.median * 100).toFixed(2) + '%' : 'N/A'}
+                  {data?.results?.median ? (data?.results?.median * 100).toFixed(2) + '%' : 'N/A'}
                 </div>
               </div>
             </div>
             
             <div style={styles.detailsSection}>
               <h4>Paramètres de l'analyse</h4>
-              <p>Horizon: {data.params.horizon}</p>
-              <p>Top-{data.params.top_n} basket</p>
-              <p>{data.params.days_back} jours d'historique</p>
-              <p>Généré le: {new Date(data.generated_at).toLocaleString('fr-FR')}</p>
+              <p>Horizon: {data?.params?.horizon || 'N/A'}</p>
+              <p>Top-{data?.params?.top_n || 'N/A'} basket</p>
+              <p>{data?.params?.days_back || 'N/A'} jours d'historique</p>
+              <p>Généré le: {data?.generated_at ? new Date(data.generated_at).toLocaleString('fr-FR') : 'N/A'}</p>
               
-              {data.warning && (
+              {data?.warning && (
                 <div style={styles.warning}>
-                  <strong>Avertissement:</strong> {data.warning}
+                  <strong>Avertissement:</strong> {data?.warning}
                 </div>
               )}
             </div>

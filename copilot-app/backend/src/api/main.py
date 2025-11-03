@@ -873,38 +873,57 @@ def register_routes(app: FastAPI):
             
             result = run_backtest(horizon=horizon, top_n=top_n, days_back=days_back)
             
-            if result.get("ok"):
-                return _ok({
-                    "results": result,
-                    "params": {
-                        "horizon": horizon,
-                        "top_n": top_n,
-                        "days_back": days_back
-                    },
-                    "generated_at": datetime.utcnow().isoformat()
-                })
-            else:
-                # Return partial results or error information
-                return _ok({
-                    "results": result,
-                    "params": {
-                        "horizon": horizon,
-                        "top_n": top_n,
-                        "days_back": days_back
-                    },
-                    "warning": "Backtesting executed but no results available - check if forecast data exists",
-                    "generated_at": datetime.utcnow().isoformat()
-                })
+            # Prepare response in format expected by frontend
+            response_data = {
+                "results": {
+                    "ok": result.get("ok", False),
+                    "count_days": result.get("count_days", 0),
+                    "avg_basket_return": result.get("avg_basket_return", 0),
+                    "median": result.get("median", 0),
+                    "stdev": result.get("stdev", 0)
+                },
+                "params": {
+                    "horizon": horizon,
+                    "top_n": top_n,
+                    "days_back": days_back
+                },
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+            # Add warning if there was an issue but basic structure exists
+            if not result.get("ok"):
+                response_data["warning"] = "Backtesting executed but no results available - check if forecast data exists"
+                # Set default values for missing fields
+                response_data["results"]["count_days"] = 0
+                response_data["results"]["avg_basket_return"] = 0
+                response_data["results"]["median"] = 0
+                response_data["results"]["stdev"] = 0
+            
+            return _ok(response_data)
                 
         except ImportError:
             return _ok({
-                "results": {"ok": False, "error": "Backtest agent not available"},
+                "results": {
+                    "ok": False,
+                    "count_days": 0,
+                    "avg_basket_return": 0,
+                    "median": 0,
+                    "stdev": 0,
+                    "error": "Backtest agent not available"
+                },
                 "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
-                "note": "Backtesting functionality requires forecast data and proper data setup"
+                "warning": "Backtesting functionality requires forecast data and proper data setup"
             })
         except Exception as e:
             return _ok({
-                "results": {"ok": False, "error": str(e)},
+                "results": {
+                    "ok": False,
+                    "count_days": 0,
+                    "avg_basket_return": 0,
+                    "median": 0,
+                    "stdev": 0,
+                    "error": str(e)
+                },
                 "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
                 "error": "Backtest execution failed"
             })
@@ -1461,7 +1480,7 @@ def register_routes(app: FastAPI):
 
 # ================================= SERVER ====================================
 
-def run_server(host: str = "127.0.0.1", port: int = 8000):
+def run_server(host: str = "127.0.0.1", port: int = 8050):
     """Run the FastAPI server."""
     import uvicorn
     app = create_app()

@@ -1,13 +1,20 @@
 // Header principal de l'application
 
 import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 
 export default function Header() {
-  // For UI tests, use a fixed time instead of dynamic time to ensure consistency
-  const isTestEnvironment = typeof window !== 'undefined' && (window as any).__pw_test__
-  const timeString = isTestEnvironment 
-    ? '10:00:00' 
-    : new Date().toLocaleTimeString('fr-FR')
+  const [timeString, setTimeString] = useState(() => new Date().toLocaleTimeString('fr-FR'))
+  
+  useEffect(() => {
+    // Update time every minute instead of constantly, to reduce UI flicker
+    const updateTimer = setInterval(() => {
+      setTimeString(new Date().toLocaleTimeString('fr-FR'))
+    }, 60000) // Update every minute instead of every second
+    
+    // Clean up interval on unmount
+    return () => clearInterval(updateTimer)
+  }, [])
 
   return (
     <header style={styles.header}>
