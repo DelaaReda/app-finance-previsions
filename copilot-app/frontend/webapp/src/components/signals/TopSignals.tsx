@@ -1,0 +1,104 @@
+// Composant pour afficher les Top 3 Signaux
+
+import { Signal } from '@/types/common.types'
+import Card from '@/components/common/Card'
+
+type TopSignalsProps = {
+  signals: Signal[]
+  title?: string
+}
+
+export default function TopSignals({ signals, title = 'Top 3 Signaux' }: TopSignalsProps) {
+  const topSignals = signals.slice(0, 3)
+
+  return (
+    <Card title={title}>
+      <div style={styles.container}>
+        {topSignals.map((signal, index) => (
+          <div key={index} style={styles.signalCard}>
+            <div style={styles.header}>
+              <span style={styles.rank}>#{index + 1}</span>
+              {signal.composite_score !== undefined ? (
+                <span style={styles.score}>{signal.composite_score.toFixed(0)}</span>
+              ) : (
+                <span style={styles.score}>{signal.score?.toFixed(0) || 'N/A'}</span>
+              )}
+            </div>
+            <h4 style={styles.title}>{signal.ticker}</h4>
+            <p style={styles.description}>{signal.reason || signal.description || 'Aucune raison fournie'}</p>
+            <div style={styles.footer}>
+              {signal.confidence !== undefined && (
+                <span style={styles.horizon}>Conf: {(signal.confidence * 100).toFixed(0)}%</span>
+              )}
+              <span style={styles.sources}>Score: {signal.composite_score?.toFixed(1) || signal.score?.toFixed(1) || 'N/A'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 16,
+  },
+  signalCard: {
+    backgroundColor: '#222',
+    borderRadius: 6,
+    padding: 16,
+    border: '1px solid #333',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  rank: {
+    backgroundColor: '#333',
+    borderRadius: 4,
+    padding: '2px 8px',
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  score: {
+    marginLeft: 'auto',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#4caf50',
+  },
+  title: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 600,
+    marginBottom: 6,
+  },
+  description: {
+    margin: 0,
+    fontSize: 13,
+    color: '#aaa',
+    lineHeight: 1.5,
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTop: '1px solid #333',
+  },
+  horizon: {
+    fontSize: 12,
+    padding: '2px 8px',
+    backgroundColor: '#1a3a52',
+    borderRadius: 4,
+    color: '#64b5f6',
+  },
+  sources: {
+    fontSize: 11,
+    color: '#666',
+  },
+}

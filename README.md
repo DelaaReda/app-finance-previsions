@@ -1,68 +1,160 @@
-# App Finance Prévisions
+# 📁 STRUCTURE DU PROJET FINANCE COPILOT
 
-> Un copilote financier personnel qui agrège macro, marchés, et actualités, les transforme en insights actionnables (CT/MT/LT), et permet d'interroger des LLM avec un contexte de données historisées (≥5 ans).
+## 🎯 Organisation Principale
 
-
-## 📚 Vision
-
-**Objectif**
-
-Offrir un poste d'observation complet (macro, actions, news) + un copilote LLM, pour passer du bruit au signal et soutenir des décisions court, moyen et long terme.
-
-**Proposition de valeur**
-- **Tout-en-un** : macro (FRED, indices, cycles), actions (prix, indicateurs), news (RSS/curation), Q&A LLM.
-- **Signal > Bruit** : tri, dédup, scoring → *Top 3 signaux* / *Top 3 risques*.
-- **Réponses citées** : le LLM renvoie faits + graphiques + sources.
-- **Mémoire** : news/données/notes historisées pour donner du contexte au LLM (RAG).
-
-**Piliers**
-1. Macro (FRED, VIX, GSCPI, GPR, tendances inflation/emploi/liquidité)
-2. Actions (yfinance, SMA/RSI/MACD, comparaisons secteurs)
-3. News (RSS robuste + scoring fraîcheur/source/pertinence)
-4. LLM Copilot (Q&A + what-if avec retrieval sur 5+ ans)
-5. Mémoire & traçabilité (sources, timestamps, params)
-
-**Sorties**
-- Daily/Weekly **Market Brief** (HTML/PDF)
-- **Fiches Ticker** : techniques + news + niveaux
-- **Réponses LLM citées** avec limites explicites
-
-**KPIs**
-- Couverture ≥ 90% tickers ≤ 24h
-- Fraîcheur news médiane < 10 min
-- Brief ≤ 2 pages (annexes à part)
-- 100% graphiques avec **source+timestamp**
-- 80% réponses LLM avec ≥2 sources
-
-**Garde-fous**
-- Explainable-first, contre-arguments, opt-in Internet pour tests, citations obligatoires.
-
-**MVP**
-- Ingestion macro (FRED), prix (yfinance), RSS robuste + dédup
-- Scoring simple **macro(40)/tech(40)/news(20)**
-- Market Brief hebdo via `make`
-- Q&A LLM avec **RAG** (5 ans de séries + 12-24 mois news)
-
-**Non-objectifs**
-- Pas d'ordres de bourse, pas d'alpha opaque, pas de données payantes non conformes
-
-
-## 🛠️ Prise en main rapide
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.sample .env  # édite les clés
-make smoke   # test rapide
-make test    # unit tests
-make it-integration  # tests réseau (AF_ALLOW_INTERNET=1)
+```
+analyse-financiere/
+├── copilot-app/ 
+├──  copilot.sh                    ← Script principal copilot app                   ← Application Finance Copilot principale
+│   ├── backend/                    ← Backend Python (API FastAPI)
+│   │   ├── api/                    ← API principale
+│   │   ├── src/                    ← Source code backend
+│   │   ├── run_api.py             ← Point d'entrée backend
+│   │   ├── api.log               ← Logs backend
+│   │   └── .venv/                ← Environnement Python virtuel
+│   ├── frontend/                 ← Frontend React
+│   │   └── webapp/               ← Application web React/Vite
+│   │       ├── src/              ← Source code frontend
+│   │       ├── frontend.log     ← Logs frontend
+│   │       └── vite.config.ts    ← Configuration Vite
+│   ├── scripts/                  ← Scripts de gestion
+│   │   ├── start.sh             ← Démarrage de l'application
+│   │   ├── stop.sh              ← Arrêt de l'application
+│   │   └── test_system.sh       ← Test du système
+│   └── docs/                     ← Documentation
+│       └── README_SCRIPTS.md    ← Guide d'utilisation
+├── agent-stack-oss/              ← Agent OSS (projet séparé)
+│   ├── src/
+│   ├── training-materials/
+│   └── ...
 ```
 
+## 🚀 Démarrage Rapide
 
-## 👨‍💻 Guide Agent LLM
+### 1. Démarrer l'application
+```bash
+./copilot-app/copilot.sh start
+```
 
-Les consignes, routes, conventions et objectifs pour tout agent/IA qui code ici : voir **`docs/AGENT_GUIDE.md`**.
+### 2. Vérifier l'état
+```bash
+./copilot-app/copilot.sh status
+```
 
-Schéma d'archi, modules et flux de données : **`docs/ARCHITECTURE.md`**.
+### 3. Arrêter l'application
+```bash
+./copilot-app/copilot.sh stop
+```
 
-Vision détaillée, KPIs et roadmap : **`docs/VISION.md`**.
+## 🌐 URLs Disponibles
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8050
+- **Documentation API**: http://localhost:8050/docs
+
+## 📂 Structure Détaillée
+
+### `copilot-app/backend/`
+Contient tout le code backend Python :
+- API FastAPI dans `api/main.py`
+- Services métier dans `src/`
+- Point d'entrée `run_api.py`
+- Environnement virtuel `.venv/`
+
+### `copilot-app/frontend/webapp/`
+Contient l'application React/Vite :
+- Code source dans `src/`
+- Configuration Vite dans `vite.config.ts`
+- Dépendances Node dans `package.json`
+
+### `copilot-app/scripts/`
+Scripts de gestion de l'application :
+- `start.sh` : Démarrage complet
+- `stop.sh` : Arrêt sécurisé
+- `test_system.sh` : Diagnostics
+
+## ⚙️ Commandes Utiles
+
+### Gestion de l'application
+```bash
+# Démarrer tous les services
+./copilot.sh start
+
+# Arrêter tous les services
+./copilot.sh stop
+
+# Redémarrer tous les services
+./copilot.sh restart
+
+# Vérifier l'état des services
+./copilot.sh status
+
+# Tester le système
+./copilot.sh test
+```
+
+### Accès direct aux services
+```bash
+# Démarrer uniquement le backend
+cd copilot-app/backend && python run_api.py
+
+# Démarrer uniquement le frontend
+cd copilot-app/frontend/webapp && npm run dev
+```
+
+## 🧪 Tests
+
+### Test des endpoints backend
+```bash
+# Test de santé
+curl http://localhost:8050/api/health
+
+# Test de génération de brief
+curl http://localhost:8050/api/brief/daily
+
+# Test du tableau de bord
+curl http://localhost:8050/api/dashboard/kpis
+```
+
+### Test du frontend
+```bash
+# Accès à la page principale
+curl http://localhost:5173/
+```
+
+## 🛠️ Dépannage
+
+### Problèmes fréquents
+
+1. **Ports occupés**:
+   ```bash
+   # Libérer les ports
+   ./copilot.sh stop
+   lsof -i :8050 | xargs kill -9
+   lsof -i :5173 | xargs kill -9
+   ```
+
+2. **Dépendances manquantes**:
+   ```bash
+   # Backend (Python)
+   cd copilot-app/backend
+   source .venv/bin/activate
+   pip install uvicorn fastapi
+   
+   # Frontend (Node)
+   cd copilot-app/frontend/webapp
+   npm install
+   ```
+
+3. **Permissions**:
+   ```bash
+   chmod +x copilot.sh
+   chmod +x copilot-app/scripts/*.sh
+   ```
+
+## 📞 Support
+
+Pour toute question ou problème :
+1. Exécutez `./copilot.sh status` pour diagnostiquer
+2. Vérifiez les logs dans `copilot-app/backend/api.log` et `copilot-app/frontend/webapp/frontend.log`
+3. Contactez l'équipe de développement avec les logs d'erreur
