@@ -17,8 +17,8 @@ test.describe("All Pages Functional Tests", () => {
       await expect(page.getByRole("heading", { name: "Macro" })).toBeVisible();
       await expect(page).toHaveURL(/.*macro/);
       
-      // Navigate to Stocks - using exact match to avoid ambiguity
-      await page.getByRole("link", { name: "Actions", exact: true }).click();
+      // Navigate to Stocks - using the href attribute to be specific
+      await page.locator('a[href="/stocks"]').click();
       await expect(page.getByRole("heading", { name: "📈 Actions - Analyse Technique" })).toBeVisible();
       await expect(page).toHaveURL(/.*stocks/);
       
