@@ -1,1 +1,0 @@
-copilot-app/copilot.sh
