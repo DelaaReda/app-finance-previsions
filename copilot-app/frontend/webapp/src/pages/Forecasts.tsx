@@ -20,10 +20,17 @@ export default function Forecasts() {
 
   useEffect(() => {
     setLoading(true)
-    apiGet<{ rows: Row[]; count: number; asset_type: string }>(`/forecasts`, { asset_type: 'all', horizon: 'all', sort_by: 'score' })
+    // The API returns { ok: boolean, data: { rows: [], count: number, asset_type: string } }
+    apiGet<{ ok: boolean; data: { rows: Row[]; count: number; asset_type: string } | null; error?: string }>(`/forecasts`, { asset_type: 'all', horizon: 'all', sort_by: 'score' })
       .then((res) => {
-        if (res.ok && res.data) setRows(res.data.rows)
-        else setErr(res.error ?? 'Erreur inconnue')
+        if (res.ok && res.data && res.data.rows) {
+          setRows(res.data.rows);
+        } else if (res.ok && res.data) {
+          // Handle case where data exists but rows may be undefined
+          setRows(res.data.rows || []);
+        } else {
+          setErr(res.error ?? 'Erreur inconnue');
+        }
       })
       .finally(() => setLoading(false))
   }, [])

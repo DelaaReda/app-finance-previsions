@@ -18,8 +18,18 @@ export default function NewsFeed() {
 
       {/* États */}
       {error && <div role="alert" className="text-red-700">Erreur: {error}</div>}
-      {loading && items.length === 0 && <div>Chargement…</div>}
-      {items.length === 0 && !loading && <div>Aucune news</div>}
+      {loading && items.length === 0 && <div className="text-center py-8">Chargement des actualités…</div>}
+      {items.length === 0 && !loading && (
+        <div className="text-center py-8 bg-gray-50 rounded-lg border">
+          <h3 className="font-medium text-gray-900 mb-2">Aucune actualité trouvée</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Aucun article ne correspond aux filtres actuels.
+          </p>
+          <p className="text-xs text-gray-500">
+            Essayez de modifier les filtres (période, région, score minimum) pour voir plus d'articles.
+          </p>
+        </div>
+      )}
 
       {/* Liste */}
       {items.map(item => <NewsCard key={item.id} item={item} />)}

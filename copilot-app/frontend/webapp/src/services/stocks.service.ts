@@ -88,34 +88,46 @@ export const stocksService = {
    * Get analysis for a specific ticker
    */
   getAnalysis: async (ticker: string) => {
-    // Since there's no analysis endpoint in the backend yet, return mock data for now
-    const mockAnalysis: StockAnalysis = {
+    // Use the actual API endpoint for ticker sheet data, then transform to match expected format
+    const response = await apiGet<any>(`/stocks/${ticker}`)
+    
+    if (!response.ok) {
+      return response
+    }
+    
+    // Transform the API response to match the expected StockAnalysis format
+    const apiData = response.data
+    
+    const transformedAnalysis: StockAnalysis = {
       stock: {
-        ticker: ticker,
-        name: ticker + ' Corp',
-        price: 150.25,
-        change: 1.25,
-        changePercent: 0.84,
-        sector: 'Technology',
-        volume: 15000000
+        ticker: apiData.ticker || ticker,
+        name: apiData.company_name || ticker + ' Corp',
+        price: apiData.current_price || 0,
+        change: apiData.price_change || 0,
+        changePercent: apiData.price_change_pct || 0,
+        sector: apiData.fundamentals?.sector || 'N/A',
+        volume: apiData.fundamentals?.volume || 0
       },
       score: {
-        macro: 32,
-        technical: 35,
-        news: 18,
-        composite: 85
+        macro: apiData.score_breakdown?.macro || 0,
+        technical: apiData.score_breakdown?.technical || 0,
+        news: apiData.score_breakdown?.news || 0,
+        composite: apiData.composite_score || 0
       },
       technicals: {
-        sma20: 148.50,
-        sma50: 145.20,
-        sma200: 140.80,
-        rsi: 62.5
+        sma20: apiData.technical_indicators?.sma20 || 0,
+        sma50: apiData.technical_indicators?.sma50 || 0,
+        sma200: apiData.technical_indicators?.sma200 || 0,
+        rsi: apiData.technical_indicators?.rsi || 0
       },
-      signals: [
-        { type: 'buy', strength: 85, indicator: 'RSI', description: 'RSI indicates bullish momentum' },
-        { type: 'hold', strength: 70, indicator: 'SMA', description: 'Price above SMA20 but below SMA50' }
-      ]
+      signals: apiData.alerts || [] // Assuming alerts can be used as signals, or use a different field
     }
-    return { ok: true, data: mockAnalysis } as any
+    
+    // Ensure signals is an array to prevent .map errors
+    if (!transformedAnalysis.signals || !Array.isArray(transformedAnalysis.signals)) {
+      transformedAnalysis.signals = []
+    }
+    
+    return { ok: true, data: transformedAnalysis }
   }
 }

@@ -39,6 +39,42 @@ export default defineConfig(({ mode }) => ({
         target: 'http://127.0.0.1:8050',
         changeOrigin: true,
         secure: false,
+      },
+      // Routes spécifiques qui doivent être redirigées vers le backend 
+      '/forecasts': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/brief': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/dashboard': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/macro': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/stocks': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/news': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/copilot': {
+        target: 'http://127.0.0.1:8050',
+        changeOrigin: true,
+        secure: false,
       }
     }
   },

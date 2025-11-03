@@ -56,7 +56,7 @@ export default function MarketBrief() {
             <label htmlFor="universe-select">Univers:</label>
             <select
               id="universe-select"
-              value={universe.join(',')}
+              value={universe?.join(',') || 'SPY,QQQ'}
               onChange={(e) => setUniverse(e.target.value ? e.target.value.split(',') : ['SPY', 'QQQ'])}
               style={{
                 padding: '0.5rem',
@@ -83,17 +83,19 @@ export default function MarketBrief() {
           <Card>
             <h2 style={{ margin: '0 0 1rem 0' }}>Market Brief {brief.period === 'daily' ? 'Journalier' : 'Hebdomadaire'}</h2>
             <div style={{ color: '#888', marginBottom: '1rem' }}>
-              {new Date(brief.generated_at).toLocaleDateString('fr-FR', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
+              {brief.generated_at ? 
+                new Date(brief.generated_at).toLocaleDateString('fr-FR', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })
+              : 'Date non disponible'}
             </div>
             <div style={{ lineHeight: 1.6 }}>
-              Analyse générée pour l'univers: {brief.universe.join(', ')}
+              Analyse générée pour l'univers: {(brief.universe || []).join(', ')}
             </div>
           </Card>
           {/* Top 3 Signaux et Top 3 Risques */}
@@ -153,7 +155,7 @@ export default function MarketBrief() {
           )}
 
           <div style={{ fontSize: '0.85rem', color: '#666', textAlign: 'center' }}>
-            Généré le {new Date(brief.generated_at).toLocaleString()} • Période: {brief.period}
+            Généré le {brief.generated_at ? new Date(brief.generated_at).toLocaleString() : 'N/A'} • Période: {brief.period || 'N/A'}
           </div>
         </div>
       )}

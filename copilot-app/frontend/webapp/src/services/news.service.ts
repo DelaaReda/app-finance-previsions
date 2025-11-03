@@ -3,7 +3,7 @@ import { apiGet } from "@/api/client";
 import { NewsFeedResponse } from "@/types/news.types";
 
 export async function getNewsFeed(params: {
-  ticker?: string; q?: string; start?: string; end?: string;
+  tickers?: string[]; since?: string; region?: string; score_min?: number;
   page?: number; limit?: number;
 }) {
   const p = { ...params };

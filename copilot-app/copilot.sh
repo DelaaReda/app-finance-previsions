@@ -1,22 +1,25 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Script de démarrage principal pour Finance Copilot
-# Pointe vers les scripts dans le dossier copilot-app
+# Script principal pour Finance Copilot
+# Gestion centralisée des opérations de démarrage/arrêt
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COPILOT_APP_DIR="$SCRIPT_DIR"
+# Déterminer le répertoire réel du script (résout les liens symboliques)
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+PROJECT_DIR="$SCRIPT_DIR"
+SCRIPTS_DIR="$PROJECT_DIR/scripts"
 
-# Vérifier que le dossier copilot-app existe
-if [ ! -d "$COPILOT_APP_DIR" ]; then
-    echo "❌ Erreur: Dossier copilot-app introuvable"
+# Vérifier que le dossier scripts existe
+if [ ! -d "$SCRIPTS_DIR" ]; then
+    echo "❌ Erreur: Dossier scripts introuvable dans $SCRIPT_DIR/scripts"
     exit 1
 fi
 
 # Fonction pour afficher l'aide
 show_help() {
-    echo "Finance Copilot - Script de démarrage principal"
+    echo "Finance Copilot - Script de gestion centralisée"
     echo ""
     echo "Usage: $0 [commande]"
     echo ""
@@ -39,25 +42,25 @@ main() {
     case "${1:-help}" in
         start)
             echo "🚀 Démarrage de Finance Copilot..."
-            "$COPILOT_APP_DIR/scripts/start.sh"
+            "$SCRIPTS_DIR/start.sh" start
             ;;
         stop)
             echo "🛑 Arrêt de Finance Copilot..."
-            "$COPILOT_APP_DIR/scripts/stop.sh"
+            "$SCRIPTS_DIR/stop.sh" stop
             ;;
         restart)
             echo "🔄 Redémarrage de Finance Copilot..."
-            "$COPILOT_APP_DIR/scripts/stop.sh"
+            "$SCRIPTS_DIR/stop.sh" stop
             sleep 3
-            "$COPILOT_APP_DIR/scripts/start.sh"
+            "$SCRIPTS_DIR/start.sh" start
             ;;
         status)
             echo "📊 État des services Finance Copilot..."
-            "$COPILOT_APP_DIR/scripts/test_system.sh"
+            "$SCRIPTS_DIR/test_system.sh" test
             ;;
         test)
             echo "🧪 Test du système Finance Copilot..."
-            "$COPILOT_APP_DIR/scripts/test_system.sh"
+            "$SCRIPTS_DIR/test_system.sh" test
             ;;
         help|--help|-h)
             show_help
