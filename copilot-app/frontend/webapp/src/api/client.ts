@@ -1,7 +1,7 @@
 // webapp/src/api/client.ts
 import type { ApiResponse } from '../types/common'
 
-const API_BASE = "http://localhost:8050/api";
+const API_BASE = "http://localhost:8050/api"; // keep like that, never use env vars here
 
 function qs(params?: Record<string, any>) {
   if (!params) return "";
