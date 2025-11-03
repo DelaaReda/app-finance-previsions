@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COPILOT_APP_DIR="$SCRIPT_DIR/copilot-app"
+COPILOT_APP_DIR="$SCRIPT_DIR"
 
 # Vérifier que le dossier copilot-app existe
 if [ ! -d "$COPILOT_APP_DIR" ]; then
