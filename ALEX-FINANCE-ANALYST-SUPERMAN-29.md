@@ -15,6 +15,7 @@
 - [x] FC-P1-011: News Ingest v1 (RSS multi-sources)
 - [x] FC-P1-012: Feature set marché (indicateurs)
 - [x] FC-P0-014: Health+ enrichi (backend+UI)
+- [x] FC-P0-002: Forecasts empty-safe (front)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -30,9 +31,10 @@
 - [x] FC-P1-011: News Ingest v1 (RSS multi-sources) - Complete RSS ingestion pipeline
 - [x] FC-P1-012: Feature set marché (indicateurs) - Complete technical indicators suite
 - [x] FC-P0-014: Health+ enrichi (backend+UI) - Enhanced health endpoint with domain freshness
+- [x] FC-P0-002: Forecasts empty-safe (front) - Empty-state protection with safety guards
 
 ## 📈 Points Gagnés
-- **Total**: 600 points
+- **Total**: 660 points
 - **Dernière mise à jour**: 2025-11-03
 
 ## 🔄 Tâches Planifiées

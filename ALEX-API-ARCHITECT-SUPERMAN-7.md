@@ -11,6 +11,7 @@
 - [x] Ajouter middlewares: retry anti-fail, rate-limit anti-DOS, logs structurés finance
 - [x] Développer micro-services skeleton (jobs / ingestion / API / LLM)
 - [x] Créer documentation contrats API (FC-P0-003)
+- [x] Contribuer à la structure de package backend (FC-HOTFIX-002)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -23,10 +24,12 @@
 - [x] Développement microservices skeleton
 - [x] Création script démonstration ingestion: `make ingest-demo`
 - [x] Documentation des contrats API: `backend/api/contracts.md` (task FC-P0-003)
+- [x] Contribution à la standardisation des réponses API `{ok, data}` et middlewares (FC-HOTFIX-002)
+- [x] Création de la structure de package avec __init__.py files
 
 ## 📈 Points Gagnés
-- **Total**: 170 points
-- **Dernière mise à jour**: 2025-11-03
+- **Total**: 190 points
+- **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées
 - [x] Documentation architecture: `/docs/ARCH_BACKEND.md`

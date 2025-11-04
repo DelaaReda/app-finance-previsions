@@ -51,11 +51,11 @@ backend/
 * `curl :8050/api/health` renvoie `{ ok:true }`.
 
 #### FC-HOTFIX-002 — Middlewares & envelope de réponse
-**Status**: CLAIMED
+**Status**: DONE
 
 **But**: avoir un middleware minimal et une réponse standard `{ ok, data }`.
 
-**Claimed by**: ALEX-API-ARCHITECT-SUPERMAN-7
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-003 — `main.py` propre + routes incluses
 **Status**: AVAILABLE to claim
@@ -596,6 +596,8 @@ echo "SMOKE OK"
 
 ## FC-P0-001 — News: UI empty-safe (frontend)
 
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+
 **But**: `/news` ne crashe jamais, même si l’API renvoie un snapshot vide.
 
 **Fichiers**
@@ -667,7 +669,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P0-002 — Forecasts: UI empty-safe (frontend)
+## FC-P0-002 — Forecasts: UI empty-safe (frontend) - DONE
 
 **But**: `/forecasts` affiche un état vide propre et ne crashe pas.
 
@@ -715,6 +717,12 @@ echo "SMOKE OK"
 
 * Plus d’erreurs `reading 'map'`.
 * **Preuves** : capture `/forecasts` vide + `curl -sS :8050/api/forecasts | jq .`.
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created/updated**:
+- `webapp/src/components/ui/EmptyState.tsx` - Empty state component
+- `webapp/src/pages/Forecasts.tsx` - Safe guards, empty state, and error handling
 
 ---
 
