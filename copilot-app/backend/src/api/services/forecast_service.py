@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 import asyncio
 
 # New imports for persistent caching
-from backend.storage.json_storage import load_json, save_json
-from backend.services.cache_service import load_or_compute
+from backend.storage.base import load_json, save_json
+from backend.services.cache_layer import load_or_compute
 
 from analytics.forecaster import forecast_ticker, ForecastResult
 from core.data_store import query_duckdb, write_parquet
@@ -74,24 +74,35 @@ class ForecastService:
                 }
         
         # Use load_or_compute to get data with persistent caching
-        result = await load_or_compute(
-            key=key,
-            compute_fn=compute_forecasts,
-            sources=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
+        result = load_or_compute(
+            key,
+            compute_forecasts,
+            ["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
         )
         
+        # Extract the actual data from the result
+        if result and "data" in result:
+            actual_data = result["data"]
+        else:
+            actual_data = result
+            
         # Ensure the result has the expected format for the API
-        if result and "data" not in result:
-            # If load_or_compute returned raw computed data, wrap it properly
+        if actual_data and "error" not in actual_data:
             return {
-                "ok": result.get("error") is None,
-                "data": result
+                "ok": True,
+                "data": actual_data
             }
         else:
-            # If load_or_compute returned cached data with metadata, use it as is
+            # Return empty structure but never fail
             return {
-                "ok": result is not None and "error" not in (result.get("data", {}) or {}),
-                "data": result.get("data", result) if result else {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
+                "ok": False,
+                "data": {
+                    "rows": [],
+                    "count": 0,
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "source": ["fallback"],
+                    "model_version": "hybrid_v1"
+                }
             }
     
     def _load_hybrid_forecasts(self) -> Dict[str, Any]:

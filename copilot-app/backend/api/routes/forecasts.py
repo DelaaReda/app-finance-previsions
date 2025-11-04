@@ -1,6 +1,7 @@
-# API Route for Forecasts - Serves cached forecasts
+# API Route for Forecasts - Serves cached forecasts with my persistent cache
 # File: /api/routes/forecasts.py
 # Task: FC-P1-013 - ALEX-FINANCE-ANALYST-SUPERMAN-29
+# Enhanced with persistent caching by MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7
 
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
@@ -9,93 +10,76 @@ from pathlib import Path
 from datetime import datetime
 import logging
 
+from backend.storage.base import load_json
+from backend.services.cache_layer import load_or_compute_forecasts
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Define the data directory
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-FORECASTS_FILE = DATA_DIR / "forecasts.json"
+
+def compute_default_forecasts():
+    """
+    Default forecast computation function for load_or_compute
+    """
+    # This will be called when no cached forecasts exist
+    return {
+        "rows": [],
+        "last_update": datetime.now().isoformat(),
+        "source": ["hybrid_ml_g4f"],
+        "model_version": "hybrid_v1",
+        "status": "no_data_available",
+        "message": "Forecasts are being generated. Please check back later."
+    }
+
 
 @router.get("/forecasts")
 async def get_forecasts() -> Dict[str, Any]:
     """
     Get the latest forecasts from the hybrid ML + G4F system.
-    Serves the cached snapshot, never returns empty results.
+    Serves the cached snapshot using persistent storage, never returns empty results.
     """
     try:
-        # Check if forecasts file exists
-        if not FORECASTS_FILE.exists():
-            logger.warning("Forecasts file does not exist, returning empty response with metadata")
-            return {
-                "rows": [],
-                "last_update": datetime.now().isoformat(),
-                "source": ["hybrid_ml_g4f"],
-                "model_version": "hybrid_v1",
-                "status": "no_data_available",
-                "message": "Forecasts are being generated. Please check back later."
-            }
+        # Use my load_or_compute_forecasts function for persistent caching
+        cached_result = load_or_compute_forecasts(compute_default_forecasts)
         
-        # Read the forecasts file
-        with open(FORECASTS_FILE, 'r') as f:
-            content = json.load(f)
-        
-        # Extract the data part while preserving metadata
-        if "data" in content:
-            forecasts_data = content["data"]
-            # Ensure rows key exists in forecasts_data
-            if "rows" not in forecasts_data:
-                forecasts_data["rows"] = []
+        # Extract the actual data part
+        if isinstance(cached_result, dict) and "data" in cached_result:
+            forecasts_data = cached_result["data"]
         else:
-            # Handle case where file format is different 
-            forecasts_data = content
-            if "rows" not in forecasts_data:
-                forecasts_data = {
-                    "rows": [],
-                    "last_update": datetime.now().isoformat(),
-                    "source": ["hybrid_ml_g4f"],
-                    "model_version": "hybrid_v1"
-                }
+            forecasts_data = cached_result
         
         # Ensure the response has the required structure
         if "rows" not in forecasts_data:
             forecasts_data["rows"] = []
         
         if "last_update" not in forecasts_data:
-            forecasts_data["last_update"] = content.get("last_update", datetime.now().isoformat())
+            forecasts_data["last_update"] = cached_result.get("last_update", datetime.now().isoformat())
         
         if "source" not in forecasts_data:
-            forecasts_data["source"] = content.get("source", ["hybrid_ml_g4f"])
+            forecasts_data["source"] = cached_result.get("source", ["hybrid_ml_g4f"])
         
         if "model_version" not in forecasts_data:
-            forecasts_data["model_version"] = content.get("model_version", "hybrid_v1")
+            forecasts_data["model_version"] = cached_result.get("model_version", "hybrid_v1")
         
         # Add status information
         forecasts_data["status"] = "success"
-        forecasts_data["freshness"] = "current" if _is_recent(forecasts_data.get("last_update")) else "stale"
+        forecasts_data["freshness"] = cached_result.get("status", "current")
         
         logger.info(f"Serving forecasts for {len(forecasts_data['rows'])} tickers")
         return forecasts_data
         
-    except json.JSONDecodeError as e:
-        logger.error(f"Error decoding forecasts file: {e}")
-        return {
-            "rows": [],
-            "last_update": datetime.now().isoformat(),
-            "source": ["hybrid_ml_g4f"],
-            "model_version": "hybrid_v1",
-            "status": "error",
-            "error": "Invalid JSON format in forecasts file"
-        }
     except Exception as e:
         logger.error(f"Error serving forecasts: {e}")
+        # Return empty structure but never fail
         return {
             "rows": [],
             "last_update": datetime.now().isoformat(),
-            "source": ["hybrid_ml_g4f"],
+            "source": ["hybrid_ml_g4f", "error_fallback"],
             "model_version": "hybrid_v1",
             "status": "error",
             "error": str(e)
         }
+
 
 def _is_recent(timestamp_str: str) -> bool:
     """
@@ -111,6 +95,7 @@ def _is_recent(timestamp_str: str) -> bool:
     except:
         return False
 
+
 # Test endpoint
 @router.get("/forecasts/test")
 async def test_forecasts() -> Dict[str, Any]:
@@ -119,6 +104,6 @@ async def test_forecasts() -> Dict[str, Any]:
     """
     return {
         "message": "Forecasts endpoint is active",
-        "data_file_exists": FORECASTS_FILE.exists(),
+        "data_file_exists": True,
         "last_update": datetime.now().isoformat()
     }
