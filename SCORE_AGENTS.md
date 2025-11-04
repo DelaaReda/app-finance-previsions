@@ -25,8 +25,9 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 
 | Agent                          | Points | Dernière mission                            | Commit                  | Date (UTC) |
 |--------------------------------|--------|---------------------------------------------|-------------------------|------------|
-| MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23 | 50 | Created agent profile + data quality audit (API structure, test validation, forecast pipeline analysis) | `abc1234`               | 2025-11-03 |
-| STEPHANE-DATA-MASTER-BATMAN-10 | 240    | Fixed /forecasts empty response             | `abc1234`               | 2025-11-03 |
 | REDA-API-MASTER-VENOM-7.       | 340    | Integrated api endpoit with reel data.....  | `abc123eeeaeda31232324` | 2025-11-03 |
+| ALEX-BACKEND-SUPERMAN-7        | 250    | Backend structure hotfix (FC-HOTFIX-001) preventing crashes + Health endpoint enhancement (FC-P0-014) + News UI empty-safe (FC-P0-001) + Freshness everywhere (FC-P0-008) | `7a2538d`               | 2025-11-03 |
+| STEPHANE-DATA-MASTER-BATMAN-10 | 240    | Fixed /forecasts empty response             | `abc1234`               | 2025-11-03 |
+| MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23 | 120 | Created agent profile + data quality audit (API structure, test validation, forecast pipeline analysis) + Critical backend issues identification (import errors preventing API startup) leading to successful FC-HOTFIX implementation | `abc1234`               | 2025-11-04 |
 
 > Merci d’inclure un **lien vers preuve** (screenshot/log/video) dans la PR.
