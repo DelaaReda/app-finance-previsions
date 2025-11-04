@@ -14,6 +14,7 @@
 - [x] HOTFIX: Backend structure & package fixes (critical system stability)
 - [x] FC-P1-011: News Ingest v1 (RSS multi-sources)
 - [x] FC-P1-012: Feature set marché (indicateurs)
+- [x] FC-P0-014: Health+ enrichi (backend+UI)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -28,9 +29,10 @@
 - [x] HOTFIX: Backend structure & package fixes (core architecture)
 - [x] FC-P1-011: News Ingest v1 (RSS multi-sources) - Complete RSS ingestion pipeline
 - [x] FC-P1-012: Feature set marché (indicateurs) - Complete technical indicators suite
+- [x] FC-P0-014: Health+ enrichi (backend+UI) - Enhanced health endpoint with domain freshness
 
 ## 📈 Points Gagnés
-- **Total**: 540 points
+- **Total**: 600 points
 - **Dernière mise à jour**: 2025-11-03
 
 ## 🔄 Tâches Planifiées
