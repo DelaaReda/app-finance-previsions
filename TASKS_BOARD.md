@@ -596,7 +596,7 @@ echo "SMOKE OK"
 
 ## FC-P0-001 — News: UI empty-safe (frontend)
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: `/news` ne crashe jamais, même si l’API renvoie un snapshot vide.
 
