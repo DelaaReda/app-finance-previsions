@@ -523,9 +523,9 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 
 ## FC-P0-008 — Freshness partout (backend+frontend)
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
-**But**: chaque réponse **inclut** `freshness`, l’UI **l’affiche**.
+**But**: chaque réponse **inclut** `freshness`, l'UI **l’affiche**.
 
 **Fichiers**
 
