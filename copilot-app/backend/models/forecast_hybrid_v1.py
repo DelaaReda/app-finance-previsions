@@ -1,0 +1,285 @@
+# Forecasts Hybrid v1 - ML + G4F Ranking
+# File: /models/forecast_hybrid_v1.py
+# Purpose: Combine ML predictions with LLM ranking for forecasts
+# Task: FC-P1-013 - ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Tuple, Optional
+import logging
+from datetime import datetime
+from g4f.client import Client
+import json
+from pathlib import Path
+
+from .pipeline_news_macro_stocks_forecast import NewsMacroStocksForecastPipeline
+from .required_indicators import technical, fundamental, regime
+
+class ForecastHybridV1:
+    """
+    Hybrid forecasting system combining ML predictions with G4F LLM ranking
+    """
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.pipeline = NewsMacroStocksForecastPipeline()
+        self.g4f_client = Client()
+        self.data_dir = Path(__file__).parent / ".." / "data"
+        self.data_dir.mkdir(exist_ok=True)
+        
+    def predict_direction_ml(self, ticker: str, features_df: pd.DataFrame) -> Dict:
+        """
+        ML model to predict direction and probability based on features
+        """
+        if features_df.empty or len(features_df) < 10:  # Need minimum data
+            return {
+                "direction": "neutral",
+                "probability": 0.5,
+                "expected_return": 0.0,
+                "confidence": 0.4
+            }
+        
+        # Get the latest row
+        latest = features_df.iloc[-1]
+        
+        # Simple ML logic based on technical signals
+        signals = {
+            'ma_bullish': 1 if latest.get('sma_20', 0) > latest.get('sma_50', 0) else 0,
+            'rsi_oversold': 1 if latest.get('rsi', 50) < 30 else 0,
+            'rsi_overbought': 1 if latest.get('rsi', 50) > 70 else 0,
+            'bb_bullish_breakout': 1 if latest.get('close', 0) > latest.get('bb_upper', 0) else 0,
+            'bb_bearish_breakout': 1 if latest.get('close', 0) < latest.get('bb_lower', 0) else 0,
+            'macd_bullish': 1 if latest.get('macd', 0) > latest.get('macd_signal', 0) else 0,
+            'macd_bearish': 1 if latest.get('macd', 0) < latest.get('macd_signal', 0) else 0,
+            'news_positive': 1 if latest.get('news_sentiment_score', 0) > 0.2 else 0,
+            'news_negative': 1 if latest.get('news_sentiment_score', 0) < -0.2 else 0,
+            'high_volatility': 1 if latest.get('atr', 0) > latest.get('close', 1) * 0.03 else 0  # 3% of price
+        }
+        
+        # Calculate composite direction based on signals
+        bullish_signals = (signals['ma_bullish'] * 0.2 +
+                          signals['rsi_oversold'] * 0.15 +
+                          signals['bb_bullish_breakout'] * 0.15 +
+                          signals['macd_bullish'] * 0.15 +
+                          signals['news_positive'] * 0.15)
+        
+        bearish_signals = (signals['rsi_overbought'] * 0.15 +
+                          signals['bb_bearish_breakout'] * 0.15 +
+                          signals['macd_bearish'] * 0.15 +
+                          signals['news_negative'] * 0.15 +
+                          signals['high_volatility'] * 0.1)
+        
+        # Determine direction
+        if bullish_signals > bearish_signals + 0.1:  # Threshold to avoid neutral
+            direction = "up"
+            probability = min(0.8, bullish_signals)
+        elif bearish_signals > bullish_signals + 0.1:
+            direction = "down"
+            probability = min(0.8, bearish_signals)
+        else:
+            direction = "neutral"
+            probability = 0.5
+            
+        # Calculate expected return based on signal strength
+        signal_strength = abs(bullish_signals - bearish_signals)
+        expected_return = signal_strength * (0.02 if direction == "up" else -0.02)  # Max 2% daily
+        
+        return {
+            "direction": direction,
+            "probability": probability,
+            "expected_return": expected_return,
+            "confidence": signal_strength
+        }
+    
+    def get_llm_validation(self, ticker: str, ml_prediction: Dict, market_context: Dict) -> Dict:
+        """
+        Use G4F LLM to validate, rank, and explain the forecast
+        """
+        # Prepare market context for the LLM
+        context_str = f"""
+        Ticker: {ticker}
+        ML Prediction: {ml_prediction}
+        
+        Market Context:
+        - Current price: {market_context.get('current_price', 'N/A')}
+        - Recent trend: {market_context.get('trend', 'N/A')}
+        - Volatility level: {market_context.get('volatility', 'N/A')}
+        - News sentiment: {market_context.get('news_sentiment', 'N/A')}
+        - Technical signals: {market_context.get('tech_signals', 'N/A')}
+        - Macro environment: {market_context.get('macro_regime', 'N/A')}
+        
+        Please analyze these signals and provide:
+        1. Direction filter (up/down/neutral)
+        2. Confidence adjustment (how much to modify the ML confidence)
+        3. Short explanation of your reasoning
+        4. Risk factors to consider
+        
+        Respond in JSON format:
+        {{
+            "direction_filter": "up|down|neutral",
+            "confidence_adjustment": float,
+            "explanation": "short reason",
+            "risk_factors": ["factor1", "factor2"]
+        }}
+        """
+        
+        try:
+            response = self.g4f_client.chat.completions.create(
+                model="gpt-3.5-turbo",  # Using a widely available model
+                messages=[{"role": "user", "content": context_str}]
+            )
+            
+            # Parse the response (need to handle potential format issues)
+            response_text = response.choices[0].message.content
+            
+            # Extract JSON from response if it includes other text
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                llm_result = json.loads(json_str)
+            else:
+                # Fallback if no JSON found
+                llm_result = {
+                    "direction_filter": ml_prediction["direction"],
+                    "confidence_adjustment": 0.0,
+                    "explanation": "LLM parsing issue, using original prediction",
+                    "risk_factors": []
+                }
+                
+            return llm_result
+        except Exception as e:
+            self.logger.error(f"LLM validation error for {ticker}: {e}")
+            # Return fallback values
+            return {
+                "direction_filter": ml_prediction["direction"],
+                "confidence_adjustment": 0.0,
+                "explanation": "LLM validation temporarily unavailable",
+                "risk_factors": []
+            }
+    
+    def generate_forecast_row(self, ticker: str, ml_result: Dict, llm_result: Dict, 
+                            market_context: Dict) -> Dict:
+        """
+        Generate a final forecast row combining ML and LLM results
+        """
+        # Combine ML and LLM results
+        final_direction = llm_result.get("direction_filter", ml_result["direction"])
+        base_confidence = ml_result["confidence"]
+        llm_adjustment = llm_result.get("confidence_adjustment", 0.0)
+        final_confidence = max(0.0, min(1.0, base_confidence + llm_adjustment))
+        
+        # Calculate adjusted expected return based on confidence
+        confidence_factor = final_confidence / max(ml_result["confidence"], 0.1)  # Avoid division by zero
+        adjusted_return = ml_result["expected_return"] * confidence_factor
+        
+        return {
+            "ticker": ticker,
+            "direction": final_direction,
+            "confidence": round(final_confidence, 3),
+            "expected_return": round(adjusted_return, 4),
+            "probability": round(ml_result["probability"], 3),
+            "explanation": llm_result.get("explanation", "AI-generated forecast combining technical and fundamental analysis"),
+            "risk_factors": llm_result.get("risk_factors", []),
+            "timestamp": datetime.now().isoformat(),
+            "source": ["ml_model", "g4f_llm"],
+            "model_version": "hybrid_v1"
+        }
+    
+    def generate_hybrid_forecasts(self, tickers: List[str]) -> Dict:
+        """
+        Main function to generate hybrid forecasts for given tickers
+        """
+        self.logger.info(f"Generating hybrid forecasts for tickers: {tickers}")
+        
+        # Use the existing pipeline to get data
+        pipeline_results = self.pipeline.run_pipeline(tickers)
+        
+        forecasts = []
+        
+        for ticker in tickers:
+            if ticker not in pipeline_results or pipeline_results[ticker].empty:
+                self.logger.warning(f"No data available for {ticker}, skipping")
+                continue
+                
+            # Get the latest data for this ticker
+            latest_data = pipeline_results[ticker].iloc[-1]
+            
+            # Prepare features for ML model
+            features_df = pipeline_results[ticker]
+            
+            # Step 1: ML prediction
+            ml_result = self.predict_direction_ml(ticker, features_df)
+            
+            # Prepare market context for LLM
+            market_context = {
+                "current_price": float(latest_data.get('close', 0)),
+                "trend": "bullish" if latest_data.get('sma_20', 0) > latest_data.get('sma_50', 0) else "bearish",
+                "volatility": float(latest_data.get('atr', 0)),
+                "news_sentiment": float(latest_data.get('news_impact_score', 0)),
+                "tech_signals": {
+                    "rsi": float(latest_data.get('rsi', 50)),
+                    "macd_bullish": bool(latest_data.get('macd_bullish_cross', 0)),
+                    "ma_bullish": bool(latest_data.get('ma_bullish_cross', 0))
+                },
+                "macro_regime": float(latest_data.get('macro_regime_score', 0))
+            }
+            
+            # Step 2: LLM validation and ranking
+            llm_result = self.get_llm_validation(ticker, ml_result, market_context)
+            
+            # Step 3: Generate final forecast row
+            forecast_row = self.generate_forecast_row(ticker, ml_result, llm_result, market_context)
+            forecasts.append(forecast_row)
+        
+        # Create final result with metadata
+        result = {
+            "rows": forecasts,
+            "last_update": datetime.now().isoformat(),
+            "source": ["ml_model", "g4f_llm", "market_data"],
+            "model_version": "hybrid_v1",
+            "tickers_processed": tickers,
+            "total_forecasts": len(forecasts)
+        }
+        
+        self.logger.info(f"Generated {len(forecasts)} forecasts for {len(tickers)} tickers")
+        return result
+    
+    def save_forecasts(self, forecasts: Dict, filename: str = "forecasts.json"):
+        """
+        Save forecasts to file with metadata
+        """
+        filepath = self.data_dir / filename
+        
+        # Add metadata to forecasts
+        forecasts_with_meta = {
+            "last_update": datetime.now().isoformat(),
+            "source": ["ml_model", "g4f_llm", "market_data"],
+            "model_version": "hybrid_v1",
+            "data": forecasts
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump(forecasts_with_meta, f, indent=2, default=str)
+        
+        self.logger.info(f"Forecasts saved to {filepath}")
+    
+    def run_forecast_job(self, tickers: List[str] = None):
+        """
+        Execute the forecast job and save results
+        """
+        if tickers is None:
+            # Default to major indices/stocks for demo
+            tickers = ["SPY", "QQQ", "AAPL", "MSFT", "TSLA", "NVDA", "GOOGL", "META"]
+        
+        # Generate forecasts
+        forecasts = self.generate_hybrid_forecasts(tickers)
+        
+        # Save to file
+        self.save_forecasts(forecasts)
+        
+        return forecasts
+
+# Example usage:
+# hybrid_forecast = ForecastHybridV1()
+# result = hybrid_forecast.run_forecast_job(["AAPL", "GOOGL", "MSFT"])

@@ -396,6 +396,8 @@ On avance ensemble, sans casser, et sans faire double travail.
 Let’s ship. 🚀
 
 # ✅ Bonnes pratiques 
+
+
 ## 1) Prendre une tâche (anti-collision)
 
 * Crée un **lock** avant tout: `.locks/<TASK-ID>.lock`
