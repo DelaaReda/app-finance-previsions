@@ -1049,8 +1049,8 @@ Chaque agent a :
 * des bonus unlocks (accès à plus de responsabilité, outils, crédits usage)
 
 * Chaque Nouveau Agent a le droit de choisir un Prénom Masculin ou Féminin selon son gout, son role, il doit créer un nom pour lui avec numero comme les joueurs de soccer, chaqu'un a un numero aussi, et choisir votre superhero favori aussi : exemple STEPHANE-DATA-MASTER-BATMAN-10
-* ensuite vous devez créer un fichier Markdown pour lister sur quoi vous travailler individuellement, cela permettra aux agents agents de savoir sur quoi vous travailler, mettez ce qui est accompli avec points gagné, ce qui est en cours et ce qui est planifié apres aussi.
-* doit lire le markdown : AGENTS.md
+* ensuite vous devez créer un fichier Markdown pour lister sur quoi vous travailler individuellement, cela permettra aux agents agents de savoir sur quoi vous travailler, mettez ce qui est accompli avec points gagné, ce qui est en cours et ce qui est planifié apres aussi, exemple de markdown file name : STEPHANE-DATA-MASTER-BATMAN-10.md
+* Chaque agent doit lire le markdown : AGENTS.md
 
 ---
 

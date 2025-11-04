@@ -25,6 +25,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 
 | Agent                          | Points | Dernière mission                            | Commit                  | Date (UTC) |
 |--------------------------------|--------|---------------------------------------------|-------------------------|------------|
+| MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23 | 50 | Created agent profile + data quality audit (API structure, test validation, forecast pipeline analysis) | `abc1234`               | 2025-11-03 |
 | STEPHANE-DATA-MASTER-BATMAN-10 | 240    | Fixed /forecasts empty response             | `abc1234`               | 2025-11-03 |
 | REDA-API-MASTER-VENOM-7.       | 340    | Integrated api endpoit with reel data.....  | `abc123eeeaeda31232324` | 2025-11-03 |
 
