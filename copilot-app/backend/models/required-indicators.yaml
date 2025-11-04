@@ -1,0 +1,266 @@
+# Required Technical & Fundamental Indicators - Finance Copilot System
+# File: /models/required-indicators.yaml
+# Purpose: Define mandatory indicators for forecast engine
+# Mission: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+---
+version: "1.0"
+
+# Technical Indicators
+technical:
+  moving_averages:
+    - name: "sma_20"
+      description: "Simple Moving Average 20 periods"
+      formula: "close / 20"
+      timeframe: "daily"
+      usage: "trend_direction"
+      category: "trend"
+    
+    - name: "sma_50"
+      description: "Simple Moving Average 50 periods"
+      formula: "close / 50"
+      timeframe: "daily"
+      usage: "trend_direction"
+      category: "trend"
+    
+    - name: "ema_12"
+      description: "Exponential Moving Average 12 periods"
+      formula: "EMA(close, 12)"
+      timeframe: "daily"
+      usage: "momentum"
+      category: "momentum"
+    
+    - name: "ema_26"
+      description: "Exponential Moving Average 26 periods"
+      formula: "EMA(close, 26)"
+      timeframe: "daily"
+      usage: "momentum"
+      category: "momentum"
+
+  momentum:
+    - name: "rsi_14"
+      description: "Relative Strength Index 14 periods"
+      formula: "RSI(close, 14)"
+      timeframe: "daily"
+      usage: "overbought_oversold"
+      category: "momentum"
+    
+    - name: "macd_line"
+      description: "MACD Line (12,26,9)"
+      formula: "ema_12 - ema_26"
+      timeframe: "daily"
+      usage: "momentum"
+      category: "momentum"
+    
+    - name: "macd_signal"
+      description: "MACD Signal Line (9-period EMA of MACD)"
+      formula: "EMA(macd_line, 9)"
+      timeframe: "daily"
+      usage: "momentum"
+      category: "momentum"
+    
+    - name: "stoch_k"
+      description: "Stochastic %K"
+      formula: "(close - lowest_low_14) / (highest_high_14 - lowest_low_14) * 100"
+      timeframe: "daily"
+      usage: "momentum"
+      category: "momentum"
+
+  volatility:
+    - name: "bb_upper"
+      description: "Bollinger Bands Upper Band (20,2)"
+      formula: "sma_20 + (std_dev_20 * 2)"
+      timeframe: "daily"
+      usage: "volatility"
+      category: "volatility"
+    
+    - name: "bb_lower"
+      description: "Bollinger Bands Lower Band (20,2)"
+      formula: "sma_20 - (std_dev_20 * 2)"
+      timeframe: "daily"
+      usage: "volatility"
+      category: "volatility"
+    
+    - name: "bb_width"
+      description: "Bollinger Bands Width"
+      formula: "bb_upper - bb_lower"
+      timeframe: "daily"
+      usage: "volatility_regime"
+      category: "volatility"
+    
+    - name: "atr_14"
+      description: "Average True Range 14 periods"
+      formula: "ATR(high, low, close, 14)"
+      timeframe: "daily"
+      usage: "volatility"
+      category: "volatility"
+
+  volume:
+    - name: "obv"
+      description: "On Balance Volume"
+      formula: "cumulative(volume * direction)"
+      timeframe: "daily"
+      usage: "volume_trend"
+      category: "volume"
+    
+    - name: "volume_sma_20"
+      description: "Volume Simple Moving Average 20 periods"
+      formula: "volume / 20"
+      timeframe: "daily"
+      usage: "volume_trend"
+      category: "volume"
+
+# Fundamental Indicators
+fundamental:
+  valuation:
+    - name: "pe_ratio"
+      description: "Price to Earnings Ratio"
+      formula: "price / eps_ttm"
+      timeframe: "quarterly"
+      usage: "valuation"
+      category: "valuation"
+    
+    - name: "pb_ratio"
+      description: "Price to Book Ratio"
+      formula: "price / book_value_per_share"
+      timeframe: "quarterly"
+      usage: "valuation"
+      category: "valuation"
+    
+    - name: "ps_ratio"
+      description: "Price to Sales Ratio"
+      formula: "price / sales_per_share"
+      timeframe: "quarterly"
+      usage: "valuation"
+      category: "valuation"
+
+  profitability:
+    - name: "roe"
+      description: "Return on Equity"
+      formula: "net_income / shareholders_equity"
+      timeframe: "quarterly"
+      usage: "quality"
+      category: "profitability"
+    
+    - name: "roa"
+      description: "Return on Assets"
+      formula: "net_income / total_assets"
+      timeframe: "quarterly"
+      usage: "quality"
+      category: "profitability"
+    
+    - name: "roic"
+      description: "Return on Invested Capital"
+      formula: "nopat / invested_capital"
+      timeframe: "quarterly"
+      usage: "quality"
+      category: "profitability"
+
+  growth:
+    - name: "revenue_growth"
+      description: "Revenue Growth YoY"
+      formula: "(revenue_current - revenue_prev) / revenue_prev"
+      timeframe: "quarterly"
+      usage: "growth"
+      category: "growth"
+    
+    - name: "eps_growth"
+      description: "Earnings Per Share Growth YoY"
+      formula: "(eps_current - eps_prev) / eps_prev"
+      timeframe: "quarterly"
+      usage: "growth"
+      category: "growth"
+
+# Market Regime Indicators
+regime:
+  volatility_regime:
+    - name: "vix_level"
+      description: "Current VIX level"
+      formula: "vix_index"
+      timeframe: "daily"
+      usage: "volatility_regime"
+      category: "regime"
+    
+    - name: "vix_change"
+      description: "VIX daily change"
+      formula: "(vix_today - vix_yesterday) / vix_yesterday"
+      timeframe: "daily"
+      usage: "volatility_regime"
+      category: "regime"
+    
+    - name: "volatility_regime"
+      description: "Market volatility regime classification"
+      formula: "high_vol if vix > 25 else low_vol if vix < 15 else normal_vol"
+      timeframe: "daily"
+      usage: "regime_classification"
+      category: "regime"
+
+  trend_regime:
+    - name: "sma_200"
+      description: "200-day Simple Moving Average"
+      formula: "close / 200"
+      timeframe: "daily"
+      usage: "long_term_trend"
+      category: "regime"
+    
+    - name: "price_above_sma200"
+      description: "Price above 200-day moving average (bullish/bearish)"
+      formula: "price > sma_200"
+      timeframe: "daily"
+      usage: "regime_classification"
+      category: "regime"
+
+# Market Microstructure Indicators
+microstructure:
+  liquidity:
+    - name: "bid_ask_spread"
+      description: "Bid-ask spread"
+      formula: "(ask_price - bid_price) / mid_price"
+      timeframe: "real_time"
+      usage: "liquidity"
+      category: "microstructure"
+
+# Calculated Features for ML Model
+calculated_features:
+  ratios:
+    - name: "rsi_macd_ratio"
+      description: "Ratio of RSI to MACD"
+      formula: "rsi_14 / macd_line"
+      timeframe: "daily"
+      usage: "combined_signal"
+      category: "calculated"
+    
+    - name: "bb_position"
+      description: "Position within Bollinger Bands"
+      formula: "(close - bb_lower) / (bb_upper - bb_lower)"
+      timeframe: "daily"
+      usage: "relative_position"
+      category: "calculated"
+    
+    - name: "atr_percent"
+      description: "ATR as percentage of price"
+      formula: "atr_14 / close * 100"
+      timeframe: "daily"
+      usage: "normalized_volatility"
+      category: "calculated"
+
+# Required Data Sources
+data_sources:
+  - name: "yfinance"
+    indicators: ["price", "volume", "high", "low", "close"]
+    frequency: "daily"
+  
+  - name: "fred"
+    indicators: ["vix", "cpi", "interest_rates"]
+    frequency: "daily/monthly"
+  
+  - name: "earnings_calendar"
+    indicators: ["eps_surprise", "revenue_surprise"]
+    frequency: "event_based"
+
+# Validation Requirements
+validation_criteria:
+  - minimum_data_points: 252  # 1 year of daily data
+  - maximum_null_percentage: 5
+  - refresh_frequency: "daily"
+  - consistency_check: true
