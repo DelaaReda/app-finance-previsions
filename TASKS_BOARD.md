@@ -63,11 +63,11 @@ backend/
 **But**: app FastAPI minimaliste mais clean.
 
 #### FC-HOTFIX-004 — I/O disque + cache léger (never-empty)
-**Status**: CLAIMED
+**Status**: DONE
 
 **But**: lecture/écriture JSON + métadonnées de fraîcheur.
 
-**Claimed by**: ALEX-API-ARCHITECT-SUPERMAN-7
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-005 — Services & routes "news" et "forecasts"
 **Status**: AVAILABLE to claim
