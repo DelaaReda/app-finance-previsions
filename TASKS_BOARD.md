@@ -51,9 +51,11 @@ backend/
 * `curl :8050/api/health` renvoie `{ ok:true }`.
 
 #### FC-HOTFIX-002 — Middlewares & envelope de réponse
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED
 
 **But**: avoir un middleware minimal et une réponse standard `{ ok, data }`.
+
+**Claimed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-003 — `main.py` propre + routes incluses
 **Status**: AVAILABLE to claim
@@ -1100,7 +1102,7 @@ echo "SMOKE OK"
 
 # 📈 P1 — Data / ML / LLM
 
-## FC-P1-011 — News Ingest v1 (RSS multi-sources)
+## FC-P1-011 — News Ingest v1 (RSS multi-sources) - DONE
 
 **But**: > 20 articles réels, refresh < 15 min.
 
@@ -1156,6 +1158,13 @@ echo "SMOKE OK"
 **Preuves**
 
 * `curl` + capture `/news` stable.
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created**:
+- `/jobs/news_ingest.py` - Complete RSS ingestion pipeline with deduplication and ticker mapping
+- `/scheduler/app.py` - Scheduler with 15-min job for news refresh
+- `/storage/io.py` and `/services/cache_layer.py` - Used for persistent storage (from HOTFIX)
 
 ---
 
