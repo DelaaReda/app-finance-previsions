@@ -199,6 +199,8 @@ async def get_stock_fundamentals(ticker: str):
 # ============================================================================
 # ROUTES - NEWS (Pilier 3)
 # ============================================================================
+from src.api.services.news_service import news_service
+
 @app.get("/api/news/feed")
 async def get_news_feed(
     tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
@@ -210,48 +212,7 @@ async def get_news_feed(
     Récupère le flux de news scoré et dédupliqué.
     Exemple: /api/news/feed?tickers=AAPL&limit=20&q=earnings
     """
-    try:
-        # Run news pipeline
-        regions = ["US", "CA", "INTL"]
-        tgt_ticker = tickers[0] if tickers and len(tickers) > 0 else None
-        
-        items = run_news_pipeline(
-            regions=regions,
-            window=window,
-            query=q or "",
-            tgt_ticker=tgt_ticker,
-            per_source_cap=None,
-            limit=limit
-        )
-        
-        # Sérialiser les items
-        serialized_items = []
-        for item in items:
-            serialized_items.append({
-                "title": item.get("title", ""),
-                "url": item.get("url", ""),
-                "published": item.get("published", ""),
-                "source": item.get("source", ""),
-                "summary": item.get("summary", ""),
-                "score": item.get("score", 0),
-                "importance": item.get("importance", 0),
-                "freshness": item.get("freshness", 0),
-                "relevance": item.get("relevance", 0),
-                "sentiment": item.get("sentiment", None),
-                "entities": item.get("entities", []),
-                "tickers": item.get("tickers", []),
-            })
-        
-        return {
-            "ok": True,
-            "data": {
-                "items": serialized_items,
-                "count": len(serialized_items),
-                "generated_at": datetime.utcnow().isoformat()
-            }
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return await news_service.get_news_feed(tickers, q, limit, window)
 
 @app.post("/api/news/save")
 async def save_news_to_memory(item: Dict[str, Any]):
@@ -432,7 +393,7 @@ async def copilot_ask(request: CopilotRequest):
 # ============================================================================
 # ROUTES - FORECASTS (existant)
 # ============================================================================
-from api.services.forecast_service import forecast_service
+from src.api.services.forecast_service import forecast_service
 
 @app.get("/api/forecasts")
 async def get_forecasts(
@@ -441,7 +402,7 @@ async def get_forecasts(
     sort_by: str = Query("score")
 ):
     """Route existante pour les prévisions."""
-    return forecast_service.get_all_forecasts(asset_type, horizon, sort_by)
+    return await forecast_service.get_all_forecasts(asset_type, horizon, sort_by)
 
 # ============================================================================
 # HEALTH CHECK

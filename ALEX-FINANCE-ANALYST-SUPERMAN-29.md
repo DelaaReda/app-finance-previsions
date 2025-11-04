@@ -10,6 +10,7 @@
 - [x] Définir indicateurs obligatoires
 - [x] Pipeline news→macro→stocks→forecast
 - [x] Build `alpha matrix` (signal scoring)
+- [ ] FC-P1-013: Forecasts Hybrid v1 (ML + G4F ranking)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -31,7 +32,7 @@
 - [x] Élaboration de la matrice alpha (signal scoring) (COMPLETED)
 - [x] Définition des indicateurs techniques obligatoires (COMPLETED)
 - [x] Construction du pipeline news→macro→stocks→forecast (COMPLETED)
-- [ ] Intégration avec le moteur d'IA (G4F) pour validation LLM
+- [x] Intégration avec le moteur d'IA (G4F) pour validation LLM (IN PROGRESS - FC-P1-013)
 - [ ] Tests de performance et validation des prévisions
 
 ## 📝 Description des Activités

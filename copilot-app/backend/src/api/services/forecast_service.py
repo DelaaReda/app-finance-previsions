@@ -1,5 +1,5 @@
 """
-Service layer for forecasts with caching and proper data handling.
+Service layer for forecasts with persistent caching.
 Addresses the issue of empty responses in the forecasts endpoint.
 """
 from __future__ import annotations
@@ -8,8 +8,12 @@ from pathlib import Path
 import pandas as pd
 import json
 from datetime import datetime, timedelta
+import asyncio
 
-from core.cache import ttl_cache
+# New imports for persistent caching
+from backend.storage.json_storage import load_json, save_json
+from backend.services.cache_service import load_or_compute
+
 from analytics.forecaster import forecast_ticker, ForecastResult
 from core.data_store import query_duckdb, write_parquet
 
@@ -19,50 +23,68 @@ class ForecastService:
         self.cache_ttl = 300  # 5 minutes
         self.data_path = Path("data/forecast")
     
-    @ttl_cache(ttl_seconds=1800)  # 30 minutes cache
-    def get_all_forecasts(self, 
-                         asset_type: str = "all", 
-                         horizon: str = "all", 
-                         sort_by: str = "score") -> Dict[str, Any]:
+    async def get_all_forecasts(self, 
+                               asset_type: str = "all", 
+                               horizon: str = "all", 
+                               sort_by: str = "score") -> Dict[str, Any]:
         """
-        Get all forecasts with proper caching and fallback mechanisms.
+        Get all forecasts with persistent caching and fallback mechanisms.
         Returns real data or empty structure but never fails.
         """
-        try:
-            # Try to load from parquet first
-            forecasts_data = self._load_cached_forecasts()
-            
-            if not forecasts_data:
-                # If no cached data, generate fresh forecasts for common tickers
-                forecasts_data = self._generate_fallback_forecasts()
-            
-            # Apply filters
-            filtered_data = self._filter_forecasts(forecasts_data, asset_type, horizon)
-            
-            # Apply sorting
-            sorted_data = self._sort_forecasts(filtered_data, sort_by)
-            
-            return {
-                "ok": True,
-                "data": {
+        # Use the persistent cache mechanism
+        key = f"forecasts_{asset_type}_{horizon}_{sort_by}"
+        
+        async def compute_forecasts():
+            try:
+                # Try to load from parquet first
+                forecasts_data = self._load_cached_forecasts()
+                
+                if not forecasts_data:
+                    # If no cached data, generate fresh forecasts for common tickers
+                    forecasts_data = self._generate_fallback_forecasts()
+                
+                # Apply filters
+                filtered_data = self._filter_forecasts(forecasts_data, asset_type, horizon)
+                
+                # Apply sorting
+                sorted_data = self._sort_forecasts(filtered_data, sort_by)
+                
+                return {
                     "rows": sorted_data,
                     "count": len(sorted_data),
                     "asset_type": asset_type,
                     "generated_at": datetime.utcnow().isoformat(),
                     "source": "parquet_cache" if self._has_cached_data() else "realtime_calculation"
                 }
-            }
-        except Exception as e:
-            # Fallback: return structured empty response instead of failing
-            return {
-                "ok": False,
-                "data": {
+            except Exception as e:
+                # Fallback: return structured empty response instead of failing
+                return {
                     "rows": [],
                     "count": 0,
                     "error": str(e),
                     "generated_at": datetime.utcnow().isoformat(),
                     "source": "error_fallback"
                 }
+        
+        # Use load_or_compute to get data with persistent caching
+        result = await load_or_compute(
+            key=key,
+            compute_fn=compute_forecasts,
+            sources=["forecast_service", "parquet", "realtime_calculation"]
+        )
+        
+        # Ensure the result has the expected format for the API
+        if result and "data" not in result:
+            # If load_or_compute returned raw computed data, wrap it properly
+            return {
+                "ok": result.get("error") is None,
+                "data": result
+            }
+        else:
+            # If load_or_compute returned cached data with metadata, use it as is
+            return {
+                "ok": result is not None and "error" not in (result.get("data", {}) or {}),
+                "data": result.get("data", result) if result else {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
             }
     
     def _load_cached_forecasts(self) -> List[Dict[str, Any]]:

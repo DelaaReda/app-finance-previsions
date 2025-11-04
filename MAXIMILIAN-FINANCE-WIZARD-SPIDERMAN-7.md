@@ -45,6 +45,7 @@
   - `config.py`: Gestion de configuration
   - `requirements.txt`: Dépendances du système
   - `main.py`: Point d'entrée pour exécution autonome
+- **Statut**: Le code est prêt, nécessite installation des dépendances via requirements.txt pour exécution
 
 ## 📝 Description des Activités
 En tant que FINANCE-WIZARD, ma mission est d'être le cerveau prévisionnel du système. J'ai complété le modèle baseline ARIMA/XGB, le Node2Vec / Market embedding et la couche LLM scoring explanation, créant ainsi un moteur de prévision hybride ML + LLM entièrement fonctionnel pour le système Finance Copilot.
