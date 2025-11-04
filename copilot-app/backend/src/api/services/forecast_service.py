@@ -1,6 +1,7 @@
 """
 Service layer for forecasts with persistent caching.
 Addresses the issue of empty responses in the forecasts endpoint.
+Updated to use hybrid ML + G4F system (FC-P1-013).
 """
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
@@ -16,12 +17,15 @@ from backend.services.cache_service import load_or_compute
 
 from analytics.forecaster import forecast_ticker, ForecastResult
 from core.data_store import query_duckdb, write_parquet
+from backend.models.forecast_hybrid_v1 import ForecastHybridV1
 
 
 class ForecastService:
     def __init__(self):
         self.cache_ttl = 300  # 5 minutes
         self.data_path = Path("data/forecast")
+        # Initialize the hybrid forecast system
+        self.hybrid_system = ForecastHybridV1()
     
     async def get_all_forecasts(self, 
                                asset_type: str = "all", 
@@ -29,6 +33,7 @@ class ForecastService:
                                sort_by: str = "score") -> Dict[str, Any]:
         """
         Get all forecasts with persistent caching and fallback mechanisms.
+        Updated to use hybrid ML + G4F system (FC-P1-013).
         Returns real data or empty structure but never fails.
         """
         # Use the persistent cache mechanism
@@ -36,15 +41,15 @@ class ForecastService:
         
         async def compute_forecasts():
             try:
-                # Try to load from parquet first
-                forecasts_data = self._load_cached_forecasts()
+                # Try to load from the hybrid system's saved forecasts first
+                forecasts_data = self._load_hybrid_forecasts()
                 
-                if not forecasts_data:
-                    # If no cached data, generate fresh forecasts for common tickers
-                    forecasts_data = self._generate_fallback_forecasts()
+                if not forecasts_data or not forecasts_data.get("rows"):
+                    # If no hybrid forecast data, execute the hybrid system
+                    forecasts_data = self._generate_hybrid_forecasts()
                 
                 # Apply filters
-                filtered_data = self._filter_forecasts(forecasts_data, asset_type, horizon)
+                filtered_data = self._filter_forecasts(forecasts_data.get("rows", []), asset_type, horizon)
                 
                 # Apply sorting
                 sorted_data = self._sort_forecasts(filtered_data, sort_by)
@@ -53,8 +58,9 @@ class ForecastService:
                     "rows": sorted_data,
                     "count": len(sorted_data),
                     "asset_type": asset_type,
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "source": "parquet_cache" if self._has_cached_data() else "realtime_calculation"
+                    "generated_at": forecasts_data.get("last_update", datetime.utcnow().isoformat()),
+                    "source": forecasts_data.get("source", ["hybrid_ml_g4f"]),
+                    "model_version": forecasts_data.get("model_version", "hybrid_v1")
                 }
             except Exception as e:
                 # Fallback: return structured empty response instead of failing
@@ -63,14 +69,15 @@ class ForecastService:
                     "count": 0,
                     "error": str(e),
                     "generated_at": datetime.utcnow().isoformat(),
-                    "source": "error_fallback"
+                    "source": ["hybrid_ml_g4f", "error_fallback"],
+                    "model_version": "hybrid_v1"
                 }
         
         # Use load_or_compute to get data with persistent caching
         result = await load_or_compute(
             key=key,
             compute_fn=compute_forecasts,
-            sources=["forecast_service", "parquet", "realtime_calculation"]
+            sources=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
         )
         
         # Ensure the result has the expected format for the API
@@ -86,6 +93,42 @@ class ForecastService:
                 "ok": result is not None and "error" not in (result.get("data", {}) or {}),
                 "data": result.get("data", result) if result else {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
             }
+    
+    def _load_hybrid_forecasts(self) -> Dict[str, Any]:
+        """
+        Load forecasts from the hybrid system's saved file.
+        """
+        try:
+            # The hybrid system saves to data/forecasts.json
+            forecasts_file = Path(__file__).parent.parent.parent / "data" / "forecasts.json"
+            
+            if forecasts_file.exists():
+                with open(forecasts_file, 'r') as f:
+                    content = json.load(f)
+                
+                # Return the data part if it exists
+                if "data" in content:
+                    return content["data"]
+                else:
+                    # If the format is different, return as is
+                    return content
+        except Exception as e:
+            print(f"Error loading hybrid forecasts: {e}")
+            pass
+        
+        return {}
+    
+    def _generate_hybrid_forecasts(self) -> Dict[str, Any]:
+        """
+        Generate forecasts using the hybrid system (ML + G4F).
+        """
+        try:
+            # Use the hybrid system to generate forecasts for common tickers
+            common_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM"]
+            return self.hybrid_system.run_forecast_job(common_tickers)
+        except Exception as e:
+            print(f"Error generating hybrid forecasts: {e}")
+            return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"]}
     
     def _load_cached_forecasts(self) -> List[Dict[str, Any]]:
         """Load forecasts from parquet cache."""

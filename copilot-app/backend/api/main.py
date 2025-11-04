@@ -391,18 +391,14 @@ async def copilot_ask(request: CopilotRequest):
         return {"ok": False, "error": str(e)}
 
 # ============================================================================
-# ROUTES - FORECASTS (existant)
+# ROUTES - FORECASTS (Updated for FC-P1-013)
 # ============================================================================
 from src.api.services.forecast_service import forecast_service
 
 @app.get("/api/forecasts")
-async def get_forecasts(
-    asset_type: str = Query("all"),
-    horizon: str = Query("all"),
-    sort_by: str = Query("score")
-):
-    """Route existante pour les prévisions."""
-    return await forecast_service.get_all_forecasts(asset_type, horizon, sort_by)
+async def get_forecasts():
+    """Updated route for hybrid ML + G4F forecasts."""
+    return await forecast_service.get_all_forecasts()
 
 # ============================================================================
 # HEALTH CHECK
