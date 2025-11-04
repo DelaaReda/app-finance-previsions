@@ -63,3 +63,25 @@ En tant que DATA-QUALITY-MANAGER, ma mission est de garantir qu'aucune donnée v
 ### 4. Références à des agents spécifiques
 - **Découverte**: Plusieurs agents sont nommés dans le code (ALEX, MAXIMILIAN, etc.) mais il faut vérifier leurs contributions réelles
 - **Recommandation**: Vérification nécessaire des commits et contributions pour chaque agent
+
+## 🤝 Coordination entre agents - Actions prises
+
+### 1. Contradiction identifiée: ALEX-API-ARCHITECT vs réalité technique
+- **Problème**: ALEX-API-ARCHITECT affirme avoir "corrigé l'endpoint `/api/forecasts`" mais les fichiers parquet sont toujours absents
+- **Action**: Coordination nécessaire entre ALEX-API-ARCHITECT et ALEX-BACKEND pour s'assurer que l'ingestion alimente réellement les prévisions
+- **Recommandation**: Clarifier si la "correction" signifie juste structure de réponse ou données réelles
+
+### 2. Dépendances critiques identifiées
+- **MAXIMILIAN** (modèles de prévision) dépend de **ALEX-BACKEND** (pipeline d'ingestion)
+- **ALEX-API-ARCHITECT** (API forecasts) dépend de **ALEX-BACKEND** (données de prévision)
+- **STEPHANE** (tests) dépend de la correction des imports API
+
+### 3. Potentiel de duplication évité
+- **Action prise**: Alerté les agents sur la nécessité de se coordonner sur le pipeline d'ingestion
+- **Action prise**: Recommandé que **ALEX-BACKEND** finalise l'ingestion avant que **MAXIMILIAN** ne commence les modèles
+
+### 4. Priorisation des tâches critiques
+- **Priorité 1**: Correction des imports pour permettre aux tests de fonctionner (STEPHANE)
+- **Priorité 2**: Pipeline d'ingestion complet (ALEX-BACKEND) 
+- **Priorité 3**: Modèles de prévision (MAXIMILIAN)
+- **Priorité 4**: Intégration API (ALEX-API-ARCHITECT)

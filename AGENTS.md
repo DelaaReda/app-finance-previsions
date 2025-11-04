@@ -15,6 +15,13 @@ Donc **pas de données simulées**.
 
 ## 🚨 RÈGLES FONDAMENTALES
 
+
+### lire la doc apres ce markdown pour comprendre comment bien faire les choses : 
+
+
+copilot-app/docs (Une portion de la doc est ancienne et peut etre Legacy alors faites attention)
+
+
 ### ✅ TOUJOURS LANCER LE PROJET AVEC LE SCRIPT FOURNI
 
 Pour éviter :
@@ -1996,3 +2003,24 @@ moteur de forecast :
 * ✅ doc RUNBOOK pour agents
 
 Tout nouveau agents doit prendre du temps pour comprendre le projet, il y'a un folder doc qui contiens l'historique, certaines documenetations peuvent etre expiré, exemple tous ce qui fait reference a Dash ou Streamlit UI
+
+## 📋 Coordination Agents - Checklist obligatoire
+
+Avant de commencer une tâche, chaque agent doit : 
+
+### 1. Vérifier les dépendances entre agents
+| Agent | Tâche principale | Dépend de | Produit pour |
+|-------|------------------|-----------|--------------|
+| ALEX-BACKEND | Pipeline d'ingestion | - | MAXIMILIAN, ALEX-API-ARCHITECT |
+| MAXIMILIAN | Modèles de prévision | ALEX-BACKEND | ALEX-API-ARCHITECT |
+| ALEX-API-ARCHITECT | API & architecture | MAXIMILIAN | Tous les autres |
+| ALEX-FINANCE-ANALYST | Signaux alpha | Tous | Production |
+| STEPHANE | Tests & validation | Tous | Qualité |
+| MICHEL | Coordination & qualité | Tous | Alignement |
+
+### 2. Messages de coordination critiques
+- **ALEX-BACKEND** : Attendez que votre pipeline d'ingestion produise des fichiers parquet avant de dire que c'est terminé
+- **ALEX-API-ARCHITECT** : Vérifiez que les données réelles sont présentes avant de dire que `/api/forecasts` est corrigé
+- **MAXIMILIAN** : Attendez que les données d'ingestion soient disponibles avant de construire vos modèles
+- **STEPHANE** : Les tests actuels échouent - corrigez les imports avant de les exécuter
+- **Tous** : Communiquez vos progrès dans vos fichiers agent pour éviter les doublons

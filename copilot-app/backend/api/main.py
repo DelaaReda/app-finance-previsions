@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from core.middleware import FinanceMiddleware
 from pydantic import BaseModel
 import pandas as pd
 
@@ -42,6 +43,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Finance-specific middleware
+app.add_middleware(FinanceMiddleware)
 
 # RAG Store singleton
 rag_store = RAGStore()
@@ -428,6 +432,8 @@ async def copilot_ask(request: CopilotRequest):
 # ============================================================================
 # ROUTES - FORECASTS (existant)
 # ============================================================================
+from api.services.forecast_service import forecast_service
+
 @app.get("/api/forecasts")
 async def get_forecasts(
     asset_type: str = Query("all"),
@@ -435,18 +441,7 @@ async def get_forecasts(
     sort_by: str = Query("score")
 ):
     """Route existante pour les prévisions."""
-    try:
-        # TODO: Brancher sur analytics/forecaster.py ou lire parquet
-        return {
-            "ok": True,
-            "data": {
-                "rows": [],
-                "count": 0,
-                "asset_type": asset_type
-            }
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return forecast_service.get_all_forecasts(asset_type, horizon, sort_by)
 
 # ============================================================================
 # HEALTH CHECK
