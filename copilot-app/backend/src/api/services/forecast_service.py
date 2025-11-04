@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 import asyncio
 
 # New imports for persistent caching
-from backend.storage.base import load_json, save_json
-from backend.services.cache_layer import load_or_compute
+from backend.storage.json_storage import load_json, save_json
+from backend.services.cache_service import load_or_compute
 
 from analytics.forecaster import forecast_ticker, ForecastResult
 from core.data_store import query_duckdb, write_parquet
@@ -74,35 +74,34 @@ class ForecastService:
                 }
         
         # Use load_or_compute to get data with persistent caching
-        result = load_or_compute(
+        result = await load_or_compute(
             key,
             compute_forecasts,
             ["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
         )
         
-        # Extract the actual data from the result
-        if result and "data" in result:
-            actual_data = result["data"]
-        else:
-            actual_data = result
+        # Prepare the response with freshness info at the top level
+        if result and isinstance(result, dict) and "data" in result:
+            # This is cached data with metadata, return with freshness info
+            api_response = result["data"].copy() if isinstance(result["data"], dict) else {"rows": [], "count": 0}
+            api_response["freshness"] = result.get("freshness", "unknown")
+            api_response["last_update"] = result.get("last_update")
+            api_response["source"] = result.get("source", [])
             
-        # Ensure the result has the expected format for the API
-        if actual_data and "error" not in actual_data:
             return {
-                "ok": True,
-                "data": actual_data
+                "ok": "error" not in (result.get("data", {}) or {}),
+                "data": api_response
             }
         else:
-            # Return empty structure but never fail
+            # This is computed data without cache metadata, add basic freshness info
+            api_response = result if isinstance(result, dict) else {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
+            api_response["freshness"] = "fresh"
+            api_response["last_update"] = datetime.utcnow().isoformat()
+            api_response["source"] = ["realtime_calculation"]
+            
             return {
-                "ok": False,
-                "data": {
-                    "rows": [],
-                    "count": 0,
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "source": ["fallback"],
-                    "model_version": "hybrid_v1"
-                }
+                "ok": "error" not in (result or {}),
+                "data": api_response
             }
     
     def _load_hybrid_forecasts(self) -> Dict[str, Any]:

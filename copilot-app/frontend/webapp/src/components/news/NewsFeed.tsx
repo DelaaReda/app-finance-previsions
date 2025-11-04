@@ -2,18 +2,20 @@
 import React, { Suspense } from "react";
 import NewsCard from "./NewsCard";
 import { useNews } from "@/hooks/useNews";
+import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 const NewsFilters = React.lazy(() => import("./NewsFilters"));
 
 export default function NewsFeed() {
-  const { items, filters, setFilters, loading, error, hasMore, loadMore } = useNews();
+  const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNews();
 
   return (
     <section>
-      {/* Filtres */}
-      <div className="mb-4">
+      {/* Filtres et badge de fraîcheur */}
+      <div className="flex items-center justify-between mb-4">
         <Suspense fallback={null}>
           <NewsFilters value={filters} onChange={setFilters} />
         </Suspense>
+        <FreshnessBadge freshness={freshness} stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false} />
       </div>
 
       {/* États */}

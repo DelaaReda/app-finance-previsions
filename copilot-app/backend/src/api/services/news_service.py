@@ -96,27 +96,33 @@ class NewsService:
         
         # Use load_or_compute to get data with persistent caching
         result = await load_or_compute(
-            key=key,
-            compute_fn=compute_news_feed,
-            sources=["news_pipeline", "rss_feeds", "api_sources"]
+            key,
+            compute_news_feed,
+            ["news_pipeline", "rss_feeds", "api_sources"]
         )
         
-        # Ensure the result has the expected format for the API
-        if result and "data" not in result:
-            # If load_or_compute returned raw computed data, wrap it properly
+        # Prepare the response with freshness info at the top level
+        if result and isinstance(result, dict) and "data" in result:
+            # This is cached data with metadata, return with freshness info
+            api_response = result["data"].copy() if isinstance(result["data"], dict) else {"items": [], "count": 0}
+            api_response["freshness"] = result.get("freshness", "unknown")
+            api_response["last_update"] = result.get("last_update")
+            api_response["source"] = result.get("source", [])
+            
             return {
-                "ok": result.get("error") is None,
-                "data": result
+                "ok": "error" not in (result.get("data", {}) or {}),
+                "data": api_response
             }
         else:
-            # If load_or_compute returned cached data with metadata, use it as is
+            # This is computed data without cache metadata, add basic freshness info
+            api_response = result if isinstance(result, dict) else {"items": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
+            api_response["freshness"] = "fresh"
+            api_response["last_update"] = datetime.utcnow().isoformat()
+            api_response["source"] = ["realtime_calculation"]
+            
             return {
-                "ok": result is not None and "error" not in (result.get("data", {}) or {}),
-                "data": result.get("data", result) if result else {
-                    "items": [], 
-                    "count": 0, 
-                    "generated_at": datetime.utcnow().isoformat()
-                }
+                "ok": "error" not in (result or {}),
+                "data": api_response
             }
 
 

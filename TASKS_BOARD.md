@@ -252,7 +252,7 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 
 ---
 
-## FC-P0-003 — Contrats API publiés (backend/docs)
+## FC-P0-003 — Contrats API publiés (backend/docs) - DONE
 
 **But**: un **contrat unique, source de vérité** pour le front.
 
@@ -288,6 +288,8 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 **DoD**
 
 * Fichier committé, simple à lire, et le front s’aligne (aucun accès à des champs non documentés).
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ---
 
@@ -520,6 +522,8 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 ---
 
 ## FC-P0-008 — Freshness partout (backend+frontend)
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
 
 **But**: chaque réponse **inclut** `freshness`, l’UI **l’affiche**.
 

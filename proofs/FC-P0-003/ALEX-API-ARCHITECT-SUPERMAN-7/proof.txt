@@ -1,0 +1,20 @@
+Preuve de création des contrats API - FC-P0-003
+
+1. Vérification du contenu du fichier:
+
+- Tous les endpoints critiques sont documentés
+- Les règles générales sont clairement énoncées
+- Format JSON exemple pour chaque endpoint
+- Respect des règles: collections jamais null, toujours []
+
+2. Vérification que le fichier est bien accessible:
+
+- Chemin: copilot-app/backend/api/contracts.md
+- Format: Markdown avec structure claire
+- Détails: chaque endpoint a ses paramètres et réponses définies
+
+3. Alignement avec la mission:
+
+- Documentation centralisée des contrats API
+- Référence pour les développeurs frontend
+- Respect des principes "never-empty" et API stables

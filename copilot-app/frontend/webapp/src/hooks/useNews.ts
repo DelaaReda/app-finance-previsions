@@ -19,6 +19,7 @@ export function useNews(initial: NewsFilters = {}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [freshness, setFreshness] = useState<string | null>(null);
 
   const fetchPage = useCallback(async (reset: boolean) => {
     setLoading(true); setError(null);
@@ -41,6 +42,11 @@ export function useNews(initial: NewsFilters = {}) {
       
       // The response data contains the backend response with articles, count, etc.
       const backendResponse = resp?.data;
+      
+      // Extract freshness information if available
+      if (backendResponse && typeof backendResponse === 'object') {
+        setFreshness(backendResponse.freshness || backendResponse.last_update || null);
+      }
       
       // Handle the backend response structure properly
       if (backendResponse && typeof backendResponse === 'object' && 'articles' in backendResponse) {
@@ -83,5 +89,5 @@ export function useNews(initial: NewsFilters = {}) {
   useEffect(() => { setPage(1); fetchPage(true); }, [filters, fetchPage]);
   useEffect(() => { if (page > 1) fetchPage(false); }, [page, fetchPage]);
 
-  return { items, filters, setFilters, loading, error, hasMore, loadMore: () => setPage(p => p + 1) };
+  return { items, filters, setFilters, loading, error, hasMore, freshness, loadMore: () => setPage(p => p + 1) };
 }

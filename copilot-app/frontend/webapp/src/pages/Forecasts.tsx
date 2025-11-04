@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiGet } from '../api/client'
+import { FreshnessBadge } from '../components/ui/FreshnessBadge'
 
 type Row = {
   asset_type?: string
@@ -17,17 +18,22 @@ export default function Forecasts() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [freshness, setFreshness] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
-    // The API returns { ok: boolean, data: { rows: [], count: number, asset_type: string } }
-    apiGet<{ ok: boolean; data: { rows: Row[]; count: number; asset_type: string } | null; error?: string }>(`/forecasts`, { asset_type: 'all', horizon: 'all', sort_by: 'score' })
+    // The API returns { ok: boolean, data: { rows: [], count: number, asset_type: string, freshness: string } }
+    apiGet<{ ok: boolean; data: { rows: Row[]; count: number; asset_type: string; freshness?: string } | null; error?: string }>(`/forecasts`, { asset_type: 'all', horizon: 'all', sort_by: 'score' })
       .then((res) => {
-        if (res.ok && res.data && res.data.rows) {
-          setRows(res.data.rows);
-        } else if (res.ok && res.data) {
-          // Handle case where data exists but rows may be undefined
-          setRows(res.data.rows || []);
+        if (res.ok && res.data) {
+          if (res.data.rows) {
+            setRows(res.data.rows);
+          } else {
+            // Handle case where data exists but rows may be undefined
+            setRows([]);
+          }
+          // Extract freshness information if available
+          setFreshness(res.data.freshness || res.data.last_update || null);
         } else {
           setErr(res.error ?? 'Erreur inconnue');
         }
@@ -37,7 +43,13 @@ export default function Forecasts() {
 
   return (
     <div>
-      <h2>Forecasts</h2>
+      <div className="flex items-center justify-between">
+        <h2>Forecasts</h2>
+        <FreshnessBadge 
+          freshness={freshness} 
+          stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false} 
+        />
+      </div>
       {loading && <small>Chargement…</small>}
       {err && <small style={{ color: 'tomato' }}>{err}</small>}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>

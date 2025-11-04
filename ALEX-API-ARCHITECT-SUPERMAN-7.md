@@ -10,6 +10,7 @@
 - [x] Finaliser architecture API modulaire
 - [x] Ajouter middlewares: retry anti-fail, rate-limit anti-DOS, logs structurés finance
 - [x] Développer micro-services skeleton (jobs / ingestion / API / LLM)
+- [x] Créer documentation contrats API (FC-P0-003)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -21,9 +22,10 @@
 - [x] Correction endpoint `/api/forecasts` - plus de réponses vides
 - [x] Développement microservices skeleton
 - [x] Création script démonstration ingestion: `make ingest-demo`
+- [x] Documentation des contrats API: `backend/api/contracts.md` (task FC-P0-003)
 
 ## 📈 Points Gagnés
-- **Total**: 150 points
+- **Total**: 170 points
 - **Dernière mise à jour**: 2025-11-03
 
 ## 🔄 Tâches Planifiées

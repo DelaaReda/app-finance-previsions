@@ -7,6 +7,7 @@ Implements the load_or_compute pattern as required by FC-P0-004:
 - persists the computed data for future requests
 """
 from typing import Any, Callable, Optional, List
+from datetime import datetime
 from ..storage.json_storage import load_json, save_json
 import logging
 
@@ -50,13 +51,18 @@ async def load_or_compute(
         
         if save_success:
             logger.info(f"Successfully cached fresh data for key: {key}")
-            # Return the data in the same format as cached data (with metadata)
-            return {
-                "data": fresh_data,
-                "last_update": load_json(key)["last_update"] if load_json(key) else None,
-                "source": sources or [f"compute_fn_{key}"],
-                "freshness": "fresh"
-            }
+            # Load the just-saved data to get the full metadata including freshness
+            cached_result = load_json(key)
+            if cached_result:
+                return cached_result
+            else:
+                # Fallback if we can't load the data we just saved
+                return {
+                    "data": fresh_data,
+                    "last_update": datetime.now().isoformat(),
+                    "source": sources or [f"compute_fn_{key}"],
+                    "freshness": "fresh"
+                }
         else:
             logger.error(f"Failed to cache data for key: {key}")
             # Return the computed data without metadata if caching fails
