@@ -126,6 +126,386 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 ###################################################### TASKS LIST Yeeey!!!####################################################################
 
 
+
+
+Tu as raison : là, le backend **ne peut pas démarrer** (imports cassés, `timeout` absent, mauvais chemins). On corrige **tout de suite** avec un plan “hotfix” ultra-précis que tu peux coller au board pour les agents. J’ai mis le **pourquoi**, le **comment** et des **snippets prêts à coller**.
+
+---
+
+# 🔧 HOTFIX — remettre le backend sur pied (immédiat)
+
+## Pourquoi ça plante
+
+* `ModuleNotFoundError: No module named 'core'` → l’arborescence Python n’est pas un **package** (pas de `__init__.py`) et les **imports** ne correspondent pas aux dossiers réels.
+* Le script d’agent a tenté d’utiliser `timeout` (absent sur macOS) → commandes KO.
+* Le front tape probablement aux **mauvaises URLs** (`/forecasts` vs `/api/forecasts`) et **l’enveloppe** `{ ok, data }` n’est pas gérée côté UI.
+
+---
+
+## 🎯 Objectif hotfix
+
+1. Rendre le backend **bootable** (`uvicorn api.main:app` OK).
+2. Fixer la structure de **packages** + **imports**.
+3. Exposer 3 routes **fonctionnelles**: `/api/health`, `/api/news/feed`, `/api/forecasts` (never-empty avec snapshot disque).
+4. Éviter `timeout` ; remplacer par un **wait loop** simple.
+5. Côté front, consommer **l’enveloppe** `{ ok, data }` et sécuriser les empty-states.
+
+---
+
+## ✅ À coller dans `TASKS_BOARD.md` — tâches prêtes à claimer
+
+### FC-HOTFIX-001 — Structurer le backend en vrai package
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+
+**But**: supprimer `ModuleNotFoundError` et fiabiliser les imports.
+**À faire**
+
+1. Créer les dossiers + `__init__.py` :
+
+```
+backend/
+  api/__init__.py
+  api/main.py
+  api/routes/__init__.py
+  api/routes/health.py
+  api/routes/news.py
+  api/routes/forecasts.py
+  core/__init__.py
+  core/middleware.py
+  core/response.py
+  services/__init__.py
+  services/cache_layer.py
+  services/news_service.py
+  services/forecast_service.py
+  storage/__init__.py
+  storage/io.py
+```
+
+2. S’assurer que **tous** les imports utilisent ces chemins **absolus** (p.ex. `from core.middleware import FinanceMiddleware`, `from services.news_service import get_news_feed`).
+3. Ajouter un **`PYTHONPATH=.`** dans le script de démarrage (voir FC-HOTFIX-003).
+   **DoD**
+
+* `uvicorn api.main:app --port 8050` démarre sans erreur.
+* `curl :8050/api/health` renvoie `{ ok:true }`.
+
+---
+
+### FC-HOTFIX-002 — Middlewares & envelope de réponse
+
+**But**: avoir un middleware minimal et une réponse standard `{ ok, data }`.
+**Fichiers (à créer)**
+
+`backend/core/response.py`
+
+```python
+from fastapi.responses import JSONResponse
+
+def ok(data):
+    return {"ok": True, "data": data}
+
+def err(code:int, message:str):
+    return JSONResponse({"ok": False, "error": {"code": code, "message": message}}, status_code=code)
+```
+
+`backend/core/middleware.py`
+
+```python
+import time
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class FinanceMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        response.headers["X-Exec-Time-ms"] = str(int((time.time()-start)*1000))
+        return response
+```
+
+**DoD**
+
+* Les routes utilisent `from core.response import ok, err`.
+* Health renvoie `ok({...})`.
+
+---
+
+### FC-HOTFIX-003 — `main.py` propre + routes incluses
+
+**But**: app FastAPI minimaliste mais clean.
+**Remplacer** `backend/api/main.py` par :
+
+```python
+from fastapi import FastAPI
+from core.middleware import FinanceMiddleware
+from api.routes.health import router as health_router
+from api.routes.news import router as news_router
+from api.routes.forecasts import router as forecasts_router
+
+app = FastAPI(title="Finance Copilot API")
+app.add_middleware(FinanceMiddleware)
+app.include_router(health_router, prefix="/api")
+app.include_router(news_router, prefix="/api")
+app.include_router(forecasts_router, prefix="/api")
+```
+
+`backend/api/routes/health.py`
+
+```python
+from fastapi import APIRouter
+from core.response import ok
+from storage.io import last_updates_info
+
+router = APIRouter()
+
+@router.get("/health")
+def health():
+    return ok({"status": "ok", "last_updates": last_updates_info()})
+```
+
+**DoD**
+
+* `uvicorn api.main:app --port 8050` up → `curl :8050/api/health` OK.
+
+---
+
+### FC-HOTFIX-004 — I/O disque + cache léger (never-empty)
+
+**But**: lecture/écriture JSON + métadonnées de fraîcheur.
+**Créer** `backend/storage/io.py`
+
+```python
+from pathlib import Path
+import json, time
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+DATA_DIR.mkdir(exist_ok=True)
+
+def _path(key:str) -> Path:
+    return DATA_DIR / f"{key}.json"
+
+def save_json(key:str, payload:dict, source:list|None=None):
+    now = int(time.time())
+    doc = {
+        "last_update": now,
+        "source": source or [],
+        "version": 1,
+        "payload": payload
+    }
+    _path(key).write_text(json.dumps(doc, ensure_ascii=False))
+    return doc
+
+def load_json(key:str) -> dict|None:
+    p = _path(key)
+    if not p.exists(): return None
+    return json.loads(p.read_text())
+
+def last_updates_info():
+    info = {}
+    for name in ["news_feed","forecasts","brief_weekly","backtests"]:
+        d = load_json(name)
+        if d: info[name] = d.get("last_update")
+    return info
+```
+
+**Créer** `backend/services/cache_layer.py`
+
+```python
+from storage.io import load_json, save_json
+
+def load_or_compute(key:str, compute_fn, source:list|None=None):
+    snap = load_json(key)
+    if snap and snap.get("payload") is not None:
+        return snap
+    data = compute_fn()
+    return save_json(key, data, source=source)
+```
+
+**DoD**
+
+* `save_json/load_json` opérationnels.
+* `load_or_compute` utilisé par news/forecasts.
+
+---
+
+### FC-HOTFIX-005 — Services & routes “news” et “forecasts”
+
+**But**: endpoints **réels** + snapshot.
+**Créer** `backend/services/news_service.py`
+
+```python
+def compute_news_feed():
+    # TODO: remplacer par l’ingest réelle RSS (P1)
+    return {"articles": []}
+
+def get_news_feed(cache):
+    return cache("news_feed", compute_news_feed, source=["bootstrap"])
+```
+
+**Créer** `backend/services/forecast_service.py`
+
+```python
+def compute_forecasts():
+    # TODO: remplacer par ML + G4F (P1)
+    return {"rows": []}
+
+def get_all_forecasts(cache):
+    return cache("forecasts", compute_forecasts, source=["bootstrap"])
+```
+
+**Créer** `backend/api/routes/news.py`
+
+```python
+from fastapi import APIRouter
+from core.response import ok
+from services.news_service import get_news_feed
+from services.cache_layer import load_or_compute
+
+router = APIRouter()
+
+@router.get("/news/feed")
+def news_feed():
+    snap = get_news_feed(lambda key,fn,source=None: load_or_compute(key,fn,source))
+    payload = snap["payload"]
+    payload["freshness"] = snap["last_update"]
+    payload["source"] = snap["source"]
+    return ok(payload)
+```
+
+**Créer** `backend/api/routes/forecasts.py`
+
+```python
+from fastapi import APIRouter
+from core.response import ok
+from services.forecast_service import get_all_forecasts
+from services.cache_layer import load_or_compute
+
+router = APIRouter()
+
+@router.get("/forecasts")
+def forecasts():
+    snap = get_all_forecasts(lambda key,fn,source=None: load_or_compute(key,fn,source))
+    payload = snap["payload"]
+    payload["freshness"] = snap["last_update"]
+    payload["source"] = snap["source"]
+    return ok(payload)
+```
+
+**DoD**
+
+* `curl :8050/api/news/feed | jq` → `{ ok:true, data:{ articles:[], freshness:..., source:[...] } }`
+* `curl :8050/api/forecasts | jq` → `{ ok:true, data:{ rows:[], ... } }`
+
+---
+
+### FC-HOTFIX-006 — Script start/stop/status sans `timeout`
+
+**But**: démarrage stable sur macOS (pas de `timeout`).
+**Modifier** `finance-copilot.sh` (section backend) pour :
+
+* activer venv, `export PYTHONPATH="$(pwd)/copilot-app/backend"`
+* lancer uvicorn en **arrière-plan** et écrire un PID.
+* **boucle d’attente** (10 tentatives) qui teste `/api/health` avec `curl -f`.
+
+**Snippet à intégrer**
+
+```bash
+start_backend() {
+  cd "$ROOT/copilot-app/backend" || exit 1
+  [ -d .venv ] || python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -U pip && pip install -r requirements.txt
+  export PYTHONPATH="$(pwd)"
+  uvicorn api.main:app --host 0.0.0.0 --port 8050 --reload > api.log 2>&1 &
+  echo $! > .backend.pid
+
+  # wait loop (no 'timeout')
+  for i in {1..10}; do
+    sleep 1
+    if curl -fsS http://localhost:8050/api/health >/dev/null; then
+      echo "Backend up"
+      return 0
+    fi
+  done
+  echo "Backend failed to start"; exit 1
+}
+```
+
+**DoD**
+
+* `./finance-copilot.sh start` → “Backend up”.
+* `./finance-copilot.sh status` montre le PID.
+
+---
+
+### FC-HOTFIX-007 — Front: enveloppe + empty-states
+
+**But**: plus de crash `length/map of undefined`.
+**À faire (exemples)**
+
+* `NewsFeed.tsx` :
+
+```ts
+const resp = useQuery(...);
+const articles = resp.data?.data?.articles ?? [];
+// afficher EmptyState si articles.length===0
+```
+
+* `Forecasts.tsx` :
+
+```ts
+const resp = useQuery(...);
+const rows = resp.data?.data?.rows ?? [];
+```
+
+* Vérifier que **toutes** les pages lisent `resp.data?.data?.…`.
+  **DoD**
+* `/news` et `/forecasts` ne crashent **jamais** (captures).
+* Empty-view + badge “Mise à jour: …”.
+
+---
+
+### FC-HOTFIX-008 — Smoke sans `timeout`
+
+**But**: pre-push fiable sur macOS.
+**Créer** `scripts/smoke.sh`
+
+```bash
+set -euo pipefail
+curl -fsS http://localhost:8050/api/health | grep -q '"ok": true'
+curl -fsS http://localhost:8050/api/news/feed | grep -q '"articles"'
+curl -fsS http://localhost:8050/api/forecasts | grep -q '"rows"'
+echo "SMOKE OK"
+```
+
+**DoD**
+
+* Hook pre-push l’exécute ; push bloqué si un check échoue.
+
+---
+
+## 🧭 Commentaire management (ce qu’ils doivent améliorer)
+
+* **Toujours booter localement** avant commit. Les imports cassés = “push interdit”.
+* **Interdiction d’utiliser `timeout`** (non dispo par défaut sur macOS). Préférer un **wait loop**.
+* **Unifier l’enveloppe `{ ok, data }`** côté front **et** back (zéro exception).
+* **Never-empty** effectif: routes lisent **uniquement** des snapshots persistés, et **calculent en arrière-plan**.
+* **Preuves**: joindre le `curl /api/… | jq` + capture UI à chaque “done”.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 🔥 P0 — Stabilité & “Never-Empty”
 
 ## FC-P0-001 — News: UI empty-safe (frontend)
@@ -803,6 +1183,178 @@ curl -sS http://localhost:8050/api/backtests | head -c 200
 * Résultats lisibles (`hit_rate`, `avg_er`, `n_trades`), preuve `curl`.
 
 ---
+
+
+
+
+
+
+
+
+
+
+Parfait. J’ai lu tes derniers commits et l’état de la branche **feature/g4f-integration**. Voici les **priorités nettes** (avec raisons ancrées dans ce qui est déjà en place), puis un **découpage en tâches prêtes à claimer**.
+
+## Ce que j’ai constaté (audit ultra-court)
+
+* Le backend expose désormais **`/api/forecasts`** via `forecast_service.get_all_forecasts(...)` (remplacement d’un stub). ([GitHub][1])
+* La doc d’archi backend impose un **enveloppe** uniforme: `{"ok": bool, "data": {...}}` et liste les endpoints critiques (`/api/forecasts`, `/api/macro/series`, `/api/news/feed`, etc.). ([GitHub][1])
+* Un commit de type “done” (ex: **FC-P0-008 – Freshness**) a bien été poussé — bonne base pour le format “claim/done”. ([GitHub][1])
+
+👉 Implication: le **front** doit lire `data.data.rows` / `data.data.articles` (et pas `data.rows`). Sinon on retombe sur les erreurs vues (`map/length of undefined`).
+
+---
+
+## Priorités maintenant (ordre conseillé)
+
+1. **Aligner contrat API ↔ Front**
+
+   * Adapter *toutes* les requêtes front pour consommer l’enveloppe `{ ok, data }` (et non des champs à la racine).
+   * C’est la source #1 des crashs sur `/news` et `/forecasts`. ([GitHub][1])
+
+2. **Proxy Vite & base URL**
+
+   * S’assurer que les appels partent bien vers **`/api/*`** (ton backend publie `api/...`).
+   * Corrige le 404 vu côté UI quand ça tape `/forecasts` au lieu de `/api/forecasts`.
+
+3. **Empty-safety + ErrorBoundary**
+
+   * Gardes systématiques `const rows = resp?.data?.rows ?? []` / `const articles = resp?.data?.articles ?? []`.
+   * Mettre un ErrorBoundary global pour bannir les écrans d’erreur bruts.
+
+4. **Cache persistant + Never-Empty**
+
+   * Implémenter `load_or_compute` + `{save,load}_json` et l’activer sur **news** et **forecasts**.
+   * Sert le **dernier snapshot** immédiatement; calcule en arrière-plan.
+
+5. **Smoke tests + pre-push**
+
+   * Bloquer tout push si `/api/health` ou les routes clés ne répondent pas avec les clés attendues.
+
+6. **Health+ enrichi**
+
+   * Étendre `/api/health` pour exposer `last_updates` par domaine; badge côté UI.
+
+---
+
+## Tâches prêtes à claimer (avec pas-à-pas précis)
+
+### FC-P0-009 (DEVX) — Vite proxy + `.env`
+
+**But**: 0 mismatch d’URL entre front et back.
+**À faire (concret)**
+
+* `.env`: `VITE_API_BASE_URL=http://localhost:8050`
+* `vite.config.ts`: proxy `'/api' → 'http://localhost:8050'`
+* Dans ton `api/client` (fetch/axios), préfixer **toujours** par `import.meta.env.VITE_API_BASE_URL` si appel absolu, sinon utiliser `/api/...`.
+* **Test**: `curl http://localhost:5173/api/health` renvoie le health du back.
+  **Fini si**: capture du `curl :5173/api/health` + UI `/forecasts` ne 404 plus.
+
+---
+
+### FC-P0-001 (UI) — News empty-safe + contrat
+
+**But**: `/news` ne crashe jamais.
+**À faire (concret)**
+
+* Dans `NewsFeed.tsx`:
+
+  * Remplacer accès direct par `const articles = resp?.data?.articles ?? [];`
+  * Empty-view propre si `articles.length===0` (texte + `freshness` si présent).
+* Vérifier que le hook/fetch **retourne l’enveloppe** brute (ne pas “déballer” côté hook si l’UI attend l’enveloppe).
+* **Test manuel**: server renvoie un snapshot vide contrôlé → la page reste stable.
+  **Fini si**: plus aucune `reading 'length' of undefined`; capture + `curl /api/news/feed`.
+
+---
+
+### FC-P0-002 (UI) — Forecasts empty-safe + contrat
+
+**But**: `/forecasts` sans crash si vide.
+**À faire**
+
+* Dans `Forecasts.tsx`: `const rows = resp?.data?.rows ?? [];`
+* Empty-view “Aucune prévision… en cours de calcul”; afficher `freshness`.
+* Vérifier la **clé d’état React-Query** (ex: `["forecasts"]`) et que le **select** (si utilisé) garde l’enveloppe ou l’adapte partout.
+  **Fini si**: plus de `reading 'map'`; capture + `curl /api/forecasts`.
+
+---
+
+### FC-P0-007 (UI) — ErrorBoundary global
+
+**But**: adieu l’écran d’erreur brut.
+**À faire**
+
+* Créer `components/ErrorBoundary.tsx` (render fallback + bouton “Rafraîchir” + horodatage).
+* L’enregistrer en `errorElement` du router **ou** wrapper racine.
+  **Fini si**: une 500 simulée → affichage propre, pas de stacktrace.
+
+---
+
+### FC-P0-004 (BACK) — Cache persistant générique
+
+**But**: instantané + never-empty.
+**À faire**
+
+* `backend/storage/`: `save_json(path, payload, meta)` + `load_json(path)` qui renvoient `{ data, meta:{last_update,source,version} }`.
+* `backend/services/cache_layer.py`:
+
+  ```py
+  def load_or_compute(key, compute_fn, ttl=None):
+      snap = load_json(key)
+      if snap and fresh(snap, ttl): return snap
+      data = compute_fn()
+      return save_json(key, data, meta=…)
+  ```
+* Routes **news** et **forecasts**: utiliser `load_or_compute(...)`.
+  **Fini si**: reboot du back → les réponses restent non-vides (dernier snapshot) + `last_update` présent (preuve via `curl`).
+
+---
+
+### FC-P0-010 (INFRA) — Hook pre-push = smoke
+
+**But**: empêcher un push qui casse l’app.
+**À faire**
+
+* `scripts/smoke.sh`: 5 curls + `grep` clés (`ok`, `articles`, `rows`, etc.) → `exit 1` si échec.
+* `git/hooks/pre-push` (doc: comment l’installer localement).
+  **Fini si**: démo d’un push bloqué quand `/api/health` est KO.
+
+---
+
+### FC-P0-014 (BACK+UI) — Health+ enrichi
+
+**But**: visibilité fraîcheur par domaine.
+**À faire**
+
+* `/api/health`: retourner `{ ok, backend_up, last_updates: {news,forecasts,weekly,backtests}, data_paths }`.
+* Header UI: badge de statut (vert/orange/rouge).
+  **Fini si**: `curl /api/health | jq` montre `last_updates.*`; badge visible sur le front.
+
+---
+
+## Petites notes de mise au point
+
+* **Contrat unique ≠ front multiple**: la doc backend impose `{ok,data}`. Harmonise *toute* la couche front sur cette enveloppe (pas d’exception locale), ou, si tu préfères aplatir côté front, fais-le via un **interceptor** qui renvoie déjà `res.data` (et adapte les composants en conséquence).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ############################################ END OF TASKS LIST Yeeey!!!####################################################################
 
 
