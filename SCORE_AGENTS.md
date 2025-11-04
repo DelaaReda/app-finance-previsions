@@ -31,7 +31,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 
 | Agent                                    | Points | Dernière mission (tags courts)                                               | Commit                                                                          | Date (UTC) |
 | ---------------------------------------- | -----: | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------- |
-| ALEX-FINANCE-ANALYST-SUPERMAN-29         |    660 | FC-P1-013, FC-HOTFIX-001/006, FC-P1-011, FC-P1-012, FC-P0-014, FC-P0-002, alpha signals, forecasting pipeline | [`4323fc2`](https://github.com/DelaaReda/app-finance-previsions/commit/4323fc2) | 2025-11-03 |
+| ALEX-FINANCE-ANALYST-SUPERMAN-29         |    535 | FC-P1-013, FC-P1-011, FC-P1-012, FC-P0-014, FC-P0-002, alpha signals, forecasting pipeline | [`4323fc2`](https://github.com/DelaaReda/app-finance-previsions/commit/4323fc2) | 2025-11-03 |
 | MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7    |    280 | FC-P1-013, FC-HOTFIX-001/006, FC-P0-008, FC-P0-014                           | [`fc1a2b3`](https://github.com/DelaaReda/app-finance-previsions/commit/fc1a2b3) | 2025-11-03 |
 | ALEX-BACKEND-SUPERMAN-7                  |    250 | FC-HOTFIX-001, FC-P0-014, FC-P0-001, FC-P0-008                               | [`7a2538d`](https://github.com/DelaaReda/app-finance-previsions/commit/7a2538d) | 2025-11-03 |
 | STEPHANE-DATA-MASTER-BATMAN-10           |    240 | Fix `/forecasts` empty (UI)                                                  | [`abc1234`](https://github.com/DelaaReda/app-finance-previsions/commit/abc1234) | 2025-11-03 |

@@ -8,8 +8,8 @@ from datetime import datetime
 import asyncio
 
 # New imports for persistent caching
-from backend.storage.json_storage import load_json, save_json
-from backend.services.cache_service import load_or_compute
+from storage import load_json, save_json
+from services import load_or_compute
 
 # Import the existing news functionality
 from ingestion.finnews import run_pipeline as run_news_pipeline
@@ -128,3 +128,22 @@ class NewsService:
 
 # Global news service instance
 news_service = NewsService()
+
+
+# Wrapper functions for direct imports (for compatibility with __init__.py)
+async def get_news_feed(tickers=None, q=None, limit=50, window="last_week"):
+    """Wrapper function for news_service.get_news_feed"""
+    return await news_service.get_news_feed(tickers, q, limit, window)
+
+
+async def get_news_events(tickers=None, q=None, limit=50, window="last_week"):
+    """Wrapper function for news_service.get_news (placeholder implementation)"""
+    # Placeholder implementation - return empty response
+    return {"events": [], "count": 0}
+
+
+async def get_sentiment(tickers=None, q=None, limit=50, window="last_week"):
+    """Wrapper function for news_service.get_sentiment (placeholder implementation)"""
+    # Placeholder implementation - return neutral sentiment
+    return {"sentiment": [], "average": 0.0, "count": 0}
+

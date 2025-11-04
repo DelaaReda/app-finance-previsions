@@ -146,12 +146,20 @@ start_backend() {
     nohup python run_api.py > api.log 2>&1 &
     BACKEND_PID=$!
     
-    # Attendre que le backend démarre
+    # Attendre que le backend démarre (wait loop - pas de timeout qui n'existe pas sur macOS)
     log "Attente du démarrage du backend..."
-    sleep 8
+    backend_up=0
+    for i in {1..10}; do
+        if curl -fsS "http://localhost:8050/api/health" >/dev/null 2>&1; then
+            backend_up=1
+            break
+        fi
+        sleep 2
+        log "En attente du backend... ($i/10)"
+    done
     
     # Vérifier si le backend répond
-    if curl -s "http://localhost:8050/api/health" >/dev/null; then
+    if [ $backend_up -eq 1 ]; then
         log_success "Backend démarré avec succès (PID: $BACKEND_PID)"
         echo "$BACKEND_PID" > /tmp/finance_copilot_backend.pid
     else
@@ -173,12 +181,20 @@ start_frontend() {
     nohup npm run dev > frontend.log 2>&1 &
     FRONTEND_PID=$!
     
-    # Attendre que le frontend démarre
+    # Attendre que le frontend démarre (wait loop - pas de timeout qui n'existe pas sur macOS)
     log "Attente du démarrage du frontend..."
-    sleep 10
+    frontend_up=0
+    for i in {1..15}; do
+        if curl -fsS "http://localhost:5173/" | grep -q "<html" >/dev/null 2>&1; then
+            frontend_up=1
+            break
+        fi
+        sleep 2
+        log "En attente du frontend... ($i/15)"
+    done
     
     # Vérifier si le frontend répond
-    if curl -s "http://localhost:5173/" | grep -q "<html"; then
+    if [ $frontend_up -eq 1 ]; then
         log_success "Frontend démarré avec succès (PID: $FRONTEND_PID)"
         echo "$FRONTEND_PID" > /tmp/finance_copilot_frontend.pid
     else

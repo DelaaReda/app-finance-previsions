@@ -10,6 +10,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
+import { FreshnessBadge } from '@/components/ui/FreshnessBadge'
 
 export default function MarketBrief() {
   const [type, setType] = useState<'daily' | 'weekly'>('daily')
@@ -23,6 +24,11 @@ export default function MarketBrief() {
         <h1>📋 Market Brief</h1>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <FreshnessBadge 
+            freshness={brief?.generated_at || null} 
+            stale={brief?.generated_at ? new Date().getTime() - new Date(brief.generated_at).getTime() > 3600000 : false} 
+          />
+          
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={() => setType('daily')}

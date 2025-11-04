@@ -6,6 +6,7 @@ import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
+import { FreshnessBadge } from '@/components/ui/FreshnessBadge'
 
 interface BacktestResult {
   results: {
@@ -44,7 +45,13 @@ export default function Backtests() {
   return (
     <MainLayout>
       <div style={styles.container}>
-        <h2 style={styles.pageTitle}>📊 Backtests - Analyse de Performance</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={styles.pageTitle}>📊 Backtests - Analyse de Performance</h2>
+          <FreshnessBadge 
+            freshness={data?.generated_at || null} 
+            stale={data?.generated_at ? new Date().getTime() - new Date(data.generated_at).getTime() > 3600000 : false} 
+          />
+        </div>
 
         {/* Configuration Panel */}
         <Card title="Configuration du Backtest">

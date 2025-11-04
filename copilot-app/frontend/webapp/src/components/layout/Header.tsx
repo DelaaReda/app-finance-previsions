@@ -2,6 +2,7 @@
 
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { HealthIndicator } from '../ui/HealthIndicator'
 
 export default function Header() {
   const [timeString, setTimeString] = useState(() => new Date().toLocaleTimeString('fr-FR'))
@@ -33,6 +34,7 @@ export default function Header() {
         </nav>
 
         <div style={styles.actions}>
+          <HealthIndicator />
           <span style={styles.updateTime}>Mise à jour: {timeString}</span>
         </div>
       </div>

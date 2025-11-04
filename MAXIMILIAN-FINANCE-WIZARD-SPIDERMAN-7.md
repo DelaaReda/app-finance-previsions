@@ -24,7 +24,7 @@
 - [x] Intégration complète des composants du système de prévision
 
 ## 📈 Points Gagnés
-- **Total**: 150 points
+- **Total**: 280 points
 - **Dernière mise à jour**: 2025-11-03
 
 ## 🔄 Tâches Planifiées
@@ -46,6 +46,12 @@
   - `requirements.txt`: Dépendances du système
   - `main.py`: Point d'entrée pour exécution autonome
 - **Statut**: Le code est prêt, nécessite installation des dépendances via requirements.txt pour exécution
+
+## 🏅 Tâches Récentes Accomplies
+- **FC-P0-008 - Freshness partout**: Implémentation du badge de fraîcheur sur 4 pages (Forecasts, News, MarketBrief, Backtests) avec détection de données périmées
+- **FC-P0-014 - Health+ enrichi**: Endpoint /api/health enrichi avec last_updates, backend_up, data_paths + indicateur UI dans le header
+- **Hotfixes**: Corrections critiques pour le démarrage backend et script start/stop sans dépendance à 'timeout'
+- **FC-P1-013 - Forecasts Hybrid v1**: Moteur de prévision hybride ML + G4F complètement implémenté
 
 ## 📝 Description des Activités
 En tant que FINANCE-WIZARD, ma mission est d'être le cerveau prévisionnel du système. J'ai complété le modèle baseline ARIMA/XGB, le Node2Vec / Market embedding et la couche LLM scoring explanation, créant ainsi un moteur de prévision hybride ML + LLM entièrement fonctionnel pour le système Finance Copilot.

@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 import asyncio
 
 # New imports for persistent caching
-from backend.storage.json_storage import load_json, save_json
-from backend.services.cache_service import load_or_compute
+from storage import load_json, save_json
+from services import load_or_compute
 
 from analytics.forecaster import forecast_ticker, ForecastResult
 from core.data_store import query_duckdb, write_parquet
