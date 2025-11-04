@@ -1,5 +1,6 @@
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet, Link } from 'react-router-dom'
 import { AppProviders } from './app/providers'
+import { HealthStatusBadge } from './components/ui/HealthStatusBadge';
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -29,9 +30,14 @@ function AppLayout() {
         height: '100vh',
         overflowY: 'auto'
       }}>
-        <h1 style={{ fontSize: 20, marginBottom: 24, fontWeight: 600 }}>
-          💼 Finance Copilot
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
+            💼 Finance Copilot
+          </h1>
+          <div>
+            <HealthStatusBadge />
+          </div>
+        </div>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <NavSection title="📊 Vue d'ensemble">

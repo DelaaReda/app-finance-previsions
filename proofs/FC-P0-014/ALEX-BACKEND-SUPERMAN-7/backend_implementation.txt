@@ -1,0 +1,39 @@
+# Proof for FC-P0-014 - Health+ enrichi
+
+## Backend Implementation
+
+Enhanced the health endpoint (`/api/health`) to return additional information:
+
+- Backend status (`backend_up` field)
+- Last updates by domain (`last_updates` field)
+- Data paths information (`data_paths` field)
+- Timestamp of the check
+
+## API Response Format
+
+The health endpoint now returns:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "ok",
+    "backend_up": true,
+    "last_updates": {
+      "news_feed": 1234567890,
+      "forecasts": 1234567890,
+      "brief_weekly": 1234567890,
+      "backtests": 1234567890
+    },
+    "data_paths": {
+      "directory_name": "/path/to/data/directory",
+      "file_name.json": "/path/to/data/file.json"
+    },
+    "timestamp": 1234567890
+  }
+}
+```
+
+## Verification
+
+The implementation uses the existing `last_updates_info()` function that was properly implemented as part of the storage module, ensuring consistency with the system architecture.

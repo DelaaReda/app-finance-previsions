@@ -1100,6 +1100,45 @@ echo "SMOKE OK"
 
 ---
 
+## FC-P0-014 — Health+ enrichi (backend)
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+
+**But**: étendre `/api/health` pour exposer `last_updates` par domaine et chemin des données.
+**Fichiers**
+
+* `backend/api/routes/health.py`
+
+**Étapes**
+
+1. **Données de santé**
+
+   ```python
+   @router.get("/health")
+   def health():
+       return ok({
+         "status": "ok",
+         "backend_up": True,                # service répond
+         "last_updates": {                  # dernieres mises à jour par domaine
+           "news": 1234567890,
+           "forecasts": 1234567890,
+           "brief_weekly": 1234567890,
+           "backtests": 1234567890
+         },
+         "data_paths": {                    # chemins vers fichiers de données
+           "forecasts": "/data/forecasts.json",
+           "news": "/data/news_feed.json"
+         }
+       })
+   ```
+2. **UI**: badge de statut dans le header de l'application (vert/orange/rouge selon santé).
+   **DoD**
+
+* `curl /api/health | jq` montre `last_updates` et `data_paths`.
+* Badge UI visible dans le header (capture).
+
+---
+
 # 📈 P1 — Data / ML / LLM
 
 ## FC-P1-011 — News Ingest v1 (RSS multi-sources) - DONE
@@ -1420,7 +1459,7 @@ Parfait. J’ai lu tes derniers commits et l’état de la branche **feature/g4f
 
 ---
 
-### FC-P0-014 (BACK+UI) — Health+ enrichi
+### FC-P0-014 (BACK+UI) — Health+ enrichi - CLAIMED
 
 **But**: visibilité fraîcheur par domaine.
 **À faire**
@@ -1428,6 +1467,8 @@ Parfait. J’ai lu tes derniers commits et l’état de la branche **feature/g4f
 * `/api/health`: retourner `{ ok, backend_up, last_updates: {news,forecasts,weekly,backtests}, data_paths }`.
 * Header UI: badge de statut (vert/orange/rouge).
   **Fini si**: `curl /api/health | jq` montre `last_updates.*`; badge visible sur le front.
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 ---
 
