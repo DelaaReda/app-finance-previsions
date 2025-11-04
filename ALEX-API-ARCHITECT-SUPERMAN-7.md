@@ -31,6 +31,7 @@
 - [x] Création de la structure de package avec __init__.py files
 - [x] Implémentation I/O disque et cache léger (never-empty) (FC-HOTFIX-004)
 - [x] Création routes news et forecasts avec structure propre (FC-HOTFIX-005)
+- [x] Modification script start/stop pour macOS (wait loops au lieu de timeout) (FC-HOTFIX-006)
 
 ## 📈 Points Gagnés
 - **Total**: 190 points

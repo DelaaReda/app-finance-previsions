@@ -79,9 +79,11 @@ backend/
 **Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-006 — Script start/stop/status sans `timeout`
-**Status**: AVAILABLE to claim
+**Status**: DONE
 
 **But**: démarrage stable sur macOS (pas de `timeout`).
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-007 — Front: enveloppe + empty-states
 **Status**: AVAILABLE to claim
