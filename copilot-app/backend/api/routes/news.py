@@ -7,7 +7,7 @@ router = APIRouter()
 
 @router.get("/news/feed")
 def news_feed():
-    snap = get_news_feed(lambda key, fn, source=None: load_or_compute(key, fn, source))
+    snap = get_news_feed(lambda key,fn,source=None: load_or_compute(key,fn,source))
     payload = snap["payload"]
     payload["freshness"] = snap["last_update"]
     payload["source"] = snap["source"]
