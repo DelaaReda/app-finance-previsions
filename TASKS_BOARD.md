@@ -156,7 +156,7 @@ Tu as raison : là, le backend **ne peut pas démarrer** (imports cassés, `time
 
 ### FC-HOTFIX-001 — Structurer le backend en vrai package
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: supprimer `ModuleNotFoundError` et fiabiliser les imports.
 **À faire**
