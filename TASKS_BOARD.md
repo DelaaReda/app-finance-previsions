@@ -58,9 +58,11 @@ backend/
 **Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-003 — `main.py` propre + routes incluses
-**Status**: AVAILABLE to claim
+**Status**: DONE
 
 **But**: app FastAPI minimaliste mais clean.
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-004 — I/O disque + cache léger (never-empty)
 **Status**: DONE
@@ -70,9 +72,11 @@ backend/
 **Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-005 — Services & routes "news" et "forecasts"
-**Status**: AVAILABLE to claim
+**Status**: DONE
 
 **But**: endpoints **réels** + snapshot.
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-006 — Script start/stop/status sans `timeout`
 **Status**: AVAILABLE to claim

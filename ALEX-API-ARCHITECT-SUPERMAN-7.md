@@ -12,6 +12,9 @@
 - [x] Développer micro-services skeleton (jobs / ingestion / API / LLM)
 - [x] Créer documentation contrats API (FC-P0-003)
 - [x] Contribuer à la structure de package backend (FC-HOTFIX-002)
+- [x] Créer main.py propre + routes incluses (FC-HOTFIX-003)
+- [x] Créer I/O disque + cache léger (never-empty) (FC-HOTFIX-004)
+- [x] Créer routes news et forecasts avec structure propre (FC-HOTFIX-005)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -26,6 +29,8 @@
 - [x] Documentation des contrats API: `backend/api/contracts.md` (task FC-P0-003)
 - [x] Contribution à la standardisation des réponses API `{ok, data}` et middlewares (FC-HOTFIX-002)
 - [x] Création de la structure de package avec __init__.py files
+- [x] Implémentation I/O disque et cache léger (never-empty) (FC-HOTFIX-004)
+- [x] Création routes news et forecasts avec structure propre (FC-HOTFIX-005)
 
 ## 📈 Points Gagnés
 - **Total**: 190 points
