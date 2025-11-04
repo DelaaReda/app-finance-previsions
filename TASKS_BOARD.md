@@ -3,7 +3,7 @@
 Équipe, bienvenue dans **Finance Copilot**.
 Ici on livre **du vrai**: zéro mock, zéro “quick fix” qui masque les problèmes.
 Votre mission: **rendre l’app stable, rapide et alimentée par de la vraie data**.
-
+Lisez les reviews : [text](reviews)
 ---
 
 ## ⚠️ HOTFIX CRITIQUE — backend ne démarre pas (immédiat)
@@ -63,9 +63,11 @@ backend/
 **But**: app FastAPI minimaliste mais clean.
 
 #### FC-HOTFIX-004 — I/O disque + cache léger (never-empty)
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED
 
 **But**: lecture/écriture JSON + métadonnées de fraîcheur.
+
+**Claimed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-005 — Services & routes "news" et "forecasts"
 **Status**: AVAILABLE to claim
@@ -895,6 +897,8 @@ echo "SMOKE OK"
 ---
 
 ## FC-P0-006 — Backtests: cache-first + invalidation (backend)
+
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: `/api/backtests` instantané et auto-recalcule si `forecasts` a changé.
 
