@@ -6,6 +6,90 @@ Votre mission: **rendre l’app stable, rapide et alimentée par de la vraie dat
 
 ---
 
+## ⚠️ HOTFIX CRITIQUE — backend ne démarre pas (immédiat)
+
+### Problème identifié par le DATA QUALITY MANAGER
+Le backend **ne peut pas démarrer** en raison d'erreurs critiques d'imports :
+- `ModuleNotFoundError: No module named 'core'` 
+- `from core.middleware import FinanceMiddleware` → fichier inexistant
+- `from core.data_access import ...` → fichier inexistant
+- `from src.api.services.news_service import news_service` → fichier inexistant
+- `from src.api.services.forecast_service import forecast_service` → fichier inexistant
+
+### Plan d'action immédiat
+Les tâches suivantes sont prioritaires pour réparer le backend :
+
+#### FC-HOTFIX-001 — Structurer le backend en vrai package
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
+
+**But**: supprimer `ModuleNotFoundError` et fiabiliser les imports.
+**À faire**
+1. Créer les dossiers + `__init__.py` :
+```
+backend/
+  api/__init__.py
+  api/main.py
+  api/routes/__init__.py
+  api/routes/health.py
+  api/routes/news.py
+  api/routes/forecasts.py
+  core/__init__.py
+  core/middleware.py
+  core/response.py
+  services/__init__.py
+  services/cache_layer.py
+  services/news_service.py
+  services/forecast_service.py
+  storage/__init__.py
+  storage/io.py
+```
+
+2. S'assurer que **tous** les imports utilisent ces chemins **absolus** (p.ex. `from core.middleware import FinanceMiddleware`, `from services.news_service import get_news_feed`).
+3. Ajouter un **`PYTHONPATH=.`** dans le script de démarrage.
+**DoD**
+* `uvicorn api.main:app --port 8050` démarre sans erreur.
+* `curl :8050/api/health` renvoie `{ ok:true }`.
+
+#### FC-HOTFIX-002 — Middlewares & envelope de réponse
+**Status**: AVAILABLE to claim
+
+**But**: avoir un middleware minimal et une réponse standard `{ ok, data }`.
+
+#### FC-HOTFIX-003 — `main.py` propre + routes incluses
+**Status**: AVAILABLE to claim
+
+**But**: app FastAPI minimaliste mais clean.
+
+#### FC-HOTFIX-004 — I/O disque + cache léger (never-empty)
+**Status**: AVAILABLE to claim
+
+**But**: lecture/écriture JSON + métadonnées de fraîcheur.
+
+#### FC-HOTFIX-005 — Services & routes "news" et "forecasts"
+**Status**: AVAILABLE to claim
+
+**But**: endpoints **réels** + snapshot.
+
+#### FC-HOTFIX-006 — Script start/stop/status sans `timeout`
+**Status**: AVAILABLE to claim
+
+**But**: démarrage stable sur macOS (pas de `timeout`).
+
+#### FC-HOTFIX-007 — Front: enveloppe + empty-states
+**Status**: AVAILABLE to claim
+
+**But**: plus de crash `length/map of undefined`.
+
+#### FC-HOTFIX-008 — Smoke sans `timeout`
+**Status**: AVAILABLE to claim
+
+**But**: pre-push fiable sur macOS.
+
+**REMARQUE IMPORTANTE**: Tant que ces HOTFIX ne sont pas résolus, l'application est non fonctionnelle. 
+Priorité absolue à la réparation du backend avant toute autre fonctionnalité.
+
+---
+
 ## 0) Règles d’or (obligatoires)
 
 1. **Démarrage/arrêt uniquement via le script**
