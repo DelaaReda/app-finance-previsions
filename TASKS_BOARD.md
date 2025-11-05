@@ -562,6 +562,7 @@ Actions:
 - Détecter `error`/`fallback` dans réponse et expliquer l'état.
 - Bouton "Réessayer" qui refetch sans tout recharger.
 - Bouton “Réessayer” qui refetch sans tout recharger.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 DoD:
 - L’utilisateur comprend pourquoi Top3 est vide et quand ça a été généré.
