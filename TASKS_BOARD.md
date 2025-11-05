@@ -508,10 +508,11 @@ How‑to
 - Validation: captures des deux séries actives enregistrées dans `proofs/FC-UI-004/`.
 
 ## FC-UI-005 — Stocks: placeholders et couleurs sûres
-Status: AVAILABLE
+Status: CLAIMED
 
 But: Plusieurs champs `0`/`null` (SMA/RSI) → lisibilité mauvaise.
 
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 Actions:
 - Afficher `N/A` pour valeurs non mesurées.
 - Teintes cohérentes (vert/rouge) et info‑bulle “non disponible”.
@@ -710,7 +711,8 @@ How‑to
 - Intégration: adapter `/api/news/feed` pour inclure ces champs et recalculer `score`.
 
 ## FC-DATA-004 — Forecasts materialization (daily cache)
-Status: AVAILABLE
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 But: Générer `final.parquet` quotidien, servir instantanément `/api/forecasts` et alimenter backtests.
 
@@ -725,6 +727,10 @@ DoD:
 How‑to
 - Script/cron (APScheduler) quotidien: construire `forecasts.parquet` → `final.parquet`; symlink `latest`.
 - Endpoint `/api/forecasts`: lire `latest`, sinon dernier dt connu; lancer recalc async si stale >24h.
+
+**Preuve**: Job complet de materialisation des prévisions implémenté avec stockage persistant en JSON et Parquet. Génération quotidienne de snapshots de prévisions dans `data/forecast/dt=YYYYMMDD/` avec symlinks `latest`, système de cache-first optimisé avec fallback, endpoint `/api/forecasts` servira dorénavant des données pré-calculées instantanément avec contrat never-empty maintenu.
+
+---
 
 ## FC-DATA-005 — Technical indicators fallback (SMA/RSI)
 Status: AVAILABLE
@@ -868,7 +874,7 @@ DoD:
 - Jobs tournent local; logs horodatés + durée.
 
 ## FC-OPS-003 — Structured logging + trace id
-Status: AVAILABLE
+Status: CLAIMED by ALEX-BACKEND-SUPERMAN-7
 
 But: Mieux corréler front↔back et diagnostiquer.
 
@@ -2021,13 +2027,14 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P1-015 — Backtests v1 - CLAIMED
+## FC-P1-015 — Backtests v1 - DONE
 
 **But**: hit-rate minimal + ER moyen.
 
 **Fichiers**
 
-* `backend/jobs/backtests.py` (même module que P0-006 acceptable)
+* `backend/jobs/backtests.py` 
+* `backend/api/routes/backtests.py`
 
 **Étapes**
 
@@ -2044,7 +2051,12 @@ echo "SMOKE OK"
 
 * Résultats lisibles (`hit_rate`, `avg_er`, `n_trades`), preuve `curl`.
 
-**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created/updated:**
+- `backend/jobs/backtests.py` - Complete backtesting job with market data validation
+- `backend/api/routes/backtests.py` - API routes for backtest results with filtering
+- Integration with persistent storage system and caching layer
 
 ---
 
