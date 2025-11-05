@@ -7,6 +7,8 @@ import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import FreshnessBadge from '@/components/ui/FreshnessBadge'
+import DataTable from '@/components/DataTable'
+import { GridColDef } from '@mui/x-data-grid';
 
 interface BacktestResult {
   results: {
@@ -24,6 +26,7 @@ interface BacktestResult {
   }
   generated_at: string
   warning?: string
+  detailed_results?: any[] // Added to represent possible detailed backtest results
 }
 
 export default function Backtests() {
@@ -41,6 +44,37 @@ export default function Backtests() {
       }).then(r => r.ok ? r.data : Promise.reject(r.error)),
     staleTime: 300000, // 5 minutes
   })
+
+  // Define columns for the detailed results table (if available)
+  const backtestColumns: GridColDef[] = [
+    {
+      field: 'period',
+      headerName: 'Période',
+      width: 150,
+      type: 'string',
+    },
+    {
+      field: 'return',
+      headerName: 'Retour',
+      width: 120,
+      type: 'number',
+      valueFormatter: (params) => params.value ? `${(params.value * 100).toFixed(2)}%` : '-',
+    },
+    {
+      field: 'sharpe',
+      headerName: 'Sharpe',
+      width: 100,
+      type: 'number',
+      valueFormatter: (params) => params.value ? (params.value).toFixed(3) : '-',
+    },
+    {
+      field: 'max_dd',
+      headerName: 'Max DD',
+      width: 120,
+      type: 'string',
+      valueFormatter: (params) => params.value ? (params.value).toFixed(2) : '-',
+    },
+  ];
 
   return (
     <MainLayout>
@@ -142,6 +176,20 @@ export default function Backtests() {
                 </div>
               )}
             </div>
+            
+            {/* Add a detailed table if available */}
+            {data?.detailed_results && data.detailed_results.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <DataTable 
+                  title="Résultats détaillés des backtests" 
+                  columns={backtestColumns} 
+                  rows={data.detailed_results} 
+                  toolbar={true}
+                  defaultPageSize={10}
+                  pageSizeOptions={[5, 10, 25]}
+                />
+              </div>
+            )}
           </Card>
         )}
       </div>

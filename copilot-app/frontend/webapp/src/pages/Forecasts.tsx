@@ -1,16 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
-import type { GridValueFormatterParams } from '@mui/x-data-grid';
+import type { GridValueFormatterParams, GridColDef } from '@mui/x-data-grid';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { apiGet } from '../api/client';
 import FreshnessBadge from '../components/ui/FreshnessBadge';
 import EmptyState from '../components/ui/EmptyState';
 import { safeArray } from '../utils/safeAccess';
+import DataTable from '../components/DataTable';
 
 type Row = {
   id?: string;
@@ -70,7 +70,7 @@ export default function Forecasts() {
     return arr.map((r, i) => ({ id: r.id ?? `${r.ticker ?? r.commodity_name ?? 'r'}-${r.horizon ?? 'h'}-${i}`, ...r }));
   }, [rawData]);
 
-  const columns = useMemo<GridColDef[]>(() => ([
+  const columns: GridColDef[] = useMemo(() => ([
     { field: 'asset_type', headerName: 'Type', width: 120 },
     { field: 'ticker', headerName: 'Symbole', width: 140 },
     { field: 'commodity_name', headerName: 'Nom', width: 180 },
@@ -99,9 +99,17 @@ export default function Forecasts() {
       )}
 
       {!loading && !err && rows.length > 0 && (
-        <Box sx={{ height: 520, width: '100%' }}>
-          <DataGrid rows={rows} columns={columns} disableRowSelectionOnClick initialState={{ pagination: { paginationModel: { pageSize: 25 } } }} pageSizeOptions={[10,25,50]} />
-        </Box>
+        <DataTable 
+          title="Tableau des Prévisions" 
+          columns={columns} 
+          rows={rows} 
+          loading={loading} 
+          error={null} 
+          toolbar={true} 
+          defaultPageSize={25} 
+          pageSizeOptions={[10, 25, 50, 100]}
+          height={520}
+        />
       )}
     </Container>
   );

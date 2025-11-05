@@ -3174,7 +3174,7 @@ Let’s ship. 🚀
 
 ## FC-UI-023 — Data Visualization MUI (Charts & DataGrid)
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Remplacer les composants de visualisation par des composants MUI X (DataGrid, Charts).
 
@@ -3207,7 +3207,7 @@ Let’s ship. 🚀
 * Accessibilité WCAG respectée pour toutes les visualisations
 * Protection contre crashes UI (never-empty patterns)
 
----
+**Preuve**: Composants de visualisation MUI X (LineChart, BarChart, PieChart) et DataGrid implémentés avec fonctionnalités avancées (toolbar, tri, pagination, filtres), intégrés dans la page Prévisions, avec gestion d'erreurs et états loading/empty.
 
 ## FC-UI-024 — UI Guards & Error Boundaries (Stabilité)
 
