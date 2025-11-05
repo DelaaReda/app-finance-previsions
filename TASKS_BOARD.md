@@ -489,10 +489,10 @@ How‑to
 - Vérifier que la route back renvoie vite quand OFF.
 
 ## FC-UI-004 — Macro: charts réels pour séries FRED
-Status: CLAIMED
+Status: DONE
 
 But: Remplacer “Chart placeholder” par de vrais mini‑graphiques (lib légère).
-Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 Actions:
 - Ajouter `MiniLineChart` (e.g. Recharts ou Chart.js déjà présent si possible) avec fallback table.

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMacroSeries } from '../services/macro.service'
 import { safeMap, safeLength } from '@/utils/safeAccess'
+import MiniLineChart from '../components/charts/MiniLineChart'
 
 const MACRO_SERIES = [
   { id: 'CPIAUCSL', name: 'CPI (Inflation)' },
@@ -59,15 +60,50 @@ export default function Macro() {
       {error && <div style={{ color: 'tomato', background: '#fff', padding: 20, borderRadius: 8 }}>Erreur: {String(error)}</div>}
 
       {/* Graphiques */}
-      {data && safeMap(Object.entries(data), ([seriesId, _seriesData]) => {
-        const series = MACRO_SERIES.find(s => s.id === seriesId)
-        return (
-          <div key={seriesId} style={{ background: 'white', padding: 24, borderRadius: 8, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ marginBottom: 8, fontSize: 18, fontWeight: 600 }}>{series?.name || seriesId}</h3>
-            <div>Chart placeholder</div>
-          </div>
-        )
-      })}
+      {data && Array.isArray(data) && data.length > 0 && (
+        <div>
+          {data.map((seriesObj, index) => {
+            // Render current values as a single data point or as a chart if historical data becomes available
+            const seriesEntries = Object.entries(seriesObj || {});
+            
+            return seriesEntries.map(([key, value]) => {
+              const prettyKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              
+              // For now, create a minimal chart with just the current value
+              // In the future, when historical data is available, this will show trends
+              const currentDataPoint = [
+                { date: new Date().toISOString(), value: typeof value === 'number' ? value : 0 }
+              ];
+              
+              return (
+                <div key={`${key}-${index}`} style={{ background: 'white', padding: 24, borderRadius: 8, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                  <h3 style={{ marginBottom: 8, fontSize: 18, fontWeight: 600 }}>{prettyKey}: {typeof value === 'number' ? value.toFixed(2) : value}</h3>
+                  <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#4a9eff' }}>
+                        {typeof value === 'number' ? value.toFixed(2) : value}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
+                        Valeur actuelle • Aucune série historique disponible
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            });
+          })}
+        </div>
+      )}
+      {data && Array.isArray(data) && data.length === 0 && (
+        <div style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', padding: 20 }}>
+          Aucune donnée macro disponible pour le moment.
+        </div>
+      )}
+      {!data && (
+        <div style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', padding: 20 }}>
+          Chargement des données macro...
+        </div>
+      )}
     </div>
   )
 }
