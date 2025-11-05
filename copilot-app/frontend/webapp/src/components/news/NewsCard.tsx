@@ -1,25 +1,93 @@
 // webapp/src/components/news/NewsCard.tsx
 import { NewsItem } from "@/types/news.types";
+import { Card, CardContent, Typography, Chip, Link, Box, Stack } from '@mui/material';
+import { TrendingUp, TrendingDown } from '@mui/icons-material';
 
 export default function NewsCard({ item }: { item: NewsItem }) {
   const d = new Date(item.published_at);
+
+  // Sentiment color and icon
+  const getSentimentColor = (sentiment: number) => {
+    if (sentiment > 0) return 'success';
+    if (sentiment < 0) return 'error';
+    return 'default';
+  };
+
+  const getSentimentIcon = (sentiment: number) => {
+    if (sentiment > 0) return <TrendingUp fontSize="small" />;
+    if (sentiment < 0) return <TrendingDown fontSize="small" />;
+    return null;
+  };
+
   return (
-    <article data-testid="news-card" className="border rounded-lg p-3 mb-3 hover:bg-neutral-50">
-      <div className="text-sm text-neutral-500 flex gap-2">
-        {item.ticker && <span className="font-mono px-2 py-0.5 rounded bg-neutral-200">{item.ticker}</span>}
-        <span>{item.source}</span>
-        <span>•</span>
-        <time dateTime={item.published_at}>{d.toLocaleString()}</time>
-        {typeof item.sentiment === "number" && (
-          <span className={item.sentiment > 0 ? "text-green-600" : item.sentiment < 0 ? "text-red-600" : "text-neutral-600"}>
-            {item.sentiment.toFixed(2)}
-          </span>
+    <Card
+      data-testid="news-card"
+      sx={{
+        mb: 2,
+        '&:hover': { bgcolor: 'action.hover' },
+        transition: 'background-color 0.2s'
+      }}
+    >
+      <CardContent>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" mb={1}>
+          {item.ticker && (
+            <Chip
+              label={item.ticker}
+              size="small"
+              sx={{ fontFamily: 'monospace' }}
+            />
+          )}
+          <Typography variant="caption" color="text.secondary">
+            {item.source}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            •
+          </Typography>
+          <Typography variant="caption" color="text.secondary" component="time" dateTime={item.published_at}>
+            {d.toLocaleString()}
+          </Typography>
+          {typeof item.sentiment === "number" && (
+            <Chip
+              icon={getSentimentIcon(item.sentiment)}
+              label={item.sentiment.toFixed(2)}
+              size="small"
+              color={getSentimentColor(item.sentiment)}
+              variant="outlined"
+            />
+          )}
+        </Stack>
+
+        <Link
+          href={item.url}
+          target="_blank"
+          rel="noreferrer"
+          underline="hover"
+          sx={{
+            display: 'block',
+            mb: 1,
+            fontWeight: 600,
+            fontSize: '1.1rem'
+          }}
+        >
+          {item.title}
+        </Link>
+
+        {item.text && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {item.text}
+          </Typography>
         )}
-      </div>
-      <a href={item.url} target="_blank" rel="noreferrer" className="block mt-1 text-lg font-semibold text-blue-700 underline">
-        {item.title}
-      </a>
-      {item.text && <p className="mt-1 text-sm text-neutral-700 line-clamp-3">{item.text}</p>}
-    </article>
+      </CardContent>
+    </Card>
   );
 }

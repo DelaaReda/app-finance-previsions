@@ -3,52 +3,91 @@ import React, { Suspense } from "react";
 import NewsCard from "./NewsCard";
 import { useNews } from "@/hooks/useNews";
 import FreshnessBadge from "@/components/ui/FreshnessBadge";
-import EmptyState from "@/components/ui/EmptyState";
-import { safeGetArray, safeLength, safeMap } from '@/utils/safeAccess';
+import { EmptyState } from "@/components/EmptyState";
+import { safeArray, hasItems } from '@/lib/safe';
 import type { NewsItem } from '@/types/news.types';
+import {
+  Box,
+  Stack,
+  Button,
+  Alert,
+  CircularProgress,
+  Typography
+} from '@mui/material';
 const NewsFilters = React.lazy(() => import("./NewsFilters"));
 
 export default function NewsFeed() {
   const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNews();
 
-  // Safely access articles with fallback to empty array using safe access utility
-  const articles = safeGetArray<NewsItem>({ items }, 'items', []);
+  // Safely access articles with fallback to empty array using safe helpers
+  const articles = safeArray<NewsItem>(items);
 
   return (
-    <section>
+    <Box component="section">
       {/* Filtres et badge de fraîcheur */}
-      <div className="flex items-center justify-between mb-4">
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
         <Suspense fallback={null}>
           <NewsFilters value={filters} onChange={setFilters} />
         </Suspense>
-  <FreshnessBadge freshness={freshness ?? undefined} stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false} />
-      </div>
+        <FreshnessBadge
+          freshness={freshness ?? undefined}
+          stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false}
+        />
+      </Stack>
 
-      {/* États */}
-      {error && <div role="alert" className="text-red-700">Erreur: {error}</div>}
-      {loading && safeLength(articles) === 0 && <div className="text-center py-8">Chargement des actualités…</div>}
-      {safeLength(articles) === 0 && !loading && (
+      {/* États d'erreur */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Erreur: {error}
+        </Alert>
+      )}
+
+      {/* État de chargement initial */}
+      {loading && !hasItems(articles) && (
+        <Box display="flex" justifyContent="center" alignItems="center" py={8}>
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress />
+            <Typography variant="body2" color="text.secondary">
+              Chargement des actualités…
+            </Typography>
+          </Stack>
+        </Box>
+      )}
+
+      {/* État vide */}
+      {!hasItems(articles) && !loading && (
         <EmptyState
           title="Aucun article disponible"
-          hint={freshness ? `Dernière mise à jour: ${new Date(freshness).toLocaleString()}` : "Ingestion en cours…"}
+          subtitle={
+            freshness
+              ? `Dernière mise à jour: ${new Date(freshness).toLocaleString()}`
+              : "Ingestion en cours…"
+          }
         />
       )}
 
-      {/* Liste sécurisée */}
-      {safeLength(articles) > 0 && (
-        <div>
-          {safeMap<NewsItem, JSX.Element>(articles, (item: NewsItem, index: number) => <NewsCard key={item.id || index.toString()} item={item} />)}
-        </div>
+      {/* Liste d'articles */}
+      {hasItems(articles) && (
+        <Stack spacing={0}>
+          {articles.map((item: NewsItem, index: number) => (
+            <NewsCard key={item.id || index.toString()} item={item} />
+          ))}
+        </Stack>
       )}
 
       {/* Pagination */}
-      <div className="mt-4">
-        {hasMore && (
-          <button disabled={loading} onClick={loadMore} className="px-4 py-2 rounded border">
+      {hasMore && (
+        <Box display="flex" justifyContent="center" mt={3}>
+          <Button
+            variant="outlined"
+            disabled={loading}
+            onClick={loadMore}
+            size="large"
+          >
             {loading ? "Chargement…" : "Charger plus"}
-          </button>
-        )}
-      </div>
-    </section>
+          </Button>
+        </Box>
+      )}
+    </Box>
   );
 }
