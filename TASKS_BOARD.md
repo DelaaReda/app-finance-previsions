@@ -1851,7 +1851,7 @@ echo "SMOKE OK"
 
 ## FC-FE-001 — Intégration Material UI (frontend/vite-ts)
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: moderniser le frontend avec Material UI pour améliorer l'UX/UI.
 
@@ -2007,6 +2007,8 @@ echo "SMOKE OK"
 ---
 
 ## FC-FE-002 — Composants UI robustes (frontend)
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
 
 **But**: remplacer les composants bruts par des versions MUI avec protections.
 
@@ -3011,7 +3013,7 @@ Let’s ship. 🚀
 
 ## FC-UI-024 — UI Guards & Error Boundaries (Stabilité)
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Mettre en place des garde-fous UI pour éviter les crashes (never-empty côté front).
 
@@ -3042,6 +3044,8 @@ Let’s ship. 🚀
 * États loading/error/empty gérés avec composants MUI
 * UI jamais blanche ou cassée en cas d'erreur
 * Système de fallback robuste
+
+**Preuve**: ErrorBoundary global implémenté avec retry mechanism, composants utils pour safe access (safeArray, safeMap, etc.), api clients sécurisés avec gestion d'erreurs, et intégration dans le système de routage.
 
 ---
 

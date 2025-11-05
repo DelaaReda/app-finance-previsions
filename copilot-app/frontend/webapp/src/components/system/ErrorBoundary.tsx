@@ -1,35 +1,88 @@
-import React from "react";
+import React, { Component, ReactNode } from 'react';
+import { Alert, Button, Container, Typography, Box, Card, CardContent } from '@mui/material';
+import { Refresh as RefreshIcon, WarningAmberOutlined as WarningIcon } from '@mui/icons-material';
 
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error?: any }> {
-  state = { error: undefined };
-  
-  static getDerivedStateFromError(error: any) { 
-    return { error }; 
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+  errorInfo?: React.ErrorInfo;
+}
+
+class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
   }
-  
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log the error to an error reporting service
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    console.error('Error caught by ErrorBoundary:', error, errorInfo);
+    this.setState({ errorInfo });
   }
-  
+
+  handleRetry = () => {
+    // Reset the error state to allow the app to recover
+    window.location.reload(); // Simple solution: reload the app
+  };
+
   render() {
-    if (this.state.error) {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
       return (
-        <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-          <h2 className="text-xl font-bold text-red-700 mb-2">Un problème est survenu.</h2>
-          <p className="text-red-600 mb-4">Essayez de rafraîchir. Si ça persiste, ouvrez /docs.</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
-          >
-            Rafraîchir
-          </button>
-          <div className="text-xs text-gray-500 mt-3">
-            {new Date().toLocaleString()} • ID: {Math.random().toString(36).substring(2, 8)}
-          </div>
-        </div>
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Card sx={{ boxShadow: 3 }}>
+            <CardContent>
+              <Box textAlign="center" py={4}>
+                <WarningIcon color="error" fontSize="large" sx={{ fontSize: 60, mb: 2 }} />
+                <Typography variant="h5" component="h2" gutterBottom color="error">
+                  Une erreur inattendue s'est produite
+                </Typography>
+                
+                {this.state.error && (
+                  <Typography variant="body1" color="text.secondary" gutterBottom>
+                    {this.state.error.message}
+                  </Typography>
+                )}
+                
+                {this.state.errorInfo && (
+                  <Alert severity="info" sx={{ textAlign: 'left', mt: 2 }}>
+                    <Typography variant="caption" component="div" fontFamily="monospace" whiteSpace="pre-wrap">
+                      {this.state.errorInfo.componentStack}
+                    </Typography>
+                  </Alert>
+                )}
+                
+                <Box sx={{ mt: 3 }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<RefreshIcon />}
+                    onClick={this.handleRetry}
+                    size="large"
+                  >
+                    Relancer l'application
+                  </Button>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Container>
       );
     }
+
     return this.props.children;
   }
 }
+
+export { ErrorBoundary };
