@@ -1,66 +1,77 @@
 /**
- * Safe access utilities to prevent "reading property of undefined" errors
+ * Safely access any property with fallback (using dot notation)
+ * @param obj The object to access
+ * @param path The property path (e.g. 'data.user.name' or 'rows.0.symbol')
+ * @param defaultValue Default value if property not found
+ * @returns Property value or defaultValue
  */
-
-export const safeGet = <T = any>(obj: any, path: string, defaultValue?: T): T | undefined => {
-  try {
-    const keys = path.split('.');
-    let current = obj;
-    
-    for (const key of keys) {
-      if (current === null || current === undefined) {
-        return defaultValue;
-      }
-      current = current[key];
-    }
-    
-    return current !== undefined ? current : defaultValue;
-  } catch (e) {
+export function safeGet<T>(obj: any, path: string, defaultValue: T): T {
+  if (obj === null || obj === undefined) {
     return defaultValue;
   }
-};
-
-export const safeArray = <T>(arr: T[] | null | undefined, defaultValue: T[] = []): T[] => {
-  if (Array.isArray(arr)) {
-    return arr;
+  
+  const keys = path.split('.');
+  let current = obj;
+  
+  for (const key of keys) {
+    if (current === null || current === undefined) {
+      return defaultValue;
+    }
+    current = current[key];
   }
-  return defaultValue;
-};
+  
+  return current !== undefined ? current : defaultValue;
+}
 
-export const safeString = (str: string | null | undefined, defaultValue: string = ''): string => {
-  if (typeof str === 'string') {
-    return str;
+/**
+ * Safely access array property with fallback using dot notation
+ * @param obj The object that might contain the array property
+ * @param path The property path (e.g. 'data.rows' or 'items')
+ * @param defaultValue Default value if property not found or not an array
+ * @returns Array if valid, otherwise defaultValue
+ */
+export function safeGetArray<T>(obj: any, path: string, defaultValue: T[] = []): T[] {
+  if (obj === null || obj === undefined) {
+    return defaultValue;
   }
-  return defaultValue;
-};
+  
+  const keys = path.split('.');
+  let current = obj;
+  
+  for (const key of keys) {
+    if (current === null || current === undefined) {
+      return defaultValue;
+    }
+    current = current[key];
+  }
+  
+  return Array.isArray(current) ? current : defaultValue;
+}
 
-export const safeNumber = (num: number | null | undefined, defaultValue: number = 0): number => {
-  if (typeof num === 'number' && !isNaN(num)) {
-    return num;
-  }
-  return defaultValue;
+/**
+ * Safe guard for non-empty arrays
+ */
+export const hasSafeArray = (obj: any, prop: string): boolean => {
+  const value = safeGet<any>(obj, prop, undefined);
+  return Array.isArray(value) && value.length > 0;
 };
 
 /**
- * Safe mapper that handles undefined arrays
+ * Safe map function that checks array validity before mapping
  */
-export const safeMap = <T, R>(
-  arr: T[] | null | undefined,
-  callback: (item: T, index: number) => R,
-  defaultValue: R[] = []
-): R[] => {
-  if (Array.isArray(arr)) {
-    return arr.map(callback);
+export const safeMap = <T, U>(array: T[], callback: (item: T, index: number) => U, defaultValue: U[] = []): U[] => {
+  if (!Array.isArray(array)) {
+    return defaultValue;
   }
-  return defaultValue;
+  return array.map(callback);
 };
 
 /**
- * Safe length checker for arrays
+ * Safe length check that works with arrays and fallbacks
  */
-export const safeLength = (arr: any): number => {
-  if (Array.isArray(arr)) {
-    return arr.length;
+export const safeLength = (array: any): number => {
+  if (Array.isArray(array)) {
+    return array.length;
   }
   return 0;
 };
@@ -70,38 +81,33 @@ export const safeLength = (arr: any): number => {
  */
 export const isNonEmptyArray = <T>(arr: T[] | null | undefined): arr is T[] => {
   return Array.isArray(arr) && arr.length > 0;
-};
+}
 
 /**
- * Safe array getter that uses dot notation for nested properties
+ * Format a number for display, showing "N/A" if null or undefined
+ * @param value The value to format
+ * @param decimals Number of decimal places (default 2)
+ * @returns Formatted string with number of "N/A" if null
  */
-export const safeGetArray = <T>(obj: any, path: string, defaultValue: T[] = []): T[] => {
-  try {
-    const keys = path.split('.');
-    let current = obj;
-    
-    for (const key of keys) {
-      if (current === null || current === undefined) {
-        return defaultValue;
-      }
-      current = current[key];
-    }
-    
-    return Array.isArray(current) ? current : defaultValue;
-  } catch (e) {
-    return defaultValue;
+export function safeFormatNumber(value: number | null | undefined, decimals: number = 2): string {
+  if (value === null || value === undefined) {
+    return 'N/A';
   }
-};
-// Backwards-compatible aliases used across the codebase
-export function safeGetArrayAlias<T>(obj: any, prop: string, fallback: T[] = []): T[] {
-  const value = safeGet<any>(obj, prop, undefined as any);
-  return Array.isArray(value) ? (value as T[]) : fallback;
+  
+  return value.toFixed(decimals);
 }
 
-export function hasSafeArray(obj: any, prop: string): boolean {
-  const value = safeGet<any>(obj, prop, undefined as any);
-  return Array.isArray(value) && value.length > 0;
+/**
+ * Get a safe color for RSI values with handling for null values
+ * @param rsi The RSI value
+ * @returns Color style object
+ */
+export function getSafeRSIColor(rsi: number | null | undefined) {
+  if (rsi === null || rsi === undefined) {
+    return { color: '#cfd8dc' }; // neutral gray
+  }
+  
+  if (rsi > 70) return { color: '#f44336', fontWeight: 600 }; // oversold (red)
+  if (rsi < 30) return { color: '#4caf50', fontWeight: 600 }; // oversold (green) 
+  return { color: '#ffb74d' }; // neutral (orange)
 }
-
-// Provide a commonly named alias 'safeGetArray' for compatibility
-// note: `safeGetArray` is the canonical function above; keep `safeGetArrayAlias` for legacy imports
