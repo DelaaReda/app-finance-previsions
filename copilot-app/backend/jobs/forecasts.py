@@ -81,7 +81,7 @@ def get_latest_forecasts():
     """
     Retrieve the latest forecasts from persistent storage
     """
-    from backend.storage.io import load_json
+    from storage.io import load_json
     
     forecasts_snapshot = load_json("forecasts")
     if forecasts_snapshot:

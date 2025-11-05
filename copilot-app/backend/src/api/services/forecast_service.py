@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 import asyncio
 
 # New imports for persistent caching
-from backend.storage.io import load_json, save_json
-from backend.services.cache_layer import load_or_compute
+from storage.io import load_json, save_json
+from services.cache_layer import load_or_compute
 
 # Corrected imports for existing modules that might be in the codebase
 try:
@@ -30,9 +30,15 @@ except ImportError:
     query_duckdb = None
     write_parquet = None
 
-# Use our newly created ML forecast model
-from backend.models.ml_forecast import run_forecast_generation
-from backend.models.llm_ranker import llm_ranker
+# Use our existing hybrid forecasting system
+try:
+    from backend.models.forecast_hybrid_v1 import ForecastHybridV1
+except ImportError:
+    # Fallback if our module doesn't exist yet
+    class ForecastHybridV1:
+        def run_forecast_job(self, tickers=None):
+            # Minimal fallback implementation
+            return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["fallback"]}
 
 
 class ForecastService:
@@ -86,11 +92,11 @@ class ForecastService:
                     "model_version": "hybrid_v1"
                 }
         
-        # Use load_or_compute to get data with persistent caching
-        result = await load_or_compute(
+        # Use load_or_compute to get data with persistent caching (sync function, no await)
+        result = load_or_compute(
             key,
             compute_forecasts,
-            ["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
+            source=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
         )
         
         # Prepare the response with freshness info at the top level
@@ -108,6 +114,9 @@ class ForecastService:
         else:
             # This is computed data without cache metadata, add basic freshness info
             api_response = result if isinstance(result, dict) else {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
+            if not isinstance(api_response, dict):
+                api_response = {"rows": [], "count": 0, "generated_at": datetime.utcnow().isoformat()}
+            
             api_response["freshness"] = "fresh"
             api_response["last_update"] = datetime.utcnow().isoformat()
             api_response["source"] = ["realtime_calculation"]
@@ -122,23 +131,24 @@ class ForecastService:
         Load forecasts from the hybrid system's saved file.
         """
         try:
-            # Use our job to get the latest forecasts
-            from backend.jobs.forecasts import get_latest_forecasts
-            return get_latest_forecasts()
+            # Try loading directly from our hybrid system
+            forecasts_data = load_json("forecasts")
+            if forecasts_data and isinstance(forecasts_data, dict):
+                return forecasts_data
+            return {}
         except Exception as e:
             print(f"Error loading hybrid forecasts: {e}")
-            pass
-        
-        return {}
+            return {}
     
     def _generate_hybrid_forecasts(self) -> Dict[str, Any]:
         """
         Generate forecasts using the hybrid system (ML + G4F).
         """
         try:
-            # Use our jobs module to run the hybrid forecast job
-            from backend.jobs.forecasts import run_forecasts_job
-            return run_forecasts_job()
+            # Use our hybrid forecast model to generate forecasts
+            forecast_model = ForecastHybridV1()
+            tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "TSLA", "META"]
+            return forecast_model.run_forecast_job(tickers)
         except Exception as e:
             print(f"Error generating hybrid forecasts: {e}")
             return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"]}
@@ -177,9 +187,21 @@ class ForecastService:
         This ensures we never have empty results.
         """
         try:
-            # Use our ML model to generate forecasts
-            from backend.models.ml_forecast import run_forecast_generation
-            return run_forecast_generation()
+            # Generate minimal fallback forecasts to ensure non-empty response
+            tickers = ["SPY", "QQQ", "AAPL"]
+            fallback_forecasts = []
+            for ticker in tickers:
+                fallback_forecasts.append({
+                    "ticker": ticker,
+                    "direction": "neutral",
+                    "confidence": 0.5,
+                    "expected_return": 0.0,
+                    "horizon": "1d",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "source": ["fallback_generator"],
+                    "model_version": "fallback_v1"
+                })
+            return fallback_forecasts
         except Exception as e:
             print(f"Fallback forecast generation failed: {e}")
             # Return minimal structure if all else fails

@@ -970,7 +970,7 @@ def register_routes(app: FastAPI):
         """Get weekly market brief with <200ms response time using pre-computed data."""
         try:
             # Use cached snapshot approach for instant response
-            from backend.storage.base import load_json
+            from storage.base import load_json
             
             cached_brief = load_json("brief_weekly.json")
             

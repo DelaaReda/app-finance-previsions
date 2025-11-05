@@ -265,7 +265,7 @@ def _generate_forecast_based_alerts(ticker: str, current_price: float) -> List[D
     """
     Generate alerts based on forecast signals from the hybrid forecasting model.
     """
-    from backend.storage.base import load_json
+    from storage.base import load_json
     
     alerts = []
     
@@ -358,7 +358,7 @@ def _generate_combined_signal_alerts(ticker: str, rsi: float, news_score: float,
     """
     Generate alerts that combine multiple signals (technical + news + forecast).
     """
-    from backend.storage.base import load_json
+    from storage.base import load_json
     
     alerts = []
     

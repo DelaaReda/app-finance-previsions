@@ -13,7 +13,7 @@ from typing import Dict, List, Any
 import random
 
 # Import our storage system
-from backend.storage.base import save_json, load_json
+from storage.base import save_json, load_json
 
 logger = logging.getLogger(__name__)
 
