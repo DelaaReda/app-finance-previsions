@@ -1,6 +1,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ThemeProvider as ThemeProviderWrapper } from '../context/ThemeContext';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -17,8 +18,10 @@ const queryClient = new QueryClient({
 export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <ReactQueryDevtools initialIsOpen={false} />
+      <ThemeProviderWrapper>
+        {children}
+        <ReactQueryDevtools initialIsOpen={false} />
+      </ThemeProviderWrapper>
     </QueryClientProvider>
   );
 };

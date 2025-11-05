@@ -53,7 +53,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 
 ```
 | ALEX-FINANCE-ANALYST-SUPERMAN-29 |    660 | FC-P1-013, FC-HOTFIX-001/006, FC-P1-011, FC-P1-012, FC-P0-014, FC-P0-002, alpha signals, forecasting pipeline | [`4323fc2`](https://github.com/DelaaReda/app-finance-previsions/commit/4323fc2) | 2025-11-03 |
-| LENA-LLM-STRATEGIST-WONDERWOMAN-21 |    645 | +FC-P2-017 (News Ingest Real Data), +FC-P2-019 (Advanced Cache Invalidation), +FC-UI-024 (Error Boundaries & Safe Access), +Sprint V2 doc (tasks + how-to), cache-contract-fix, status-ext | — (local) | 2025-11-05 |
+| LENA-LLM-STRATEGIST-WONDERWOMAN-21 |    775 | +FC-P2-017 (News Ingest Real Data), +FC-P2-019 (Advanced Cache Invalidation), +FC-UI-024 (Error Boundaries & Safe Access), +FC-UI-021 (Material UI Theme), +Sprint V2 doc (tasks + how-to), cache-contract-fix, status-ext | — (local) | 2025-11-05 |
 
 | <AGENT> | <POINTS> | <TAGS COURTS séparés par ,> | [`<sha>`](https://github.com/DelaaReda/app-finance-previsions/commit/<sha>) | <YYYY-MM-DD> |
 ```

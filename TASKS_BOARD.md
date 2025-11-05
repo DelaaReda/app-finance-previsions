@@ -280,9 +280,11 @@ How‑to (guide rapide)
 - Validation: Dashboard affiche des entiers cohérents pour Top3.
 
 ## FC-UI-003 — Toggle “include_signals=1” (heavy path) sur Dashboard
-Status: AVAILABLE
+Status: CLAIMED
 
 But: Permettre à l’utilisateur d’activer le scoring détaillé (chemin lourd) côté API.
+
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 Actions:
 - Ajouter un toggle dans `Dashboard.tsx` (par défaut OFF).
@@ -2008,7 +2010,7 @@ echo "SMOKE OK"
 
 ## FC-FE-002 — Composants UI robustes (frontend)
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: remplacer les composants bruts par des versions MUI avec protections.
 
@@ -2898,7 +2900,7 @@ Let’s ship. 🚀
 
 ## FC-UI-021 — Thème Material UI (Design System)
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Implémenter le thème Material UI basé sur l'exemple officiel `material-ui-vite-ts` pour améliorer l'UX, l'accessibilité et la cohérence visuelle.
 
@@ -2934,6 +2936,8 @@ Let’s ship. 🚀
 * Palettes de couleurs personnalisées pour le thème financier
 * Application respecte les normes d'accessibilité WCAG
 * Aucun crash UI sur les composants migrés
+
+**Preuve**: Thème financier complet implémenté avec modes clair/sombre persistants, composants MUI intégrés avec palettes personnalisées (couleurs bullish/bearish), système de persistance locale, et intégration dans la structure applicative.
 
 ---
 
