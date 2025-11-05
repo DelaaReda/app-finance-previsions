@@ -100,9 +100,11 @@ How‑to (référence pour maintenance)
 - Ajouter un message d’erreur lisible quand `response.ok === false`.
 
 #### FC-HOTFIX-008 — Smoke sans `timeout`
-**Status**: AVAILABLE to claim
+**Status**: DONE
 
 **But**: pre-push fiable sur macOS.
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 How‑to
 - Dans `.githooks/pre-push`, remplacer toute invocation `timeout` par une boucle d’attente simple (curl toutes les 2s, max 30s) pour `/api/health`.
