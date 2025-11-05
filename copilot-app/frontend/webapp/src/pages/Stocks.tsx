@@ -6,6 +6,7 @@ import { stocksService } from '@/services/stocks.service'
 import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import { safeGetArray, hasSafeArray } from '@/utils/safeAccess'
 
 export default function Stocks() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -145,10 +146,10 @@ export default function Stocks() {
                 </Card>
 
                 {/* Signaux */}
-                {analysis.signals && analysis.signals.length > 0 && (
+                {hasSafeArray(analysis, 'signals') && (
                   <Card title="Signaux Techniques">
                     <div style={styles.signalsList}>
-                      {analysis.signals.map((signal: any, index: number) => (
+                      {safeMap(safeGetArray(analysis, 'signals'), (signal: any, index: number) => (
                         <div key={index} style={getSignalStyle(signal.type)}>
                           <div style={styles.signalHeader}>
                             <span style={styles.signalType}>{signal.type.toUpperCase()}</span>

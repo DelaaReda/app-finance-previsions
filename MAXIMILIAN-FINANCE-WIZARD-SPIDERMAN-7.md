@@ -50,6 +50,7 @@
 ## 🏅 Tâches Récentes Accomplies
 - **FC-P0-008 - Freshness partout**: Implémentation du badge de fraîcheur sur 4 pages (Forecasts, News, MarketBrief, Backtests) avec détection de données périmées
 - **FC-P0-014 - Health+ enrichi**: Endpoint /api/health enrichi avec last_updates, backend_up, data_paths + indicateur UI dans le header
+- **FC-P1-014 - Alerts (signals + news)**: Système d'alertes avancé combinant indicateurs techniques, sentiment news et signaux de prévision
 - **Hotfixes**: Corrections critiques pour le démarrage backend et script start/stop sans dépendance à 'timeout'
 - **FC-P1-013 - Forecasts Hybrid v1**: Moteur de prévision hybride ML + G4F complètement implémenté
 

@@ -2,6 +2,7 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 type TopSignalsProps = {
   signals: CompositeSignal[]
@@ -31,7 +32,7 @@ const getComponentScores = (signal: CompositeSignal) => {
 
 const buildStrengthSummary = (signal: CompositeSignal) => {
   const components = getComponentScores(signal)
-  if (!components.length) return undefined
+  if (safeLength(components) === 0) return undefined
   const strongest = components.reduce((best, current) =>
     current.score > best.score ? current : best
   )
@@ -55,10 +56,10 @@ export default function TopSignals({
   return (
     <Card title={title}>
       <div style={styles.container}>
-        {topSignals.length === 0 ? (
+        {safeLength(topSignals) === 0 ? (
           <div style={styles.empty}>{emptyMessage}</div>
         ) : (
-          topSignals.map((signal, index) => {
+          safeMap(topSignals, (signal, index) => {
             const compositeScore = getCompositeScore(signal)
             const components = getComponentScores(signal)
             const strengthSummary = buildStrengthSummary(signal)
@@ -78,7 +79,7 @@ export default function TopSignals({
                 <p style={styles.description}>{description}</p>
 
                 <div style={styles.metrics}>
-                  {components.map(component => (
+                  {safeMap(components, component => (
                     <span key={component.key} style={styles.metric}>
                       {component.label}: <strong>{formatScore(component.score)}</strong>
                     </span>

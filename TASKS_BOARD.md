@@ -4,6 +4,7 @@
 Ici on livre **du vrai**: zéro mock, zéro “quick fix” qui masque les problèmes.
 Votre mission: **rendre l’app stable, rapide et alimentée par de la vraie data**.
 Lisez les reviews : [text](reviews)
+[➡️ Sprint V2 (plan détaillé prêt à l’emploi)](docs/product/SPRINT_V2_TASKS.md)
 ---
 
 ## ⚠️ HOTFIX CRITIQUE — backend ne démarre pas (immédiat)
@@ -86,14 +87,27 @@ backend/
 **Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
 
 #### FC-HOTFIX-007 — Front: enveloppe + empty-states
-**Status**: AVAILABLE to claim
+**Status**: DONE
 
 **But**: plus de crash `length/map of undefined`.
+
+**Completed by**: ALEX-API-ARCHITECT-SUPERMAN-7
+
+How‑to (référence pour maintenance)
+- Utiliser uniquement le client unwrappé `src/api/client.ts` et `src/services/api.ts` (retournent le payload direct si `{ok,data}`).
+- Partout dans le front: accéder via `data?.rows ?? []`, `data?.items ?? []` et afficher un `EmptyState` explicite si len=0.
+- Pour les pages clés (Dashboard, Macro, News, Stocks, Brief): ne jamais `.map`/`.length` sur `undefined`.
+- Ajouter un message d’erreur lisible quand `response.ok === false`.
 
 #### FC-HOTFIX-008 — Smoke sans `timeout`
 **Status**: AVAILABLE to claim
 
 **But**: pre-push fiable sur macOS.
+
+How‑to
+- Dans `.githooks/pre-push`, remplacer toute invocation `timeout` par une boucle d’attente simple (curl toutes les 2s, max 30s) pour `/api/health`.
+- Ensuite exécuter `scripts/ui_api_validate.sh`; si l’une des routes critiques n’a pas `data`, refuser le push (`exit 1`).
+- Capturer un court log dans `proofs/FC-OPS-004/`.
 
 **REMARQUE IMPORTANTE**: Tant que ces HOTFIX ne sont pas résolus, l'application est non fonctionnelle. 
 Priorité absolue à la réparation du backend avant toute autre fonctionnalité.
@@ -235,6 +249,473 @@ Tu as raison : là, le backend **ne peut pas démarrer** (imports cassés, `time
 * Le front tape probablement aux **mauvaises URLs** (`/forecasts` vs `/api/forecasts`) et **l’enveloppe** `{ ok, data }` n’est pas gérée côté UI.
 
 ---
+
+# 🎨 UI/UX Improvements Sprint — Front fiable et lisible
+
+Objectif: rendre l’affichage user‑friendly, cohérent et robuste, en s’alignant sur les données réelles du backend (never‑empty) et en évitant les états “vides” non expliqués.
+
+## FC-UI-002 — Normaliser l’affichage des scores (0..100)
+Status: AVAILABLE
+
+But: Les `composite_score` peuvent être dans [-1..1] ou 0..1 selon la source; l’UI affiche “/100”, ce qui donne parfois 0/100. Normaliser (front-only) pour lecture claire.
+
+Actions:
+- Ajouter un util `formatScore100(x)` qui:
+  - si |x| ≤ 1 → `((x+1)/2)*100` pour [-1..1]; sinon si 0..1 → `x*100`; sinon garder tel quel si déjà 0..100.
+  - borne 0..100, arrondi configurable.
+- Appliquer à `TopSignals.tsx`, `TopRisks.tsx`, Dashboard KPIs affichant des scores.
+
+DoD:
+- Les badges de score affichent des valeurs lisibles (entiers 0‑100).
+- Aucun affichage 0/100 incohérent quand des signaux existent.
+
+How‑to (guide rapide)
+- Créer `copilot-app/frontend/webapp/src/utils/score.ts` avec `export function toScore100(x?: number): number | null`:
+  - if x == null → null
+  - if -1 ≤ x ≤ 1 → return Math.round(((x + 1) / 2) * 100)
+  - if 0 ≤ x ≤ 1 → return Math.round(x * 100)
+  - else → clamp(Math.round(x), 0, 100)
+- Utiliser `toScore100()` dans `TopSignals.tsx` et `TopRisks.tsx` au lieu de `toFixed(0)` direct.
+- Afficher “—” si null; sinon “{score}/100”.
+- Validation: Dashboard affiche des entiers cohérents pour Top3.
+
+## FC-UI-003 — Toggle “include_signals=1” (heavy path) sur Dashboard
+Status: AVAILABLE
+
+But: Permettre à l’utilisateur d’activer le scoring détaillé (chemin lourd) côté API.
+
+Actions:
+- Ajouter un toggle dans `Dashboard.tsx` (par défaut OFF).
+- Quand ON: ajouter `include_signals=1` aux params de `/dashboard/kpis`.
+- Indiquer visuellement “mode lourd” et spinner spécifique.
+
+DoD:
+- Le toggle recharge les données et peuple `filtered_signals/risks` avec plus de détails.
+- L’UI reste réactive; pas de blocage global.
+
+How‑to
+- Dans `Dashboard.tsx`, ajouter un switch `heavyMode` (boolean) et passer `include_signals: heavyMode ? '1' : '0'` à l’appel `/dashboard/kpis`.
+- Désactiver le switch pendant le refetch (isFetching).
+- Indiquer visuellement “Mode avancé activé”.
+- Vérifier que la route back renvoie vite quand OFF.
+
+## FC-UI-004 — Macro: charts réels pour séries FRED
+Status: AVAILABLE
+
+But: Remplacer “Chart placeholder” par de vrais mini‑graphiques (lib légère).
+
+Actions:
+- Ajouter `MiniLineChart` (e.g. Recharts ou Chart.js déjà présent si possible) avec fallback table.
+- Mapper `fetchMacroSeries()` → séries à tracer, légendes en FR, unités simples.
+
+DoD:
+- Au moins 2 séries s’affichent correctement avec axes et tooltip.
+- Fallback propre si une série est indisponible.
+
+How‑to
+- Ajouter un composant `MiniLineChart` (Recharts ou Chart.js déjà si présent). Démarrer simple: timestamp → value.
+- Dans `Macro.tsx`, pour chaque série, passer les points (date,value) triés; si série absente → montrer “N/A”.
+- Validation: captures des deux séries actives enregistrées dans `proofs/FC-UI-004/`.
+
+## FC-UI-005 — Stocks: placeholders et couleurs sûres
+Status: AVAILABLE
+
+But: Plusieurs champs `0`/`null` (SMA/RSI) → lisibilité mauvaise.
+
+Actions:
+- Afficher `N/A` pour valeurs non mesurées.
+- Teintes cohérentes (vert/rouge) et info‑bulle “non disponible”.
+
+DoD:
+- Aucun “$0.00” quand la donnée est manquante; on voit “N/A”.
+
+How‑to
+- Dans `stocks.service.ts`, remplacer `|| 0` par `?? null` pour `sma*`, `rsi`, etc.
+- Dans `Stocks.tsx`, n’afficher une valeur formatée que si non null; sinon `N/A` + tooltip “indicateur indisponible”.
+- Validation: `/api/stocks/AAPL` avec nulls n’affiche plus de faux zéros.
+
+## FC-UI-006 — Brief: UI fallback explicite (daily/weekly)
+Status: AVAILABLE
+
+But: Quand backend renvoie un placeholder (ex: weekly fallback), afficher bandeau “snapshot indisponible” + horodatage.
+
+Actions:
+- Détecter `error`/`fallback` dans réponse et expliquer l’état.
+- Bouton “Réessayer” qui refetch sans tout recharger.
+
+DoD:
+- L’utilisateur comprend pourquoi Top3 est vide et quand ça a été généré.
+
+How‑to
+- Lire `brief.error|message|freshness`; si présent → bandeau `snapshot indisponible` + `Généré le …` + bouton `Réessayer`.
+- Ne pas rendre Top3 si tableaux vides et erreur présente; montrer EmptyState.
+
+## FC-UI-007 — Health unifié (client unwrap)
+Status: AVAILABLE
+
+But: Unifier `HealthIndicator` et `HealthStatusBadge` pour consommer le client unwrappé.
+
+Actions:
+- Factoriser un hook `useHealth()`.
+- État ‘degraded’ si freshness inconnue.
+
+DoD:
+- Badges synchronisés; aucune divergence “Backend Hors ligne” fantôme.
+
+How‑to
+- Créer hook `useHealth()` qui consomme `apiGet('/health')` (unwrapped) et renvoie `{status, backend_up, last_updates}`.
+- Refactor `HealthIndicator.tsx` + `HealthStatusBadge.tsx` pour utiliser ce hook.
+
+## FC-UI-008 — Freshness globale (top bar)
+Status: AVAILABLE
+
+But: Montrer la fraîcheur globale (forecasts/news/brief) dans l’en‑tête.
+
+Actions:
+- Ajouter composant `GlobalFreshness` lisant `/api/health` et indicateurs clés.
+
+DoD:
+- Un badge affiche la dernière mise à jour (±min) ou “stale”.
+
+How‑to
+- Créer composant `GlobalFreshness` lisant `/api/health` et affichant last_updates.{forecasts,news,brief}.
+- Seuils: fresh < 15 min; stale > 60 min.
+
+## FC-UI-009 — Error Boundary global
+Status: AVAILABLE
+
+But: Intercepter erreurs runtime front et afficher état contrôlé.
+
+Actions:
+- Ajouter ErrorBoundary avec reset et journalisation console.
+
+DoD:
+- Aucune stacktrace brute en prod dev; message propre.
+
+How‑to
+- Ajouter `components/common/AppErrorBoundary.tsx` avec reset.
+- Envelopper `<App/>` dans `App.tsx`.
+
+## FC-UI-010 — Info sources (tooltips)
+Status: AVAILABLE
+
+But: Transparence sur les sources (FRED, yfinance, RSS…)
+
+Actions:
+- Ajouter infobulles sur sections avec source principale + date extraction.
+
+DoD:
+- Au survol, la source et la date s’affichent.
+
+How‑to
+- Ajouter un util `SourceTooltip` prenant `{source, last_update}` et l’utiliser sur sections Macro/News/Stocks/Brief.
+
+## FC-UI-011 — Playwright smoke UX (Dashboard/Macro/News/Stocks/Brief)
+Status: AVAILABLE
+
+But: Verrouiller que chaque page rend un état non‑vide ou un empty‑state propre.
+
+Actions:
+- Tests rapides: navigue → attend badges/sections clefs → vérifie contenu.
+
+DoD:
+- CI locale: tests passent; captures ajoutées dans `proofs/FC-UI-011/`.
+
+How‑to
+- Ajouter tests simples: vérifier présence des tuiles Dashboard, charts Macro (ou EmptyState), liste News (>0 ou EmptyState), Stocks (N/A géré), Brief (bandeau fallback si weekly vide).
+
+## FC-UI-013 — Mapper “short/medium/long” → tokens API
+Status: AVAILABLE
+
+But: Harmoniser les filtres d’horizon côté UI avec les tokens API (ex: 1w/1m/1y) pour éviter des résultats vides.
+
+Actions:
+- Dans `Dashboard.tsx`, convertir `['short','medium','long']` en `['1w','1m','1y']` (ou la table exacte documentée par l’API).
+- Afficher les labels humains mais envoyer les tokens API.
+
+DoD:
+- Les KPIs filtrés renvoient des signaux/risques cohérents après sélection d’horizons.
+
+How‑to
+- Créer un mapping constant `HORIZON_MAP` et utiliser `params.horizons = selected.map(h => HORIZON_MAP[h])`.
+- Test manuel: sélectionner “short” montre un filtrage attendu (Top3 non vides quand présents côté API).
+
+## FC-UI-014 — Forecasts: client unwrap & shape stable
+Status: AVAILABLE
+
+But: `Forecasts.tsx` assume {ok,data}; désormais `apiGet` renvoie le payload direct.
+
+Actions:
+- Changer l’appel en `apiGet<{ rows: Row[]; count?: number; asset_type?: string; freshness?: string }>("/forecasts", ...)` et lire `res.rows` (et non `res.data.rows`).
+- Sécuriser `rows` avec fallback `[]` et EmptyState.
+
+DoD:
+- La page Forecasts affiche un tableau quand `count>0` ou un empty-state propre sinon.
+
+How‑to
+- Modifier les types lignes ~26–37 de `Forecasts.tsx` et simplifier la logique setRawData (pas besoin d’imbriquer `data`).
+
+---
+
+# 📈 Data Pipelines Sprint — Quality, Freshness, Coverage
+
+Objectif: fiabiliser et enrichir les pipelines (news/macro/stocks/forecasts), garantir des snapshots persistés, et exposer des métriques de fraîcheur mesurables.
+
+## FC-DATA-001 — News ingestion expansion (+dedup)
+Status: AVAILABLE
+
+But: Augmenter la couverture news (plus de flux + moteur SearXNG), éviter doublons, persister en JSONL/Parquet.
+
+Actions:
+- Étendre la liste RSS (tier‑1, SEC, WSJ, FT, Bloomberg endpoints publics, CNBC, Reuters, Yahoo Finance, Investing) et SearXNG local (ops/web/searxng-local/).
+- Normaliser items: id stable (hash de canonical_url + published_at), `source`, `ticker_tags`, `score`.
+- Déduplication: canonicalisation URL (strip utm, mobile subdomains), fenêtre 24h.
+- Persistance: `data/news.jsonl` append‑only + `data/news/dt=YYYYMMDD.parquet` quotidien.
+
+DoD:
+- ≥300 articles/24h (dev) avec <3% doublons.
+- `/api/news/feed` renvoie `count>0`, `freshness<15min (dev)`, champs normalisés.
+
+How‑to
+- Sources: compléter liste RSS (docs/NEWS_INFRASTRUCTURE.md), et activer SearXNG local (`ops/web/searxng-local/` → `launch_searxng.sh`).
+- Normaliser les items: générer `id` = sha1(canonical_url|published_at); parser `tickers` via regex/mapper; `score` par simple heuristique (recency × novelty × tier1).
+- Dédupliquer: normaliser URLs (strip utm, m/ mobile), fenêtre 24h en mémoire + vérif sur JSONL précédent.
+- Persistance: append `data/news.jsonl`, batch parquet quotidien `data/news/dt=YYYYMMDD.parquet`.
+
+## FC-DATA-002 — News freshness SLA + health
+Status: AVAILABLE
+
+But: Exposer métriques (count 1h/6h/24h, freshness médiane) et SLA via `/api/health`.
+
+Actions:
+- Calculer freshness médiane, p90; counts par fenêtre; écrire `last_updates.news`.
+- Ajouter badges UI (global freshness). Voir FC-UI-008.
+
+DoD:
+- `/api/health` inclut `last_updates.news`, `news_stats {median_min, p90_min, count_24h}`.
+- UI affiche l’état “fresh/stale”.
+
+How‑to
+- Calculer sur lecture du JSONL/parquet: ordonner par `published_at`, calculer `median`/`p90` de `now - published_at`.
+- Enrichir la réponse `/api/health` avec ces stats et mettre à jour `Health` UI.
+
+## FC-DATA-003 — News NLP enrich (taxonomy + novelty)
+Status: AVAILABLE
+
+But: Améliorer signal qualité: taxonomie thèmes, entités, score de nouveauté.
+
+Actions:
+- Pipeline `src/research/nlp_enrich.py` existant: brancher spaCy/fasttext/simple‑NER; calcul novelty par domaine/ticker fenêtré.
+- Persister features dans Parquet; intégrer au feed.
+
+DoD:
+- Champs `entities`, `novelty`, `tier1_share` disponibles et utilisés dans score.
+
+How‑to
+- Pipeline: partir de `src/research/nlp_enrich.py` et `src/taxonomy/news_taxonomy.py`.
+- Entities: extraction via spaCy/light NER (ou simple regex tickers + règles domaine). Stocker sous `entities: [{text,type,score}]`.
+- Taxonomy: mapper titres/descriptions vers thèmes (growth, value, momentum, dividend, quality) → voir `news_taxonomy.py`.
+- Novelty: par (domain,ticker) sur 7/30 jours: score élevé si faible similarité TF‑IDF/K‑shingle ou fréquence rare.
+- Persist: enrichir Parquet quotidien (ajouter colonnes `novelty`, `tier1_flag`, `tier1_share`, `entities`, `themes`).
+- Intégration: adapter `/api/news/feed` pour inclure ces champs et recalculer `score`.
+
+## FC-DATA-004 — Forecasts materialization (daily cache)
+Status: AVAILABLE
+
+But: Générer `final.parquet` quotidien, servir instantanément `/api/forecasts` et alimenter backtests.
+
+Actions:
+- Job quotidien: écrit `copilot-app/backend/data/forecast/dt=YYYYMMDD/{forecasts,final}.parquet` + symlink `latest`.
+- `/api/forecasts` lit `latest` puis recalcule async si plus vieux que 24h.
+
+DoD:
+- `/api/forecasts` latence <150ms (cache) et `count>0`.
+- `/api/backtests` dépend de `final.parquet` sans recalcul lourd.
+
+How‑to
+- Script/cron (APScheduler) quotidien: construire `forecasts.parquet` → `final.parquet`; symlink `latest`.
+- Endpoint `/api/forecasts`: lire `latest`, sinon dernier dt connu; lancer recalc async si stale >24h.
+
+## FC-DATA-005 — Technical indicators fallback (SMA/RSI)
+Status: AVAILABLE
+
+But: Éviter `null` sur `/api/stocks/:ticker` en recalculant via `/stocks/prices` si manque.
+
+Actions:
+- Implémenter calcul SMA(20/50/200), RSI(14) côté backend si champs manquants; persister dans snapshot ticker.
+
+DoD:
+- Les indicateurs affichés ne montrent plus `N/A` pour AAPL/MSFT (top‑tickers) en conditions normales.
+
+How‑to
+- Dans backend, si `technical_indicators.{sma*,rsi}` sont null: charger `/stocks/prices` (1d 200 barres) → calculer SMA(20/50/200) et RSI(14) (indicators_basic.py existe).
+- Persister snapshot ticker enrichi et renvoyer via `/api/stocks/:ticker`.
+
+## FC-DATA-006 — Macro ingestion + snapshot
+Status: AVAILABLE
+
+But: Stocker séries macro en Parquet (by series_id), snapshotter le dernier point, contract stable.
+
+Actions:
+- Écrire `data/macro/series_id=XXX/dt=YYYYMMDD.parquet` + `macro_snapshot.json`.
+- Adapter `/api/macro/series` pour retourner aussi un mapping clé→série (option `format=map`).
+
+DoD:
+- `/api/macro/series?ids=CPIAUCSL,VIXCLS` renvoie data non vide + snapshot récent.
+- UI Macro utilise mapping (voir FC-UI-012).
+
+How‑to
+- Ingestion FRED → Parquet partitionné par `series_id`/`dt`.
+- Générer `macro_snapshot.json` {series_id: last_value, timestamp}.
+- Endpoint: `format=map` retourne mapping prêt pour l’UI.
+
+## FC-DATA-007 — Data quality checks (gate)
+Status: AVAILABLE
+
+But: Bloquer les snapshots corrompus: schéma, champs obligatoires, ratios de nulls.
+
+Actions:
+- Ajout `src/core/data_quality.py` (déjà présent) → checks par domaine; générer rapport markdown.
+- Si KO: servir dernier snapshot valide + flag `degraded`.
+
+DoD:
+- Rapport sous `proofs/DATA_QUALITY/<ts>.md` et `/api/health` expose `quality.degraded=false/true`.
+
+How‑to
+- Ajouter validations de schéma/ratios nulls dans `src/core/data_quality.py`; exécuter sur news/forecasts/macro/stocks avant de publier `latest`.
+- En cas d’échec: servir le dernier snapshot `latest` valide et marquer `degraded: true`.
+
+## FC-DATA-008 — Pipeline audit script (end‑to‑end)
+Status: DONE (script de base)
+
+But: Avoir une commande unique pour vérifier les endpoints critiques consommés par l’UI.
+
+Actions:
+- Script `scripts/ui_api_validate.sh` (ajouté) qui sauvegarde JSON + log.
+
+DoD:
+- Rapport dans `proofs/FC-UI-VALIDATION/<ts>.log`.
+
+## FC-DATA-009 — Storage conventions (layout stable)
+Status: AVAILABLE
+
+But: Convention unique: Parquet partitionné par `dt=YYYYMMDD`, symlink `latest`, JSON pour snapshots.
+
+Actions:
+- Documenter et adapter loaders; centraliser dans `src/core/data_access.py`.
+
+DoD:
+- Tous les loaders utilisent la convention; doc mise à jour.
+
+How‑to
+- Centraliser dans `copilot-app/backend/src/core/data_access.py` les helpers `read_latest(dt_path)`, `write_with_dt(path, dt, obj)`.
+- Documenter sous `docs/architecture/data_flow.md`.
+
+## FC-DATA-010 — Rate limits & backoff
+Status: AVAILABLE
+
+But: Éviter bans des sources externes (FRED, yfinance, RSS).
+
+Actions:
+- Ajout backoff exponentiel simple, budget QPS, retries avec jitter.
+
+DoD:
+- Aucun 429 répété dans logs sur 24h.
+
+How‑to
+- Wrapper HTTP avec retries exponentiels + jitter, budget QPS par domaine, et `User-Agent` stable.
+- Exposer variables env pour overrides (RATE_*). Ajouter stats dans `/api/health`.
+
+---
+
+## FC-API-016 — Stocks search endpoint (réel)
+Status: AVAILABLE
+
+But: Remplacer la recherche mock par une vraie API.
+
+Actions:
+- Backend: `GET /api/stocks/search?q=...` → renvoie `{ ticker, name, sector, changePct }[]` depuis `universe` + yfinance.
+- Front: remplacer mock dans `stocks.service.ts` par appel réel.
+
+DoD:
+- Recherche fonctionne pour 3 tickers majeurs; pas de mock.
+
+## FC-API-017 — Weekly brief materialization
+Status: AVAILABLE
+
+But: Éviter le fallback d’erreur; servir un snapshot hebdo réel.
+
+Actions:
+- Job hebdo: générer `data/brief/weekly/dt=YYYYWW.json` (top_signals/risks/picks/sources) à partir de `final.parquet`.
+- Endpoint `/api/brief/weekly`: lire `latest` et indiquer `freshness`.
+
+DoD:
+- UI Weekly Brief affiche Top3 ou un empty-state propre avec bandeau.
+
+## FC-API-019 — Macro API mapping option
+Status: AVAILABLE
+
+But: Rendre l’API directement exploitable par l’UI.
+
+Actions:
+- `/api/macro/series?ids=...&format=map` → `{ [series_id]: {meta, points} }`.
+- Conserver le format array par défaut pour compat scientifique.
+
+DoD:
+- UI Macro bascule sans transformation complexe côté front.
+
+---
+
+## FC-OPS-001 — Scheduler (APScheduler)
+Status: AVAILABLE
+
+But: Orchestrer jobs daily/weekly (news refresh, forecasts, brief, backtests).
+
+Actions:
+- Intégrer APScheduler au backend avec jobs déclarés; endpoints de contrôle facultatifs.
+
+DoD:
+- Jobs tournent local; logs horodatés + durée.
+
+## FC-OPS-003 — Structured logging + trace id
+Status: AVAILABLE
+
+But: Mieux corréler front↔back et diagnostiquer.
+
+Actions:
+- Logger JSON (uvicorn + app) avec `trace-id` propagé depuis header `X-Trace-Id` (déjà créé côté front).
+
+DoD:
+- api.log montre trace id constant par requête.
+
+## FC-OPS-004 — Pre-push gate (validation)
+Status: AVAILABLE
+
+But: Empêcher push si endpoints critiques cassés.
+
+Actions:
+- Étendre `.githooks/pre-push` pour exécuter `scripts/ui_api_validate.sh` et refuser si clés manquent.
+
+DoD:
+- Push refusé si `ok != true` ou `data` absent sur routes critiques.
+
+## FC-UI-012 — Adapter Macro UI au schéma API (array → mapping)
+Status: AVAILABLE
+
+But: L’endpoint `/api/macro/series` renvoie un array; `Macro.tsx` attend un mapping `{ seriesId: data }`, ce qui affiche `0` comme clé à l’écran.
+
+Actions:
+- Adapter `fetchMacroSeries` ou `Macro.tsx` pour transformer `Array` → `Record<string, Series>` indexé par `series_id`.
+- Gérer les séries absentes par un état “N/A”.
+
+DoD:
+- Les cartes macro affichent les noms des séries (CPI, VIX…) et non `0`.
+
+How‑to
+- Dans `macro.service.ts::getSeries`, normaliser le retour: si Array → transformer en `{ [series_id]: data }`.
+- Ou adapter `Macro.tsx` pour itérer sur l’Array et afficher label via `MACRO_SERIES`.
+- Validation: plus de clé `0` affichée dans la page Macro.
+
 
 ## 🎯 Objectif hotfix
 
@@ -954,7 +1435,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P0-007 — ErrorBoundary global (frontend)
+## FC-P0-007 — ErrorBoundary global (frontend) - CLAIMED
 
 **But**: remplacer l’écran d’erreur brut par une UX maîtrisée.
 
@@ -992,6 +1473,9 @@ echo "SMOKE OK"
 
    ```tsx
    // main.tsx
+```
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
    ReactDOM.createRoot(document.getElementById('root')!).render(
      <ErrorBoundary>
        <RouterProvider router={router} />
@@ -1043,7 +1527,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P0-009 — Vite proxy + .env (frontend/devx)
+## FC-P0-009 — Vite proxy + .env (frontend/devx) - CLAIMED
 
 **But**: le front parle au back via `/api` local.
 
@@ -1076,6 +1560,8 @@ echo "SMOKE OK"
 **DoD**
 
 * Capture du `curl` côté 5173.
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 ---
 
@@ -1749,3 +2235,135 @@ Let’s ship. 🚀
 * On **documente** ce qui compte (court + utile)
 * On **livre** petit mais sûr, avec **preuves**
 
+# 🚀 NEXT ITERATION TASKS (P2) - Ready to claim
+
+## FC-P2-016 — Forecast Data Population (real data to forecasts)
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+
+**But**: remplir `/api/forecasts` avec de vraies données ML+G4F au lieu de tableaux vides.
+
+**Fichiers**
+
+* `backend/models/ml_forecast.py`
+* `backend/models/llm_ranker.py` 
+* `backend/jobs/forecasts.py`
+* `backend/routes/forecasts.py`
+
+**Étapes**
+
+1. Exécuter le modèle ML pour produire de vraies prévisions (pas juste des structures vides)
+2. Intégrer G4F pour ranking et explications
+3. Sauvegarder dans `data/forecasts.json` avec horodatage et sources
+4. S'assurer que `/api/forecasts` renvoie des `rows` non-vides
+
+**DoD**
+
+* `/api/forecasts` renvoie `{"rows": [...]}` avec des données réelles (pas vide)
+* Structure: `{ticker, horizon, direction, confidence, explanation, score}`
+* Fraîcheur et sources incluses
+
+---
+
+## FC-P2-017 — News Ingest Real Data (RSS → API)
+
+**Status**: AVAILABLE to claim
+
+**But**: Alimenter `/api/news/feed` avec de vraies données RSS au lieu de réponses vides.
+
+**Fichiers**
+
+* `backend/jobs/news_ingest.py`
+* `backend/routes/news.py`
+* `backend/services/news_service.py`
+
+**Étapes**
+
+1. Configurer les sources RSS réelles (Bloomberg, Reuters, etc.)
+2. Intégrer le pipeline d'ingestion avec scraping + parsing
+3. Sauvegarder dans `data/news_feed.json` avec fraîcheur
+4. S'assurer que `/api/news/feed` renvoie des articles réels
+
+**DoD**
+
+* `/api/news/feed` renvoie `{"articles": [...]}` avec articles réels
+* Articles < 15 minutes (fraîcheur garantie)
+* Structure: `{title, link, pubDate, source, sentiment_score, tickers}`
+
+---
+
+## FC-P2-018 — ML Model Performance Tracking
+
+**Status**: AVAILABLE to claim
+
+**But**: Suivre la performance des modèles ML avec métriques réelles.
+
+**Fichiers**
+
+* `backend/models/performance_tracker.py`
+* `backend/jobs/performance_report.py`
+* `backend/routes/ml_performance.py`
+
+**Étapes**
+
+1. Calculer des métriques: hit_rate, precision, recall pour les prévisions
+2. Suivre l'évolution des prévisions dans le temps
+3. Sauvegarder dans `data/ml_performance.json` 
+4. Endpoint pour visualiser la performance
+
+**DoD**
+
+* `/api/ml-performance` renvoie métriques réelles de performance
+* Données historiques de performance ML stockées et accessibles
+
+---
+
+## FC-P2-019 — Advanced Cache Invalidation
+
+**Status**: AVAILABLE to claim
+
+**But**: Système intelligent d'invalidation des caches basé sur la fraîcheur des données.
+
+**Fichiers**
+
+* `backend/services/cache_service.py`
+* `backend/jobs/cache_manager.py`
+
+**Étapes**
+
+1. Détecter quand les données sources changent (news, forecasts, etc.)
+2. Invalider automatiquement les caches dépendants
+3. Rafraîchir les snapshots en arrière-plan
+4. Maintenir la fraîcheur dans les métadonnées
+
+**DoD**
+
+* Cache mis à jour automatiquement quand les données changent
+* Fraîcheur toujours correcte dans les réponses
+* `/api/*` renvoie toujours les dernières données valides
+
+---
+
+## FC-P2-020 — LLM Judge Integration
+
+**Status**: AVAILABLE to claim
+
+**But**: Intégrer le LLM Judge pour évaluer la qualité des prévisions et des analyses.
+
+**Fichiers**
+
+* `backend/llm_judge/judge_service.py`
+* `backend/routes/judge.py`
+* `backend/jobs/judge_evaluation.py`
+
+**Étapes**
+
+1. Intégrer G4F pour évaluation des prévisions
+2. Comparer les prévisions avec les réalisations
+3. Générer des rapports de performance LLM
+4. Endpoint pour consulter les évaluations
+
+**DoD**
+
+* `/api/judge` renvoie évaluations LLM des prévisions/analyses
+* Scores de qualité et explications disponibles

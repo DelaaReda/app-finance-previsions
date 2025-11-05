@@ -2,6 +2,7 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 type TopRisksProps = {
   risks: CompositeSignal[]
@@ -31,7 +32,7 @@ const getComponentScores = (risk: CompositeSignal) => {
 
 const buildWeaknessSummary = (risk: CompositeSignal) => {
   const components = getComponentScores(risk)
-  if (!components.length) return undefined
+  if (safeLength(components) === 0) return undefined
   const weakest = components.reduce((worst, current) =>
     current.score < worst.score ? current : worst
   )
@@ -63,10 +64,10 @@ export default function TopRisks({
   return (
     <Card title={title}>
       <div style={styles.container}>
-        {topRisks.length === 0 ? (
+        {safeLength(topRisks) === 0 ? (
           <div style={styles.empty}>{emptyMessage}</div>
         ) : (
-          topRisks.map((risk, index) => {
+          safeMap(topRisks, (risk, index) => {
             const compositeScore = getCompositeScore(risk)
             const { label: severityLabel, tone: severityTone } = getSeverity(compositeScore)
             const components = getComponentScores(risk)
@@ -89,7 +90,7 @@ export default function TopRisks({
                 <p style={styles.description}>{description}</p>
 
                 <div style={styles.metrics}>
-                  {components.map(component => (
+                  {safeMap(components, component => (
                     <span key={component.key} style={styles.metric}>
                       {component.label}: <strong>{formatScore(component.score)}</strong>
                     </span>

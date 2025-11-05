@@ -1,0 +1,14 @@
+📊 État des services Finance Copilot...
+🧪 Test de Finance Copilot
+===========================
+
+🔍 Test des endpoints backend:
+------------------------------
+   /api/health: ✅ OK
+   /api/brief/daily: ✅ OK
+   /api/dashboard/kpis: ✅ OK
+   /api/news/feed: ✅ OK
+
+📊 Résumé:
+----------
+🎉 Tous les tests ont réussi ! Finance Copilot est prêt à l'emploi.

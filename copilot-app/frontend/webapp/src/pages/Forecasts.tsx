@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiGet } from '../api/client'
 import { FreshnessBadge } from '../components/ui/FreshnessBadge'
 import { EmptyState } from '../components/ui/EmptyState'
+import { safeGetArray, hasSafeArray, safeMap } from '../utils/safeAccess'
 
 type Row = {
   asset_type?: string
@@ -69,7 +70,7 @@ export default function Forecasts() {
       )}
       
       {/* Only render table if there are rows */}
-      {!loading && !err && rows.length > 0 && (
+      {!loading && !err && hasSafeArray({ rows }, 'rows') && (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -83,7 +84,7 @@ export default function Forecasts() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {safeMap(safeGetArray({ rows }, 'rows'), (r: Row, i: number) => (
               <tr key={[r.asset_type, r.ticker ?? r.commodity_name, r.horizon].filter(Boolean).join(':') || String(i)}>
                 <td>{r.asset_type || ''}</td>
                 <td>{r.ticker || r.commodity_name || ''}</td>

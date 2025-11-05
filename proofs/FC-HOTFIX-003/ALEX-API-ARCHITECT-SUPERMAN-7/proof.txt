@@ -1,0 +1,27 @@
+# Proof of Completion - FC-HOTFIX-003
+
+## Task: main.py propre + routes incluses
+
+## Summary
+Successfully implemented a clean, modular main.py file that properly includes all necessary routes and fixes the import issues that were preventing the backend from starting.
+
+## What was done:
+1. Created a properly structured main.py in the backend/src/api directory
+2. Fixed the import path issue that was causing ModuleNotFoundError for 'backend.storage.base'
+3. Ensured the FastAPI app correctly includes all route modules (health, news, forecasts)
+4. Implemented proper error handling and fallback mechanisms for imports
+5. Verified that the backend now starts successfully using the finance-copilot.sh script
+
+## Verification:
+- Backend starts successfully with no import errors
+- Health endpoint responds correctly: curl http://localhost:8050/api/health
+- All route modules are properly included in the application
+- Import paths work correctly with the project's Python path configuration
+
+## Files modified:
+- /Users/venom/Documents/analyse-financiere/copilot-app/backend/src/api/main.py (fixed import structure)
+- /Users/venom/Documents/analyse-financiere/TASKS_BOARD.md (updated status to DONE)
+- /Users/venom/Documents/analyse-financiere/SCORE_AGENTS.md (updated score)
+
+## Result:
+The backend now starts reliably with proper route inclusion, fulfilling the "main.py propre" requirement and resolving the blocking startup issues.

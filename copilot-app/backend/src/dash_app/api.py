@@ -33,6 +33,8 @@ def _err(msg: str) -> Dict[str, Any]:
 
 # ----------------------------- Dashboard KPIs ------------------------------ #
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
 def _latest_dt_under(base: str) -> str | None:
     parts = sorted(Path(base).glob('dt=*'))
     return parts[-1].name.split('=')[-1] if parts else None
@@ -51,13 +53,13 @@ def dashboard_kpis() -> Dict[str, Any]:
     try:
         _prof.log_event("http", {"path": "/api/dashboard/kpis"})
         # Forecasts KPIs
-        last_f_dt = _latest_dt_under('data/forecast')
+        last_f_dt = _latest_dt_under(str(BASE_DIR / 'data' / 'forecast'))
         forecasts_count = 0
         tickers = 0
         horizons: List[str] = []
         try:
             if last_f_dt:
-                fp = Path('data/forecast') / f'dt={last_f_dt}' / 'final.parquet'
+                fp = BASE_DIR / 'data' / 'forecast' / f'dt={last_f_dt}' / 'final.parquet'
                 if fp.exists():
                     df = pd.read_parquet(fp)
                     forecasts_count = int(len(df))

@@ -43,9 +43,14 @@ export async function apiGet<T>(
       return { ok: false, error: `Expected JSON response for ${path}, got ${contentType}` }
     }
     
-    // Parse JSON response safely
-    const data = await r.json()
-    return { ok: true, data }
+    // Parse JSON response safely and unwrap common { ok, data } shape
+    const json = await r.json()
+    if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
+      if (json.ok) return { ok: true, data: (json as any).data as T }
+      const err = (json as any).error || (json as any).detail || `GET ${path} failed`
+      return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) }
+    }
+    return { ok: true, data: json as T }
   } catch (error) {
     // Network error or parsing error
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -81,9 +86,14 @@ export async function apiPost<T>(
       return { ok: false, error: `Expected JSON response for ${path}, got ${contentType}` }
     }
     
-    // Parse JSON response safely
-    const data = await r.json()
-    return { ok: true, data }
+    // Parse JSON response safely and unwrap common { ok, data } shape
+    const json = await r.json()
+    if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
+      if (json.ok) return { ok: true, data: (json as any).data as T }
+      const err = (json as any).error || (json as any).detail || `POST ${path} failed`
+      return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) }
+    }
+    return { ok: true, data: json as T }
   } catch (error) {
     // Network error or parsing error
     return { ok: false, error: error instanceof Error ? error.message : String(error) }

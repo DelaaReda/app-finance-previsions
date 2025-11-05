@@ -4,13 +4,14 @@ import NewsCard from "./NewsCard";
 import { useNews } from "@/hooks/useNews";
 import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess';
 const NewsFilters = React.lazy(() => import("./NewsFilters"));
 
 export default function NewsFeed() {
   const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNews();
 
-  // Safely access articles with fallback to empty array
-  const articles = items ?? [];
+  // Safely access articles with fallback to empty array using safe access utility
+  const articles = safeGetArray({ items }, 'items', []);
 
   return (
     <section>
@@ -24,8 +25,8 @@ export default function NewsFeed() {
 
       {/* États */}
       {error && <div role="alert" className="text-red-700">Erreur: {error}</div>}
-      {loading && articles.length === 0 && <div className="text-center py-8">Chargement des actualités…</div>}
-      {articles.length === 0 && !loading && (
+      {loading && safeLength(articles) === 0 && <div className="text-center py-8">Chargement des actualités…</div>}
+      {safeLength(articles) === 0 && !loading && (
         <EmptyState
           title="Aucun article disponible"
           hint={freshness ? `Dernière mise à jour: ${new Date(freshness).toLocaleString()}` : "Ingestion en cours…"}
@@ -33,9 +34,9 @@ export default function NewsFeed() {
       )}
 
       {/* Liste sécurisée */}
-      {articles.length > 0 && (
+      {safeLength(articles) > 0 && (
         <div>
-          {articles.map(item => <NewsCard key={item.id} item={item} />)}
+          {safeMap(articles, (item, index) => <NewsCard key={item.id || index.toString()} item={item} />)}
         </div>
       )}
 

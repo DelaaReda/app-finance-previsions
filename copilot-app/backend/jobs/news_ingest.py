@@ -12,7 +12,6 @@ from typing import List, Dict, Any
 
 # Import our existing storage functions
 from storage.io import save_json
-from services.cache_layer import load_or_compute
 
 
 # Financial news RSS sources

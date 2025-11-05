@@ -70,6 +70,14 @@ else
     echo -e "${RED}❌ ÉCHEC${NC}"
 fi
 
+# News feed endpoint (never-empty)
+echo -n "   /api/news/feed: "
+if curl -s "http://localhost:8050/api/news/feed" | grep -q '"ok":true'; then
+    echo -e "${GREEN}✅ OK${NC}"
+else
+    echo -e "${RED}❌ ÉCHEC${NC}"
+fi
+
 echo ""
 
 # Test 3: Vérifier le frontend
@@ -117,8 +125,9 @@ echo "----------"
 BACKEND_HEALTH=$(curl -s "http://localhost:8050/api/health" | grep -q '"ok":true' && echo 0 || echo 1)
 FRONTEND_ACCESS=$(curl -s "http://localhost:5173" | grep -q "<html" && echo 0 || echo 1)
 BRIEF_ENDPOINT=$(curl -s "http://localhost:8050/api/brief/daily" | grep -q '"ok":true' && echo 0 || echo 1)
+NEWS_ENDPOINT=$(curl -s "http://localhost:8050/api/news/feed" | grep -q '"ok":true' && echo 0 || echo 1)
 
-if [ $BACKEND_HEALTH -eq 0 ] && [ $FRONTEND_ACCESS -eq 0 ] && [ $BRIEF_ENDPOINT -eq 0 ]; then
+if [ $BACKEND_HEALTH -eq 0 ] && [ $FRONTEND_ACCESS -eq 0 ] && [ $BRIEF_ENDPOINT -eq 0 ] && [ $NEWS_ENDPOINT -eq 0 ]; then
     echo -e "${GREEN}🎉 Tous les tests ont réussi ! Finance Copilot est prêt à l'emploi.${NC}"
     echo ""
     echo "   🌐 URLs disponibles:"

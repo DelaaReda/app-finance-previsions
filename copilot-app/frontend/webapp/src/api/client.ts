@@ -1,7 +1,11 @@
 // webapp/src/api/client.ts
 import type { ApiResponse } from '../types/common'
 
-const API_BASE = "http://localhost:8050/api"; // keep like that, never use env vars here
+// Use relative '/api' so Vite dev proxy handles cross-origin in dev,
+// and same-origin works in production behind the frontend host.
+// If an explicit base is provided via env, it can be added later, but
+// defaulting to '/api' avoids CORS/status 0 issues.
+const API_BASE = "/api";
 
 function qs(params?: Record<string, any>) {
   if (!params) return "";
@@ -54,7 +58,14 @@ export async function apiGet<T>(path: string, params?: Record<string, any>): Pro
     }
     
     try {
-      return { ok: true, data: await res.json() };
+      const json = await res.json();
+      // Unwrap common backend shape { ok, data } so UI gets payload directly
+      if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
+        if (json.ok) return { ok: true, data: (json as any).data as T };
+        const err = (json as any).error || (json as any).detail || `GET ${path} failed`;
+        return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) };
+      }
+      return { ok: true, data: json as T };
     } catch (parseError: any) {
       return { ok: false, error: `Failed to parse JSON from ${path}: ${parseError.message}` };
     }
@@ -105,8 +116,13 @@ export async function apiPost<T>(path: string, data?: any): Promise<ApiResponse<
     }
     
     try {
-      const result = await res.json();
-      return { ok: true, data: result };
+      const json = await res.json();
+      if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
+        if (json.ok) return { ok: true, data: (json as any).data as T };
+        const err = (json as any).error || (json as any).detail || `POST ${path} failed`;
+        return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) };
+      }
+      return { ok: true, data: json as T };
     } catch (parseError: any) {
       return { ok: false, error: `Failed to parse JSON from ${path}: ${parseError.message}` };
     }

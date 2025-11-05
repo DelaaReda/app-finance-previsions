@@ -249,7 +249,10 @@ class ForecastHybridV1:
         """
         Save forecasts to file with metadata
         """
-        filepath = self.data_dir / filename
+        # Create the data directory if it doesn't exist
+        data_dir = Path(__file__).resolve().parents[2] / "data"
+        data_dir.mkdir(exist_ok=True)
+        filepath = data_dir / filename
         
         # Add metadata to forecasts
         forecasts_with_meta = {

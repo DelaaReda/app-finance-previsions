@@ -68,6 +68,7 @@ class NewsService:
                         "url": item.get("url", ""),
                         "published": item.get("published", ""),
                         "source": item.get("source", ""),
+                        "region": item.get("region"),
                         "summary": item.get("summary", ""),
                         "score": item.get("score", 0),
                         "importance": item.get("importance", 0),
@@ -146,4 +147,3 @@ async def get_sentiment(tickers=None, q=None, limit=50, window="last_week"):
     """Wrapper function for news_service.get_sentiment (placeholder implementation)"""
     # Placeholder implementation - return neutral sentiment
     return {"sentiment": [], "average": 0.0, "count": 0}
-

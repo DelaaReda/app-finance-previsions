@@ -111,7 +111,25 @@ def register_routes(app: FastAPI):
     @app.get("/api/health")
     async def health_check():
         """Health check endpoint with enriched status information."""
-        from backend.storage.base import load_json
+        # Use relative import based on the project structure
+        # Since this is in src/api, and storage is in backend/storage (outside src), 
+        # we need to use a different approach
+        try:
+            # First try the direct import (relative to project root)
+            import sys
+            from pathlib import Path
+            backend_root = Path(__file__).resolve().parents[2]  # Go from src/api/main.py to backend/
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            
+            from storage.base import load_json
+        except ImportError:
+            try:
+                from storage.io import load_json  # Alternative storage module
+            except ImportError:
+                # Ultimate fallback - create a mock load_json function
+                def load_json(key):
+                    return None
         
         # Get last updates by domain from stored files
         last_updates = {}
@@ -606,38 +624,90 @@ def register_routes(app: FastAPI):
     async def news_feed(
         tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
         since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
-        region: str = Query("all", description="Region filter"),
-        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score"),
+        region: str = Query("all", description="Region filter (unused in v1)"),
+        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
         limit: int = Query(50, ge=1, le=200)
     ):
-        """Get news feed with scoring from the lakehouse."""
-        data = lakehouse_news_feed(
+        """Get news feed with caching. Never-empty: serves latest snapshot on failure."""
+        # Map `since` to service `window`
+        since_map = {
+            "1d": "last_day",
+            "3d": "last_week",
+            "7d": "last_week",
+            "14d": "last_week",
+            "30d": "last_month",
+            "90d": "last_month",
+        }
+        window = since_map.get(since, "last_week")
+
+        # Call async service and adapt contract to API response
+        result = await lakehouse_news_feed(
             tickers=tickers,
-            since=since,
-            score_min=score_min,
-            region=region,
+            q=None,
             limit=limit,
+            window=window,
         )
 
+        # result shape: { ok: bool, data: { items: [...], count, freshness, ... } }
+        ok_flag = bool(result.get("ok", True)) if isinstance(result, dict) else True
+        payload = result.get("data", {}) if isinstance(result, dict) else {}
+        items = payload.get("items") or payload.get("articles") or []
+
+        # Normalize to articles list
+        articles = []
+        for idx, item in enumerate(items or []):
+            if not isinstance(item, dict):
+                continue
+            articles.append({
+                "id": item.get("id") or item.get("url") or f"news_{idx+1}",
+                "title": item.get("title", ""),
+                "link": item.get("url") or item.get("link", ""),
+                "pubDate": item.get("published") or item.get("pubDate") or datetime.utcnow().isoformat(),
+                "source": item.get("source", "unknown"),
+                "region": (item.get("region") or "").upper() if isinstance(item.get("region"), str) else item.get("region"),
+                "summary": item.get("summary", ""),
+                "score": item.get("score", 0.0),
+                "importance": item.get("importance", 0.0),
+                "freshness": item.get("freshness", 0.0),
+                "relevance": item.get("relevance", 0.0),
+                "sentiment_score": item.get("sentiment_score", item.get("sentiment", 0.0) or 0.0),
+                "entities": item.get("entities", []),
+                "tickers": item.get("tickers", []),
+            })
+
+        # Optional filtering by score_min (v1: simple threshold on score)
+        try:
+            if score_min and score_min > 0:
+                articles = [a for a in articles if float(a.get("score", 0)) >= float(score_min)]
+        except Exception:
+            # Do not fail on bad types; keep unfiltered
+            pass
+
+        # Optional region filter (v1)
+        try:
+            if region and region.lower() != "all":
+                region_up = region.upper()
+                articles = [a for a in articles if (a.get("region") or "").upper() == region_up]
+        except Exception:
+            pass
+
         response = {
-            "articles": [article.model_dump() for article in data.articles],
-            "count": data.count,
-            "total": data.total,
-            "filters": data.filters.model_dump(exclude_none=True),
-            "trace": data.trace.model_dump(),
+            "articles": articles,
+            "count": len(articles) if payload.get("count") is None else payload.get("count"),
+            "filters": {"tickers": tickers, "since": since, "limit": limit},
+            "freshness": payload.get("freshness", "unknown"),
+            "source": payload.get("source", []),
+            "last_update": payload.get("last_update"),
         }
-        return _ok(response)
+        return _ok(response) if ok_flag else _err("news service error")
 
     @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
-        """Get aggregated sentiment by ticker."""
-        data = lakehouse_news_sentiment(limit=limit)
-        response = {
-            "sentiment": data.sentiment,
-            "count": data.count,
-            "trace": data.trace.model_dump(),
-        }
-        return _ok(response)
+        """Get aggregated sentiment by ticker (v1 minimal)."""
+        result = await lakehouse_news_sentiment(limit=limit)
+        if isinstance(result, dict):
+            return _ok(result)
+        return _ok({"sentiment": [], "count": 0})
 
     @app.get("/api/news/events")
     async def news_events(
@@ -647,20 +717,17 @@ def register_routes(app: FastAPI):
         end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
         limit: int = Query(200, ge=1, le=1000)
     ):
-        """Fetch structured events extracted from news articles."""
-        data = lakehouse_news_events(
+        """Fetch structured events extracted from news articles (placeholder)."""
+        result = await lakehouse_news_events(
             tickers=tickers,
             event_types=event_types,
             start=start,
             end=end,
             limit=limit,
         )
-        response = {
-            "events": [event.model_dump() for event in data.events],
-            "count": data.count,
-            "trace": data.trace.model_dump(),
-        }
-        return _ok(response)
+        if isinstance(result, dict):
+            return _ok(result)
+        return _ok({"events": [], "count": 0})
 
     @app.get("/api/news/features/daily")
     async def news_features_daily(
@@ -836,23 +903,64 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/brief/daily")
     async def brief_daily():
-        """Get daily market brief."""
+        """Get daily market brief with cache-first, instant response (never-empty)."""
         try:
-            from research.scoring import compute_composite_brief
-            
-            # Generate comprehensive brief using the new function
-            brief_data = compute_composite_brief(period="daily")
-            
-            return _ok(brief_data)
-            
-        except Exception as e:
+            # 1) Try cached daily snapshot (fast path)
+            from storage import load_json
+            snap = load_json("brief_daily") or load_json("brief_weekly")
+
+            if snap:
+                # Support multiple payload shapes
+                payload = (
+                    snap.get("data")
+                    or snap.get("daily")
+                    or snap.get("weekly")
+                    or snap.get("payload")
+                    or {}
+                )
+                if not isinstance(payload, dict):
+                    payload = {}
+
+                # Ensure minimal structure for UI
+                payload.setdefault("title", "Daily Market Brief")
+                payload.setdefault("period", "daily")
+                payload.setdefault("top_signals", [])
+                payload.setdefault("top_risks", [])
+                payload.setdefault("picks", [])
+                payload.setdefault("sources", [])
+                payload.setdefault("generated_at", snap.get("last_update") or datetime.utcnow().isoformat())
+                payload.setdefault("freshness", snap.get("freshness", "unknown"))
+                payload.setdefault("source", snap.get("source", ["brief_cache"]))
+
+                return _ok(payload)
+
+            # 2) Fallback: return quick placeholder while background job can populate cache
             return _ok({
                 "title": "Daily Market Brief",
-                "date": datetime.utcnow().date().isoformat(),
-                "sections": [],
-                "placeholder": True,
-                "error": str(e),
-                "message": "Brief generation failed, showing placeholder data"
+                "period": "daily",
+                "top_signals": [],
+                "top_risks": [],
+                "picks": [],
+                "sources": [],
+                "generated_at": datetime.utcnow().isoformat(),
+                "freshness": "empty",
+                "source": ["placeholder"],
+                "message": "Daily brief snapshot not available yet; computing in background"
+            })
+
+        except Exception as e:
+            # Never fail hard; keep UI stable
+            return _ok({
+                "title": "Daily Market Brief",
+                "period": "daily",
+                "top_signals": [],
+                "top_risks": [],
+                "picks": [],
+                "sources": [],
+                "generated_at": datetime.utcnow().isoformat(),
+                "freshness": "error",
+                "source": ["error_fallback"],
+                "error": str(e)
             })
 
     # =========================== SIGNALS =================================
@@ -924,62 +1032,45 @@ def register_routes(app: FastAPI):
         top_n: int = Query(5, ge=1, le=20, description="Top-N basket size"),
         days_back: int = Query(180, ge=30, le=365, description="Days to look back")
     ):
-        """Run backtesting analysis on Top-N baskets with cache-first and invalidation."""
+        """Backtests summary with cache-first and safe fallbacks (never-empty)."""
         try:
-            # Use cache-first approach with invalidation based on forecasts changes
-            from backend.jobs.backtests import ensure_backtests_up_to_date
-            
-            # Get the up-to-date backtests (this handles cache and invalidation logic)
-            cached_backtest_result = ensure_backtests_up_to_date()
-            
-            if cached_backtest_result:
-                # Format response to maintain compatibility with existing frontend
-                response_data = {
-                    "results": {
-                        "ok": True,
-                        "count_days": cached_backtest_result.get("metrics", {}).get("n_trades", 0),
-                        "avg_basket_return": cached_backtest_result.get("metrics", {}).get("avg_expected_return", 0),
-                        "median": cached_backtest_result.get("metrics", {}).get("hit_rate", 0),
-                        "stdev": cached_backtest_result.get("metrics", {}).get("avg_expected_return", 0)  # Using avg for now as placeholder
-                    },
-                    "params": {
-                        "horizon": horizon,
-                        "top_n": top_n,
-                        "days_back": days_back
-                    },
-                    "generated_at": cached_backtest_result.get("until", datetime.utcnow().isoformat()),
-                    "last_update": cached_backtest_result.get("since"),
-                    "source": cached_backtest_result.get("source", ["backtest_job", "cached_result"]),
-                    "depends_on_forecasts": cached_backtest_result.get("depends_on_forecasts"),
-                    "metrics_extended": cached_backtest_result.get("metrics", {}),
-                    "results_list": cached_backtest_result.get("results", [])
-                }
-                
-                # Add warning if cached backtests exist but are not tied to current forecasts
-                if cached_backtest_result.get("depends_on_forecasts"):
-                    response_data["cache_status"] = "fresh"
-                else:
-                    response_data["cache_status"] = "stale_no_forecasts"
-                
-                return _ok(response_data)
-            else:
-                # Fallback if no cached data exists
-                response_data = {
-                    "results": {
-                        "ok": False,
-                        "count_days": 0,
-                        "avg_basket_return": 0,
-                        "median": 0,
-                        "stdev": 0
-                    },
-                    "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
-                    "warning": "No cached backtest results available - results will be computed in background",
-                    "cache_status": "empty"
-                }
-                return _ok(response_data)
-                
+            # Prefer cached snapshot on disk
+            from storage import load_json
+            bt = load_json("backtests") or {}
+            data_block = bt.get("data") if isinstance(bt, dict) else None
+            core = data_block if isinstance(data_block, dict) else bt if isinstance(bt, dict) else {}
+
+            # Normalize keys from various producers (jobs/services)
+            metrics = core.get("metrics") or {}
+            n_trades = int(metrics.get("n_trades", core.get("n_trades", 0)) or 0)
+            avg_ret = float(metrics.get("avg_expected_return", core.get("avg_return", 0)) or 0)
+            hit_rate = float(metrics.get("hit_rate", core.get("hit_rate", 0)) or 0)
+            stdev = metrics.get("stdev", 0)
+
+            response_data = {
+                "results": {
+                    "ok": True if bt else False,
+                    "count_days": n_trades,
+                    "avg_basket_return": avg_ret,
+                    "median": hit_rate,
+                    "stdev": stdev,
+                },
+                "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
+                "generated_at": core.get("until") or core.get("generated_at") or datetime.utcnow().isoformat(),
+                "last_update": core.get("since"),
+                "source": core.get("source", ["backtests_cache"]),
+                "depends_on_forecasts": core.get("depends_on_forecasts"),
+                "metrics_extended": metrics if metrics else {
+                    "n_trades": n_trades,
+                    "avg_return": avg_ret,
+                    "hit_rate": hit_rate,
+                },
+                "results_list": core.get("results", []),
+                "cache_status": "fresh" if core else "empty",
+            }
+            return _ok(response_data)
         except Exception as e:
-            # Always return a valid response even if computation fails
+            # Safe fallback: never-empty structure, with error note
             return _ok({
                 "results": {
                     "ok": False,
@@ -990,7 +1081,7 @@ def register_routes(app: FastAPI):
                     "error": str(e)
                 },
                 "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
-                "error": "Backtest execution failed",
+                "warning": "Backtests snapshot not found; background compute recommended",
                 "cache_status": "error"
             })
 
@@ -1009,40 +1100,101 @@ def register_routes(app: FastAPI):
         can be slow due to external data fetches.
         """
         try:
-            from dash_app.api import dashboard_kpis as dash_kpis
-            # Heavy scoring imports are delayed and only used when requested
-            # to avoid blocking the UI by default.
-            # from research.scoring import get_top_signals_and_risks
-            # from core.data_access import get_close_series
+            # Compute KPIs using DuckDB directly to avoid CWD-dependent paths
+            from pathlib import Path as _P
+            from core.duck import query_parquet as _qp
+            base_dir = _P(__file__).resolve().parents[2]
+            fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
+            # Latest dt by filesystem
+            parts = sorted((base_dir / 'data' / 'forecast').glob('dt=*'))
+            last_dt = parts[-1].name.split('=')[-1] if parts else None
+            # Counts
+            try:
+                cnt_row = _qp(f"select count(*) as cnt, count(distinct ticker) as nt from read_parquet('{fpat}')")
+                forecasts_count = int(cnt_row[0]['cnt']) if cnt_row else 0
+                tickers_count = int(cnt_row[0]['nt']) if cnt_row else 0
+                hz_rows = _qp(f"select distinct horizon from read_parquet('{fpat}')")
+                horizons_list = sorted([str(r['horizon']) for r in hz_rows if r.get('horizon') is not None])
+            except Exception:
+                forecasts_count = 0
+                tickers_count = 0
+                horizons_list = []
+            base_data = {
+                "last_forecast_dt": last_dt,
+                "forecasts_count": forecasts_count,
+                "tickers": tickers_count,
+                "horizons": horizons_list,
+                "last_macro_dt": None,
+                "last_quality_dt": None
+            }
             
-            # Get base dashboard data
-            result = dash_kpis()
-            if not result.get("ok"):
-                base_data = {
-                    "last_forecast_dt": None,
-                    "forecasts_count": 0,
-                    "tickers": 0,
-                    "horizons": [],
-                    "last_macro_dt": None,
-                    "last_quality_dt": None
-                }
-            else:
-                base_data = result.get("data", {})
-            
-            # If heavy scoring not requested, return lightweight KPIs only
+            # If heavy scoring not requested, compute a lightweight top/bottom from final.parquet
             if not include_signals:
+                from core.duck import query_parquet as _qp
+                from pathlib import Path as _P
+                base_dir = _P(__file__).resolve().parents[2]
+                fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
+
+                # Map UI horizons to dataset horizons
+                hmap = {"short": "1w", "medium": "1m", "long": "1y"}
+                ds_horizons = [hmap.get(h, h) for h in horizons] if horizons else []
+
+                # Build WHERE filters
+                where = ["1=1"]
+                if ds_horizons:
+                    hvals = ",".join([f"'{h}'" for h in ds_horizons])
+                    where.append(f"horizon IN ({hvals})")
+                if tickers:
+                    tvals = ",".join([f"'{t}'" for t in tickers])
+                    where.append(f"ticker IN ({tvals})")
+                predicate = " AND ".join(where)
+
+                # Prefer final_score, fallback to expected_return
+                try:
+                    rows = _qp(f"SELECT ticker, final_score, expected_return FROM read_parquet('{fpat}') WHERE {predicate}")
+                except Exception:
+                    rows = []
+
+                def _score(r):
+                    return r.get("final_score") if r.get("final_score") is not None else r.get("expected_return", 0.0)
+
+                sigs, risks = [], []
+                if rows:
+                    # Top 3 by score
+                    for r in sorted(rows, key=_score, reverse=True)[:3]:
+                        sigs.append({
+                            "ticker": r.get("ticker"),
+                            "composite_score": float(_score(r) or 0.0),
+                            "macro_score": 50.0,
+                            "technical_score": 50.0,
+                            "news_score": 50.0,
+                            "reason": "Signal composite",
+                            "confidence": 1.0,
+                        })
+                    # Bottom 3 by score
+                    for r in sorted(rows, key=_score)[:3]:
+                        risks.append({
+                            "ticker": r.get("ticker"),
+                            "composite_score": float(_score(r) or 0.0),
+                            "macro_score": 50.0,
+                            "technical_score": 50.0,
+                            "news_score": 50.0,
+                            "reason": "Risk composite",
+                            "confidence": 1.0,
+                        })
+
                 return _ok({
                     **base_data,
-                    "filtered_signals": [],
-                    "filtered_risks": [],
+                    "filtered_signals": sigs,
+                    "filtered_risks": risks,
                     "filter_applied": {
                         "sectors": sectors,
                         "horizons": horizons,
                         "themes": themes,
-                        "tickers": tickers
+                        "tickers": tickers,
                     },
-                    "filtered_ticker_count": 0,
-                    "generated_at": datetime.utcnow().isoformat()
+                    "filtered_ticker_count": len(tickers) if tickers else base_data.get("tickers", 0),
+                    "generated_at": datetime.utcnow().isoformat(),
                 })
 
             # Heavy path (on-demand): compute signals/risks

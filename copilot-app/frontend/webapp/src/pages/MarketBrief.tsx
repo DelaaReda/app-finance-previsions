@@ -11,6 +11,7 @@ import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge'
+import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
 
 export default function MarketBrief() {
   const [type, setType] = useState<'daily' | 'weekly'>('daily')
@@ -111,10 +112,10 @@ export default function MarketBrief() {
           </div>
 
           {/* Picks */}
-          {brief.picks && brief.picks.length > 0 && (
+          {hasSafeArray(brief, 'picks') && (
             <Card title="🎯 Picks">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {brief.picks.map((pick: any, index: number) => (
+                {safeMap(safeGetArray(brief, 'picks'), (pick: any, index: number) => (
                   <div key={index} style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -143,10 +144,10 @@ export default function MarketBrief() {
           )}
 
           {/* Sources */}
-          {brief.sources && brief.sources.length > 0 && (
+          {hasSafeArray(brief, 'sources') && (
             <Card title="📚 Sources">
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {brief.sources.map((source: any, index: number) => (
+                {safeMap(safeGetArray(brief, 'sources'), (source: any, index: number) => (
                   <span key={index} style={{ 
                     padding: '0.25rem 0.5rem', 
                     backgroundColor: '#333',
