@@ -1435,7 +1435,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P0-007 — ErrorBoundary global (frontend) - CLAIMED
+## FC-P0-007 — ErrorBoundary global (frontend) - DONE
 
 **But**: remplacer l’écran d’erreur brut par une UX maîtrisée.
 
@@ -1443,6 +1443,7 @@ echo "SMOKE OK"
 
 * `webapp/src/components/system/ErrorBoundary.tsx`
 * `webapp/src/main.tsx` (ou `App.tsx`) / Router
+* `webapp/src/App.tsx`
 
 **Étapes**
 
@@ -1454,14 +1455,27 @@ echo "SMOKE OK"
    export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error?: any }> {
      state = { error: undefined };
      static getDerivedStateFromError(error: any) { return { error }; }
+     
+     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+       // Log the error to an error reporting service
+       console.error("ErrorBoundary caught an error:", error, errorInfo);
+     }
+     
      render() {
        if (this.state.error) {
          return (
-           <div className="p-6">
-             <h2>Un problème est survenu.</h2>
-             <p>Essayez de rafraîchir. Si ça persiste, ouvrez /docs.</p>
-             <button onClick={() => location.reload()}>Rafraîchir</button>
-             <div className="text-xs mt-2">{new Date().toLocaleString()}</div>
+           <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+             <h2 className="text-xl font-bold text-red-700 mb-2">Un problème est survenu.</h2>
+             <p className="text-red-600 mb-4">Essayez de rafraîchir. Si ça persiste, ouvrez /docs.</p>
+             <button 
+               onClick={() => window.location.reload()} 
+               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+             >
+               Rafraîchir
+             </button>
+             <div className="text-xs text-gray-500 mt-3">
+               {new Date().toLocaleString()} • ID: {Math.random().toString(36).substring(2, 8)}
+             </div>
            </div>
          );
        }
@@ -1471,11 +1485,16 @@ echo "SMOKE OK"
    ```
 2. **Intégration**
 
-   ```tsx
-   // main.tsx
-```
+   - Intégré dans `main.tsx` au plus haut niveau de l'application
+   - Intégré également dans `App.tsx` autour des routes pour double protection
 
-**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+**DoD**
+
+* Écran d'erreur remplacé par UI conviviale
+* Bouton "Rafraîchir" fonctionnel
+* Informations de débogage (timestamp, ID) incluses
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
    ReactDOM.createRoot(document.getElementById('root')!).render(
      <ErrorBoundary>
        <RouterProvider router={router} />

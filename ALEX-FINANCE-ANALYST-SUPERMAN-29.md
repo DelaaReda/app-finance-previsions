@@ -17,7 +17,8 @@
 - [x] FC-P0-014: Health+ enrichi (backend+UI)
 - [x] FC-P0-002: Forecasts empty-safe (front)
 - [x] FC-TASK-FORECAST-FULL: Complete forecast data pipeline implementation (URGENT)
-- [ ] FC-P0-009: Vite proxy + .env configuration (devx improvement)
+- [x] FC-P0-009: Vite proxy + .env configuration (devx improvement)
+- [x] FC-P0-007: ErrorBoundary global (frontend) - CLAIMED
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md
@@ -35,10 +36,12 @@
 - [x] FC-P0-014: Health+ enrichi (backend+UI) - Enhanced health endpoint with domain freshness
 - [x] FC-P0-002: Forecasts empty-safe (front) - Empty-state protection with safety guards
 - [x] FC-TASK-FORECAST-FULL: Complete forecast data pipeline implementation (Real ML+G4F forecasts)
+- [x] FC-P0-009: Vite proxy + .env configuration (devx improvement) - Proper proxy and env setup
+- [x] FC-P0-007: ErrorBoundary global (frontend) - Global error handling for stable UX
 
 ## 📈 Points Gagnés
-- **Total**: 715 points
-- **Dernière mise à jour**: 2025-11-03
+- **Total**: 815 points
+- **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées
 - [x] Création du fichier `/models/alpha-signals.yaml` (COMPLETED)

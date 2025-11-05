@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppProviders } from './app/providers';
+import { ErrorBoundary } from './components/system/ErrorBoundary'; // Import global error boundary
 
 // Conditionally import debug utilities in development
 if (process.env.NODE_ENV === 'development') {
@@ -15,11 +16,13 @@ if (!container) {
 }
 const root = createRoot(container);
 
-// Render the app
+// Render the app wrapped in global error boundary
 root.render(
   <React.StrictMode>
-    <AppProviders>
-      <App />
-    </AppProviders>
+    <ErrorBoundary>
+      <AppProviders>
+        <App />
+      </AppProviders>
+    </ErrorBoundary>
   </React.StrictMode>
 );

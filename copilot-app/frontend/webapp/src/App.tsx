@@ -1,6 +1,8 @@
+import React from 'react';
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet, Link } from 'react-router-dom'
 import { AppProviders } from './app/providers'
 import { HealthStatusBadge } from './components/ui/HealthStatusBadge';
+import { ErrorBoundary } from './components/system/ErrorBoundary'; // Global error boundary for stability
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -71,9 +73,13 @@ function AppLayout() {
   );
 }
 
-// Create router
+// Create router with error boundary wrapper
 const router = createBrowserRouter(createRoutesFromElements(
-  <Route element={<AppLayout />}>
+  <Route element={
+    <ErrorBoundary>
+      <AppLayout />
+    </ErrorBoundary>
+  }>
     <Route index element={<Dashboard />} />
     <Route path="/brief" element={<MarketBrief />} />
     <Route path="/macro" element={<Macro />} />
