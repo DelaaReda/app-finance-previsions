@@ -874,7 +874,7 @@ DoD:
 - Jobs tournent local; logs horodatés + durée.
 
 ## FC-OPS-003 — Structured logging + trace id
-Status: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+Status: DONE by ALEX-BACKEND-SUPERMAN-7
 
 But: Mieux corréler front↔back et diagnostiquer.
 

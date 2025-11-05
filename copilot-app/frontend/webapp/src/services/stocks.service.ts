@@ -115,10 +115,10 @@ export const stocksService = {
         composite: apiData.composite_score || 0
       },
       technicals: {
-        sma20: apiData.technical_indicators?.sma20 || 0,
-        sma50: apiData.technical_indicators?.sma50 || 0,
-        sma200: apiData.technical_indicators?.sma200 || 0,
-        rsi: apiData.technical_indicators?.rsi || 0
+        sma20: apiData.technical_indicators?.sma20 ?? null,
+        sma50: apiData.technical_indicators?.sma50 ?? null,
+        sma200: apiData.technical_indicators?.sma200 ?? null,
+        rsi: apiData.technical_indicators?.rsi ?? null
       },
       signals: apiData.alerts || [] // Assuming alerts can be used as signals, or use a different field
     }

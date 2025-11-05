@@ -6,7 +6,7 @@ import { stocksService } from '@/services/stocks.service'
 import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
-import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap, safeFormatNumber, getSafeRSIColor } from '@/utils/safeAccess'
 
 export default function Stocks() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -126,20 +126,20 @@ export default function Stocks() {
                   <div style={styles.techGrid}>
                     <div style={styles.techItem}>
                       <span>SMA 20</span>
-                      <span>${analysis.technicals.sma20.toFixed(2)}</span>
+                      <span>${safeFormatNumber(analysis.technicals.sma20, 2)}</span>
                     </div>
                     <div style={styles.techItem}>
                       <span>SMA 50</span>
-                      <span>${analysis.technicals.sma50.toFixed(2)}</span>
+                      <span>${safeFormatNumber(analysis.technicals.sma50, 2)}</span>
                     </div>
                     <div style={styles.techItem}>
                       <span>SMA 200</span>
-                      <span>${analysis.technicals.sma200.toFixed(2)}</span>
+                      <span>${safeFormatNumber(analysis.technicals.sma200, 2)}</span>
                     </div>
                     <div style={styles.techItem}>
                       <span>RSI</span>
-                      <span style={getRSIColor(analysis.technicals.rsi)}>
-                        {analysis.technicals.rsi.toFixed(1)}
+                      <span style={getSafeRSIColor(analysis.technicals.rsi)}>
+                        {safeFormatNumber(analysis.technicals.rsi, 1)}
                       </span>
                     </div>
                   </div>
@@ -171,11 +171,7 @@ export default function Stocks() {
   )
 }
 
-function getRSIColor(rsi: number) {
-  if (rsi > 70) return { color: '#f44336', fontWeight: 600 }
-  if (rsi < 30) return { color: '#4caf50', fontWeight: 600 }
-  return { color: '#ffb74d' }
-}
+
 
 function getSignalStyle(type: 'buy' | 'sell' | 'hold') {
   const colors = {
