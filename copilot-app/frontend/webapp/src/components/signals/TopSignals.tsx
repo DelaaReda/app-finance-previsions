@@ -3,15 +3,13 @@
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
 import { safeMap, safeLength } from '@/utils/safeAccess'
+import { formatScore as formatScore100, toScore100 } from '@/utils/score'
 
 type TopSignalsProps = {
   signals: CompositeSignal[]
   title?: string
   emptyMessage?: string
 }
-
-const formatScore = (value?: number) =>
-  value === undefined || value === null ? '—' : value.toFixed(0)
 
 const getCompositeScore = (signal: CompositeSignal) =>
   signal.composite_score ?? signal.final_score ?? signal.score
@@ -36,7 +34,7 @@ const buildStrengthSummary = (signal: CompositeSignal) => {
   const strongest = components.reduce((best, current) =>
     current.score > best.score ? current : best
   )
-  return `Forces dominantes: ${strongest.label} (${formatScore(strongest.score)}/100)`
+  return `Forces dominantes: ${strongest.label} (${formatScore100(strongest.score)})`
 }
 
 const formatTimestamp = (timestamp?: string) => {
@@ -72,7 +70,7 @@ export default function TopSignals({
                   <span style={styles.rank}>#{index + 1}</span>
                   <span style={styles.ticker}>{signal.ticker}</span>
                   {compositeScore !== undefined && (
-                    <span style={styles.scoreBadge}>{formatScore(compositeScore)}/100</span>
+                    <span style={styles.scoreBadge}>{formatScore100(compositeScore)}</span>
                   )}
                 </div>
 
@@ -81,7 +79,7 @@ export default function TopSignals({
                 <div style={styles.metrics}>
                   {safeMap<{ key: string; label: string; score: number }, JSX.Element>(components, component => (
                     <span key={component.key} style={styles.metric}>
-                      {component.label}: <strong>{formatScore(component.score)}</strong>
+                      {component.label}: <strong>{formatScore100(component.score)}</strong>
                     </span>
                   ))}
                 </div>

@@ -3,15 +3,13 @@
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
 import { safeMap, safeLength } from '@/utils/safeAccess'
+import { formatScore as formatScore100, toScore100 } from '@/utils/score'
 
 type TopRisksProps = {
   risks: CompositeSignal[]
   title?: string
   emptyMessage?: string
 }
-
-const formatScore = (value?: number) =>
-  value === undefined || value === null ? '—' : value.toFixed(0)
 
 const getCompositeScore = (risk: CompositeSignal) =>
   risk.composite_score ?? risk.final_score ?? risk.score
@@ -36,7 +34,7 @@ const buildWeaknessSummary = (risk: CompositeSignal) => {
   const weakest = components.reduce((worst, current) =>
     current.score < worst.score ? current : worst
   )
-  return `Faiblesse principale: ${weakest.label} (${formatScore(weakest.score)}/100)`
+  return `Faiblesse principale: ${weakest.label} (${formatScore100(weakest.score)})`
 }
 
 const getSeverity = (score?: number) => {
@@ -82,7 +80,7 @@ export default function TopRisks({
                   <span style={styles.icon} aria-hidden>⚠️</span>
                   <span style={{ ...styles.severity, color: severityTone }}>{severityLabel}</span>
                   {compositeScore !== undefined && (
-                    <span style={styles.scoreBadge}>{formatScore(compositeScore)}/100</span>
+                    <span style={styles.scoreBadge}>{formatScore100(compositeScore)}</span>
                   )}
                 </div>
 
@@ -92,7 +90,7 @@ export default function TopRisks({
                 <div style={styles.metrics}>
                   {safeMap<{ key: string; label: string; score: number }, JSX.Element>(components, component => (
                     <span key={component.key} style={styles.metric}>
-                      {component.label}: <strong>{formatScore(component.score)}</strong>
+                      {component.label}: <strong>{formatScore100(component.score)}</strong>
                     </span>
                   ))}
                 </div>

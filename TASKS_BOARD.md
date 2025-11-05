@@ -2020,7 +2020,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P1-015 — Backtests v1
+## FC-P1-015 — Backtests v1 - CLAIMED
 
 **But**: hit-rate minimal + ER moyen.
 
@@ -2042,6 +2042,8 @@ echo "SMOKE OK"
 **DoD**
 
 * Résultats lisibles (`hit_rate`, `avg_er`, `n_trades`), preuve `curl`.
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 ---
 
@@ -3135,11 +3137,11 @@ Let’s ship. 🚀
 
 ---
 
-## FC-UI-022 — Composants UI MUI (Page Components)
+## FC-P0-014 — Health+ enrichi (backend)
 
-**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
-**But**: Convertir les composants pages vers Material UI avec des layouts professionnels.
+**But**: étendre `/api/health` pour exposer `last_updates` par domaine et chemin des données.
 
 **Fichiers**
 * `frontend/webapp/src/pages/Dashboard.tsx`

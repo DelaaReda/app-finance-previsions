@@ -1,0 +1,38 @@
+# Preuve de mise en œuvre - FC-UI-002
+
+## Tâche: Normaliser l'affichage des scores (0..100)
+
+## Résumé
+Création de fonctions utilitaires pour normaliser l'affichage des scores qui peuvent être dans différentes gammes [-1..1], [0..1] ou [0..100].
+
+## Changements apportés
+- Création de `/utils/score.ts` avec fonctions helper:
+  - `toScore100(x?)` - conversion de score dans gamme [0..100]
+  - `formatScore(x?)` - formatage avec "N/A" si null ou gamme [0..100]
+- Mise à jour des composants TopSignals et TopRisks pour utiliser ces helpers
+- Protection des calculs de scores [-1,1] et [0,1] vers [0,100] range
+
+## Structure mise en place
+- Fonction `toScore100` convertit selon la gamme d'origine du score:
+  - [-1, 1] → map à [0, 100] via ((x + 1) / 2) * 100
+  - [0, 1] → scale à [0, 100] via x * 100  
+  - [0, 100] → clamp dans [0, 100] range
+- Fonction `formatScore` affiche "—" pour valeurs null/undefined
+- Utilisation dans TopSignals et TopRisks pour les badges de score
+
+## Fichiers modifiés
+- `frontend/webapp/src/utils/score.ts` (nouveau)
+- `frontend/webapp/src/components/signals/TopSignals.tsx`
+- `frontend/webapp/src/components/signals/TopRisks.tsx`
+
+## Vérification
+- Les scores provenant des différentes sources sont normalisés
+- Les badges affichent des valeurs lisibles (entiers 0-100)
+- Plus de "0/100" incohérents quand des signaux/risques existent
+
+## Résultats
+- Conversion [-1,1] → [0,100]: ✅
+- Conversion [0,1] → [0,100]: ✅  
+- Formatage sécurisé: ✅ (affichage "—" pour valeurs null)
+- Mise à jour composants UI: ✅ (TopSignals + TopRisks)
+- Pas de crash length/map: ✅ (en utilisant les fonctions utilitaires)

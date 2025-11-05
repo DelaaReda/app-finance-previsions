@@ -35,6 +35,7 @@
 - [x] Création utilitaires d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)
 - [x] Création toggle 'include_signals' pour activer mode lourd côté API dans Dashboard (FC-UI-003)
 - [x] Mise à jour pre-push hook pour utiliser wait loops (curl -f /api/health) au lieu de timeout command (FC-HOTFIX-008)
+- [x] Création fonctions utilitaires pour normaliser l'affichage des scores (0..100) dans TopSignals/TopRisks (FC-UI-002)
 - [x] Création utilities d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)
 
 ## 📈 Points Gagnés
