@@ -8,6 +8,7 @@ import { useStockAnalysis } from '@/hooks/useStockData'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 export default function TickerSheet() {
   const { ticker } = useParams<{ ticker: string }>()
@@ -83,10 +84,10 @@ export default function TickerSheet() {
         </Card>
 
         {/* Alertes */}
-        {data.alerts && data.alerts.length > 0 && (
+        {hasSafeArray(data, 'alerts') && (
           <Card title="🔔 Alertes">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {data.alerts.map((alert: any, idx: number) => (
+              {safeMap(safeGetArray(data, 'alerts'), (alert: any, idx: number) => (
                 <div
                   key={idx}
                   style={{

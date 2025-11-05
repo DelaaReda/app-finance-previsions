@@ -1,5 +1,6 @@
 /**
- * Helper utilities to prevent "length/map of undefined" crashes in frontend
+ * Utilities for safe array/object access in frontend components
+ * Prevents "length/map of undefined" crashes
  */
 
 /**
@@ -59,8 +60,6 @@ export function safeMap<T, U>(
   
   return fallback;
 }
-
-// Note: functions are already exported above; avoid duplicate named exports
 
 /**
  * Safe length check that returns 0 for undefined/non-array values

@@ -24,8 +24,8 @@
 - [x] Intégration complète des composants du système de prévision
 
 ## 📈 Points Gagnés
-- **Total**: 280 points
-- **Dernière mise à jour**: 2025-11-03
+- **Total**: 350 points
+- **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées
 - [x] Créer `/models/forecast_v0/`

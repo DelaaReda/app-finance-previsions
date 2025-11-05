@@ -1,0 +1,159 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - heading "💼 Finance Copilot" [level=1] [ref=e5]
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: 📊 Vue d'ensemble
+          - generic [ref=e9]:
+            - link "Dashboard" [ref=e10] [cursor=pointer]:
+              - /url: /
+            - link "Market Brief" [ref=e11] [cursor=pointer]:
+              - /url: /brief
+        - generic [ref=e12]:
+          - generic [ref=e13]: 🔬 5 Piliers
+          - generic [ref=e14]:
+            - link "1. Macro" [ref=e15] [cursor=pointer]:
+              - /url: /macro
+            - link "2. Stocks" [ref=e16] [cursor=pointer]:
+              - /url: /stocks
+            - link "3. News" [ref=e17] [cursor=pointer]:
+              - /url: /news
+            - link "4. Copilot LLM" [ref=e18] [cursor=pointer]:
+              - /url: /copilot
+        - generic [ref=e19]:
+          - generic [ref=e20]: 📈 Analyse
+          - generic [ref=e21]:
+            - link "Prévisions" [ref=e22] [cursor=pointer]:
+              - /url: /forecasts
+            - link "Backtests" [ref=e23] [cursor=pointer]:
+              - /url: /backtests
+        - generic [ref=e24]:
+          - generic [ref=e25]: 🛠️ Outils
+          - link "LLM Judge" [ref=e27] [cursor=pointer]:
+            - /url: /judge
+    - main [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e31]:
+          - link "📊 Copilote Financier" [ref=e32] [cursor=pointer]:
+            - /url: /
+            - heading "📊 Copilote Financier" [level=1] [ref=e33]
+          - navigation [ref=e34]:
+            - link "Dashboard" [ref=e35] [cursor=pointer]:
+              - /url: /
+            - link "Macro" [ref=e36] [cursor=pointer]:
+              - /url: /macro
+            - link "Actions" [ref=e37] [cursor=pointer]:
+              - /url: /stocks
+            - link "News" [ref=e38] [cursor=pointer]:
+              - /url: /news
+            - link "Copilot" [ref=e39] [cursor=pointer]:
+              - /url: /copilot
+            - link "Brief" [ref=e40] [cursor=pointer]:
+              - /url: /brief
+          - generic [ref=e42]: "Mise à jour: 08:19:51"
+        - main [ref=e43]:
+          - generic [ref=e45]:
+            - heading "Dashboard - Vue d'ensemble" [level=2] [ref=e46]
+            - generic [ref=e47]:
+              - heading "Filtres (Secteur, Horizon, Thème)" [level=3] [ref=e49]
+              - generic [ref=e51]:
+                - generic [ref=e52]:
+                  - generic [ref=e53]: "Secteurs:"
+                  - generic [ref=e54]:
+                    - generic [ref=e55] [cursor=pointer]:
+                      - checkbox "Technology" [ref=e56]
+                      - text: Technology
+                    - generic [ref=e57] [cursor=pointer]:
+                      - checkbox "Healthcare" [ref=e58]
+                      - text: Healthcare
+                    - generic [ref=e59] [cursor=pointer]:
+                      - checkbox "Financials" [ref=e60]
+                      - text: Financials
+                    - generic [ref=e61] [cursor=pointer]:
+                      - checkbox "Consumer" [ref=e62]
+                      - text: Consumer
+                    - generic [ref=e63] [cursor=pointer]:
+                      - checkbox "Industrials" [ref=e64]
+                      - text: Industrials
+                    - generic [ref=e65] [cursor=pointer]:
+                      - checkbox "Energy" [ref=e66]
+                      - text: Energy
+                    - generic [ref=e67] [cursor=pointer]:
+                      - checkbox "Utilities" [ref=e68]
+                      - text: Utilities
+                    - generic [ref=e69] [cursor=pointer]:
+                      - checkbox "Real Estate" [ref=e70]
+                      - text: Real Estate
+                - generic [ref=e71]:
+                  - generic [ref=e72]: "Horizons:"
+                  - generic [ref=e73]:
+                    - generic [ref=e74] [cursor=pointer]:
+                      - checkbox "short" [ref=e75]
+                      - text: short
+                    - generic [ref=e76] [cursor=pointer]:
+                      - checkbox "medium" [ref=e77]
+                      - text: medium
+                    - generic [ref=e78] [cursor=pointer]:
+                      - checkbox "long" [ref=e79]
+                      - text: long
+                - generic [ref=e80]:
+                  - generic [ref=e81]: "Thèmes:"
+                  - generic [ref=e82]:
+                    - generic [ref=e83] [cursor=pointer]:
+                      - checkbox "growth" [ref=e84]
+                      - text: growth
+                    - generic [ref=e85] [cursor=pointer]:
+                      - checkbox "value" [ref=e86]
+                      - text: value
+                    - generic [ref=e87] [cursor=pointer]:
+                      - checkbox "momentum" [ref=e88]
+                      - text: momentum
+                    - generic [ref=e89] [cursor=pointer]:
+                      - checkbox "dividend" [ref=e90]
+                      - text: dividend
+                    - generic [ref=e91] [cursor=pointer]:
+                      - checkbox "quality" [ref=e92]
+                      - text: quality
+                - generic [ref=e93]:
+                  - generic [ref=e94]: "Tickers (séparés par des virgules):"
+                  - 'textbox "ex: AAPL,MSFT,GOOGL" [ref=e95]'
+            - generic [ref=e96]:
+              - generic [ref=e97]:
+                - heading "Dernière prévision" [level=3] [ref=e99]
+                - generic [ref=e101]: —
+              - generic [ref=e102]:
+                - heading "Nombre de prévisions" [level=3] [ref=e104]
+                - generic [ref=e106]: "0"
+              - generic [ref=e107]:
+                - heading "Tickers suivis" [level=3] [ref=e109]
+                - generic [ref=e111]: "0"
+              - generic [ref=e112]:
+                - heading "Horizons" [level=3] [ref=e114]
+                - generic [ref=e116]: —
+            - generic [ref=e117]:
+              - generic [ref=e118]:
+                - text: "Univers analysé:"
+                - strong [ref=e119]: "0"
+                - text: tickers
+              - generic [ref=e120]: "Filtres appliqués côté API: Aucun"
+              - generic [ref=e121]: "Mise à jour: 03/11/2025 13:19:51"
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - heading "Top 3 Signaux" [level=3] [ref=e125]
+                - generic [ref=e128]: Aucun signal détecté pour les filtres sélectionnés.
+              - generic [ref=e129]:
+                - heading "Top 3 Risques" [level=3] [ref=e131]
+                - generic [ref=e134]: Aucun risque majeur détecté pour les filtres sélectionnés.
+  - generic [ref=e135]:
+    - img [ref=e137]
+    - button "Open Tanstack query devtools" [ref=e185] [cursor=pointer]:
+      - img [ref=e186]
+  - generic [ref=e234]:
+    - img [ref=e236]
+    - button "Open Tanstack query devtools" [ref=e284] [cursor=pointer]:
+      - img [ref=e285]
+```

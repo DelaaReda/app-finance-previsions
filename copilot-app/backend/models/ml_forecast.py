@@ -83,9 +83,6 @@ class MLForecastModel:
             direction = "flat"
             expected_return = random.uniform(-0.005, 0.005)  # -0.5% to 0.5%
         
-        # Store the direction score for return
-        direction_score_val = direction_score
-        
         # Generate explanation based on signals
         explanations = []
         if signals["rsi"] > 65:
@@ -112,7 +109,7 @@ class MLForecastModel:
             "confidence": min(confidence, 1.0),
             "expected_return": expected_return,
             "explanation": explanation,
-            "direction_score": direction_score_val,
+            "direction_score": direction_score,
             "source": "ml_model_v1",
             "generated_at": datetime.utcnow().isoformat() + "Z"
         }

@@ -14,7 +14,7 @@ htmlcov/
 dist/
 build/
 
-# Project data and caches
+# Projet
 cache/
 artifacts/
 artifacts_phase1/
@@ -24,31 +24,17 @@ logs/
 *.out
 *.stderr.txt
 *.stdout.txt
-data/
 
 # Node / JS
 node_modules/
-webapp/node_modules/
-webapp/dist/
-webapp/build/
-copilot-app/frontend/webapp/test-results/
 
-# Virtual environments
+# Virtual envs
 .venv/
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-copilot-app/backend/.venv/
-copilot-app/frontend/webapp/node_modules/
 
 # OS/IDE
 .DS_Store
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # Secrets / credentials (never commit)
 .env
@@ -65,47 +51,11 @@ credentials.json
 *.pem
 *.p12
 
-# Ignore vscode AI rules
-.github/instructions/codacy.instructions.md
 
-# Generated agent outputs (ignore dated partitions from local runs)
-data/backtest/dt=*
-data/evaluation/dt=*
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+data/macro/forecast/dt=20251026/
+data/quality/dt=20251026/
+data/
 docs/old-context/chat.md
 .codacy/
-
-# Ignore system and temporary files
-*.tmp
-*.temp
-*~
-Thumbs.db
-
-# Ignore IDE specific files
-*.sublime-project
-*.sublime-workspace
-
-# Ignore compiled files
-*.so
-*.dylib
-*.dll
-
-# Ignore log files
-*.log
-
-# Ignore OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Ignore API logs
-api.log
-frontend.log
-copilot-app/backend/api.log
-copilot-app/frontend/webapp/frontend.log
-
-# Ignore local configuration files
-webapp/.env

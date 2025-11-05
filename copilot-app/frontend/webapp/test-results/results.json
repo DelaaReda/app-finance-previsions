@@ -1,0 +1,1011 @@
+{
+  "config": {
+    "configFile": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/playwright.config.ts",
+    "rootDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 5
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Chrome",
+        "name": "Mobile Chrome",
+        "testDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Safari",
+        "name": "Mobile Safari",
+        "testDir": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.1",
+    "workers": 5,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:5174",
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "comprehensive-ui-test.spec.ts",
+      "file": "comprehensive-ui-test.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Comprehensive UI Testing Suite",
+          "file": "comprehensive-ui-test.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "Page Navigation and Basic Functionality",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 4,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should navigate through all pages successfully",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 3465,
+                          "error": {
+                            "message": "Error: locator.click: Error: strict mode violation: getByRole('link', { name: 'News' }) resolved to 2 elements:\n    1) <a href=\"/news\">3. News</a> aka getByRole('link', { name: '3. News' })\n    2) <a href=\"/news\">News</a> aka getByRole('link', { name: 'News', exact: true })\n\nCall log:\n\u001b[2m  - waiting for getByRole('link', { name: 'News' })\u001b[22m\n",
+                            "stack": "Error: locator.click: Error: strict mode violation: getByRole('link', { name: 'News' }) resolved to 2 elements:\n    1) <a href=\"/news\">3. News</a> aka getByRole('link', { name: '3. News' })\n    2) <a href=\"/news\">News</a> aka getByRole('link', { name: 'News', exact: true })\n\nCall log:\n\u001b[2m  - waiting for getByRole('link', { name: 'News' })\u001b[22m\n\n    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:32:54",
+                            "location": {
+                              "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                              "column": 54,
+                              "line": 32
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 30 |\u001b[39m\n \u001b[90m 31 |\u001b[39m       \u001b[90m// Navigate to News\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 32 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"link\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"News\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 33 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"heading\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"News\"\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 34 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page)\u001b[33m.\u001b[39mtoHaveURL(\u001b[35m/.*news/\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 35 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mscreenshot({ path\u001b[33m:\u001b[39m \u001b[32m'test-results/news-page.png'\u001b[39m\u001b[33m,\u001b[39m fullPage\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                                "column": 54,
+                                "line": 32
+                              },
+                              "message": "Error: locator.click: Error: strict mode violation: getByRole('link', { name: 'News' }) resolved to 2 elements:\n    1) <a href=\"/news\">3. News</a> aka getByRole('link', { name: '3. News' })\n    2) <a href=\"/news\">News</a> aka getByRole('link', { name: 'News', exact: true })\n\nCall log:\n\u001b[2m  - waiting for getByRole('link', { name: 'News' })\u001b[22m\n\n\n\u001b[0m \u001b[90m 30 |\u001b[39m\n \u001b[90m 31 |\u001b[39m       \u001b[90m// Navigate to News\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 32 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"link\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"News\"\u001b[39m })\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                      \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 33 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByRole(\u001b[32m\"heading\"\u001b[39m\u001b[33m,\u001b[39m { name\u001b[33m:\u001b[39m \u001b[32m\"News\"\u001b[39m }))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 34 |\u001b[39m       \u001b[36mawait\u001b[39m expect(page)\u001b[33m.\u001b[39mtoHaveURL(\u001b[35m/.*news/\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 35 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mscreenshot({ path\u001b[33m:\u001b[39m \u001b[32m'test-results/news-page.png'\u001b[39m\u001b[33m,\u001b[39m fullPage\u001b[33m:\u001b[39m \u001b[36mtrue\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:32:54\u001b[22m"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:37.595Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-d17d5-ough-all-pages-successfully-chromium/test-failed-1.png"
+                            },
+                            {
+                              "name": "video",
+                              "contentType": "video/webm",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-d17d5-ough-all-pages-successfully-chromium/video.webm"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-d17d5-ough-all-pages-successfully-chromium/error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                            "column": 54,
+                            "line": 32
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-be0c95c0b4a72668b556",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 5,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Dashboard Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 67,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load dashboard and test all interactive elements",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 1,
+                          "status": "passed",
+                          "duration": 5658,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:37.600Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-da173a3bed2a8703b1bf",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 68,
+                  "column": 5
+                },
+                {
+                  "title": "should handle filter combinations correctly",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 4987,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:37.624Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-ef4a2be39699f66508aa",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 103,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Market Brief Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 125,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load market brief and test all controls",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 3,
+                          "parallelIndex": 3,
+                          "status": "failed",
+                          "duration": 7755,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveClass\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: 'Quotidien' })\nExpected pattern: \u001b[32m/active|selected/\u001b[39m\nReceived string:  \u001b[31m\"\"\u001b[39m\nTimeout: 5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveClass\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: 'Quotidien' })\u001b[22m\n\u001b[2m    9 × locator resolved to <button>Quotidien</button>\u001b[22m\n\u001b[2m      - unexpected value \"\"\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveClass\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: 'Quotidien' })\nExpected pattern: \u001b[32m/active|selected/\u001b[39m\nReceived string:  \u001b[31m\"\"\u001b[39m\nTimeout: 5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveClass\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: 'Quotidien' })\u001b[22m\n\u001b[2m    9 × locator resolved to <button>Quotidien</button>\u001b[22m\n\u001b[2m      - unexpected value \"\"\u001b[22m\n\n    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:139:33",
+                            "location": {
+                              "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                              "column": 33,
+                              "line": 139
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 137 |\u001b[39m       \u001b[90m// Test button clicks\u001b[39m\n \u001b[90m 138 |\u001b[39m       \u001b[36mawait\u001b[39m dailyButton\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 139 |\u001b[39m       \u001b[36mawait\u001b[39m expect(dailyButton)\u001b[33m.\u001b[39mtoHaveClass(\u001b[35m/active|selected/\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 140 |\u001b[39m\n \u001b[90m 141 |\u001b[39m       \u001b[36mawait\u001b[39m weeklyButton\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 142 |\u001b[39m       \u001b[36mawait\u001b[39m expect(weeklyButton)\u001b[33m.\u001b[39mtoHaveClass(\u001b[35m/active|selected/\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                                "column": 33,
+                                "line": 139
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveClass\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('button', { name: 'Quotidien' })\nExpected pattern: \u001b[32m/active|selected/\u001b[39m\nReceived string:  \u001b[31m\"\"\u001b[39m\nTimeout: 5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveClass\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: 'Quotidien' })\u001b[22m\n\u001b[2m    9 × locator resolved to <button>Quotidien</button>\u001b[22m\n\u001b[2m      - unexpected value \"\"\u001b[22m\n\n\n\u001b[0m \u001b[90m 137 |\u001b[39m       \u001b[90m// Test button clicks\u001b[39m\n \u001b[90m 138 |\u001b[39m       \u001b[36mawait\u001b[39m dailyButton\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 139 |\u001b[39m       \u001b[36mawait\u001b[39m expect(dailyButton)\u001b[33m.\u001b[39mtoHaveClass(\u001b[35m/active|selected/\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 140 |\u001b[39m\n \u001b[90m 141 |\u001b[39m       \u001b[36mawait\u001b[39m weeklyButton\u001b[33m.\u001b[39mclick()\u001b[33m;\u001b[39m\n \u001b[90m 142 |\u001b[39m       \u001b[36mawait\u001b[39m expect(weeklyButton)\u001b[33m.\u001b[39mtoHaveClass(\u001b[35m/active|selected/\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:139:33\u001b[22m"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:37.596Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-298e5-brief-and-test-all-controls-chromium/test-failed-1.png"
+                            },
+                            {
+                              "name": "video",
+                              "contentType": "video/webm",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-298e5-brief-and-test-all-controls-chromium/video.webm"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-298e5-brief-and-test-all-controls-chromium/error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                            "column": 33,
+                            "line": 139
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-7d64fd41b40d6cf32002",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 126,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Macro Analysis Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 157,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load macro page and test indicator controls",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 4,
+                          "parallelIndex": 4,
+                          "status": "passed",
+                          "duration": 23326,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Found 4 chart/visualization elements on macro page\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:37.624Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-0e6b482e284fbd33d783",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 158,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Stock Analysis Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 184,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load stocks page and test search functionality",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 5,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 7181,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:43.777Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-db1806f4f24adb0b0c68",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 185,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "News Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 218,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load news page and test filtering",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 3824,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Filter button disabled state: false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:44.714Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-494cdfcef285ac834359",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 219,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Copilot LLM Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 246,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load copilot page and verify static content",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 1,
+                          "status": "passed",
+                          "duration": 543,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Found 0 textareas and 0 text inputs on copilot page\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:45.406Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-f3326003e5d4c77f2c00",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 247,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Forecasts Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 267,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load forecasts page and check table structure",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 1,
+                          "status": "passed",
+                          "duration": 1701,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Found 1 rows in forecasts table\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:45.960Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-935018ccbcababbdb55b",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 268,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Backtests Page - Critical Bug Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 298,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should attempt to load backtests page and document errors",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 6,
+                          "parallelIndex": 3,
+                          "status": "passed",
+                          "duration": 3480,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Backtests page loaded normally\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:48.223Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-b7848beeec66b80c2ce1",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 299,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "LLM Judge Page - Detailed Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 342,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should load LLM judge page and test form elements",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 1,
+                          "status": "passed",
+                          "duration": 2924,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "LLM Judge page: 0 text inputs, 0 textareas, 3 buttons\n"
+                            },
+                            {
+                              "text": "Run button disabled: false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:47.672Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-3a2f28c92879aab81807",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 343,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Responsive Design Testing",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 377,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should work on mobile viewport",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 1157,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:48.553Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-aa6e40af4a2a77d55228",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 378,
+                  "column": 5
+                },
+                {
+                  "title": "should work on tablet viewport",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 942,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:49.743Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-e1028feb31fba2e7b52a",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 393,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Error Handling and Edge Cases",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 403,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should handle network errors gracefully",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 1,
+                          "parallelIndex": 1,
+                          "status": "failed",
+                          "duration": 5898,
+                          "error": {
+                            "message": "Error: locator.count: Unexpected token \"=\" while parsing css selector \".error, .error-message, text=Error, text=Failed\". Did you mean to CSS.escape it?",
+                            "stack": "Error: locator.count: Unexpected token \"=\" while parsing css selector \".error, .error-message, text=Error, text=Failed\". Did you mean to CSS.escape it?\n    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:413:46",
+                            "location": {
+                              "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                              "column": 46,
+                              "line": 413
+                            },
+                            "snippet": "\u001b[0m \u001b[90m 411 |\u001b[39m       \u001b[36mconst\u001b[39m loadingStates \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=Loading, text=Chargement, .loading, .spinner'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 412 |\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 413 |\u001b[39m       \u001b[36mconst\u001b[39m errorCount \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m errorMessages\u001b[33m.\u001b[39mcount()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 414 |\u001b[39m       \u001b[36mconst\u001b[39m loadingCount \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loadingStates\u001b[33m.\u001b[39mcount()\u001b[33m;\u001b[39m\n \u001b[90m 415 |\u001b[39m\n \u001b[90m 416 |\u001b[39m       console\u001b[33m.\u001b[39mlog(\u001b[32m`Found ${errorCount} error messages and ${loadingCount} loading indicators`\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                                "column": 46,
+                                "line": 413
+                              },
+                              "message": "Error: locator.count: Unexpected token \"=\" while parsing css selector \".error, .error-message, text=Error, text=Failed\". Did you mean to CSS.escape it?\n\n\u001b[0m \u001b[90m 411 |\u001b[39m       \u001b[36mconst\u001b[39m loadingStates \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'text=Loading, text=Chargement, .loading, .spinner'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 412 |\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 413 |\u001b[39m       \u001b[36mconst\u001b[39m errorCount \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m errorMessages\u001b[33m.\u001b[39mcount()\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                                              \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 414 |\u001b[39m       \u001b[36mconst\u001b[39m loadingCount \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loadingStates\u001b[33m.\u001b[39mcount()\u001b[33m;\u001b[39m\n \u001b[90m 415 |\u001b[39m\n \u001b[90m 416 |\u001b[39m       console\u001b[33m.\u001b[39mlog(\u001b[32m`Found ${errorCount} error messages and ${loadingCount} loading indicators`\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts:413:46\u001b[22m"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:50.614Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-4a886-e-network-errors-gracefully-chromium/test-failed-1.png"
+                            },
+                            {
+                              "name": "video",
+                              "contentType": "video/webm",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-4a886-e-network-errors-gracefully-chromium/video.webm"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/test-results/comprehensive-ui-test-Comp-4a886-e-network-errors-gracefully-chromium/error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "/Users/venom/Documents/analyse-financiere/copilot-app/frontend/webapp/tests/ui/comprehensive-ui-test.spec.ts",
+                            "column": 46,
+                            "line": 413
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-55497a50d294c0ab0164",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 404,
+                  "column": 5
+                },
+                {
+                  "title": "should handle invalid URLs gracefully",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 793,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Invalid URL test: Dashboard visible: false, 404 visible: false\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:50.721Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-af6f6639f92bfc6fea52",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 421,
+                  "column": 5
+                }
+              ]
+            },
+            {
+              "title": "Performance and Loading Tests",
+              "file": "comprehensive-ui-test.spec.ts",
+              "line": 437,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should measure page load times",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 5,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 3667,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Dashboard page load time: 243ms\n"
+                            },
+                            {
+                              "text": "Dashboard full load time (with dynamic content): 3256ms\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:51.344Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-a3bb1ef83800dc7208f9",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 438,
+                  "column": 5
+                },
+                {
+                  "title": "should check for console errors",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 2,
+                          "parallelIndex": 2,
+                          "status": "passed",
+                          "duration": 5684,
+                          "errors": [],
+                          "stdout": [
+                            {
+                              "text": "Console errors: 1\n"
+                            },
+                            {
+                              "text": "Console warnings: 1\n"
+                            },
+                            {
+                              "text": "Errors: [ \u001b[32m'Failed to load resource: net::ERR_CONNECTION_REFUSED'\u001b[39m ]\n"
+                            }
+                          ],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-11-03T13:19:51.532Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "be7edd2b97ffb096aabe-f8a6a9cb6e913e275caa",
+                  "file": "comprehensive-ui-test.spec.ts",
+                  "line": 453,
+                  "column": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-11-03T13:19:36.456Z",
+    "duration": 26789.552,
+    "expected": 14,
+    "skipped": 0,
+    "unexpected": 3,
+    "flaky": 0
+  }
+}

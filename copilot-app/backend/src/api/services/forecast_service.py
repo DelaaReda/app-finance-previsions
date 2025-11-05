@@ -12,20 +12,33 @@ from datetime import datetime, timedelta
 import asyncio
 
 # New imports for persistent caching
-from storage import load_json, save_json
-from services import load_or_compute
+from backend.storage.io import load_json, save_json
+from backend.services.cache_layer import load_or_compute
 
-from analytics.forecaster import forecast_ticker, ForecastResult
-from core.data_store import query_duckdb, write_parquet
-from backend.models.forecast_hybrid_v1 import ForecastHybridV1
+# Corrected imports for existing modules that might be in the codebase
+try:
+    from backend.analytics.forecaster import forecast_ticker, ForecastResult
+except ImportError:
+    # Fallback if module doesn't exist yet
+    forecast_ticker = None
+    ForecastResult = None
+
+try:
+    from backend.core.data_store import query_duckdb, write_parquet
+except ImportError:
+    # Fallback if module doesn't exist yet
+    query_duckdb = None
+    write_parquet = None
+
+# Use our newly created ML forecast model
+from backend.models.ml_forecast import run_forecast_generation
+from backend.models.llm_ranker import llm_ranker
 
 
 class ForecastService:
     def __init__(self):
         self.cache_ttl = 300  # 5 minutes
-        self.data_path = Path("data/forecast")
-        # Initialize the hybrid forecast system
-        self.hybrid_system = ForecastHybridV1()
+        self.data_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "forecast"
     
     async def get_all_forecasts(self, 
                                asset_type: str = "all", 
@@ -109,19 +122,9 @@ class ForecastService:
         Load forecasts from the hybrid system's saved file.
         """
         try:
-            # The hybrid system saves to data/forecasts.json
-            forecasts_file = Path(__file__).parent.parent.parent / "data" / "forecasts.json"
-            
-            if forecasts_file.exists():
-                with open(forecasts_file, 'r') as f:
-                    content = json.load(f)
-                
-                # Return the data part if it exists
-                if "data" in content:
-                    return content["data"]
-                else:
-                    # If the format is different, return as is
-                    return content
+            # Use our job to get the latest forecasts
+            from backend.jobs.forecasts import get_latest_forecasts
+            return get_latest_forecasts()
         except Exception as e:
             print(f"Error loading hybrid forecasts: {e}")
             pass
@@ -133,9 +136,9 @@ class ForecastService:
         Generate forecasts using the hybrid system (ML + G4F).
         """
         try:
-            # Use the hybrid system to generate forecasts for common tickers
-            common_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM"]
-            return self.hybrid_system.run_forecast_job(common_tickers)
+            # Use our jobs module to run the hybrid forecast job
+            from backend.jobs.forecasts import run_forecasts_job
+            return run_forecasts_job()
         except Exception as e:
             print(f"Error generating hybrid forecasts: {e}")
             return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"]}
@@ -173,33 +176,14 @@ class ForecastService:
         Generate forecasts for common tickers as fallback.
         This ensures we never have empty results.
         """
-        common_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "TSM"]
-        horizons = ["1w", "1m", "3m"]
-        
-        all_forecasts = []
-        
-        for ticker in common_tickers:
-            for horizon in horizons:
-                try:
-                    # Generate forecast using the existing forecaster
-                    forecast_result: ForecastResult = forecast_ticker(ticker, horizon)
-                    
-                    forecast_dict = {
-                        "ticker": ticker,
-                        "horizon": horizon,
-                        "direction": forecast_result.direction,
-                        "confidence": forecast_result.confidence,
-                        "expected_return": forecast_result.expected_return,
-                        "drivers": forecast_result.drivers,
-                        "generated_at": datetime.utcnow().isoformat()
-                    }
-                    
-                    all_forecasts.append(forecast_dict)
-                except Exception:
-                    # If forecast fails for a ticker, continue with others
-                    continue
-        
-        return all_forecasts
+        try:
+            # Use our ML model to generate forecasts
+            from backend.models.ml_forecast import run_forecast_generation
+            return run_forecast_generation()
+        except Exception as e:
+            print(f"Fallback forecast generation failed: {e}")
+            # Return minimal structure if all else fails
+            return []
     
     def _filter_forecasts(self, forecasts: List[Dict], asset_type: str, horizon: str) -> List[Dict]:
         """Filter forecasts by asset type and horizon."""

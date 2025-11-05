@@ -18,7 +18,8 @@
 - [x] FC-P0-002: Forecasts empty-safe (front)
 - [x] FC-TASK-FORECAST-FULL: Complete forecast data pipeline implementation (URGENT)
 - [x] FC-P0-009: Vite proxy + .env configuration (devx improvement)
-- [x] FC-P0-007: ErrorBoundary global (frontend) - CLAIMED
+- [x] FC-P0-007: ErrorBoundary global (frontend)
+- [ ] FC-P0-004: Cache persistant générique (backend)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md

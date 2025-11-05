@@ -87,61 +87,87 @@ class NewsService:
         window: str = "last_week"
     ) -> Dict[str, Any]:
         """
-        Get news feed with persistent caching and fallback mechanisms.
+        Get news feed with persistent caching using load_or_compute pattern (FC-P0-004).
         Returns real data from stored files when available, or empty structure but never fails.
         Prioritizes reading from stored data to ensure never-empty contract.
         """
-        # First, try to load from persistent storage - this is the main source of truth
-        try:
-            stored_data = load_json("news_feed")
-            if stored_data and isinstance(stored_data, dict) and "payload" in stored_data:
-                # Extract the actual news data from the stored payload
-                payload = stored_data.get("payload", {})
-                articles = payload.get("articles", [])
-                
-                # Apply basic filtering if tickers are specified
-                if tickers:
-                    filtered_articles = []
-                    for article in articles:
-                        article_tickers = article.get("tickers", [])
-                        if any(ticker.upper() in [t.upper() for t in article_tickers] for ticker in tickers):
-                            filtered_articles.append(article)
-                    articles = filtered_articles
-                
-                # Apply limit
-                articles = articles[:limit]
-                
-                # Prepare response data
-                response_data = {
-                    "items": articles,
-                    "count": len(articles),
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "source": stored_data.get("source", ["rss_ingestion"]),
-                    "sources_used": payload.get("sources_used", []),
-                    "total_collected": payload.get("total_collected", len(articles)),
-                    "total_after_dedup": payload.get("total_after_dedup", len(articles)),
-                }
-                
-                # Add freshness info from stored metadata
-                last_update_ts = stored_data.get("last_update")
-                if last_update_ts:
-                    from datetime import timezone
-                    import datetime as dt
-                    last_update_dt = dt.datetime.fromtimestamp(last_update_ts, tz=timezone.utc)
-                    response_data["freshness"] = last_update_dt.isoformat()
-                    response_data["last_update"] = last_update_dt.isoformat()
+        # Use load_or_compute for consistent caching behavior as per FC-P0-004 requirements
+        def compute_news_feed():
+            try:
+                stored_data = load_json("news_feed")
+                if stored_data and isinstance(stored_data, dict) and "payload" in stored_data:
+                    # Extract the actual news data from the stored payload
+                    payload = stored_data.get("payload", {})
+                    articles = payload.get("articles", [])
+                    
+                    # Apply basic filtering if tickers are specified
+                    if tickers:
+                        filtered_articles = []
+                        for article in articles:
+                            article_tickers = article.get("tickers", [])
+                            if any(ticker.upper() in [t.upper() for t in article_tickers] for ticker in tickers):
+                                filtered_articles.append(article)
+                        articles = filtered_articles
+                    
+                    # Apply limit
+                    articles = articles[:limit]
+                    
+                    # Prepare response data
+                    response_data = {
+                        "items": articles,
+                        "count": len(articles),
+                        "generated_at": datetime.utcnow().isoformat(),
+                        "source": stored_data.get("source", ["rss_ingestion"]),
+                        "sources_used": payload.get("sources_used", []),
+                        "total_collected": payload.get("total_collected", len(articles)),
+                        "total_after_dedup": payload.get("total_after_dedup", len(articles)),
+                    }
+                    
+                    # Add freshness info from stored metadata
+                    last_update_ts = stored_data.get("last_update")
+                    if last_update_ts:
+                        from datetime import timezone
+                        import datetime as dt
+                        last_update_dt = dt.datetime.fromtimestamp(last_update_ts, tz=timezone.utc)
+                        response_data["freshness"] = last_update_dt.isoformat()
+                        response_data["last_update"] = last_update_dt.isoformat()
+                    else:
+                        response_data["freshness"] = "unknown"
+                        response_data["last_update"] = datetime.utcnow().isoformat()
+                    
+                    return response_data
                 else:
-                    response_data["freshness"] = "unknown"
-                    response_data["last_update"] = datetime.utcnow().isoformat()
-                
+                    # Fallback if no stored data available
+                    return None
+            except Exception as e:
+                print(f"Error in compute_news_feed: {e}")
+                return None
+
+        # Use the load_or_compute pattern for consistency
+        if load_or_compute is not None:
+            # Use the cache system if available
+            cached_result = load_or_compute("news_feed", lambda: compute_news_feed(), source=["news_service"])
+            
+            if cached_result and isinstance(cached_result, dict) and "payload" in cached_result:
+                # Return the cached result in the proper format
                 return {
                     "ok": True,
-                    "data": response_data
+                    "data": cached_result["payload"] if isinstance(cached_result.get("payload"), dict) else cached_result
                 }
-            
-        except Exception as e:
-            print(f"Error reading stored news data: {e}")
-            # Continue to fallback if stored data is unavailable
+            elif isinstance(cached_result, dict) and "items" in cached_result:
+                # If cached result is already in proper format
+                return {
+                    "ok": True,
+                    "data": cached_result
+                }
+        
+        # Fallback to direct computation
+        result = compute_news_feed()
+        if result:
+            return {
+                "ok": True,
+                "data": result
+            }
         
         # Fallback: try the news pipeline if available
         if FINNEWS_AVAILABLE and run_news_pipeline:

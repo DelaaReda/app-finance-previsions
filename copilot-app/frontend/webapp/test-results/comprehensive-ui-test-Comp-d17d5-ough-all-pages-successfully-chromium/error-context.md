@@ -1,0 +1,72 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - heading "💼 Finance Copilot" [level=1] [ref=e5]
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: 📊 Vue d'ensemble
+          - generic [ref=e9]:
+            - link "Dashboard" [ref=e10] [cursor=pointer]:
+              - /url: /
+            - link "Market Brief" [ref=e11] [cursor=pointer]:
+              - /url: /brief
+        - generic [ref=e12]:
+          - generic [ref=e13]: 🔬 5 Piliers
+          - generic [ref=e14]:
+            - link "1. Macro" [ref=e15] [cursor=pointer]:
+              - /url: /macro
+            - link "2. Stocks" [active] [ref=e16] [cursor=pointer]:
+              - /url: /stocks
+            - link "3. News" [ref=e17] [cursor=pointer]:
+              - /url: /news
+            - link "4. Copilot LLM" [ref=e18] [cursor=pointer]:
+              - /url: /copilot
+        - generic [ref=e19]:
+          - generic [ref=e20]: 📈 Analyse
+          - generic [ref=e21]:
+            - link "Prévisions" [ref=e22] [cursor=pointer]:
+              - /url: /forecasts
+            - link "Backtests" [ref=e23] [cursor=pointer]:
+              - /url: /backtests
+        - generic [ref=e24]:
+          - generic [ref=e25]: 🛠️ Outils
+          - link "LLM Judge" [ref=e27] [cursor=pointer]:
+            - /url: /judge
+    - main [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e31]:
+          - link "📊 Copilote Financier" [ref=e32] [cursor=pointer]:
+            - /url: /
+            - heading "📊 Copilote Financier" [level=1] [ref=e33]
+          - navigation [ref=e34]:
+            - link "Dashboard" [ref=e35] [cursor=pointer]:
+              - /url: /
+            - link "Macro" [ref=e36] [cursor=pointer]:
+              - /url: /macro
+            - link "Actions" [ref=e37] [cursor=pointer]:
+              - /url: /stocks
+            - link "News" [ref=e38] [cursor=pointer]:
+              - /url: /news
+            - link "Copilot" [ref=e39] [cursor=pointer]:
+              - /url: /copilot
+            - link "Brief" [ref=e40] [cursor=pointer]:
+              - /url: /brief
+          - generic [ref=e42]: "Mise à jour: 08:19:42"
+        - main [ref=e43]:
+          - generic [ref=e45]:
+            - heading "📈 Actions - Analyse Technique" [level=2] [ref=e46]
+            - generic [ref=e47]:
+              - heading "Rechercher une action" [level=3] [ref=e49]
+              - 'textbox "Ticker ou nom (ex: AAPL, Apple)" [ref=e51]'
+  - generic [ref=e52]:
+    - img [ref=e54]
+    - button "Open Tanstack query devtools" [ref=e102] [cursor=pointer]:
+      - img [ref=e103]
+  - generic [ref=e151]:
+    - img [ref=e153]
+    - button "Open Tanstack query devtools" [ref=e201] [cursor=pointer]:
+      - img [ref=e202]
+```

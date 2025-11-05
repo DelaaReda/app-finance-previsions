@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 import type { CompositeSignal } from '@/types/common.types'
 
 type DashboardData = {
@@ -48,10 +49,10 @@ export default function Dashboard() {
     queryKey: ['dashboard', { sectors, horizons, themes, tickers }],
     queryFn: async () => {
       const params: Record<string, string> = {}
-      if (sectors.length) params.sectors = sectors.join(',')
-      if (horizons.length) params.horizons = horizons.join(',')
-      if (themes.length) params.themes = themes.join(',')
-      if (tickers.length) params.tickers = tickers.join(',')
+      if (safeLength(sectors) > 0) params.sectors = sectors.join(',')
+      if (safeLength(horizons) > 0) params.horizons = horizons.join(',')
+      if (safeLength(themes) > 0) params.themes = themes.join(',')
+      if (safeLength(tickers) > 0) params.tickers = tickers.join(',')
 
       const response = await apiGet<DashboardData>('/dashboard/kpis', params)
       if (!response.ok) {
@@ -93,7 +94,7 @@ export default function Dashboard() {
 
   const handleTickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
-    setTickers(value ? value.split(',').map(t => t.trim().toUpperCase()) : [])
+    setTickers(value ? safeMap(value.split(','), t => t.trim().toUpperCase()) : [])
   }
 
   return (
@@ -107,7 +108,7 @@ export default function Dashboard() {
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Secteurs:</label>
               <div style={styles.checkboxGroup}>
-                {sectorOptions.map(sector => (
+                {safeMap(sectorOptions, sector => (
                   <label key={sector} style={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -124,7 +125,7 @@ export default function Dashboard() {
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Horizons:</label>
               <div style={styles.checkboxGroup}>
-                {horizonOptions.map(horizon => (
+                {safeMap(horizonOptions, horizon => (
                   <label key={horizon} style={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -141,7 +142,7 @@ export default function Dashboard() {
             <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Thèmes:</label>
               <div style={styles.checkboxGroup}>
-                {themeOptions.map(theme => (
+                {safeMap(themeOptions, theme => (
                   <label key={theme} style={styles.checkboxLabel}>
                     <input
                       type="checkbox"
@@ -166,13 +167,13 @@ export default function Dashboard() {
               />
             </div>
 
-        {(sectors.length > 0 || horizons.length > 0 || themes.length > 0 || tickers.length > 0) && (
+        {(safeLength(sectors) > 0 || safeLength(horizons) > 0 || safeLength(themes) > 0 || safeLength(tickers) > 0) && (
           <div style={styles.activeFilters}>
             <small>Filtres actifs:</small>
-            {sectors.length > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
-            {horizons.length > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
-            {themes.length > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
-            {tickers.length > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
+            {safeLength(sectors) > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
+            {safeLength(horizons) > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
+            {safeLength(themes) > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
+            {safeLength(tickers) > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
           </div>
         )}
       </div>
@@ -209,10 +210,10 @@ export default function Dashboard() {
               {filtersApplied && (
                 <span style={styles.metaLabel}>
                   Filtres appliqués côté API: {[
-                    filtersApplied.sectors?.length ? `Secteurs (${filtersApplied.sectors.length})` : null,
-                    filtersApplied.horizons?.length ? `Horizons (${filtersApplied.horizons.join(', ')})` : null,
-                    filtersApplied.themes?.length ? `Thèmes (${filtersApplied.themes.join(', ')})` : null,
-                    filtersApplied.tickers?.length ? `Tickers (${filtersApplied.tickers.join(', ')})` : null,
+                    filtersApplied.sectors && safeLength(filtersApplied.sectors) > 0 ? `Secteurs (${filtersApplied.sectors.length})` : null,
+                    filtersApplied.horizons && safeLength(filtersApplied.horizons) > 0 ? `Horizons (${filtersApplied.horizons.join(', ')})` : null,
+                    filtersApplied.themes && safeLength(filtersApplied.themes) > 0 ? `Thèmes (${filtersApplied.themes.join(', ')})` : null,
+                    filtersApplied.tickers && safeLength(filtersApplied.tickers) > 0 ? `Tickers (${filtersApplied.tickers.join(', ')})` : null,
                   ].filter(Boolean).join(' • ') || 'Aucun'}
                 </span>
               )}

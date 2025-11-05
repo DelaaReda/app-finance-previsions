@@ -1,0 +1,60 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - heading "💼 Finance Copilot" [level=1] [ref=e5]
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: 📊 Vue d'ensemble
+          - generic [ref=e9]:
+            - link "Dashboard" [ref=e10] [cursor=pointer]:
+              - /url: /
+            - link "Market Brief" [ref=e11] [cursor=pointer]:
+              - /url: /brief
+        - generic [ref=e12]:
+          - generic [ref=e13]: 🔬 5 Piliers
+          - generic [ref=e14]:
+            - link "1. Macro" [ref=e15] [cursor=pointer]:
+              - /url: /macro
+            - link "2. Stocks" [ref=e16] [cursor=pointer]:
+              - /url: /stocks
+            - link "3. News" [ref=e17] [cursor=pointer]:
+              - /url: /news
+            - link "4. Copilot LLM" [ref=e18] [cursor=pointer]:
+              - /url: /copilot
+        - generic [ref=e19]:
+          - generic [ref=e20]: 📈 Analyse
+          - generic [ref=e21]:
+            - link "Prévisions" [ref=e22] [cursor=pointer]:
+              - /url: /forecasts
+            - link "Backtests" [ref=e23] [cursor=pointer]:
+              - /url: /backtests
+        - generic [ref=e24]:
+          - generic [ref=e25]: 🛠️ Outils
+          - link "LLM Judge" [ref=e27] [cursor=pointer]:
+            - /url: /judge
+    - main [ref=e28]:
+      - generic [ref=e30]:
+        - heading "📋 Market Brief" [level=1] [ref=e31]
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - button "Quotidien" [active] [ref=e34] [cursor=pointer]
+            - button "Hebdomadaire" [ref=e35] [cursor=pointer]
+          - generic [ref=e36]:
+            - generic [ref=e37]: "Univers:"
+            - combobox "Univers:" [ref=e38]:
+              - option "SPY,QQQ (Défaut)" [selected]
+              - option "SPY,AAPL,NVDA,MSFT"
+              - option "QQQ,AAPL,GOOGL,AMZN"
+              - option "SPY,TSLA,META,NVDA"
+  - generic [ref=e39]:
+    - img [ref=e41]
+    - button "Open Tanstack query devtools" [ref=e89] [cursor=pointer]:
+      - img [ref=e90]
+  - generic [ref=e138]:
+    - img [ref=e140]
+    - button "Open Tanstack query devtools" [ref=e188] [cursor=pointer]:
+      - img [ref=e189]
+```

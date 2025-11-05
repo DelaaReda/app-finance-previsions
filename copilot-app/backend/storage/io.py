@@ -1,44 +1,25 @@
 from pathlib import Path
-import json
-import time
+import json, time, datetime as dt
 from typing import Dict, Any, Optional, List
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"  # backend/data/
-DATA_DIR.mkdir(exist_ok=True)
+BASE = Path("data")  # gitignored
+BASE.mkdir(exist_ok=True)
 
-def _path(key: str) -> Path:
-    return DATA_DIR / f"{key}.json"
-
-def save_json(key: str, payload: Dict[str, Any], source: Optional[List[str]] = None) -> Dict[str, Any]:
+def save_json(key: str, payload: Dict[str, Any], source: Optional[List[str]] = None, version: str = "v1") -> None:
     """
-    Save payload to JSON file with metadata.
+    Save payload to JSON file with metadata (matching task specs).
     """
-    now = int(time.time())
-    doc = {
-        "last_update": now,
-        "source": source or [],
-        "version": 1,
-        "payload": payload
-    }
-    _path(key).write_text(json.dumps(doc, ensure_ascii=False, indent=2))
-    return doc
+    final_payload = dict(payload)
+    final_payload["freshness"] = dt.datetime.utcnow().isoformat()+"Z"
+    final_payload["source"] = source or []
+    final_payload["version"] = version
+    (BASE / f"{key}.json").write_text(json.dumps(final_payload, ensure_ascii=False))
 
 def load_json(key: str) -> Optional[Dict[str, Any]]:
     """
-    Load JSON from file, return None if not found.
+    Load JSON from file, return None if not found (matching task specs).
     """
-    p = _path(key)
+    p = BASE / f"{key}.json"
     if not p.exists():
         return None
     return json.loads(p.read_text())
-
-def last_updates_info() -> Dict[str, Any]:
-    """
-    Get info about last updates for key data files.
-    """
-    info = {}
-    for name in ["news_feed", "forecasts", "brief_weekly", "backtests"]:
-        d = load_json(name)
-        if d:
-            info[name] = d.get("last_update")
-    return info

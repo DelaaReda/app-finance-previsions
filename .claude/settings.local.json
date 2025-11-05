@@ -13,7 +13,17 @@
       "Bash(sort:*)",
       "Bash(./scripts/cleanup_phase1.sh:*)",
       "Bash(pytest:*)",
-      "Bash(PYTHONPATH=. pytest:*)"
+      "Bash(PYTHONPATH=. pytest:*)",
+      "Bash(for:*)",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(done)",
+      "Bash(if [ -f /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/brief_weekly.json ])",
+      "Bash(then head -30 /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/brief_weekly.json)",
+      "Bash(else echo \"File does not exist\")",
+      "Bash(fi)",
+      "Bash(.venv/bin/python3:*)",
+      "Bash(lsof:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

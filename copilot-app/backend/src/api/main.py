@@ -66,13 +66,116 @@ def create_app() -> FastAPI:
 
     # Routes
     register_routes(app)
-    
+
     # Include brief routes
     try:
         from api.routes.brief_routes import router as brief_router
         app.include_router(brief_router)
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
+
+    # =================== STARTUP EVENT HANDLER ===================
+    @app.on_event("startup")
+    async def startup_event():
+        """
+        Initialize application data at startup
+        Task: FC-STARTUP-INIT-001 (+60 pts)
+        Author: CLAUDE-STABILITY-ARCHITECT-IRONMAN-42
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info("="*70)
+        logger.info("🚀 Finance Copilot Starting Up...")
+        logger.info("="*70)
+
+        # Import necessary functions
+        try:
+            from storage.io import load_json
+            from jobs.forecasts import run_forecasts_job
+            from jobs.news_ingest import run_news_ingest
+            from jobs.weekly_brief import run_and_persist_weekly_brief
+            from jobs.alerts import run_alerts_job
+            from scheduler.app import start_scheduler
+
+            logger.info("📦 Checking data availability...")
+
+            # Check and generate forecasts if missing
+            if not load_json("forecasts.json"):
+                logger.info("⚠️  No forecasts found, generating initial set...")
+                try:
+                    run_forecasts_job()
+                    logger.info("✅ Initial forecasts generated")
+                except Exception as e:
+                    logger.error(f"❌ Failed to generate forecasts: {e}")
+            else:
+                logger.info("✅ Forecasts data found")
+
+            # Check and generate news feed if missing
+            if not load_json("news_feed.json"):
+                logger.info("⚠️  No news feed found, fetching initial data...")
+                try:
+                    run_news_ingest()
+                    logger.info("✅ Initial news feed generated")
+                except Exception as e:
+                    logger.error(f"❌ Failed to fetch news: {e}")
+            else:
+                logger.info("✅ News feed data found")
+
+            # Check and generate weekly brief if missing
+            if not load_json("brief_weekly.json"):
+                logger.info("⚠️  No weekly brief found, generating...")
+                try:
+                    run_and_persist_weekly_brief()
+                    logger.info("✅ Initial weekly brief generated")
+                except Exception as e:
+                    logger.error(f"❌ Failed to generate weekly brief: {e}")
+            else:
+                logger.info("✅ Weekly brief data found")
+
+            # Check and generate alerts if missing
+            if not load_json("alerts.json"):
+                logger.info("⚠️  No alerts found, generating...")
+                try:
+                    run_alerts_job()
+                    logger.info("✅ Initial alerts generated")
+                except Exception as e:
+                    logger.error(f"❌ Failed to generate alerts: {e}")
+            else:
+                logger.info("✅ Alerts data found")
+
+            # Start background scheduler
+            logger.info("⏰ Starting background scheduler...")
+            try:
+                start_scheduler()
+                logger.info("✅ Scheduler started successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to start scheduler: {e}")
+
+            logger.info("="*70)
+            logger.info("✅ Finance Copilot Ready!")
+            logger.info("="*70)
+
+        except Exception as e:
+            logger.error(f"❌ Startup initialization failed: {e}")
+            logger.warning("⚠️  Application will continue but some features may not work")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Cleanup on shutdown"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info("🛑 Shutting down Finance Copilot...")
+
+        try:
+            from scheduler.app import stop_scheduler
+            stop_scheduler()
+            logger.info("✅ Scheduler stopped")
+        except Exception as e:
+            logger.error(f"❌ Error stopping scheduler: {e}")
+
+        logger.info("👋 Goodbye!")
 
     return app
 

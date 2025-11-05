@@ -6,7 +6,7 @@ import { stocksService } from '@/services/stocks.service'
 import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
-import { safeGetArray, hasSafeArray } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 export default function Stocks() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -51,9 +51,9 @@ export default function Stocks() {
           
           {isSearching && <LoadingSpinner size={24} />}
           
-          {searchResults && (searchResults as any[]).length > 0 && (
+          {hasSafeArray({ searchResults: searchResults as any[] }, 'searchResults') ? (
             <div style={styles.resultsList}>
-              {(searchResults as any[]).map((stock: any) => (
+              {safeMap(safeGetArray({ searchResults: searchResults as any[] }, 'searchResults'), (stock: any) => (
                 <div
                   key={stock.ticker}
                   style={styles.resultItem}
@@ -70,7 +70,7 @@ export default function Stocks() {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </Card>
 
         {/* Analyse du ticker sélectionné */}
