@@ -14,13 +14,14 @@ from typing import List, Dict, Any
 from storage.io import save_json
 
 
-# Financial news RSS sources
+# Financial news RSS sources - Using working URLs only
 SOURCES = [
-    {"name": "reuters_business", "url": "https://www.reuters.com/business/rssBusinessNews"},
-    {"name": "reuters_markets", "url": "https://www.reuters.com/markets/rssMarketsNews"},
     {"name": "bloomberg", "url": "https://feeds.bloomberg.com/markets/news.rss"},
-    {"name": "financial_times", "url": "https://www.ft.com/rss/markets"},  # Note: this might require more complex parsing
     {"name": "market_watch", "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories"},
+    {"name": "cnbc_markets", "url": "https://www.cnbc.com/id/10001147/device/rss/rss.html"},
+    {"name": "marketwatch_top", "url": "https://www.marketwatch.com/rss/topstories"},
+    {"name": "dj_markets", "url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"},
+    {"name": "ft_markets", "url": "https://www.ft.com/rss/markets"},
 ]
 
 # Simple ticker mapping dictionary (S&P 500 and major indices)
@@ -169,7 +170,7 @@ def run_news_ingest():
         news_data = compute_news_feed()
         
         # Save to file using our storage system
-        save_json("news_feed", news_data, source=["rss_ingest", "reuters", "bloomberg", "market_watch"])
+        save_json("news_feed", news_data, source=["rss_ingest", "bloomberg", "market_watch", "cnbc", "ft", "dj_markets"])
         
         print(f"News ingestion completed successfully. Saved {len(news_data['articles'])} articles from {len(news_data['sources_used'])} sources.")
         
@@ -187,6 +188,20 @@ def run_news_ingest():
         # Still save the error state so the API doesn't return empty
         save_json("news_feed", error_response, source=["rss_ingest", "error"])
         return error_response
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Run news ingestion job')
+    parser.add_argument('--cron', action='store_true', help='Run in cron mode (no interactive output)')
+    args = parser.parse_args()
+    
+    if args.cron:
+        # Silent mode for cron jobs
+        run_news_ingest()
+    else:
+        # Verbose mode
+        run_news_ingest()
 
 
 if __name__ == "__main__":

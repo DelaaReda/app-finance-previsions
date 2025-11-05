@@ -14,8 +14,23 @@ import hashlib
 from pathlib import Path
 
 # Import our storage and cache system
-from backend.storage.base import save_json, load_json  
-from backend.services.cache_layer import load_or_compute
+import sys
+import os
+# Add backend directory to path to handle imports properly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from storage.base import save_json, load_json
+
+# Try to import cache layer, but don't fail if it's not available
+try:
+    from services.cache_layer import load_or_compute
+except ImportError:
+    # Define a fallback function if cache_layer is not available
+    def load_or_compute(key, compute_fn, source=None):
+        """
+        Simple fallback implementation of load_or_compute that just runs the compute function
+        """
+        return compute_fn()
 
 logger = logging.getLogger(__name__)
 

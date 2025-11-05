@@ -33,7 +33,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 | ---------------------------------------- | -----: | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------- |
 | ALEX-FINANCE-ANALYST-SUPERMAN-29         |    535 | FC-P1-013, FC-P1-011, FC-P1-012, FC-P0-014, FC-P0-002, alpha signals, forecasting pipeline | [`4323fc2`](https://github.com/DelaaReda/app-finance-previsions/commit/4323fc2) | 2025-11-03 |
 | MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7    |    350 | FC-P1-013, FC-HOTFIX-001/006, FC-P0-008, FC-P0-014, FC-P1-014              | [`fc1a2b3`](https://github.com/DelaaReda/app-finance-previsions/commit/fc1a2b3) | 2025-11-03 |
-| ALEX-BACKEND-SUPERMAN-7                  |    250 | FC-HOTFIX-001, FC-P0-014, FC-P0-001, FC-P0-008                               | [`7a2538d`](https://github.com/DelaaReda/app-finance-previsions/commit/7a2538d) | 2025-11-03 |
+| ALEX-BACKEND-SUPERMAN-7                  |    500 | FC-HOTFIX-001, FC-P0-014, FC-P0-001, FC-P0-008, FC-P2-016 (forecast pipeline + ML+G4F) | [`7a2538d`](https://github.com/DelaaReda/app-finance-previsions/commit/7a2538d) | 2025-11-04 |
 | STEPHANE-DATA-MASTER-BATMAN-10           |    240 | Fix `/forecasts` empty (UI)                                                  | [`abc1234`](https://github.com/DelaaReda/app-finance-previsions/commit/abc1234) | 2025-11-03 |
 | ALEX-API-ARCHITECT-SUPERMAN-7            |    460 | FC-P0-003 (contracts), FC-HOTFIX-002 (middleware), FC-HOTFIX-003 (main.py), FC-HOTFIX-004 (IO/cache), FC-HOTFIX-005 (news/forecasts routes), FC-HOTFIX-006 (wait loops), cache layer, forecast svc | [`abcd123`](https://github.com/DelaaReda/app-finance-previsions/commit/abcd123) | 2025-11-04 |
 | MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23 |    320 | Profil agent, audit qualité data, détection imports KO → hotfix, coordination API fixes, communication protocol establishment, system-wide quality oversight | [`abc1234`](https://github.com/DelaaReda/app-finance-previsions/commit/abc1234) | 2025-11-04 |
@@ -51,6 +51,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 
 ```
 | ALEX-FINANCE-ANALYST-SUPERMAN-29 |    660 | FC-P1-013, FC-HOTFIX-001/006, FC-P1-011, FC-P1-012, FC-P0-014, FC-P0-002, alpha signals, forecasting pipeline | [`4323fc2`](https://github.com/DelaaReda/app-finance-previsions/commit/4323fc2) | 2025-11-03 |
+| LENA-LLM-STRATEGIST-WONDERWOMAN-21 |    395 | +FC-P2-017 (News Ingest Real Data), +Sprint V2 doc (tasks + how-to), cache-contract-fix, status-ext | — (local) | 2025-11-05 |
 
 | <AGENT> | <POINTS> | <TAGS COURTS séparés par ,> | [`<sha>`](https://github.com/DelaaReda/app-finance-previsions/commit/<sha>) | <YYYY-MM-DD> |
 ```
