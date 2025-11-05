@@ -8,6 +8,25 @@ Legend
 
 ---
 
+## V2‑UI‑MIGRATION — Mantine + Tremor unifiés (drop MUI)
+- Area: UI
+- Effort: M
+
+Why
+- Cohérence visuelle, simplicité pour agents IA, réduction des crashs et de la dette. Un seul design system: Mantine + Tremor (+ Tailwind utilitaire).
+
+Steps
+1) Interdire MUI via ESLint (`no-restricted-imports` sur `@mui/*`).
+2) Créer `src/ui/*` wrappers autour de Mantine et refactor imports vers `@/ui`.
+3) Remplacer composants MUI restants (News, Forecasts, Macro, Stocks) par Mantine.
+4) Standardiser 4 états (Loading/Empty/Error/Freshness) et safe helpers (`@/lib/safe`).
+
+DoD
+- `rg "@mui/"` → 0; build OK.
+- Pages clés fonctionnent via `@/ui`; tests Playwright passent.
+
+---
+
 ## V2‑ML‑001 — Probabilistic Forecasts (Quantiles + Calibration)
 - Area: ML, UI
 - Effort: L
@@ -178,4 +197,3 @@ DoD
 Scoring Proposé (à ajuster par le manager)
 - L: +140, M: +90, S: +50
 - Bonus +30 si doc claire + preuves; +40 si perf → x2 vs baseline ; −100 si mock ; −80 si schema casse UI.
-

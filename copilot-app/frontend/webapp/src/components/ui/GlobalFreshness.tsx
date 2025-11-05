@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Tooltip } from '@mui/material';
+import { Tooltip } from '@/ui';
 import { apiGet } from '../../api/client';
 import type { HealthData } from '../../hooks/useHealth';
 
@@ -62,10 +62,10 @@ export default function GlobalFreshness() {
       setError(null);
 
       try {
-        const response = await apiGet('/health');
+        const response = await apiGet<HealthData>('/health');
 
         if (response.ok && response.data) {
-          const healthData: HealthData = response.data;
+          const healthData = response.data as HealthData;
           const lastUpdates = healthData.last_updates || {};
 
           setFreshnessData({
@@ -151,7 +151,7 @@ export default function GlobalFreshness() {
   );
 
   return (
-    <Tooltip title={tooltipContent} placement="bottom">
+    <Tooltip label={tooltipContent} position="bottom">
       <div style={styles.container}>
         <span style={{ ...styles.freshnessText, color }}>
           {icon} {statusText}

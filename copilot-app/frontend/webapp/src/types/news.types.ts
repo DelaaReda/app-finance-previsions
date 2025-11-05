@@ -1,13 +1,14 @@
 // webapp/src/types/news.types.ts
 export interface NewsItem {
   id: string;
-  ticker?: string;
   title: string;
-  text?: string;
-  url: string;
-  source: string;
-  published_at: string; // ISO
-  sentiment?: number;   // -1..+1 éventuel
+  link: string;
+  source?: string;
+  pubDate?: string;
+  timestamp?: number;
+  description?: string;
+  tickers?: string[];
+  sentiment_score?: number;
 }
 
 export type NewsFeedBackendResponse = {

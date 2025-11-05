@@ -34,10 +34,7 @@ export default function MarketBrief() {
         <h1>📋 Market Brief</h1>
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <FreshnessBadge 
-            freshness={brief?.generated_at ?? undefined} 
-            stale={brief?.generated_at ? new Date().getTime() - new Date(brief.generated_at).getTime() > 3600000 : false} 
-          />
+          <FreshnessBadge freshness={brief?.generated_at ?? undefined} />
           
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button

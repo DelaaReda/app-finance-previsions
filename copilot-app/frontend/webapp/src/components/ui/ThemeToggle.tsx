@@ -1,22 +1,21 @@
-import React from 'react';
-import { IconButton, Tooltip } from '@mui/material';
-import { Brightness4 as DarkModeIcon, Brightness7 as LightModeIcon } from '@mui/icons-material';
-import { useThemeMode } from '../../context/ThemeContext';
+import { IconMoonStars, IconSun } from '@tabler/icons-react';
+import { ActionIcon, Tooltip } from '@/ui';
+import { useThemeMode } from '@/context/ThemeContext';
 
-const ThemeToggle: React.FC = () => {
+export default function ThemeToggle() {
   const { mode, toggleMode } = useThemeMode();
-
+  const isDark = mode === 'dark';
   return (
-    <Tooltip title={`Passer en mode ${mode === 'light' ? 'sombre' : 'clair'}`}>
-      <IconButton 
+    <Tooltip label={`Passer en mode ${isDark ? 'clair' : 'sombre'}`}>
+      <ActionIcon
         onClick={toggleMode}
-        color="inherit"
-        aria-label={`Basculer en mode ${mode === 'light' ? 'sombre' : 'clair'}`}
+        size="lg"
+        variant="light"
+        color={isDark ? 'yellow' : 'indigo'}
+        aria-label={`Basculer en mode ${isDark ? 'clair' : 'sombre'}`}
       >
-        {mode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
-      </IconButton>
+        {isDark ? <IconSun size={18} /> : <IconMoonStars size={18} />}
+      </ActionIcon>
     </Tooltip>
   );
-};
-
-export default ThemeToggle;
+}

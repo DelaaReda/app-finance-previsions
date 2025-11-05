@@ -1,124 +1,235 @@
 """
-Scheduler for Finance Copilot - FC-OPS-001
-Handles ALL scheduled jobs: news, forecasts, briefs, backtests, alerts
-Author: MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7
-Task: FC-OPS-001 (+90 pts)
+Scheduler module for managing recurring jobs in the Finance Copilot system.
+Handles news refresh, forecasts, brief reports, and backtests on scheduled intervals.
 """
 from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
+from apscheduler.triggers.cron import CronTrigger
 import logging
-from pathlib import Path
-import sys
+from datetime import datetime
+import atexit
 import os
 
-# Add the backend directory to path to access modules
-backend_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(backend_root))
-
-# Import job functions with correct paths based on actual function names found
-from jobs.news_ingest import run_news_ingest
-from jobs.forecasts import run_forecasts_job
-from jobs.weekly_brief import run_and_persist_weekly_brief
-from jobs.backtests import ensure_backtests_up_to_date
-from jobs.alerts import run_alerts_job
-
+# Configure logging for scheduler
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create the scheduler
-scheduler = BackgroundScheduler()
+# Import the actual job modules
+from backend.jobs.news_ingest import run_news_ingest
+from backend.jobs.forecasts import run_forecasts_job
+from backend.jobs.weekly_brief import run_weekly_brief_job
+from backend.jobs.backtests import run_backtests_job
+from backend.storage.io import save_json
 
-# Job 1: News ingestion (every 15 minutes)
-scheduler.add_job(
-    run_news_ingest,
-    'interval',
-    minutes=15,
-    id='news_ingest_job',
-    name='News RSS Ingestion'
-)
+class JobScheduler:
+    def __init__(self):
+        self.scheduler = BackgroundScheduler()
+        self._setup_jobs()
+    
+    def _setup_jobs(self):
+        """
+        Set up all scheduled jobs with their cron schedules
+        """
+        # News refresh job - every 15 minutes
+        self.scheduler.add_job(
+            func=self._run_news_refresh_job,
+            trigger="interval",
+            minutes=15,  # Every 15 minutes
+            id='news_refresh_job',
+            name='Refresh news feed data',
+            replace_existing=True
+        )
+        logger.info("Scheduled news refresh job every 15 minutes")
+        
+        # Forecasts job - daily at 2 AM
+        self.scheduler.add_job(
+            func=self._run_forecasts_job,
+            trigger="cron",
+            hour=2,
+            minute=0,  # Daily at 2:00 AM
+            id='forecasts_job',
+            name='Generate daily forecasts',
+            replace_existing=True
+        )
+        logger.info("Scheduled forecasts job daily at 2:00 AM")
+        
+        # Weekly brief job - Sundays at 11:30 PM
+        self.scheduler.add_job(
+            func=self._run_weekly_brief_job,
+            trigger="cron",
+            day_of_week='sun',
+            hour=23,
+            minute=30,  # Sundays at 23:30
+            id='weekly_brief_job',
+            name='Generate weekly market brief',
+            replace_existing=True
+        )
+        logger.info("Scheduled weekly brief job Sundays at 23:30")
+        
+        # Backtests job - weekly on Wednesdays at 3:00 AM
+        self.scheduler.add_job(
+            func=self._run_backtests_job,
+            trigger="cron",
+            day_of_week='wed',
+            hour=3,
+            minute=0,  # Wednesdays at 3:00 AM
+            id='backtests_job',
+            name='Run backtests validation',
+            replace_existing=True
+        )
+        logger.info("Scheduled backtests job Wednesdays at 3:00 AM")
+    
+    def _run_news_refresh_job(self):
+        """
+        Run news refresh job with error handling and logging
+        """
+        try:
+            logger.info("Starting news refresh job...")
+            start_time = datetime.utcnow()
+            result = run_news_ingest()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Create job metadata
+            job_metadata = {
+                "job_id": "news_refresh_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            
+            # Save job metadata to persistent storage
+            save_json("job_news_refresh", job_metadata, source=["scheduler", "news_refresh"])
+            logger.info(f"News refresh job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"News refresh job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "news_refresh_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_news_refresh", job_metadata, source=["scheduler", "news_refresh", "error"])
+    
+    def _run_forecasts_job(self):
+        """
+        Run forecasts job with error handling and logging
+        """
+        try:
+            logger.info("Starting forecasts job...")
+            start_time = datetime.utcnow()
+            result = run_forecasts_job()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Save job metadata
+            job_metadata = {
+                "job_id": "forecasts_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            
+            save_json("job_forecasts", job_metadata, source=["scheduler", "forecasts"])
+            logger.info(f"Forecasts job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Forecasts job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "forecasts_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_forecasts", job_metadata, source=["scheduler", "forecasts", "error"])
+    
+    def _run_weekly_brief_job(self):
+        """
+        Run weekly brief job with error handling and logging
+        """
+        try:
+            logger.info("Starting weekly brief job...")
+            start_time = datetime.utcnow()
+            result = run_weekly_brief_job()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Save job metadata
+            job_metadata = {
+                "job_id": "weekly_brief_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            
+            save_json("job_weekly_brief", job_metadata, source=["scheduler", "weekly_brief"])
+            logger.info(f"Weekly brief job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Weekly brief job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "weekly_brief_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_weekly_brief", job_metadata, source=["scheduler", "weekly_brief", "error"])
+    
+    def _run_backtests_job(self):
+        """
+        Run backtests job with error handling and logging
+        """
+        try:
+            logger.info("Starting backtests job...")
+            start_time = datetime.utcnow()
+            result = run_backtests_job()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Save job metadata
+            job_metadata = {
+                "job_id": "backtests_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            
+            save_json("job_backtests", job_metadata, source=["scheduler", "backtests"])
+            logger.info(f"Backtests job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Backtests job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "backtests_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_backtests", job_metadata, source=["scheduler", "backtests", "error"])
+    
+    def start(self):
+        """
+        Start the scheduler
+        """
+        if not self.scheduler.running:
+            self.scheduler.start()
+            logger.info("Scheduler started")
+            
+            # Register shutdown function to properly close the scheduler on exit
+            atexit.register(lambda: self.shutdown())
+    
+    def shutdown(self):
+        """
+        Shutdown the scheduler
+        """
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Scheduler shut down")
 
-# Job 2: Forecasts generation (daily at 4 AM)
-scheduler.add_job(
-    run_forecasts_job,
-    'cron',
-    hour=4,
-    minute=0,
-    id='forecasts_generation_job',
-    name='Daily Forecasts Generation'
-)
 
-# Job 3: Weekly brief (Sunday at 6 PM)
-scheduler.add_job(
-    run_and_persist_weekly_brief,
-    'cron',
-    day_of_week='sun',
-    hour=18,
-    minute=0,
-    id='weekly_brief_job',
-    name='Weekly Market Brief'
-)
-
-# Job 4: Backtests (daily at 3 AM, before forecasts)
-scheduler.add_job(
-    ensure_backtests_up_to_date,
-    'cron',
-    hour=3,
-    minute=0,
-    id='backtests_job',
-    name='Daily Backtests Update'
-)
-
-# Job 5: Alerts detection (every 30 minutes)
-scheduler.add_job(
-    run_alerts_job,
-    'interval',
-    minutes=30,
-    id='alerts_detection_job',
-    name='Market Alerts Detection'
-)
-
-def start_scheduler():
-    """Start the background scheduler with all jobs"""
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("="*70)
-        logger.info("🚀 Finance Copilot Scheduler Started Successfully")
-        logger.info("="*70)
-        logger.info("Active Jobs:")
-
-        for job in scheduler.get_jobs():
-            logger.info(f"  ✓ {job.name}")
-            logger.info(f"    ID: {job.id}")
-            logger.info(f"    Next run: {job.next_run_time}")
-            logger.info("")
-
-        logger.info("="*70)
-        logger.info(f"Total: {len(scheduler.get_jobs())} jobs scheduled")
-        logger.info("="*70)
-
-        # Shut down the scheduler when exiting the app
-        atexit.register(lambda: scheduler.shutdown())
-
-def stop_scheduler():
-    """Stop the background scheduler"""
-    if scheduler.running:
-        scheduler.shutdown()
-        print("Scheduler stopped")
-
-# For standalone execution
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    start_scheduler()
-    logger.info("Scheduler running in standalone mode... Press Ctrl+C to exit")
-
-    try:
-        import time
-        while True:
-            time.sleep(60)  # Keep the main thread alive
-    except KeyboardInterrupt:
-        logger.info("Shutting down scheduler...")
-        stop_scheduler()
-        logger.info("Scheduler stopped successfully")
+# Global scheduler instance
+scheduler = JobScheduler()

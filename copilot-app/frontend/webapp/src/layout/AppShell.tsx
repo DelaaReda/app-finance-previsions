@@ -1,166 +1,124 @@
-import React, { useState } from 'react';
+import { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AppShell as MantineAppShell, Box, Burger, Group, ScrollArea, Stack, Text, ThemeIcon, Tooltip } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import {
-  AppBar,
-  Box,
-  Toolbar,
-  Typography,
-  IconButton,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemText,
-  ListItemIcon,
-  Divider,
-  useTheme,
-  useMediaQuery,
-  Stack
-} from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Dashboard as DashboardIcon,
-  Assessment as AssessmentIcon,
-  TrendingUp as TrendingUpIcon,
-  Newspaper as NewsIcon,
-  Description as DescriptionIcon,
-  Science as ScienceIcon,
-  Public as PublicIcon,
-  ShowChart as ShowChartIcon,
-  Chat as ChatIcon
-} from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { HealthStatusBadge } from '../components/ui/HealthStatusBadge';
+  IconGauge,
+  IconPresentationAnalytics,
+  IconBuildingBank,
+  IconChartHistogram,
+  IconNews,
+  IconRobot,
+  IconChartDots,
+  IconChartBubble,
+} from '@tabler/icons-react';
+import { HealthStatusBadge } from '@/components/ui/HealthStatusBadge';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 
 interface NavItem {
   label: string;
   to: string;
-  icon: React.ReactNode;
+  icon: React.ComponentType<any>;
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', to: '/', icon: <DashboardIcon /> },
-  { label: 'Brief', to: '/brief', icon: <DescriptionIcon /> },
-  { label: 'Macro', to: '/macro', icon: <PublicIcon /> },
-  { label: 'Actions', to: '/stocks', icon: <ShowChartIcon /> },
-  { label: 'News', to: '/news', icon: <NewsIcon /> },
-  { label: 'Copilot', to: '/copilot', icon: <ChatIcon /> },
-  { label: 'Prévisions', to: '/forecasts', icon: <TrendingUpIcon /> },
-  { label: 'Backtests', to: '/backtests', icon: <AssessmentIcon /> },
-  { label: 'LLM Judge', to: '/judge', icon: <ScienceIcon /> },
+  { label: 'dashboard', to: '/', icon: IconGauge },
+  { label: 'brief', to: '/brief', icon: IconPresentationAnalytics },
+  { label: 'macro', to: '/macro', icon: IconBuildingBank },
+  { label: 'stocks', to: '/stocks', icon: IconChartHistogram },
+  { label: 'news', to: '/news', icon: IconNews },
+  { label: 'copilot', to: '/copilot', icon: IconRobot },
+  { label: 'forecasts', to: '/forecasts', icon: IconChartDots },
+  { label: 'backtests', to: '/backtests', icon: IconChartBubble },
+  { label: 'judge', to: '/judge', icon: IconRobot },
 ];
 
-interface AppShellProps {
-  children: React.ReactNode;
-  title?: string;
+function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate: () => void }) {
+  const Icon = item.icon;
+  return (
+    <Group
+      data-testid={`nav-${item.label}`}
+      onClick={onNavigate}
+      gap="sm"
+      px="md"
+      py="sm"
+      justify="space-between"
+      style={{
+        borderRadius: '12px',
+        background: active ? 'rgba(76,110,245,0.15)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'background 150ms ease',
+      }}
+    >
+      <Group gap="sm">
+        <ThemeIcon variant={active ? 'gradient' : 'light'} gradient={{ from: 'indigo', to: 'teal' }}>
+          <Icon size={16} />
+        </ThemeIcon>
+        <Text tt="uppercase" fw={600} fz="xs" c={active ? 'indigo.4' : 'slate.6'}>
+          {item.label}
+        </Text>
+      </Group>
+    </Group>
+  );
 }
 
-export default function AppShell({ children, title = 'Finance Copilot' }: AppShellProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const navigate = useNavigate();
+export default function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
+  const [opened, { toggle, close }] = useDisclosure(false);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+  const handleNavigate = (to: string) => {
+    navigate(to);
+    close();
   };
 
-  const drawer = (
-    <Box onClick={() => isMobile && setMobileOpen(false)}>
-      <Box sx={{ textAlign: 'center', py: 2 }}>
-        <Typography variant="h6" fontWeight={700}>
-          💼 {title}
-        </Typography>
-      </Box>
-      <Divider />
-      <List>
-        {navItems.map((item) => (
-          <ListItemButton
-            key={item.to}
-            selected={location.pathname === item.to}
-            onClick={() => navigate(item.to)}
-            sx={{
-              '&.Mui-selected': {
-                backgroundColor: 'primary.main',
-                color: 'primary.contrastText',
-                '&:hover': {
-                  backgroundColor: 'primary.dark',
-                },
-                '& .MuiListItemIcon-root': {
-                  color: 'primary.contrastText',
-                },
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
-      </List>
-    </Box>
-  );
-
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* AppBar */}
-  <AppBar position="fixed" sx={{ zIndex: (theme: any) => theme.zIndex.drawer + 1 }}>
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { md: 'none' } }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {title}
-          </Typography>
-          {/* Health Status Indicator in Header */}
-          <Stack direction="row" spacing={1} alignItems="center">
-            <HealthStatusBadge />
+    <MantineAppShell
+      layout="alt"
+      header={{ height: 72 }}
+      navbar={{ width: 260, breakpoint: 'md', collapsed: { mobile: !opened } }}
+      padding="xl"
+    >
+      <MantineAppShell.Header withBorder={false} p="md">
+        <Group justify="space-between" align="center">
+          <Group gap="sm">
+            <Burger opened={opened} onClick={toggle} size="sm" hiddenFrom="md" color="white" />
+            <Stack gap={0}>
+              <Text fw={700} fz="lg">Finance Copilot</Text>
+              <Text c="dimmed" fz="xs">Systèmes d’intelligence de marché</Text>
+            </Stack>
+          </Group>
+          <Group gap="md">
+            <Tooltip label="État du backend">
+              <Box>
+                <HealthStatusBadge />
+              </Box>
+            </Tooltip>
+            <ThemeToggle />
+          </Group>
+        </Group>
+      </MantineAppShell.Header>
+
+      <MantineAppShell.Navbar p="md" withBorder={false}>
+        <ScrollArea style={{ height: '100%' }}>
+          <Stack gap="sm">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                item={item}
+                active={location.pathname === item.to}
+                onNavigate={() => handleNavigate(item.to)}
+              />
+            ))}
           </Stack>
-        </Toolbar>
-      </AppBar>
+        </ScrollArea>
+      </MantineAppShell.Navbar>
 
-      {/* Mobile drawer */}
-      <Box
-        component="nav"
-        sx={{ width: { md: 240 }, flexShrink: { md: 0 } }}
-        aria-label="navigation"
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240 },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        
-        {/* Desktop drawer */}
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: 240, pt: 8 },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
-
-      {/* Main content */}
-      <Box component="main" sx={{ flexGrow: 1, mt: 8, ml: { md: '240px' }, width: '100%' }}>
-        {children}
-      </Box>
-    </Box>
+      <MantineAppShell.Main>
+        <Box component="section" style={{ minHeight: '100vh' }}>
+          {children}
+        </Box>
+      </MantineAppShell.Main>
+    </MantineAppShell>
   );
 }

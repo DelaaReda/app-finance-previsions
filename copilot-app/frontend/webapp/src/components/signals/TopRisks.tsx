@@ -2,8 +2,8 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
-import { safeMap, safeLength } from '@/utils/safeAccess'
-import { formatScore as formatScore100, toScore100 } from '@/utils/score'
+import { safeMap, safeLength } from '@/lib/safe'
+import { formatScore as formatScore100 } from '@/utils/score'
 
 type TopRisksProps = {
   risks: CompositeSignal[]

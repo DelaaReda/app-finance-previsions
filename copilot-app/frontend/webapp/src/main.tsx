@@ -6,13 +6,7 @@ import GlobalErrorBoundary from './components/system/GlobalErrorBoundary';
 
 // Tailwind CSS (must be first for proper cascade)
 import './index.css';
-import '@fontsource/inter/variable.css';
-
-// Font imports
-import '@fontsource/roboto/300.css';
-import '@fontsource/roboto/400.css';
-import '@fontsource/roboto/500.css';
-import '@fontsource/roboto/700.css';
+import '@fontsource/inter/latin.css';
 
 // Create root element
 const container = document.getElementById('root');

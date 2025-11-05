@@ -92,12 +92,12 @@ class NewsService:
         Prioritizes reading from stored data to ensure never-empty contract.
         """
         # Use load_or_compute for consistent caching behavior as per FC-P0-004 requirements
-        def compute_news_feed():
+        def compute_news_feed_internal():
             try:
-                stored_data = load_json("news_feed")
-                if stored_data and isinstance(stored_data, dict) and "payload" in stored_data:
+                current_stored_data = load_json("news_feed")
+                if current_stored_data and isinstance(current_stored_data, dict) and "payload" in current_stored_data:
                     # Extract the actual news data from the stored payload
-                    payload = stored_data.get("payload", {})
+                    payload = current_stored_data.get("payload", {})
                     articles = payload.get("articles", [])
                     
                     # Apply basic filtering if tickers are specified
@@ -117,14 +117,14 @@ class NewsService:
                         "items": articles,
                         "count": len(articles),
                         "generated_at": datetime.utcnow().isoformat(),
-                        "source": stored_data.get("source", ["rss_ingestion"]),
+                        "source": current_stored_data.get("source", ["rss_ingestion"]),
                         "sources_used": payload.get("sources_used", []),
                         "total_collected": payload.get("total_collected", len(articles)),
                         "total_after_dedup": payload.get("total_after_dedup", len(articles)),
                     }
                     
                     # Add freshness info from stored metadata
-                    last_update_ts = stored_data.get("last_update")
+                    last_update_ts = current_stored_data.get("last_update")
                     if last_update_ts:
                         from datetime import timezone
                         import datetime as dt
@@ -140,29 +140,33 @@ class NewsService:
                     # Fallback if no stored data available
                     return None
             except Exception as e:
-                print(f"Error in compute_news_feed: {e}")
+                print(f"Error in compute_news_feed_internal: {e}")
                 return None
 
         # Use the load_or_compute pattern for consistency
         if load_or_compute is not None:
             # Use the cache system if available
-            cached_result = load_or_compute("news_feed", lambda: compute_news_feed(), source=["news_service"])
-            
-            if cached_result and isinstance(cached_result, dict) and "payload" in cached_result:
-                # Return the cached result in the proper format
-                return {
-                    "ok": True,
-                    "data": cached_result["payload"] if isinstance(cached_result.get("payload"), dict) else cached_result
-                }
-            elif isinstance(cached_result, dict) and "items" in cached_result:
-                # If cached result is already in proper format
-                return {
-                    "ok": True,
-                    "data": cached_result
-                }
+            try:
+                cached_result = load_or_compute("news_feed", compute_news_feed_internal, source=["news_service"])
+                
+                if cached_result and isinstance(cached_result, dict) and "payload" in cached_result:
+                    # Return the cached result in the proper format
+                    return {
+                        "ok": True,
+                        "data": cached_result["payload"] if isinstance(cached_result.get("payload"), dict) else cached_result
+                    }
+                elif isinstance(cached_result, dict) and "items" in cached_result:
+                    # If cached result is already in proper format
+                    return {
+                        "ok": True,
+                        "data": cached_result
+                    }
+            except Exception as e:
+                print(f"Caching layer failed: {e}")
+                # Continue to direct computation if cache fails
         
         # Fallback to direct computation
-        result = compute_news_feed()
+        result = compute_news_feed_internal()
         if result:
             return {
                 "ok": True,

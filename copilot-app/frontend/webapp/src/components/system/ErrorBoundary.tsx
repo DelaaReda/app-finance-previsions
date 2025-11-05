@@ -1,88 +1,33 @@
-import React, { Component, ReactNode } from 'react';
-import { Alert, Button, Container, Typography, Box, Card, CardContent } from '@mui/material';
-import { Refresh as RefreshIcon, WarningAmberOutlined as WarningIcon } from '@mui/icons-material';
+import React from 'react';
+import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
+import { Button, Card, Group, Stack, Text, Title } from '@/ui';
+import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
 
-interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
+function FallbackComponent({ error, resetErrorBoundary }: FallbackProps) {
+  return (
+    <Card padding="xl" radius="lg" shadow="lg">
+      <Stack gap="md" align="center">
+        <IconAlertCircle size={40} color="#fa5252" />
+        <Title order={3}>Quelque chose s’est mal passé</Title>
+        <Text ta="center" c="dimmed">
+          {error?.message ?? 'Une erreur inconnue est survenue. Merci de réessayer.'}
+        </Text>
+        <Group>
+          <Button leftSection={<IconRefresh size={16} />} variant="light" onClick={resetErrorBoundary}>
+            Recharger la vue
+          </Button>
+        </Group>
+      </Stack>
+    </Card>
+  );
 }
 
-interface State {
-  hasError: boolean;
-  error?: Error;
-  errorInfo?: React.ErrorInfo;
-}
-
-class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error caught by ErrorBoundary:', error, errorInfo);
-    this.setState({ errorInfo });
-  }
-
-  handleRetry = () => {
-    // Reset the error state to allow the app to recover
-    window.location.reload(); // Simple solution: reload the app
-  };
-
+export class ErrorBoundary extends React.Component<React.PropsWithChildren> {
   render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
-      return (
-        <Container maxWidth="md" sx={{ py: 4 }}>
-          <Card sx={{ boxShadow: 3 }}>
-            <CardContent>
-              <Box textAlign="center" py={4}>
-                <WarningIcon color="error" fontSize="large" sx={{ fontSize: 60, mb: 2 }} />
-                <Typography variant="h5" component="h2" gutterBottom color="error">
-                  Une erreur inattendue s'est produite
-                </Typography>
-                
-                {this.state.error && (
-                  <Typography variant="body1" color="text.secondary" gutterBottom>
-                    {this.state.error.message}
-                  </Typography>
-                )}
-                
-                {this.state.errorInfo && (
-                  <Alert severity="info" sx={{ textAlign: 'left', mt: 2 }}>
-                    <Typography variant="caption" component="div" fontFamily="monospace" whiteSpace="pre-wrap">
-                      {this.state.errorInfo.componentStack}
-                    </Typography>
-                  </Alert>
-                )}
-                
-                <Box sx={{ mt: 3 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<RefreshIcon />}
-                    onClick={this.handleRetry}
-                    size="large"
-                  >
-                    Relancer l'application
-                  </Button>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Container>
-      );
-    }
-
-    return this.props.children;
+    return (
+      <ReactErrorBoundary FallbackComponent={FallbackComponent}>
+        {this.props.children}
+      </ReactErrorBoundary>
+    );
   }
 }
-
-export { ErrorBoundary };

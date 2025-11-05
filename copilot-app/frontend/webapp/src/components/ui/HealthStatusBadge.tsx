@@ -1,76 +1,51 @@
-import { useEffect, useState } from 'react';
-
-interface HealthStatus {
-  status: string;
-  backend_up: boolean;
-  last_updates: Record<string, number>;
-  data_paths: Record<string, string>;
-  timestamp: number;
-}
+import { Badge, LoadingSpinner, Tooltip } from '@/ui';
+import { useHealth } from '@/hooks/useHealth';
 
 export function HealthStatusBadge() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchHealth = async () => {
-      try {
-        const response = await fetch('/api/health');
-        const result = await response.json();
-        
-        if (result.ok) {
-          setHealth(result.data);
-        } else {
-          setError('Health check failed');
-        }
-      } catch (err) {
-        setError('Network error');
-        console.error('Health check error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHealth();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchHealth, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const { health, loading, error, lastChecked } = useHealth();
 
   if (loading) {
-    return (
-      <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
-        Checking...
-      </span>
-    );
+    return <LoadingSpinner size="sm" />;
   }
 
   if (error || !health) {
     return (
-      <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800" title={error || 'Health data unavailable'}>
-        Error
-      </span>
+      <Tooltip label={error ?? 'Health data unavailable'}>
+        <Badge color="red" variant="light">Erreur</Badge>
+      </Tooltip>
     );
   }
 
-  // Determine overall status based on health data
-  const isHealthy = health.backend_up;
-  let statusColor = 'bg-green-100 text-green-800';
-  let statusText = 'Healthy';
+  const status = health.status ?? (health.backend_up ? 'up' : 'degraded');
+  const labelMap: Record<string, string> = {
+    up: 'Healthy',
+    degraded: 'Dégradé',
+    down: 'Down',
+  };
+  const colorMap: Record<string, string> = {
+    up: 'teal',
+    degraded: 'orange',
+    down: 'red',
+  };
 
-  if (!isHealthy) {
-    statusColor = 'bg-red-100 text-red-800';
-    statusText = 'Unhealthy';
-  } else if (health.last_updates && Object.keys(health.last_updates).length === 0) {
-    statusColor = 'bg-yellow-100 text-yellow-800';
-    statusText = 'Limited';
+  const label = labelMap[status] ?? 'Unknown';
+  const color = colorMap[status] ?? 'gray';
+
+  const titleParts: string[] = [`Status: ${label}`];
+  if (health.timestamp) {
+    titleParts.push(`Mise à jour: ${new Date(health.timestamp).toLocaleString('fr-FR')}`);
+  } else if (lastChecked) {
+    titleParts.push(`Vérifié: ${new Date(lastChecked).toLocaleString('fr-FR')}`);
+  }
+  if (health.message) {
+    titleParts.push(`Note: ${health.message}`);
   }
 
   return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${statusColor}`} title={`Backend: ${health.status}`}>
-      {statusText}
-    </span>
+    <Tooltip label={titleParts.join('\n')} position="bottom">
+      <Badge color={color} variant="light">
+        {label}
+      </Badge>
+    </Tooltip>
   );
 }

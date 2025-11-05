@@ -1,0 +1,39 @@
+# Preuve de mise en œuvre - FC-UI-010
+
+## Tâche: Info sources (tooltips)
+
+## Résumé
+Mise en place des tooltips de transparence sur les sources (FRED, yfinance, RSS) pour informer les utilisateurs de la provenance des données financières.
+
+## Changements apportés
+- Création du composant SourceTooltip.tsx avec affichage d'information sur la source
+- Ajout d'informations sur la date de dernière mise à jour
+- Affichage de métadonnées supplémentaires si disponibles
+- Intégration avec Material UI Tooltip pour une expérience utilisateur fluide
+- Design consistant avec les autres composants d'information
+
+## Structure mise en place
+- Composant SourceTooltip avec props pour source, lastUpdate, metadata
+- Affichage de l'icône d'information (i) pour indiquer la disponibilité d'informations
+- Tooltip flottant avec détails sur la source au survol
+- Formatage des dates pour meilleure lisibilité
+- Zone d'affichage avec bordure et organisation claire des informations
+
+## Fichiers modifiés
+- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de tooltip de source
+
+## Vérification
+- Le composant s'affiche avec une icône d'information discrète
+- Au survol, le tooltip affiche les détails de la source
+- Les dates sont formatées correctement selon la locale française
+- Les métadonnées supplémentaires sont affichées si disponibles
+- Le composant est réutilisable et configurable pour différentes sources
+- L'interface est cohérente avec le design global de l'application
+
+## Résultats
+- Tooltips de transparence des sources: ✅
+- Affichage date dernière mise à jour: ✅
+- Affichage métadonnées: ✅
+- Icône d'information: ✅
+- Intégration avec MUI: ✅
+- Composant réutilisable: ✅

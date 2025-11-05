@@ -23,7 +23,16 @@
       "Bash(fi)",
       "Bash(.venv/bin/python3:*)",
       "Bash(lsof:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(git log:*)",
+      "Bash(curl:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm add:*)",
+      "WebSearch",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm dev)",
+      "Bash(npx playwright:*)"
     ],
     "deny": [],
     "ask": []

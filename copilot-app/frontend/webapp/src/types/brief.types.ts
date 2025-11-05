@@ -18,6 +18,9 @@ export type MarketBrief = {
   error?: string           // Error message if any
   title?: string           // Optional title
   date?: string           // Optional date
+  is_fallback?: boolean
+  fallback?: boolean
+  fallback_reason?: string
 }
 
 export type BriefMacroSnapshot = {

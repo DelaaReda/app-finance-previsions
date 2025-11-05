@@ -1,59 +1,29 @@
-import { useState, useEffect } from 'react';
-import { apiGet } from '../../api/client';
-
-interface HealthStatus {
-  status: 'up' | 'down' | 'degraded';
-  lastChecked: string | null;
-  lastUpdate: string | null;
-}
+import { useHealth } from '../../hooks/useHealth';
 
 export function HealthIndicator() {
-  const [health, setHealth] = useState<HealthStatus>({ 
-    status: 'down', 
-    lastChecked: null, 
-    lastUpdate: null 
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchHealth = async () => {
-      try {
-        const response = await apiGet('/health');
-        if (response.ok && response.data) {
-          const data: any = response.data;
-            const isUp = data.status === 'up' && data.backend_up !== false;
-            const lastUpdate = data.last_updates?.forecasts || data.timestamp || null;
-          
-          setHealth({
-            status: isUp ? 'up' : 'down',
-            lastChecked: new Date().toISOString(),
-            lastUpdate: lastUpdate
-          });
-        } else {
-          setHealth({ status: 'down', lastChecked: new Date().toISOString(), lastUpdate: null });
-        }
-      } catch (error) {
-        setHealth({ status: 'down', lastChecked: new Date().toISOString(), lastUpdate: null });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Initial fetch
-    fetchHealth();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchHealth, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
+  const { health, loading, error } = useHealth();
 
   const getHealthColor = () => {
-    switch (health.status) {
+    if (loading) return '#666';
+    if (error) return '#f44336';
+    
+    switch (health?.status) {
       case 'up': return '#4caf50';
       case 'degraded': return '#ff9800';
       case 'down': return '#f44336';
       default: return '#666';
+    }
+  };
+
+  const getStatusText = () => {
+    if (loading) return 'Checking...';
+    if (error) return 'Error';
+    
+    switch (health?.status) {
+      case 'up': return 'Opérationnel';
+      case 'degraded': return 'Dégradé';
+      case 'down': return 'Hors ligne';
+      default: return 'Inconnu';
     }
   };
 
@@ -72,7 +42,7 @@ export function HealthIndicator() {
         )}
       </div>
       <span style={styles.healthText}>
-        Backend: {health.status === 'up' ? 'Opérationnel' : health.status === 'degraded' ? 'Dégradé' : 'Hors ligne'}
+        Backend: {getStatusText()}
       </span>
     </div>
   );

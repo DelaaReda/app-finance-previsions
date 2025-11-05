@@ -592,6 +592,7 @@ How‑to
 Status: AVAILABLE
 
 But: Montrer la fraîcheur globale (forecasts/news/brief) dans l’en‑tête.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 Actions:
 - Ajouter composant `GlobalFreshness` lisant `/api/health` et indicateurs clés.

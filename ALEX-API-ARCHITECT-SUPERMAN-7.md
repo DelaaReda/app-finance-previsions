@@ -42,6 +42,7 @@
 - [x] Unification des composants HealthIndicator et HealthStatusBadge avec client unwrapped (FC-UI-007)
 - [x] Ajout composant GlobalFreshness dans l'en-tête pour afficher la fraîcheur globale (FC-UI-008)
 - [x] Mise en place ErrorBoundary global avec logging et UI contrôlée pour les erreurs runtime (FC-UI-009)
+- [x] Mise en place composant SourceTooltip pour afficher les informations de provenance des données (FC-UI-010)
 - [x] Création composant MiniLineChart et intégration dans la page Macro pour afficher les séries FRED (FC-UI-004)
 - [x] Création fonctions utilitaires pour normaliser l'affichage des scores (0..100) dans TopSignals/TopRisks (FC-UI-002)
 - [x] Création utilities d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)

@@ -5,7 +5,7 @@ import type { ApiResponse } from '../types/common'
 // and same-origin works in production behind the frontend host.
 // If an explicit base is provided via env, it can be added later, but
 // defaulting to '/api' avoids CORS/status 0 issues.
-const API_BASE = "/api";
+const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? "/api";
 
 function qs(params?: Record<string, any>) {
   if (!params) return "";

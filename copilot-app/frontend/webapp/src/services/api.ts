@@ -17,13 +17,15 @@ const defaultHeaders = () => ({
   'X-Trace-Id': traceId() 
 })
 
+const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? '/api'
+
 export async function apiGet<T>(
   path: string, 
   params?: Record<string, string>
 ): Promise<ApiResult<T>> {
   const q = params ? '?' + new URLSearchParams(params).toString() : ''
   try {
-    const r = await fetch(`/api${path}${q}`, { headers: defaultHeaders() })
+    const r = await fetch(`${API_BASE}${path}${q}`, { headers: defaultHeaders() })
     
     // Check if response is ok (status 200-299)
     if (!r.ok) {
@@ -62,7 +64,7 @@ export async function apiPost<T>(
   body: any
 ): Promise<ApiResult<T>> {
   try {
-    const r = await fetch(`/api${path}`, { 
+    const r = await fetch(`${API_BASE}${path}`, { 
       method: 'POST', 
       headers: defaultHeaders(), 
       body: JSON.stringify(body) 

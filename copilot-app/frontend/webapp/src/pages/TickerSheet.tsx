@@ -8,7 +8,7 @@ import { useStockAnalysis } from '@/hooks/useStockData'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
-import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap } from '@/lib/safe'
 
 export default function TickerSheet() {
   const { ticker } = useParams<{ ticker: string }>()

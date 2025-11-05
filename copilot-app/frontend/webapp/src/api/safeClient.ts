@@ -94,7 +94,7 @@ export const fetchSafePaginated = async <T>(
         []
       ) as T[];
   // Ensure count is always a number (never undefined)
-  const count = safeNumber(safeGet<number>(response.data, 'count', undefined), 0);
+  const count = safeNumber(safeGet<number>(response.data, 'count', 0), 0);
       
       return { rows, count };
     }
