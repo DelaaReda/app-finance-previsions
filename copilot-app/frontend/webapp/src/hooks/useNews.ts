@@ -41,7 +41,7 @@ export function useNews(initial: NewsFilters = {}) {
       }
       
       // The response data contains the backend response with articles, count, etc.
-      const backendResponse = resp?.data;
+  const backendResponse: any = resp?.data;
       
       // Extract freshness information if available
       if (backendResponse && typeof backendResponse === 'object') {
@@ -51,8 +51,8 @@ export function useNews(initial: NewsFilters = {}) {
       // Handle the backend response structure properly
       if (backendResponse && typeof backendResponse === 'object' && 'articles' in backendResponse) {
         // This is the new backend response format with wrapper
-        const payload = backendResponse as any;
-        const { items: chunk, next_page } = normalizeFeed(payload);
+  const payload = backendResponse as any;
+  const { items: chunk } = normalizeFeed(payload);
         
         // Calculate if there are more articles to load
         // If we got back less than limit, or if count < total, there might be no more
@@ -74,10 +74,10 @@ export function useNews(initial: NewsFilters = {}) {
         setHasMore(moreAvailable);
       } else {
         // Fallback to old format if needed
-        const payload = backendResponse ?? ([] as any);
-        const { items: chunk, next_page } = normalizeFeed(payload);
-        setItems(prev => reset ? chunk : [...prev, ...chunk]);
-        setHasMore(Boolean(next_page) || (chunk.length === 50));
+  const payload = backendResponse ?? ([] as any);
+  const { items: chunk, next_page } = normalizeFeed(payload);
+    setItems(prev => reset ? chunk : [...prev, ...chunk]);
+    setHasMore(Boolean(next_page) || (chunk.length === 50));
       }
     } catch (e: any) {
       setError(e.message ?? "Erreur");

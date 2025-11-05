@@ -8,11 +8,14 @@ import { useStockAnalysis } from '@/hooks/useStockData'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
 
 export default function TickerSheet() {
   const { ticker } = useParams<{ ticker: string }>()
   const { data, isLoading, error } = useStockAnalysis(ticker || '')
+
+  // Backend may wrap payload in an ApiResponse-like envelope; normalize to raw payload
+  const payload: any = (data as any)?.data ?? data;
 
   if (!ticker) {
     return <ErrorMessage message="Ticker manquant" />
@@ -20,12 +23,12 @@ export default function TickerSheet() {
 
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={String(error)} />
-  if (!data) return <div>Aucune donnée disponible</div>
+  if (!payload) return <div>Aucune donnée disponible</div>
 
   return (
     <div>
       <h1 style={{ marginBottom: '2rem' }}>
-        {data.ticker} • {data.name}
+  {payload.ticker} • {payload.name}
       </h1>
 
       <div style={{ display: 'grid', gap: '1.5rem' }}>
@@ -34,22 +37,22 @@ export default function TickerSheet() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
             <div>
               <div style={{ fontSize: '0.85rem', color: '#888' }}>Prix actuel</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>${data.current_price.toFixed(2)}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>${payload.current_price.toFixed(2)}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: '#888' }}>Variation</div>
               <div style={{
                 fontSize: '1.5rem',
                 fontWeight: 'bold',
-                color: data.change_pct >= 0 ? '#4ade80' : '#f87171',
+                color: payload.change_pct >= 0 ? '#4ade80' : '#f87171',
               }}>
-                {data.change_pct >= 0 ? '+' : ''}{data.change_pct.toFixed(2)}%
+                {payload.change_pct >= 0 ? '+' : ''}{payload.change_pct.toFixed(2)}%
               </div>
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: '#888' }}>Volume</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {(data.volume / 1000000).toFixed(2)}M
+                {(payload.volume / 1000000).toFixed(2)}M
               </div>
             </div>
           </div>
@@ -58,17 +61,17 @@ export default function TickerSheet() {
         {/* Indicateurs techniques */}
         <Card title="Indicateurs Techniques">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
-            {data.technical.sma_20 && (
-              <TechIndicator label="SMA 20" value={data.technical.sma_20.toFixed(2)} />
+            {payload.technical?.sma_20 && (
+              <TechIndicator label="SMA 20" value={payload.technical.sma_20.toFixed(2)} />
             )}
-            {data.technical.sma_50 && (
-              <TechIndicator label="SMA 50" value={data.technical.sma_50.toFixed(2)} />
+            {payload.technical?.sma_50 && (
+              <TechIndicator label="SMA 50" value={payload.technical.sma_50.toFixed(2)} />
             )}
-            {data.technical.rsi && (
+            {payload.technical?.rsi && (
               <TechIndicator 
                 label="RSI" 
-                value={data.technical.rsi.toFixed(1)}
-                color={data.technical.rsi > 70 ? '#f87171' : data.technical.rsi < 30 ? '#4ade80' : undefined}
+                value={payload.technical.rsi.toFixed(1)}
+                color={payload.technical.rsi > 70 ? '#f87171' : payload.technical.rsi < 30 ? '#4ade80' : undefined}
               />
             )}
           </div>
@@ -76,18 +79,18 @@ export default function TickerSheet() {
         {/* Score composite */}
         <Card title="Score Composite (40/40/20)">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
-            <ScoreBox label="Macro" value={data.score.macro} />
-            <ScoreBox label="Technique" value={data.score.technical} />
-            <ScoreBox label="News" value={data.score.news} />
-            <ScoreBox label="Composite" value={data.score.composite} highlight />
+            <ScoreBox label="Macro" value={payload.score?.macro ?? 0} />
+            <ScoreBox label="Technique" value={payload.score?.technical ?? 0} />
+            <ScoreBox label="News" value={payload.score?.news ?? 0} />
+            <ScoreBox label="Composite" value={payload.score?.composite ?? 0} highlight />
           </div>
         </Card>
 
         {/* Alertes */}
-        {hasSafeArray(data, 'alerts') && (
+  {hasSafeArray(payload, 'alerts') && (
           <Card title="🔔 Alertes">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {safeMap(safeGetArray(data, 'alerts'), (alert: any, idx: number) => (
+              {safeMap(safeGetArray(payload, 'alerts'), (alert: any, idx: number) => (
                 <div
                   key={idx}
                   style={{
@@ -107,7 +110,7 @@ export default function TickerSheet() {
 
         {/* Sources */}
         <div style={{ fontSize: '0.85rem', color: '#666' }}>
-          Dernière mise à jour: {data.last_updated}
+          Dernière mise à jour: {payload.last_updated}
         </div>
       </div>
     </div>

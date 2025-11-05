@@ -2,9 +2,9 @@
 import React, { Suspense } from "react";
 import NewsCard from "./NewsCard";
 import { useNews } from "@/hooks/useNews";
-import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { safeGetArray, safeMap, safeLength } from '@/utils/safeAccess';
+import FreshnessBadge from "@/components/ui/FreshnessBadge";
+import EmptyState from "@/components/ui/EmptyState";
+import { safeGetArray, safeLength, safeMap } from '@/utils/safeAccess';
 import type { NewsItem } from '@/types/news.types';
 const NewsFilters = React.lazy(() => import("./NewsFilters"));
 
@@ -21,7 +21,7 @@ export default function NewsFeed() {
         <Suspense fallback={null}>
           <NewsFilters value={filters} onChange={setFilters} />
         </Suspense>
-        <FreshnessBadge freshness={freshness} stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false} />
+  <FreshnessBadge freshness={freshness ?? undefined} stale={freshness ? new Date().getTime() - new Date(freshness).getTime() > 3600000 : false} />
       </div>
 
       {/* États */}
@@ -37,7 +37,7 @@ export default function NewsFeed() {
       {/* Liste sécurisée */}
       {safeLength(articles) > 0 && (
         <div>
-          {safeMap<NewsItem, JSX.Element>(articles, (item, index) => <NewsCard key={item.id || index.toString()} item={item} />)}
+          {safeMap<NewsItem, JSX.Element>(articles, (item: NewsItem, index: number) => <NewsCard key={item.id || index.toString()} item={item} />)}
         </div>
       )}
 

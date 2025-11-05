@@ -1,18 +1,15 @@
-import React from 'react';
+import { Chip } from '@mui/material';
 
 interface FreshnessBadgeProps {
-  freshness?: string | null;
   stale?: boolean;
+  freshness?: string;
 }
 
-export function FreshnessBadge({ freshness, stale }: FreshnessBadgeProps) {
+export default function FreshnessBadge({ stale, freshness }: FreshnessBadgeProps) {
   if (!freshness) return null;
   
-  const label = `Mise à jour: ${new Date(freshness).toLocaleString()}`;
+  const label = stale ? `Stale: ${new Date(freshness).toLocaleString()}` : `Fresh: ${new Date(freshness).toLocaleString()}`;
+  const color = stale ? 'warning' : 'success';
   
-  return (
-    <span className={`badge ${stale ? "badge-warning" : "badge-ok"}`}>
-      {label}{stale ? " • stale" : ""}
-    </span>
-  );
+  return <Chip size="small" label={label} color={color as any} />;
 }

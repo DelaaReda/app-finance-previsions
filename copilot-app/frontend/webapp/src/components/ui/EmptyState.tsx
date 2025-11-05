@@ -1,27 +1,15 @@
-import React from 'react';
+import { Box, Typography } from '@mui/material';
 
 interface EmptyStateProps {
-  title: string;
+  title?: string;
   hint?: string;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({ title, hint }) => {
+export default function EmptyState({ title = 'Aucune donnée', hint }: EmptyStateProps) {
   return (
-    <div className="empty-state" style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px 20px',
-      textAlign: 'center',
-      border: '1px dashed #ddd',
-      borderRadius: '8px',
-      backgroundColor: '#fafafa',
-      minHeight: '200px',
-      marginTop: '20px'
-    }}>
-      <h3 style={{ margin: '0 0 10px 0', color: '#666' }}>{title}</h3>
-      {hint && <p style={{ margin: '5px 0 0 0', color: '#888' }}>{hint}</p>}
-    </div>
+    <Box sx={{ textAlign: 'center', py: 6, opacity: 0.8 }}>
+      <Typography variant="h6">{title}</Typography>
+      {hint && <Typography variant="body2" sx={{ mt: 1 }}>{hint}</Typography>}
+    </Box>
   );
-};
+}

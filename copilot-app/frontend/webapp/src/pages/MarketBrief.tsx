@@ -10,7 +10,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
-import { FreshnessBadge } from '@/components/ui/FreshnessBadge'
+import FreshnessBadge from '@/components/ui/FreshnessBadge'
 import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
 
 export default function MarketBrief() {
@@ -26,7 +26,7 @@ export default function MarketBrief() {
         
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <FreshnessBadge 
-            freshness={brief?.generated_at || null} 
+            freshness={brief?.generated_at ?? undefined} 
             stale={brief?.generated_at ? new Date().getTime() - new Date(brief.generated_at).getTime() > 3600000 : false} 
           />
           

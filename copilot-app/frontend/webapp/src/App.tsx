@@ -1,8 +1,7 @@
-import React from 'react';
-import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet, Link } from 'react-router-dom'
+import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet } from 'react-router-dom'
 import { AppProviders } from './app/providers'
-import { HealthStatusBadge } from './components/ui/HealthStatusBadge';
 import { ErrorBoundary } from './components/system/ErrorBoundary'; // Global error boundary for stability
+import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -18,66 +17,13 @@ import Copilot from './pages/Copilot'
 import TickerSheet from './pages/TickerSheet'
 import MarketBrief from './pages/MarketBrief'
 
-// Layout avec navigation pour l'application
-function AppLayout() {
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Sidebar Navigation */}
-      <nav style={{
-        width: 240,
-        background: '#1a1a1a',
-        padding: 20,
-        color: 'white',
-        position: 'fixed',
-        height: '100vh',
-        overflowY: 'auto'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-            💼 Finance Copilot
-          </h1>
-          <div>
-            <HealthStatusBadge />
-          </div>
-        </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <NavSection title="📊 Vue d'ensemble">
-            <NavLink to="/">Dashboard</NavLink>
-            <NavLink to="/brief">Market Brief</NavLink>
-          </NavSection>
-          
-          <NavSection title="🔬 5 Piliers">
-            <NavLink to="/macro">1. Macro</NavLink>
-            <NavLink to="/stocks">2. Stocks</NavLink>
-            <NavLink to="/news">3. News</NavLink>
-            <NavLink to="/copilot">4. Copilot LLM</NavLink>
-          </NavSection>
-          
-          <NavSection title="📈 Analyse">
-            <NavLink to="/forecasts">Prévisions</NavLink>
-            <NavLink to="/backtests">Backtests</NavLink>
-          </NavSection>
-          
-          <NavSection title="🛠️ Outils">
-            <NavLink to="/judge">LLM Judge</NavLink>
-          </NavSection>
-        </div>
-      </nav>
-
-      {/* Main Content - contenu des routes */}
-      <main style={{ marginLeft: 240, flex: 1, padding: 32, background: '#f5f5f5' }}>
-        <Outlet />
-      </main>
-    </div>
-  );
-}
-
 // Create router with error boundary wrapper
 const router = createBrowserRouter(createRoutesFromElements(
   <Route element={
     <ErrorBoundary>
-      <AppLayout />
+      <AppShell>
+        <Outlet />
+      </AppShell>
     </ErrorBoundary>
   }>
     <Route index element={<Dashboard />} />
@@ -98,39 +44,5 @@ export default function App() {
     <AppProviders>
       <RouterProvider router={router} />
     </AppProviders>
-  )
-}
-
-// Helper Components
-function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.6, marginBottom: 8, fontWeight: 600 }}>
-        {title}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        padding: '8px 12px',
-        borderRadius: 6,
-        textDecoration: 'none',
-        color: 'white',
-        fontSize: 14,
-        transition: 'all 0.2s',
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = '#333'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-    >
-      {children}
-    </Link>
   )
 }

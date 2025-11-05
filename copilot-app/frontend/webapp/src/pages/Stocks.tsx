@@ -6,7 +6,7 @@ import { stocksService } from '@/services/stocks.service'
 import MainLayout from '@/components/layout/MainLayout'
 import Card from '@/components/common/Card'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
 
 export default function Stocks() {
   const [searchQuery, setSearchQuery] = useState('')

@@ -2,7 +2,7 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
-import { safeGetArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeMap, safeLength } from '@/utils/safeAccess'
 
 type TopSignalsProps = {
   signals: CompositeSignal[]

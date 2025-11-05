@@ -9,7 +9,7 @@ export const briefService = {
    * NOTE: Backend doesn't currently support listing multiple briefs, only latest daily/weekly
    * For now, return empty array or a mock response
    */
-  getBriefs: async (filters?: Record<string, any>): Promise<ApiResponse<MarketBrief[]>> => {
+  getBriefs: async (_filters?: Record<string, any>): Promise<ApiResponse<MarketBrief[]>> => {
     // Backend doesn't currently support a list endpoint, so return empty array
     // Could implement this later with actual backend support
     return { ok: true, data: [] }
@@ -25,7 +25,7 @@ export const briefService = {
   /**
    * Get latest brief of specified type
    */
-  getLatest: async (type: 'daily' | 'weekly' = 'daily', universe: string[] = ['SPY', 'QQQ']): Promise<ApiResponse<MarketBrief>> => {
+  getLatest: async (type: 'daily' | 'weekly' = 'daily', _universe: string[] = ['SPY', 'QQQ']): Promise<ApiResponse<MarketBrief>> => {
     // Use the correct endpoint for daily or weekly briefs
     const endpoint = type === 'daily' ? '/brief/daily' : '/brief/weekly'
     // Note: universe filters are not currently supported in backend endpoints
@@ -38,7 +38,7 @@ export const briefService = {
 // Export function for backward compatibility
 export async function fetchBrief(
   period: 'daily' | 'weekly' = 'weekly',
-  universe: string[] = ['SPY', 'QQQ']
+  _universe: string[] = ['SPY', 'QQQ']
 ): Promise<ApiResponse<MarketBrief>> {
   // Use the correct endpoint for daily or weekly briefs
   const endpoint = period === 'daily' ? '/brief/daily' : '/brief/weekly'

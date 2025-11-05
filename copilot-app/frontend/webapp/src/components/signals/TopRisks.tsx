@@ -2,7 +2,7 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeMap, safeLength } from '@/utils/safeAccess'
 
 type TopRisksProps = {
   risks: CompositeSignal[]
@@ -67,7 +67,7 @@ export default function TopRisks({
         {safeLength(topRisks) === 0 ? (
           <div style={styles.empty}>{emptyMessage}</div>
         ) : (
-          safeMap(topRisks, (risk, index) => {
+          safeMap<CompositeSignal, JSX.Element>(topRisks, (risk, index) => {
             const compositeScore = getCompositeScore(risk)
             const { label: severityLabel, tone: severityTone } = getSeverity(compositeScore)
             const components = getComponentScores(risk)
@@ -90,7 +90,7 @@ export default function TopRisks({
                 <p style={styles.description}>{description}</p>
 
                 <div style={styles.metrics}>
-                  {safeMap(components, component => (
+                  {safeMap<{ key: string; label: string; score: number }, JSX.Element>(components, component => (
                     <span key={component.key} style={styles.metric}>
                       {component.label}: <strong>{formatScore(component.score)}</strong>
                     </span>

@@ -20,9 +20,9 @@ export function HealthIndicator() {
       try {
         const response = await apiGet('/health');
         if (response.ok && response.data) {
-          const data = response.data;
-          const isUp = data.status === 'up' && data.backend_up !== false;
-          const lastUpdate = data.last_updates?.forecasts || data.timestamp || null;
+          const data: any = response.data;
+            const isUp = data.status === 'up' && data.backend_up !== false;
+            const lastUpdate = data.last_updates?.forecasts || data.timestamp || null;
           
           setHealth({
             status: isUp ? 'up' : 'down',

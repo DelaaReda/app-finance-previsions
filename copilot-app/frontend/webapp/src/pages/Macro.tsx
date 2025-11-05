@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMacroSeries } from '../services/macro.service'
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeMap, safeLength } from '@/utils/safeAccess'
 
 const MACRO_SERIES = [
   { id: 'CPIAUCSL', name: 'CPI (Inflation)' },
