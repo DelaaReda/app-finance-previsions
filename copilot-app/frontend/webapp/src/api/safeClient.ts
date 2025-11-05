@@ -1,6 +1,6 @@
 import { apiGet, apiPost } from './client';
 import type { ApiResponse } from '../types/common';
-import { safeArray, safeGet, safeNumber } from '../utils/safeAccess';
+import { safeArray, safeGet, safeNumber } from '@/lib/safe';
 
 /**
  * Safe API client that handles undefined responses and provides safe access patterns

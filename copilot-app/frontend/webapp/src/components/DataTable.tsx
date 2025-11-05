@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { DataGrid, GridColDef, GridToolbar, GridRenderCellParams, GridValueGetterParams } from '@mui/x-data-grid';
 import { Paper, Typography, Box, CircularProgress, Alert } from '@mui/material';
 import { ErrorOutline as ErrorIcon } from '@mui/icons-material';
-import { safeArray } from '../utils/safeAccess';
+import { safeArray } from '@/lib/safe';
 
 interface DataTableProps<T = any> {
   title?: string;

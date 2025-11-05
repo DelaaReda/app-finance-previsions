@@ -39,3 +39,14 @@ export function safeGet<T>(obj: any, path: string, defaultValue: T): T {
     return defaultValue;
   }
 }
+
+/**
+ * Safe number conversion with fallback
+ * Prevents NaN and null/undefined issues
+ */
+export function safeNumber(value: number | null | undefined, defaultValue: number): number {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value;
+  }
+  return defaultValue;
+}

@@ -1,11 +1,36 @@
-// Page Backtests - Mini backtesting analysis
+// Backtests page - Professional MUI with enhanced metrics visualization
+// FC-UI-BACKTESTS-001: Complete MUI redesign with visual stats
+
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import {
+  Container,
+  Box,
+  Typography,
+  Stack,
+  Card,
+  CardContent,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  TextField,
+  Alert,
+  Skeleton,
+  Divider,
+  Chip
+} from '@mui/material'
+import {
+  TrendingUp,
+  TrendingDown,
+  Assessment,
+  DateRange,
+  ShowChart,
+  Warning,
+  Timeline
+} from '@mui/icons-material'
 import { apiGet } from '@/api/client'
-import MainLayout from '@/components/layout/MainLayout'
-import Card from '@/components/common/Card'
-import LoadingSpinner from '@/components/common/LoadingSpinner'
-import ErrorMessage from '@/components/common/ErrorMessage'
 import FreshnessBadge from '@/components/ui/FreshnessBadge'
 import DataTable from '@/components/DataTable'
 import { GridColDef } from '@mui/x-data-grid';
@@ -29,6 +54,14 @@ interface BacktestResult {
   detailed_results?: any[] // Added to represent possible detailed backtest results
 }
 
+// Helper for return color
+function getReturnColor(value: number | null | undefined): string {
+  if (value == null) return 'text.secondary';
+  if (value > 0) return 'success.main';
+  if (value < 0) return 'error.main';
+  return 'text.secondary';
+}
+
 export default function Backtests() {
   const [horizon, setHorizon] = useState<'1w' | '1m' | '1y'>('1m')
   const [topN, setTopN] = useState(5)
@@ -36,11 +69,11 @@ export default function Backtests() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['backtests', horizon, topN, daysBack],
-    queryFn: () => 
-      apiGet<BacktestResult>('/backtests', { 
-        horizon, 
-        'top_n': String(topN), 
-        'days_back': String(daysBack) 
+    queryFn: () =>
+      apiGet<BacktestResult>('/backtests', {
+        horizon,
+        'top_n': String(topN),
+        'days_back': String(daysBack)
       }).then(r => r.ok ? r.data : Promise.reject(r.error)),
     staleTime: 300000, // 5 minutes
   })
@@ -76,180 +109,281 @@ export default function Backtests() {
     },
   ];
 
-  return (
-    <MainLayout>
-      <div style={styles.container}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={styles.pageTitle}>📊 Backtests - Analyse de Performance</h2>
-          <FreshnessBadge 
-            freshness={data?.generated_at ?? undefined} 
-            stale={data?.generated_at ? new Date().getTime() - new Date(data.generated_at).getTime() > 3600000 : false} 
-          />
-        </div>
+  const avgReturn = data?.results?.avg_basket_return;
+  const isPositiveReturn = avgReturn != null && avgReturn > 0;
 
-        {/* Configuration Panel */}
-        <Card title="Configuration du Backtest">
-          <div style={styles.configGrid}>
-            <div>
-              <label style={styles.label}>Horizon</label>
-              <select 
-                value={horizon} 
-                onChange={(e) => setHorizon(e.target.value as '1w' | '1m' | '1y')}
-                style={styles.select}
-              >
-                <option value="1w">1 Semaine</option>
-                <option value="1m">1 Mois</option>
-                <option value="1y">1 An</option>
-              </select>
-            </div>
-            
-            <div>
-              <label style={styles.label}>Top-N</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={topN}
-                onChange={(e) => setTopN(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                style={styles.input}
-              />
-            </div>
-            
-            <div>
-              <label style={styles.label}>Jours Historiques</label>
-              <input
-                type="number"
-                min="30"
-                max="365"
-                value={daysBack}
-                onChange={(e) => setDaysBack(Math.max(30, Math.min(365, parseInt(e.target.value) || 180)))}
-                style={styles.input}
-              />
-            </div>
-          </div>
+  return (
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Stack spacing={3}>
+        {/* Header */}
+        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+          <Box>
+            <Typography variant="h4" component="h1" gutterBottom fontWeight={700}>
+              Backtests - Analyse de Performance
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Évaluation historique de la stratégie de trading
+            </Typography>
+          </Box>
+          {data?.generated_at && (
+            <FreshnessBadge
+              freshness={data.generated_at}
+              stale={new Date().getTime() - new Date(data.generated_at).getTime() > 3600000}
+            />
+          )}
+        </Box>
+
+        {/* Configuration Card */}
+        <Card elevation={2}>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <ShowChart color="primary" />
+                <Typography variant="h6" fontWeight={600}>
+                  Configuration du Backtest
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Horizon</InputLabel>
+                    <Select
+                      value={horizon}
+                      label="Horizon"
+                      onChange={(e) => setHorizon(e.target.value as '1w' | '1m' | '1y')}
+                    >
+                      <MenuItem value="1w">1 Semaine</MenuItem>
+                      <MenuItem value="1m">1 Mois</MenuItem>
+                      <MenuItem value="1y">1 An</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Top-N actifs"
+                    value={topN}
+                    onChange={(e) => setTopN(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                    inputProps={{ min: 1, max: 20 }}
+                    helperText="Nombre d'actifs dans le panier"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Jours historiques"
+                    value={daysBack}
+                    onChange={(e) => setDaysBack(Math.max(30, Math.min(365, parseInt(e.target.value) || 180)))}
+                    inputProps={{ min: 30, max: 365 }}
+                    helperText="Période d'analyse"
+                  />
+                </Grid>
+              </Grid>
+
+              <Box>
+                <Alert severity="info" icon={<Timeline />}>
+                  <Typography variant="body2">
+                    Configuration: Horizon <strong>{horizon}</strong>, Top-<strong>{topN}</strong> actifs, <strong>{daysBack}</strong> jours d'historique
+                  </Typography>
+                </Alert>
+              </Box>
+            </Stack>
+          </CardContent>
         </Card>
 
-        {/* Results */}
-        {isLoading && <LoadingSpinner />}
-        {error && <ErrorMessage message={String(error)} />}
-        
-        {data && data.results && (
-          <Card title="Résultats du Backtest">
-            <div style={styles.resultsGrid}>
-              <div style={styles.metricCard}>
-                <div style={styles.metricLabel}>Jours de données</div>
-                <div style={styles.metricValue}>{data?.results?.count_days ?? 0}</div>
-              </div>
-              
-              <div style={styles.metricCard}>
-                <div style={styles.metricLabel}>Retour moyen</div>
-                <div style={styles.metricValue}>
-                  {data?.results?.avg_basket_return ? (data?.results?.avg_basket_return * 100).toFixed(2) + '%' : 'N/A'}
-                </div>
-              </div>
-              
-              <div style={styles.metricCard}>
-                <div style={styles.metricLabel}>Écart-type</div>
-                <div style={styles.metricValue}>
-                  {data?.results?.stdev ? (data?.results?.stdev * 100).toFixed(2) + '%' : 'N/A'}
-                </div>
-              </div>
-              
-              <div style={styles.metricCard}>
-                <div style={styles.metricLabel}>Médiane</div>
-                <div style={styles.metricValue}>
-                  {data?.results?.median ? (data?.results?.median * 100).toFixed(2) + '%' : 'N/A'}
-                </div>
-              </div>
-            </div>
-            
-            <div style={styles.detailsSection}>
-              <h4>Paramètres de l'analyse</h4>
-              <p>Horizon: {data?.params?.horizon || 'N/A'}</p>
-              <p>Top-{data?.params?.top_n || 'N/A'} basket</p>
-              <p>{data?.params?.days_back || 'N/A'} jours d'historique</p>
-              <p>Généré le: {data?.generated_at ? new Date(data.generated_at).toLocaleString('fr-FR') : 'N/A'}</p>
-              
-              {data?.warning && (
-                <div style={styles.warning}>
-                  <strong>Avertissement:</strong> {data?.warning}
-                </div>
-              )}
-            </div>
-            
-            {/* Add a detailed table if available */}
-            {data?.detailed_results && data.detailed_results.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <DataTable 
-                  title="Résultats détaillés des backtests" 
-                  columns={backtestColumns} 
-                  rows={data.detailed_results} 
-                  toolbar={true}
-                  defaultPageSize={10}
-                  pageSizeOptions={[5, 10, 25]}
-                />
-              </div>
-            )}
-          </Card>
+        {/* Loading State */}
+        {isLoading && (
+          <Stack spacing={2}>
+            <Skeleton variant="rectangular" height={200} />
+            <Skeleton variant="rectangular" height={300} />
+          </Stack>
         )}
-      </div>
-    </MainLayout>
-  )
-}
 
-const styles = {
-  container: { display: 'flex', flexDirection: 'column' as const, gap: 24 },
-  pageTitle: { margin: 0, fontSize: 28, fontWeight: 700, color: '#fff' },
-  configGrid: { 
-    display: 'grid' as const, 
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-    gap: 16 
-  },
-  label: { display: 'block', marginBottom: 4, fontSize: 14, color: '#ccc' },
-  select: { 
-    width: '100%', 
-    padding: '8px 12px', 
-    backgroundColor: '#222', 
-    border: '1px solid #444', 
-    borderRadius: 4,
-    color: '#fff',
-    fontSize: 14,
-  },
-  input: { 
-    width: '100%', 
-    padding: '8px 12px', 
-    backgroundColor: '#222', 
-    border: '1px solid #444', 
-    borderRadius: 4,
-    color: '#fff',
-    fontSize: 14,
-  },
-  resultsGrid: { 
-    display: 'grid' as const, 
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-    gap: 16,
-    marginBottom: 24
-  },
-  metricCard: { 
-    padding: 16, 
-    backgroundColor: '#1a1a1a', 
-    borderRadius: 8, 
-    textAlign: 'center' as const 
-  },
-  metricLabel: { fontSize: 12, color: '#999', marginBottom: 8 },
-  metricValue: { fontSize: 20, fontWeight: 600, color: '#4caf50' },
-  detailsSection: { 
-    padding: 16, 
-    backgroundColor: '#1a1a1a', 
-    borderRadius: 8,
-    fontSize: 14
-  },
-  warning: { 
-    marginTop: 12, 
-    padding: 12, 
-    backgroundColor: '#3a2a15', 
-    border: '1px solid #664', 
-    borderRadius: 4,
-    color: '#ff8800'
-  }
+        {/* Error State */}
+        {error && (
+          <Alert severity="error">
+            Erreur lors du chargement: {String(error)}
+          </Alert>
+        )}
+
+        {/* Results */}
+        {data && data.results && (
+          <>
+            {/* Metrics Grid */}
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card elevation={2}>
+                  <CardContent>
+                    <Stack spacing={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <DateRange color="primary" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">
+                          Jours de données
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" fontWeight={700} color="primary.main">
+                        {data.results.count_days ?? 0}
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Card elevation={2}>
+                  <CardContent>
+                    <Stack spacing={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        {isPositiveReturn ? (
+                          <TrendingUp color="success" fontSize="small" />
+                        ) : (
+                          <TrendingDown color="error" fontSize="small" />
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          Retour moyen
+                        </Typography>
+                      </Box>
+                      <Typography
+                        variant="h4"
+                        fontWeight={700}
+                        sx={{ color: getReturnColor(avgReturn) }}
+                      >
+                        {avgReturn != null ? `${(avgReturn * 100).toFixed(2)}%` : 'N/A'}
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Card elevation={2}>
+                  <CardContent>
+                    <Stack spacing={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Assessment color="warning" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">
+                          Écart-type
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" fontWeight={700} color="warning.main">
+                        {data.results.stdev != null ? `${(data.results.stdev * 100).toFixed(2)}%` : 'N/A'}
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <Card elevation={2}>
+                  <CardContent>
+                    <Stack spacing={1}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <ShowChart color="info" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">
+                          Médiane
+                        </Typography>
+                      </Box>
+                      <Typography variant="h4" fontWeight={700} color="info.main">
+                        {data.results.median != null ? `${(data.results.median * 100).toFixed(2)}%` : 'N/A'}
+                      </Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Details Card */}
+            <Card elevation={2}>
+              <CardContent>
+                <Stack spacing={2}>
+                  <Typography variant="h6" fontWeight={600}>
+                    Paramètres de l'analyse
+                  </Typography>
+
+                  <Divider />
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Horizon
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600}>
+                          {data.params?.horizon || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Panier Top-N
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600}>
+                          Top-{data.params?.top_n || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Période historique
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600}>
+                          {data.params?.days_back || 'N/A'} jours
+                        </Typography>
+                      </Box>
+                    </Grid>
+
+                    <Grid item xs={12} sm={6} md={3}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Généré le
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600}>
+                          {data.generated_at ? new Date(data.generated_at).toLocaleString('fr-FR') : 'N/A'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  {data.warning && (
+                    <>
+                      <Divider />
+                      <Alert severity="warning" icon={<Warning />}>
+                        <Typography variant="body2">
+                          <strong>Avertissement:</strong> {data.warning}
+                        </Typography>
+                      </Alert>
+                    </>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* Detailed Results Table */}
+            {data.detailed_results && data.detailed_results.length > 0 && (
+              <DataTable
+                title="Résultats détaillés des backtests"
+                columns={backtestColumns}
+                rows={data.detailed_results}
+                toolbar={true}
+                defaultPageSize={10}
+                pageSizeOptions={[5, 10, 25]}
+                height={400}
+              />
+            )}
+          </>
+        )}
+      </Stack>
+    </Container>
+  )
 }

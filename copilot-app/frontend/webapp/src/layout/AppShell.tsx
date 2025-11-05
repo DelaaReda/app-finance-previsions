@@ -9,24 +9,43 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  Container,
+  ListItemIcon,
   Divider,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Stack
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import {
+  Menu as MenuIcon,
+  Dashboard as DashboardIcon,
+  Assessment as AssessmentIcon,
+  TrendingUp as TrendingUpIcon,
+  Newspaper as NewsIcon,
+  Description as DescriptionIcon,
+  Science as ScienceIcon,
+  Public as PublicIcon,
+  ShowChart as ShowChartIcon,
+  Chat as ChatIcon
+} from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { HealthStatusBadge } from '../components/ui/HealthStatusBadge';
 
-// Navigation items
-const navItems = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Market Brief', to: '/brief' },
-  { label: 'Macro', to: '/macro' },
-  { label: 'Stocks', to: '/stocks' },
-  { label: 'News', to: '/news' },
-  { label: 'Forecasts', to: '/forecasts' },
-  { label: 'Backtests', to: '/backtests' },
-  { label: 'LLM Judge', to: '/judge' },
+interface NavItem {
+  label: string;
+  to: string;
+  icon: React.ReactNode;
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', to: '/', icon: <DashboardIcon /> },
+  { label: 'Brief', to: '/brief', icon: <DescriptionIcon /> },
+  { label: 'Macro', to: '/macro', icon: <PublicIcon /> },
+  { label: 'Actions', to: '/stocks', icon: <ShowChartIcon /> },
+  { label: 'News', to: '/news', icon: <NewsIcon /> },
+  { label: 'Copilot', to: '/copilot', icon: <ChatIcon /> },
+  { label: 'Prévisions', to: '/forecasts', icon: <TrendingUpIcon /> },
+  { label: 'Backtests', to: '/backtests', icon: <AssessmentIcon /> },
+  { label: 'LLM Judge', to: '/judge', icon: <ScienceIcon /> },
 ];
 
 interface AppShellProps {
@@ -46,10 +65,12 @@ export default function AppShell({ children, title = 'Finance Copilot' }: AppShe
   };
 
   const drawer = (
-    <Box onClick={() => isMobile && setMobileOpen(false)} sx={{ textAlign: 'center' }}>
-      <Typography variant="h6" sx={{ my: 2 }}>
-        💼 {title}
-      </Typography>
+    <Box onClick={() => isMobile && setMobileOpen(false)}>
+      <Box sx={{ textAlign: 'center', py: 2 }}>
+        <Typography variant="h6" fontWeight={700}>
+          💼 {title}
+        </Typography>
+      </Box>
       <Divider />
       <List>
         {navItems.map((item) => (
@@ -57,8 +78,22 @@ export default function AppShell({ children, title = 'Finance Copilot' }: AppShe
             key={item.to}
             selected={location.pathname === item.to}
             onClick={() => navigate(item.to)}
-            sx={{ textAlign: 'left' }}
+            sx={{
+              '&.Mui-selected': {
+                backgroundColor: 'primary.main',
+                color: 'primary.contrastText',
+                '&:hover': {
+                  backgroundColor: 'primary.dark',
+                },
+                '& .MuiListItemIcon-root': {
+                  color: 'primary.contrastText',
+                },
+              },
+            }}
           >
+            <ListItemIcon sx={{ minWidth: 40 }}>
+              {item.icon}
+            </ListItemIcon>
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}
@@ -80,9 +115,13 @@ export default function AppShell({ children, title = 'Finance Copilot' }: AppShe
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {title}
           </Typography>
+          {/* Health Status Indicator in Header */}
+          <Stack direction="row" spacing={1} alignItems="center">
+            <HealthStatusBadge />
+          </Stack>
         </Toolbar>
       </AppBar>
 
@@ -119,10 +158,8 @@ export default function AppShell({ children, title = 'Finance Copilot' }: AppShe
       </Box>
 
       {/* Main content */}
-      <Box component="main" sx={{ flexGrow: 1, p: 3, mt: 8, ml: { md: '240px' } }}>
-        <Container maxWidth="xl">
-          {children}
-        </Container>
+      <Box component="main" sx={{ flexGrow: 1, mt: 8, ml: { md: '240px' }, width: '100%' }}>
+        {children}
       </Box>
     </Box>
   );
