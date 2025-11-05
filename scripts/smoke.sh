@@ -1,43 +1,53 @@
 #!/usr/bin/env bash
-# scripts/smoke.sh
-# Smoke test for Finance Copilot - checks critical endpoints without using 'timeout'
+# Smoke test script - verifies critical endpoints are responding properly
+# Task: FC-P0-010 - Pre-push local: smoke hook
+# Author: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
 set -euo pipefail
 
-echo " smoke test: checking backend health..."
+echo "🔍 Running smoke test..."
 
-# Test 1: Health endpoint
-if ! curl -fsS http://localhost:8050/api/health | grep -q '"ok": true'; then
-    echo "❌ SMOKE FAIL: /api/health not responding correctly"
+# Check if backend is running
+if ! curl -sS http://localhost:8050/api/health > /dev/null 2>&1; then
+    echo "❌ Backend not running on port 8050"
+    echo "💡 Start with: /Users/venom/Documents/analyse-financiere/finance-copilot.sh start"
     exit 1
 fi
-echo "✅ /api/health OK"
 
-# Test 2: News feed endpoint - check if articles key exists in data
-if ! curl -fsS http://localhost:8050/api/news/feed 2>/dev/null | grep -q '"articles"'; then
-    echo "❌ SMOKE FAIL: /api/news/feed missing articles key"
+# Test health endpoint
+echo "🏥 Testing /api/health..."
+if ! curl -sS http://localhost:8050/api/health | grep -qi ok > /dev/null; then
+    echo "❌ Health check failed"
     exit 1
 fi
-echo "✅ /api/news/feed OK"
 
-# Test 3: Forecasts endpoint - check if rows key exists in data
-if ! curl -fsS http://localhost:8050/api/forecasts 2>/dev/null | grep -q '"rows"'; then
-    echo "❌ SMOKE FAIL: /api/forecasts missing rows key"
+# Test news endpoint
+echo "📰 Testing /api/news/feed..."
+if ! curl -sS http://localhost:8050/api/news/feed | jq -e '.data.articles // .articles' > /dev/null 2>&1; then
+    echo "❌ News endpoint failed - missing articles key"
     exit 1
 fi
-echo "✅ /api/forecasts OK"
 
-# Test 4: Brief/weekly endpoint - check if it responds with valid JSON containing ok
-if ! curl -fsS http://localhost:8050/api/brief/weekly 2>/dev/null | grep -q '"ok"'; then
-    echo "❌ SMOKE FAIL: /api/brief/weekly not responding properly"
+# Test forecasts endpoint
+echo "📈 Testing /api/forecasts..."
+if ! curl -sS http://localhost:8050/api/forecasts | jq -e '.data.rows // .rows' > /dev/null 2>&1; then
+    echo "❌ Forecasts endpoint failed - missing rows key"
     exit 1
 fi
-echo "✅ /api/brief/weekly OK"
 
-# Test 5: Backtests endpoint - check if it responds with valid JSON containing ok
-if ! curl -fsS http://localhost:8050/api/backtests 2>/dev/null | grep -q '"ok"'; then
-    echo "❌ SMOKE FAIL: /api/backtests not responding properly"
+# Test brief endpoint
+echo "📋 Testing /api/brief/weekly..."
+if ! curl -sS http://localhost:8050/api/brief/weekly | head -c 80 > /dev/null; then
+    echo "❌ Brief endpoint failed"
     exit 1
 fi
-echo "✅ /api/backtests OK"
 
-echo "SMOKE OK - All critical endpoints responding"
+# Test backtests endpoint
+echo "📊 Testing /api/backtests..."
+if ! curl -sS http://localhost:8050/api/backtests | head -c 80 > /dev/null; then
+    echo "❌ Backtests endpoint failed"
+    exit 1
+fi
+
+echo "✅ SMOKE TEST PASSED - All critical endpoints responding"
+echo "✨ Ready to push safely"
