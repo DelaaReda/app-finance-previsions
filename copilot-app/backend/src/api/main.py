@@ -17,6 +17,16 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 import pandas as pd
 
+# Ensure project backend paths are on sys.path so `import core.*` works
+import sys
+from pathlib import Path as _Path
+_backend_root = _Path(__file__).resolve().parents[2]
+_src_path = str(_backend_root / "src")
+if _src_path not in sys.path:
+    sys.path.insert(0, _src_path)
+if str(_backend_root) not in sys.path:
+    sys.path.insert(0, str(_backend_root))
+
 # Import data access layer
 try:
     from core.data_access import (
@@ -738,78 +748,73 @@ def register_routes(app: FastAPI):
         score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
         limit: int = Query(50, ge=1, le=200)
     ):
-        """Get news feed with caching. Never-empty: serves latest snapshot on failure."""
-        # Map `since` to service `window`
-        since_map = {
-            "1d": "last_day",
-            "3d": "last_week",
-            "7d": "last_week",
-            "14d": "last_week",
-            "30d": "last_month",
-            "90d": "last_month",
-        }
-        window = since_map.get(since, "last_week")
+        """Get news feed - serves real data from news_feed.json"""
+        try:
+            from storage.io import load_json
 
-        # Call async service and adapt contract to API response
-        result = await lakehouse_news_feed(
-            tickers=tickers,
-            q=None,
-            limit=limit,
-            window=window,
-        )
+            # Load news data
+            news_data = load_json("news_feed")
 
-        # result shape: { ok: bool, data: { items: [...], count, freshness, ... } }
-        ok_flag = bool(result.get("ok", True)) if isinstance(result, dict) else True
-        payload = result.get("data", {}) if isinstance(result, dict) else {}
-        items = payload.get("items") or payload.get("articles") or []
+            if not news_data:
+                # Return empty but valid structure
+                return _ok({
+                    "articles": [],
+                    "count": 0,
+                    "filters": {
+                        "tickers": tickers,
+                        "since": since,
+                        "limit": limit
+                    },
+                    "freshness": "unknown",
+                    "source": ["file_not_found"],
+                    "last_update": None
+                })
 
-        # Normalize to articles list
-        articles = []
-        for idx, item in enumerate(items or []):
-            if not isinstance(item, dict):
-                continue
-            articles.append({
-                "id": item.get("id") or item.get("url") or f"news_{idx+1}",
-                "title": item.get("title", ""),
-                "link": item.get("url") or item.get("link", ""),
-                "pubDate": item.get("published") or item.get("pubDate") or datetime.utcnow().isoformat(),
-                "source": item.get("source", "unknown"),
-                "region": (item.get("region") or "").upper() if isinstance(item.get("region"), str) else item.get("region"),
-                "summary": item.get("summary", ""),
-                "score": item.get("score", 0.0),
-                "importance": item.get("importance", 0.0),
-                "freshness": item.get("freshness", 0.0),
-                "relevance": item.get("relevance", 0.0),
-                "sentiment_score": item.get("sentiment_score", item.get("sentiment", 0.0) or 0.0),
-                "entities": item.get("entities", []),
-                "tickers": item.get("tickers", []),
+            # Extract articles from loaded data
+            articles = news_data.get("articles", [])
+
+            # Apply filters
+            filtered_articles = articles
+
+            # Filter by tickers if specified
+            if tickers and filtered_articles:
+                # For now, basic filtering - can be improved
+                filtered_articles = [a for a in filtered_articles if any(
+                    ticker.upper() in (a.get("title", "") + a.get("summary", "")).upper()
+                    for ticker in tickers
+                )]
+
+            # Apply limit
+            filtered_articles = filtered_articles[:limit]
+
+            return _ok({
+                "articles": filtered_articles,
+                "count": len(filtered_articles),
+                "filters": {
+                    "tickers": tickers,
+                    "since": since,
+                    "limit": limit
+                },
+                "freshness": news_data.get("collected_at", datetime.utcnow().isoformat()),
+                "source": news_data.get("sources_used", ["news_feed.json"]),
+                "last_update": news_data.get("collected_at", datetime.utcnow().isoformat())
             })
 
-        # Optional filtering by score_min (v1: simple threshold on score)
-        try:
-            if score_min and score_min > 0:
-                articles = [a for a in articles if float(a.get("score", 0)) >= float(score_min)]
-        except Exception:
-            # Do not fail on bad types; keep unfiltered
-            pass
-
-        # Optional region filter (v1)
-        try:
-            if region and region.lower() != "all":
-                region_up = region.upper()
-                articles = [a for a in articles if (a.get("region") or "").upper() == region_up]
-        except Exception:
-            pass
-
-        response = {
-            "articles": articles,
-            "count": len(articles) if payload.get("count") is None else payload.get("count"),
-            "filters": {"tickers": tickers, "since": since, "limit": limit},
-            "freshness": payload.get("freshness", "unknown"),
-            "source": payload.get("source", []),
-            "last_update": payload.get("last_update"),
-        }
-        return _ok(response) if ok_flag else _err("news service error")
+        except Exception as e:
+            # Fallback: return empty structure
+            return _ok({
+                "articles": [],
+                "count": 0,
+                "error": str(e),
+                "filters": {
+                    "tickers": tickers,
+                    "since": since,
+                    "limit": limit
+                },
+                "freshness": "error",
+                "source": ["error_fallback"],
+                "last_update": datetime.utcnow().isoformat()
+            })
 
     @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
@@ -1124,17 +1129,71 @@ def register_routes(app: FastAPI):
         search: Optional[str] = Query(None, description="Search term"),
         sort_by: str = Query("score", description="Sort by: score, confidence, return")
     ):
-        """Get forecasts list."""
-        # Reuse existing dash_app.api logic
+        """Get forecasts list - serves real data from forecasts.json"""
         try:
-            from dash_app.api import forecasts as dash_forecasts
-            result = dash_forecasts(asset_type, horizon, search, sort_by)
-            if result.get("ok"):
-                return _ok(result["data"])
-            else:
-                raise HTTPException(status_code=404, detail=result.get("error", "Not found"))
-        except ImportError:
-            return _ok({"rows": [], "count": 0, "note": "Forecasts API not available"})
+            from storage.io import load_json
+
+            # Load forecasts data
+            forecasts_data = load_json("forecasts")
+
+            if not forecasts_data:
+                # Return empty but valid structure
+                return _ok({
+                    "rows": [],
+                    "count": 0,
+                    "asset_type": asset_type,
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "source": ["file_not_found"],
+                    "freshness": "unknown"
+                })
+
+            # Extract rows from loaded data
+            rows = forecasts_data.get("rows", [])
+
+            # Apply filters
+            filtered_rows = rows
+
+            # Filter by horizon if specified
+            if horizon != "all" and rows:
+                filtered_rows = [r for r in filtered_rows if r.get("horizon") == horizon]
+
+            # Filter by asset_type (for now all are equity)
+            # This can be extended later
+
+            # Filter by search term if provided
+            if search and filtered_rows:
+                search_lower = search.lower()
+                filtered_rows = [r for r in filtered_rows if search_lower in r.get("ticker", "").lower()]
+
+            # Sort rows
+            if sort_by == "confidence" and filtered_rows:
+                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("confidence", 0), reverse=True)
+            elif sort_by == "return" and filtered_rows:
+                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("expected_return", 0), reverse=True)
+            else:  # score or default
+                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("llm_adjusted_confidence", x.get("confidence", 0)), reverse=True)
+
+            return _ok({
+                "rows": filtered_rows,
+                "count": len(filtered_rows),
+                "asset_type": asset_type,
+                "horizon": horizon,
+                "generated_at": forecasts_data.get("generated_at", datetime.utcnow().isoformat()),
+                "source": forecasts_data.get("source", ["forecasts.json"]),
+                "model_version": forecasts_data.get("model_version", "hybrid_v1"),
+                "freshness": forecasts_data.get("freshness", datetime.utcnow().isoformat())
+            })
+
+        except Exception as e:
+            # Fallback: return empty structure
+            return _ok({
+                "rows": [],
+                "count": 0,
+                "error": str(e),
+                "asset_type": asset_type,
+                "generated_at": datetime.utcnow().isoformat(),
+                "source": ["error_fallback"]
+            })
 
     @app.get("/api/backtests")
     async def backtests(
