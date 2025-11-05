@@ -10,8 +10,16 @@ Implements the load_or_compute pattern as required by FC-P0-004 with advanced fe
 """
 from typing import Any, Callable, Optional, List, Tuple
 from datetime import datetime
-from ..storage.json_storage import load_json, save_json
-from ..jobs.cache_manager import invalidate_cache_if_needed, mark_cache_as_updated, mark_cache_as_invalidated
+import sys
+import os
+import asyncio
+
+# Add backend path for proper imports
+backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, backend_root)
+
+from storage.json_storage import load_json, save_json
+from jobs.cache_manager import invalidate_cache_if_needed, mark_cache_as_updated, mark_cache_as_invalidated
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,7 +66,11 @@ async def load_or_compute(
     
     # Compute fresh data
     try:
-        fresh_data = await compute_fn() if callable(getattr(compute_fn, '__await__', None)) else compute_fn()
+        # Check if compute_fn is a coroutine function to handle async properly
+        if asyncio.iscoroutinefunction(compute_fn):
+            fresh_data = await compute_fn()
+        else:
+            fresh_data = compute_fn()
         
         # Save the fresh data to cache
         save_success = save_json(key, fresh_data, sources or [f"compute_fn_{key}"])
@@ -113,7 +125,7 @@ def get_advanced_cache_freshness_info():
     Get comprehensive freshness information for all tracked caches.
     """
     try:
-        from ..jobs.cache_manager import CacheInvalidationTracker
+        from jobs.cache_manager import CacheInvalidationTracker
         tracker = CacheInvalidationTracker()
         return tracker.get_cache_freshness_info()
     except Exception as e:
@@ -130,7 +142,7 @@ def force_invalidate_cache(cache_key: str, reason: str = "Manual invalidation"):
         reason: Reason for invalidation (for logging)
     """
     try:
-        from ..jobs.cache_manager import CacheInvalidationTracker
+        from jobs.cache_manager import CacheInvalidationTracker
         tracker = CacheInvalidationTracker()
         tracker._mark_for_refresh(cache_key, reason)
         logger.info(f"Force invalidated cache '{cache_key}' - {reason}")

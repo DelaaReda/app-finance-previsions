@@ -74,6 +74,13 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
 
+    # Include cache management routes
+    try:
+        from api.routes.cache_routes import router as cache_router
+        app.include_router(cache_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include cache routes: {e}")
+
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")
     async def startup_event():

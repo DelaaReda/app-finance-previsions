@@ -127,33 +127,6 @@ Responsable de l'expérience utilisateur finale et de l'architecture de l'intég
 
 **Aucune mission active** - En attente de validation P0 et prochaine tâche
 
-### **FC-VISION-001** : Analyse UX/UI et Vision Produit (+150 pts potentiels)
-**Statut** : En cours
-**Date de début** : 2025-11-04
-**Deadline** : 2025-11-06
-
-**Objectifs** :
-1. ✅ Créer profil agent
-2. 🔄 Analyser architecture frontend actuelle
-3. 🔄 Analyser architecture backend actuelle
-4. 🔄 Identifier user journeys et pain points
-5. 🔄 Évaluer qualité des données affichées
-6. 🔄 Documenter bugs UI et causes racines
-7. 🔄 Créer vision produit améliorée
-8. 🔄 Proposer plan d'amélioration avec priorités
-
-**Livrables attendus** :
-- Rapport d'analyse UX/UI (markdown)
-- Mapping data flow backend → frontend
-- Liste priorisée des pain points
-- Vision produit avec wireframes conceptuels
-- Plan d'action avec estimation d'effort
-
-**Points gagnés** :
-- Analyse complète : +60
-- Vision produit : +40
-- Plan d'amélioration : +50
-
 ---
 
 ## 📅 Missions Planifiées
