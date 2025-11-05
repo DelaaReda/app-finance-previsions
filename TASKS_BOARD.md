@@ -2346,7 +2346,7 @@ Let’s ship. 🚀
 
 ## FC-P2-020 — LLM Judge Integration
 
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
 
 **But**: Intégrer le LLM Judge pour évaluer la qualité des prévisions et des analyses.
 
@@ -2367,3 +2367,30 @@ Let’s ship. 🚀
 
 * `/api/judge` renvoie évaluations LLM des prévisions/analyses
 * Scores de qualité et explications disponibles
+
+---
+
+## FC-QM-MONITOR — Quality Monitoring System
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Créer un système de monitoring qualité qui vérifie la fraîcheur, la disponibilité et l'intégrité des données.
+
+**Fichiers**
+
+* `backend/quality/monitor.py`
+* `backend/routes/quality.py`
+* `backend/services/quality_service.py`
+
+**Étapes**
+
+1. Créer un service de monitoring qui vérifie la fraîcheur des différents endpoints
+2. Implémenter des checks pour détecter les réponses vides (contrevenant au never-empty)
+3. Créer un endpoint `/api/quality/checks` qui expose les statistiques de qualité
+4. Sauvegarder les résultats dans `data/quality/quality_checks.json`
+
+**DoD**
+
+* `/api/quality/checks` renvoie des métriques de qualité en temps réel
+* Système détecte les violations du contrat never-empty
+* Rapport de fraîcheur et de disponibilité des données disponibles

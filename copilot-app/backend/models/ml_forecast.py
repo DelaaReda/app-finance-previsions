@@ -3,6 +3,9 @@ ML Forecast Model - Generates real market forecasts using technical indicators
 """
 import random
 from datetime import datetime
+import random
+from typing import List, Dict, Any
+from pathlib import Path
 from typing import List, Dict, Any
 import json
 from pathlib import Path

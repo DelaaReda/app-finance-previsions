@@ -1,31 +1,23 @@
 """
 Forecasts Materialization Job - FC-DATA-004
-Generates daily forecast cache in Parquet format for fast API access
+Creates daily forecast cache in Parquet format for fast API access
 Author: MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7
 """
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-import json
 import logging
 from typing import Dict, Any, List
-
-import sys
+import json
 import os
-# Add the backend directory to path to access our storage and cache systems
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import sys
+from datetime import timedelta
 
-# Import our forecasting engine components that I built earlier
-from models.forecast_v0.api import get_forecast
-from models.forecast_v0.main import create_sample_data
-from backend.storage.base import save_json, load_json
-from backend.services.cache_layer import load_or_compute_forecasts
-
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-def run_daily_forecasts_job():
+def run_daily_forecasts_job() -> Dict[str, Any]:
     """
     Run the daily forecasts materialization job.
     Creates Parquet files with proper partitioning and updates latest symlink.
@@ -33,25 +25,25 @@ def run_daily_forecasts_job():
     try:
         logger.info("Starting daily forecasts materialization job...")
         
+        # Import our forecasting system
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+        from models.forecast_v0.api import get_forecast
+        from models.forecast_v0.main import create_sample_data
+        from backend.storage.base import save_json
+        from backend.services.cache_layer import load_or_compute_forecasts
+        
         # Generate forecasts using our forecasting engine
-        # Create sample data for multiple tickers
-        sample_tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "BABA"]
+        tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "BABA"]
         
         all_forecasts = []
-        for ticker in sample_tickers:
-            try:
-                # Create sample data for this ticker
-                sample_data = create_sample_data(ticker, days=252)
-                # Generate forecast for this ticker using our forecasting engine
-                forecast = get_forecast(ticker, sample_data, include_llm_analysis=True)
-                if forecast:
-                    all_forecasts.append(forecast)
-            except Exception as e:
-                logger.warning(f"Error generating forecast for {ticker}: {e}")
-                continue
+        for ticker in tickers:
+            sample_data = create_sample_data(ticker, days=252)
+            forecast = get_forecast(ticker, sample_data, include_llm_analysis=True)
+            if forecast and 'rows' in forecast and forecast['rows']:
+                all_forecasts.extend(forecast['rows'])
         
         # Convert forecasts to DataFrame for Parquet storage
-        forecasts_df = create_forecasts_dataframe(all_forecasts)
+        forecasts_df = forecasts_to_dataframe(all_forecasts)
         
         # Create partitioned output directory (format: data/forecast/dt=YYYYMMDD/)
         today_str = datetime.now().strftime("%Y%m%d")
@@ -109,7 +101,7 @@ def run_daily_forecasts_job():
         
     except Exception as e:
         logger.error(f"Error in daily forecasts job: {e}")
-        # Still return a structured response to maintain never-empty guarantee
+        # Return fallback structure to maintain never-empty guarantee
         error_result = {
             "status": "error",
             "partition_date": datetime.now().strftime("%Y%m%d"),
@@ -120,7 +112,7 @@ def run_daily_forecasts_job():
         }
         
         # Save error state to maintain never-empty guarantee
-        fallback_data = {
+        save_json({
             "rows": [],
             "count": 0,
             "generated_at": datetime.now().isoformat() + "Z",
@@ -128,27 +120,26 @@ def run_daily_forecasts_job():
             "source": ["forecast_materialization_job", "error_fallback"],
             "freshness": "error",
             "error": str(e)
-        }
-        save_json(fallback_data, "forecasts.json", ["forecast_materialization", "error_fallback"])
+        }, "forecasts.json", ["forecast_materialization", "error_fallback"])
         
         return error_result
 
 
-def create_forecasts_dataframe(forecasts: List[Dict[str, Any]]) -> pd.DataFrame:
+def forecasts_to_dataframe(forecasts: List[Dict[str, Any]]) -> pd.DataFrame:
     """
-    Convert forecasts result to DataFrame for Parquet storage.
+    Convert forecasts to DataFrame for Parquet storage.
     """
     if not forecasts:
-        # Create empty dataframe with proper schema
+        # Create empty DataFrame with proper schema
         return pd.DataFrame(columns=[
             'ticker', 'horizon', 'direction', 'confidence', 'expected_return',
-            'explanation', 'model_version', 'generated_at', 'freshness_score'
+            'explanation', 'model_version', 'generated_at'
         ])
     
-    # Convert forecasts to flat structure appropriate for Parquet
-    flat_rows = []
+    # Normalize and flatten forecasts
+    normalized_rows = []
     for forecast in forecasts:
-        flat_row = {
+        normalized_row = {
             'ticker': forecast.get('ticker', ''),
             'horizon': forecast.get('horizon', '1d'),
             'direction': forecast.get('direction', 'neutral'),
@@ -157,121 +148,115 @@ def create_forecasts_dataframe(forecasts: List[Dict[str, Any]]) -> pd.DataFrame:
             'explanation': forecast.get('explanation', ''),
             'model_version': forecast.get('model_version', 'v1'),
             'generated_at': forecast.get('generated_at', datetime.now().isoformat()),
-            'freshness_score': float(forecast.get('freshness_score', 0.0)) if forecast.get('freshness_score') is not None else 0.0,
-            'source': '|'.join(forecast.get('source', [])) if isinstance(forecast.get('source'), list) else '',
-            'model_components': '|'.join(forecast.get('model_components', [])) if isinstance(forecast.get('model_components'), list) else '',
+            'model_components': '|'.join(forecast.get('model_components', [])),
             'confidence_breakdown_technical': float(forecast.get('confidence_breakdown', {}).get('technical_score', 0.0)),
             'confidence_breakdown_news': float(forecast.get('confidence_breakdown', {}).get('news_score', 0.0)),
-            'confidence_breakdown_momentum': float(forecast.get('confidence_breakdown', {}).get('momentum_score', 0.0)),
-            'risk_factors': '|'.join(forecast.get('risk_factors', [])) if isinstance(forecast.get('risk_factors'), list) else ''
+            'confidence_breakdown_momentum': forecast.get('confidence_breakdown', {}).get('momentum_score', 0.0),
         }
-        flat_rows.append(flat_row)
+        normalized_rows.append(normalized_row)
     
-    return pd.DataFrame(flat_rows)
+    return pd.DataFrame(normalized_rows)
 
 
 def process_final_forecasts(forecasts_df: pd.DataFrame) -> pd.DataFrame:
     """
     Process forecasts through business logic to create final forecast set.
-    This includes filtering, ranking, and applying any business rules.
     """
     if forecasts_df.empty:
         return forecasts_df
     
-    # Apply business rules/filtering
-    # 1. Filter out low confidence forecasts (< 0.4)
+    # Apply filters and business logic
+    # Filter out low confidence forecasts
     filtered_df = forecasts_df[forecasts_df['confidence'] >= 0.4].copy()
     
-    # 2. Rank by a combination of confidence and expected return magnitude
-    filtered_df['rank_score'] = (
+    # Calculate composite score for ranking
+    filtered_df['composite_score'] = (
         filtered_df['confidence'] * 0.7 + 
         abs(filtered_df['expected_return']) * 0.3
     )
     
-    # 3. Sort by rank score (descending) and then expected return (descending for up, ascending for down)
-    filtered_df = filtered_df.sort_values(
-        by=['rank_score', 'expected_return'], 
-        ascending=[False, False]
-    ).reset_index(drop=True)
+    # Sort by composite score (descending)
+    final_df = filtered_df.sort_values(by=['composite_score'], ascending=False).reset_index(drop=True)
     
-    # 4. Limit to top 100 forecasts per day to keep file size manageable
-    final_df = filtered_df.head(100).copy()
-    
-    # Add additional processing-specific columns
-    final_df['processed_at'] = datetime.now().isoformat()
-    final_df['valid_until'] = (datetime.now() + timedelta(days=1)).isoformat()
+    # Limit to top 100 forecasts to keep file manageable
+    final_df = final_df.head(100)
     
     logger.info(f"Processed forecasts: {len(forecasts_df)} → {len(final_df)} (after filtering and ranking)")
     
     return final_df
 
 
-def get_latest_forecasts():
+def get_latest_forecasts() -> Dict[str, Any]:
     """
-    Get the latest forecasts from the materialized cache.
-    This function is optimized for fast access as required by the task (<150ms).
+    Get latest forecasts from the materialized cache with <150ms response time.
     """
     try:
-        # First try to get from the latest symlinked partition
+        # Try to read from latest symlinked partition
         latest_path = Path("data/forecast/latest")
         if latest_path.exists() and latest_path.is_symlink():
-            # Try to read from the latest parquet file
             final_parquet = latest_path / "final.parquet"
             if final_parquet.exists():
                 df = pd.read_parquet(final_parquet, engine='pyarrow')
-                result = {
+                return {
                     "rows": df.to_dict('records'),
                     "count": len(df),
-                    "generated_at": datetime.now().isoformat() + "Z",  # Use current time as API generation time
+                    "generated_at": datetime.now().isoformat() + "Z",  # Current time as API generation time
                     "source": ["materialized_cache", "latest_partition"],
                     "freshness": "current"
                 }
-                return result
         
-        # Fallback: try to read from JSON snapshot
-        forecasts_json = load_json("forecasts.json")
-        if forecasts_json:
-            return forecasts_json
+        # Fallback to JSON snapshot
+        import json
+        json_path = Path("data/forecast/forecasts.json")
+        if json_path.exists():
+            with open(json_path, 'r') as f:
+                return json.load(f)
         
-        # Double fallback: compute fresh forecasts (but this is slower)
-        logger.warning("No cached forecasts available, computing fresh (this will be slower than <150ms target)")
-        return load_or_compute_forecasts(lambda: run_daily_forecasts_job())  # Using the job function to compute
+        # Ultimate fallback - return empty structure but never None
+        return {
+            "rows": [],
+            "count": 0,
+            "generated_at": datetime.now().isoformat() + "Z",
+            "source": ["fallback"],
+            "freshness": "fallback",
+            "message": "No cached forecasts available - using fallback structure"
+        }
         
     except Exception as e:
         logger.error(f"Error getting latest forecasts: {e}")
-        # Return empty but valid structure to maintain never-empty guarantee
+        # Maintain never-empty guarantee
         return {
             "rows": [],
             "count": 0,
             "generated_at": datetime.now().isoformat() + "Z",
             "source": ["error_fallback"],
             "freshness": "error",
-            "message": "Error accessing forecast cache - using fallback data"
+            "error": str(e),
+            "message": "Error accessing forecast cache - return fallback data to maintain never-empty guarantee"
         }
 
 
-def is_data_stale(threshold_hours: int = 24) -> bool:
+def is_data_stale(max_age_hours: int = 24) -> bool:
     """
-    Check if the latest forecast data is stale (older than threshold).
+    Check if the latest forecast data is stale (older than max_age_hours).
     """
     try:
         latest_path = Path("data/forecast/latest")
         if not latest_path.exists():
+            return True  # If no latest, definitely stale
+            
+        # Get the modification time of the target partition
+        target_partition = latest_path.resolve()
+        if target_partition.exists():
+            import time
+            mtime = target_partition.stat().st_mtime
+            age_hours = (time.time() - mtime) / 3600
+            return age_hours > max_age_hours
+        else:
             return True
             
-        # Get the target partition date from symlink
-        target_partition = latest_path.resolve()
-        partition_date_str = target_partition.name.replace("dt=", "")
-        
-        # Parse the date from partition name
-        partition_date = datetime.strptime(partition_date_str, "%Y%m%d")
-        
-        # Check if older than threshold
-        hours_old = (datetime.now() - partition_date).total_seconds() / 3600
-        return hours_old > threshold_hours
-        
     except Exception:
-        # If there's an error checking freshness, assume it's stale
+        # If there's an error checking freshness, assume stale to be safe
         return True
 
 
