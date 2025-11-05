@@ -1,10 +1,10 @@
 import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet } from 'react-router-dom'
 import { AppProviders } from './app/providers'
-import { ErrorBoundary } from './components/system/ErrorBoundary'; // Global error boundary for stability
+import GlobalErrorBoundary from './components/system/GlobalErrorBoundary'; // Global error boundary for stability
 import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 
 // Pages existantes
-import Dashboard from './pages/Dashboard'
+import DashboardTremor from './pages/DashboardTremor'
 import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
@@ -20,13 +20,13 @@ import MarketBrief from './pages/MarketBrief'
 // Create router with error boundary wrapper
 const router = createBrowserRouter(createRoutesFromElements(
   <Route element={
-    <ErrorBoundary>
+    <GlobalErrorBoundary>
       <AppShell>
         <Outlet />
       </AppShell>
-    </ErrorBoundary>
+    </GlobalErrorBoundary>
   }>
-    <Route index element={<Dashboard />} />
+    <Route index element={<DashboardTremor />} />
     <Route path="/brief" element={<MarketBrief />} />
     <Route path="/macro" element={<Macro />} />
     <Route path="/stocks" element={<Stocks />} />

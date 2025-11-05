@@ -1,9 +1,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { CssBaseline } from '@mui/material';
 import App from './App';
 import { AppProviders } from './app/providers';
-import { ErrorBoundary } from './components/system/ErrorBoundary';
+import GlobalErrorBoundary from './components/system/GlobalErrorBoundary';
+
+// Tailwind CSS (must be first for proper cascade)
+import './index.css';
+import '@fontsource/inter/variable.css';
 
 // Font imports
 import '@fontsource/roboto/300.css';
@@ -22,11 +25,10 @@ const root = createRoot(container);
 // Theme provider is now handled in AppProviders with ThemeContext
 root.render(
   <React.StrictMode>
-    <ErrorBoundary>
+    <GlobalErrorBoundary>
       <AppProviders>
-        <CssBaseline />
         <App />
       </AppProviders>
-    </ErrorBoundary>
+    </GlobalErrorBoundary>
   </React.StrictMode>
 );

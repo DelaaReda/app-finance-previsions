@@ -578,6 +578,7 @@ But: Unifier `HealthIndicator` et `HealthStatusBadge` pour consommer le client u
 
 Actions:
 - Factoriser un hook `useHealth()`.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 - État ‘degraded’ si freshness inconnue.
 
 DoD:
