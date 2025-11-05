@@ -546,6 +546,7 @@ DoD:
 - Aucun “$0.00” quand la donnée est manquante; on voit “N/A”.
 
 How‑to
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 - Dans `stocks.service.ts`, remplacer `|| 0` par `?? null` pour `sma*`, `rsi`, etc.
 - Dans `Stocks.tsx`, n’afficher une valeur formatée que si non null; sinon `N/A` + tooltip “indicateur indisponible”.
 - Validation: `/api/stocks/AAPL` avec nulls n’affiche plus de faux zéros.

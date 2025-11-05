@@ -39,6 +39,7 @@
 - [x] Création composant MiniLineChart et intégration dans la page Macro pour afficher les séries FRED (FC-UI-004)
 - [x] Mise en place affichage sécurisé SMA/RSI avec N/A au lieu de 0.00 pour valeurs manquantes (FC-UI-005)
 - [x] Mise en place bandeau explicite "snapshot indisponible" avec horodatage et bouton réessayer (FC-UI-006)
+- [x] Unification des composants HealthIndicator et HealthStatusBadge avec client unwrapped (FC-UI-007)
 - [x] Création composant MiniLineChart et intégration dans la page Macro pour afficher les séries FRED (FC-UI-004)
 - [x] Création fonctions utilitaires pour normaliser l'affichage des scores (0..100) dans TopSignals/TopRisks (FC-UI-002)
 - [x] Création utilities d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)
