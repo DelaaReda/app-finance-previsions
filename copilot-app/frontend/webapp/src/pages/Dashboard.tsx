@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [horizons, setHorizons] = useState<string[]>([])
   const [themes, setThemes] = useState<string[]>([])
   const [tickers, setTickers] = useState<string[]>([])
+  const [includeSignals, setIncludeSignals] = useState<boolean>(false)  // Heavy mode toggle
 
   // Sector options
   const sectorOptions = ["Technology", "Healthcare", "Financials", "Consumer", "Industrials", "Energy", "Utilities", "Real Estate"]
@@ -46,13 +47,14 @@ export default function Dashboard() {
   const themeOptions = ["growth", "value", "momentum", "dividend", "quality"]
 
   const { data, isLoading, error, isFetching } = useQuery<DashboardData>({
-    queryKey: ['dashboard', { sectors, horizons, themes, tickers }],
+    queryKey: ['dashboard', { sectors, horizons, themes, tickers, includeSignals }],
     queryFn: async () => {
       const params: Record<string, string> = {}
       if (safeLength(sectors) > 0) params.sectors = sectors.join(',')
       if (safeLength(horizons) > 0) params.horizons = horizons.join(',')
       if (safeLength(themes) > 0) params.themes = themes.join(',')
       if (safeLength(tickers) > 0) params.tickers = tickers.join(',')
+      if (includeSignals) params.include_signals = '1'  // Add heavy mode flag
 
       const response = await apiGet<DashboardData>('/dashboard/kpis', params)
       if (!response.ok) {
@@ -167,17 +169,33 @@ export default function Dashboard() {
               />
             </div>
 
-        {(safeLength(sectors) > 0 || safeLength(horizons) > 0 || safeLength(themes) > 0 || safeLength(tickers) > 0) && (
-          <div style={styles.activeFilters}>
-            <small>Filtres actifs:</small>
-            {safeLength(sectors) > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
-            {safeLength(horizons) > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
-            {safeLength(themes) > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
-            {safeLength(tickers) > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
-          </div>
-        )}
-      </div>
-    </Card>
+            {/* Toggle for heavy processing mode */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>
+                Mode détaillé: 
+                <input
+                  type="checkbox"
+                  checked={includeSignals}
+                  onChange={(e) => setIncludeSignals(e.target.checked)}
+                  disabled={isFetching}  // Disable during fetch to prevent multiple parallel requests
+                  style={styles.toggleSwitch}
+                />
+                <span style={styles.toggleLabel}>{includeSignals ? ' Activé' : ' Désactivé'}</span>
+              </label>
+            </div>
+
+          {(safeLength(sectors) > 0 || safeLength(horizons) > 0 || safeLength(themes) > 0 || safeLength(tickers) > 0 || includeSignals) && (
+            <div style={styles.activeFilters}>
+              <small>Filtres actifs:</small>
+              {safeLength(sectors) > 0 && <span style={styles.filterBadge}>Secteurs: {sectors.join(', ')}</span>}
+              {safeLength(horizons) > 0 && <span style={styles.filterBadge}>Horizons: {horizons.join(', ')}</span>}
+              {safeLength(themes) > 0 && <span style={styles.filterBadge}>Thèmes: {themes.join(', ')}</span>}
+              {safeLength(tickers) > 0 && <span style={styles.filterBadge}>Tickers: {tickers.join(', ')}</span>}
+              {includeSignals && <span style={styles.filterBadge}>Mode détaillé: ON</span>}
+            </div>
+          )}
+        </div>
+      </Card>
 
         {/* KPIs Grid */}
         <div style={styles.kpisGrid}>
@@ -293,6 +311,16 @@ const styles = {
     borderRadius: 4,
     color: '#fff',
     fontSize: 14,
+  },
+  toggleSwitch: {
+    marginLeft: 8,
+    transform: 'scale(1.2)',
+    cursor: 'pointer',
+  },
+  toggleLabel: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: '#4caf50',
   },
   activeFilters: {
     display: 'flex' as const,
