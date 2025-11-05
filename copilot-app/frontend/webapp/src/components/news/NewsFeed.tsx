@@ -4,14 +4,15 @@ import NewsCard from "./NewsCard";
 import { useNews } from "@/hooks/useNews";
 import { FreshnessBadge } from "@/components/ui/FreshnessBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess';
+import { safeGetArray, safeMap, safeLength } from '@/utils/safeAccess';
+import type { NewsItem } from '@/types/news.types';
 const NewsFilters = React.lazy(() => import("./NewsFilters"));
 
 export default function NewsFeed() {
   const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNews();
 
   // Safely access articles with fallback to empty array using safe access utility
-  const articles = safeGetArray({ items }, 'items', []);
+  const articles = safeGetArray<NewsItem>({ items }, 'items', []);
 
   return (
     <section>
@@ -36,7 +37,7 @@ export default function NewsFeed() {
       {/* Liste sécurisée */}
       {safeLength(articles) > 0 && (
         <div>
-          {safeMap(articles, (item, index) => <NewsCard key={item.id || index.toString()} item={item} />)}
+          {safeMap<NewsItem, JSX.Element>(articles, (item, index) => <NewsCard key={item.id || index.toString()} item={item} />)}
         </div>
       )}
 

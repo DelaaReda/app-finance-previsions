@@ -32,6 +32,7 @@
 - [x] Implémentation I/O disque et cache léger (never-empty) (FC-HOTFIX-004)
 - [x] Création routes news et forecasts avec structure propre (FC-HOTFIX-005)
 - [x] Modification script start/stop pour macOS (wait loops au lieu de timeout) (FC-HOTFIX-006)
+- [x] Création utilitaires d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)
 - [x] Création utilities d'accès sécurisé (safeGetArray, safeMap, safeLength) pour éviter crashes length/map of undefined (FC-HOTFIX-007)
 
 ## 📈 Points Gagnés

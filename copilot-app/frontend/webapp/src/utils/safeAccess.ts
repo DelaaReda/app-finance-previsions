@@ -1,75 +1,79 @@
 /**
- * Utilities for safe array/object access in frontend components
- * Prevents "length/map of undefined" crashes
+ * Safe access utilities to prevent "reading property of undefined" errors
  */
 
+export const safeGet = <T = any>(obj: any, path: string, defaultValue?: T): T | undefined => {
+  try {
+    const keys = path.split('.');
+    let current = obj;
+    
+    for (const key of keys) {
+      if (current === null || current === undefined) {
+        return defaultValue;
+      }
+      current = current[key];
+    }
+    
+    return current !== undefined ? current : defaultValue;
+  } catch (e) {
+    return defaultValue;
+  }
+};
+
+export const safeArray = <T>(arr: T[] | null | undefined, defaultValue: T[] = []): T[] => {
+  if (Array.isArray(arr)) {
+    return arr;
+  }
+  return defaultValue;
+};
+
+export const safeString = (str: string | null | undefined, defaultValue: string = ''): string => {
+  if (typeof str === 'string') {
+    return str;
+  }
+  return defaultValue;
+};
+
+export const safeNumber = (num: number | null | undefined, defaultValue: number = 0): number => {
+  if (typeof num === 'number' && !isNaN(num)) {
+    return num;
+  }
+  return defaultValue;
+};
+
 /**
- * Safely access array property with fallback
- * @param obj The object that might contain the array property
- * @param prop The property name to access
- * @param fallback The fallback value if property is undefined or not an array
- * @returns The array if valid, otherwise the fallback value
+ * Safe mapper that handles undefined arrays
  */
-export function safeGetArray<T>(
-  obj: any,
-  prop: string,
-  fallback: T[] = []
-): T[] {
-  if (!obj || typeof obj !== 'object') {
-    return fallback;
+export const safeMap = <T, R>(
+  arr: T[] | null | undefined, 
+  callback: (item: T, index: number) => R,
+  defaultValue: R[] = []
+): R[] => {
+  if (Array.isArray(arr)) {
+    return arr.map(callback);
   }
-  
-  const value = obj[prop];
-  if (Array.isArray(value)) {
-    return value;
-  }
-  
-  return fallback;
+  return defaultValue;
+};
+
+/**
+ * Guard for checking if an array is defined and not empty
+ */
+export const isNonEmptyArray = <T>(arr: T[] | null | undefined): arr is T[] => {
+  return Array.isArray(arr) && arr.length > 0;
+};
+
+// Backwards-compatible aliases used across the codebase
+export function safeGetArray<T>(obj: any, prop: string, fallback: T[] = []): T[] {
+  const value = safeGet<any>(obj, prop, undefined as any);
+  return Array.isArray(value) ? (value as T[]) : fallback;
 }
 
-/**
- * Safely check if an array property exists and has elements
- * @param obj The object that might contain the array property
- * @param prop The property name to check
- * @returns true if property exists and is a non-empty array
- */
 export function hasSafeArray(obj: any, prop: string): boolean {
-  if (!obj || typeof obj !== 'object') {
-    return false;
-  }
-  
-  const value = obj[prop];
+  const value = safeGet<any>(obj, prop, undefined as any);
   return Array.isArray(value) && value.length > 0;
 }
 
-/**
- * Safe map function that checks if array exists before mapping
- * @param array The array to map over
- * @param callback The mapping function
- * @param fallback Fallback value if array is not valid
- * @returns Mapped array or fallback
- */
-export function safeMap<T, U>(
-  array: any,
-  callback: (item: T, index: number) => U,
-  fallback: U[] = []
-): U[] {
-  if (Array.isArray(array)) {
-    return array.map(callback);
-  }
-  
-  return fallback;
-}
-
-/**
- * Safe length check that returns 0 for undefined/non-array values
- * @param array The array to check length of
- * @returns Length of array or 0 if not valid array
- */
 export function safeLength(array: any): number {
-  if (Array.isArray(array)) {
-    return array.length;
-  }
-  
+  if (Array.isArray(array)) return array.length;
   return 0;
 }

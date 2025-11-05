@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchMacroSeries } from '../services/macro.service'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 const MACRO_SERIES = [
   { id: 'CPIAUCSL', name: 'CPI (Inflation)' },
@@ -16,7 +17,7 @@ export default function Macro() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['macro-series', selectedSeries],
     queryFn: () => fetchMacroSeries(selectedSeries, '2019-01-01').then(r => r.ok ? r.data : Promise.reject(r.error)),
-    enabled: selectedSeries.length > 0,
+    enabled: safeLength(selectedSeries) > 0,
     staleTime: 3600000, // 1h
   })
 
@@ -34,7 +35,7 @@ export default function Macro() {
       <div style={{ marginBottom: 32, background: 'white', padding: 20, borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <h3 style={{ marginBottom: 16, fontSize: 16, fontWeight: 600 }}>Séries à afficher</h3>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {MACRO_SERIES.map(series => (
+          {safeMap(MACRO_SERIES, series => (
             <label key={series.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -58,7 +59,7 @@ export default function Macro() {
       {error && <div style={{ color: 'tomato', background: '#fff', padding: 20, borderRadius: 8 }}>Erreur: {String(error)}</div>}
 
       {/* Graphiques */}
-      {data && Object.entries(data).map(([seriesId, _seriesData]) => {
+      {data && safeMap(Object.entries(data), ([seriesId, _seriesData]) => {
         const series = MACRO_SERIES.find(s => s.id === seriesId)
         return (
           <div key={seriesId} style={{ background: 'white', padding: 24, borderRadius: 8, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>

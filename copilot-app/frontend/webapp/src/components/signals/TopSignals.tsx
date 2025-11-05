@@ -2,7 +2,7 @@
 
 import Card from '@/components/common/Card'
 import { CompositeSignal } from '@/types/common.types'
-import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/utils/safeAccess'
+import { safeGetArray, safeMap, safeLength } from '@/utils/safeAccess'
 
 type TopSignalsProps = {
   signals: CompositeSignal[]
@@ -59,7 +59,7 @@ export default function TopSignals({
         {safeLength(topSignals) === 0 ? (
           <div style={styles.empty}>{emptyMessage}</div>
         ) : (
-          safeMap(topSignals, (signal, index) => {
+          safeMap<CompositeSignal, JSX.Element>(topSignals, (signal, index) => {
             const compositeScore = getCompositeScore(signal)
             const components = getComponentScores(signal)
             const strengthSummary = buildStrengthSummary(signal)
@@ -79,7 +79,7 @@ export default function TopSignals({
                 <p style={styles.description}>{description}</p>
 
                 <div style={styles.metrics}>
-                  {safeMap(components, component => (
+                  {safeMap<{ key: string; label: string; score: number }, JSX.Element>(components, component => (
                     <span key={component.key} style={styles.metric}>
                       {component.label}: <strong>{formatScore(component.score)}</strong>
                     </span>

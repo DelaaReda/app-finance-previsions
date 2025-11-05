@@ -1849,6 +1849,477 @@ echo "SMOKE OK"
 
 ---
 
+## FC-FE-001 — Intégration Material UI (frontend/vite-ts)
+
+**Status**: CLAIMED by ALEX-BACKEND-SUPERMAN-7
+
+**But**: moderniser le frontend avec Material UI pour améliorer l'UX/UI.
+
+**Fichiers**
+
+* `package.json` — ajouter dépendances MUI
+* `src/theme.ts` — créer thème avec mode clair/sombre
+* `src/main.tsx` — intégrer ThemeProvider + CssBaseline
+* `src/layout/AppShell.tsx` — AppBar + Drawer MUI
+
+**Étapes**
+
+1. **Installation**
+
+   ```bash
+   pnpm add @mui/material @emotion/react @emotion/styled @mui/icons-material @fontsource/roboto
+   pnpm add @mui/x-data-grid  # pour DataGrid (Forecasts/Backtests)
+   ```
+2. **Thème**
+
+   ```ts
+   // src/theme.ts
+   import { createTheme } from '@mui/material/styles';
+
+   export function buildTheme(mode: 'light' | 'dark' = 'light') {
+     return createTheme({
+       palette: {
+         mode,
+         primary: { main: '#1976d2' },
+         secondary: { main: '#9c27b0' },
+         success: { main: '#2e7d32' },
+         warning: { main: '#ed6c02' },
+         error: { main: '#d32f2f' },
+         info: { main: '#0288d1' },
+       },
+       components: {
+         MuiButton: { defaultProps: { variant: 'contained' } },
+         MuiCard:   { styleOverrides: { root: { borderRadius: 14 } } },
+         MuiChip:   { styleOverrides: { root: { fontWeight: 600 } } },
+       },
+     });
+   }
+   ```
+3. **Main integration**
+
+   ```tsx
+   // src/main.tsx
+   import React from 'react';
+   import ReactDOM from 'react-dom/client';
+   import { CssBaseline, ThemeProvider } from '@mui/material';
+   import '@fontsource/roboto/300.css';
+   import '@fontsource/roboto/400.css';
+   import '@fontsource/roboto/500.css';
+   import '@fontsource/roboto/700.css';
+   import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+   import App from './App';
+   import { buildTheme } from './theme';
+
+   function getInitialMode(): 'light' | 'dark' {
+     const saved = localStorage.getItem('palette-mode');
+     if (saved === 'light' || saved === 'dark') return saved;
+     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+   }
+
+   const queryClient = new QueryClient();
+   const theme = buildTheme(getInitialMode());
+
+   ReactDOM.createRoot(document.getElementById('root')!).render(
+     <React.StrictMode>
+       <QueryClientProvider client={queryClient}>
+         <ThemeProvider theme={theme}>
+           <CssBaseline />
+           <App />
+         </ThemeProvider>
+       </QueryClientProvider>
+     </React.StrictMode>
+   );
+   ```
+4. **Shell layout**
+
+   ```tsx
+   // src/layout/AppShell.tsx
+   import * as React from 'react';
+   import {
+     AppBar, Box, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, 
+     ListItemText, Container, Divider
+   } from '@mui/material';
+   import MenuIcon from '@mui/icons-material/Menu';
+   import { useNavigate, useLocation } from 'react-router-dom';
+
+   const nav = [
+     { label: 'Dashboard', to: '/' },
+     { label: 'Market Brief', to: '/brief' },
+     { label: 'Macro', to: '/macro' },
+     { label: 'Stocks', to: '/stocks' },
+     { label: 'News', to: '/news' },
+     { label: 'Forecasts', to: '/forecasts' },
+     { label: 'Backtests', to: '/backtests' },
+     { label: 'LLM Judge', to: '/judge' },
+   ];
+
+   export default function AppShell({ title = 'Finance Copilot', children }: React.PropsWithChildren<{title?: string;}>) {
+     const [open, setOpen] = React.useState(false);
+     const navTo = useNavigate();
+     const { pathname } = useLocation();
+
+     return (
+       <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+         <AppBar position="fixed">
+           <Toolbar>
+             <IconButton color="inherit" edge="start" onClick={() => setOpen(true)} sx={{ mr: 2 }}>
+               <MenuIcon />
+             </IconButton>
+             <Typography variant="h6" noWrap>{title}</Typography>
+           </Toolbar>
+         </AppBar>
+
+         <Drawer open={open} onClose={() => setOpen(false)}>
+           <Box sx={{ width: 260 }} role="presentation" onClick={() => setOpen(false)}>
+             <Typography variant="subtitle2" sx={{ px: 2, pt: 2, pb: 1, opacity: .7 }}>Navigation</Typography>
+             <Divider />
+             <List>
+               {nav.map((item) => (
+                 <ListItemButton
+                   key={item.to}
+                   selected={pathname === item.to}
+                   onClick={() => navTo(item.to)}
+                 >
+                   <ListItemText primary={item.label} />
+                 </ListItemButton>
+               ))}
+             </List>
+           </Box>
+         </Drawer>
+
+         <Box component="main" sx={{ flex: 1, pt: 8 }}>
+           <Container maxWidth="lg" sx={{ py: 3 }}>
+             {children}
+           </Container>
+         </Box>
+       </Box>
+     );
+   }
+   ```
+
+**DoD**
+
+* `pnpm install` fonctionne avec les nouveaux packages MUI
+* Thème clair/sombre opérationnel
+* Layout avec AppBar/Drawer fonctionnel
+* Aucun conflit avec le routing existant
+
+---
+
+## FC-FE-002 — Composants UI robustes (frontend)
+
+**But**: remplacer les composants bruts par des versions MUI avec protections.
+
+**Fichiers**
+
+* `src/components/ui/ErrorBoundary.tsx`
+* `src/components/ui/EmptyState.tsx` 
+* `src/components/ui/FreshnessBadge.tsx`
+
+**Étapes**
+
+1. **Error Boundary**
+
+   ```tsx
+   import { FallbackProps } from 'react-error-boundary';
+   import { Alert, AlertTitle, Button } from '@mui/material';
+
+   export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+     return (
+       <Alert severity="error" sx={{ my: 2 }}>
+         <AlertTitle>Une erreur est survenue</AlertTitle>
+         {String(error?.message || error)}
+         <Button sx={{ ml: 2 }} onClick={resetErrorBoundary} variant="outlined">Réessayer</Button>
+       </Alert>
+     );
+   }
+   ```
+2. **Empty State**
+
+   ```tsx
+   import { Box, Typography } from '@mui/material';
+   export default function EmptyState({ title='Aucune donnée', hint }: {title?: string; hint?: string;}) {
+     return (
+       <Box sx={{ textAlign:'center', py: 6, opacity:.8 }}>
+         <Typography variant="h6">{title}</Typography>
+         {hint && <Typography variant="body2" sx={{ mt: 1 }}>{hint}</Typography>}
+       </Box>
+     );
+   }
+   ```
+3. **Freshness Badge**
+
+   ```tsx
+   import { Chip } from '@mui/material';
+
+   export default function FreshnessBadge({ stale }: { stale?: boolean }) {
+     const label = stale ? 'Stale' : 'Fresh';
+     const color = stale ? 'warning' : 'success';
+     return <Chip size="small" label={label} color={color as any} />;
+   }
+   ```
+
+**DoD**
+
+* Tous les composants MUI fonctionnent correctement
+* Protection contre `undefined.map` et `undefined.length` en place
+* Affichage stylisé des states (erreur, vide, fraîcheur)
+
+---
+
+## FC-FE-003 — Dashboard avec MUI Cards (frontend)
+
+**But**: remplacer le dashboard actuel par des Cards MUI avec KPIs.
+
+**Fichiers**
+
+* `src/pages/Dashboard.tsx`
+* `src/components/dashboard/KPICard.tsx`
+
+**Étapes**
+
+1. **KPI Card**
+
+   ```tsx
+   import { Card, CardContent, Typography, Box } from '@mui/material';
+
+   export default function KPICard({ title, value, trend, icon }: { title: string; value: string | number; trend?: number; icon?: React.ReactNode; }) {
+     return (
+       <Card>
+         <CardContent>
+           <Box display="flex" justifyContent="space-between" alignItems="center">
+             <Box>
+               <Typography color="textSecondary" gutterBottom variant="caption">{title}</Typography>
+               <Typography variant="h6">{value}</Typography>
+               {trend !== undefined && (
+                 <Typography color={trend >= 0 ? 'success.main' : 'error.main'} variant="caption">
+                   {trend >= 0 ? '↗' : '↘'} {Math.abs(trend)}%
+                 </Typography>
+               )}
+             </Box>
+             {icon && <Box>{icon}</Box>}
+           </Box>
+         </CardContent>
+       </Card>
+     );
+   }
+   ```
+2. **Dashboard layout**
+
+   ```tsx
+   import { Grid } from '@mui/material';
+   import KPICard from '../components/dashboard/KPICard';
+
+   export default function Dashboard() {
+     // fetch data avec guards
+     const { data, isLoading, error } = useQuery({ queryKey: ['dashboard'], queryFn: fetchDashboard });
+
+     if (isLoading) return <CircularProgress />;
+     if (error) return <Alert severity="error">Erreur de chargement</Alert>;
+
+     const kpis = data?.kpi || {};
+
+     return (
+       <Grid container spacing={3}>
+         <Grid item xs={12} md={3}>
+           <KPICard title="Forecasts" value={kpis.forecastsCount} trend={kpis.forecastsTrend} />
+         </Grid>
+         <Grid item xs={12} md={3}>
+           <KPICard title="News" value={kpis.newsCount} trend={kpis.newsTrend} />
+         </Grid>
+         <Grid item xs={12} md={3}>
+           <KPICard title="Backtests" value={kpis.backtestsCount} trend={kpis.backtestsTrend} />
+         </Grid>
+         <Grid item xs={12} md={3}>
+           <KPICard title="Health" value="OK" trend={kpis.healthTrend} />
+         </Grid>
+       </Grid>
+     );
+   }
+   ```
+
+**DoD**
+
+* Dashboard avec 4+ KPI cards stylisées
+* States loading/error/empty correctement gérés
+* Valeurs réelles provenant du backend (pas de mocks)
+
+---
+
+## FC-FE-004 — DataTable MUI pour Forecasts (frontend)
+
+**But**: remplacer la table brute par DataGrid MUI avec pagination/tri.
+
+**Fichiers**
+
+* `src/components/tables/ForecastTable.tsx`
+* `src/pages/Forecasts.tsx`
+
+**Étapes**
+
+1. **DataGrid Component**
+
+   ```tsx
+   import { DataGrid, GridColDef } from '@mui/x-data-grid';
+
+   export default function ForecastTable({ rows, loading }: { rows: any[]; loading?: boolean; }) {
+     const columns: GridColDef[] = [
+       { field: 'ticker', headerName: 'Ticker', width: 100 },
+       { field: 'horizon', headerName: 'Horizon', width: 100 },
+       { field: 'direction', headerName: 'Dir', width: 80 },
+       { field: 'confidence', headerName: 'Conf', width: 100, valueFormatter: (v) => `${Math.round(v * 100)}%` },
+       { field: 'expected_return', headerName: 'ER', width: 100, valueFormatter: (v) => `${(v * 100).toFixed(2)}%` },
+       { field: 'explanation', headerName: 'Explication', width: 300 },
+     ];
+
+     return (
+       <div style={{ height: 520, width: '100%' }}>
+         <DataGrid
+           rows={rows}
+           columns={columns}
+           disableRowSelectionOnClick
+           loading={!!loading}
+           initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+           pageSizeOptions={[10, 25, 50]}
+           sx={{ borderRadius: 2, mt: 1 }}
+         />
+       </div>
+     );
+   }
+   ```
+2. **Intégration page**
+
+   ```tsx
+   import ForecastTable from '../components/tables/ForecastTable';
+   import EmptyState from '../components/ui/EmptyState';
+   import { ErrorFallback } from '../components/ui/ErrorBoundary';
+
+   export default function Forecasts() {
+     const { data, isLoading, error } = useQuery({ queryKey: ['forecasts'], queryFn: fetchForecasts });
+
+     if (error) return <ErrorFallback error={error} resetErrorBoundary={() => {}} />;
+     if (isLoading) return <LinearProgress />;
+
+     // Never-empty pattern
+     const rows = Array.isArray(data?.rows) ? data.rows : [];
+
+     return (
+       <div>
+         <div className="flex items-center justify-between">
+           <h2>Forecasts</h2>
+           <FreshnessBadge freshness={data?.freshness} stale={data?.stale} />
+         </div>
+         
+         {!rows.length ? (
+           <EmptyState title="Aucune prévision disponible" hint="Le modèle calcule en arrière-plan..." />
+         ) : (
+           <ForecastTable rows={rows} loading={isLoading} />
+         )}
+       </div>
+     );
+   }
+   ```
+
+**DoD**
+
+* Tableau MUI DataGrid fonctionnel avec pagination/tri
+* States loading/error/empty gérés
+* Never-empty pattern appliqué
+* Affichage de la fraîcheur
+
+---
+
+## FC-FE-005 — News Feed avec MUI List (frontend)
+
+**But**: remplacer le NewsFeed par une liste MUI avec structure propre.
+
+**Fichiers**
+
+* `src/components/news/NewsItem.tsx`
+* `src/pages/News.tsx`
+
+**Étapes**
+
+1. **News Item**
+
+   ```tsx
+   import { Card, CardContent, Typography, Chip, Box } from '@mui/material';
+
+   export default function NewsItem({ item }: { item: any }) {
+     return (
+       <Card>
+         <CardContent>
+           <Box display="flex" justifyContent="space-between">
+             <Typography variant="h6">{item.title}</Typography>
+             <Chip size="small" label={item.source} variant="outlined" />
+           </Box>
+           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+             {item.summary || item.description}
+           </Typography>
+           <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+             {item.tickers?.slice(0, 3)?.map?.((t: string) => (
+               <Chip key={t} label={t} size="small" />
+             ))}
+             {item.sentiment_score && (
+               <Chip 
+                 size="small" 
+                 label={`Senti: ${(item.sentiment_score * 100).toFixed(0)}%`} 
+                 color={item.sentiment_score > 0 ? 'success' : item.sentiment_score < 0 ? 'error' : 'default'}
+               />
+             )}
+           </Box>
+         </CardContent>
+       </Card>
+     );
+   }
+   ```
+2. **Integration dans la page**
+
+   ```tsx
+   import { List, ListItem } from '@mui/material';
+   import NewsItem from '../components/news/NewsItem';
+
+   export default function News() {
+     const { data, isLoading, error } = useQuery({ queryKey: ['news'], queryFn: fetchNews });
+
+     if (error) return <ErrorFallback error={error} resetErrorBoundary={() => {}} />;
+     if (isLoading) return <LinearProgress />;
+
+     // Never-empty pattern
+     const articles = Array.isArray(data?.articles) ? data.articles : [];
+
+     return (
+       <div>
+         <div className="flex items-center justify-between">
+           <h2>News</h2>
+           <FreshnessBadge freshness={data?.freshness} stale={data?.stale} />
+         </div>
+
+         {!articles.length ? (
+           <EmptyState title="Aucun article disponible" hint="Ingestion en cours..." />
+         ) : (
+           <List>
+             {articles.map((article) => (
+               <ListItem key={article.id}>
+                 <NewsItem item={article} />
+               </ListItem>
+             ))}
+           </List>
+         )}
+       </div>
+     );
+   }
+   ```
+
+**DoD**
+
+* Liste MUI Cards pour les articles
+* Tags et sentiments affichés avec Chips MUI
+* États loading/error/empty gérés
+* Never-empty pattern appliqué
+
+---
+
 
 
 
@@ -2421,43 +2892,43 @@ Let’s ship. 🚀
 * `/api/quality/checks` renvoie des métriques de qualité en temps réel
 * Système détecte les violations du contrat never-empty
 * Rapport de fraîcheur et de disponibilité des données disponibles
-# 🚀 UI THEMING MISSIONS - Material UI Integration
+# 🚀 UI THEMING MISSIONS - Material UI Integration (Complete Technical Guide)
 
 ## FC-UI-021 — Thème Material UI (Design System)
 
 **Status**: AVAILABLE to claim
 
-**But**: Implémenter le thème Material UI basé sur l'exemple officiel `material-ui-vite-ts` pour améliorer l'UX et l'accessibilité.
+**But**: Implémenter le thème Material UI basé sur l'exemple officiel `material-ui-vite-ts` pour améliorer l'UX, l'accessibilité et la cohérence visuelle.
 
 **Fichiers**
-
 * `frontend/webapp/package.json`
 * `frontend/webapp/vite.config.ts`
 * `frontend/webapp/src/App.tsx`
 * `frontend/webapp/src/main.tsx`
 * `frontend/webapp/src/theme.ts`
+* `frontend/webapp/src/layout/AppShell.tsx`
 * `frontend/webapp/src/components/ui/*`
 
 **Étapes**
-
 1. **Setup Material UI**:
-   - Ajouter `@mui/material`, `@emotion/react`, `@emotion/styled` aux dépendances
-   - Configurer le Vite pour supporter le CSS de MUI
-   - Créer un fichier `theme.ts` avec la personnalisation de la palette
+   - Installer dépendances: `@mui/material @emotion/react @emotion/styled @mui/icons-material @fontsource/roboto @mui/x-data-grid`
+   - Charger police Roboto dans `main.tsx` une seule fois
+   - Créer `theme.ts` avec `createTheme()` et modes light/dark
 
-2. **Wrapper principal**:
-   - Encapsuler l'application dans `ThemeProvider` et `CssBaseline`
+2. **Structure applicative**:
+   - Encapsuler l'application dans `ThemeProvider`, `CssBaseline`, `QueryClientProvider`
+   - Créer layout `AppShell.tsx` avec AppBar, Drawer, Container responsive
    - Remplacer le CSS global par les composants MUI équivalents
 
 3. **Migration progressive**:
    - Convertir les composants UI critiques un par un (Dashboard, Forecasts, News)
-   - Conserver la structure existante mais améliorer avec MUI
+   - Conserver la structure logique existante mais améliorer avec MUI
    - Tester chaque conversion pour s'assurer de la non-régression
 
 **DoD**
-
 * Tous les composants UI utilisent les composants MUI
 * Thème cohérent appliqué à l'ensemble de l'application
+* Mode clair/sombre supporté avec persistance
 * Palettes de couleurs personnalisées pour le thème financier
 * Application respecte les normes d'accessibilité WCAG
 * Aucun crash UI sur les composants migrés
@@ -2471,7 +2942,6 @@ Let’s ship. 🚀
 **But**: Convertir les composants pages vers Material UI avec des layouts professionnels.
 
 **Fichiers**
-
 * `frontend/webapp/src/pages/Dashboard.tsx`
 * `frontend/webapp/src/pages/Forecasts.tsx`
 * `frontend/webapp/src/pages/News.tsx`
@@ -2479,14 +2949,13 @@ Let’s ship. 🚀
 * `frontend/webapp/src/layouts/*`
 
 **Étapes**
-
 1. **Layout principal**:
    - Créer un layout avec AppBar, Drawer, et Footer en MUI
    - Implémenter le routing MUI avec `Tab` ou `BottomNavigation`
 
 2. **Pages critiques**:
-   - Dashboard: Grilles MUI (`Grid`, `Card`, `Paper`, `Typography`)
-   - Forecasts: Tableaux MUI (`Table`, `TableHead`, `TableBody`, `TableCell`)
+   - Dashboard: Grilles MUI (`Grid`, `Card`, `Paper`, `Typography`), KPIs en Cards
+   - Forecasts: DataGrid MUI (`DataGrid`) pour les prévisions
    - News: Listes MUI (`List`, `ListItem`, `ListItemText`, `Card`)
    - Briefs: Accordion MUI pour les sections
 
@@ -2495,103 +2964,99 @@ Let’s ship. 🚀
    - Tester sur différentes tailles d'écran
 
 **DoD**
-
 * Toutes les pages principales utilisent les composants MUI
 * Layout responsive fonctionnel sur mobile et desktop
 * Navigation intuitive avec barre latérale ou tabs
 * Performance comparable ou meilleure qu'avant la migration
+* États loading/error/empty correctement gérés avec composants MUI
 
 ---
 
-## FC-UI-023 — Data Visualization MUI (Charts & Graphs)
+## FC-UI-023 — Data Visualization MUI (Charts & DataGrid)
 
 **Status**: AVAILABLE to claim
 
-**But**: Remplacer les graphiques actuels par des composants MUI X (DataGrid, Charts).
+**But**: Remplacer les composants de visualisation par des composants MUI X (DataGrid, Charts).
 
 **Fichiers**
-
 * `frontend/webapp/src/components/charts/*`
+* `frontend/webapp/src/components/DataTable.tsx`
 * `frontend/webapp/src/pages/Forecasts.tsx`
 * `frontend/webapp/src/pages/Backtests.tsx`
 
 **Étapes**
-
 1. **Install MUI X**:
-   - Ajouter `@mui/x-data-grid`, `@mui/x-charts` aux dépendances
+   - Ajouter `@mui/x-data-grid` aux dépendances
    - Configurer les licences (open source)
 
 2. **Remplacer DataGrid**:
    - Utiliser `DataGridPro` ou `DataGrid` pour les prévisions
    - Implémenter le tri, filtre, pagination nativement
    - Améliorer l'accessibilité des données tabulaires
+   - Protéger contre erreurs `map/length of undefined`
 
-3. **Remplacer graphiques**:
-   - Utiliser `LineChart`, `BarChart`, `PieChart` pour les visualisations
+3. **Visualisations**:
+   - Utiliser `@mui/x-charts` pour graphiques simples (LineChart, BarChart, etc.)
    - Intégrer avec les données d'API existantes
    - Ajouter des tooltips et interactions MUI
 
 **DoD**
-
 * Tous les tableaux de données utilisent MUI DataGrid
 * Graphiques remplacés par MUI Charts avec interactions améliorées
 * Chargement des graphiques plus rapide avec MUI X
 * Accessibilité WCAG respectée pour toutes les visualisations
+* Protection contre crashes UI (never-empty patterns)
 
 ---
 
-## FC-UI-024 — Formulaires & Inputs MUI
+## FC-UI-024 — UI Guards & Error Boundaries (Stabilité)
 
 **Status**: AVAILABLE to claim
 
-**But**: Mettre à jour les formulaires et inputs avec les composants MUI pour une meilleure UX.
+**But**: Mettre en place des garde-fous UI pour éviter les crashes (never-empty côté front).
 
 **Fichiers**
-
-* `frontend/webapp/src/components/forms/*`
-* `frontend/webapp/src/pages/Settings.tsx`
-* `frontend/webapp/src/api/forms/*`
+* `frontend/webapp/src/components/ErrorBoundary.tsx`
+* `frontend/webapp/src/components/EmptyState.tsx`
+* `frontend/webapp/src/pages/*.tsx` (intégration)
+* `frontend/webapp/src/api/client.ts` (sécurisation des appels)
 
 **Étapes**
+1. **Error Boundaries**:
+   - Composant global ErrorBoundary avec message clair et bouton "Réessayer"
+   - Intégrer dans le AppShell ou via React Router
 
-1. **Champs de formulaire**:
-   - Utiliser `TextField`, `Select`, `Autocomplete` MUI
-   - Implémenter la validation MUI avec `TextField` props
-   - Gérer les erreurs et feedbacks utilisateur
+2. **Sécurisation des données**:
+   - Toujours `const items = Array.isArray(data?.items) ? data.items : []` au lieu de `data.items`
+   - Éviter `.map` ou `.length` direct sur des propriétés potentiellement `undefined`
+   - Utiliser `?? []` pour les tableaux, `?? 0` pour les nombres, `?? ""` pour les strings
 
-2. **Composants complexes**:
-   - DatePicker MUI pour les filtres de dates
-   - Slider MUI pour les paramètres de seuils
-   - Switch MUI pour les options d'affichage
-
-3. **Accessibilité**:
-   - Labels correctement associés
-   - Navigation clavier fonctionnelle
-   - Support des lecteurs d'écran
+3. **États UI**:
+   - Loading: Spinners/Skeleton MUI pendant les appels API
+   - Error: Alert MUI avec message d'erreur et bouton de retry
+   - Empty: EmptyState MUI avec message clair sans crash
 
 **DoD**
-
-* Tous les formulaires UI utilisent les composants MUI
-* Validation des formulaires intégrée avec MUI
-* Expérience utilisateur améliorée pour les interactions
-* Support complet des normes d'accessibilité
+* Aucun crash dû à `.map/length of undefined` 
+* Tous les composants protégés avec garde-fous
+* États loading/error/empty gérés avec composants MUI
+* UI jamais blanche ou cassée en cas d'erreur
+* Système de fallback robuste
 
 ---
 
-## FC-UI-025 — Migration complète et tests
+## FC-UI-025 — Migration complète et tests (Validation)
 
 **Status**: AVAILABLE to claim
 
 **But**: Compléter la migration UI et valider la stabilité globale.
 
 **Fichiers**
-
 * Tous les composants UI existants
 * Scripts de test e2e
 * Documentation de migration
 
 **Étapes**
-
 1. **Audit final**:
    - Vérifier que tous les composants UI sont migrés
    - Tester la performance et le bundle size
@@ -2608,9 +3073,9 @@ Let’s ship. 🚀
    - Mettre à jour les stories Storybook (si existant)
 
 **DoD**
-
 * 100% des composants UI migrés vers MUI
 * Tous les tests passent (unitaires, e2e, performance)
 * Bundle size optimal (pas de régression significative)
 * Documentation mise à jour pour l'équipe
 * Aucun bug d'accessibilité ou de performance
+* Système entièrement fonctionnel avec nouvelle UI MUI
