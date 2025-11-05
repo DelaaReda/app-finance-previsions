@@ -12,14 +12,15 @@ import sys
 import os
 
 # Add the backend directory to path to access modules
-sys.path.append(str(Path(__file__).resolve().parent.parent))
+backend_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(backend_root))
 
-# Import job functions with correct paths
-from backend.jobs.news_ingest import run_news_ingest_job
-from backend.jobs.forecast_materialization import run_daily_forecasts_job
-from backend.jobs.weekly_brief import run_and_persist_weekly_brief
-from backend.jobs.backtests import ensure_backtests_up_to_date
-from backend.jobs.alerts import run_alerts_job
+# Import job functions with correct paths based on actual function names found
+from jobs.news_ingest import run_news_ingest
+from jobs.forecasts import run_forecasts_job
+from jobs.weekly_brief import run_and_persist_weekly_brief
+from jobs.backtests import ensure_backtests_up_to_date
+from jobs.alerts import run_alerts_job
 
 logger = logging.getLogger(__name__)
 
