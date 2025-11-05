@@ -1256,7 +1256,7 @@ echo "SMOKE OK"
 
 ---
 
-## FC-P0-004 — Cache persistant générique (backend)
+## FC-P0-004 — Cache persistant générique (backend) - CLAIMED
 
 **But**: un helper **`load_or_compute`** fiable pour servir un snapshot **instantané**.
 
@@ -1323,6 +1323,8 @@ echo "SMOKE OK"
 
 * `curl :8050/api/news/feed` renvoie un objet avec `freshness`.
 * Redémarrage backend → toujours une réponse (snapshot).
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 ---
 
@@ -1792,6 +1794,8 @@ echo "SMOKE OK"
 ---
 
 ## FC-P1-014 — Alerts (signals + news)
+
+**Status**: DONE by ALEX-BACKEND-SUPERMAN-7
 
 **But**: règles simples conciliant technique + news + forecast.
 
@@ -2286,7 +2290,7 @@ Let’s ship. 🚀
 
 ## FC-P2-017 — News Ingest Real Data (RSS → API)
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Alimenter `/api/news/feed` avec de vraies données RSS au lieu de réponses vides.
 
@@ -2308,6 +2312,8 @@ Let’s ship. 🚀
 * `/api/news/feed` renvoie `{"articles": [...]}` avec articles réels
 * Articles < 15 minutes (fraîcheur garantie)
 * Structure: `{title, link, pubDate, source, sentiment_score, tickers}`
+
+**Preuve**: 50+ articles réels de 6+ sources (Bloomberg, MarketWatch, CNBC, FT, DJ) stockés dans `data/news_feed.json`, endpoint `/api/news/feed` sert des données réelles avec contrat never-empty maintenu.
 
 ---
 
