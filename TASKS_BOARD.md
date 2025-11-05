@@ -441,10 +441,10 @@ Tu as raison : là, le backend **ne peut pas démarrer** (imports cassés, `time
 Objectif: rendre l’affichage user‑friendly, cohérent et robuste, en s’alignant sur les données réelles du backend (never‑empty) et en évitant les états “vides” non expliqués.
 
 ## FC-UI-002 — Normaliser l’affichage des scores (0..100)
-Status: CLAIMED
+Status: DONE
 
 But: Les `composite_score` peuvent être dans [-1..1] ou 0..1 selon la source; l’UI affiche “/100”, ce qui donne parfois 0/100. Normaliser (front-only) pour lecture claire.
-Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 Actions:
 - Ajouter un util `formatScore100(x)` qui:
@@ -489,7 +489,7 @@ How‑to
 - Vérifier que la route back renvoie vite quand OFF.
 
 ## FC-UI-004 — Macro: charts réels pour séries FRED
-Status: AVAILABLE
+Status: CLAIMED
 
 But: Remplacer “Chart placeholder” par de vrais mini‑graphiques (lib légère).
 Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
@@ -2991,7 +2991,7 @@ Let’s ship. 🚀
 
 ## FC-P2-018 — ML Model Performance Tracking
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Suivre la performance des modèles ML avec métriques réelles.
 
@@ -3012,6 +3012,8 @@ Let’s ship. 🚀
 
 * `/api/ml-performance` renvoie métriques réelles de performance
 * Données historiques de performance ML stockées et accessibles
+
+**Preuve**: Système complet de suivi des performances ML implémenté : calculateur de métriques (accuracy, precision, recall, F1, Sharpe, Sortino), traqueur de prédictions avec stockage persistant, endpoint `/api/ml-performance` fonctionnel avec données réelles, job de reporting exécuté régulièrement, historique des métriques sauvegardé, et intégration avec le système de cache pour garantir never-empty.
 
 ---
 
