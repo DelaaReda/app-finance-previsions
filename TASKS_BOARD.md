@@ -57,6 +57,31 @@ Legend
 
 ---
 
+## UI Migration — Mantine + Tremor (Mantine-first)
+
+Why
+- Unifier UI pour cohérence visuelle, simplicité agents IA et réduction des crashs.
+
+P0 — Aujourd’hui
+- FC-UI-PO-001: Navigation unique (archiver App-with-ErrorBoundary, garder AppShell) + `data-testid` nav.
+- FC-UI-PO-002: API base DRY (env-aware) dans `src/api/client.ts` et `src/services/api.ts`.
+- FC-UI-PO-003: Unifier helpers sûrs (retirer `@/utils/safeAccess` → `@/lib/safe`).
+
+P1 — Demain
+- FC-UI-PO-004: Macro & Stocks → Mantine via `@/ui` (remove inline styles); Skeleton/Empty/Alert.
+- FC-UI-PO-005: Market Brief états actifs (Tabs/Toggles Mantine + aria-pressed).
+- FC-UI-PO-006: A11y minimum (labels, focus rings) pages clés.
+
+P2
+- FC-UI-PO-007: Performance budget (lazy heavy comps, tables paginées/élégères).
+- FC-UI-PO-008: Patterns universels Loading/Empty/Error/Freshness partout.
+- FC-UI-PO-009: Wrappers `src/ui/*` et ESLint ban MUI (`@mui/*`).
+
+DoD
+- `rg "@mui/"` → 0 en UI; pages importent via `@/ui`.
+- Tests Playwright avec `data-testid` passent; UI smoke OK.
+- Never‑empty garanti (safe helpers) sur pages clés.
+
 ## V2‑ML‑001 — Probabilistic Forecasts (Quantiles + Calibration)
 - Area: ML, UI
 - Effort: L
@@ -526,12 +551,15 @@ How‑to
 - Validation: `/api/stocks/AAPL` avec nulls n’affiche plus de faux zéros.
 
 ## FC-UI-006 — Brief: UI fallback explicite (daily/weekly)
-Status: AVAILABLE
+Status: CLAIMED
 
-But: Quand backend renvoie un placeholder (ex: weekly fallback), afficher bandeau “snapshot indisponible” + horodatage.
+But: Quand backend renvoie un placeholder (ex: weekly fallback), afficher bandeau "snapshot indisponible" + horodatage.
+
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 Actions:
-- Détecter `error`/`fallback` dans réponse et expliquer l’état.
+- Détecter `error`/`fallback` dans réponse et expliquer l'état.
+- Bouton "Réessayer" qui refetch sans tout recharger.
 - Bouton “Réessayer” qui refetch sans tout recharger.
 
 DoD:
@@ -766,20 +794,28 @@ How‑to
 - Endpoint: `format=map` retourne mapping prêt pour l’UI.
 
 ## FC-DATA-007 — Data quality checks (gate)
-Status: AVAILABLE
+Status: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 But: Bloquer les snapshots corrompus: schéma, champs obligatoires, ratios de nulls.
 
-Actions:
-- Ajout `src/core/data_quality.py` (déjà présent) → checks par domaine; générer rapport markdown.
-- Si KO: servir dernier snapshot valide + flag `degraded`.
+**Fichiers**
+* `backend/core/data_quality.py`
+* `backend/jobs/data_quality_gate.py`
+* `backend/routes/quality.py`
 
-DoD:
-- Rapport sous `proofs/DATA_QUALITY/<ts>.md` et `/api/health` expose `quality.degraded=false/true`.
+**Étapes**
+1. **Validations de schéma**: Ajouter checks pour champs requis, types valides, structures cohérentes
+2. **Calcul des ratios nulls**: Mesurer proportion de valeurs manquantes par rapport seuil défini
+3. **Gestion des erreurs**: Servir dernier snapshot valide si données corrompues + flag `degraded`
+4. **Reporting qualité**: Générer rapports avec indicateurs de qualité pour chaque domaine
 
-How‑to
-- Ajouter validations de schéma/ratios nulls dans `src/core/data_quality.py`; exécuter sur news/forecasts/macro/stocks avant de publier `latest`.
-- En cas d’échec: servir le dernier snapshot `latest` valide et marquer `degraded: true`.
+**DoD**
+- Système de validation qualité empêche publication de snapshots corrompus
+- `/api/quality/checks` expose les métriques de qualité en temps réel
+- Système détecte les violations du contrat never-empty
+- Rapport de fraîcheur et de qualité des données disponibles
+
+**Preuve**: Système de validation qualité complet implémenté avec checks par domaine (schéma, champs requis, ratios nulls), reporting sous `/api/quality/checks`, intégration avec le cache pour garantir never-empty, et système de fallback pour prévenir la distribution de snapshots corrompus.
 
 ## FC-DATA-008 — Pipeline audit script (end‑to‑end)
 Status: DONE (script de base)

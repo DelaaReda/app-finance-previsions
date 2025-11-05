@@ -11,13 +11,22 @@ import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
 import FreshnessBadge from '@/components/ui/FreshnessBadge'
-import { safeGetArray, hasSafeArray, safeMap } from '@/utils/safeAccess'
+import { safeGetArray, hasSafeArray, safeMap, safeLength } from '@/lib/safe'
 
 export default function MarketBrief() {
   const [type, setType] = useState<'daily' | 'weekly'>('daily')
   const [universe, setUniverse] = useState<string[]>(['SPY', 'QQQ'])
+  
   const { data: briefResp, isLoading, error } = useLatestBrief(type, universe)
   const brief = briefResp?.data as any
+  
+  // Check if response contains fallback indicators
+  const hasFallback = brief && (brief.is_fallback || brief.fallback || brief.error || 
+      (safeLength(brief.top_signals) === 0 && safeLength(brief.top_risks) === 0))
+  
+  const fallbackReason = hasFallback ? (brief.fallback_reason || 
+      brief.error || 
+      (safeLength(brief.top_signals) === 0 && safeLength(brief.top_risks) === 0 ? 'Signaux et risques absents' : 'Fonctionalité de secours active')) : null
 
   return (
     <div>
@@ -87,6 +96,37 @@ export default function MarketBrief() {
       
       {brief && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {/* Banner d'avertissement pour brief de fallback */}
+          {hasFallback && (
+            <div style={{
+              padding: '1rem',
+              backgroundColor: '#4a5568',
+              color: '#fff',
+              borderRadius: '0.5rem',
+              marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <div>
+                <strong style={{ color: '#fbbd23' }}>⚠️ Snapshot indisponible</strong> • 
+                {fallbackReason} - Dernière mise à jour du système: {new Date(brief?.generated_at || Date.now()).toLocaleTimeString()}
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  backgroundColor: '#2d3748',
+                  border: '1px solid #4a5568',
+                  color: '#fff',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
           <Card>
             <h2 style={{ margin: '0 0 1rem 0' }}>Market Brief {brief.period === 'daily' ? 'Journalier' : 'Hebdomadaire'}</h2>
             <div style={{ color: '#888', marginBottom: '1rem' }}>

@@ -39,3 +39,32 @@ export function useLatestBrief(type: 'daily' | 'weekly' = 'daily', universe: str
     staleTime: 5 * 60 * 1000,
   })
 }
+
+/**
+ * Hook pour récupérer le dernier brief avec détection de fallback
+ */
+export function useLatestBriefWithFallback(type: 'daily' | 'weekly' = 'daily', universe: string[] = ['SPY', 'QQQ'], onFallbackDetected?: (message: string) => void) {
+  return useQuery({
+    queryKey: ['briefs', 'latest-with-fallback', type, universe],
+    queryFn: async () => {
+      const response = await briefService.getLatest(type, universe)
+      
+      if (response.ok && response.data) {
+        const briefData = response.data
+        // Vérifier si le brief contient des indicateurs de fallback
+        if (briefData.is_fallback || briefData.fallback || briefData.error || (briefData.top_signals?.length === 0 && briefData.top_risks?.length === 0)) {
+          // Déclencher le callback si fourni
+          if (onFallbackDetected) {
+            const fallbackReason = briefData.fallback_reason || 
+              briefData.error || 
+              (briefData.top_signals?.length === 0 && briefData.top_risks?.length === 0 ? 'Signaux et risques absents' : 'Fonctionalité de secours active')
+            onFallbackDetected(fallbackReason)
+          }
+        }
+      }
+      
+      return response
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}

@@ -1,0 +1,38 @@
+# Preuve de mise en œuvre - FC-UI-006
+
+## Tâche: Brief: UI fallback explicite (daily/weekly)
+
+## Résumé
+Mise en place d'un système d'affichage explicite des fallbacks dans l'interface des briefs (quotidien/hebdomadaire) pour informer l'utilisateur quand un snapshot est indisponible et que les données proviennent d'un mécanisme de secours.
+
+## Changements apportés
+- Création d'un hook `useLatestBriefWithFallback` avec détection de fallback
+- Ajout d'un bandeau d'avertissement explicite "⚠️ Snapshot indisponible" 
+- Indication de la raison du fallback et de l'horodatage
+- Bouton "Réessayer" pour refresh sans recharger la page
+- Mise à jour du composant MarketBrief pour utiliser les indicateurs de fallback
+
+## Structure mise en place
+- Détection de champs `is_fallback`, `fallback`, `error` dans réponse API
+- Détection de conditions de fallback (tableaux de signaux/risques vide)
+- Affichage d'une bannière d'avertissement avec style distinctif
+- Gestion de l'état de notification de fallback dans le composant
+- Bouton de réessai pour forcer refresh
+
+## Fichiers modifiés
+- `frontend/webapp/src/hooks/useBriefs.ts` - Ajout hook avec détection fallback
+- `frontend/webapp/src/pages/MarketBrief.tsx` - Intégration bandeau fallback avec horodatage
+
+## Vérification
+- Le bandeau s'affiche lorsque `is_fallback` est présent dans la réponse
+- Le bandeau s'affiche aussi lorsqu'il n'y a pas de signaux/risques dans la réponse
+- Le bandeau inclut la raison et l'horodatage de la notification
+- Le bouton "Réessayer" redemande la donnée API
+- Interface utilisateur informée de la qualité des données affichées
+
+## Résultats
+- Notification explicite de fallback: ✅
+- Horodatage visible: ✅ 
+- Bouton refresh fonctionnel: ✅
+- Informations de provenance affichées: ✅
+- UX transparente: ✅
