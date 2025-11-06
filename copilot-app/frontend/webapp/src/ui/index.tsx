@@ -84,14 +84,14 @@ export const Tooltip = (props: TooltipProps) => (
   <MantineTooltip radius="md" withArrow {...props} />
 );
 
-export const Typo = (props: TextProps) => <Text fw={props.fw ?? 500} {...props} />;
+export const Typo = (props: TextProps) => <MantineText fw={props.fw ?? 500} {...props} />;
 
 export const Heading = (props: TitleProps) => (
-  <Title order={props.order ?? 3} fw={props.fw ?? 700} {...props} />
+  <MantineTitle order={props.order ?? 3} fw={props.fw ?? 700} {...props} />
 );
 
 export const LoadingSpinner = (props: LoaderProps) => (
-  <Loader size={props.size ?? 'md'} color={props.color ?? 'indigo'} variant={props.variant ?? 'bars'} {...props} />
+  <MantineLoader size={props.size ?? 'md'} color={props.color ?? 'indigo'} variant={props.variant ?? 'bars'} {...props} />
 );
 
 export const RingProgress = (props: RingProps) => <RingComponent {...props} />;
