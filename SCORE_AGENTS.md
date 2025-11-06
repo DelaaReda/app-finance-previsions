@@ -39,6 +39,7 @@ Ajoutez une ligne dans le tableau ci-dessous et **gardez le tri par Points décr
 | MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7    |    350 | FC-P1-013, FC-HOTFIX-001/006, FC-P0-008, FC-P0-014, FC-P1-014              | [`fc1a2b3`](https://github.com/DelaaReda/app-finance-previsions/commit/fc1a2b3) | 2025-11-03 |
 | LENA-LLM-STRATEGIST-WONDERWOMAN-21       |   1175 | +FC-P2-017 (News Ingest Real Data), +FC-P2-019 (Advanced Cache Invalidation), +FC-UI-024 (Error Boundaries & Safe Access), +FC-UI-021 (Material UI Theme), +FC-UI-023 (Data Visualization MUI), +FC-UI-025 (Complete UI Migration Validation), +FC-P2-018 (ML Model Performance Tracking), +FC-DATA-007 (Data Quality Checks), +Sprint V2 doc (tasks + how-to), cache-contract-fix, status-ext | — (local) | 2025-11-05 |
 | STEPHANE-DATA-MASTER-BATMAN-10           |    240 | Fix `/forecasts` empty (UI)                                                  | [`abc1234`](https://github.com/DelaaReda/app-finance-previsions/commit/abc1234) | 2025-11-03 |
+| ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39 |    260 | FC-INT-001 (Audit frontend/backend integration), FC-INT-002 (Safe Access Pattern analysis), FC-INT-009 (Critical: Connected backend jobs to ForecastHybridV1 system - pipeline integration complete) | proofs/FC-INT-*/ELENA-39 | 2025-11-06 |
 | NORA-PRODUCT-OWNER-SPIDERWOMAN-11        |    285 | FC-UI-PO-001/002/003/004/009 (Mantine migration, safe helpers, nav, API, wrappers), FC-UI-PO-008 (visual states), News/Macro/Stocks/Forecasts redesign | proofs/FC-UI-PO-P1/NORA-11 | 2025-11-05 |
 
 ### Notes
