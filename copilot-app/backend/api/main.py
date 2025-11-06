@@ -285,6 +285,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No correlations routes module found: {str(e)}")
     
+    # Search router (API-SEARCH-001 by ELENA-39)
+    try:
+        from api.routes.search import router as search_router
+        app.include_router(search_router, prefix="/api/search", tags=["search"])
+        logger.info("✅ Search router registered at /api/search")
+    except ImportError as e:
+        logger.info(f"No search routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 

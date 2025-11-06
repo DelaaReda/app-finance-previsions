@@ -42,4 +42,5 @@ export const qk = {
     String(limit ?? ''),
     sort,
   ],
+  search: (type: string, ...params: any[]) => ['search', type, ...params],
 } as const;
