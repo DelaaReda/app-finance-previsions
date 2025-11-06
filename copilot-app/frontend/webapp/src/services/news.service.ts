@@ -8,6 +8,8 @@ export async function getNewsFeed(params: {
 }) {
   const p = { ...params };
   if (!p.limit) p.limit = 50;
+  // Backend validation requires limit <= 200
+  if (p.limit && p.limit > 200) p.limit = 200;
   return apiGet<NewsFeedResponse>("/api/news/feed", p);
 }
 

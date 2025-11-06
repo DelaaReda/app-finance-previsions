@@ -42,6 +42,7 @@
 - [x] FC-TASK-FORECAST-FULL: Complete forecast data pipeline implementation (Real ML+G4F forecasts)
 - [x] FC-P1-015: Backtests v1 - Forecast validation with hit-rate and ER metrics (Complete backtesting system)
 - [x] FC-DASH-002: Hooks Data & API Integration - Backend routes for dashboard data (forecasts/news/macro APIs)
+- [ ] FC-UI-ENHANCEMENT: Enhanced Forecasts UI with advanced visualizations and ML+G4F insights
 - [x] FC-P0-010: Pre-push smoke hook infrastructure (quality gate) - Quality gates with automatic testing
 - [x] HOTFIX Structure: Backend package architecture and import fixes (system stability)
 - [x] FC-P0-009: Vite proxy + .env configuration (devx improvement) - Proper proxy and env setup

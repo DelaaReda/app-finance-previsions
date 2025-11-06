@@ -16,11 +16,11 @@ export default function ForecastsMinimal() {
   }));
 
   return (
-    <div style={{ padding: '2rem', color: 'white' }}>
+    <div data-testid="forecasts-pro" style={{ padding: '2rem', color: 'white' }}>
       <h1>Prévisions de marché</h1>
       <p>Univers complet: Crypto, Gold, Tech, International, Indices</p>
 
-      <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+      <div data-testid="forecasts-grid" style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
         {mockForecasts.map(({ ticker, name, category, score, trend }) => (
           <div
             key={ticker}

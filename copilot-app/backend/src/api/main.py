@@ -108,7 +108,7 @@ def create_app() -> FastAPI:
 
         # Import necessary functions
         try:
-            from storage.io import load_json
+            from backend.storage.base import load_json
             from jobs.forecasts import run_forecasts_job
             from jobs.news_ingest import run_news_ingest
             from jobs.weekly_brief import run_and_persist_weekly_brief
@@ -763,10 +763,10 @@ def register_routes(app: FastAPI):
     ):
         """Get news feed - serves real data from news_feed.json"""
         try:
-            from storage.io import load_json
+            from storage.base import load_json
 
             # Load news data
-            news_data = load_json("news_feed")
+            news_data = load_json("news_feed.json")
 
             if not news_data:
                 # Return empty but valid structure
@@ -1130,7 +1130,7 @@ def register_routes(app: FastAPI):
         """Get weekly market brief with <200ms response time using pre-computed data."""
         try:
             # Use cached snapshot approach for instant response
-            from storage.base import load_json
+            from backend.storage.base import load_json
             
             cached_brief = load_json("brief_weekly.json")
             
@@ -1176,8 +1176,8 @@ def register_routes(app: FastAPI):
         """Get daily market brief with cache-first, instant response (never-empty)."""
         try:
             # 1) Try cached daily snapshot (fast path)
-            from storage import load_json
-            snap = load_json("brief_daily") or load_json("brief_weekly")
+            from storage.io import load_json
+            snap = load_json("brief_daily.json") or load_json("brief_weekly.json")
 
             if snap:
                 # Support multiple payload shapes
@@ -1289,7 +1289,7 @@ def register_routes(app: FastAPI):
             from storage.io import load_json
 
             # Load forecasts data
-            forecasts_data = load_json("forecasts")
+            forecasts_data = load_json("forecasts.json")
 
             if not forecasts_data:
                 # Return empty but valid structure

@@ -45,6 +45,10 @@
 - [x] Intégration des helpers dans le système UI (@/ui) pour accès facile
 - [x] Documentation des patterns never-empty dans /docs/never-empty-patterns.md
 - [x] Fix critique pour éviter les erreurs "Cannot read properties of undefined"
+- [x] Documentation complète de la procédure UI testing (docs/ui-testing-procedure.md)
+- [x] Coordination du QA système et standardisation des tests UI
+- [x] Procédure de vérification des 4 états (loading, empty, error, data) établie
+- [x] Méthodologie de capture des problèmes avec screenshots documentée
 
 ## 📈 Points Gagnés
 - **Total**: 240 points

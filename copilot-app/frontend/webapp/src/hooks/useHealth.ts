@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, client } from '../api/client';
+import { validateData, HealthSchema, logValidationSuccess } from '@/lib/zodWrapper';
 
 export interface LegacyHealthData {
   status: 'up' | 'down' | 'degraded';
@@ -132,7 +133,7 @@ export function useHealth() {
         };
       });
 
-      return {
+      const response = {
         updated_at: raw.timestamp ?? new Date().toISOString(),
         datasets,
         thresholds: {
@@ -142,6 +143,12 @@ export function useHealth() {
           }, {}),
         },
       } satisfies Health;
+
+      // Validate response schema
+      const validated = validateData(response, HealthSchema);
+      logValidationSuccess('Health', validated.datasets.length);
+
+      return validated;
     },
     refetchInterval: 60_000,
   });

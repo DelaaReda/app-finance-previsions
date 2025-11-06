@@ -1,7 +1,7 @@
 import { Stack, Title, Text } from '@mantine/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import BacktestsPanel from '@/components/widgets/BacktestsPanel';
+import BacktestsPanelEnhanced from '@/components/widgets/BacktestsPanelEnhanced';
 
 export default function BacktestsPage() {
   const [params] = useSearchParams();
@@ -21,7 +21,7 @@ export default function BacktestsPage() {
           Performance historique des stratégies Finance Copilot. Branchez une stratégie backend réelle — données sans mock.
         </Text>
       </div>
-      <BacktestsPanel
+      <BacktestsPanelEnhanced
         strategy={query.strategy}
         universe={query.universe}
         benchmark={query.benchmark}
