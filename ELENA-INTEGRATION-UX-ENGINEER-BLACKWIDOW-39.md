@@ -293,7 +293,10 @@ Combiner les 9 widgets sophistiqués + data backend riche + ML models + G4F LLM 
 
 **Status** : ✅ SEMAINE 1 TERMINÉE en 1 jour !
 
-**Prochaine action** : Démarrer Semaine 2 (FC-INT-023: Recommendations Service)
+**Semaine 2** : 🟡 EN COURS
+- 🟡 FC-INT-023 (Recommendations Service) - EN COURS
+
+**Prochaine action** : Implémenter FC-INT-023 (Recommendations Service)
 
 ---
 
