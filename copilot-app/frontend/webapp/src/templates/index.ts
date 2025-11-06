@@ -1,7 +1,11 @@
+import { macroBoardTemplate } from './macroBoard';
+import { performanceMatrixTemplate } from './performanceMatrix';
 import { stocksMomentumTemplate } from './stocksMomentum';
 
-export { stocksMomentumTemplate };
+export { macroBoardTemplate, performanceMatrixTemplate, stocksMomentumTemplate };
 
 export const templates = [
+  macroBoardTemplate,
+  performanceMatrixTemplate,
   stocksMomentumTemplate,
 ];

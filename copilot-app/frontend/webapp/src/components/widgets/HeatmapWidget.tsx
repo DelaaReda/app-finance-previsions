@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Card, Title, Text } from '@/ui';
 import { Alert, Group, Loader } from '@mantine/core';
 import { ensureArray, safeFormatNumber } from '@/lib/safe';
@@ -128,7 +128,8 @@ export function HeatmapWidget({ universe, horizon = '1m', periods = ['1w', '1m',
 
   // Render simple table heatmap
   return (
-    <Card>
+    <React.Fragment>
+      <Card>
       <Title order={4}>{title}</Title>
       {description && <Text c="dimmed" mt="xs">{description}</Text>}
       <div className="overflow-auto mt-4">
@@ -161,6 +162,7 @@ export function HeatmapWidget({ universe, horizon = '1m', periods = ['1w', '1m',
           </tbody>
         </table>
       </div>
-    </Card>
+      </Card>
+    </React.Fragment>
   );
 }

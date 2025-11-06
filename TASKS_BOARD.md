@@ -75,6 +75,24 @@ Lisez les reviews : [text](reviews)
 - **DoD**: Les erreurs `ImportMetaEnv` disparaissent; doc à jour.
 - **Proof**: log typecheck + snippet doc.
 
+#### FC-API-STOCKS-SEARCH-REAL — Recherche actions sans mock *(Effort M)*
+- **Why**: `stocksService.search` renvoie une liste mockée (AAPL/MSFT hardcodés), contraire à la règle « no mocks » et génère des signaux erronés.
+- **Steps**:
+  1. Exposer un endpoint backend (`GET /stocks/search?q=`) ou, à défaut, réutiliser `/stocks/universe` + filtrage réel (aucun tableau mock).
+  2. Supprimer le tableau `mockResults`, gérer le cas 0 résultat avec `EmptyState` + CTA “élargir la requête”.
+  3. Couvrir par un test (unit/service + Playwright) montrant qu’un ticker réellement suivi (ex: `NVDA`) est proposé.
+- **DoD**: `rg "mockResults"` → 0; page Stocks affiche résultats backend + état vide propre; curl `/api/stocks/search?q=AAPL` figure dans les preuves.
+- **Proof**: log tests + screenshot recherche + captures curl.
+
+#### FC-UI-BRIEF-MANTINE — Refonte Market Brief Mantine/Tremor *(Effort M)*
+- **Why**: `MarketBrief.tsx` utilise encore layout legacy (inline styles, boutons custom, `<select>` brut) en contradiction avec la vision Mantine.
+- **Steps**:
+  1. Remplacer layout par composants Mantine (`Stack`, `Card`, `SegmentedControl`, `MultiSelect`) + stylage thème.
+  2. Normaliser Loading/Empty/Error + `FreshnessBadge` partagé; conserver bannière fallback mais via `Alert` Mantine.
+  3. Brancher la sélection d’univers sur un refetch réel et loguer si backend ignore le param (note PO dans preuve).
+- **DoD**: `rg 'backgroundColor' MarketBrief.tsx` → 0; Playwright `/brief` vert; screenshots avant/après + log réseau.
+- **Proof**: Diff + vidéo toggle quotidien/hebdo + traces refetch.
+
 ---
 
 ## P1 — Copilot & Backtests (48–72h)

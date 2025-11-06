@@ -21,6 +21,7 @@ import { useMacroSeries } from '@/hooks/useMacroSeries';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { useNews } from '@/hooks/useNews';
+import { ForecastMatrixWidget } from '@/components/widgets/ForecastMatrixWidget';
 
 // --------------------------------------------
 // Helpers d'adaptation
@@ -344,6 +345,12 @@ export default function Dashboard() {
               )}
             </Grid.Col>
           </Grid>
+
+          <ForecastMatrixWidget
+            key={`forecast-matrix-${universe.join(',')}`}
+            defaultUniverse={universe}
+            defaultHorizons={['1m', '3m', '6m', '12m']}
+          />
         </Grid.Col>
 
         {/* Colonne droite */}
