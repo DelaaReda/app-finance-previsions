@@ -43,4 +43,7 @@ export const qk = {
     sort,
   ],
   search: (type: string, ...params: any[]) => ['search', type, ...params],
+  portfolios: () => ['portfolios'],
+  portfolio: (id: string) => ['portfolios', id],
+  portfolioPerformance: (id: string, benchmark?: string) => ['portfolios', id, 'performance', benchmark ?? 'SPY'],
 } as const;

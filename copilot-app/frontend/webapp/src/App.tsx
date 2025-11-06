@@ -22,6 +22,7 @@ import NewsSignalRadar from './pages/NewsSignalRadar' // FC-UX-002: News Signal 
 import Copilot from './pages/Copilot'
 import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSheet with intelligent drill-down
 import MarketBrief from './pages/MarketBrief'
+import Portfolios from './pages/Portfolios' // API-PORTFOLIO-002: Portfolio/Watchlist management
 import TestSimple from './pages/TestSimple'
 
 // AppContent wrapper with Command Palette
@@ -54,6 +55,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/news" element={<News />} />
     <Route path="/news/radar" element={<NewsSignalRadar />} /> {/* FC-UX-002: News Signal Radar */}
     <Route path="/copilot" element={<Copilot />} />
+    <Route path="/portfolios" element={<Portfolios />} /> {/* API-PORTFOLIO-002: Portfolio management */}
     <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<ForecastsMinimal />} />
     <Route path="/test" element={<TestSimple />} />

@@ -35,6 +35,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useDrillDown } from '../../contexts/DrillDownContext';
 import { useForecasts } from '../../hooks/useForecasts';
+import { usePortfolios } from '../../hooks/usePortfolios';
 
 interface CommandPaletteProps {
   opened: boolean;
@@ -68,6 +69,7 @@ export function CommandPalette({ opened, close }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { navigateToTicker } = useDrillDown();
   const { data: forecasts } = useForecasts();
+  const { data: portfolios = [] } = usePortfolios();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +172,23 @@ export function CommandPalette({ opened, close }: CommandPaletteProps) {
       });
     });
     
+    // === PORTFOLIO COMMANDS (Dynamic) ===
+    portfolios.forEach((portfolio) => {
+      commands.push({
+        id: `portfolio-${portfolio.id}`,
+        label: `📂 ${portfolio.name}`,
+        description: `View ${portfolio.tickers.length} tickers: ${portfolio.tickers.slice(0, 3).join(', ')}${portfolio.tickers.length > 3 ? '...' : ''}`,
+        onClick: () => {
+          // For now, navigate to Dashboard with portfolio filter
+          // TODO: Create dedicated portfolio detail page
+          navigate(`/dashboard?portfolio=${portfolio.id}`);
+          close();
+        },
+        leftSection: <IconBriefcase size={20} />,
+        keywords: [portfolio.name, ...portfolio.tickers, 'portfolio', 'watchlist'],
+      });
+    });
+    
     // === ACTION COMMANDS ===
     commands.push(
       {
@@ -195,7 +214,7 @@ export function CommandPalette({ opened, close }: CommandPaletteProps) {
     );
 
     return commands;
-  }, [navigate, navigateToTicker, forecasts, close]);
+  }, [navigate, navigateToTicker, forecasts, portfolios, close]);
 
   const filteredActions = useMemo(() => {
     return actions.filter((action) => matchesQuery(action, query)).slice(0, 10);
