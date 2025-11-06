@@ -237,7 +237,12 @@ Combiner les 9 widgets sophistiqués + data backend riche + ML models + G4F LLM 
 - Plan d'ingénierie complet : `/workspace/proofs/FC-INT-019-ADVANCED-INTEGRATION/engineering-plan.md`
 - Executive summary : `/workspace/proofs/FC-INT-019-ADVANCED-INTEGRATION/EXECUTIVE_SUMMARY.md`
 
-**Prochaine action** : Commencer FC-INT-020 (Intelligence Service)
+**Progression** :
+- ✅ FC-INT-020 (Intelligence Service) - COMPLETED (+90 pts)
+- 🟡 FC-INT-021 (Context Service) - EN COURS
+- ⏳ FC-INT-022 (IntelligenceDashboardWidget) - À venir
+
+**Prochaine action** : Implémenter FC-INT-021 (Context Service)
 
 ---
 
