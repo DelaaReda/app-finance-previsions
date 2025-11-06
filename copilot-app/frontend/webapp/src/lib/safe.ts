@@ -78,3 +78,9 @@ export function safeNumber(value: any, defaultValue: number = 0): number {
   const num = Number(value);
   return isNaN(num) ? defaultValue : num;
 }
+
+// Aliases for convenience
+export const asNumber = safeNumber;
+export const asString = safeString;
+export const safeGetArray = ensureArray;
+export const hasSafeArray = hasItems;
