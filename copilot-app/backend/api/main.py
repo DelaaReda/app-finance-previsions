@@ -38,6 +38,44 @@ app.add_middleware(
 from src.core.middleware import FinanceMiddleware
 app.add_middleware(FinanceMiddleware)
 
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize data on first startup if not present
+    Integration by: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
+    Task: FC-INT-009 - Ensure data is available immediately on API start
+    """
+    logger.info("🚀 API startup - checking for data files...")
+    
+    try:
+        from storage.base import load_forecasts
+        
+        # Check if forecast data exists
+        forecasts = load_forecasts()
+        
+        if forecasts is None or not forecasts.get('data', {}).get('rows'):
+            logger.info("⚠️  No forecast data found, initializing...")
+            
+            # Import and run initialization
+            import sys
+            from pathlib import Path
+            backend_path = str(Path(__file__).parent.parent)
+            if backend_path not in sys.path:
+                sys.path.insert(0, backend_path)
+            
+            from jobs.initialize_data import initialize_all_data
+            results = initialize_all_data()
+            
+            logger.info(f"✅ Data initialization complete: {results}")
+        else:
+            forecast_count = len(forecasts.get('data', {}).get('rows', []))
+            last_update = forecasts.get('last_update', 'unknown')
+            logger.info(f"✅ Forecast data exists: {forecast_count} forecasts, last update: {last_update}")
+            
+    except Exception as e:
+        logger.warning(f"⚠️  Could not initialize data on startup: {str(e)}")
+        logger.info("API will continue but may return empty data until jobs run")
+
 @app.get("/")
 def root():
     """Root endpoint for health check."""
