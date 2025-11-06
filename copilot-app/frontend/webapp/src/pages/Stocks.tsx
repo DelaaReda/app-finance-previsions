@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { stocksService } from '@/services/stocks.service';
 import { AreaChart, BarList, Card, Heading, RingProgress, SimpleGrid, Stack, Text, Button, Group, Text as MantineText, TextInput } from '@/ui';
 import { IconTrendingDown, IconTrendingUp } from '@tabler/icons-react';
+import { StocksScreenerWidget } from '@/components/widgets/StocksScreenerWidget';
 
 const formatPriceSeries = (raw?: any) => {
   if (!raw || !raw.data?.tickers) return [];
@@ -60,6 +61,8 @@ export default function Stocks() {
 
   return (
     <Stack gap="xl">
+      <StocksScreenerWidget />
+
       <Heading order={2}>Analyse Actions</Heading>
 
       <Card>

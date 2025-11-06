@@ -24,4 +24,22 @@ export const qk = {
     [...universe].sort().join(','),
     [...horizons].sort().join(','),
   ],
+  newsRadar: (
+    universe: string[],
+    themes: string[],
+    q: string,
+    from: string,
+    to: string,
+    limit: string | number,
+    sort: string,
+  ) => [
+    'news-radar',
+    [...universe].sort().join(','),
+    [...themes].sort().join(','),
+    q,
+    from,
+    to,
+    String(limit ?? ''),
+    sort,
+  ],
 } as const;
