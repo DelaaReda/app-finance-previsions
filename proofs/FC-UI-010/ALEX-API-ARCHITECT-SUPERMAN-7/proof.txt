@@ -1,39 +1,41 @@
 # Preuve de mise en œuvre - FC-UI-010
 
-## Tâche: Info sources (tooltips)
+## Tâche: Info sources (tooltips) - Transparency sur les sources
 
 ## Résumé
-Mise en place des tooltips de transparence sur les sources (FRED, yfinance, RSS) pour informer les utilisateurs de la provenance des données financières.
+Mise en place d'outils de transparence (FRED, yfinance, RSS) sur diverses pages pour informer les utilisateurs de la provenance des données.
 
 ## Changements apportés
-- Création du composant SourceTooltip.tsx avec affichage d'information sur la source
-- Ajout d'informations sur la date de dernière mise à jour
-- Affichage de métadonnées supplémentaires si disponibles
-- Intégration avec Material UI Tooltip pour une expérience utilisateur fluide
-- Design consistant avec les autres composants d'information
+- Création du composant SourceTooltip.tsx avec affichage d'information sur la provenance des données
+- Prise en charge de différents types de sources (FRED, yfinance, RSS, etc.)
+- Affichage de la date de dernière mise à jour des données
+- Affichage des métadonnées supplémentaires si disponibles
+- Style cohérent avec le reste de l'application
+- Intégration facile avec n'importe quel élément nécessitant des informations de source
 
 ## Structure mise en place
-- Composant SourceTooltip avec props pour source, lastUpdate, metadata
-- Affichage de l'icône d'information (i) pour indiquer la disponibilité d'informations
-- Tooltip flottant avec détails sur la source au survol
-- Formatage des dates pour meilleure lisibilité
-- Zone d'affichage avec bordure et organisation claire des informations
+- Composant SourceTooltip réutilisable avec props configurables
+- Affichage d'un indicateur d'information (icone "i")
+- Tooltip avec informations détaillées au survol
+- Gestion de cas où les données de source sont incomplètes
+- Prise en charge du mode développement avec détails techniques
 
 ## Fichiers modifiés
-- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de tooltip de source
+- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de source
 
 ## Vérification
-- Le composant s'affiche avec une icône d'information discrète
+- Le composant s'affiche avec une icône discrète d'information
 - Au survol, le tooltip affiche les détails de la source
-- Les dates sont formatées correctement selon la locale française
+- Les dates sont formatées correctement
 - Les métadonnées supplémentaires sont affichées si disponibles
-- Le composant est réutilisable et configurable pour différentes sources
-- L'interface est cohérente avec le design global de l'application
+- Le composant gère correctement les cas de données manquantes
+- Interface utilisateur claire et informative
 
 ## Résultats
-- Tooltips de transparence des sources: ✅
-- Affichage date dernière mise à jour: ✅
-- Affichage métadonnées: ✅
-- Icône d'information: ✅
-- Intégration avec MUI: ✅
-- Composant réutilisable: ✅
+- Composant SourceTooltip fonctionnel: ✅
+- Affichage des détails de sources: ✅
+- Affichage des dates de mise à jour: ✅
+- Affichage des métadonnées: ✅
+- Style cohérent: ✅
+- Gestion des données manquantes: ✅
+- Mode développement détails: ✅
