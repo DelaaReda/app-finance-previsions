@@ -309,6 +309,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No search routes module found: {str(e)}")
     
+    # Portfolios router (API-PORTFOLIO-001 by ELENA-39)
+    try:
+        from api.routes.portfolios import router as portfolios_router
+        app.include_router(portfolios_router, prefix="/api", tags=["portfolios"])
+        logger.info("✅ Portfolios router registered at /api/portfolios")
+    except ImportError as e:
+        logger.info(f"No portfolios routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 
