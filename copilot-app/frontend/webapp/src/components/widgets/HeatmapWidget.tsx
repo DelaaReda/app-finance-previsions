@@ -58,7 +58,7 @@ export function HeatmapWidget({ universe, horizon = '1m', periods = ['1w', '1m',
     );
   }
 
-  const items = ensureArray(forecastsQ.data as any ?? (forecastsQ.data as any)?.items ?? []);
+  const items = ensureArray(forecastsQ.data?.items ?? []);
   const metas = ensureArray(metaQ.data?.items ?? []);
 
   // Build ticker -> sector map

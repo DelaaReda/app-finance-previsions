@@ -88,3 +88,14 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<ApiRespo
     return { ok: false, error: error?.message ?? String(error) };
   }
 }
+
+export const client = {
+  async get<T>(path: string): Promise<T> {
+    return api.fetchJson<T>(path);
+  },
+  async post<T>(path: string, body?: unknown): Promise<T> {
+    return api.fetchJson<T>(path, { method: 'POST', body });
+  },
+};
+
+export { API_BASE };

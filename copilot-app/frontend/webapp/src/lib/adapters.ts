@@ -1,25 +1,63 @@
 import { ensureArray, asNumber, asString } from '@/lib/safe';
-import type { ForecastItem } from '@/types/forecast';
+import type { ForecastItem, ForecastSparkPoint } from '@/types/forecast';
 import type { MacroPoint, MacroSeriesMap } from '@/types/macro';
 import type { NewsArticle } from '@/types/news';
 
 export function adaptForecasts(payload: any): ForecastItem[] {
-  const arr =
-    ensureArray(payload?.data?.items) ||
-    ensureArray(payload?.data) ||
-    ensureArray(payload);
+  const arr = ensureArray(payload?.items) || ensureArray(payload?.data?.items) || ensureArray(payload?.data) || ensureArray(payload);
 
   return arr
-    .map((row: any): ForecastItem => ({
-      symbol: asString(row?.symbol ?? row?.ticker, ''),
-      horizon: (row?.horizon ?? 'short') as any,
-      score: asNumber(row?.score ?? row?.signal ?? row?.rank, 0),
-      direction: (row?.direction ?? row?.dir ?? 'flat') as any,
-      confidence: row?.confidence != null ? asNumber(row?.confidence) : undefined,
-      expectedReturn: row?.expected_return != null ? asNumber(row?.expected_return) : undefined,
-      updatedAt: asString(row?.updated_at ?? row?.generated_at, undefined as any),
-    }))
-    .filter((item) => item.symbol);
+    .map((row: any): ForecastItem | null => {
+      const ticker = asString(row?.ticker ?? row?.symbol ?? row?.id, '');
+      if (!ticker) return null;
+
+      const score = asNumber(row?.score ?? row?.signal ?? row?.rank, 0);
+      const direction = (row?.direction ?? row?.dir ?? 'neutral') as ForecastItem['direction'];
+      let confidenceRaw = row?.confidence != null ? asNumber(row?.confidence, 0) : 0;
+      if (Number.isFinite(confidenceRaw) && confidenceRaw > 1) {
+        confidenceRaw = confidenceRaw / 100;
+      }
+
+      let expectedRaw = row?.expected_return_pct != null ? asNumber(row?.expected_return_pct, null as any) : row?.expected_return != null ? asNumber(row?.expected_return, null as any) : null;
+      if (expectedRaw != null && Math.abs(expectedRaw) <= 1) {
+        expectedRaw = expectedRaw * 100;
+      }
+
+      const sparkline: ForecastSparkPoint[] | undefined = ensureArray(row?.sparkline).length
+        ? ensureArray(row?.sparkline).map((point: any) => ({
+            date: asString(point?.date ?? point?.t ?? point?.time, ''),
+            value: point?.value != null ? asNumber(point?.value) : point?.v != null ? asNumber(point?.v) : null,
+          })).filter((point) => point.date)
+        : undefined;
+
+      const forecastedAt = asString(row?.forecasted_at ?? row?.updated_at ?? row?.generated_at, undefined as any);
+      const components = row?.components && typeof row?.components === 'object' ? row.components : undefined;
+      const themes = ensureArray(row?.themes).map((theme) => asString(theme, '')).filter(Boolean);
+
+      return {
+        ticker,
+        symbol: ticker,
+        name: row?.name ?? row?.company ?? null,
+        sector: row?.sector ?? null,
+        horizon: (row?.horizon ?? 'short') as any,
+        themes,
+        score,
+        direction,
+        confidence: confidenceRaw,
+        confidence_pct: confidenceRaw != null ? confidenceRaw * 100 : null,
+        expected_return_pct: expectedRaw,
+        expectedReturnPct: expectedRaw,
+        expectedReturn: expectedRaw != null ? expectedRaw / 100 : null,
+        forecasted_at: forecastedAt,
+        forecastedAt,
+        model_version: row?.model_version ?? row?.model ?? row?.model_name ?? null,
+        components,
+        sparkline,
+        explain: row?.explain ?? row?.explanation ?? undefined,
+        updatedAt: forecastedAt,
+      } satisfies ForecastItem;
+    })
+    .filter((item): item is ForecastItem => Boolean(item?.ticker));
 }
 
 export function adaptMacroSeries(payload: any): MacroSeriesMap {

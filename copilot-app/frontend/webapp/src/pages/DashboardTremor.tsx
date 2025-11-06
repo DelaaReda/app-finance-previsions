@@ -44,8 +44,8 @@ export default function DashboardTremor() {
   const error = (forecastsQ.error ?? macroQ.error ?? (newsQ.error as any)) as any;
 
   // Compose lightweight data
-  const signals = safeArray(forecastsQ.data).slice(0, 5).map((f: any) => ({
-    ticker: f.symbol ?? f.ticker ?? 'N/A',
+  const signals = safeArray(forecastsQ.data?.items).slice(0, 5).map((f: any) => ({
+    ticker: f.ticker ?? f.symbol ?? 'N/A',
     composite_score: f.score ?? f.confidence ?? 0,
     macro_score: 0,
     technical_score: 0,
@@ -58,7 +58,7 @@ export default function DashboardTremor() {
 
   const data = {
     last_forecast_dt: undefined,
-    forecasts_count: safeArray(forecastsQ.data).length,
+    forecasts_count: safeArray(forecastsQ.data?.items).length,
     tickers: undefined,
     horizons: [],
     last_macro_dt: (macroQ.data as any)?.last_update ?? undefined,

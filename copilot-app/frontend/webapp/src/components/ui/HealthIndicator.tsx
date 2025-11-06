@@ -1,7 +1,7 @@
-import { useHealth } from '../../hooks/useHealth';
+import { useLegacyHealth } from '@/hooks/useHealth';
 
 export function HealthIndicator() {
-  const { health, loading, error } = useHealth();
+  const { health, loading, error } = useLegacyHealth();
 
   const getHealthColor = () => {
     if (loading) return '#666';

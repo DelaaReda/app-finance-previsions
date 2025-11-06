@@ -15,12 +15,12 @@ type Props = {
   onOpenDetails?: (ticker: string) => void;
 };
 
-function dirToDelta(d: 'up' | 'down' | 'flat') {
+function dirToDelta(d: 'up' | 'down' | 'neutral' | 'flat') {
   if (d === 'up') return 'increase';
   if (d === 'down') return 'decrease';
   return 'unchanged';
 }
-function dirToBadge(d: 'up' | 'down' | 'flat') {
+function dirToBadge(d: 'up' | 'down' | 'neutral' | 'flat') {
   if (d === 'up') return { label: 'Haussier', color: 'green' as const };
   if (d === 'down') return { label: 'Baissier', color: 'red' as const };
   return { label: 'Neutre', color: 'gray' as const };
@@ -42,7 +42,7 @@ export function ForecastCardsWidget({
   const { data, isLoading, error, refetch, isFetching } = useForecasts({ horizon: hz, universe });
 
   const items = useMemo(() => {
-    const arr = (data ?? []).slice();
+    const arr = ensureArray(data?.items).slice();
     arr.sort((a, b) => b.score - a.score || ((b.confidence ?? 0) - (a.confidence ?? 0)));
     return arr.slice(0, limit);
   }, [data, limit]);
@@ -50,15 +50,15 @@ export function ForecastCardsWidget({
   const exportCsv = () => {
     const lines: string[] = [];
     lines.push('symbol,horizon,score,confidence,direction,expected_return_pct,updated_at');
-    (data ?? []).forEach((f) => {
+    ensureArray(data?.items).forEach((f) => {
       lines.push([
-        f.symbol,
+        f.ticker ?? f.symbol ?? '',
         f.horizon,
         f.score,
-        f.confidence ?? 0,
+        Math.round((f.confidence ?? 0) * 100) / 100,
         f.direction,
-        ((f.expectedReturn ?? 0)).toFixed(4),
-        f.updatedAt ?? '',
+        ((f.expected_return_pct ?? f.expectedReturnPct ?? 0)).toFixed(4),
+        f.forecasted_at ?? f.updatedAt ?? '',
       ].join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -104,15 +104,15 @@ export function ForecastCardsWidget({
         {items.map((f) => {
           const dBadge = dirToBadge(f.direction);
           return (
-            <Grid.Col key={`${f.symbol}-${f.horizon}`} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
+            <Grid.Col key={`${f.ticker ?? f.symbol}-${f.horizon}`} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
               <Card withBorder shadow="sm">
                 <Group justify="space-between" mb="xs">
                   <Group gap={8} wrap="nowrap">
                     <Title order={5} style={{ cursor: onSelectTicker ? 'pointer' : 'default' }}
-                      onClick={() => onSelectTicker?.(f.symbol)}
+                      onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
                       title="Ouvrir la page du ticker"
                     >
-                      {f.symbol}
+                      {f.ticker ?? f.symbol}
                     </Title>
                     <BadgeDelta deltaType={dirToDelta(f.direction)} />
                     <Badge color={dBadge.color}>{dBadge.label}</Badge>
@@ -141,9 +141,9 @@ export function ForecastCardsWidget({
                   />
                   <div style={{ lineHeight: 1.2 }}>
                     <Text size="sm" c="dimmed">Confiance</Text>
-                    <Text fw={600}>{(f.confidence ?? 0)}%</Text>
+                    <Text fw={600}>{Math.round((f.confidence ?? 0) * 100)}%</Text>
                     <Text size="sm" c="dimmed" mt={8}>ER attendu</Text>
-                    <Text fw={600}>{fmtPct(f.expectedReturn ?? 0)}</Text>
+                    <Text fw={600}>{fmtPct((f.expected_return_pct ?? f.expectedReturnPct ?? 0) / 100)}</Text>
                   </div>
                 </Group>
 
@@ -151,23 +151,23 @@ export function ForecastCardsWidget({
                   <ActionIcon
                     variant="light"
                     title="Voir détails de la prévision"
-                    onClick={() => onOpenDetails?.(f.symbol)}
+                    onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}
                   >
                     ⓘ
                   </ActionIcon>
                   <Group gap="xs">
-                    <Button size="xs" variant="light" onClick={() => onSelectTicker?.(f.symbol)}>
+                    <Button size="xs" variant="light" onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}>
                       Ouvrir
                     </Button>
-                    <Button size="xs" onClick={() => onOpenDetails?.(f.symbol)}>
+                    <Button size="xs" onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}>
                       Détails
                     </Button>
                   </Group>
                 </Group>
 
-                {f.updatedAt && (
+                {(f.forecasted_at ?? f.updatedAt) && (
                   <Text c="dimmed" size="xs" mt="xs">
-                    MAJ {new Date(f.updatedAt).toLocaleString()}
+                    MAJ {new Date(f.forecasted_at ?? f.updatedAt ?? '').toLocaleString()}
                   </Text>
                 )}
               </Card>

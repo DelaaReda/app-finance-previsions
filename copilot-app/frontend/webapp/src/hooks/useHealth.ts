@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { apiGet } from '../api/client';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiGet, client } from '../api/client';
 
-export interface HealthData {
+export interface LegacyHealthData {
   status: 'up' | 'down' | 'degraded';
   backend_up?: boolean;
   last_updates?: Record<string, string>;
@@ -12,8 +13,8 @@ export interface HealthData {
   error?: string;
 }
 
-export interface HealthHookReturn {
-  health: HealthData | null;
+export interface LegacyHealthHookReturn {
+  health: LegacyHealthData | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -25,8 +26,8 @@ export interface HealthHookReturn {
  * Unifies the functionality of HealthIndicator and HealthStatusBadge components
  * @returns Health status, loading state, error state, and refresh function
  */
-export function useHealth(): HealthHookReturn {
-  const [health, setHealth] = useState<HealthData | null>(null);
+export function useLegacyHealth(): LegacyHealthHookReturn {
+  const [health, setHealth] = useState<LegacyHealthData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
@@ -37,10 +38,10 @@ export function useHealth(): HealthHookReturn {
     
     try {
       // Use the unified apiGet client that handles the { ok, data } envelope
-      const response = await apiGet<HealthData>('/health');
+      const response = await apiGet<LegacyHealthData>('/health');
       
       if (response.ok && response.data) {
-        const data: HealthData = response.data;
+        const data: LegacyHealthData = response.data;
         
         // Standardize the status based on backend_up and other health indicators
         let standardizedStatus: 'up' | 'down' | 'degraded' = 'down';
@@ -97,4 +98,25 @@ export function useHealth(): HealthHookReturn {
     refresh: fetchHealth,
     lastChecked
   };
+}
+
+export type DatasetHealth = {
+  name: string;
+  last_update: string;
+  latency_sec: number;
+  errors_24h: number;
+};
+
+export type Health = {
+  updated_at?: string;
+  datasets: DatasetHealth[];
+  thresholds?: { stale_sec?: Record<string, number> };
+};
+
+export function useHealth() {
+  return useQuery<Health>({
+    queryKey: ['health-datasets'],
+    queryFn: () => client.get<Health>('/analytics/health'),
+    refetchInterval: 60_000,
+  });
 }

@@ -1,73 +1,72 @@
-import { keepPreviousData, useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { api } from '@/api/client';
-import { qk } from '@/lib/keys';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { client } from '@/api/client';
 import { adaptForecasts } from '@/lib/adapters';
-import type { ForecastItem, Horizon, Direction } from '@/types/forecast';
 import { ensureArray } from '@/lib/safe';
+import type { Direction, ForecastItem, ForecastsResponse, Horizon } from '@/types/forecast';
 
-type LegacyHorizon = '1m' | '3m' | '6m';
-
-export interface ForecastsParams {
-  horizon: Horizon;
-  universe: string[];
+export type ForecastsParams = {
+  tickers?: string[];
+  horizons?: Horizon[];
   themes?: string[];
+  /** Legacy aliases */
+  horizon?: Horizon | string;
+  universe?: string[];
+  limit?: number;
+  offset?: number;
+  since?: string;
+  sort?: string;
+};
+
+function buildSearchParams(params: ForecastsParams): string {
+  const sp = new URLSearchParams();
+  const tickers = params.tickers?.length ? params.tickers : params.universe;
+  const horizons = params.horizons?.length ? params.horizons : params.horizon ? [params.horizon as Horizon] : undefined;
+
+  if (tickers?.length) sp.set('tickers', tickers.join(','));
+  if (horizons?.length) sp.set('horizons', horizons.join(','));
+  if (params.themes?.length) sp.set('themes', params.themes.join(','));
+  if (params.limit != null) sp.set('limit', String(params.limit));
+  if (params.offset != null) sp.set('offset', String(params.offset));
+  if (params.since) sp.set('since', params.since);
+  if (params.sort) sp.set('sort', params.sort);
+  return sp.toString();
 }
 
-function normalizeHorizon(value: string): Horizon {
-  const map: Record<string, Horizon> = {
-    '1m': 'short',
-    '1d': 'short',
-    short: 'short',
-    '3m': 'medium',
-    medium: 'medium',
-    '6m': 'long',
-    long: 'long',
-  };
-  return map[value] ?? 'short';
+function normalizeDirection(direction?: string | null): Direction {
+  if (direction === 'up' || direction === 'down') return direction;
+  if (direction === 'flat') return 'neutral';
+  return 'neutral';
 }
 
-function normalizeUniverse(value: string[] | string | undefined): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return value.split(',').map((item) => item.trim()).filter(Boolean);
-}
+/**
+ * Fetch forecasts response (metadata + items) using the canonical contract.
+ */
+export function useForecasts(params: ForecastsParams = {}): UseQueryResult<ForecastsResponse> {
+  const queryString = buildSearchParams(params);
+  const key = queryString ? `/forecasts?${queryString}` : '/forecasts';
 
-export function useForecasts(params: ForecastsParams): UseQueryResult<ForecastItem[]>;
-export function useForecasts(horizon: LegacyHorizon | Horizon, tickers: string[]): UseQueryResult<ForecastItem[]>;
-export function useForecasts(arg1: any, arg2?: any): UseQueryResult<ForecastItem[]> {
-  const config: ForecastsParams =
-    typeof arg1 === 'object' && arg1 !== null && !Array.isArray(arg1)
-      ? {
-          horizon: normalizeHorizon(arg1.horizon),
-          universe: normalizeUniverse(arg1.universe),
-          themes: ensureArray(arg1.themes),
-        }
-      : {
-          horizon: normalizeHorizon(String(arg1)),
-          universe: normalizeUniverse(arg2),
-          themes: [],
-        };
-
-  return useQuery<ForecastItem[]>({
-    queryKey: qk.forecasts(config.horizon, config.universe, config.themes),
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+  return useQuery<ForecastsResponse>({
+    queryKey: ['forecasts', queryString],
     queryFn: async () => {
-      const data = await api.fetchJson<any>('/forecasts', {
-        searchParams: {
-          horizon: config.horizon,
-          universe: config.universe.length ? config.universe.join(',') : undefined,
-          themes: config.themes?.length ? config.themes.join(',') : undefined,
-        },
-      });
-      return adaptForecasts(data);
+      const raw = await client.get<any>(key);
+      const items = adaptForecasts(raw).map((item) => ({
+        ...item,
+        direction: normalizeDirection(item.direction),
+      }));
+
+      return {
+        updated_at: raw?.updated_at ?? raw?.data?.updated_at ?? null,
+        request_id: raw?.request_id ?? raw?.data?.request_id ?? null,
+        count: raw?.count ?? raw?.data?.count ?? items.length,
+        items,
+      } satisfies ForecastsResponse;
     },
+    keepPreviousData: true,
   });
 }
 
 // ---------------------------------------------------------------------------
-// Forecast matrix (multi-horizon) support
+// Forecast matrix (multi-horizon) support (legacy helper kept for dashboards)
 // ---------------------------------------------------------------------------
 
 export type MatrixHorizon = '1m' | '3m' | '6m' | '12m';
@@ -80,7 +79,7 @@ export interface MatrixForecastItem {
   score: number;
   direction: Direction;
   confidence?: number | null;
-  expected_return?: number | null;
+  expected_return_pct?: number | null;
   spark?: number[] | null;
   updated_at?: string | null;
 }
@@ -99,24 +98,35 @@ export type ForecastMatrixRow = {
 export function useForecastMatrix(params: { universe: string[]; horizons: MatrixHorizon[] }): UseQueryResult<ForecastsMatrixResponse> {
   const universe = ensureArray(params.universe);
   const horizons = ensureArray(params.horizons);
+  const searchParams = new URLSearchParams();
+  if (universe.length) searchParams.set('tickers', universe.join(','));
+  if (horizons.length) searchParams.set('horizons', horizons.join(','));
+
+  const key = `/forecasts?${searchParams.toString()}`;
 
   return useQuery<ForecastsMatrixResponse>({
-    queryKey: qk.forecastMatrix(universe, horizons),
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    queryKey: ['forecasts-matrix', universe.join(','), horizons.join(',')],
     queryFn: async () => {
-      const data = await api.fetchJson<any>('/forecasts', {
-        searchParams: {
-          universe: universe.length ? universe.join(',') : undefined,
-          horizons: horizons.length ? horizons.join(',') : undefined,
-        },
-      });
+      const raw = await client.get<any>(key);
+      const items = adaptForecasts(raw).map((item) => ({
+        kind: raw?.kind ?? undefined,
+        symbol: item.ticker,
+        name: item.name ?? item.ticker,
+        horizon: (item.horizon as MatrixHorizon) ?? '1m',
+        score: item.score,
+        direction: normalizeDirection(item.direction),
+        confidence: item.confidence ?? null,
+        expected_return_pct: item.expected_return_pct ?? null,
+        spark: item.sparkline?.map((point) => point.value ?? 0) ?? null,
+        updated_at: item.forecasted_at ?? item.updatedAt ?? null,
+      }));
 
       return {
-        updated_at: data?.updated_at ?? null,
-        items: ensureArray<MatrixForecastItem>(data?.items ?? data),
-      };
+        updated_at: raw?.updated_at ?? raw?.data?.updated_at ?? null,
+        items,
+      } satisfies ForecastsMatrixResponse;
     },
+    keepPreviousData: true,
   });
 }
 

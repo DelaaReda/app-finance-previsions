@@ -1,8 +1,8 @@
 import { Badge, LoadingSpinner, Tooltip } from '@/ui';
-import { useHealth } from '@/hooks/useHealth';
+import { useLegacyHealth } from '@/hooks/useHealth';
 
 export function HealthStatusBadge() {
-  const { health, loading, error, lastChecked } = useHealth();
+  const { health, loading, error, lastChecked } = useLegacyHealth();
 
   if (loading) {
     return <LoadingSpinner size="sm" />;

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tooltip } from '@/ui';
 import { apiGet } from '../../api/client';
-import type { HealthData } from '../../hooks/useHealth';
+import type { LegacyHealthData } from '../../hooks/useHealth';
 
 interface FreshnessData {
   forecasts: string | number | null;
@@ -62,10 +62,10 @@ export default function GlobalFreshness() {
       setError(null);
 
       try {
-        const response = await apiGet<HealthData>('/health');
+        const response = await apiGet<LegacyHealthData>('/health');
 
         if (response.ok && response.data) {
-          const healthData = response.data as HealthData;
+          const healthData = response.data as LegacyHealthData;
           const lastUpdates = healthData.last_updates || {};
 
           setFreshnessData({

@@ -31,7 +31,7 @@ function MomentumLists({ horizon, universe, themes }: { horizon: string; univers
     );
   }
 
-  const items = ensureArray((data as any)?.items ?? (data as any)?.data ?? data);
+  const items = ensureArray(data?.items);
   // On utilise "score" (ou "er" si présent) comme proxy momentum
   const withScore = items
     .map((it: any) => ({
@@ -98,7 +98,7 @@ function MomentumSparkline({ horizon, universe, themes }: { horizon: string; uni
     );
   }
 
-  const items = ensureArray((data as any)?.items ?? (data as any)?.data ?? data);
+  const items = ensureArray(data?.items);
   // Fabrique un petit dataset time-series par ticker si "history" est dispo; sinon fallback à score-only
   const chart = useMemo(() => {
     // format attendu par AreaChart: [{ time: '2025-11-03', AAPL: 0.12, MSFT: 0.08, … }, …]

@@ -21,6 +21,12 @@
 - [x] Coordination UI framework change (MUI → Mantine+Tremor)
 - [x] Rectification des tâches basées sur ancienne directive
 - [x] Vérification de compliance aux nouvelles directives
+- [x] Implementation du nouveau Dashboard.tsx (Mantine+Tremor)
+- [x] Publication du plan d'intégration intelligence LLM + widgets + data
+- [ ] Développement Intelligence Service (backend)
+- [ ] Développement Context Service (market regime detection)
+- [ ] Développement Smart Recommendations (top 3 actions + explications)
+- [ ] Développement Adaptive UI (layout dynamique selon contexte)
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md

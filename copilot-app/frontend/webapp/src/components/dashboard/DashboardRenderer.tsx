@@ -82,7 +82,7 @@ function MacroWidget({ widget, context }: { widget: WidgetBase; context: Dashboa
 
 function ForecastWidget({ widget, context }: { widget: WidgetBase; context: DashboardContext }) {
   const { data, isLoading } = useForecasts({ horizon: context.horizon, universe: context.universe, themes: context.themes });
-  const items = ensureArray(data);
+  const items = ensureArray(data?.items);
 
   if (widget.type === 'metric') {
     const metric = widget.data.params?.metric as string;
@@ -96,7 +96,7 @@ function ForecastWidget({ widget, context }: { widget: WidgetBase; context: Dash
       value = items.length ? `${Math.round((up * 100) / items.length)}%` : '0%';
     }
     if (metric === 'lastUpdate') {
-      const last = items.find((item) => item.updatedAt)?.updatedAt;
+      const last = items.find((item) => item.forecasted_at ?? item.updatedAt)?.forecasted_at ?? items.find((item) => item.updatedAt)?.updatedAt;
       value = last ? new Date(last).toLocaleString('fr-FR') : '—';
     }
     return (
@@ -111,8 +111,10 @@ function ForecastWidget({ widget, context }: { widget: WidgetBase; context: Dash
     const limit = Number(widget.data.params?.limit ?? 10);
     const scored = items
       .map((item) => ({
-        name: item.symbol,
-        value: order === 'expectedReturn' ? asNumber(item.expectedReturn) : asNumber(item.score),
+        name: item.ticker ?? item.symbol,
+        value: order === 'expectedReturn'
+          ? asNumber((item.expected_return_pct ?? item.expectedReturnPct ?? 0) / 100)
+          : asNumber(item.score),
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, limit);
