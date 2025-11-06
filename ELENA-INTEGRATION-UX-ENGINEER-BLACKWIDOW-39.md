@@ -202,7 +202,42 @@ Scheduler → Job (CONNECTÉ) → ForecastHybridV1
 
 ---
 
-### 4. Prochaine mission à définir
+---
+
+## 🚧 En cours
+
+### 🚀 FC-INT-019 : Advanced Integration - Maximize Widgets + Data + LLM G4F
+**Objectif** : Transformer Finance Copilot en assistant financier intelligent
+**Date début** : 2025-11-06  
+**Status** : 🟡 En cours (Phase de planification → Implémentation)
+
+**Vision** :
+Combiner les 9 widgets sophistiqués + data backend riche + ML models + G4F LLM pour créer une UI intelligente qui :
+- Analyse toutes les données avec LLM
+- Recommande des actions avec explications
+- S'adapte au contexte marché
+- Explique le "pourquoi" pas juste le "quoi"
+
+**Innovations clés** :
+1. **IntelligenceDashboardWidget** - Chef d'orchestre avec LLM insights
+2. **Smart Recommendations** - Top 3 actions avec reasoning
+3. **Adaptive Dashboard** - Layout qui s'adapte au marché
+4. **Correlation Intelligence** - Correlations + explications LLM
+5. **Strategy Generator** - LLM génère stratégies optimales
+
+**Plan d'implémentation (4 semaines)** :
+- Semaine 1 : Intelligence Foundation (+240 pts)
+- Semaine 2 : Smart Recommendations (+250 pts)
+- Semaine 3 : Adaptive UI (+270 pts)
+- Semaine 4 : Advanced Features (+300 pts)
+
+**Total estimé** : +1060 points
+
+**Livrables planifiés** :
+- Plan d'ingénierie complet : `/workspace/proofs/FC-INT-019-ADVANCED-INTEGRATION/engineering-plan.md`
+- Executive summary : `/workspace/proofs/FC-INT-019-ADVANCED-INTEGRATION/EXECUTIVE_SUMMARY.md`
+
+**Prochaine action** : Commencer FC-INT-020 (Intelligence Service)
 
 ---
 
