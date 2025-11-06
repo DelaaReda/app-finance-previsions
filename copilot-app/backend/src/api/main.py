@@ -270,9 +270,14 @@ def register_routes(app: FastAPI):
             last_updates["brief_weekly"] = brief_data.get("last_update")
         
         # Check backtests last update
-        backtests_data = load_json("backtests.json")
-        if backtests_data:
-            last_updates["backtests"] = backtests_data.get("last_update")
+        try:
+            from backend.storage.base import load_json
+            backtests_data = load_json("backtests.json")
+            if backtests_data:
+                last_updates["backtests"] = backtests_data.get("last_update")
+        except ImportError:
+            # If storage module isn't available, skip backtests update
+            pass
         
         return _ok({
             "status": "up",
@@ -1353,8 +1358,8 @@ def register_routes(app: FastAPI):
         """Backtests summary with cache-first and safe fallbacks (never-empty)."""
         try:
             # Prefer cached snapshot on disk
-            from backend.storage.json_storage import load_json
-            bt = load_json("backtests.json") or {}
+            from backend.storage.base import load_backtests
+            bt = load_backtests() or {}
             data_block = bt.get("data") if isinstance(bt, dict) else None
             core = data_block if isinstance(data_block, dict) else bt if isinstance(bt, dict) else {}
 

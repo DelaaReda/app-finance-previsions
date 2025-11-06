@@ -88,7 +88,7 @@ export default function NewsFeed() {
         </Stack>
       )}
 
-      {error && <Card><Text c="red">Erreur: {error}</Text></Card>}
+      {error && <Card><Text c="red">Erreur: {String(error)}</Text></Card>}
 
       {!loading && items.length === 0 && !error && (
         <EmptyState title="Aucun article" subtitle="Ajustez les filtres ou attendez la prochaine ingestion." />
