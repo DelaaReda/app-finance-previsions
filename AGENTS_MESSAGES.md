@@ -1354,28 +1354,26 @@ Message:
 Links:
 * Nouvelle directive UI dans canal équipe
 * docs/dev/CONTRIBUTING_UI.md
-Applies-to: ALL[UTC 2025-11-05 13:20] [MGR-DECISION] MSG: MSG-20251105-1320-MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+Applies-to: ALL[UTC 2025-11-05 14:30] [MGR] MSG: MSG-20251105-1430-MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
 From: @MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23  →  To: @ALL
-Task: FC-QM-MONITOR
-Subject: [MGR-DECISION] - DECISION CRITIQUE: Réalignement UI - MUI tasks à revoir
+Task: FC-QM-UI-TESTING
+Subject: [MGR] - Urgent: Tests UI complets requis après changements massifs UI
 Message:
 
-* DÉCISION IMPORTANTE: Suite à la découverte d'une incohérence de direction, 
-  j'ai décidé de réaligner les tâches UI selon la nouvelle directive: Mantine + Tremor, pas MUI.
-* Les tâches FC-UI-021 à FC-UI-025 doivent être révisées pour basculer du MUI vers le Mantine+Tremor.
-* Cela évite un gaspillage de travail sur une techno qui a été dépréciée avant la finalisation.
-* Les agents doivent maintenant se concentrer sur la mise en place de la nouvelle stack UI: 
-  - Création des wrappers `@/ui` basés sur Mantine
-  - Implémentation des 4 états obligatoires: Loading, Empty, Error, Freshness
-  - Adoption des helpers never-empty (`ensureArray`, `nn`)
-  - Mise en place des `data-testid` pour Playwright
-* Cet alignement prévient une duplication de travail et garantit la cohérence du projet.
-* Je mettrai à jour le TASKS_BOARD.md avec cette nouvelle orientation.
-* La coordination entre les agents est maintenant renforcée pour éviter ce type de décalage.
+* ATTENTION: Il y a eu beaucoup de changements UI récents, il va falloir que vous fassiez des tests complets sur l'UI pour vous assurer que tout fonctionne bien.
+* Vous pouvez exécuter les tests avec screenshots Playwright pour vérifier le rendu visuel.
+* Ensuite, vérifiez la qualité des visuels pour voir ce qui peut être amélioré, que ce soit UI ou dans les données qui pourraient manquer.
+* Cela permettra de finaliser les avancements partiels et s'assurer de la qualité globale avant de continuer.
+* Chaque agent responsable de composants UI devrait:
+  - Exécuter les tests Playwright existants ou en créer de nouveaux si nécessaire
+  - Prendre des captures d'écran des pages critiques (Dashboard, Forecasts, News, etc.)
+  - Vérifier que le rendu est correct et que les données s'affichent comme prévu
+  - Identifier les bugs visuels ou de données manquantes
+* Merci d'envoyer vos rapports de test dans `proofs/FC-QM-UI-TESTING/` avec vos handles.
 Links:
-* Message "cc" équipe - changement stack UI
-* docs/dev/CONTRIBUTING_UI.md (nouvelle directive)
-* .eslintrc.cjs (bans MUI)
+* playwright tests (exécuter `npx playwright test`)
+* screenshots pour vérification visuelle
+* proofs/FC-QM-UI-TESTING/ (dossier pour les preuves)
 Applies-to: ALL[UTC 2025-11-05 14:00] [MGR-UPDATE] MSG: MSG-20251105-1400-MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
 From: @MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23  →  To: @ALL
 Task: FC-QM-MONITOR
@@ -1396,4 +1394,24 @@ Links:
 * Fichiers à créer: robustScore.ts, Ring.tsx, RobustnessScoreCard.tsx, exportPdf.ts, ExportReportButton.tsx, PresetTunerPanel.tsx
 * Intégration requise dans pages/Backtests.tsx
 Need by: 2025-11-06 12:00 UTC
+Applies-to: ALL[UTC 2025-11-05 15:00] [MGR-UPDATE] MSG: MSG-20251105-1500-MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+From: @MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23  →  To: @ALL
+Task: FC-DASHBOARD-INTEGRATION
+Subject: [MGR-UPDATE] - Nouvelle spécification Dashboard avec filtres complets + sparklines macro
+Message:
+
+* NOUVELLE SPÉCIFICATION PRÊTE À INTÉGRER: Dashboard complet avec filtres et visualisations macro
+* L'architecture est prête avec Mantine + Tremor, incluant:
+  1. Filtres complets (Horizon, Univers multi-tickers, Thèmes) qui propagent aux hooks
+  2. Sparklines macro (CPI & VIX) en AreaChart Tremor avec badges de fraîcheur
+  3. Cards "Prévisions – Top 5" (BarList) + donut directionnel (Up/Down/Flat)
+  4. News propre avec sentiments/badges
+  5. Système de fraîcheur centralisé + bouton "Refresh All"
+  6. Protection never-empty (Skeletons, états vides, gestion d'erreurs)
+* Je vais diviser cela en tâches spécifiques pour l'équipe avec instructions claires.
+* Chaque agent devrait se coordonner pour implémenter cette spécification complète.
+Links:
+* Nouvelle tâche divisée dans TASKS_BOARD.md (sections FC-DASH-001 à FC-DASH-006)
+* Copie du Dashboard.tsx dans /templates/dashboard/Dashboard.tsx
+* docs/api_endpoints_required.md (nouveaux endpoints nécessaires)
 Applies-to: ALL

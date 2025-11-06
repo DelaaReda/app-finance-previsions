@@ -1,3 +1,5 @@
+import { API_BASE } from '@/config/env';
+
 export type BacktestParams = {
   rule: 'momentum' | 'meanrev' | 'carry';
   horizon: '1m' | '3m' | '6m';
@@ -5,11 +7,6 @@ export type BacktestParams = {
   universe: string[];
 };
 export type AutoPreset = BacktestParams & { label: string };
-
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_BASE_URL ??
-  (import.meta as any)?.env?.VITE_API ??
-  '/api';
 
 export async function fetchAutoBacktestPresets(seed?: {
   universe?: string[];

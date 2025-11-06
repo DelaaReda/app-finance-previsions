@@ -1,11 +1,26 @@
 import { useMemo, useState } from 'react';
-import { Card, Button, Grid, Title, Text, Loader, Badge } from '@/ui';
-import { useAutoPresets } from '@/hooks/useAutoPresets';
-import { AreaChart } from '@tremor/react';
+import {
+  AreaChart,
+  Badge,
+  Button,
+  Card,
+  Grid,
+  Loader,
+  Text,
+  Title,
+} from '@/ui';
+import { ensureArray, nn } from '@/lib/safe';
 import type { BacktestParams } from '@/services/backtests';
 import { useBacktest } from '@/hooks/useBacktest';
-import { ensureArray, nn } from '@/lib/safe';
 import { useBacktestInsights } from '@/hooks/useBacktestInsights';
+import { useBacktestHistory } from '@/hooks/useBacktestHistory';
+import type { BacktestSummary as ScoreSummary } from '@/lib/robustScore';
+import RobustnessScoreCard from '@/components/metrics/RobustnessScoreCard';
+import RobustnessHistoryCard from '@/components/metrics/RobustnessHistoryCard';
+import PresetTunerPanel from '@/components/tuner/PresetTunerPanel';
+import FullReportButton from '@/components/report/FullReportButton';
+import ExportReportButton from '@/components/report/ExportReportButton';
+import { useAutoPresets } from '@/hooks/useAutoPresets';
 
 type Rule = 'momentum' | 'meanrev' | 'carry';
 
@@ -16,18 +31,6 @@ const DEFAULT_PARAMS: BacktestParams = {
   universe: ['SPY', 'QQQ'],
 };
 
-function parseCSV(input: string): string[] {
-  return input
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
-}
-
-function pct(v: number, digits = 1) {
-  if (Number.isFinite(v)) return `${(v * 100).toFixed(digits)}%`;
-  return '—';
-}
-
 const PRESETS: Array<{ label: string; params: BacktestParams }> = [
   { label: 'Momentum Top-2 (SPY,QQQ)', params: { rule: 'momentum', horizon: '1m', lookback: 180, universe: ['SPY', 'QQQ'] } },
   { label: 'MeanRev Tech (AAPL,MSFT)', params: { rule: 'meanrev', horizon: '1m', lookback: 120, universe: ['AAPL', 'MSFT'] } },
@@ -35,24 +38,62 @@ const PRESETS: Array<{ label: string; params: BacktestParams }> = [
   { label: 'Momentum Growth (QQQ,NVDA)', params: { rule: 'momentum', horizon: '3m', lookback: 240, universe: ['QQQ', 'NVDA'] } },
 ];
 
+const REPORT_SECTION_IDS = [
+  'backtests-section-intro',
+  'backtests-section-kpis',
+  'backtests-section-history',
+  'backtests-section-insights',
+];
+
+function parseCSV(input: string): string[] {
+  return input
+    .split(',')
+    .map((token) => token.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function pct(value: number, digits = 1) {
+  if (Number.isFinite(value)) return `${(value * 100).toFixed(digits)}%`;
+  return '—';
+}
+
 export default function BacktestsPage() {
   const [draft, setDraft] = useState<BacktestParams>(DEFAULT_PARAMS);
   const [active, setActive] = useState<BacktestParams>(DEFAULT_PARAMS);
   const [question, setQuestion] = useState('');
+  const [autoRequested, setAutoRequested] = useState(false);
 
   const { data, isLoading, isFetching, error, refetch } = useBacktest(active, true);
-  const [wantAuto, setWantAuto] = useState(false);
-  const { data: autoPresets, isFetching: isAutoLoading, refetch: refetchAuto } =
-    useAutoPresets({ universe: draft.universe, target: 'balanced' }, wantAuto);
-
-  const equityDataset = useMemo(() => {
-    return ensureArray(data?.equity).map((point) => ({
-      date: point.t,
-      equity: point.v,
-    }));
-  }, [data]);
+  const autoPresetQuery = useAutoPresets({ universe: draft.universe, target: 'balanced' }, autoRequested);
 
   const summary = data?.summary;
+  const summaryForScore: ScoreSummary | undefined = summary
+    ? {
+        cagr: summary.cagr ?? 0,
+        maxDD: Math.abs(summary.maxDD ?? 0),
+        winRate: summary.winRate ?? 0,
+        trades: summary.trades ?? 0,
+      }
+    : undefined;
+
+  const historyQuery = useBacktestHistory(
+    {
+      rule: active.rule,
+      horizon: active.horizon,
+      lookback: active.lookback,
+      universe: active.universe,
+    },
+    Boolean(summary),
+  );
+
+  const equityDataset = useMemo(
+    () =>
+      ensureArray(data?.equity).map((point) => ({
+        date: point.t,
+        equity: point.v,
+      })),
+    [data],
+  );
 
   const insightsInput = summary
     ? { summary, params: { ...active }, question: question.trim() || undefined }
@@ -65,15 +106,15 @@ export default function BacktestsPage() {
   }
 
   function onExportCSV() {
-    const rows = [['date', 'equity'], ...ensureArray(data?.equity).map((p) => [p.t, String(p.v)])];
-    const csv = rows.map((r) => r.join(',')).join('\n');
+    const rows = [['date', 'equity'], ...ensureArray(data?.equity).map((point) => [point.t, String(point.v)])];
+    const csv = rows.map((row) => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const anchor = document.createElement('a');
+    anchor.href = url;
     const name = `${active.rule}_${active.horizon}_${active.universe.join('-')}.csv`;
-    a.download = `backtest_${name}`;
-    a.click();
+    anchor.download = `backtest_${name}`;
+    anchor.click();
     URL.revokeObjectURL(url);
   }
 
@@ -87,7 +128,13 @@ export default function BacktestsPage() {
     <div data-testid="page-backtests" style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Title order={2}>🧪 Backtests</Title>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {summary && (
+            <>
+              <FullReportButton sectionIds={REPORT_SECTION_IDS} filename="backtests-report.pdf" />
+              <ExportReportButton targetId="backtests-section-kpis" filename="backtests-kpis.pdf" />
+            </>
+          )}
           <Button variant="default" onClick={onRun} data-testid="btn-run" disabled={isFetching}>
             Lancer le backtest
           </Button>
@@ -103,42 +150,22 @@ export default function BacktestsPage() {
       </div>
 
       <Card withBorder>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <Title order={4} style={{ marginBottom: 8 }}>Presets (1-clic)</Title>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              size="xs"
-              variant="light"
-              data-testid="btn-auto-presets"
-              onClick={() => {
-                setWantAuto(true);
-                refetchAuto();
-              }}
-              disabled={isAutoLoading}
-            >
-              {isAutoLoading ? 'Génération…' : 'Générer 5 presets auto'}
-            </Button>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <Title order={4}>Presets (1-clic)</Title>
+          <Button
+            size="xs"
+            variant="light"
+            data-testid="btn-auto-presets"
+            disabled={autoPresetQuery.isFetching}
+            onClick={() => {
+              setAutoRequested(true);
+              autoPresetQuery.refetch();
+            }}
+          >
+            {autoPresetQuery.isFetching ? 'Génération…' : 'Générer 5 presets auto'}
+          </Button>
         </div>
-
-        {/* Auto presets if available */}
-        {!!autoPresets?.length && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }} data-testid="auto-presets">
-            {autoPresets.map((p) => (
-              <Button
-                key={p.label}
-                size="xs"
-                variant="default"
-                onClick={() => applyPreset(p)}
-                data-testid={`auto-preset-${p.label}`}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} data-testid="presets-bar">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }} data-testid="presets-bar">
           {PRESETS.map((preset) => (
             <Button
               key={preset.label}
@@ -146,6 +173,24 @@ export default function BacktestsPage() {
               variant="light"
               onClick={() => applyPreset(preset.params)}
               data-testid={`preset-${preset.label}`}
+            >
+              {preset.label}
+            </Button>
+          ))}
+          {ensureArray(autoPresetQuery.data).map((preset) => (
+            <Button
+              key={preset.label}
+              size="xs"
+              variant="default"
+              onClick={() =>
+                applyPreset({
+                  rule: preset.rule,
+                  horizon: preset.horizon,
+                  lookback: preset.lookback,
+                  universe: preset.universe,
+                })
+              }
+              data-testid={`preset-auto-${preset.label}`}
             >
               {preset.label}
             </Button>
@@ -161,7 +206,9 @@ export default function BacktestsPage() {
               <select
                 data-testid="sel-rule"
                 value={draft.rule}
-                onChange={(e) => setDraft((d) => ({ ...d, rule: e.target.value as Rule }))}
+                onChange={(event) =>
+                  setDraft((draftParams) => ({ ...draftParams, rule: event.target.value as Rule }))
+                }
                 style={{
                   width: '100%',
                   padding: 8,
@@ -182,7 +229,12 @@ export default function BacktestsPage() {
               <select
                 data-testid="sel-horizon"
                 value={draft.horizon}
-                onChange={(e) => setDraft((d) => ({ ...d, horizon: e.target.value as BacktestParams['horizon'] }))}
+                onChange={(event) =>
+                  setDraft((draftParams) => ({
+                    ...draftParams,
+                    horizon: event.target.value as BacktestParams['horizon'],
+                  }))
+                }
                 style={{
                   width: '100%',
                   padding: 8,
@@ -205,9 +257,12 @@ export default function BacktestsPage() {
                 type="number"
                 value={draft.lookback}
                 min={30}
-                max={2000}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, lookback: Math.max(30, Math.min(2000, Number(e.target.value))) }))
+                max={4000}
+                onChange={(event) =>
+                  setDraft((draftParams) => ({
+                    ...draftParams,
+                    lookback: Math.max(30, Math.min(4000, Number(event.target.value))),
+                  }))
                 }
                 style={{
                   width: '100%',
@@ -226,7 +281,12 @@ export default function BacktestsPage() {
                 data-testid="inp-universe"
                 type="text"
                 value={draft.universe.join(',')}
-                onChange={(e) => setDraft((d) => ({ ...d, universe: parseCSV(e.target.value) }))}
+                onChange={(event) =>
+                  setDraft((draftParams) => ({
+                    ...draftParams,
+                    universe: parseCSV(event.target.value),
+                  }))
+                }
                 placeholder="SPY,QQQ,AAPL"
                 style={{
                   width: '100%',
@@ -241,7 +301,7 @@ export default function BacktestsPage() {
           </div>
 
           <Text size="sm" c="dimmed">
-            Astuce : garde l’univers compact (2–20 tickers) pour des itérations rapides.
+            Astuce&nbsp;: garde l’univers compact (2–20 tickers) pour des itérations rapides.
           </Text>
         </div>
       </Card>
@@ -255,103 +315,146 @@ export default function BacktestsPage() {
       )}
 
       {summary && (
-        <Grid>
-          <Card withBorder>
-            <Title order={4}>Résumé</Title>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginTop: 12 }}>
-              <Stat label="CAGR" value={pct(nn(summary.cagr, 0))} color="teal" />
-              <Stat label="Max Drawdown" value={pct(nn(summary.maxDD, 0))} color="red" />
-              <Stat label="Win Rate" value={pct(nn(summary.winRate, 0))} color="indigo" />
-              <Stat label="Trades" value={String(nn(summary.trades, 0))} color="gray" />
-            </div>
-          </Card>
-
-          <Card withBorder>
-            <Title order={4}>Courbe d’équité</Title>
-            {equityDataset.length === 0 ? (
-              <Text c="dimmed" style={{ marginTop: 8 }}>
-                Aucune donnée d’équité retournée.
+        <>
+          <div id="backtests-section-intro" style={{ display: 'grid', gap: 12 }}>
+            <Card withBorder>
+              <Title order={4}>Configuration active</Title>
+              <Text c="dimmed" size="sm" mt={6}>
+                Règle&nbsp;
+                <Badge color="indigo" variant="light">
+                  {active.rule}
+                </Badge>{' '}
+                • Horizon&nbsp;
+                <Badge color="teal" variant="light">
+                  {active.horizon}
+                </Badge>{' '}
+                • Lookback&nbsp;
+                <Badge color="grape" variant="light">
+                  {active.lookback}j
+                </Badge>{' '}
+                • Univers&nbsp;
+                <Badge variant="outline">{active.universe.join(', ')}</Badge>
               </Text>
+            </Card>
+          </div>
+
+          <div id="backtests-section-kpis" style={{ display: 'grid', gap: 16 }}>
+            <Grid>
+              <Card withBorder>
+                <Title order={4}>Résumé</Title>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginTop: 12 }}>
+                  <Stat label="CAGR" value={pct(nn(summary.cagr, 0))} color="teal" />
+                  <Stat label="Max Drawdown" value={pct(nn(summary.maxDD, 0))} color="red" />
+                  <Stat label="Win Rate" value={pct(nn(summary.winRate, 0))} color="indigo" />
+                  <Stat label="Trades" value={String(nn(summary.trades, 0))} color="gray" />
+                </div>
+              </Card>
+
+              <Card withBorder>
+                <Title order={4}>Courbe d’équité</Title>
+                {equityDataset.length === 0 ? (
+                  <Text c="dimmed" style={{ marginTop: 8 }}>
+                    Aucune donnée d’équité retournée.
+                  </Text>
+                ) : (
+                  <AreaChart
+                    className="h-80"
+                    data={equityDataset}
+                    index="date"
+                    categories={['equity']}
+                    valueFormatter={(value) => String(value)}
+                    yAxisWidth={56}
+                  />
+                )}
+              </Card>
+            </Grid>
+
+            <RobustnessScoreCard summary={summaryForScore} />
+          </div>
+
+          <div id="backtests-section-history">
+            {historyQuery.isLoading ? (
+              <Card withBorder>
+                <Loader size="sm" />
+                <Text c="dimmed" size="sm" mt={8}>
+                  Chargement de l’historique de robustesse…
+                </Text>
+              </Card>
             ) : (
-              <AreaChart
-                className="h-80"
-                data={equityDataset}
-                index="date"
-                categories={['equity']}
-                valueFormatter={(value) => String(value)}
-                yAxisWidth={56}
-              />
+              <RobustnessHistoryCard snapshots={historyQuery.data} />
             )}
-          </Card>
-        </Grid>
-      )}
-
-      {summary && (
-        <Card withBorder data-testid="card-insights">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <Title order={4}>Interprétation (Copilot)</Title>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                data-testid="inp-question"
-                type="text"
-                placeholder="Pose une question (ex: est-ce robuste si j’ajoute AAPL ?)"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                style={{
-                  width: 360,
-                  padding: 8,
-                  borderRadius: 8,
-                  background: '#111827',
-                  border: '1px solid #374151',
-                  color: 'white',
-                }}
-              />
-              <Button
-                variant="default"
-                onClick={() => setQuestion((q) => q.trim())}
-                disabled={isThinking}
-                data-testid="btn-ask"
-              >
-                Demander
-              </Button>
-            </div>
           </div>
 
-          {isThinking && <Loader />}
+          <div id="backtests-section-insights" style={{ display: 'grid', gap: 16 }}>
+            <Card withBorder data-testid="card-insights">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Title order={4}>Interprétation (Copilot)</Title>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    data-testid="inp-question"
+                    type="text"
+                    placeholder="Pose une question (ex: est-ce robuste si j’ajoute AAPL ?)"
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    style={{
+                      width: 360,
+                      padding: 8,
+                      borderRadius: 8,
+                      background: '#111827',
+                      border: '1px solid #374151',
+                      color: 'white',
+                    }}
+                  />
+                  <Button
+                    variant="default"
+                    onClick={() => setQuestion((value) => value.trim())}
+                    disabled={isThinking}
+                    data-testid="btn-ask"
+                  >
+                    Demander
+                  </Button>
+                </div>
+              </div>
 
-          {!isThinking && (
-            <pre
-              data-testid="txt-insight"
-              style={{
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                background: '#0b1220',
-                padding: 12,
-                borderRadius: 8,
-                border: '1px solid #1f2937',
-                fontSize: 14,
-                lineHeight: 1.5,
-              }}
-            >
-              {insight?.text || '—'}
-            </pre>
-          )}
+              {isThinking && <Loader />}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <Button
-              size="xs"
-              variant="light"
-              onClick={() => {
-                if (insight?.text) {
-                  navigator.clipboard?.writeText(insight.text);
-                }
-              }}
-              data-testid="btn-copy-insight"
-            >
-              Copier
-            </Button>
+              {!isThinking && (
+                <pre
+                  data-testid="txt-insight"
+                  style={{
+                    margin: 0,
+                    whiteSpace: 'pre-wrap',
+                    background: '#0b1220',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: '1px solid #1f2937',
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {insight?.text || '—'}
+                </pre>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => insight?.text && navigator.clipboard?.writeText(insight.text)}
+                  data-testid="btn-copy-insight"
+                >
+                  Copier
+                </Button>
+              </div>
+            </Card>
+
+            <PresetTunerPanel
+              initialStrategy={active.rule}
+              initialLookback={active.lookback}
+              initialUniverse={active.universe.join(',')}
+            />
           </div>
-        </Card>
+        </>
       )}
 
       {!error && !isLoading && !isFetching && !summary && (

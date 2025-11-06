@@ -4,11 +4,12 @@ import GlobalErrorBoundary from './components/system/GlobalErrorBoundary'; // Gl
 import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 
 // Pages existantes
-import DashboardTremor from './pages/DashboardTremor'
+import Dashboard from './pages/Dashboard'
 import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
 import CompareStrategies from './pages/CompareStrategies'
+import DashboardsPage from './pages/Dashboards'
 
 // Nouvelles pages selon VISION
 import Macro from './pages/Macro'
@@ -27,7 +28,7 @@ const router = createBrowserRouter(createRoutesFromElements(
       </AppShell>
     </GlobalErrorBoundary>
   }>
-    <Route index element={<DashboardTremor />} />
+    <Route index element={<Dashboard />} />
     <Route path="/brief" element={<MarketBrief />} />
     <Route path="/macro" element={<Macro />} />
     <Route path="/stocks" element={<Stocks />} />
@@ -37,6 +38,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/forecasts" element={<Forecasts />} />
     <Route path="/backtests" element={<Backtests />} />
   <Route path="/compare" element={<CompareStrategies />} />
+    <Route path="/dashboards/:slug?" element={<DashboardsPage />} />
     <Route path="/judge" element={<LLMJudge />} />
   </Route>
 ));

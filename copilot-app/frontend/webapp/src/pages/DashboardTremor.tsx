@@ -1,12 +1,13 @@
 // Dashboard VIVANT - Mantine + Tremor avec graphiques partout
 // Migration from MUI to Mantine/Tremor for better UX
 
-import { useQuery } from '@tanstack/react-query'
 import { Container, Title, Text, Grid, Card, Badge, Group, Stack, Loader, Alert, Box } from '@mantine/core'
 import { BarList, Metric, DonutChart } from '@tremor/react'
 import { IconTrendingUp, IconTrendingDown, IconActivity, IconAlertCircle } from '@tabler/icons-react'
-import { apiGet } from '@/services/api'
 import { safeArray } from '@/lib/safe'
+import { useForecasts } from '@/hooks/useForecasts'
+import { useMacroSnapshot } from '@/hooks/useMacroData'
+import { useNewsCompat } from '@/hooks/useNewsCompat'
 
 type CompositeSignal = {
   ticker: string
@@ -34,23 +35,39 @@ type DashboardData = {
 export default function DashboardTremor() {
   const includeSignals = true;
 
-  const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ['dashboard', { includeSignals }],
-    queryFn: async () => {
-      const params: Record<string, string> = {}
-      if (includeSignals) params.include_signals = '1'
+  // Use existing hooks and compose a lightweight dashboard view
+  const forecastsQ = useForecasts({ horizon: 'short', universe: [] });
+  const macroQ = useMacroSnapshot();
+  const newsQ = useNewsCompat();
 
-      const response = await apiGet<DashboardData>('/dashboard/kpis', params)
-      if (!response.ok) {
-        throw new Error(response.error || 'Échec du chargement du dashboard')
-      }
-      return response.data
-    },
-    staleTime: 15_000,
-  })
+  const isLoading = forecastsQ.isLoading || macroQ.isLoading || newsQ.loading;
+  const error = (forecastsQ.error ?? macroQ.error ?? (newsQ.error as any)) as any;
 
-  const signals = safeArray(data?.filtered_signals).slice(0, 5) // Top 5
-  const risks = safeArray(data?.filtered_risks).slice(0, 5) // Top 5
+  // Compose lightweight data
+  const signals = safeArray(forecastsQ.data).slice(0, 5).map((f: any) => ({
+    ticker: f.symbol ?? f.ticker ?? 'N/A',
+    composite_score: f.score ?? f.confidence ?? 0,
+    macro_score: 0,
+    technical_score: 0,
+    news_score: 0,
+    reason: f.reason ?? '',
+    confidence: f.confidence ?? f.score ?? 0,
+  }));
+
+  const risks = [] as any[];
+
+  const data = {
+    last_forecast_dt: undefined,
+    forecasts_count: safeArray(forecastsQ.data).length,
+    tickers: undefined,
+    horizons: [],
+    last_macro_dt: (macroQ.data as any)?.last_update ?? undefined,
+    last_quality_dt: undefined,
+    filtered_signals: signals,
+    filtered_risks: risks,
+    filtered_ticker_count: undefined,
+    generated_at: new Date().toISOString(),
+  } as DashboardData
 
   // Transform pour Tremor BarList
   const signalsData = signals.map(s => ({

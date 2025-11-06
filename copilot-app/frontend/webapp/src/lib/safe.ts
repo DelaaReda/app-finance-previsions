@@ -73,3 +73,12 @@ export function getSafeRSIColor(rsi: number | null | undefined) {
   if (rsi < 30) return { color: '#4caf50', fontWeight: 600 };
   return { color: '#ffb74d' };
 }
+
+export function asNumber(value: unknown, fallback = 0): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+export function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}

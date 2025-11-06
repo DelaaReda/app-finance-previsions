@@ -1,135 +1,90 @@
-// webapp/src/api/client.ts
-import type { ApiResponse } from '../types/common'
+import type { ApiResponse } from '@/types/common.types';
 
-// Use relative '/api' so Vite dev proxy handles cross-origin in dev,
-// and same-origin works in production behind the frontend host.
-// If an explicit base is provided via env, it can be added later, but
-// defaulting to '/api' avoids CORS/status 0 issues.
-const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? "/api";
+const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? '/api';
 
-function qs(params?: Record<string, any>) {
-  if (!params) return "";
-  
-  const normalizedParams: Record<string, string> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      if (Array.isArray(value)) {
-        // Handle arrays by joining with commas
-        normalizedParams[key] = value.join(',');
-      } else {
-        normalizedParams[key] = String(value);
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+function buildUrl(path: string, searchParams?: Record<string, string | number | boolean | undefined>) {
+  const base = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
+  const url = new URL(path.replace(/^\//, ''), base);
+  if (searchParams) {
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value));
       }
-    }
+    });
   }
-  
-  const entries = Object.entries(normalizedParams);
-  return entries.length ? `?${new URLSearchParams(entries as any).toString()}` : "";
+  return url.toString();
 }
+
+async function fetchJson<T>(
+  path: string,
+  opts?: {
+    method?: HttpMethod;
+    searchParams?: Record<string, string | number | boolean | undefined>;
+    body?: unknown;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
+): Promise<T> {
+  const { method = 'GET', searchParams, body, signal, timeoutMs = 15_000 } = opts ?? {};
+  const url = buildUrl(path, searchParams);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: signal ?? controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status} ${response.statusText} — ${text || url}`);
+    }
+
+    if (response.status === 204) return undefined as T;
+
+    const data = (await response.json()) as unknown;
+    if (data && typeof data === 'object' && 'data' in (data as any)) {
+      return (data as any).data as T;
+    }
+    return data as T;
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export const api = {
+  fetchJson,
+  buildUrl,
+};
 
 export async function apiGet<T>(path: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
   try {
-    const res = await fetch(`${API_BASE}${path}${qs(params)}`, { headers: { Accept: "application/json" } });
-    
-    // Check response status
-    if (!res.ok) {
-      // Try to get error message from response body, if available
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        try {
-          const errorData = await res.json();
-          return { ok: false, error: `GET ${path} ${res.status}: ${errorData.detail || errorData.error || errorData.message || 'Request failed'}` };
-        } catch {
-          // If error response isn't JSON, return status-based error
-          return { ok: false, error: `GET ${path} ${res.status}` };
-        }
-      }
-      return { ok: false, error: `GET ${path} ${res.status}` };
-    }
-    
-    // Check if response has JSON content
-    const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      return { ok: false, error: `Expected JSON for ${path}, got ${contentType}` };
-    }
-    
-    // Ensure response has body before parsing
-    if (res.status === 204 || res.headers.get('content-length') === '0') {
-      return { ok: true, data: undefined as any };
-    }
-    
-    try {
-      const json = await res.json();
-      // Unwrap common backend shape { ok, data } so UI gets payload directly
-      if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
-        if (json.ok) return { ok: true, data: (json as any).data as T };
-        const err = (json as any).error || (json as any).detail || `GET ${path} failed`;
-        return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) };
-      }
-      return { ok: true, data: json as T };
-    } catch (parseError: any) {
-      return { ok: false, error: `Failed to parse JSON from ${path}: ${parseError.message}` };
-    }
+    const data = await api.fetchJson<T>(path, { searchParams: params });
+    return { ok: true, data };
   } catch (error: any) {
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      return { ok: false, error: `Network error: Unable to reach server for ${path}` };
-    }
-    return { ok: false, error: `Network error: ${error.message}` };
+    return { ok: false, error: error?.message ?? String(error) };
   }
 }
 
-export async function apiPost<T>(path: string, data?: any): Promise<ApiResponse<T>> {
+export async function apiPost<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
-    
-    // Check response status
-    if (!res.ok) {
-      // Try to get error message from response body, if available
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        try {
-          const errorData = await res.json();
-          return { ok: false, error: `POST ${path} ${res.status}: ${errorData.detail || errorData.error || errorData.message || 'Request failed'}` };
-        } catch {
-          // If error response isn't JSON, return status-based error
-          return { ok: false, error: `POST ${path} ${res.status}` };
-        }
-      }
-      return { ok: false, error: `POST ${path} ${res.status}` };
-    }
-    
-    // Check if response has JSON content
-    const contentType = res.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      return { ok: false, error: `Expected JSON for ${path}, got ${contentType}` };
-    }
-    
-    // Ensure response has body before parsing
-    if (res.status === 204 || res.headers.get('content-length') === '0') {
-      return { ok: true, data: undefined as any };
-    }
-    
-    try {
-      const json = await res.json();
-      if (json && typeof json === 'object' && 'ok' in json && 'data' in json) {
-        if (json.ok) return { ok: true, data: (json as any).data as T };
-        const err = (json as any).error || (json as any).detail || `POST ${path} failed`;
-        return { ok: false, error: typeof err === 'string' ? err : JSON.stringify(err) };
-      }
-      return { ok: true, data: json as T };
-    } catch (parseError: any) {
-      return { ok: false, error: `Failed to parse JSON from ${path}: ${parseError.message}` };
-    }
+    const data = await api.fetchJson<T>(path, { method: 'POST', body });
+    return { ok: true, data };
   } catch (error: any) {
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      return { ok: false, error: `Network error: Unable to reach server for ${path}` };
-    }
-    return { ok: false, error: `Network error: ${error.message}` };
+    return { ok: false, error: error?.message ?? String(error) };
   }
 }

@@ -33,6 +33,8 @@
 - [x] Système de validation mise en place
 - [x] FC-QM-MONITOR - Quality Monitoring System (completed 2025-11-05)
 - [x] Vérification complète des livraisons équipe - validation tous endpoints critiques fonctionnels
+- [x] Coordination UI stack change: MUI → Mantine + Tremor (compliance avec nouvelle directive)
+- [x] Implementation de Dashboard.tsx conforme à la nouvelle spécification (Mantine + Tremor avec filtres, macro sparklines, etc.)
 
 ## 📈 Points Gagnés
 - **Total**: 240 points

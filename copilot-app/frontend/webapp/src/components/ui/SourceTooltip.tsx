@@ -4,8 +4,8 @@
  */
 
 import React from 'react';
-import { Tooltip } from '@mui/material';
-import { InfoOutlined } from '@mui/icons-material';
+import { Tooltip } from '@mantine/core';
+import { IconInfoCircle } from '@tabler/icons-react';
 
 interface SourceTooltipProps {
   source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')
@@ -63,9 +63,9 @@ export default function SourceTooltip({
   );
 
   return (
-    <Tooltip title={tooltipContent} placement="top" arrow>
+    <Tooltip label={tooltipContent} position="top" withArrow multiline>
       <span style={{ cursor: 'help', verticalAlign: 'middle' }}>
-        <InfoOutlined style={{ fontSize: '14px', color: '#999' }} />
+        <IconInfoCircle size={14} color="#999" />
       </span>
     </Tooltip>
   );

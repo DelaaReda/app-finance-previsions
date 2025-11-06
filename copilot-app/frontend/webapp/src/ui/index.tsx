@@ -93,6 +93,8 @@ export const LoadingSpinner = (props: LoaderProps) => (
   <Loader size={props.size ?? 'md'} color={props.color ?? 'indigo'} variant={props.variant ?? 'bars'} {...props} />
 );
 
+export const RingProgress = (props: RingProps) => <RingComponent {...props} />;
+
 export {
   AreaChart,
   BarList,
@@ -110,7 +112,6 @@ export {
   Loader,
   Paper,
   Progress,
-  RingProgress,
   ScrollArea,
   Select,
   SimpleGrid,
@@ -123,6 +124,16 @@ export {
   ThemeIcon,
   Title,
   Transition,
+  NumberInput,
 };
 
-export type { ButtonProps, CardProps, BadgeProps, ActionIconProps, ModalProps, TabsProps, TableProps };
+export type {
+  ButtonProps,
+  CardProps,
+  BadgeProps,
+  ActionIconProps,
+  ModalProps,
+  TabsProps,
+  TableProps,
+  NumberInputProps,
+};

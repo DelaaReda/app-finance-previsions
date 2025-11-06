@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useNews } from '@/hooks/useNews';
+import { useNewsCompat } from '@/hooks/useNewsCompat';
 import { Anchor, BarList, Button, Card, Heading, LoadingSpinner, Select, SimpleGrid, Stack, Text, TextInput, Chip, Group, Badge } from '@/ui';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
 import EmptyState from '@/components/ui/EmptyState';
@@ -32,7 +32,7 @@ const SCORE_OPTIONS = [
 ];
 
 export default function NewsFeed() {
-  const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNews();
+  const { items, filters, setFilters, loading, error, hasMore, loadMore, freshness } = useNewsCompat();
 
   const impactList = useMemo(() =>
     items
@@ -110,7 +110,7 @@ export default function NewsFeed() {
                 <Text fw={600}>{item.title}</Text>
                 {item.description && <Text c="dimmed" fz="sm">{item.description}</Text>}
                 <Group gap="xs">
-                  {(item.tickers ?? []).slice(0, 4).map((ticker) => (
+                  {(item.tickers ?? []).slice(0, 4).map((ticker: string) => (
                     <Chip key={ticker} size="xs" radius="sm" variant="light">{ticker}</Chip>
                   ))}
                 </Group>

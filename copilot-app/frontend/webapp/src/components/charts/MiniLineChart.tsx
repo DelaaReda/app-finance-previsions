@@ -31,13 +31,13 @@ const MiniLineChart: React.FC<MiniLineChartProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
 
-  const horizontalLines = 5  // Define this constant
+  // number of horizontal grid lines (kept inside effect below)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !data || data.length === 0) return
 
-    const ctx = canvas.getContext('2d')
+  const ctx = canvas.getContext('2d')
     if (!ctx) return
 
     // Clear canvas
@@ -69,7 +69,7 @@ const MiniLineChart: React.FC<MiniLineChartProps> = ({
     // Draw grid lines (horizontal)
     ctx.strokeStyle = '#eee'
     ctx.lineWidth = 0.5
-    const horizontalLines = 5
+  const horizontalLines = 5
     for (let i = 0; i <= horizontalLines; i++) {
       const y = height - (i / horizontalLines) * (height - 30) - 15  // Leave some bottom margin
       ctx.beginPath()
@@ -142,7 +142,7 @@ const MiniLineChart: React.FC<MiniLineChartProps> = ({
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+  // y not used currently; we keep only x for nearest-point lookup
 
     const container = containerRef.current
     if (!container) return
