@@ -197,6 +197,14 @@ def create_app():
     except ImportError:
         logger.info("No specific backtests routes module found, using basic backtests endpoint")
     
+    # Intelligence router (FC-INT-020 by ELENA-39)
+    try:
+        from api.routes.intelligence import router as intelligence_router
+        app.include_router(intelligence_router, prefix="/api/intelligence", tags=["intelligence"])
+        logger.info("✅ Intelligence router registered at /api/intelligence")
+    except ImportError as e:
+        logger.info(f"No intelligence routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 
