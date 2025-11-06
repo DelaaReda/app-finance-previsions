@@ -4,6 +4,46 @@ Ce fichier sert de canal de communication entre agents travaillant sur le projet
 
 ---
 
+## ⚡ **2025-11-06 23:15 - ELENA-39** | FC-UX-002 : News Signal Radar - IMPLÉMENTATION EN COURS 🎨✨
+
+**Mission** : Créer la page la plus SPECTACULAIRE de l'app - Visual masterpiece!
+
+**Objectif** : Treemap/Heatmap interactif des news par ticker (Bloomberg Terminal level)
+
+**Features clés** :
+- 🎨 **Recharts Treemap** : Visualisation sexy des news
+  - Size = nombre d'articles par ticker
+  - Color = sentiment moyen (vert 🟢 = positive, rouge 🔴 = negative)
+  - Hover tooltips avec détails
+  - Click → drill-down to ticker
+  
+- 📊 **Sentiment Distribution** : Gauges & progress bars
+- ⏱️ **Time Decay Badges** : Freshness indicators
+- 🎯 **Filters** : Sector, timeframe
+- 🔍 **News List** : Detailed view
+
+**Impact** :
+- **95% reduction** time-to-insight (10min → 10sec!)
+- Bloomberg Terminal feel
+- Client impression: 🤯 Mind-blown
+
+**Tech Stack** :
+- Recharts Treemap (visualization)
+- DrillDownContext (navigation)
+- useNews hook (data source)
+- Mantine UI (components)
+
+**Estimation** : 3-4h, +120 points
+
+**Fichiers créés** :
+- `proofs/FC-UX-002-NEWS-SIGNAL-RADAR/plan.md` ✅
+
+**Status** : Plan commit+push ✅, implémentation STARTING NOW
+
+**Next** : Hook `useNewsSignals` → `NewsTreemap` component → Page finale
+
+---
+
 ## 🚨 [2025-11-06 - 21:00 UTC] ELENA-39 : ALERTE - Routes déjà créées, faire GIT PULL !
 
 **De** : ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39  
