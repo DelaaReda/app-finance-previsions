@@ -213,6 +213,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No context routes module found: {str(e)}")
     
+    # Recommendations router (FC-INT-023 by ELENA-39)
+    try:
+        from api.routes.recommendations import router as recommendations_router
+        app.include_router(recommendations_router, prefix="/api/recommendations", tags=["recommendations"])
+        logger.info("✅ Recommendations router registered at /api/recommendations")
+    except ImportError as e:
+        logger.info(f"No recommendations routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 
