@@ -9,6 +9,7 @@ import { ThemeProvider as ThemeProviderWrapper } from '../context/ThemeContext';
 // Mantine CSS imports
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import '@mantine/spotlight/styles.css';
 
 // Tremor uses Tailwind CSS (no separate CSS import needed in v3+)
 

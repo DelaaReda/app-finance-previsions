@@ -3,6 +3,8 @@ import { AppProviders } from './app/providers'
 import GlobalErrorBoundary from './components/system/GlobalErrorBoundary'; // Global error boundary for stability
 import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 import { DrillDownProvider } from './contexts/DrillDownContext'; // FC-INT-027: Intelligent drill-down navigation
+import { CommandPalette } from './components/system/CommandPalette'; // FC-UX-001: Command Palette (Ctrl+K)
+import { useCommandPalette } from './hooks/useCommandPalette'; // FC-UX-001: Command Palette hook
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -21,13 +23,25 @@ import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSh
 import MarketBrief from './pages/MarketBrief'
 import TestSimple from './pages/TestSimple'
 
-// Create router with error boundary wrapper and drill-down context
+// AppContent wrapper with Command Palette
+function AppContent() {
+  const { opened, close } = useCommandPalette();
+  
+  return (
+    <>
+      <CommandPalette opened={opened} close={close} />
+      <Outlet />
+    </>
+  );
+}
+
+// Create router with error boundary wrapper, drill-down context, and command palette
 const router = createBrowserRouter(createRoutesFromElements(
   <Route element={
     <GlobalErrorBoundary>
       <DrillDownProvider>
         <AppShell>
-          <Outlet />
+          <AppContent />
         </AppShell>
       </DrillDownProvider>
     </GlobalErrorBoundary>
