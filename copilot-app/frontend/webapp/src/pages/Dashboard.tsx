@@ -22,6 +22,7 @@ import { useMacroSeries } from '@/hooks/useMacroSeries';
 // @ts-ignore
 import { useNews } from '@/hooks/useNews';
 import { ForecastMatrixWidget } from '@/components/widgets/ForecastMatrixWidget';
+import { IntelligenceDashboardWidget } from '@/components/widgets/IntelligenceDashboardWidget';
 
 // --------------------------------------------
 // Helpers d'adaptation
@@ -235,6 +236,9 @@ export default function Dashboard() {
           </ActionIcon>
         </Tooltip>
       </Group>
+
+      {/* Intelligence Dashboard Widget - Full Width */}
+      <IntelligenceDashboardWidget />
 
       {/* Filtres */}
       <UICard data-testid="filters-card">
