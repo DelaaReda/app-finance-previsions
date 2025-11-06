@@ -1,23 +1,67 @@
-import { Stack, Title, Text } from '@mantine/core';
+import { Stack, Title, Text, Group, Alert } from '@mantine/core';
+import { IconSparkles, IconInfoCircle } from '@tabler/icons-react';
 import HealthBar from '@/components/widgets/HealthBar';
-import ForecastsProBoard from '@/components/widgets/ForecastsProBoard';
-import BacktestsPanel from '@/components/widgets/BacktestsPanel';
-import { IntelligenceDashboardWidget } from '@/components/widgets/IntelligenceDashboardWidget';
+import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
+import { RegimeBadgeAdaptive } from '@/components/adaptive/RegimeBadgeAdaptive';
+import { LayoutModeToggle } from '@/components/adaptive/LayoutModeToggle';
+import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
 
-export default function Dashboard() {
+/**
+ * Dashboard - Adaptive Layout
+ * 
+ * Dashboard that automatically adapts its layout based on market regime.
+ * Surfaces the most relevant widgets first according to market context.
+ * 
+ * Author: ELENA-39
+ * Task: FC-INT-026
+ */
+function DashboardContent() {
   return (
     <Stack data-testid="dashboard-root" gap="lg">
-      <div>
-        <Title order={2}>Dashboard - Vue d'ensemble</Title>
-        <Text c="dimmed" mt={4}>
-          Vue opérationnelle : santé des pipelines, prévisions live, performance backtests et intelligence LLM.
-        </Text>
-      </div>
+      {/* Header */}
+      <Stack gap="xs">
+        <Group justify="space-between" align="flex-start">
+          <div>
+            <Group gap="xs" align="center">
+              <IconSparkles size={28} color="#4169E1" />
+              <Title order={2}>Adaptive Dashboard</Title>
+            </Group>
+            <Text c="dimmed" size="sm" mt={4}>
+              Intelligent layout that adapts to market conditions in real-time
+            </Text>
+          </div>
 
+          <Group gap="md" align="center">
+            <RegimeBadgeAdaptive />
+            <LayoutModeToggle />
+          </Group>
+        </Group>
+
+        {/* Info Alert */}
+        <Alert color="blue" variant="light" icon={<IconInfoCircle size={20} />}>
+          <Text size="sm">
+            <strong>Adaptive Mode Active:</strong> Dashboard layout automatically adjusts based on detected market regime. 
+            Switch to Manual mode to lock the current layout.
+          </Text>
+        </Alert>
+      </Stack>
+
+      {/* System Health Bar */}
       <HealthBar />
-      <IntelligenceDashboardWidget />
-      <ForecastsProBoard />
-      <BacktestsPanel strategy="long_top_score" universe="SP500" benchmark="SPY" horizon="short" />
+
+      {/* Dynamic Widget Grid - Adapts to market context */}
+      <DynamicWidgetGrid />
     </Stack>
+  );
+}
+
+/**
+ * Dashboard with Adaptive Layout Provider
+ */
+export default function Dashboard() {
+  return (
+    <AdaptiveLayoutProvider>
+      <DashboardContent />
+    </AdaptiveLayoutProvider>
   );
 }
