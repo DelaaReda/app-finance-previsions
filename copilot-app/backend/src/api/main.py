@@ -210,6 +210,14 @@ class CopilotAskRequest(BaseModel):
     scope: Optional[Dict[str, Any]] = None
     tickers: Optional[List[str]] = None
 
+
+class LLMJudgeRequest(BaseModel):
+    """Request payload for the LLM judge endpoint."""
+    model: str = "deepseek-ai/DeepSeek-V3-0324-Turbo"
+    max_er: float = 0.08
+    min_conf: float = 0.6
+    tickers: Optional[str] = None
+
 # ================================= HELPERS ===================================
 
 def _ok(data: Any) -> Dict:
@@ -974,13 +982,6 @@ def register_routes(app: FastAPI):
         })
 
     # ======================== LLM JUDGE =========================
-
-    class LLMJudgeRequest(BaseModel):
-        """Request body for LLM judge endpoint."""
-        model: str = "deepseek-ai/DeepSeek-V3-0324-Turbo"
-        max_er: float = 0.08
-        min_conf: float = 0.6
-        tickers: Optional[str] = None
 
     @app.post("/api/llm/judge/run")
     async def llm_judge_run(request: LLMJudgeRequest):

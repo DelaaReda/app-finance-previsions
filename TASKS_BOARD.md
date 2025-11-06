@@ -281,8 +281,8 @@ This document outlines the tasks required to implement the new Dashboard with:
 ---
 
 ## FC-DASH-002 — Hooks Data & API Integration
-**Status**: AVAILABLE to claim
-**Owner**: Backend + Frontend teams
+**Status**: CLAIMED
+**Owner**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 **But**: Créer les hooks React et les endpoints API pour alimenter le Dashboard.
 
@@ -293,6 +293,8 @@ This document outlines the tasks required to implement the new Dashboard with:
 * `backend/api/routes/forecasts.py`
 * `backend/api/routes/macro.py`
 * `backend/api/routes/news.py`
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 **Étapes**
 1. **Frontend Hooks**:

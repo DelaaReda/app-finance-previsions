@@ -2,7 +2,7 @@ import time
 import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.response import Response
+from starlette.responses import Response
 
 # Import trace ID functionality
 from ..logging.structured_log import trace_id_var

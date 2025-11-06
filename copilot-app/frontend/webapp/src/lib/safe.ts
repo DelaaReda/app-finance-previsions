@@ -12,8 +12,7 @@ export function safeArray<T>(value: T[] | null | undefined, fallback: T[] = []):
   return ensureArray<T>(value, fallback);
 }
 
-// Backwards-compatible alias expected by many files
-// (ensureArray function above is the canonical implementation)
+export const safe = ensureArray; // legacy alias used in some widgets
 
 export function nn(value: unknown, fallback = 0): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;

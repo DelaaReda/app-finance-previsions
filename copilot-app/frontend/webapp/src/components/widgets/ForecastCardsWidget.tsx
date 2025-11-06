@@ -5,6 +5,7 @@ import { RingProgress } from '@mantine/core';
 import { BadgeDelta } from '@tremor/react';
 import { useForecasts } from '@/hooks/useForecasts';
 import type { Horizon as ForecastHorizon } from '@/types/forecast';
+import { ensureArray } from '@/lib/safe';
 
 type Props = {
   universe: string[];
