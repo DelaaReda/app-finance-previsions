@@ -22,6 +22,7 @@
 - [x] FC-P0-007: ErrorBoundary global (frontend)
 - [x] FC-P0-004: Cache persistant générique (backend)
 - [x] FC-P1-015: Backtests v1 - Forecast validation with hit-rate and ER metrics
+- [ ] FC-DASH-002: Hooks Data & API Integration - Backend routes for dashboard data
 
 ## ✅ Tâches Accomplies
 - [x] Lecture du fichier AGENTS.md

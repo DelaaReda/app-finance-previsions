@@ -18,6 +18,33 @@ Lisez les reviews : [text](reviews)
 
 ## P0 — Brancher la donnée réelle (immédiat)
 
+#### FC-FE-API-CONTRACT-ALIGN — Corriger les chemins API côté front *(Effort S)*
+- **Why**: Les hooks `useLegacyHealth`, `useHealth`, `useStocksScreener`, `stocksService.getPrices` appellent `/health` ou `/stocks/*` sans préfixe `/api`, entraînant des 404 malgré un backend prêt. Cela casse Dashboard (HealthBar), Stocks Screener et monitoring.
+- **Steps**:
+  1. Mettre à jour les services/hooks pour cibler `/api/...` (ex. `useHealth` → `/api/health` & `/api/analytics/health` lorsque disponible).
+  2. Faire respecter ce contrat via un helper `pathWithApiPrefix()` dans `api/client.ts` (défaut `/api`, override env pour staging/prod) + tests unitaires.
+  3. Ajouter doc courte dans `copilot-app/docs/frontend/integration.md` rappelant la règle « routes FastAPI ⇒ /api/... ».
+- **DoD**:
+  - `curl http://localhost:5173/api/health` via proxy OK, Dashboard affiche badges sans erreur console.
+  - `pnpm run typecheck` + `pnpm run build` passent.
+  - Capture Dashboard + log curl déposés dans `proofs/FC-FE-API-CONTRACT-ALIGN/`.
+
+#### FC-FE-MANTINE-V7-HARDEN — Retirer props deprecated (refs & creatable) *(Effort S)*
+- **Why**: Mantine v7 rejette `creatable`, `getCreateLabel` et refs sur composants fonctionnels (`Tooltip` + `ActionIcon` wrapper), générant warnings persistants et risque de régression lors des upgrades.
+- **Steps**:
+  1. Mettre en place `forwardRef` sur `ActionIcon` exporté `src/ui/index.tsx` et sur `ThemeToggle` si custom wrapper nécessaire.
+  2. Migrer `MultiSelect`/`Combobox` vers API v7 (`withCheckIcon`, `useCombobox`, `creatable` → `combobox.createOption`). Fichiers concernés : `StocksScreenerWidget.tsx`, éventuels duplicates (grep `creatable`).
+  3. Ajouter test Playwright rapide (Stocks page) pour garantir absence de toast d’erreur.
+- **DoD**: Console Vite sans warning Mantine, test UI passe, diff validé.
+
+#### FC-FE-STOCKS-LIVE-DATA — Débrancher mocks & 404 screener *(Effort M)*
+- **Why**: `useStocksScreener` tape `/stocks/screener` (inexistant) et `stocksService.search` renvoie un tableau mocké, brisant la promesse « no mocks » et empêchant la page Stocks de montrer les scores réels.
+- **Steps**:
+  1. Travailler avec backend pour exposer `/api/stocks/screener` & `/api/stocks/search` (contrat inspiré de `docs/INTEGRATION_PLAN.md`), ou adapter le front sur endpoint existant + doc.
+  2. Remplacer les mocks par véritable appel TanStack Query + états Loading/Empty/Errored.
+  3. Ajouter preuve via `curl` + screenshot page `/stocks` affichant résultats.
+- **DoD**: `/stocks` affiche données réelles sans 404; `pnpm run typecheck` OK; preuve déposée.
+
 #### FC-API-FORECASTS-REAL — Forecasts branchés backend *(Effort M)*
 - **Why**: Remplacer les mocks par les vraies prévisions pour `/forecasts` (liste + détail).
 - **Inputs**: `GET /api/forecasts`, `GET /api/forecasts/:id` (cf. spec ci-dessous).
