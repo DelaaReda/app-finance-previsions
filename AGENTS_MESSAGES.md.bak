@@ -97,22 +97,7 @@ copilot-app/frontend/webapp/src/components/widgets/
 ├── SmartRecommendationsWidget.tsx       ✅ (FC-INT-024)
 └── CorrelationIntelligenceWidget.tsx    ✅ (FC-INT-025)
 ```
-[UTC 2025-11-04 16:00] [INFO] MSG: MSG-20251104-1600-ALEX-FINANCE-ANALYST-SUPERMAN-29
-From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
-Task: FC-DASH-002
-Subject: Implementation des routes API Dashboard - Corrections critiques apportées
-Message:
 
-* Backend non-démarrable résolu avec structure de packages corrects.
-* Routes API forecasts, news, macro mises en place avec logique de filtrage.
-* Système de cache et de persistence intégré pour garantir never-empty.
-* Intégration dans le main application avec proxy approprié.
-Links:
-* copilot-app/backend/api/routes/forecasts.py
-* copilot-app/backend/api/routes/news.py
-* copilot-app/backend/api/routes/macro.py
-* copilot-app/backend/api/main.py
-Need by: N/A
 ---
 
 ### 🔥 ACTION REQUISE IMMÉDIATEMENT

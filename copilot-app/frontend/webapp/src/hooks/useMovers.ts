@@ -58,18 +58,28 @@ export function useMovers(universe: string[], window: MoversWindow = '1d', limit
     enabled: tickers.length > 0,
     queryFn: async () => {
       if (!tickers.length) return { top: [] as Mover[], bottom: [] as Mover[] };
-      const url = `/stocks/movers?tickers=${encodeURIComponent(joined)}&window=${encodeURIComponent(window)}&limit=${limit}`;
-      const json = await api.fetchJson<{ items?: RawMover[] }>(url);
-      const items = ensureArray(json?.items).map(normalize).filter((item): item is Mover => item !== null);
+      try {
+        const json = await api.fetchJson<{ items?: RawMover[] }>('/api/stocks/movers', {
+          searchParams: {
+            tickers: joined,
+            window,
+            limit: String(limit),
+          },
+        });
+        const items = ensureArray(json?.items).map(normalize).filter((item): item is Mover => item !== null);
 
-      const sorted = items.slice().sort((a, b) => b.r - a.r);
-      const top = sorted.filter((item) => item.r > 0).slice(0, limit);
-      const bottom = sorted
-        .filter((item) => item.r < 0)
-        .sort((a, b) => a.r - b.r)
-        .slice(0, limit);
+        const sorted = items.slice().sort((a, b) => b.r - a.r);
+        const top = sorted.filter((item) => item.r > 0).slice(0, limit);
+        const bottom = sorted
+          .filter((item) => item.r < 0)
+          .sort((a, b) => a.r - b.r)
+          .slice(0, limit);
 
-      return { top, bottom };
+        return { top, bottom };
+      } catch (error) {
+        console.warn('useMovers: backend endpoint /api/stocks/movers indisponible', error);
+        return { top: [], bottom: [] };
+      }
     },
     initialData: { top: [] as Mover[], bottom: [] as Mover[] },
     staleTime: 30_000,

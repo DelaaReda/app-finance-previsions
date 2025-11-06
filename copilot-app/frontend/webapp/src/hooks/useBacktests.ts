@@ -18,7 +18,8 @@ export function useBacktests(params: BacktestsParams): UseQueryResult<BacktestsR
   });
 
   const queryString = sp.toString();
-  const key = `/backtests?${queryString}`;
+  const basePath = '/api/backtests';
+  const key = queryString ? `${basePath}?${queryString}` : basePath;
 
   return useQuery<BacktestsResponse>({
     queryKey: ['backtests', queryString],

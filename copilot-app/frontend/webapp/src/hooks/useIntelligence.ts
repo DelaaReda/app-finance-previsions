@@ -50,7 +50,28 @@ export function useIntelligence() {
     queryKey: ['intelligence', 'snapshot'],
     queryFn: async () => {
       const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
-      return response.data;
+      if (response.ok && response.data) {
+        return response.data;
+      }
+
+      console.warn('useIntelligence: endpoint /api/intelligence/snapshot indisponible', response.error);
+      return {
+        insights: {
+          summary: 'Données intelligence indisponibles pour le moment.',
+          market_regime: {
+            current: 'unknown',
+            explanation: 'Aucune donnée reçue du service.',
+          },
+          opportunities: [],
+          risks: [],
+        },
+        data_freshness: {
+          forecasts_age: 'unknown',
+          macro_age: 'unknown',
+          news_age: 'unknown',
+        },
+        timestamp: new Date().toISOString(),
+      } as IntelligenceSnapshot;
     },
     staleTime: 5 * 60_000, // 5 minutes
     refetchInterval: 5 * 60_000, // Auto-refetch every 5 minutes

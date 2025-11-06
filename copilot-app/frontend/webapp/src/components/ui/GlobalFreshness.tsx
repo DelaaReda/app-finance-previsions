@@ -62,7 +62,7 @@ export default function GlobalFreshness() {
       setError(null);
 
       try {
-        const response = await apiGet<LegacyHealthData>('/health');
+        const response = await apiGet<LegacyHealthData>('/api/health');
 
         if (response.ok && response.data) {
           const healthData = response.data as LegacyHealthData;

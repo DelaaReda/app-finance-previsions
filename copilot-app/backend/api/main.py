@@ -253,6 +253,22 @@ def create_app():
     except ImportError:
         logger.info("No specific backtests routes module found, using basic backtests endpoint")
     
+    # News routes (FC-DASH-002 by ALEX-FINANCE-ANALYST-SUPERMAN-29)
+    try:
+        from api.routes.news import router as news_router
+        app.include_router(news_router, prefix="/api")
+        logger.info("Successfully registered news routes")
+    except ImportError:
+        logger.info("No specific news routes module found, using basic news endpoint")
+    
+    # Macro routes (FC-DASH-002 by ALEX-FINANCE-ANALYST-SUPERMAN-29)
+    try:
+        from api.routes.macro import router as macro_router
+        app.include_router(macro_router, prefix="/api")
+        logger.info("Successfully registered macro routes")
+    except ImportError:
+        logger.info("No specific macro routes module found, using basic macro endpoint")
+    
     # Intelligence router (FC-INT-020 by ELENA-39)
     try:
         from api.routes.intelligence import router as intelligence_router

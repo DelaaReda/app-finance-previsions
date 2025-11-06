@@ -44,7 +44,7 @@ export function useMacroSeries(params: {
   return useQuery<MacroResponse>({
     queryKey: ['macro-series', list, start ?? '', end ?? '', frequency ?? '', collapse ?? ''] as const,
     queryFn: async () => {
-      const json = await api.fetchJson<any>('/macro/series', { searchParams });
+      const json = await api.fetchJson<any>('/api/macro/series', { searchParams });
       const series = ensureArray(json?.series ?? json?.items ?? json).map((serie: any) => ({
         id: String(serie?.id ?? ''),
         name: serie?.name ?? serie?.title ?? serie?.id ?? null,

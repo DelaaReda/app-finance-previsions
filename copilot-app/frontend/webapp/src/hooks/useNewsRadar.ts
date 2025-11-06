@@ -38,7 +38,7 @@ function buildSearchParams(params: NewsRadarParams): Record<string, string> {
   const universe = ensureArray(params.universe);
   const themes = ensureArray(params.themes);
 
-  if (universe.length) searchParams.universe = universe.join(',');
+  if (universe.length) searchParams.tickers = universe.join(',');
   if (themes.length) searchParams.themes = themes.join(',');
   if (params.q) searchParams.q = params.q;
   if (params.from) searchParams.from = params.from;
@@ -69,7 +69,7 @@ export function useNewsRadar(params: NewsRadarParams) {
     queryKey: keyFor(params),
     queryFn: async () => {
       const searchParams = buildSearchParams(params);
-      const json = await api.fetchJson<any>('/news', { searchParams });
+      const json = await api.fetchJson<any>('/api/news/feed', { searchParams });
       const articles = ensureArray(json?.articles ?? json).map((article: any) => ({
         id: String(article?.id ?? article?.url ?? `${article?.source ?? 'news'}-${article?.title ?? 'item'}`),
         title: String(article?.title ?? 'Sans titre'),

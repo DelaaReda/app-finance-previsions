@@ -160,8 +160,6 @@ export function NewsRadarWidget({
             value={universe}
             onChange={setUniverse}
             searchable
-            creatable
-            getCreateLabel={(value) => `Ajouter ${value}`}
             placeholder="Tickers (SPY, QQQ, NVDA...)"
             style={{ minWidth: 260 }}
           />
@@ -171,8 +169,6 @@ export function NewsRadarWidget({
             value={themes}
             onChange={setThemes}
             searchable
-            creatable
-            getCreateLabel={(value) => `Ajouter ${value}`}
             placeholder="Thèmes (AI, chips, macro...)"
             style={{ minWidth: 220 }}
           />

@@ -41,6 +41,10 @@
 - [x] Vérification complète des livraisons équipe - validation tous endpoints critiques fonctionnels
 - [x] Coordination UI stack change: MUI → Mantine + Tremor (compliance avec nouvelle directive)
 - [x] Implementation de Dashboard.tsx conforme à la nouvelle spécification (Mantine + Tremor avec filtres, macro sparklines, etc.)
+- [x] Création des helpers de sécurité d'accès (ensureArray, nn, safeMap, etc.) pour éviter les crashes UI
+- [x] Intégration des helpers dans le système UI (@/ui) pour accès facile
+- [x] Documentation des patterns never-empty dans /docs/never-empty-patterns.md
+- [x] Fix critique pour éviter les erreurs "Cannot read properties of undefined"
 
 ## 📈 Points Gagnés
 - **Total**: 240 points

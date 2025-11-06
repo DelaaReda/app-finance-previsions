@@ -38,7 +38,7 @@ export function useMacroSeries(arg: any): UseQueryResult<MacroSeriesMap | MacroD
       staleTime: 60_000,
       gcTime: 10 * 60_000,
       queryFn: async () => {
-        const data = await api.fetchJson<any>('/macro/series', {
+        const data = await api.fetchJson<any>('/api/macro/series', {
           searchParams: { ids: normalizedIds.join(',') },
         });
         return adaptMacroSeries(data);
@@ -62,7 +62,7 @@ export function useMacroSeries(arg: any): UseQueryResult<MacroSeriesMap | MacroD
       };
       if (freq) searchParams.freq = freq;
 
-      const json = await api.fetchJson<any>('/macro/series', { searchParams });
+      const json = await api.fetchJson<any>('/api/macro/series', { searchParams });
       const series = ensureArray<MacroDrilldownSeries>(json?.series ?? json?.items ?? json).map((serie) => ({
         ...serie,
         data: ensureArray<MacroDrilldownPoint>(serie.data ?? serie.points ?? []).map((point) => ({

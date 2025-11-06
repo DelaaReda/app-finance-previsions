@@ -45,9 +45,9 @@ export function useNews(arg1?: any, arg2?: any): UseQueryResult<NewsArticle[]> {
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     queryFn: async () => {
-      const data = await api.fetchJson<any>('/news', {
+      const data = await api.fetchJson<any>('/api/news/feed', {
         searchParams: {
-          universe: universe.length ? universe.join(',') : undefined,
+          tickers: universe.length ? universe.join(',') : undefined,
           limit,
           since: config.since,
         },

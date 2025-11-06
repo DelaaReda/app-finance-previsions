@@ -56,7 +56,26 @@ export function useMarketContext() {
     queryKey: ['context', 'current'],
     queryFn: async () => {
       const response = await apiGet<MarketContext>('/api/context/current');
-      return response.data;
+      if (response.ok && response.data) {
+        return response.data;
+      }
+
+      console.warn('useMarketContext: endpoint /api/context/current indisponible', response.error);
+      return {
+        regime: 'NORMAL',
+        confidence: 0,
+        key_drivers: [],
+        characteristics: {
+          volatility: 'medium',
+          sentiment: 'neutral',
+          trend: 'sideways',
+          risk_level: 'medium',
+        },
+        recommended_layout: {
+          primary_widgets: [],
+        },
+        timestamp: new Date().toISOString(),
+      } satisfies MarketContext;
     },
     staleTime: 5 * 60_000, // 5 minutes
     refetchInterval: 5 * 60_000, // Auto-refetch every 5 minutes

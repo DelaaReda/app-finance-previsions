@@ -8,12 +8,12 @@ export async function getNewsFeed(params: {
 }) {
   const p = { ...params };
   if (!p.limit) p.limit = 50;
-  return apiGet<NewsFeedResponse>("/news/feed", p);
+  return apiGet<NewsFeedResponse>("/api/news/feed", p);
 }
 
 export async function getNewsFeaturesDaily(ticker: string) {
   return apiGet<Array<{ date: string; news_count: number; sent_mean: number; novelty?: number; tier1_share?: number; impact_proxy_mean?: number }>>(
-    "/news/features/daily",
+    "/api/news/features/daily",
     { ticker }
   );
 }

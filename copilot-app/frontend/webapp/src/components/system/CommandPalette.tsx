@@ -8,20 +8,52 @@
  * Task: FC-UX-001
  */
 
-import { Spotlight, type SpotlightActionData } from '@mantine/spotlight';
-import { 
-  IconDashboard, IconChartLine, IconNews, IconChartCandle, 
-  IconRefresh, IconMoon, IconSun, IconDownload, IconAlertTriangle,
-  IconBriefcase, IconMacro, IconRocket, IconNetwork, IconSearch
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Modal,
+  Stack,
+  TextInput,
+  ScrollArea,
+  UnstyledButton,
+  Group,
+  Text,
+  Kbd,
+  Divider,
+} from '@mantine/core';
+import {
+  IconDashboard,
+  IconChartLine,
+  IconNews,
+  IconChartCandle,
+  IconRefresh,
+  IconMoon,
+  IconBriefcase,
+  IconMacro,
+  IconRocket,
+  IconSearch,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { useDrillDown } from '../../contexts/DrillDownContext';
 import { useForecasts } from '../../hooks/useForecasts';
-import { useMemo } from 'react';
 
 interface CommandPaletteProps {
   opened: boolean;
   close: () => void;
+}
+
+type CommandAction = {
+  id: string;
+  label: string;
+  description?: string;
+  keywords?: string[];
+  onClick: () => void;
+  leftSection?: ReactNode;
+};
+
+function matchesQuery(action: CommandAction, query: string) {
+  if (!query) return true;
+  const haystack = `${action.label} ${action.description ?? ''} ${(action.keywords ?? []).join(' ')}`.toLowerCase();
+  return haystack.includes(query.toLowerCase());
 }
 
 /**
@@ -36,10 +68,12 @@ export function CommandPalette({ opened, close }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { navigateToTicker } = useDrillDown();
   const { data: forecasts } = useForecasts();
-  
+  const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   // Build dynamic command list
-  const actions = useMemo<SpotlightActionData[]>(() => {
-    const commands: SpotlightActionData[] = [];
+  const actions = useMemo<CommandAction[]>(() => {
+    const commands: CommandAction[] = [];
     
     // === NAVIGATION COMMANDS ===
     commands.push(
@@ -159,23 +193,116 @@ export function CommandPalette({ opened, close }: CommandPaletteProps) {
         leftSection: <IconMoon size={20} />,
       }
     );
-    
+
     return commands;
   }, [navigate, navigateToTicker, forecasts, close]);
-  
+
+  const filteredActions = useMemo(() => {
+    return actions.filter((action) => matchesQuery(action, query)).slice(0, 10);
+  }, [actions, query]);
+
+  useEffect(() => {
+    if (opened) {
+      // focus input and reset query on open
+      setQuery('');
+      const id = window.setTimeout(() => inputRef.current?.focus(), 10);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [opened]);
+
+  const handleClose = () => {
+    setQuery('');
+    close();
+  };
+
+  const handleSubmit = () => {
+    const first = filteredActions[0];
+    if (first) {
+      first.onClick();
+    }
+  };
+
   return (
-    <Spotlight
-      actions={actions}
+    <Modal
       opened={opened}
-      onClose={close}
-      searchProps={{
-        leftSection: <IconSearch size={20} />,
-        placeholder: 'Search pages, tickers, actions...',
+      onClose={handleClose}
+      size="lg"
+      radius="lg"
+      padding="lg"
+      centered
+      withCloseButton={false}
+      styles={{
+        content: {
+          background: 'var(--mantine-color-dark-7)',
+        },
       }}
-      nothingFound="Nothing found..."
-      highlightQuery
-      limit={10}
-      shortcut={['mod + K']}
-    />
+    >
+      <Stack gap="md">
+        <TextInput
+          inputRef={inputRef}
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder="Rechercher pages, tickers, actions..."
+          leftSection={<IconSearch size={18} />}
+          rightSectionWidth={90}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleSubmit();
+            }
+          }}
+          rightSection={
+            <Group gap={4}>
+              <Kbd>↵</Kbd>
+              <Text size="xs" c="dimmed">
+                Valider
+              </Text>
+            </Group>
+          }
+        />
+
+        <Divider color="var(--mantine-color-dark-4)" />
+
+        <ScrollArea h={360} type="hover">
+          <Stack gap="xs">
+            {filteredActions.length === 0 ? (
+              <Text size="sm" c="dimmed">
+                Aucun résultat{query ? ` pour « ${query} »` : ''}.
+              </Text>
+            ) : (
+              filteredActions.map((action) => (
+                <UnstyledButton
+                  key={action.id}
+                  onClick={() => action.onClick()}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    background: 'var(--mantine-color-dark-6)',
+                  }}
+                >
+                  <Group align="flex-start" gap="md">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {action.leftSection}
+                    </div>
+                    <Stack gap={4} style={{ flex: 1 }}>
+                      <Text size="sm" fw={600}>
+                        {action.label}
+                      </Text>
+                      {action.description && (
+                        <Text size="xs" c="dimmed">
+                          {action.description}
+                        </Text>
+                      )}
+                    </Stack>
+                  </Group>
+                </UnstyledButton>
+              ))
+            )}
+          </Stack>
+        </ScrollArea>
+      </Stack>
+    </Modal>
   );
 }

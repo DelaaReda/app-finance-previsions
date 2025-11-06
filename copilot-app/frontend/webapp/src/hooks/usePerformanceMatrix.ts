@@ -80,9 +80,14 @@ export function usePerformanceMatrix(params: PerformanceMatrixParams) {
       if (sectors.length) searchParams.sectors = sectors.join(',');
       if (themes.length) searchParams.themes = themes.join(',');
 
-      const payload = await api.fetchJson<any>('/performance/matrix', { searchParams });
-      const items = ensureArray<RawMatrixItem>(payload?.items ?? payload?.data ?? payload);
-      return items.map(normalizeRow).filter((row) => row.ticker);
+      try {
+        const payload = await api.fetchJson<any>('/api/performance/matrix', { searchParams });
+        const items = ensureArray<RawMatrixItem>(payload?.items ?? payload?.data ?? payload);
+        return items.map(normalizeRow).filter((row) => row.ticker);
+      } catch (error) {
+        console.warn('usePerformanceMatrix: endpoint /api/performance/matrix indisponible', error);
+        return [];
+      }
     },
   });
 }

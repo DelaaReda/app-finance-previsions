@@ -43,7 +43,8 @@ function normalizeDirection(direction?: string | null): Direction {
  */
 export function useForecasts(params: ForecastsParams = {}): UseQueryResult<ForecastsResponse> {
   const queryString = buildSearchParams(params);
-  const key = queryString ? `/forecasts?${queryString}` : '/forecasts';
+  const basePath = '/api/forecasts';
+  const key = queryString ? `${basePath}?${queryString}` : basePath;
 
   return useQuery<ForecastsResponse>({
     queryKey: ['forecasts', queryString],
@@ -102,7 +103,8 @@ export function useForecastMatrix(params: { universe: string[]; horizons: Matrix
   if (universe.length) searchParams.set('tickers', universe.join(','));
   if (horizons.length) searchParams.set('horizons', horizons.join(','));
 
-  const key = `/forecasts?${searchParams.toString()}`;
+  const basePath = '/api/forecasts';
+  const key = `${basePath}?${searchParams.toString()}`;
 
   return useQuery<ForecastsMatrixResponse>({
     queryKey: ['forecasts-matrix', universe.join(','), horizons.join(',')],

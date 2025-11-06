@@ -75,9 +75,10 @@ export const Modal = (props: ModalComponentProps) => (
   <MantineModal radius="lg" overlayProps={{ opacity: 0.35, blur: 4 }} {...props} />
 );
 
-export const ActionIcon = (props: ActionIconComponentProps) => (
-  <MantineActionIcon radius="lg" variant={props.variant ?? 'light'} {...props} />
-);
+export const ActionIcon = forwardRef<HTMLButtonElement, ActionIconComponentProps>((props, ref) => (
+  <MantineActionIcon ref={ref} radius="lg" variant={props.variant ?? 'light'} {...props} />
+));
+ActionIcon.displayName = 'ActionIcon';
 
 export const Tooltip = (props: TooltipProps) => (
   <MantineTooltip radius="md" withArrow {...props} />
@@ -127,6 +128,20 @@ export {
   NumberInput,
 };
 
+// Safe access helpers - ensure never-empty patterns
+// Import from ../lib/safe and re-export for convenience
+import {
+  ensureArray,
+  nn,
+  hasItems,
+  safeLength,
+  safeMap,
+  safeGet,
+  safeBool,
+  safeString,
+  safeNumber,
+} from '../lib/safe';
+
 export type {
   ButtonProps,
   CardProps,
@@ -136,4 +151,17 @@ export type {
   TabsProps,
   TableProps,
   NumberInputProps,
+};
+
+// Export safe access helpers
+export {
+  ensureArray,
+  nn,
+  hasItems,
+  safeLength,
+  safeMap,
+  safeGet,
+  safeBool,
+  safeString,
+  safeNumber
 };

@@ -30,13 +30,27 @@ export function useRAGStats() {
 export function useCopilotContext() {
   return useQuery({
     queryKey: ['copilot-context'],
-    queryFn: () => client.get('/copilot/context'),
+    queryFn: async () => {
+      try {
+        return await client.get('/api/copilot/context');
+      } catch (error) {
+        console.warn('useCopilotContext: endpoint /api/copilot/context indisponible', error);
+        return [];
+      }
+    },
     staleTime: 30_000,
   })
 }
 
 export function useCreateReport() {
   return useMutation({
-    mutationFn: (body: { prompt: string; filters?: any }) => client.post('/copilot/reports', body),
+    mutationFn: async (body: { prompt: string; filters?: any }) => {
+      try {
+        return await client.post('/api/copilot/reports', body)
+      } catch (error) {
+        console.warn('useCreateReport: endpoint /api/copilot/reports indisponible', error)
+        throw error
+      }
+    },
   })
 }

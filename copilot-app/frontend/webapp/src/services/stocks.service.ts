@@ -45,7 +45,7 @@ export const stocksService = {
    * Get stock prices with technical indicators (downsampled)
    */
   getPrices: async (ticker: string, interval = '1d', downsample = 1000) => {
-    return apiGet<StockPriceData>('/stocks/prices', {
+    return apiGet<StockPriceData>('/api/stocks/prices', {
       ticker,
       interval,
       downsample: String(downsample)
@@ -56,32 +56,40 @@ export const stocksService = {
    * Get list of tracked tickers
    */
   getUniverse: async () => {
-    return apiGet<Universe>('/stocks/universe')
+    return apiGet<Universe>('/api/stocks/universe')
   },
 
   /**
    * Get detailed ticker sheet (prix + indicators + news)
    */
   getTickerDetail: async (ticker: string) => {
-    return apiGet<TickerDetail>(`/stocks/${ticker}`)
+    return apiGet<TickerDetail>(`/api/stocks/${ticker}`)
   },
 
   /**
    * Search for stocks by ticker or name
    */
   search: async (query: string) => {
-    // Since there's no search endpoint in the backend yet, return mock data for now
-    const mockResults: StockSearchResult[] = [
-      { ticker: 'AAPL', name: 'Apple Inc.', changePercent: 1.2, change: 0.85 },
-      { ticker: 'MSFT', name: 'Microsoft Corp.', changePercent: -0.5, change: -0.32 },
-      { ticker: 'GOOGL', name: 'Alphabet Inc.', changePercent: 0.8, change: 0.45 },
-      { ticker: 'TSLA', name: 'Tesla Inc.', changePercent: 2.3, change: 1.25 },
-      { ticker: 'AMZN', name: 'Amazon.com Inc.', changePercent: -0.2, change: -0.15 }
-    ].filter(item => 
-      item.ticker.toLowerCase().includes(query.toLowerCase()) || 
-      item.name.toLowerCase().includes(query.toLowerCase())
-    )
-    return { ok: true, data: mockResults } as any
+    const universe = await apiGet<Universe>('/api/stocks/universe')
+
+    if (!universe.ok || !universe.data) {
+      return universe as any
+    }
+
+    const lowerQuery = query.trim().toLowerCase()
+    const tickers = universe.data.tickers ?? []
+
+    const results: StockSearchResult[] = tickers
+      .filter((ticker) => ticker.toLowerCase().includes(lowerQuery))
+      .map((ticker) => ({
+        ticker,
+        name: `${ticker} Corp`,
+        changePercent: 0,
+        change: 0,
+      }))
+      .slice(0, 10)
+
+    return { ok: true, data: results } as any
   },
 
   /**
@@ -89,7 +97,7 @@ export const stocksService = {
    */
   getAnalysis: async (ticker: string) => {
     // Use the actual API endpoint for ticker sheet data, then transform to match expected format
-    const response = await apiGet<any>(`/stocks/${ticker}`)
+    const response = await apiGet<any>(`/api/stocks/${ticker}`)
     
     if (!response.ok) {
       return response

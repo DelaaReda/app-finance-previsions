@@ -2,10 +2,21 @@ import type { ApiResponse } from '@/types/common.types';
 
 const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? '/api';
 
+function resolveBase() {
+  const raw = API_BASE ?? '/api';
+  if (/^https?:\/\//i.test(raw)) {
+    return raw.endsWith('/') ? raw : `${raw}/`;
+  }
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+  const normalized = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${origin}${normalized.endsWith('/') ? normalized : `${normalized}/`}`;
+}
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 function buildUrl(path: string, searchParams?: Record<string, string | number | boolean | undefined>) {
-  const base = API_BASE.endsWith('/') ? API_BASE : `${API_BASE}/`;
+  const base = resolveBase();
   const url = new URL(path.replace(/^\//, ''), base);
   if (searchParams) {
     Object.entries(searchParams).forEach(([key, value]) => {

@@ -38,7 +38,7 @@ export function useLegacyHealth(): LegacyHealthHookReturn {
     
     try {
       // Use the unified apiGet client that handles the { ok, data } envelope
-      const response = await apiGet<LegacyHealthData>('/health');
+      const response = await apiGet<LegacyHealthData>('/api/health');
       
       if (response.ok && response.data) {
         const data: LegacyHealthData = response.data;
@@ -116,7 +116,33 @@ export type Health = {
 export function useHealth() {
   return useQuery<Health>({
     queryKey: ['health-datasets'],
-    queryFn: () => client.get<Health>('/analytics/health'),
+    queryFn: async () => {
+      const raw = await client.get<LegacyHealthData>('/api/health');
+      const now = Date.now();
+      const datasets: DatasetHealth[] = Object.entries(raw.last_updates ?? {}).map(([name, iso]) => {
+        const lastUpdateMs = iso ? Date.parse(iso) : NaN;
+        const latencySec = Number.isFinite(lastUpdateMs)
+          ? Math.max(0, Math.round((now - lastUpdateMs) / 1000))
+          : 86_400; // 24h par défaut si date inconnue
+        return {
+          name,
+          last_update: iso ?? 'inconnu',
+          latency_sec: latencySec,
+          errors_24h: 0,
+        };
+      });
+
+      return {
+        updated_at: raw.timestamp ?? new Date().toISOString(),
+        datasets,
+        thresholds: {
+          stale_sec: datasets.reduce<Record<string, number>>((acc, dataset) => {
+            acc[dataset.name] = 3600; // 1h par défaut
+            return acc;
+          }, {}),
+        },
+      } satisfies Health;
+    },
     refetchInterval: 60_000,
   });
 }

@@ -171,8 +171,6 @@ export function StocksScreenerWidget({
             value={tickers}
             onChange={(next) => { setTickers(next); setPage(1); }}
             searchable
-            creatable
-            getCreateLabel={(value) => `Ajouter ${value}`}
             placeholder="Tickers (SPY,QQQ,...)"
             style={{ minWidth: 260 }}
           />

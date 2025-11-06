@@ -50,7 +50,21 @@ export function useRecommendations(universe?: string[], limit: number = 3) {
       const response = await apiGet<RecommendationsResponse>(
         `/api/recommendations/daily?${params.toString()}`
       );
-      return response.data;
+      if (response.ok && response.data) {
+        return response.data;
+      }
+
+      console.warn('useRecommendations: endpoint /api/recommendations/daily indisponible', response.error);
+      return {
+        recommendations: [],
+        market_context: {
+          regime: 'unknown',
+          summary: 'Recommandations indisponibles.',
+          key_drivers: [],
+        },
+        generated_at: new Date().toISOString(),
+        valid_until: new Date().toISOString(),
+      } satisfies RecommendationsResponse;
     },
     staleTime: 60 * 60_000, // 1 hour (recommendations are daily)
     refetchInterval: 60 * 60_000, // Auto-refetch every hour

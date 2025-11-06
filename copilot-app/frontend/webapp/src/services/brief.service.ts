@@ -19,7 +19,7 @@ export const briefService = {
    * Get specific brief by ID
    */
   getBrief: async (id: string): Promise<ApiResponse<MarketBrief>> => {
-    return apiGet<MarketBrief>(`/brief/${id}`);
+    return apiGet<MarketBrief>(`/api/brief/${id}`);
   },
 
   /**
@@ -27,7 +27,7 @@ export const briefService = {
    */
   getLatest: async (type: 'daily' | 'weekly' = 'daily', _universe: string[] = ['SPY', 'QQQ']): Promise<ApiResponse<MarketBrief>> => {
     // Use the correct endpoint for daily or weekly briefs
-    const endpoint = type === 'daily' ? '/brief/daily' : '/brief/weekly'
+    const endpoint = type === 'daily' ? '/api/brief/daily' : '/api/brief/weekly'
     // Note: universe filters are not currently supported in backend endpoints
     // This would require backend changes to support universe filtering
     
@@ -41,7 +41,7 @@ export async function fetchBrief(
   _universe: string[] = ['SPY', 'QQQ']
 ): Promise<ApiResponse<MarketBrief>> {
   // Use the correct endpoint for daily or weekly briefs
-  const endpoint = period === 'daily' ? '/brief/daily' : '/brief/weekly'
+  const endpoint = period === 'daily' ? '/api/brief/daily' : '/api/brief/weekly'
   
   return apiGet<MarketBrief>(endpoint, {});
 }
