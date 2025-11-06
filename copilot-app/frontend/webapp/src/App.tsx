@@ -2,6 +2,7 @@ import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, O
 import { AppProviders } from './app/providers'
 import GlobalErrorBoundary from './components/system/GlobalErrorBoundary'; // Global error boundary for stability
 import AppShell from './layout/AppShell'; // Using the new MUI-based layout
+import { DrillDownProvider } from './contexts/DrillDownContext'; // FC-INT-027: Intelligent drill-down navigation
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -16,17 +17,19 @@ import Macro from './pages/Macro'
 import Stocks from './pages/Stocks'
 import News from './pages/News'
 import Copilot from './pages/Copilot'
-import TickerSheet from './pages/TickerSheet'
+import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSheet with intelligent drill-down
 import MarketBrief from './pages/MarketBrief'
 import TestSimple from './pages/TestSimple'
 
-// Create router with error boundary wrapper
+// Create router with error boundary wrapper and drill-down context
 const router = createBrowserRouter(createRoutesFromElements(
   <Route element={
     <GlobalErrorBoundary>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      <DrillDownProvider>
+        <AppShell>
+          <Outlet />
+        </AppShell>
+      </DrillDownProvider>
     </GlobalErrorBoundary>
   }>
     <Route index element={<Dashboard />} />
@@ -35,11 +38,11 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/stocks" element={<Stocks />} />
     <Route path="/news" element={<News />} />
     <Route path="/copilot" element={<Copilot />} />
-    <Route path="/ticker/:symbol" element={<TickerSheet />} />
+    <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<ForecastsMinimal />} />
     <Route path="/test" element={<TestSimple />} />
     <Route path="/backtests" element={<Backtests />} />
-  <Route path="/compare" element={<CompareStrategies />} />
+    <Route path="/compare" element={<CompareStrategies />} />
     <Route path="/dashboards/:slug?" element={<DashboardsPage />} />
     <Route path="/judge" element={<LLMJudge />} />
   </Route>

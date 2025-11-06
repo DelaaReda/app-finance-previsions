@@ -1,6 +1,7 @@
 import { Card, Group, Stack, Text, Badge, Button, RingProgress, Tooltip } from '@mantine/core';
 import { IconArrowRight, IconTrendingUp, IconTrendingDown, IconMinus } from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
+import { useDrillDown } from '../../contexts/DrillDownContext';
+import { useMarketContext } from '../../hooks/useMarketContext';
 import type { Recommendation } from '../../hooks/useRecommendations';
 
 interface RecommendationCardProps {
@@ -63,10 +64,24 @@ function getRiskColor(risk: string): string {
  * - Navigation to ticker detail
  */
 export function RecommendationCard({ recommendation }: RecommendationCardProps) {
-  const navigate = useNavigate();
+  const { navigateToTicker } = useDrillDown();
+  const { data: marketContext } = useMarketContext();
   
   const scorePercent = Math.round(recommendation.score * 100);
   const confidencePercent = Math.round(recommendation.confidence * 100);
+  
+  const handleViewDetails = () => {
+    navigateToTicker(recommendation.ticker, {
+      source: 'recommendations',
+      reason: recommendation.reasoning,
+      regime: marketContext?.regime,
+      additionalData: {
+        score: recommendation.score,
+        action: recommendation.action,
+        catalysts: recommendation.catalysts,
+      },
+    });
+  };
   
   return (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -136,7 +151,7 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
           variant="light"
           fullWidth
           rightSection={<IconArrowRight size={16} />}
-          onClick={() => navigate(`/ticker/${recommendation.ticker}`)}
+          onClick={handleViewDetails}
         >
           View Details
         </Button>
