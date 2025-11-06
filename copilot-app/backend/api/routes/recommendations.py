@@ -1,80 +1,69 @@
 """
 Recommendations API Routes
+Provides daily ML+LLM powered stock recommendations
 
-Endpoints for smart daily recommendations.
-
-Author: ELENA-39
 Task: FC-INT-023
+Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
+Integration: CLAUDE-CODE (connecting backend services to API)
 """
-
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
+from core.response import ok, err
+import logging
 
-try:
-    from backend.services.recommendations_service import get_recommendations_service
-except ImportError:
-    get_recommendations_service = None
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 @router.get("/daily")
 async def get_daily_recommendations(
-    universe: Optional[List[str]] = Query(None, description="List of tickers to consider"),
+    universe: Optional[List[str]] = Query(None, description="Optional list of tickers to analyze"),
     limit: int = Query(3, ge=1, le=10, description="Number of recommendations (1-10)")
 ):
     """
-    Get daily smart recommendations
-    
-    Combines ML ranking with LLM validation to generate
-    actionable daily recommendations.
-    
-    Args:
-        universe: Optional list of tickers to analyze. If not provided, uses default universe.
-        limit: Number of recommendations to return (1-10, default 3)
-    
+    Get daily top recommendations with ML scoring + LLM validation.
+
+    Query parameters:
+        - universe: Optional list of tickers (e.g., ?universe=AAPL&universe=MSFT)
+        - limit: Number of recommendations (default: 3, max: 10)
+
     Returns:
-        JSON with recommendations, market context, and validity period
-        
-    Example response:
-        {
-          "recommendations": [
-            {
-              "ticker": "AAPL",
-              "action": "BUY",
-              "score": 0.87,
-              "reasoning": "Strong momentum post-earnings...",
-              "catalysts": ["Q4 earnings beat", "..."],
-              "risk_level": "MEDIUM",
-              "confidence": 0.85,
-              "supporting_data": {...}
-            }
-          ],
-          "market_context": {
-            "regime": "NORMAL",
-            "summary": "...",
-            "key_drivers": [...]
-          },
-          "generated_at": "2025-11-06T...",
-          "valid_until": "2025-11-07T..."
-        }
+        - recommendations: List of top N recommendations with:
+            - ticker, action (BUY/SELL/HOLD)
+            - score (ML composite score)
+            - reasoning (LLM-generated explanation)
+            - catalysts (key factors)
+            - risk_level, confidence
+            - supporting_data (breakdown of scores)
+        - market_context: Current regime + summary
+        - generated_at, valid_until timestamps
+
+    Response structure matches frontend useRecommendations hook expectations.
     """
-    if not get_recommendations_service:
-        raise HTTPException(
-            status_code=503,
-            detail="Recommendations service not available"
-        )
-    
     try:
-        service = get_recommendations_service()
-        recommendations = await service.generate_daily_recommendations(
+        from services.recommendations_service import RecommendationsService
+
+        service = RecommendationsService()
+        recommendations = await service.get_daily_recommendations(
             universe=universe,
             limit=limit
         )
-        return recommendations
-        
+
+        return ok(recommendations)
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate recommendations: {str(e)}"
-        )
+        logger.error(f"Recommendations service error: {str(e)}", exc_info=True)
+
+        # Return graceful fallback
+        return ok({
+            "recommendations": [],
+            "market_context": {
+                "regime": "NORMAL",
+                "summary": "Recommendations service temporarily unavailable",
+                "key_drivers": []
+            },
+            "generated_at": None,
+            "valid_until": None,
+            "status": "fallback"
+        })

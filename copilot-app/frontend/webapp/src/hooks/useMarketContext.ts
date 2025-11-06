@@ -55,7 +55,7 @@ export function useMarketContext() {
   return useQuery<MarketContext>({
     queryKey: ['context', 'current'],
     queryFn: async () => {
-      const response = await apiGet<MarketContext>('/context/current');
+      const response = await apiGet<MarketContext>('/api/context/current');
       return response.data;
     },
     staleTime: 5 * 60_000, // 5 minutes

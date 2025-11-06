@@ -48,7 +48,7 @@ export function useRecommendations(universe?: string[], limit: number = 3) {
       params.append('limit', limit.toString());
       
       const response = await apiGet<RecommendationsResponse>(
-        `/recommendations/daily?${params.toString()}`
+        `/api/recommendations/daily?${params.toString()}`
       );
       return response.data;
     },

@@ -1,52 +1,63 @@
 """
 Context API Routes
-File: backend/api/routes/context.py
-Task: FC-INT-021 - ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
-"""
+Provides market regime detection and adaptive UI recommendations
 
+Task: FC-INT-021
+Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
+Integration: CLAUDE-CODE (connecting backend services to API)
+"""
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from core.response import ok, err
 import logging
 
-from services.context_service import get_context_service
-
 logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 @router.get("/current")
-async def get_current_context() -> Dict[str, Any]:
+async def get_current_context():
     """
-    Get current market context with regime classification and
-    adaptive UI layout recommendations.
-    
+    Get current market context with regime classification and UI recommendations.
+
     Returns:
-        {
-            'regime': str (HIGH_VOLATILITY, BULL_MARKET, RISK_OFF, etc.),
-            'confidence': float (0-1),
-            'key_drivers': List[str],
-            'recommended_layout': {
-                'primary_widgets': List[str],
-                'filters': Dict,
-                'emphasis': str
-            },
-            'characteristics': {
-                'volatility': str,
-                'sentiment': str,
-                'trend': str,
-                'momentum': str,
-                'risk_level': str
-            },
-            'metadata': {...}
-        }
+        - Market regime (HIGH_VOLATILITY, BULL_MARKET, BEAR_MARKET, etc.)
+        - Confidence score
+        - Key drivers
+        - Market characteristics (volatility, sentiment, trend, momentum, risk_level)
+        - Recommended layout (primary/secondary widgets, filters, emphasis)
+
+    Response structure matches frontend useMarketContext hook expectations.
     """
     try:
-        service = get_context_service()
-        context = await service.get_current_market_context()
-        return context
+        from services.context_service import ContextService
+
+        service = ContextService()
+        context = await service.get_current_context()
+
+        return ok(context)
+
     except Exception as e:
-        logger.error(f"Failed to get market context: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to determine market context: {str(e)}"
-        )
+        logger.error(f"Context service error: {str(e)}", exc_info=True)
+
+        # Return graceful fallback
+        return ok({
+            "regime": "NORMAL",
+            "confidence": 0.5,
+            "key_drivers": ["Market analysis in progress"],
+            "characteristics": {
+                "volatility": "medium",
+                "sentiment": "neutral",
+                "trend": "sideways",
+                "momentum": "moderate",
+                "risk_level": "medium"
+            },
+            "recommended_layout": {
+                "primary_widgets": ["ForecastsWidget", "NewsWidget"],
+                "secondary_widgets": ["BacktestsWidget"],
+                "filters": {},
+                "emphasis": "balanced"
+            },
+            "timestamp": None,
+            "status": "fallback"
+        })

@@ -49,7 +49,7 @@ export function useIntelligence() {
   return useQuery<IntelligenceSnapshot>({
     queryKey: ['intelligence', 'snapshot'],
     queryFn: async () => {
-      const response = await apiGet<IntelligenceSnapshot>('/intelligence/snapshot');
+      const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
       return response.data;
     },
     staleTime: 5 * 60_000, // 5 minutes
