@@ -18,6 +18,7 @@ import DashboardsPage from './pages/Dashboards'
 import Macro from './pages/Macro'
 import Stocks from './pages/Stocks'
 import News from './pages/News'
+import NewsSignalRadar from './pages/NewsSignalRadar' // FC-UX-002: News Signal Radar (Treemap visualization)
 import Copilot from './pages/Copilot'
 import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSheet with intelligent drill-down
 import MarketBrief from './pages/MarketBrief'
@@ -51,6 +52,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/macro" element={<Macro />} />
     <Route path="/stocks" element={<Stocks />} />
     <Route path="/news" element={<News />} />
+    <Route path="/news/radar" element={<NewsSignalRadar />} /> {/* FC-UX-002: News Signal Radar */}
     <Route path="/copilot" element={<Copilot />} />
     <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<ForecastsMinimal />} />
