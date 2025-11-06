@@ -2,7 +2,7 @@ import { Stack, Title, Text } from '@mantine/core';
 import HealthBar from '@/components/widgets/HealthBar';
 import ForecastsProBoard from '@/components/widgets/ForecastsProBoard';
 import BacktestsPanel from '@/components/widgets/BacktestsPanel';
-import IntelligenceDashboardWidget from '@/components/widgets/IntelligenceDashboardWidget';
+import { IntelligenceDashboardWidget } from '@/components/widgets/IntelligenceDashboardWidget';
 
 export default function Dashboard() {
   return (

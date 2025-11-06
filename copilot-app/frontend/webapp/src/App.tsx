@@ -5,7 +5,7 @@ import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
-import Forecasts from './pages/Forecasts'
+import ForecastsMinimal from './pages/ForecastsMinimal'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
 import CompareStrategies from './pages/CompareStrategies'
@@ -18,6 +18,7 @@ import News from './pages/News'
 import Copilot from './pages/Copilot'
 import TickerSheet from './pages/TickerSheet'
 import MarketBrief from './pages/MarketBrief'
+import TestSimple from './pages/TestSimple'
 
 // Create router with error boundary wrapper
 const router = createBrowserRouter(createRoutesFromElements(
@@ -35,7 +36,8 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/news" element={<News />} />
     <Route path="/copilot" element={<Copilot />} />
     <Route path="/ticker/:symbol" element={<TickerSheet />} />
-    <Route path="/forecasts" element={<Forecasts />} />
+    <Route path="/forecasts" element={<ForecastsMinimal />} />
+    <Route path="/test" element={<TestSimple />} />
     <Route path="/backtests" element={<Backtests />} />
   <Route path="/compare" element={<CompareStrategies />} />
     <Route path="/dashboards/:slug?" element={<DashboardsPage />} />

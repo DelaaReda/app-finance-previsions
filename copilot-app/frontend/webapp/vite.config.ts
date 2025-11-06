@@ -30,48 +30,14 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     open: false, // Don't automatically open browser
     proxy: {
+      // Only proxy API endpoints and health checks to backend
+      // Frontend routes (/forecasts, /brief, etc.) should be handled by React Router
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
         changeOrigin: true,
         secure: false,
       },
       '/health': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      // Routes spécifiques qui doivent être redirigées vers le backend 
-      '/forecasts': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/brief': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/dashboard': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/macro': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/stocks': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/news': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/copilot': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:8050',
         changeOrigin: true,
         secure: false,

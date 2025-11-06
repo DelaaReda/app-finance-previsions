@@ -69,7 +69,7 @@ export function ForecastCardsWidget({
   };
 
   return (
-    <Card>
+    <Card className="card">
       <Group justify="space-between" align="center" mb="xs">
         <div>
           <Title order={4}>{title}</Title>
@@ -85,8 +85,8 @@ export function ForecastCardsWidget({
               { label: 'Long',  value: 'long' },
             ]}
           />
-          <Button variant="light" onClick={exportCsv}>Exporter CSV</Button>
-          <Button onClick={() => refetch()} loading={isFetching}>Rafraîchir</Button>
+          <Button className="btn" variant="light" onClick={exportCsv}>Exporter CSV</Button>
+          <Button className="btn" onClick={() => refetch()} loading={isFetching}>Rafraîchir</Button>
         </Group>
       </Group>
 
@@ -105,7 +105,7 @@ export function ForecastCardsWidget({
           const dBadge = dirToBadge(f.direction);
           return (
             <Grid.Col key={`${f.ticker ?? f.symbol}-${f.horizon}`} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
-              <Card withBorder shadow="sm">
+              <Card className="card" withBorder shadow="sm">
                 <Group justify="space-between" mb="xs">
                   <Group gap={8} wrap="nowrap">
                     <Title order={5} style={{ cursor: onSelectTicker ? 'pointer' : 'default' }}
@@ -156,10 +156,10 @@ export function ForecastCardsWidget({
                     ⓘ
                   </ActionIcon>
                   <Group gap="xs">
-                    <Button size="xs" variant="light" onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}>
+                    <Button className="btn" size="xs" variant="light" onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}>
                       Ouvrir
                     </Button>
-                    <Button size="xs" onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}>
+                    <Button className="btn" size="xs" onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}>
                       Détails
                     </Button>
                   </Group>

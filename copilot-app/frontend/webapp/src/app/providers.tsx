@@ -26,6 +26,7 @@ const queryClient = new QueryClient({
 // Mantine theme with professional finance UI/UX
 type ColorScheme = 'light' | 'dark';
 
+// Use CSS variables defined in index.css so Tailwind/Mantine share the same tokens.
 const mantineTheme = createTheme({
   primaryColor: 'indigo',
   defaultRadius: 'md',
@@ -34,11 +35,23 @@ const mantineTheme = createTheme({
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     fontWeight: '700',
   },
+  // Provide a small palette but prefer CSS variables for runtime theming
   colors: {
-    indigo: ['#edf2ff','#dbe4ff','#bac8ff','#91a7ff','#748ffc','#5c7cfa','#4c6ef5','#4263eb','#3b5bdb','#364fc7'],
-    teal: ['#e6fcf5','#c3fae8','#96f2d7','#63e6be','#38d9a9','#20c997','#12b886','#0ca678','#099268','#087f5b'],
-    slate: ['#f8fafc','#f1f5f9','#e2e8f0','#cbd5f5','#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a'],
+    // Mantine expects arrays of 10 shades — repeat the CSS var to satisfy the contract.
+    indigo: [
+      'var(--accent)','var(--accent)','var(--accent)','var(--accent)','var(--accent)',
+      'var(--accent)','var(--accent)','var(--accent)','var(--accent)','var(--accent)'
+    ] as unknown as [string,string,string,string,string,string,string,string,string,string],
+    teal: [
+      'var(--accent-2)','var(--accent-2)','var(--accent-2)','var(--accent-2)','var(--accent-2)',
+      'var(--accent-2)','var(--accent-2)','var(--accent-2)','var(--accent-2)','var(--accent-2)'
+    ] as unknown as [string,string,string,string,string,string,string,string,string,string],
+    slate: [
+      'var(--surface)','var(--surface)','var(--surface)','var(--surface)','var(--surface)',
+      'var(--surface)','var(--surface)','var(--surface)','var(--surface)','var(--surface)'
+    ] as unknown as [string,string,string,string,string,string,string,string,string,string],
   },
+  // Note: global body/background is handled by index.css (CSS variables). Mantine colors map to CSS vars above.
   components: {
     Card: {
       defaultProps: {
@@ -60,6 +73,11 @@ const mantineTheme = createTheme({
         radius: 'md',
         size: 'md',
       },
+      styles: {
+        root: {
+          backgroundImage: 'linear-gradient(90deg, var(--accent), #7c95ff)'
+        }
+      }
     },
   },
 });

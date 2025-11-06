@@ -32,7 +32,9 @@
       "WebSearch",
       "Bash(pnpm remove:*)",
       "Bash(pnpm dev)",
-      "Bash(npx playwright:*)"
+      "Bash(npx playwright:*)",
+      "Bash(do url=\"http://localhost:5174/$page\" filename=\"/Users/venom/Documents/analyse-financiere/proofs/FC-UI-MANTINE-TREMOR/audit-$page:-home.png\" echo \"📸 Capturing: $url\" npx playwright screenshot --browser chromium --viewport-size 1920,1080 \"$url\" \"$filename\")",
+      "Bash(open http://localhost:5174/forecasts)"
     ],
     "deny": [],
     "ask": []

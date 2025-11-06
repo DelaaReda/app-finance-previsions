@@ -1353,8 +1353,8 @@ def register_routes(app: FastAPI):
         """Backtests summary with cache-first and safe fallbacks (never-empty)."""
         try:
             # Prefer cached snapshot on disk
-            from storage import load_json
-            bt = load_json("backtests") or {}
+            from backend.storage.base import load_json
+            bt = load_json("backtests.json") or {}
             data_block = bt.get("data") if isinstance(bt, dict) else None
             core = data_block if isinstance(data_block, dict) else bt if isinstance(bt, dict) else {}
 

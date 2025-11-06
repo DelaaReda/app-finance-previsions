@@ -12,7 +12,7 @@ export function MetricCard({
   loading?: boolean;
 }) {
   return (
-    <Card withBorder shadow="sm" data-testid="metric-card">
+    <Card className="card" withBorder shadow="sm" data-testid="metric-card">
       <Stack gap="xs">
         {title && (
           <Text size="sm" c="dimmed">
