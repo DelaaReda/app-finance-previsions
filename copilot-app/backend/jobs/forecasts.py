@@ -1,33 +1,74 @@
 """
-Forecasts job module
-Handles the generation of market forecasts using ML models and data pipelines
+Forecasts job module - CONNECTED VERSION
+Handles the generation of market forecasts using ML + LLM hybrid system
+Integration by: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
+Task: FC-INT-009 - Connect job to real ForecastHybridV1 system
 """
 from datetime import datetime
 import logging
 from pathlib import Path
+import sys
+
+# Add parent directory to path to import models
+backend_path = str(Path(__file__).parent.parent)
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
 
 logger = logging.getLogger(__name__)
 
-def run_forecasts_job():
+def run_forecasts_job(tickers=None):
     """
     Main function to run forecasts generation job
+    NOW ACTUALLY GENERATES REAL DATA using ForecastHybridV1
     """
-    logger.info("Starting forecasts job...")
+    logger.info("Starting forecasts job with REAL data generation...")
+    
     try:
-        # In a real implementation, this would run ML models, process forecasts, etc.
-        # For now, we'll return a basic structure showing success
+        # Import the hybrid forecast system
+        from models.forecast_hybrid_v1 import ForecastHybridV1
+        from storage.base import save_forecasts
+        
+        # Initialize the hybrid forecast system
+        forecast_system = ForecastHybridV1()
+        
+        # Use default tickers if none provided
+        if tickers is None:
+            tickers = ["SPY", "QQQ", "AAPL", "MSFT", "TSLA", "NVDA", "GOOGL", "META"]
+        
+        logger.info(f"Generating forecasts for {len(tickers)} tickers: {tickers}")
+        
+        # Generate forecasts using ML + LLM hybrid system
+        forecasts = forecast_system.generate_hybrid_forecasts(tickers)
+        
+        # Save to persistent storage
+        logger.info("Saving forecasts to storage...")
+        save_forecasts(forecasts, source=["job:forecasts", "ml_model", "g4f_llm"])
+        
+        # Return summary
         result = {
-            "forecast_count": 0,
+            "forecast_count": len(forecasts.get('rows', [])),
             "models_used": ["ml_model_v1", "g4f_hybrid"],
+            "tickers_processed": tickers,
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "status": "completed"
+            "status": "completed",
+            "source": ["forecast_hybrid_v1", "ml_model", "g4f_llm"]
         }
         
-        # In a real implementation, save results to persistent storage
-        # save_json("forecasts", result, source=["job:forecasts"])
-        
-        logger.info(f"Forecasts job completed. Generated {result['forecast_count']} forecasts.")
+        logger.info(f"✅ Forecasts job completed successfully. Generated {result['forecast_count']} forecasts.")
         return result
+        
+    except ImportError as e:
+        logger.error(f"Import error in forecasts job: {str(e)}", exc_info=True)
+        logger.info("Dependencies may be missing - returning fallback result")
+        # Return a minimal result indicating the system is set up but deps missing
+        return {
+            "forecast_count": 0,
+            "models_used": [],
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "status": "pending_dependencies",
+            "error": f"Import error: {str(e)}",
+            "note": "System is configured but some dependencies are not installed"
+        }
     except Exception as e:
         logger.error(f"Forecasts job failed: {str(e)}", exc_info=True)
         return {
