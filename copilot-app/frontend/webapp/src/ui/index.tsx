@@ -14,6 +14,7 @@ import {
   CardProps,
   Chip,
   Container,
+  Grid,
   Divider,
   Flex,
   Group,
@@ -23,7 +24,6 @@ import {
   ModalProps,
   Paper,
   Progress,
-  RingProgress,
   ScrollArea,
   Select,
   SimpleGrid,
@@ -34,6 +34,8 @@ import {
   TabsProps,
   Table,
   TableProps,
+  NumberInput,
+  NumberInputProps,
   Text,
   TextInput,
   TextProps,
@@ -45,6 +47,8 @@ import {
   Transition,
 } from '@mantine/core';
 import { AreaChart, BarList, DonutChart, LineChart } from '@tremor/react';
+import type { RingProps } from './Ring';
+import { RingProgress as RingComponent } from './Ring';
 
 type ButtonComponentProps = ButtonProps & ComponentPropsWithoutRef<'button'>;
 type ActionIconComponentProps = ActionIconProps & ComponentPropsWithoutRef<'button'>;
@@ -99,9 +103,11 @@ export {
   Box,
   Chip,
   Container,
+  Grid,
   Divider,
   Flex,
   Group,
+  Loader,
   Paper,
   Progress,
   RingProgress,

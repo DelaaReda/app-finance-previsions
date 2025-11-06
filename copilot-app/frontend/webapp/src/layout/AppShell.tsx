@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'copilot', to: '/copilot', icon: IconRobot },
   { label: 'forecasts', to: '/forecasts', icon: IconChartDots },
   { label: 'backtests', to: '/backtests', icon: IconChartBubble },
+  { label: 'compare', to: '/compare', icon: IconChartDots },
   { label: 'judge', to: '/judge', icon: IconRobot },
 ];
 

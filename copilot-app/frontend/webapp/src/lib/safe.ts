@@ -2,8 +2,23 @@
  * Central place for safe guard helpers used across the UI
  */
 
+export function ensureArray<T>(value: T | T[] | null | undefined, fallback: T[] = []): T[] {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined) return fallback;
+  return [value as T];
+}
+
 export function safeArray<T>(value: T[] | null | undefined, fallback: T[] = []): T[] {
-  return Array.isArray(value) ? value : fallback;
+  return ensureArray<T>(value, fallback);
+}
+
+// Backwards-compatible alias expected by many files
+// (ensureArray function above is the canonical implementation)
+
+export function nn(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const coerced = Number(value);
+  return Number.isFinite(coerced) ? coerced : fallback;
 }
 
 export function hasItems<T>(value: T[] | null | undefined): boolean {

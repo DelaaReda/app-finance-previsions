@@ -47,6 +47,35 @@ Lisez les reviews : [text](reviews)
 
 ---
 
+#### FC-UI-NEWS-HOOKS — NewsFeed branché au hook TanStack *(Effort M)*
+- **Why**: `NewsFeed.tsx` destructure `useNews()` comme un store custom (`items`, `filters`, `loadMore`…), ce qui casse le runtime et `pnpm run typecheck`.
+- **Steps**:
+  1. Conserver `useNews` (UseQueryResult) et déplacer la gestion des filtres/pagination dans `NewsFeed` via `useState` + `refetch`.
+  2. Alimenter les cartes depuis `data?.articles`, utiliser `isLoading` / `error` / `refetch` pour les états.
+  3. Couvrir les états Loading/Empty/Error/Freshness (Mantine + composants existants).
+- **DoD**: `/news` tourne sans erreur console; `pnpm run typecheck` ne remonte plus les 9 erreurs NewsFeed; capture UI (articles + filtres actifs).
+- **Proof**: log typecheck + screenshot.
+
+#### FC-UI-REMOVE-MUI — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
+- **Why**: `src/components/ui/SourceTooltip.tsx` importe `@mui/*`, interdit (cf. `UI_PROCESS_IMPROVEMENTS`) et casse tsc faute de types.
+- **Steps**:
+  1. Réécrire le composant avec Mantine Tooltip (ou supprimer si inutilisé).
+  2. Retirer `@mui/*` des deps & lockfile, ajouter règle ESLint `no-restricted-imports` si absente.
+  3. Vérifier que les pages news/brief utilisent le nouveau composant.
+- **DoD**: `rg \"@mui/\"` → 0; `pnpm run typecheck` passe cette étape; ESLint bloque toute régression.
+- **Proof**: log typecheck + diff ESLint.
+
+#### FC-BUILD-ENV-TYPES — Déclarations `import.meta.env` fiables *(Effort S)*
+- **Why**: `src/config/env.ts` déclenche 3 erreurs TS (`ImportMetaEnv` incomplet), bloquant CI.
+- **Steps**:
+  1. Ajouter `src/vite-env.d.ts` (ou équivalent) avec interface `ImportMetaEnv` (API_BASE, USE_MOCKS, ENABLE_SSE).
+  2. Documenter la convention dans `docs/dev/ui_migration_mantine.md`.
+  3. Vérifier `pnpm run typecheck`.
+- **DoD**: Les erreurs `ImportMetaEnv` disparaissent; doc à jour.
+- **Proof**: log typecheck + snippet doc.
+
+---
+
 ## P1 — Copilot & Backtests (48–72h)
 
 #### FC-COPILOT-SSE — Copilot streaming avec contexte *(Effort M)*
@@ -103,3 +132,56 @@ Lisez les reviews : [text](reviews)
 - Smoke Playwright: `/`, `/forecasts`, `/macro`, `/news` (au moins composant clé rendu).
 - Preuves à déposer dans `proofs/<TASK>/` (curl/log + screenshots ou GIF streaming).
 - Documenter tout toggle/env dans `docs/dev/ui_migration_mantine.md` (ajouter section “Mocks & SSE”).
+## FC-NEW-021 — Robustness Scoring & PDF Export (Frontend)
+
+**Status**: AVAILABLE to claim
+
+**But**: Implémenter le système de scoring robustesse avec export PDF et panel de tuning comme spécifié dans la spécification détaillée du 2025-11-05.
+
+**Fichiers**
+
+* `frontend/webapp/src/lib/robustScore.ts`
+* `frontend/webapp/src/ui/Ring.tsx` 
+* `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx`
+* `frontend/webapp/src/utils/exportPdf.ts`
+* `frontend/webapp/src/components/report/ExportReportButton.tsx`
+* `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx`
+* `frontend/webapp/src/api/backtests.ts`
+* `frontend/webapp/src/pages/Backtests.tsx` (intégration)
+
+**Étapes**
+
+1. **Implémentation du scoring robustesse**:
+   - Créer `robustScore.ts` avec les fonctions de scoring CAGR, Drawdown, WinRate, Trades
+   - Calculer le score total et la notation (S, A, B, C, D, E)
+
+2. **Composant graphique Ring**:
+   - Créer wrapper Mantine pour RingProgress avec style cohérent
+   - Intégration avec la lib de scoring robustesse
+
+3. **Carte de score Robustness**:
+   - Créer composant RobustnessScoreCard qui affiche le ring + détails
+   - Utiliser les couleurs appropriées selon le score
+
+4. **Export PDF**:
+   - Ajouter dépendances: `jspdf html2canvas`
+   - Créer utilitaire `exportPdf.ts` avec html2canvas + jsPDF
+   - Bouton export pour cibler n'importe quelle section
+
+5. **Panel de Tuning**:
+   - Créer PresetTunerPanel avec interface pour tester variantes backtests
+   - Intégration avec API backtests
+   - Affichage des résultats avec les scores de robustesse
+
+6. **Intégration**:
+   - Intégrer les composants dans la page Backtests.tsx
+   - S'assurer que les patterns never-empty sont respectés
+
+**DoD**
+
+* Système de scoring robustesse opérationnel sur la page Backtests
+* Bouton d'export PDF fonctionnel pour exporter n'importe quelle section
+* Panel de tuning permettant d'explorer plusieurs variantes de paramètres
+* 4 composants UI (Card, Ring, ExportButton, TunerPanel) prêts à être réutilisés
+* Protection contre crashes avec helpers never-empty (ensureArray, etc.)
+* UI fully responsive et accessible

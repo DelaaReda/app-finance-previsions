@@ -8,6 +8,7 @@ import DashboardTremor from './pages/DashboardTremor'
 import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
+import CompareStrategies from './pages/CompareStrategies'
 
 // Nouvelles pages selon VISION
 import Macro from './pages/Macro'
@@ -35,6 +36,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/ticker/:symbol" element={<TickerSheet />} />
     <Route path="/forecasts" element={<Forecasts />} />
     <Route path="/backtests" element={<Backtests />} />
+  <Route path="/compare" element={<CompareStrategies />} />
     <Route path="/judge" element={<LLMJudge />} />
   </Route>
 ));
