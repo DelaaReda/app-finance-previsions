@@ -221,6 +221,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No recommendations routes module found: {str(e)}")
     
+    # Correlations router (FC-INT-025 by ELENA-39)
+    try:
+        from api.routes.correlations import router as correlations_router
+        app.include_router(correlations_router, prefix="/api/correlations", tags=["correlations"])
+        logger.info("✅ Correlations router registered at /api/correlations")
+    except ImportError as e:
+        logger.info(f"No correlations routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 
