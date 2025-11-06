@@ -239,10 +239,12 @@ Combiner les 9 widgets sophistiqués + data backend riche + ML models + G4F LLM 
 
 **Progression** :
 - ✅ FC-INT-020 (Intelligence Service) - COMPLETED (+90 pts)
-- 🟡 FC-INT-021 (Context Service) - EN COURS
-- ⏳ FC-INT-022 (IntelligenceDashboardWidget) - À venir
+- ✅ FC-INT-021 (Context Service) - COMPLETED (+70 pts)
+- 🟡 FC-INT-022 (IntelligenceDashboardWidget) - EN COURS
 
-**Prochaine action** : Implémenter FC-INT-021 (Context Service)
+**Points accumulés** : 160/240 (Semaine 1 à 67%)
+
+**Prochaine action** : Implémenter FC-INT-022 (IntelligenceDashboardWidget)
 
 ---
 
