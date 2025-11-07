@@ -1,6 +1,6 @@
 """
 Scheduler module for managing recurring jobs in the Finance Copilot system.
-Handles news refresh, forecasts, brief reports, and backtests on scheduled intervals.
+Handles news refresh, forecasts, brief reports, backtests, and model watcher refreshes.
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -8,6 +8,14 @@ import logging
 from datetime import datetime
 import atexit
 import os
+import sys
+from pathlib import Path
+
+# Ensure src/ is importable for agents.*
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = BACKEND_ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
 # Configure logging for scheduler
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +27,7 @@ from backend.jobs.forecasts import run_forecasts_job
 from backend.jobs.weekly_brief import run_weekly_brief_job
 from backend.jobs.backtests import run_backtests_job
 from backend.storage.io import save_json
+from agents.g4f_model_watcher import refresh as refresh_g4f_models
 
 class JobScheduler:
     def __init__(self):
@@ -77,6 +86,19 @@ class JobScheduler:
             replace_existing=True
         )
         logger.info("Scheduled backtests job Wednesdays at 3:00 AM")
+        
+        # G4F model watcher job - interval (default 120 minutes)
+        watcher_interval_minutes = int(os.getenv("G4F_WATCHER_INTERVAL_MINUTES", "120") or "0")
+        if watcher_interval_minutes > 0:
+            self.scheduler.add_job(
+                func=self._run_g4f_watcher_job,
+                trigger="interval",
+                minutes=watcher_interval_minutes,
+                id='g4f_watcher_job',
+                name='Refresh G4F model working list',
+                replace_existing=True
+            )
+            logger.info("Scheduled G4F watcher job every %s minutes", watcher_interval_minutes)
     
     def _run_news_refresh_job(self):
         """
@@ -211,6 +233,42 @@ class JobScheduler:
             }
             save_json("job_backtests", job_metadata, source=["scheduler", "backtests", "error"])
     
+    def _run_g4f_watcher_job(self):
+        """
+        Refresh the G4F working models list to keep judge fast and reliable.
+        """
+        try:
+            limit = int(os.getenv("G4F_WATCHER_LIMIT", "10") or "10")
+            refresh_verified = os.getenv("G4F_WATCHER_REFRESH_VERIFIED", "1").strip().lower() not in {"0", "false", "no"}
+            logger.info("Starting G4F watcher job (limit=%s, refresh_verified=%s)...", limit, refresh_verified)
+            start_time = datetime.utcnow()
+            path = refresh_g4f_models(limit=limit, refresh_verified=refresh_verified)
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            job_metadata = {
+                "job_id": "g4f_watcher_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": {
+                    "saved_to": str(path),
+                    "limit": limit,
+                    "refresh_verified": refresh_verified,
+                }
+            }
+            save_json("job_g4f_watcher", job_metadata, source=["scheduler", "g4f_watcher"])
+            logger.info("G4F watcher job completed successfully in %.2fs", duration)
+        except Exception as e:
+            logger.error("G4F watcher job failed: %s", e, exc_info=True)
+            job_metadata = {
+                "job_id": "g4f_watcher_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_g4f_watcher", job_metadata, source=["scheduler", "g4f_watcher", "error"])
+    
     def start(self):
         """
         Start the scheduler
@@ -233,3 +291,11 @@ class JobScheduler:
 
 # Global scheduler instance
 scheduler = JobScheduler()
+
+
+def start_scheduler():
+    scheduler.start()
+
+
+def stop_scheduler():
+    scheduler.shutdown()

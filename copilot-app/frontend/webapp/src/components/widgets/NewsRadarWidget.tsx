@@ -105,7 +105,11 @@ export function NewsRadarWidget({
       const themeList = ensureArray(article.themes);
       const tickerList = ensureArray(article.tickers);
       const sentiment = classifySentiment(article.sentiment);
-      const bucketKey = timelineKey(new Date(article.published_at), window);
+      // Handle both ISO strings and Unix timestamps (convert seconds to milliseconds)
+      const pubDate = article.published_at
+        ? (typeof article.published_at === 'number' ? article.published_at * 1000 : article.published_at)
+        : Date.now();
+      const bucketKey = timelineKey(new Date(pubDate), window);
 
       timelineCounts.set(bucketKey, (timelineCounts.get(bucketKey) ?? 0) + 1);
 

@@ -5,6 +5,7 @@ import AppShell from './layout/AppShell'; // Using the new MUI-based layout
 import { DrillDownProvider } from './contexts/DrillDownContext'; // FC-INT-027: Intelligent drill-down navigation
 import { CommandPalette } from './components/system/CommandPalette'; // FC-UX-001: Command Palette (Ctrl+K)
 import { useCommandPalette } from './hooks/useCommandPalette'; // FC-UX-001: Command Palette hook
+import DevDebugPanel from './debug/DevDebugPanel';
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
@@ -34,6 +35,7 @@ function AppContent() {
     <>
       <CommandPalette opened={opened} close={close} />
       <Outlet />
+      <DevDebugPanel />
     </>
   );
 }

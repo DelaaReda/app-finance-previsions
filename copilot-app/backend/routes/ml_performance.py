@@ -1,111 +1,107 @@
 """
-ML Performance Metrics Route
-Task: FC-P2-018 - ML Model Performance Tracking
+ML Performance Route
+Task: FC-API-032 - Prediction Accuracy Analytics
 Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
 """
-from fastapi import APIRouter
-from typing import Dict, Any
-from datetime import datetime
+from fastapi import APIRouter, Query
+from typing import Dict, Any, Optional
 
-from backend.models.backtest_engine import run_backtest_analysis
-from backend.storage.io import load_json
-from backend.services.cache_layer import load_or_compute
+from ..services.prediction_analyzer import prediction_analytics_service
+from ..storage.io import load_json
+from ..services.cache_layer import load_or_compute
 
-router = APIRouter(prefix="/api", tags=["ml-performance"])
+router = APIRouter(prefix="/api", tags=["analytics"])
 
-@router.get("/ml-performance")
-async def ml_performance():
+@router.get("/analytics/predictions")
+async def analytics_predictions(
+    ticker: Optional[str] = Query(None, description="Filtrer par ticker"),
+    horizon: Optional[str] = Query(None, description="Filtrer par horizon (1d/1w/1m/3m)"),
+    days_back: int = Query(30, ge=1, le=365, description="Nombre de jours à analyser")
+):
     """
-    Get ML model performance metrics with real calculated values.
-    Implements never-empty contract by serving cached/latest data or fallback.
+    Get prediction accuracy analytics with comprehensive metrics.
+    Implements never-empty contract by serving cached/latest report if live calculation fails.
     """
-    def compute_ml_performance():
-        """
-        Compute fresh ML performance metrics
-        """
-        try:
-            # Try to load latest forecasts data to run performance analysis on
-            forecasts_data = load_json("forecasts") or {"data": {"rows": []}}
-            forecasts = forecasts_data.get("data", {}).get("rows", []) or forecasts_data.get("rows", [])
-            
-            # Prepare dummy price data for backtesting (in real implementation would use real prices)
-            prices_data = {}
-            
-            # Run backtest analysis to generate performance metrics
-            params = {
-                "initial_capital": 100000,
-                "analysis_period": "365d",
-                "model_version": "hybrid_v1_ml_g4f"
-            }
-            
-            results = run_backtest_analysis(forecasts, prices_data, params)
-            
-            # Format to match API contract
-            return {
-                "summary": {
-                    "total_models_tracked": 1,  # Currently tracking one model type 
-                    "total_forecasts_analyzed": len(results.get("trades", [])),
-                    "evaluation_period_days": 365,
-                    "last_evaluation": results.get("timestamp"),
-                    "model_version": params.get("model_version", "unknown")
-                },
-                "model_metrics": {
-                    "hybrid_v1_ml_g4f": {
-                        "hit_rate": results["metrics"].get("hit_rate", 0.0),
-                        "win_rate": results["metrics"].get("win_rate", 0.0),
-                        "cagr": results["metrics"].get("cagr", 0.0),
-                        "sharpe_ratio": results["metrics"].get("sharpe_ratio", 0.0),
-                        "max_drawdown": results["metrics"].get("max_drawdown", 0.0),
-                        "total_trades": results["metrics"].get("total_trades", 0),
-                        "avg_win": results["metrics"].get("avg_win", 0.0),
-                        "avg_loss": results["metrics"].get("avg_loss", 0.0),
-                        "volatility": results["metrics"].get("volatility", 0.0)
+    try:
+        # Load latest available data or compute fresh
+        def compute_analytics():
+            try:
+                # Call the service to get prediction accuracy report
+                return prediction_analytics_service.get_prediction_accuracy_report(ticker, horizon, days_back)
+            except Exception:
+                # Fallback if analytics service not available
+                return {
+                    "accuracy_metrics": {
+                        "overall": {"hit_rate": 0.0, "accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1_score": 0.0, "mean_abs_error": 0.0, "root_mean_squared_error": 0.0, "tracking_error": 0.0, "correlation": 0.0, "sample_size": 0},
+                        "by_ticker": {},
+                        "by_horizon": {},
+                        "sample_size": 0,
+                        "generated_at": "2025-11-05T00:00:00Z",
+                        "message": "Analytics service not available, using fallback metrics"
+                    },
+                    "prediction_accuracy_report": {
+                        "status": "fallback_no_service",
+                        "filters_applied": {"ticker": ticker, "horizon": horizon, "days_back": days_back}
+                    },
+                    "performance_tracking": {
+                        "hit_rate_trend": [],
+                        "accuracy_trend": [],
+                        "f1_score_trend": []
+                    },
+                    "generated_at": "2025-11-05T00:00:00Z",
+                    "data_coverage": {
+                        "total_forecasts": 0,
+                        "evaluated_predictions": 0,
+                        "evaluation_rate": 0.0,
+                        "date_range": {"start": None, "end": None}
                     }
+                }
+        
+        analytics_data = load_or_compute(
+            key=f"analytics_predictions_{ticker or 'all'}_{horizon or 'all'}_{days_back}d",
+            compute_fn=compute_analytics,
+            source=["analytics_prediction_route", "accuracy_calculation", "fc-api-032"]
+        )
+        
+        return {
+            "ok": True,
+            "data": analytics_data,
+            "freshness": analytics_data.get("generated_at", "unknown")
+        }
+        
+    except Exception as e:
+        print(f"Error in analytics/predictions endpoint: {str(e)}")
+        
+        # Return fallback data to maintain never-empty contract
+        return {
+            "ok": True,  # Still return ok=true to maintain never-empty
+            "data": {
+                "accuracy_metrics": {
+                    "overall": {"hit_rate": 0.0, "accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1_score": 0.0, "mean_abs_error": 0.0, "root_mean_squared_error": 0.0, "tracking_error": 0.0, "correlation": 0.0, "sample_size": 0},
+                    "by_ticker": {},
+                    "by_horizon": {},
+                    "sample_size": 0,
+                    "generated_at": "2025-11-05T00:00:00Z",
+                    "message": "Analytics endpoint failed, returning fallback data to maintain never-empty contract",
+                    "error": str(e)
                 },
-                "performance_history": [results["metrics"]] if results.get("metrics") else [],
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "source": ["ml_performance_tracker", "backtest_engine", "fc-p2-018"]
-            }
-            
-        except Exception as e:
-            # Fallback if anything goes wrong to ensure never-empty contract
-            return {
-                "summary": {
-                    "total_models_tracked": 0,
-                    "total_forecasts_analyzed": 0,
-                    "evaluation_period_days": 0,
-                    "last_evaluation": datetime.utcnow().isoformat() + "Z",
-                    "model_version": "error_fallback"
+                "prediction_accuracy_report": {
+                    "status": "error_fallback",
+                    "error": str(e)
                 },
-                "model_metrics": {
-                    "error_fallback": {
-                        "hit_rate": 0.0,
-                        "win_rate": 0.0,
-                        "cagr": 0.0,
-                        "sharpe_ratio": 0.0,
-                        "max_drawdown": 0.0,
-                        "total_trades": 0,
-                        "avg_win": 0.0,
-                        "avg_loss": 0.0,
-                        "volatility": 0.0
-                    }
+                "performance_tracking": {
+                    "hit_rate_trend": [],
+                    "accuracy_trend": [],
+                    "f1_score_trend": []
                 },
-                "performance_history": [],
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "source": ["ml_performance_tracker", "error_fallback", "fc-p2-018"],
-                "error": str(e),
-                "message": "ML performance metrics computation failed, returning fallback data to maintain never-empty contract"
-            }
-    
-    # Use cache layer to serve latest available data, compute if none available
-    performance_data = load_or_compute(
-        key="ml_performance",
-        compute_fn=compute_ml_performance,
-        source=["ml_performance_route", "live_calculation", "fc-p2-018"]
-    )
-    
-    return {
-        "ok": True,
-        "data": performance_data,
-        "freshness": performance_data.get("generated_at", datetime.utcnow().isoformat() + "Z")
-    }
+                "generated_at": "2025-11-05T00:00:00Z",
+                "data_coverage": {
+                    "total_forecasts": 0,
+                    "evaluated_predictions": 0,
+                    "evaluation_rate": 0.0,
+                    "date_range": {"start": None, "end": None}
+                }
+            },
+            "freshness": "error",
+            "error": str(e)
+        }

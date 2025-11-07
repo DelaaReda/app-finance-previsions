@@ -70,21 +70,33 @@ export function useNewsRadar(params: NewsRadarParams) {
     queryFn: async () => {
       const searchParams = buildSearchParams(params);
       const json = await api.fetchJson<any>('/api/news/feed', { searchParams });
-      const articles = ensureArray(json?.articles ?? json).map((article: any) => ({
-        id: String(article?.id ?? article?.url ?? `${article?.source ?? 'news'}-${article?.title ?? 'item'}`),
-        title: String(article?.title ?? 'Sans titre'),
-        url: String(article?.url ?? '#'),
-        source: article?.source ?? article?.publisher ?? null,
-        tickers: ensureArray(article?.tickers ?? article?.symbols ?? []),
-        themes: ensureArray(article?.themes ?? article?.topics ?? []),
-        published_at: String(article?.published_at ?? article?.date ?? article?.timestamp ?? new Date().toISOString()),
-        sentiment: typeof article?.sentiment_score === 'number'
-          ? article?.sentiment_score
-          : typeof article?.sentiment === 'number'
-          ? article?.sentiment
-          : null,
-        summary: article?.summary ?? article?.description ?? null,
-      }));
+      const articles = ensureArray(json?.data?.articles ?? json?.articles ?? json).map((article: any) => {
+        // Handle both pubDate (ISO string) and timestamp (Unix seconds)
+        let publishedAt = article?.pubDate ?? article?.published_at ?? article?.date;
+        if (!publishedAt && article?.timestamp) {
+          // Convert Unix timestamp (seconds) to ISO string
+          publishedAt = new Date(article.timestamp * 1000).toISOString();
+        }
+        if (!publishedAt) {
+          publishedAt = new Date().toISOString();
+        }
+
+        return {
+          id: String(article?.id ?? article?.url ?? article?.link ?? `${article?.source ?? 'news'}-${article?.title ?? 'item'}`),
+          title: String(article?.title ?? 'Sans titre'),
+          url: String(article?.link ?? article?.url ?? '#'),
+          source: article?.source ?? article?.publisher ?? null,
+          tickers: ensureArray(article?.tickers ?? article?.symbols ?? []),
+          themes: ensureArray(article?.themes ?? article?.topics ?? []),
+          published_at: publishedAt,
+          sentiment: typeof article?.sentiment_score === 'number'
+            ? article?.sentiment_score
+            : typeof article?.sentiment === 'number'
+            ? article?.sentiment
+            : null,
+          summary: article?.summary ?? article?.description ?? null,
+        };
+      });
 
       return {
         updated_at: json?.updated_at ?? null,

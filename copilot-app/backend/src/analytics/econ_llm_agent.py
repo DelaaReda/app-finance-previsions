@@ -8,6 +8,7 @@ import sys
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 
 try:
     from g4f.client import Client as G4FClient
@@ -72,7 +73,7 @@ def _pick_top3_distinct(models: List[str]) -> List[str]:
 CHAR_BUDGET = int(os.getenv("ECON_AGENT_CHAR_BUDGET", "60000"))
 MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "2048"))
 TEMPERATURE = float(os.getenv("ECON_AGENT_TEMPERATURE", "0.2"))
-TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "60"))
+TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "30"))
 RETRIES_PER_MODEL = int(os.getenv("ECON_AGENT_RETRIES", "1"))
 
 # ======== Prompts système (structurés + JSON final) ===========================
@@ -423,6 +424,7 @@ class EconomicAnalyst:
     def _call_model(self, model: str, messages: List[Dict[str, str]]) -> Tuple[bool, Dict[str, Any]]:
         last_err: Optional[str] = None
         for attempt in range(1, self.retries_per_model + 1):
+            started = time.perf_counter()
             try:
                 resp = self.client.chat.completions.create(
                     model=model,
@@ -431,6 +433,7 @@ class EconomicAnalyst:
                     max_tokens=self.max_tokens,
                     timeout=self.timeout,
                 )
+                latency_ms = int((time.perf_counter() - started) * 1000.0)
                 text = (resp.choices[0].message.content if hasattr(resp, "choices") else str(resp))
                 # Clean the LLM response to remove noise and limit length
                 text = clean_llm_text(text)
@@ -443,9 +446,12 @@ class EconomicAnalyst:
                     "answer": text,
                     "parsed": parsed,
                     "usage": _to_json_serializable(usage),
+                    "latency_ms": latency_ms,
+                    "provider": "g4f",
                 }
             except Exception as e:
                 last_err = f"{type(e).__name__}: {e}"
+                latency_ms = int((time.perf_counter() - started) * 1000.0)
                 continue
         return False, {
             "ok": False,
@@ -453,6 +459,8 @@ class EconomicAnalyst:
             "attempt": self.retries_per_model,
             "answer": "",
             "error": last_err or "Aucun provider n'a répondu",
+            "latency_ms": latency_ms if 'latency_ms' in locals() else None,
+            "provider": "g4f",
         }
 
     # ---- mode simple : un seul résultat

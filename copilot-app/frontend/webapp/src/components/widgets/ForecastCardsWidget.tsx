@@ -61,16 +61,25 @@ export function ForecastCardsWidget({
   const { data, isLoading, error, refetch, isFetching } = useForecasts({ horizon: hz, universe });
 
   const items = useMemo(() => {
-    const arr = ensureArray(safeGet(data, 'items', [])).slice();
-    arr.sort((a, b) => b.score - a.score || ((b.confidence ?? 0) - (a.confidence ?? 0)));
+    const arr = ensureArray(safeGet(data, 'rows', [])).slice();
+    // Use confidence as score if score is not available
+    arr.forEach(item => {
+      if (item.score === undefined && item.confidence !== undefined) {
+        item.score = Math.round(item.confidence * 100);
+      }
+      if (item.expected_return_pct === undefined && item.expected_return !== undefined) {
+        item.expected_return_pct = item.expected_return * 100;
+      }
+    });
+    arr.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || ((b.confidence ?? 0) - (a.confidence ?? 0)));
     return arr.slice(0, limit);
   }, [data, limit]);
 
   const exportCsv = () => {
     const lines: string[] = [];
     lines.push('symbol,horizon,score,confidence,direction,expected_return_pct,updated_at');
-    
-    ensureArray(safeGet(data, 'items', [])).forEach((f) => {
+
+    ensureArray(safeGet(data, 'rows', [])).forEach((f) => {
       lines.push([
         f.ticker ?? f.symbol ?? '',
         f.horizon,

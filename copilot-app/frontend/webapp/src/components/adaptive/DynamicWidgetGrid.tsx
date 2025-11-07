@@ -18,6 +18,9 @@ import { IntelligenceDashboardWidget } from '../widgets/IntelligenceDashboardWid
 import { SmartRecommendationsWidget } from '../widgets/SmartRecommendationsWidget';
 import { CorrelationIntelligenceWidget } from '../widgets/CorrelationIntelligenceWidget';
 import { ForecastCardsWidget } from '../widgets/ForecastCardsWidget';
+import { NewsWidget } from '../widgets/NewsWidget';
+import { MacroWidget } from '../widgets/MacroWidget';
+import { StocksWidget } from '../widgets/StocksWidget';
 // Note: Other widgets may not exist yet - we'll handle gracefully
 
 /**
@@ -34,9 +37,9 @@ const WIDGET_REGISTRY: Record<
   recommendations: SmartRecommendationsWidget,
   correlations: CorrelationIntelligenceWidget,
   forecasts: ForecastCardsWidget,
-  news: null, // Placeholder - implement as needed
-  macro: null,
-  stocks: null,
+  news: NewsWidget,
+  macro: MacroWidget,
+  stocks: StocksWidget,
   risks: null,
   opportunities: null,
   alerts: null,

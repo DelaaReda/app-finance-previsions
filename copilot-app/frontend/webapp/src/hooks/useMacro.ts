@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { ensureArray } from '@/lib/safe';
 
@@ -43,8 +43,35 @@ export function useMacroSeries(params: {
 
   return useQuery<MacroResponse>({
     queryKey: ['macro-series', list, start ?? '', end ?? '', frequency ?? '', collapse ?? ''] as const,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const json = await api.fetchJson<any>('/api/macro/series', { searchParams });
+      const rawData = json?.data ?? json;
+
+      // Handle snapshot data (array of objects with metrics as keys)
+      if (Array.isArray(rawData) && rawData.length > 0 && !rawData[0]?.id && !rawData[0]?.points) {
+        const snapshot = rawData[0]; // First (and likely only) snapshot
+        const now = new Date().toISOString().slice(0, 10);
+
+        // Convert snapshot to series format - return ALL metrics available
+        const series: MacroSeries[] = Object.entries(snapshot)
+          .filter(([key, value]) => typeof value === 'number')
+          .map(([key, value]) => ({
+            id: key,
+            name: key.replace(/_/g, ' ').toUpperCase(),
+            unit: key.includes('prob') || key.includes('rate') ? '%' : null,
+            frequency: 'daily' as MacroFreq,
+            points: [{ date: now, value: value as number }],
+          }));
+
+        // Note: Ignoring requested IDs because snapshot doesn't use FRED IDs
+        return {
+          updated_at: json?.updated_at ?? null,
+          series,
+        };
+      }
+
+      // Handle normal time series data
       const series = ensureArray(json?.series ?? json?.items ?? json).map((serie: any) => ({
         id: String(serie?.id ?? ''),
         name: serie?.name ?? serie?.title ?? serie?.id ?? null,
@@ -61,6 +88,5 @@ export function useMacroSeries(params: {
         series,
       };
     },
-    keepPreviousData: true,
   });
 }

@@ -61,8 +61,12 @@ export interface AddTickersRequest {
 const API_BASE = '/api'
 
 async function fetchPortfolios(): Promise<Portfolio[]> {
-  const data = await api.fetchJson<{ portfolios: Portfolio[]; count: number }>(`${API_BASE}/portfolios`)
-  return data.portfolios
+  // TEMPORARY: Endpoint not yet implemented - return empty array
+  // TODO: Re-enable when /api/portfolios is ready
+  // const data = await api.fetchJson<{ portfolios: Portfolio[]; count: number }>(`${API_BASE}/portfolios`)
+  // return data.portfolios
+
+  return []
 }
 
 async function fetchPortfolio(id: string): Promise<Portfolio> {

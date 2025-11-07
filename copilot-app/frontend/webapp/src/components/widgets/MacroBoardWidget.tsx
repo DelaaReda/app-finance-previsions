@@ -144,12 +144,12 @@ export function MacroBoardWidget({
   const categories = useMemo(() => transformedSeries.map((serie) => serie.id), [transformedSeries]);
 
   return (
-    <Card data-testid="macro-board">
+    <Card>
       <Group justify="space-between" align="center" wrap="wrap">
         <div>
           <Title order={4}>{title}</Title>
           <Text c="dimmed" mt={4}>
-            Sélectionne tes séries FRED, ajuste l’horizon, compare Niveau / MoM / YoY, normalise Base 100.
+            Sélectionne tes séries FRED, ajuste l'horizon, compare Niveau / MoM / YoY, normalise Base 100.
           </Text>
         </div>
         <Group gap="xs" wrap="nowrap">

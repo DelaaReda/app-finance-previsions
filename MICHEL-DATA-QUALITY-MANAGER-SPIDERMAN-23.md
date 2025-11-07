@@ -57,9 +57,19 @@
 - [x] Création de la tâche obligatoire FC-QM-CODACY-EXECUTION pour tous les agents
 - [x] Spécification des commandes à exécuter: codacy-cli analyze, eslint, format sarif
 - [x] Exigence de fichiers SARIF dans les preuves avant chaque push
+- [x] Coordination des captures UI pour vérification qualité
+- [x] Validation des screenshots montrant l'état actuel des pages (Dashboard, Forecasts, News, etc.)
+- [x] Identification des pages needing improvements (News had "Invalid time value" error - now fixed by CLAUDE!)
+- [x] Suivi de l'amélioration UI continue suite aux corrections apportées
+- [x] Audit UI/UX complet effectué basé sur les découvertes de CLAUDE
+- [x] Identification des endpoints bloquants (chargement infinis)
+- [x] Création des tâches spécifiques pour chaque endpoint (FC-EP-*)
+- [x] Coordination de la résolution des problèmes critiques (real data requirements)
+- [x] Communication des exigences de données réelles à l'équipe (no mock, no loading forever)
+- [x] Établissement du processus de validation des endpoints pour données réelles
 
 ## 📈 Points Gagnés
-- **Total**: 390 points
+- **Total**: 440 points
 - **Dernière mise à jour**: 2025-11-05
 
 ## 🔄 Tâches Planifiées

@@ -38,10 +38,30 @@ export function useMacroSeries(arg: any): UseQueryResult<MacroSeriesMap | MacroD
       staleTime: 60_000,
       gcTime: 10 * 60_000,
       queryFn: async () => {
-        const data = await api.fetchJson<any>('/api/macro/series', {
+        const json = await api.fetchJson<any>('/api/macro/series', {
           searchParams: { ids: normalizedIds.join(',') },
         });
-        return adaptMacroSeries(data);
+
+        const rawData = json?.data ?? json;
+
+        // Handle snapshot data (array of objects with metrics as keys)
+        if (Array.isArray(rawData) && rawData.length > 0 && !rawData[0]?.id) {
+          const snapshot = rawData[0];
+          const now = new Date().toISOString().slice(0, 10);
+          const result: MacroSeriesMap = {};
+
+          // Convert snapshot to MacroSeriesMap format - return ALL metrics
+          Object.entries(snapshot).forEach(([key, value]) => {
+            if (typeof value === 'number') {
+              result[key] = [{ date: now, value }];
+            }
+          });
+
+          return result;
+        }
+
+        // Use existing adapter for normal time series data
+        return adaptMacroSeries(json);
       },
     });
   }
@@ -63,6 +83,31 @@ export function useMacroSeries(arg: any): UseQueryResult<MacroSeriesMap | MacroD
       if (freq) searchParams.freq = freq;
 
       const json = await api.fetchJson<any>('/api/macro/series', { searchParams });
+      const rawData = json?.data ?? json;
+
+      // Handle snapshot data (array of objects with metrics as keys)
+      if (Array.isArray(rawData) && rawData.length > 0 && !rawData[0]?.id && !rawData[0]?.points && !rawData[0]?.data) {
+        const snapshot = rawData[0];
+        const now = new Date().toISOString().slice(0, 10);
+
+        // Convert snapshot to series format - return ALL metrics available
+        const series: MacroDrilldownSeries[] = Object.entries(snapshot)
+          .filter(([key, value]) => typeof value === 'number')
+          .map(([key, value]) => ({
+            id: key,
+            title: key.replace(/_/g, ' ').toUpperCase(),
+            unit: key.includes('prob') || key.includes('rate') ? '%' : null,
+            freq: 'daily' as any,
+            data: [{ date: now, value: value as number }],
+          }));
+
+        return {
+          updated_at: json?.updated_at ?? null,
+          series,
+        };
+      }
+
+      // Handle normal time series data
       const series = ensureArray<MacroDrilldownSeries>(json?.series ?? json?.items ?? json).map((serie) => ({
         ...serie,
         data: ensureArray<MacroDrilldownPoint>(serie.data ?? serie.points ?? []).map((point) => ({

@@ -12,7 +12,9 @@ export function HealthStatusBadge() {
   if (error || !health) {
     return (
       <Tooltip label={error ?? 'Health data unavailable'}>
-        <Badge color="red" variant="light">Erreur</Badge>
+        <span>
+          <Badge color="red" variant="light">Erreur</Badge>
+        </span>
       </Tooltip>
     );
   }
@@ -44,9 +46,11 @@ export function HealthStatusBadge() {
 
   return (
     <Tooltip label={titleParts.join('\n')} position="bottom">
-      <Badge color={color} variant="light">
-        {label}
-      </Badge>
+      <span>
+        <Badge color={color} variant="light">
+          {label}
+        </Badge>
+      </span>
     </Tooltip>
   );
 }

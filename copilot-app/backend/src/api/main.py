@@ -11,12 +11,22 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 import json
 from dataclasses import asdict
+import logging
 
-from fastapi import FastAPI, Query, HTTPException, Body
+from fastapi import FastAPI, Query, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 import pandas as pd
+from starlette.concurrency import run_in_threadpool
+
+DEBUG_MODE = str(os.getenv("FINANCE_COPILOT_DEBUG", os.getenv("COPILOT_DEBUG", "1"))).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+    "debug",
+}
 
 # Ensure project backend paths are on sys.path so `import core.*` works
 import sys
@@ -27,6 +37,16 @@ if _src_path not in sys.path:
     sys.path.insert(0, _src_path)
 if str(_backend_root) not in sys.path:
     sys.path.insert(0, str(_backend_root))
+
+
+def _configure_debug_logging():
+    """Ensure backend logs everything when DEBUG_MODE is enabled."""
+    if getattr(_configure_debug_logging, "_configured", False):
+        return
+    logging.basicConfig(level=logging.DEBUG)
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "api.debug"):
+        logging.getLogger(name).setLevel(logging.DEBUG)
+    _configure_debug_logging._configured = True  # type: ignore[attr-defined]
 
 # Import data access layer
 try:
@@ -56,11 +76,34 @@ from api.services.news_service import (
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI app."""
+    debug_enabled = DEBUG_MODE
     app = FastAPI(
         title="Finance Copilot API",
         description="Backend API for React frontend - 5 Pillars: Macro, Stocks, News, Copilot, Brief",
-        version="0.1.0"
+        version="0.1.0",
+        debug=debug_enabled,
     )
+
+    if debug_enabled:
+        _configure_debug_logging()
+        debug_logger = logging.getLogger("api.debug")
+
+        @app.middleware("http")
+        async def debug_request_logger(request: Request, call_next):
+            start = datetime.now()
+            response = await call_next(request)
+            duration = (datetime.now() - start).total_seconds() * 1000.0
+            try:
+                debug_logger.debug(
+                    "HTTP %s %s -> %s in %.1f ms",
+                    request.method,
+                    request.url.path,
+                    getattr(response, "status_code", "unknown"),
+                    duration,
+                )
+            except Exception:
+                pass
+            return response
 
     # CORS middleware (allow React dev server and production origins)
     app.add_middleware(
@@ -242,6 +285,7 @@ def _latest_partition(base: str) -> Optional[str]:
     parts = sorted(Path(base).glob("dt=*"))
     return parts[-1].name.split("=")[-1] if parts else None
 
+DEFAULT_JUDGE_TICKERS = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
 # ================================= ROUTES ====================================
 
 def register_routes(app: FastAPI):
@@ -1008,25 +1052,31 @@ def register_routes(app: FastAPI):
         logger = logging.getLogger(__name__)
         try:
             # Parse tickers if provided
-            ticker_list = []
+            ticker_list: List[str] = []
             if request.tickers:
-                ticker_list = [t.strip().upper() for t in request.tickers.split(',') if t.strip()]
-            else:
-                # Default to major index trackers if no tickers provided
-                ticker_list = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
+                placeholders = {"string", "ticker", "example", "sample"}
+                parsed = [t.strip().upper() for t in request.tickers.split(',') if t.strip()]
+                ticker_list = [t for t in parsed if t.lower() not in placeholders]
+            if not ticker_list:
+                # Default to major index trackers if no usable tickers provided
+                ticker_list = DEFAULT_JUDGE_TICKERS[:]
             
-            forecast_results = []
+            forecast_results: List[Dict[str, Any]] = []
+            get_forecast_fn = None
+            create_sample_data_fn = None
 
             # Try to use modeling stack; if unavailable, fall back to cached forecasts
             try:
                 # Import our forecasting and analysis systems
-                from backend.models.forecast_v0.api import get_forecast
-                from backend.models.forecast_v0.main import create_sample_data
+                from models.forecast_v0.api import get_forecast as _get_forecast
+                from models.forecast_v0.main import create_sample_data as _create_sample_data
+                get_forecast_fn = _get_forecast
+                create_sample_data_fn = _create_sample_data
 
                 for ticker in ticker_list:
                     try:
-                        sample_data = create_sample_data(ticker, days=252)
-                        forecast = get_forecast(
+                        sample_data = create_sample_data_fn(ticker, days=252)
+                        forecast = get_forecast_fn(
                             ticker=ticker,
                             data=sample_data,
                             include_llm_analysis=True
@@ -1037,20 +1087,39 @@ def register_routes(app: FastAPI):
                         logger.warning(f"Error generating forecast for {ticker}: {e}")
                         continue
             except Exception as model_import_err:
-                # Fallback to stored forecasts to keep endpoint useful
+                logger.warning(f"LLM Judge unable to load forecasting stack: {model_import_err}")
+
+            # If model pipeline returned nothing, attempt to read cached forecasts
+            if not forecast_results:
                 try:
                     from storage.io import load_json as _load_json
                     _data = _load_json("forecasts") or {}
                     rows = _data.get("rows", [])
-                    # Filter by tickers if provided
                     wanted = set(ticker_list)
                     if wanted:
                         rows = [r for r in rows if r.get("ticker", "").upper() in wanted]
-                    forecast_results = rows
-                    logger.warning(f"LLM Judge using cached forecasts fallback: {len(forecast_results)} rows (reason: {model_import_err})")
+                    if rows:
+                        forecast_results = rows
+                        logger.info(f"LLM Judge using cached forecasts fallback: {len(forecast_results)} rows")
                 except Exception as e2:
-                    logger.error(f"LLM Judge fallback failed: {e2}")
-                    forecast_results = []
+                    logger.error(f"LLM Judge cached fallback failed: {e2}")
+
+            # Final safety: synthesize sample forecasts for core tickers to keep the judge useful
+            if not forecast_results and get_forecast_fn and create_sample_data_fn:
+                synthetic_tickers = DEFAULT_JUDGE_TICKERS[:4]
+                logger.warning("LLM Judge generated no forecasts; synthesizing fallback signals for %s", synthetic_tickers)
+                for ticker in synthetic_tickers:
+                    try:
+                        sample_data = create_sample_data_fn(ticker, days=252)
+                        forecast = get_forecast_fn(
+                            ticker=ticker,
+                            data=sample_data,
+                            include_llm_analysis=True
+                        )
+                        if forecast and forecast.get('ok', True):
+                            forecast_results.append(forecast.get('data', forecast))
+                    except Exception as e:
+                        logger.warning(f"Synthetic forecast failed for {ticker}: {e}")
 
             # Strict mode: crash instead of UI fallback when LLM not available
             STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "1") == "1")
@@ -1097,6 +1166,8 @@ def register_routes(app: FastAPI):
                     "stats": stats,
                     "summary_text": summary,
                 }
+
+            derived = _derive(forecast_results, request.max_er, request.min_conf)
 
             # Prepare LLM analysis using unified client
             try:
@@ -1165,350 +1236,138 @@ def register_routes(app: FastAPI):
                             "url": ""
                         }
                     })
+                # Use econ_llm_agent as the canonical proxy (free reasoning stack only)
+                llm_response: Dict[str, Any] | None = None
+                selected_model = None
+                model_runs_summary: List[Dict[str, Any]] = []
+                adjudication_info: Optional[Dict[str, Any]] = None
+                avg_agreement = None
+                pairwise_agreement = None
 
-                # Use econ_llm_agent with top-3 distinct families from working list (Option B)
-                llm_response = None
                 try:
-                    from analytics.econ_llm_agent import EconomicAnalyst, EconomicInput  # type: ignore
-                    # Load working models and pick top-3 distinct families
-                    best_models: list[str] = []
-                    try:
-                        from agents.g4f_model_watcher import _load_working  # type: ignore
-                        wm = _load_working() or {}
-                        items = wm.get("models", [])
-                        # sort: pass_rate desc, latency asc
-                        items = sorted(items, key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)))
-                        def _fam(name: str) -> str:
-                            n = (name or "").lower()
-                            if "deepseek" in n: return "deepseek"
-                            if "qwen" in n: return "qwen"
-                            if "glm" in n: return "glm"
-                            if "llama" in n or "meta-llama" in n: return "llama"
-                            if "gpt-oss" in n or "openai/gpt-oss" in n: return "gpt-oss"
-                            return "other"
-                        seen = set()
-                        for it in items:
-                            model_name = it.get("model")
-                            if not it.get("ok") or not model_name:
-                                continue
-                            fam = _fam(model_name)
-                            if fam in seen:
-                                continue
-                            best_models.append(model_name)
-                            seen.add(fam)
-                            if len(best_models) == 3:
-                                break
-                    except Exception as _e:
-                        logger.warning(f"g4f_model_watcher load failed: {_e}")
-                        best_models = []
+                    from analytics.econ_llm_agent import EconomicAnalyst, EconomicInput, POWER_NOAUTH_MODELS  # type: ignore
+                except Exception as import_err:  # noqa: BLE001
+                    logger.error("llm_judge.import_failed", extra={"ctx": {"error": str(import_err)}})
+                    raise HTTPException(status_code=500, detail="LLM judge unavailable (econ agent missing)") from import_err
 
-                    # If working list empty, fallback to VERIFIED FREE models PRIORITIZED BY INTELLIGENCE
-                    # Strategy: Best REASONING models first (for financial forecasting)
-                    if not best_models:
-                        # TIER S - Best FREE Reasoning Models (Financial Analysis)
-                        verified = [
-                            "deepseek-ai/DeepSeek-R1-0528",           # #1 Best reasoning (CoT native)
-                            "deepseek-ai/DeepSeek-V3",                # #2 671B params, very powerful
-                            "claude-3-5-sonnet-20241022",             # #3 Puter.com - Excellent reasoning
-                            "Qwen/Qwen3-235B-A22B-Thinking-2507",     # #4 Reasoning mode native
-                            "deepseek-chat",                          # #5 Puter.com - Fast DeepSeek
-                            "Qwen/Qwen3-235B-A22B-Instruct-2507",     # #6 235B params
-                            "gemini-2.0-flash-exp",                   # #7 Puter.com - Google knowledge
-                            "meta-llama/Llama-3.3-70B-Instruct-Turbo", # #8 70B open source
-                            "command-r-plus-08-2024",                 # #9 Français natif
-                            "openai/gpt-oss-120b",                    # #10 120B params
-                            "deepseek-ai/DeepSeek-V3-0324-Turbo",     # Fallback
-                            "Qwen/Qwen3-Next-80B-A3B-Instruct",       # Fallback
-                            "command-a-03-2025",                      # Fallback
-                        ]
-                        try:
-                            from analytics.econ_llm_agent import POWER_NOAUTH_MODELS  # type: ignore
-                            # Add POWER_NOAUTH_MODELS to verified list
-                            for m in POWER_NOAUTH_MODELS:
-                                if m not in verified:
-                                    verified.append(m)
-                        except Exception:
-                            pass
-                        
-                        # Take top 6 diverse models (not just 3!)
-                        def _fam2(name: str) -> str:
-                            n = (name or "").lower()
-                            if "deepseek" in n: return "deepseek"
-                            if "qwen" in n: return "qwen"
-                            if "glm" in n: return "glm"
-                            if "llama" in n or "meta-llama" in n: return "llama"
-                            if "gpt-oss" in n or "gpt-4o-mini" in n: return "gpt-oss"
-                            if "command" in n: return "cohere"
-                            return "other"
-                        seenf = set(); order = []
-                        for m in verified:
-                            fam = _fam2(m)
-                            # Allow 2 per family max
-                            order.append(m)
-                            seenf.add(fam)
-                            if len(order) >= 8:  # Try up to 8 models (more chances!)
-                                break
-                        best_models = order if order else ["deepseek-ai/DeepSeek-R1-0528", "gpt-4o-mini"]
+                econ_models = POWER_NOAUTH_MODELS[:]
+                if request.model:
+                    econ_models = [request.model] + [m for m in econ_models if m != request.model]
+                econ_models = [m for m in econ_models if m]
+                agent = EconomicAnalyst(model_candidates=econ_models or None)
 
-                    # Honor requested model: put first if present, or prepend
-                    if request.model:
-                        if request.model in best_models:
-                            best_models = [request.model] + [m for m in best_models if m != request.model]
-                        else:
-                            best_models = [request.model] + best_models
-                    # ensure uniqueness while preserving order
-                    seen2 = set(); ordered = []
-                    for m in best_models:
-                        if m not in seen2:
-                            seen2.add(m); ordered.append(m)
-                    best_models = ordered
+                q = (
+                    "Juge financier: donne un verdict concis (2–3 phrases) sur ces prévisions, "
+                    "puis 1 recommandation claire (BUY/SELL/HOLD) avec raison."
+                )
 
-                    # Filter out providers that require Puter token if none configured
-                    puter_token = os.getenv("PUTER_API_TOKEN", "").strip()
-                    if not puter_token:
-                        unsupported_keywords = ("claude", "gemini", "command", "comet", "sonnet")
-                        filtered_models = [m for m in best_models if not any(key in (m or "").lower() for key in unsupported_keywords)]
-                        if filtered_models:
-                            best_models = filtered_models
+                econ_features = {
+                    "max_expected_return": request.max_er,
+                    "min_confidence": request.min_conf,
+                    "tickers": ticker_list,
+                    "stats": derived.get("stats"),
+                    "deterministic_summary": derived.get("summary_text"),
+                }
+                econ_input = EconomicInput(
+                    question=q,
+                    features=econ_features,
+                    attachments=context_chunks[:10],
+                    locale="fr",
+                    meta={
+                        "scope": "judge_forecasts",
+                        "tickers": ticker_list,
+                        "min_conf": request.min_conf,
+                        "max_er": request.max_er,
+                        "strict": STRICT_JUDGE,
+                    },
+                )
 
-                    # drop obvious placeholder entries
-                    best_models = [m for m in best_models if m and m != "*"]
-
-                    # Append MORE safety fallbacks (FREE, prioritized by intelligence)
-                    safety_fallbacks = [
-                        "deepseek-ai/DeepSeek-R1-0528",           # Best reasoning
-                        "deepseek-ai/DeepSeek-V3",                # 671B params
-                        "claude-3-5-sonnet-20241022",             # Puter - Claude
-                        "deepseek-chat",                          # Puter - DeepSeek
-                        "gemini-2.0-flash-exp",                   # Puter - Gemini
-                        "Qwen/Qwen3-235B-A22B-Instruct-2507",     # 235B params
-                        "meta-llama/Llama-3.3-70B-Instruct-Turbo", # 70B
-                        "openai/gpt-oss-120b",                    # 120B
-                        "command-r-plus-08-2024",                 # Cohere
+                ensemble_result: Optional[Dict[str, Any]] = None
+                try:
+                    t0 = datetime.now()
+                    ensemble_result = await run_in_threadpool(
+                        agent.analyze_ensemble,
+                        econ_input,
+                        3,
+                        True,
+                        True,
+                    )
+                    latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
+                    ensemble_runs = ensemble_result.get("results", []) if isinstance(ensemble_result, dict) else []
+                    model_runs_summary = [
+                        {
+                            "model": r.get("model"),
+                            "provider": r.get("provider", "EconomicAnalyst"),
+                            "ok": r.get("ok"),
+                            "latency_ms": r.get("latency_ms"),
+                            "attempt": r.get("attempt"),
+                            "answer": (r.get("answer") or "")[:1500],
+                            "parsed": r.get("parsed"),
+                            "error": r.get("error"),
+                        }
+                        for r in ensemble_runs
                     ]
-                    for fallback_model in safety_fallbacks:
-                        if fallback_model not in best_models:
-                            best_models.append(fallback_model)
+                    adjudication_info = ensemble_result.get("adjudication")
+                    avg_agreement = ensemble_result.get("avg_agreement")
+                    pairwise_agreement = ensemble_result.get("pairwise_agreement")
 
+                    ok_runs = [r for r in ensemble_runs if r.get("ok") and (r.get("answer") or "").strip()]
+                    chosen_run = ok_runs[0] if ok_runs else (ensemble_runs[0] if ensemble_runs else None)
+                    if chosen_run:
+                        llm_response = {
+                            "answer": chosen_run.get("answer", ""),
+                            "model": chosen_run.get("model"),
+                            "provider": chosen_run.get("provider", "EconomicAnalyst"),
+                            "latency_ms": chosen_run.get("latency_ms", latency_ms),
+                            "parsed": chosen_run.get("parsed"),
+                        }
+                        selected_model = chosen_run.get("model")
+                except Exception as ensemble_err:  # noqa: BLE001
+                    logger.warning("llm_judge.ensemble_failed", extra={"ctx": {"error": str(ensemble_err)}})
+
+                if llm_response is None:
+                    # Fallback to single-shot mode
                     try:
-                        logger.info("llm_judge.models", extra={"ctx": {"candidates": best_models[:6], "strict": STRICT_JUDGE}})
-                    except Exception:
-                        print(f"[LLM_JUDGE] candidates={best_models[:6]} strict={STRICT_JUDGE}")
-
-                    # Pre-probe: quickly ping candidates to prioritize responsive models
-                    alive_models: list[str] = []
-                    try:
-                        from g4f.client import Client as _ProbeClient  # type: ignore
-                        _pclient = _ProbeClient()
-                        _ping_msg = [{"role": "user", "content": "ping"}]
-                        for _m in best_models[:8]:
-                            t0 = datetime.now()
-                            ok = False
-                            try:
-                                _r = _pclient.chat.completions.create(model=_m, messages=_ping_msg, temperature=0.0, max_tokens=8)
-                                ok = bool(_r)
-                            except Exception as _pe:  # noqa: BLE001
-                                ok = False
-                                logger.debug("llm_judge.ping_fail", extra={"ctx": {"model": _m, "error": str(_pe)}})
-                            dt_ms = (datetime.now() - t0).total_seconds() * 1000.0
-                            logger.info("llm_judge.ping", extra={"ctx": {"model": _m, "ok": ok, "ms": int(dt_ms)}})
-                            if ok:
-                                alive_models.append(_m)
-                    except Exception as _pe:  # noqa: BLE001
-                        logger.debug("llm_judge.ping_unavailable", extra={"ctx": {"error": str(_pe)}})
-
-                    if alive_models:
-                        seen_alive = set(alive_models)
-                        best_models = alive_models + [m for m in best_models if m not in seen_alive]
-                        logger.info("llm_judge.models_final", extra={"ctx": {"candidates": best_models[:6], "alive_first": True}})
-                    else:
-                        logger.warning("llm_judge.no_alive_models", extra={"ctx": {"candidates": best_models[:6]}})
-
-                    agent = EconomicAnalyst(model_candidates=best_models or None)
-                    q = (
-                        "Juge financier: donne un verdict concis (2–3 phrases) sur ces prévisions, "
-                        "puis 1 recommandation claire (BUY/SELL/HOLD) avec raison."
-                    )
-                    ein = EconomicInput(
-                        question=q,
-                        attachments=context_chunks[:5],
-                        locale="fr",
-                        meta={"scope": "judge_forecasts", "min_conf": request.min_conf, "max_er": request.max_er},
-                    )
-                    # 1) Try MULTIPLE FREE PROVIDERS prioritized by INTELLIGENCE/REASONING
-                    tried_models = []
-                    
-                    # 1a) Try Puter.com first (FREE + Good reasoning models: Claude, DeepSeek, Gemini)
-                    import os as _os
-                    puter_token = _os.getenv("PUTER_API_TOKEN")
-                    if puter_token and not llm_response:
-                        try:
-                            import openai
-                            puter_client = openai.OpenAI(
-                                api_key=puter_token,
-                                base_url="https://api.puter.com/v1"
+                        t0 = datetime.now()
+                        econ_result = await run_in_threadpool(agent.analyze, econ_input)
+                        latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
+                        if econ_result and econ_result.get("ok") and (econ_result.get("answer") or "").strip():
+                            llm_response = dict(econ_result)
+                            llm_response.setdefault("provider", "EconomicAnalyst")
+                            llm_response["latency_ms"] = latency_ms
+                            selected_model = llm_response.get("model")
+                            model_runs_summary.append(
+                                {
+                                    "model": llm_response.get("model"),
+                                    "provider": llm_response.get("provider"),
+                                    "ok": True,
+                                    "latency_ms": latency_ms,
+                                    "attempt": econ_result.get("attempt"),
+                                    "answer": (llm_response.get("answer") or "")[:1500],
+                                    "parsed": llm_response.get("parsed"),
+                                }
                             )
-                            # PRIORITY: Best reasoning models from Puter
-                            puter_models = [
-                                "claude-3-5-sonnet-20241022",  # Best reasoning
-                                "deepseek-chat",               # Fast reasoning
-                                "gemini-2.0-flash-exp",        # Google knowledge
-                            ]
-                            for pm in puter_models:
-                                if pm in best_models[:5]:  # Only if in our best list
-                                    try:
-                                        t0 = datetime.now()
-                                        _res = puter_client.chat.completions.create(
-                                            model=pm,
-                                            messages=[
-                                                {"role":"system","content":"Tu es un juge financier expert. Analyse avec reasoning approfondi et sois factuel."},
-                                                {"role":"user","content":f"Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) + f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco claire."}
-                                            ],
-                                            temperature=0.2,
-                                            max_tokens=200,
-                                        )
-                                        ans = _res.choices[0].message.content.strip()
-                                        dt_ms = (datetime.now() - t0).total_seconds()*1000.0
-                                        if ans:
-                                            llm_response = {"answer": ans, "model": f"puter/{pm}", "citations": [], "provider": "Puter.com", "latency_ms": int(dt_ms)}
-                                            tried_models.append({"model": f"puter/{pm}", "success": True, "latency_ms": int(dt_ms), "provider": "Puter.com"})
-                                            logger.info(f"[LLM_JUDGE] ✅ Puter.com SUCCESS: {pm} in {int(dt_ms)}ms")
-                                            break
-                                    except Exception as _e:
-                                        tried_models.append({"model": f"puter/{pm}", "success": False, "error": str(_e)[:50], "provider": "Puter.com"})
-                                        logger.warning(f"[LLM_JUDGE] Puter.com {pm} failed: {str(_e)[:50]}")
-                        except Exception as _e:
-                            logger.warning(f"[LLM_JUDGE] Puter.com unavailable: {_e}")
-                    
-                    # 1b) Try G4F with BEST REASONING models (prioritized by intelligence)
-                    if not llm_response:
-                        try:
-                            from g4f.client import Client as _G4FClient  # type: ignore
-                            _client = _G4FClient()
-                            _sys = "Tu es un juge financier expert. Utilise ton reasoning pour une analyse approfondie et factuelle."
-                            selected_model = None
-                            # Try TOP 12 models (prioritized by intelligence/reasoning)
-                            for m in best_models[:12]:  # More tries for better success
-                                try:
-                                    prompt_user = (
-                                        "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
-                                        f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
-                                    )
-                                    t0 = datetime.now()
-                                    _res = _client.chat.completions.create(
-                                        model=m,
-                                        messages=[{"role": "system", "content": _sys}, {"role": "user", "content": prompt_user}],
-                                        temperature=0.2,
-                                        max_tokens=180,
-                                    )
-                                    ans = getattr(_res.choices[0].message, "content", "").strip()
-                                    dt_ms = (datetime.now() - t0).total_seconds() * 1000.0
-                                    tried_models.append({"model": m, "success": bool(ans), "latency_ms": int(dt_ms), "provider": "G4F"})
-                                    try:
-                                        logger.info("llm_judge.g4f_try", extra={"ctx": {"model": m, "ok": bool(ans), "ms": int(dt_ms), "len": len(ans or "")}})
-                                    except Exception:
-                                        print(f"[LLM_JUDGE] try model={m} ok={bool(ans)} ms={int(dt_ms)} len={len(ans or '')}")
-                                    if ans:
-                                        selected_model = m
-                                        llm_response = {"answer": ans, "model": m, "citations": [], "provider": "G4F", "latency_ms": int(dt_ms)}
-                                        logger.info(f"[LLM_JUDGE] ✅ G4F SUCCESS: {m} in {int(dt_ms)}ms")
-                                        break
-                                except Exception as _e:
-                                    tried_models.append({"model": m, "success": False, "error": str(_e)[:50], "provider": "G4F"})
-                                    try:
-                                        logger.warning("llm_judge.g4f_fail", extra={"ctx": {"model": m, "error": str(_e)[:50]}})
-                                    except Exception:
-                                        print(f"[LLM_JUDGE] fail model={m} error={str(_e)[:50]}")
-                        except Exception as _e:
-                            logger.warning("llm_judge.g4f_unavailable", extra={"ctx": {"error": str(_e)}})
-
-                    # 2) If still nothing, use econ_llm_agent (has its own multi-provider retry logic)
-                    if llm_response is None:
-                        try:
-                            t0 = datetime.now()
-                            res = agent.analyze(ein)  # type: ignore
-                            dt_ms = (datetime.now() - t0).total_seconds()*1000.0
-                            if isinstance(res, dict):
-                                # accept various keys the agent might use
-                                ans = (res.get("answer") or res.get("stdout") or res.get("response") or res.get("text") or "").strip()
-                                used_model = res.get("model") or (best_models[0] if best_models else request.model or "g4f-auto")
-                                if ans:
-                                    llm_response = {"answer": ans, "model": used_model, "citations": [], "provider": "EconomicAnalyst", "latency_ms": int(dt_ms)}
-                                    tried_models.append({"model": used_model, "success": True, "latency_ms": int(dt_ms), "provider": "EconomicAnalyst"})
-                                    logger.info(f"[LLM_JUDGE] EconomicAnalyst SUCCESS: {used_model} in {int(dt_ms)}ms")
-                                else:
-                                    tried_models.append({"model": used_model, "success": False, "error": "empty response", "provider": "EconomicAnalyst"})
-                        except Exception as _e:
-                            tried_models.append({"model": "EconomicAnalyst", "success": False, "error": str(_e)[:100], "provider": "EconomicAnalyst"})
-                except Exception as _e:
-                    logger.warning(f"econ_llm_agent (working models) failed: {_e}")
-
-                if llm_response is None:
-                    # Attempt a direct G4F pass with a reliable model as a last real try
-                    try:
-                        from g4f.client import Client as _G4FClient  # type: ignore
-                        _client = _G4FClient()
-                        _sys = "Tu es un juge financier. Sois concis et factuel."
-                        _usr = (
-                            "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
-                            f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
-                        )
-                        _res = _client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=[{"role":"system","content":_sys},{"role":"user","content":_usr}],
-                            temperature=0.2,
-                            max_tokens=160,
-                        )
-                        _ans = getattr(_res.choices[0].message, "content", "").strip()
-                        if _ans:
-                            llm_response = {"answer": _ans, "model": "gpt-4o-mini", "citations": []}
-                    except Exception as _e:
-                        logger.warning(f"direct g4f call failed: {_e}")
-
-                if llm_response is None and STRICT_JUDGE:
-                    raise HTTPException(status_code=503, detail="LLM Judge strict: no answer from dynamic model selector")
-                elif llm_response is None:
-                    # Non-strict: attempt secondary client (research.llm_client)
-                    if ask_llm is not None:
-                        _requested_model = request.model
-                        _llm_model = _requested_model if _requested_model else None
-                        if not os.getenv("OPENAI_API_KEY"):
-                            _llm_model = _llm_model or "gpt-4o-mini"
-                        llm_response = ask_llm(
-                            question="Donne un verdict concis (2 phrases) avec 1 recommandation claire.",
-                            context_chunks=context_chunks[:5],
-                            model=_llm_model,
-                            max_tokens=200,
-                        )
-
-                # Derive deterministic groups for UI quality flags only (not for fallback!)
-                derived = _derive(forecast_results, request.max_er, request.min_conf)
-
-                # Log final stats
-                if tried_models:
-                    success_models = [t for t in tried_models if t.get("success")]
-                    failed_models = [t for t in tried_models if not t.get("success")]
-                    logger.info(f"[LLM_JUDGE] FINAL STATS: tried={len(tried_models)} success={len(success_models)} failed={len(failed_models)}")
-                    if success_models:
-                        fastest = min(success_models, key=lambda x: x.get("latency_ms", 999999))
-                        logger.info(f"[LLM_JUDGE] FASTEST: {fastest['model']} ({fastest['provider']}) in {fastest['latency_ms']}ms")
-                
-                # Validate LLM response - NO FALLBACK allowed
-                if llm_response is None:
-                    tried_summary = f"Tried {len(tried_models)} models: " + ", ".join([f"{t['model']} ({t['provider']})" for t in tried_models[:5]])
-                    raise HTTPException(
-                        status_code=503, 
-                        detail=f"LLM Judge: All models failed. {tried_summary}. Check G4F connectivity or add OpenAI key."
-                    )
-                
+                        else:
+                            err_msg = (econ_result or {}).get("error") or "EconomicAnalyst returned empty response"
+                            raise RuntimeError(err_msg)
+                    except Exception as econ_err:  # noqa: BLE001
+                        logger.error("llm_judge.econ_agent_failed", extra={"ctx": {"error": str(econ_err)}})
+                        llm_response = {
+                            "answer": "",
+                            "model": request.model or "economic-analyst",
+                            "provider": "EconomicAnalyst",
+                            "error": str(econ_err),
+                            "latency_ms": 0,
+                        }
                 llm_model_name = str(llm_response.get("model", ""))
                 llm_answer_text = (llm_response.get("answer", "") or "").strip()
                 
                 # Check if response is actually valid (not an error marker)
                 if not llm_answer_text or llm_answer_text.startswith("⚠️") or llm_answer_text.startswith("ℹ️"):
+                    err_detail = llm_response.get("error") or f"Provider {llm_model_name} returned invalid/empty response. No fallback allowed."
                     raise HTTPException(
                         status_code=503,
-                        detail=f"LLM Judge: Provider {llm_model_name} returned invalid/empty response. No fallback allowed."
+                        detail=f"LLM Judge strict: {err_detail}"
                     )
                 
                 # Valid LLM response - use it!
@@ -1516,6 +1375,22 @@ def register_routes(app: FastAPI):
                 provider_info = llm_response.get("provider", "unknown")
                 latency = llm_response.get("latency_ms", 0)
                 ctx_text = f"LLM Judge analysis ({llm_model_name} via {provider_info} - {latency}ms)"
+                attachments_preview = [
+                    {
+                        "ticker": chunk.get("meta", {}).get("ticker"),
+                        "date": chunk.get("meta", {}).get("date"),
+                        "text": (chunk.get("text") or "")[:320],
+                    }
+                    for chunk in context_chunks[:5]
+                ]
+                context_snapshot = {
+                    "tickers": ticker_list,
+                    "features": econ_features,
+                    "stats": derived.get("stats"),
+                    "deterministic_summary": derived.get("summary_text"),
+                    "attachments_preview": attachments_preview,
+                    "forecast_preview": forecast_results[:5],
+                }
 
                 # Prepare response in expected format; map chosen text to stdout.forecast
                 response_data = {
@@ -1540,7 +1415,14 @@ def register_routes(app: FastAPI):
                         "top_buys": derived["top_buys"],
                         "top_risks": derived["top_risks"],
                         "stats": derived["stats"],
-                    }
+                    },
+                    "debug": {
+                        "models": model_runs_summary,
+                        "adjudication": adjudication_info,
+                        "avg_agreement": avg_agreement,
+                        "pairwise_agreement": pairwise_agreement,
+                        "context": context_snapshot,
+                    },
                 }
 
             except Exception as llm_error:

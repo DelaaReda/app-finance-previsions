@@ -104,7 +104,7 @@ export default function NewsFeed() {
                         {item.source?.toUpperCase() ?? 'Source' }
                       </Badge>
                       <Chip size="xs" color="indigo" radius="sm">
-                        {new Date((item.pubDate ?? item.timestamp ?? new Date().toISOString())).toLocaleString('fr-FR')}
+                        {new Date(item.pubDate ?? (item.timestamp ? item.timestamp * 1000 : Date.now())).toLocaleString('fr-FR')}
                       </Chip>
                     </Group>
                 <Text fw={600}>{item.title}</Text>

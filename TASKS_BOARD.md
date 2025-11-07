@@ -1109,9 +1109,7 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 
 ---
 
-## FC-QM-CODACY-001 — Codacy Analysis Setup & Integration
-
-**Status**: AVAILABLE to claim
+## FC-QM-CODACY-001 — Codacy Analysis Setup & Integration - CLAIMED
 
 **But**: Intégrer l'analyse Codacy dans le workflow de développement pour améliorer la qualité du code et détecter les problèmes automatiquement.
 
@@ -1147,6 +1145,8 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 * Résultats générés au format SARIF: `codacy-cli analyze --tool eslint --format sarif -o results.sarif`
 * Scripts d'analyse intégrés dans le workflow de développement
 * Documentation mise en place pour l'équipe
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 ---
 
