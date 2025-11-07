@@ -55,31 +55,14 @@ export function useMarketContext() {
   return useQuery<MarketContext>({
     queryKey: ['context', 'current'],
     queryFn: async () => {
-      // TEMPORARY: Endpoint not yet implemented - return mock data
-      // TODO: Re-enable when /api/context/current is ready
-      // const response = await apiGet<MarketContext>('/api/context/current');
-      // if (response.ok && response.data) {
-      //   return response.data;
-      // }
-
-      return {
-        regime: 'NORMAL',
-        confidence: 0,
-        key_drivers: [],
-        characteristics: {
-          volatility: 'medium',
-          sentiment: 'neutral',
-          trend: 'sideways',
-          risk_level: 'medium',
-        },
-        recommended_layout: {
-          primary_widgets: [],
-        },
-        timestamp: new Date().toISOString(),
-      } satisfies MarketContext;
+      const response = await apiGet<MarketContext>('/api/context/current');
+      if (!response.ok || !response.data) {
+        throw new Error(response.error ?? 'Unable to load market context');
+      }
+      return response.data;
     },
     staleTime: 5 * 60_000, // 5 minutes
-    refetchInterval: false, // Disabled while using mock data
-    retry: false, // No need to retry mock data
+    refetchInterval: 5 * 60_000,
+    retry: 1,
   });
 }
