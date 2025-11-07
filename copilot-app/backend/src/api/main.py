@@ -1235,6 +1235,9 @@ def register_routes(app: FastAPI):
                             seen2.add(m); ordered.append(m)
                     best_models = ordered
 
+                    # drop obvious placeholder entries
+                    best_models = [m for m in best_models if m and m != "*"]
+
                     # Append safety fallbacks known to work often with G4F
                     for fallback_model in ["gpt-4o-mini", "deepseek-ai/DeepSeek-R1-0528", "meta-llama/Llama-3.3-70B-Instruct"]:
                         if fallback_model not in best_models:
@@ -1244,6 +1247,35 @@ def register_routes(app: FastAPI):
                         logger.info("llm_judge.models", extra={"ctx": {"candidates": best_models[:6], "strict": STRICT_JUDGE}})
                     except Exception:
                         print(f"[LLM_JUDGE] candidates={best_models[:6]} strict={STRICT_JUDGE}")
+
+                    # Pre-probe: quickly ping candidates to prioritize responsive models
+                    alive_models: list[str] = []
+                    try:
+                        from g4f.client import Client as _ProbeClient  # type: ignore
+                        _pclient = _ProbeClient()
+                        _ping_msg = [{"role": "user", "content": "ping"}]
+                        for _m in best_models[:8]:
+                            t0 = datetime.now()
+                            ok = False
+                            try:
+                                _r = _pclient.chat.completions.create(model=_m, messages=_ping_msg, temperature=0.0, max_tokens=8)
+                                ok = bool(_r)
+                            except Exception as _pe:  # noqa: BLE001
+                                ok = False
+                                logger.debug("llm_judge.ping_fail", extra={"ctx": {"model": _m, "error": str(_pe)}})
+                            dt_ms = (datetime.now() - t0).total_seconds() * 1000.0
+                            logger.info("llm_judge.ping", extra={"ctx": {"model": _m, "ok": ok, "ms": int(dt_ms)}})
+                            if ok:
+                                alive_models.append(_m)
+                    except Exception as _pe:  # noqa: BLE001
+                        logger.debug("llm_judge.ping_unavailable", extra={"ctx": {"error": str(_pe)}})
+
+                    if alive_models:
+                        seen_alive = set(alive_models)
+                        best_models = alive_models + [m for m in best_models if m not in seen_alive]
+                        logger.info("llm_judge.models_final", extra={"ctx": {"candidates": best_models[:6], "alive_first": True}})
+                    else:
+                        logger.warning("llm_judge.no_alive_models", extra={"ctx": {"candidates": best_models[:6]}})
 
                     agent = EconomicAnalyst(model_candidates=best_models or None)
                     q = (
@@ -1261,6 +1293,7 @@ def register_routes(app: FastAPI):
                         from g4f.client import Client as _G4FClient  # type: ignore
                         _client = _G4FClient()
                         _sys = "Tu es un juge financier. Sois concis et factuel."
+                        selected_model = None
                         for m in best_models[:6]:
                             try:
                                 prompt_user = (
@@ -1281,6 +1314,7 @@ def register_routes(app: FastAPI):
                                 except Exception:
                                     print(f"[LLM_JUDGE] try model={m} ok={bool(ans)} ms={int(dt_ms)} len={len(ans or '')}")
                                 if ans:
+                                    selected_model = m
                                     llm_response = {"answer": ans, "model": m, "citations": []}
                                     break
                             except Exception as _e:
@@ -1331,10 +1365,9 @@ def register_routes(app: FastAPI):
                 elif llm_response is None:
                     # Non-strict: attempt secondary client (research.llm_client)
                     if ask_llm is not None:
-                        import os as _os
                         _requested_model = request.model
                         _llm_model = _requested_model if _requested_model else None
-                        if not _os.getenv("OPENAI_API_KEY"):
+                        if not os.getenv("OPENAI_API_KEY"):
                             _llm_model = _llm_model or "gpt-4o-mini"
                         llm_response = ask_llm(
                             question="Donne un verdict concis (2 phrases) avec 1 recommandation claire.",
@@ -1371,7 +1404,7 @@ def register_routes(app: FastAPI):
                     },
                     "rows": forecast_results,
                     "count": len(forecast_results),
-                    "model_used": request.model,
+                    "model_used": (selected_model or request.model),
                     "parameters": {
                         "max_er": request.max_er,
                         "min_conf": request.min_conf,

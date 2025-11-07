@@ -8,6 +8,7 @@ export default function LLMJudge() {
   const [busy, setBusy] = useState(false)
   const [out, setOut] = useState('')
   const [rowsCount, setRowsCount] = useState<number | null>(null)
+  const [modelUsed, setModelUsed] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
   // Working models for quick selection (top3 + ranked)
@@ -59,7 +60,7 @@ export default function LLMJudge() {
     setOut('(running…)')
     setErr(null)
     try {
-      const res = await apiPost<{ stdout?: { context?: string; forecast?: string }; rows?: any[] }>(
+      const res = await apiPost<{ stdout?: { context?: string; forecast?: string }; rows?: any[]; model_used?: string }>(
         '/api/llm/judge/run',
         { model, max_er: 0.08, min_conf: 0.6, tickers }
       )
@@ -68,9 +69,11 @@ export default function LLMJudge() {
         const fc = res.data.stdout?.forecast ?? '—'
         const rows = Array.isArray(res.data.rows) ? res.data.rows : []
         setRowsCount(rows.length)
+        setModelUsed(res.data.model_used ?? null)
         setOut([ctx, '----', fc].join('\n'))
       } else {
         setRowsCount(null)
+        setModelUsed(null)
         const msg = res.error ?? 'Réponse invalide'
         setErr(msg)
         setOut('Erreur: ' + msg)
@@ -122,6 +125,9 @@ export default function LLMJudge() {
       <Group gap="sm" align="center" c="dimmed">
         <Text size="sm">Rows:</Text>
         <Text size="sm" fw={700}>{rowsCount ?? '—'}</Text>
+        <Text size="sm">•</Text>
+        <Text size="sm">Model utilisé:</Text>
+        <Badge variant="light" color="blue">{modelUsed ?? '—'}</Badge>
       </Group>
       <Textarea
         readOnly
