@@ -7,7 +7,7 @@
 **Rôle** : Integration Engineer (Frontend/Backend/Data) + UX Designer  
 **Superhéros** : Black Widow 🕷️  
 **Classe principale** : 🛡️ Stability Engineer + ⚡ Data Vanguard  
-**Points** : 1810
+**Points** : 1865
 **Niveau** : Shadow Executive (Level 8)
 
 ---
