@@ -5,7 +5,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { qk } from '@/lib/keys'
-import type { ApiResponse } from '@/types/api'
+import { api } from '@/api/client'
 
 // ============================================================================
 // Types
@@ -61,108 +61,51 @@ export interface AddTickersRequest {
 const API_BASE = '/api'
 
 async function fetchPortfolios(): Promise<Portfolio[]> {
-  const response = await fetch(`${API_BASE}/portfolios`)
-  const data: ApiResponse<{ portfolios: Portfolio[]; count: number }> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to fetch portfolios')
-  }
-  
-  return data.data.portfolios
+  const data = await api.fetchJson<{ portfolios: Portfolio[]; count: number }>(`${API_BASE}/portfolios`)
+  return data.portfolios
 }
 
 async function fetchPortfolio(id: string): Promise<Portfolio> {
-  const response = await fetch(`${API_BASE}/portfolios/${id}`)
-  const data: ApiResponse<Portfolio> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to fetch portfolio')
-  }
-  
-  return data.data
+  return api.fetchJson<Portfolio>(`${API_BASE}/portfolios/${id}`)
 }
 
 async function createPortfolio(request: PortfolioCreateRequest): Promise<Portfolio> {
-  const response = await fetch(`${API_BASE}/portfolios`, {
+  return api.fetchJson<Portfolio>(`${API_BASE}/portfolios`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: request,
   })
-  const data: ApiResponse<Portfolio> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to create portfolio')
-  }
-  
-  return data.data
 }
 
 async function updatePortfolio(id: string, request: PortfolioUpdateRequest): Promise<Portfolio> {
-  const response = await fetch(`${API_BASE}/portfolios/${id}`, {
+  return api.fetchJson<Portfolio>(`${API_BASE}/portfolios/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: request,
   })
-  const data: ApiResponse<Portfolio> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to update portfolio')
-  }
-  
-  return data.data
 }
 
 async function deletePortfolio(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/portfolios/${id}`, {
+  await api.fetchJson(`${API_BASE}/portfolios/${id}`, {
     method: 'DELETE',
   })
-  const data: ApiResponse<{ deleted: boolean; id: string }> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to delete portfolio')
-  }
 }
 
 async function addTickers(id: string, request: AddTickersRequest): Promise<Portfolio> {
-  const response = await fetch(`${API_BASE}/portfolios/${id}/tickers`, {
+  return api.fetchJson<Portfolio>(`${API_BASE}/portfolios/${id}/tickers`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: request,
   })
-  const data: ApiResponse<Portfolio> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to add tickers')
-  }
-  
-  return data.data
 }
 
 async function removeTicker(id: string, ticker: string): Promise<Portfolio> {
-  const response = await fetch(`${API_BASE}/portfolios/${id}/tickers/${ticker}`, {
+  return api.fetchJson<Portfolio>(`${API_BASE}/portfolios/${id}/tickers/${ticker}`, {
     method: 'DELETE',
   })
-  const data: ApiResponse<Portfolio> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to remove ticker')
-  }
-  
-  return data.data
 }
 
 async function fetchPortfolioPerformance(id: string, benchmark?: string): Promise<PortfolioPerformance> {
-  const params = new URLSearchParams()
-  if (benchmark) params.set('benchmark', benchmark)
-  
-  const response = await fetch(`${API_BASE}/portfolios/${id}/performance?${params}`)
-  const data: ApiResponse<PortfolioPerformance> = await response.json()
-  
-  if (!data.ok) {
-    throw new Error(data.error || 'Failed to fetch performance')
-  }
-  
-  return data.data
+  return api.fetchJson<PortfolioPerformance>(`${API_BASE}/portfolios/${id}/performance`, {
+    searchParams: benchmark ? { benchmark } : undefined,
+  })
 }
 
 // ============================================================================

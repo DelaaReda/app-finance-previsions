@@ -1,11 +1,11 @@
 import { defineConfig, Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
-function injectReactDevTools(): Plugin {
+function injectReactDevTools(devtoolsEnabled: boolean): Plugin {
   return {
     name: 'inject-react-devtools',
     transformIndexHtml(html) {
-      if (process.env.NODE_ENV !== 'development' || process.env.DEVTOOLS_ENABLED === 'false') return html
+      if (!devtoolsEnabled) return html
       const tag = '<script src="http://localhost:8097"></script>'
       // injecte juste avant la fermeture de </head>
       return html.replace('</head>', `${tag}\n</head>`)
@@ -14,8 +14,13 @@ function injectReactDevTools(): Plugin {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), injectReactDevTools()],
+export default defineConfig(({ mode }) => {
+  const devtoolsEnabled =
+    mode === 'development' &&
+    ['1', 'true', 'yes'].includes((process.env.VITE_ENABLE_REACT_DEVTOOLS ?? '').toLowerCase())
+
+  return {
+  plugins: [react(), injectReactDevTools(devtoolsEnabled)],
   resolve: {
     alias: {
       '@': '/src',
@@ -57,4 +62,4 @@ export default defineConfig(({ mode }) => ({
       }
     }
   },
-}))
+}}))

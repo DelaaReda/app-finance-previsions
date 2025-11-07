@@ -81,7 +81,7 @@ export function NewsRadarWidget({
   const [query, setQuery] = useState('');
   const [window, setWindow] = useState<WindowKey>(initialWindow);
 
-  const { from, to } = windowToRange(window);
+  const { from, to } = useMemo(() => windowToRange(window), [window]);
 
   const { data, isLoading, error, isFetching, refetch } = useNewsRadar({
     universe,

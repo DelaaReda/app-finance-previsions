@@ -91,6 +91,13 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include cache routes: {e}")
 
+    # Include portfolios/watchlists routes
+    try:
+        from api.routes.portfolios import router as portfolios_router
+        app.include_router(portfolios_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include portfolios routes: {e}")
+
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")
     async def startup_event():
@@ -760,7 +767,7 @@ def register_routes(app: FastAPI):
         since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
         region: str = Query("all", description="Region filter (unused in v1)"),
         score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
-        limit: int = Query(50, ge=1, le=200)
+        limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
     ):
         """Get news feed - serves real data from news_feed.json"""
         try:
@@ -808,8 +815,8 @@ def register_routes(app: FastAPI):
                 if not filtered_articles:
                     filtered_articles = articles[:limit]
 
-            # Apply limit
-            filtered_articles = filtered_articles[:limit]
+            # Apply limit safely (frontend can request up to 400)
+            filtered_articles = filtered_articles[: min(limit, 400)]
 
             return _ok({
                 "articles": filtered_articles,
@@ -1375,19 +1382,19 @@ def register_routes(app: FastAPI):
                             # Try TOP 12 models (prioritized by intelligence/reasoning)
                             for m in best_models[:12]:  # More tries for better success
                                 try:
-                                prompt_user = (
-                                    "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
-                                    f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
-                                )
-                                t0 = datetime.now()
-                                _res = _client.chat.completions.create(
-                                    model=m,
-                                    messages=[{"role":"system","content":_sys},{"role":"user","content":prompt_user}],
-                                    temperature=0.2,
-                                    max_tokens=180,
-                                )
+                                    prompt_user = (
+                                        "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
+                                        f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
+                                    )
+                                    t0 = datetime.now()
+                                    _res = _client.chat.completions.create(
+                                        model=m,
+                                        messages=[{"role": "system", "content": _sys}, {"role": "user", "content": prompt_user}],
+                                        temperature=0.2,
+                                        max_tokens=180,
+                                    )
                                     ans = getattr(_res.choices[0].message, "content", "").strip()
-                                    dt_ms = (datetime.now() - t0).total_seconds()*1000.0
+                                    dt_ms = (datetime.now() - t0).total_seconds() * 1000.0
                                     tried_models.append({"model": m, "success": bool(ans), "latency_ms": int(dt_ms), "provider": "G4F"})
                                     try:
                                         logger.info("llm_judge.g4f_try", extra={"ctx": {"model": m, "ok": bool(ans), "ms": int(dt_ms), "len": len(ans or "")}})
