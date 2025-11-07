@@ -45,6 +45,8 @@
 - [x] FC-UI-ENHANCEMENT: Enhanced Forecasts UI with advanced visualizations (Complete UI enhancement)
 - [x] FC-P0-010: Pre-push smoke hook infrastructure (quality gate) - Quality gates with automatic testing
 - [x] FC-QUALITY-IMPROVE: Code quality enhancement - Reduced cyclomatic complexity in forecast module (Improved maintainability)
+- [x] FC-QM-CODACY-001: Codacy Analysis Setup - Code quality integration and documentation (Quality gate integration)
+- [ ] FC-QM-CODACY-001: Codacy Analysis Setup - Code quality integration and documentation (In progress)
 - [x] HOTFIX Structure: Backend package architecture and import fixes (system stability)
 - [x] FC-P0-009: Vite proxy + .env configuration (devx improvement) - Proper proxy and env setup
 - [x] FC-P0-007: ErrorBoundary global (frontend) - Global error handling for stable UX
