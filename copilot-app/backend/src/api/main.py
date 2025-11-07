@@ -49,7 +49,6 @@ except ImportError as e:
 
 from api.services.news_service import (
     get_news_events as lakehouse_news_events,
-    get_news_feed as lakehouse_news_feed,
     get_sentiment as lakehouse_news_sentiment,
 )
 
