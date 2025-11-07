@@ -158,7 +158,6 @@ export function MacroDrilldownWidget({
               data={table}
               index="date"
               categories={categories}
-              showLegend
               valueFormatter={valueFormatter}
               showXAxis
               showGridLines

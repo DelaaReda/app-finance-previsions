@@ -349,7 +349,6 @@ export default function BacktestsPanelEnhanced({ strategy, universe, benchmark, 
             categories={['strategy', ...(data.equity_curve.some((row) => row.benchmark != null) ? ['benchmark'] : [])]}
             colors={['blue', 'gray']}
             yAxisWidth={56}
-            showLegend
             showAnimation
             curveType="linear"
           />
@@ -357,18 +356,19 @@ export default function BacktestsPanelEnhanced({ strategy, universe, benchmark, 
 
         {/* Monthly Returns Tab */}
         <Tabs.Panel value="monthly" pt="md">
-          <BarChart
-            data={(data.monthly_returns ?? []).map((row) => ({
-              month: row.month,
-              returns: row.pct ?? 0
-            }))}
-            index="month"
-            categories={['returns']}
-            colors={['emerald']}
-            yAxisWidth={56}
-            showLegend={false}
-            showAnimation
-          />
+          <div className="hide-tremor-legend">
+            <BarChart
+              data={(data.monthly_returns ?? []).map((row) => ({
+                month: row.month,
+                returns: row.pct ?? 0
+              }))}
+              index="month"
+              categories={['returns']}
+              colors={['emerald']}
+              yAxisWidth={56}
+              showAnimation
+            />
+          </div>
         </Tabs.Panel>
 
         {/* Trades Tab */}

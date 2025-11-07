@@ -180,15 +180,16 @@ export default function Stocks() {
           <Card>
             <Stack gap="md">
               <Heading order={4}>Courbe des prix (1 an)</Heading>
-                <AreaChart
-                  data={chartData}
-                  index="date"
-                  categories={[ 'price' ]}
-                  colors={[ 'indigo' ]}
-                  valueFormatter={(v) => `$${Number(v).toFixed(2)}`}
-                  showLegend={false}
-                  yAxisWidth={50}
-                />
+                <div className="hide-tremor-legend">
+                  <AreaChart
+                    data={chartData}
+                    index="date"
+                    categories={[ 'price' ]}
+                    colors={[ 'indigo' ]}
+                    valueFormatter={(v) => `$${Number(v).toFixed(2)}`}
+                    yAxisWidth={50}
+                  />
+                </div>
             </Stack>
           </Card>
 

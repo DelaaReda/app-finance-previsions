@@ -208,17 +208,18 @@ export function ForecastMatrixWidget({
                               </Tooltip>
                             </Group>
                             {ensureArray(cell.spark).length > 0 && (
-                              <AreaChart
-                                className="h-10"
-                                data={ensureArray(cell.spark).map((value, index) => ({ index, value }))}
-                                index="index"
-                                categories={['value']}
-                                showLegend={false}
-                                showGridLines={false}
-                                showYAxis={false}
-                                showXAxis={false}
-                                autoMinValue
-                              />
+                              <div className="hide-tremor-legend">
+                                <AreaChart
+                                  className="h-10"
+                                  data={ensureArray(cell.spark).map((value, index) => ({ index, value }))}
+                                  index="index"
+                                  categories={['value']}
+                                  showGridLines={false}
+                                  showYAxis={false}
+                                  showXAxis={false}
+                                  autoMinValue
+                                />
+                              </div>
                             )}
                           </Stack>
                         </td>

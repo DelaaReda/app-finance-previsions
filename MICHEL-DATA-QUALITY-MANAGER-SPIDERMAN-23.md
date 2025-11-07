@@ -49,9 +49,17 @@
 - [x] Coordination du QA système et standardisation des tests UI
 - [x] Procédure de vérification des 4 états (loading, empty, error, data) établie
 - [x] Méthodologie de capture des problèmes avec screenshots documentée
+- [x] Intégration de Codacy-CLI pour analyse qualité du code  
+- [x] Standardisation des analyses de code avec SARIF format
+- [x] Documentation des procédures d'analyse qualité et intégration dans workflow
+- [x] Communication de la nouvelle procédure d'analyse qualité à l'équipe
+- [x] Commande des agents pour exécuter les analyses Codacy et corriger problèmes identifiés
+- [x] Création de la tâche obligatoire FC-QM-CODACY-EXECUTION pour tous les agents
+- [x] Spécification des commandes à exécuter: codacy-cli analyze, eslint, format sarif
+- [x] Exigence de fichiers SARIF dans les preuves avant chaque push
 
 ## 📈 Points Gagnés
-- **Total**: 340 points
+- **Total**: 390 points
 - **Dernière mise à jour**: 2025-11-05
 
 ## 🔄 Tâches Planifiées

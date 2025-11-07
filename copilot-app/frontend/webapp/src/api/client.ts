@@ -1,6 +1,13 @@
 import type { ApiResponse } from '@/types/common.types';
 
-const API_BASE = (import.meta.env as any).VITE_API_BASE_URL ?? '/api';
+const RAW_API_BASE = ((import.meta.env as any).VITE_API_BASE_URL ?? '/api').trim();
+const API_BASE = RAW_API_BASE;
+
+const RELATIVE_BASE_PATH = (() => {
+  if (!RAW_API_BASE || RAW_API_BASE.startsWith('http')) return null;
+  const cleaned = RAW_API_BASE.replace(/\/+$/, '');
+  return cleaned.startsWith('/') ? cleaned.slice(1) : cleaned;
+})();
 
 function resolveBase() {
   const raw = API_BASE ?? '/api';
@@ -13,11 +20,23 @@ function resolveBase() {
   return `${origin}${normalized.endsWith('/') ? normalized : `${normalized}/`}`;
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function normalizePath(path: string) {
+  if (!path) return '';
+  let normalized = path.trim().replace(/^\/+/, '');
+  if (RELATIVE_BASE_PATH) {
+    const pattern = new RegExp(`^${escapeRegExp(RELATIVE_BASE_PATH)}(?:/|$)`, 'i');
+    normalized = normalized.replace(pattern, '');
+  }
+  return normalized;
+}
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 function buildUrl(path: string, searchParams?: Record<string, string | number | boolean | undefined>) {
   const base = resolveBase();
-  const url = new URL(path.replace(/^\//, ''), base);
+  const url = new URL(normalizePath(path), base);
   if (searchParams) {
     Object.entries(searchParams).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {

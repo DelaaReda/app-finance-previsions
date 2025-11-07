@@ -1,4 +1,5 @@
-import { Badge, LoadingSpinner, Tooltip } from '@/ui';
+import { LoadingSpinner } from '@/ui';
+import { Badge, Tooltip } from '@mantine/core';
 import { useLegacyHealth } from '@/hooks/useHealth';
 
 export function HealthStatusBadge() {

@@ -243,14 +243,15 @@ export function NewsRadarWidget({
 
             <Card>
               <Title order={6}>Flux temporel</Title>
-              <AreaChart
-                className="mt-3 h-72"
-                data={aggregations.timeline}
-                index="time"
-                categories={['Articles']}
-                showLegend={false}
-                yAxisWidth={48}
-              />
+              <div className="hide-tremor-legend">
+                <AreaChart
+                  className="mt-3 h-72"
+                  data={aggregations.timeline}
+                  index="time"
+                  categories={['Articles']}
+                  yAxisWidth={48}
+                />
+              </div>
             </Card>
 
             <Card>

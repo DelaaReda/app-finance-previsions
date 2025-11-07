@@ -121,13 +121,19 @@ export function useHealth() {
       const raw = await client.get<LegacyHealthData>('/api/health');
       const now = Date.now();
       const datasets: DatasetHealth[] = Object.entries(raw.last_updates ?? {}).map(([name, iso]) => {
-        const lastUpdateMs = iso ? Date.parse(iso) : NaN;
+        const isoString =
+          typeof iso === 'number'
+            ? new Date(iso).toISOString()
+            : typeof iso === 'string'
+            ? iso
+            : '';
+        const lastUpdateMs = isoString ? Date.parse(isoString) : NaN;
         const latencySec = Number.isFinite(lastUpdateMs)
           ? Math.max(0, Math.round((now - lastUpdateMs) / 1000))
           : 86_400; // 24h par défaut si date inconnue
         return {
           name,
-          last_update: iso ?? 'inconnu',
+          last_update: isoString || 'inconnu',
           latency_sec: latencySec,
           errors_24h: 0,
         };

@@ -39,7 +39,8 @@ function AppContent() {
 }
 
 // Create router with error boundary wrapper, drill-down context, and command palette
-const router = createBrowserRouter(createRoutesFromElements(
+const router = createBrowserRouter(
+  createRoutesFromElements(
   <Route element={
     <GlobalErrorBoundary>
       <DrillDownProvider>
@@ -65,13 +66,27 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/compare" element={<CompareStrategies />} />
     <Route path="/dashboards/:slug?" element={<DashboardsPage />} />
     <Route path="/judge" element={<LLMJudge />} />
-  </Route>
-));
+  </Route>,
+),
+{
+  future: {
+    v7_normalizeFormMethod: true,
+    v7_partialHydration: true,
+    v7_relativeSplatPath: true,
+    v7_skipActionErrorRevalidation: true,
+    v7_startTransition: true,
+  },
+});
 
 export default function App() {
   return (
     <AppProviders>
-      <RouterProvider router={router} />
+      <RouterProvider
+        router={router}
+        future={{
+          v7_startTransition: true,
+        }}
+      />
     </AppProviders>
   )
 }

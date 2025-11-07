@@ -148,7 +148,6 @@ function MomentumSparkline({ horizon, universe, themes }: { horizon: string; uni
         index="time"
         categories={keys}
         valueFormatter={(v: number) => (Number.isFinite(v) ? v.toFixed(2) : '—')}
-        showLegend
         yAxisWidth={48}
         className="mt-4"
       />

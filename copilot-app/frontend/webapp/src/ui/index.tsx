@@ -63,9 +63,10 @@ export const Card = (props: CardProps) => (
   <MantineCard radius="lg" shadow={props.shadow ?? 'md'} withBorder padding="lg" {...props} />
 );
 
-export const Badge = (props: BadgeProps) => (
-  <MantineBadge radius="sm" variant={props.variant ?? 'light'} {...props} />
-);
+export const Badge = forwardRef<HTMLDivElement, BadgeProps>((props, ref) => (
+  <MantineBadge ref={ref} radius="sm" variant={props.variant ?? 'light'} {...props} />
+));
+Badge.displayName = 'Badge';
 
 export const Tabs = (props: TabsProps) => (
   <MantineTabs radius="md" variant={props.variant ?? 'pills'} {...props} />

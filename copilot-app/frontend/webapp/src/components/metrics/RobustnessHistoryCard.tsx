@@ -40,18 +40,19 @@ export default function RobustnessHistoryCard({ snapshots }: { snapshots?: Snaps
           Aucun historique disponible pour l’instant.
         </Text>
       ) : (
-        <AreaChart
-          className="h-64"
-          data={dataset}
-          index="date"
-          categories={['score']}
-          minValue={0}
-          maxValue={100}
-          valueFormatter={(value) => `${value}`}
-          showLegend={false}
-          curveType="monotone"
-          yAxisWidth={48}
-        />
+        <div className="hide-tremor-legend">
+          <AreaChart
+            className="h-64"
+            data={dataset}
+            index="date"
+            categories={['score']}
+            minValue={0}
+            maxValue={100}
+            valueFormatter={(value) => `${value}`}
+            curveType="monotone"
+            yAxisWidth={48}
+          />
+        </div>
       )}
     </Card>
   );

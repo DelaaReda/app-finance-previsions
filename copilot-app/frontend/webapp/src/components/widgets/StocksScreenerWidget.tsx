@@ -246,18 +246,19 @@ export function StocksScreenerWidget({
               <Group grow align="start">
                 <Card>
                   <Title order={6}>Répartition par secteur</Title>
-                  <DonutChart className="mt-3 h-72" data={sectorDistribution} category="value" index="name" showLegend />
+                  <DonutChart className="mt-3 h-72" data={sectorDistribution} category="value" index="name" />
                 </Card>
                 <Card>
                   <Title order={6}>Score moyen par secteur</Title>
-                  <BarChart
-                    className="mt-3 h-72"
-                    data={scoreBySector}
-                    index="sector"
-                    categories={['score']}
-                    showLegend={false}
-                    yAxisWidth={40}
-                  />
+                  <div className="hide-tremor-legend">
+                    <BarChart
+                      className="mt-3 h-72"
+                      data={scoreBySector}
+                      index="sector"
+                      categories={['score']}
+                      yAxisWidth={40}
+                    />
+                  </div>
                 </Card>
               </Group>
 

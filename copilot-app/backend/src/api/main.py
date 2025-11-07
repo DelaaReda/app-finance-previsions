@@ -1263,6 +1263,14 @@ def register_routes(app: FastAPI):
                             seen2.add(m); ordered.append(m)
                     best_models = ordered
 
+                    # Filter out providers that require Puter token if none configured
+                    puter_token = os.getenv("PUTER_API_TOKEN", "").strip()
+                    if not puter_token:
+                        unsupported_keywords = ("claude", "gemini", "command", "comet", "sonnet")
+                        filtered_models = [m for m in best_models if not any(key in (m or "").lower() for key in unsupported_keywords)]
+                        if filtered_models:
+                            best_models = filtered_models
+
                     # drop obvious placeholder entries
                     best_models = [m for m in best_models if m and m != "*"]
 
