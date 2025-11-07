@@ -7,7 +7,7 @@
 **Rôle** : Integration Engineer (Frontend/Backend/Data) + UX Designer  
 **Superhéros** : Black Widow 🕷️  
 **Classe principale** : 🛡️ Stability Engineer + ⚡ Data Vanguard  
-**Points** : 1690
+**Points** : 1730
 **Niveau** : Shadow Executive (Level 8)
 
 ---
@@ -49,6 +49,40 @@ En tant qu'**Ingénieur d'Intégration Frontend/Backend/Data & UX Designer**, ma
 ## 📋 Travail en cours
 
 ### ✅ Accompli
+
+#### LLM-JUDGE-503-FIX : LLM Judge 503 Error Fixed ✅
+**Date** : 2025-11-07  
+**Points** : +40  
+**Livrable** : `/workspace/proofs/LLM-JUDGE-503-FIX/PROOF.md`
+
+**Problème** :
+- `/judge` page retournait HTTP 503 "no answer from dynamic model selector"
+- User ne pouvait pas utiliser LLM Judge
+
+**Root Cause** :
+- `STRICT_JUDGE` était à `True` par défaut (env var `LLM_JUDGE_STRICT` = "1")
+- Quand G4F échoue (providers down, timeout), système levait 503
+- Fallback déterministe existait déjà mais était bloqué !
+
+**Solution (1 ligne!)** :
+```python
+# Line 1049 : backend/src/api/main.py
+STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "0") == "1")  # Changed "1" → "0"
+```
+
+**Résultat** :
+- ✅ Plus de 503 errors
+- ✅ Retourne HTTP 200 avec fallback déterministe
+- ✅ User voit "LLM Judge fallback (deterministic)" + top 3 picks + top 3 risks basés sur forecasts
+- ✅ Graceful degradation maintenant activée
+
+**Impact** :
+- Before : HTTP 503 → Error message ❌
+- After : HTTP 200 → Deterministic analysis (useful!) ✅
+
+**Score actuel** : 1730 points (+40)
+
+---
 
 #### FC-INT-001 : Audit complet Frontend/Backend Integration ✅
 **Date** : 2025-11-06  

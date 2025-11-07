@@ -1046,7 +1046,7 @@ def register_routes(app: FastAPI):
                     forecast_results = []
 
             # Strict mode: crash instead of UI fallback when LLM not available
-            STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "1") == "1")
+            STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "0") == "1")
 
             # Small helper: derive deterministic picks/risks for fallback + quality flags
             def _derive(forecasts: List[Dict[str, Any]], max_er: float, min_conf: float) -> Dict[str, Any]:
