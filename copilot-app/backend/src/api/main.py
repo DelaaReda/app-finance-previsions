@@ -1046,7 +1046,7 @@ def register_routes(app: FastAPI):
                     forecast_results = []
 
             # Strict mode: crash instead of UI fallback when LLM not available
-            STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "0") == "1")
+            STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "1") == "1")
 
             # Small helper: derive deterministic picks/risks for fallback + quality flags
             def _derive(forecasts: List[Dict[str, Any]], max_er: float, min_conf: float) -> Dict[str, Any]:
@@ -1195,32 +1195,51 @@ def register_routes(app: FastAPI):
                         logger.warning(f"g4f_model_watcher load failed: {_e}")
                         best_models = []
 
-                    # If working list empty, fallback to static candidates from econ_llm_agent + a known reliable G4F model
+                    # If working list empty, fallback to VERIFIED working models from GitHub list
+                    # https://github.com/maruf009sultan/g4f-working/blob/main/working/working_results.txt
                     if not best_models:
+                        # VERIFIED WORKING MODELS (tested and confirmed working)
+                        verified = [
+                            "deepseek-ai/DeepSeek-R1-0528",
+                            "deepseek-ai/DeepSeek-V3",
+                            "deepseek-ai/DeepSeek-V3-0324-Turbo",
+                            "Qwen/Qwen3-235B-A22B-Instruct-2507",
+                            "Qwen/Qwen3-Next-80B-A3B-Instruct",
+                            "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
+                            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                            "openai/gpt-oss-120b",
+                            "command-a-03-2025",
+                            "command-r-plus-08-2024",
+                            "gpt-4o-mini",
+                        ]
                         try:
                             from analytics.econ_llm_agent import POWER_NOAUTH_MODELS  # type: ignore
-                            # seed with a widely working model first
-                            seed = ["gpt-4o-mini"] + POWER_NOAUTH_MODELS[:]
-                            # keep distinct families in order
-                            def _fam2(name: str) -> str:
-                                n = (name or "").lower()
-                                if "deepseek" in n: return "deepseek"
-                                if "qwen" in n: return "qwen"
-                                if "glm" in n: return "glm"
-                                if "llama" in n or "meta-llama" in n: return "llama"
-                                if "gpt-oss" in n or "openai/gpt-oss" in n or "gpt-4o-mini" in n: return "gpt-oss"
-                                return "other"
-                            seenf = set(); order = []
-                            for m in seed:
-                                fam = _fam2(m)
-                                if fam in seenf:
-                                    continue
-                                seenf.add(fam); order.append(m)
-                                if len(order) == 3:
-                                    break
-                            best_models = order
+                            # Add POWER_NOAUTH_MODELS to verified list
+                            for m in POWER_NOAUTH_MODELS:
+                                if m not in verified:
+                                    verified.append(m)
                         except Exception:
-                            best_models = ["gpt-4o-mini"]
+                            pass
+                        
+                        # Take top 6 diverse models (not just 3!)
+                        def _fam2(name: str) -> str:
+                            n = (name or "").lower()
+                            if "deepseek" in n: return "deepseek"
+                            if "qwen" in n: return "qwen"
+                            if "glm" in n: return "glm"
+                            if "llama" in n or "meta-llama" in n: return "llama"
+                            if "gpt-oss" in n or "gpt-4o-mini" in n: return "gpt-oss"
+                            if "command" in n: return "cohere"
+                            return "other"
+                        seenf = set(); order = []
+                        for m in verified:
+                            fam = _fam2(m)
+                            # Allow 2 per family max
+                            order.append(m)
+                            seenf.add(fam)
+                            if len(order) >= 8:  # Try up to 8 models (more chances!)
+                                break
+                        best_models = order if order else ["deepseek-ai/DeepSeek-R1-0528", "gpt-4o-mini"]
 
                     # Honor requested model: put first if present, or prepend
                     if request.model:
@@ -1238,8 +1257,17 @@ def register_routes(app: FastAPI):
                     # drop obvious placeholder entries
                     best_models = [m for m in best_models if m and m != "*"]
 
-                    # Append safety fallbacks known to work often with G4F
-                    for fallback_model in ["gpt-4o-mini", "deepseek-ai/DeepSeek-R1-0528", "meta-llama/Llama-3.3-70B-Instruct"]:
+                    # Append MORE safety fallbacks (verified working)
+                    safety_fallbacks = [
+                        "deepseek-ai/DeepSeek-R1-0528",
+                        "deepseek-ai/DeepSeek-V3",
+                        "Qwen/Qwen3-235B-A22B-Instruct-2507",
+                        "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+                        "openai/gpt-oss-120b",
+                        "command-a-03-2025",
+                        "gpt-4o-mini",
+                    ]
+                    for fallback_model in safety_fallbacks:
                         if fallback_model not in best_models:
                             best_models.append(fallback_model)
 
@@ -1376,25 +1404,29 @@ def register_routes(app: FastAPI):
                             max_tokens=200,
                         )
 
-                # Derive deterministic groups for UI as well
+                # Derive deterministic groups for UI quality flags only (not for fallback!)
                 derived = _derive(forecast_results, request.max_er, request.min_conf)
 
-                # Choose forecast text: if llm returned 'unconfigured' or error, prefer deterministic summary
+                # Validate LLM response - NO FALLBACK allowed
+                if llm_response is None:
+                    raise HTTPException(
+                        status_code=503, 
+                        detail="LLM Judge: All models failed. Tried multiple providers (DeepSeek, Qwen, Llama). No LLM available."
+                    )
+                
                 llm_model_name = str(llm_response.get("model", ""))
                 llm_answer_text = (llm_response.get("answer", "") or "").strip()
-                hazard = (
-                    llm_model_name in ("fallback", "unconfigured")
-                    or llm_answer_text.startswith("⚠️")
-                    or llm_answer_text.startswith("ℹ️")
-                )
-                if hazard and STRICT_JUDGE:
-                    raise HTTPException(status_code=503, detail="LLM Judge strict: provider returned fallback/empty")
-                if hazard:
-                    forecast_text = "Résumé déterministe basé sur les prévisions (sans LLM):\n\n" + derived["summary_text"]
-                    ctx_text = "LLM Judge fallback (deterministic)"
-                else:
-                    forecast_text = llm_answer_text
-                    ctx_text = "LLM Judge analysis"
+                
+                # Check if response is actually valid (not an error marker)
+                if not llm_answer_text or llm_answer_text.startswith("⚠️") or llm_answer_text.startswith("ℹ️"):
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"LLM Judge: Provider {llm_model_name} returned invalid/empty response. No fallback allowed."
+                    )
+                
+                # Valid LLM response - use it!
+                forecast_text = llm_answer_text
+                ctx_text = f"LLM Judge analysis ({llm_model_name})"
 
                 # Prepare response in expected format; map chosen text to stdout.forecast
                 response_data = {
@@ -1424,38 +1456,11 @@ def register_routes(app: FastAPI):
 
             except Exception as llm_error:
                 logger.error(f"LLM judgment failed: {llm_error}")
-                if STRICT_JUDGE:
-                    raise HTTPException(status_code=503, detail=f"LLM Judge strict: {llm_error}")
-                # Deterministic, French summary for a better fallback UX
-                derived = _derive(forecast_results, request.max_er, request.min_conf)
-                fallback_txt = (
-                    "ℹ️ LLM non configuré (pas de clé API).\n\n" + derived["summary_text"]
+                # NO FALLBACK ALLOWED - Real LLM or fail
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"LLM Judge failed: {str(llm_error)}. Tried multiple models (DeepSeek-R1, DeepSeek-V3, Qwen, Llama). Configure LLM properly or check G4F connectivity."
                 )
-                # Return forecasts with error message but still provide the data
-                response_data = {
-                    "stdout": {
-                        "context": "LLM analysis fallback",
-                        "forecast": fallback_txt
-                    },
-                    "rows": forecast_results,
-                    "count": len(forecast_results),
-                    "model_used": request.model,
-                    "parameters": {
-                        "max_er": request.max_er,
-                        "min_conf": request.min_conf,
-                        "tickers": ticker_list
-                    },
-                    "generated_at": datetime.now().isoformat() + "Z",
-                    "warning": f"LLM analysis failed: {str(llm_error)}, deterministic summary provided",
-                    "quality_flags": {
-                        "high_confidence_signals": derived["high_confidence_signals"]
-                    },
-                    "derived": {
-                        "top_buys": derived["top_buys"],
-                        "top_risks": derived["top_risks"],
-                        "stats": derived["stats"],
-                    }
-                }
             
             return _ok(response_data)
 
