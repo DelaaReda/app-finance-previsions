@@ -49,33 +49,14 @@ export function useIntelligence() {
   return useQuery<IntelligenceSnapshot>({
     queryKey: ['intelligence', 'snapshot'],
     queryFn: async () => {
-      // TEMPORARY: Endpoint not yet implemented - return mock data
-      // TODO: Re-enable when /api/intelligence/snapshot is ready
-      // const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
-      // if (response.ok && response.data) {
-      //   return response.data;
-      // }
-
-      return {
-        insights: {
-          summary: 'Intelligence service coming soon.',
-          market_regime: {
-            current: 'normal',
-            explanation: 'Mock data - endpoint not yet implemented.',
-          },
-          opportunities: [],
-          risks: [],
-        },
-        data_freshness: {
-          forecasts_age: 'unknown',
-          macro_age: 'unknown',
-          news_age: 'unknown',
-        },
-        timestamp: new Date().toISOString(),
-      } as IntelligenceSnapshot;
+      const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
+      if (!response.ok || !response.data) {
+        throw new Error(response.error ?? 'Unable to load intelligence snapshot');
+      }
+      return response.data;
     },
     staleTime: 5 * 60_000, // 5 minutes
-    refetchInterval: false, // Disabled while using mock data
-    retry: false, // No need to retry mock data
+    refetchInterval: 5 * 60_000,
+    retry: 1,
   });
 }
