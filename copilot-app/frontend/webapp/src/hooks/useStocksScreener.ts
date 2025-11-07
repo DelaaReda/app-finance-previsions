@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { ensureArray } from '@/lib/safe';
 
@@ -72,58 +72,28 @@ function keyFor(params: StocksScreenerParams) {
 export function useStocksScreener(params: StocksScreenerParams) {
   return useQuery<StocksScreenerResponse>({
     queryKey: keyFor(params),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
-      const universeResponse = await api.fetchJson<any>('/api/stocks/universe');
-      const universeTickers = ensureArray<string>(universeResponse?.tickers ?? universeResponse ?? []);
+      const searchParams: Record<string, string> = {};
+      if (ensureArray(params.universe).length) searchParams.universe = ensureArray(params.universe).join(',');
+      if (ensureArray(params.sectors).length) searchParams.sectors = ensureArray(params.sectors).join(',');
+      if (params.q) searchParams.q = params.q;
+      if (params.min_mcap != null) searchParams.min_mcap = String(params.min_mcap);
+      if (params.max_mcap != null) searchParams.max_mcap = String(params.max_mcap);
+      if (params.min_pe != null) searchParams.min_pe = String(params.min_pe);
+      if (params.max_pe != null) searchParams.max_pe = String(params.max_pe);
+      if (params.sort) searchParams.sort = params.sort;
+      if (params.order) searchParams.order = params.order;
+      if (params.page) searchParams.page = String(params.page);
+      if (params.page_size) searchParams.page_size = String(params.page_size);
+      if (params.horizon) searchParams.horizon = params.horizon;
 
-      const selectedUniverse = ensureArray(params.universe).length
-        ? ensureArray(params.universe)
-        : universeTickers;
-
-      const sectorFilter = ensureArray(params.sectors);
-
-      // For now sectors are not provided by backend; keep placeholder filtering logic
-      let filteredTickers = universeTickers.filter((ticker) => selectedUniverse.includes(ticker));
-
-      if (params.q) {
-        const query = params.q.toLowerCase();
-        filteredTickers = filteredTickers.filter((ticker) => ticker.toLowerCase().includes(query));
+      const json = await api.fetchJson<any>('/api/stocks/screener', { searchParams });
+      const data = json?.data ?? json;
+      if (!data || !Array.isArray(data.items)) {
+        throw new Error('Invalid screener response');
       }
-
-      // If sectors filters are provided but we do not have mapping yet, return empty result to prompt backend integration
-      if (sectorFilter.length > 0) {
-        filteredTickers = [];
-      }
-
-      const total = filteredTickers.length;
-      const page = params.page ?? 1;
-      const pageSize = params.page_size ?? 25;
-      const start = (page - 1) * pageSize;
-      const paginatedTickers = filteredTickers.slice(start, start + pageSize);
-
-      const items: StocksScreenerItem[] = paginatedTickers.map((ticker) => ({
-        ticker,
-        name: ticker,
-        sector: null,
-        price: null,
-        change_1d: null,
-        momentum_30d: null,
-        score: null,
-        risk: null,
-        quality: null,
-        mcap: null,
-        pe: null,
-        div_yield: null,
-      }));
-
-      return {
-        updated_at: universeResponse?.timestamp ?? new Date().toISOString(),
-        total,
-        page,
-        page_size: pageSize,
-        items,
-      } satisfies StocksScreenerResponse;
+      return data as StocksScreenerResponse;
     },
   });
 }

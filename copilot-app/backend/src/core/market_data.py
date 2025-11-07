@@ -70,6 +70,8 @@ def get_fundamentals(symbol: str) -> Dict[str, Any]:
                 "beta": (metrics or {}).get("metric", {}).get("beta"),
                 "dividend_yield": (metrics or {}).get("metric", {}).get("dividendYieldIndicatedAnnual"),
                 "name": (prof or {}).get("name"),
+                "sector": (prof or {}).get("finnhubIndustry"),
+                "industry": (prof or {}).get("finnhubIndustry"),
                 "exchange": (prof or {}).get("exchange"),
                 "country": (prof or {}).get("country"),
                 "currency": (prof or {}).get("currency"),
@@ -96,6 +98,8 @@ def get_fundamentals(symbol: str) -> Dict[str, Any]:
             "beta": info.get("beta"),
             "dividend_yield": info.get("dividendYield"),
             "name": info.get("longName") or info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
             "exchange": info.get("exchange"),
             "country": info.get("country"),
             "currency": info.get("currency"),
@@ -183,4 +187,3 @@ class SnapshotInputs:
     window: str = "last_week"
     regions: str = "US,INTL"
     query: str = ""
-

@@ -8,10 +8,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from dataclasses import asdict
 import logging
+import math
 
 from fastapi import FastAPI, Query, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,13 +49,38 @@ def _configure_debug_logging():
         logging.getLogger(name).setLevel(logging.DEBUG)
     _configure_debug_logging._configured = True  # type: ignore[attr-defined]
 
+# ------------------------------ Constants ---------------------------------- #
+MACRO_SERIES_META: Dict[str, Dict[str, Optional[str]]] = {
+    "CPIAUCSL": {"name": "US CPI (All Items)", "unit": "index", "frequency": "monthly"},
+    "UNRATE": {"name": "Unemployment Rate", "unit": "%", "frequency": "monthly"},
+    "DGS10": {"name": "10Y Treasury Yield", "unit": "%", "frequency": "daily"},
+    "DGS2": {"name": "2Y Treasury Yield", "unit": "%", "frequency": "daily"},
+    "FEDFUNDS": {"name": "Federal Funds Rate", "unit": "%", "frequency": "monthly"},
+    "MICH": {"name": "Michigan Sentiment", "unit": "index", "frequency": "monthly"},
+}
+DEFAULT_MACRO_SERIES = list(MACRO_SERIES_META.keys())
+
+DEFAULT_STOCKS_UNIVERSE = [
+    t.strip().upper()
+    for t in os.getenv("STOCKS_UNIVERSE", "SPY,QQQ,AAPL,NVDA,MSFT,GOOGL,AMZN,TSLA,META,IBM")
+    .split(",")
+    if t.strip()
+]
+if not DEFAULT_STOCKS_UNIVERSE:
+    DEFAULT_STOCKS_UNIVERSE = ["SPY", "QQQ", "AAPL", "MSFT"]
+
+STOCKS_CACHE_TTL_MINUTES = int(os.getenv("STOCKS_CACHE_TTL_MINUTES", "15") or "15")
+STOCKS_CACHE_TTL = timedelta(minutes=max(5, STOCKS_CACHE_TTL_MINUTES))
+_STOCKS_METRICS_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
 # Import data access layer
 try:
     from core.data_access import (
         get_close_series,
         load_macro_forecast_rows
     )
-    from core.market_data import get_price_history
+    from core.market_data import get_price_history, get_fundamentals, get_fred_series
     from core.downsample import lttb
     from core.duck import query_parquet, parquet_glob
 except ImportError as e:
@@ -63,6 +89,8 @@ except ImportError as e:
     def get_close_series(ticker): return None
     def load_macro_forecast_rows(limit=200): return {"ok": False}
     def get_price_history(ticker, **kw): return None
+    def get_fundamentals(ticker): return {}
+    def get_fred_series(series_id, start=None): return pd.DataFrame(columns=[series_id])
     def lttb(points, threshold=1000): return points
     def query_parquet(sql, params=None): return []
     def parquet_glob(*parts): return str(Path(*parts))
@@ -71,6 +99,128 @@ from api.services.news_service import (
     get_news_events as lakehouse_news_events,
     get_sentiment as lakehouse_news_sentiment,
 )
+
+
+def _parse_csv_list(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip().upper() for item in value.split(",") if item.strip()]
+
+
+def _infer_frequency(index: pd.Index) -> Optional[str]:
+    if not isinstance(index, pd.DatetimeIndex) or index.empty:
+        return None
+    freq = pd.infer_freq(index)
+    if not freq:
+        return None
+    freq = freq.lower()
+    if "m" in freq:
+        return "monthly"
+    if "q" in freq:
+        return "quarterly"
+    if "w" in freq:
+        return "weekly"
+    return "daily"
+
+
+def _format_points(df: pd.DataFrame, column: str, limit: int, start: Optional[pd.Timestamp], end: Optional[pd.Timestamp]) -> List[Dict[str, Any]]:
+    if column not in df.columns or df.empty:
+        return []
+    series = df[column].dropna()
+    if start is not None:
+        series = series[series.index >= start]
+    if end is not None:
+        series = series[series.index <= end]
+    if limit:
+        series = series.tail(limit)
+    points = []
+    for ts, value in series.items():
+        if pd.isna(value):
+            points.append({"date": ts.strftime("%Y-%m-%d"), "value": None})
+        else:
+            points.append({"date": ts.strftime("%Y-%m-%d"), "value": float(value)})
+    return points
+
+
+def _normalize_percent(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if math.isnan(value):
+        return None
+    return float(round(value, 4))
+
+
+def _compute_stock_metrics(ticker: str) -> Dict[str, Any]:
+    ticker = ticker.upper()
+    cached = _STOCKS_METRICS_CACHE.get(ticker)
+    now = datetime.utcnow()
+    if cached and (now - cached["fetched_at"]) < STOCKS_CACHE_TTL:
+        return cached["data"]
+
+    lookback_start = (now - timedelta(days=120)).strftime("%Y-%m-%d")
+    df_prices = get_price_history(ticker, start=lookback_start, interval="1d")
+    last_price = change_1d = momentum_30d = risk = None
+    if df_prices is not None and not df_prices.empty and "Close" in df_prices.columns:
+        close = df_prices["Close"].dropna()
+        if not close.empty:
+            last_price = float(close.iloc[-1])
+            if len(close) > 1:
+                prev_close = float(close.iloc[-2])
+                if prev_close:
+                    change_1d = ((last_price - prev_close) / prev_close) * 100
+            if len(close) > 30:
+                base = float(close.iloc[-31])
+                if base:
+                    momentum_30d = ((last_price - base) / base) * 100
+            returns = close.pct_change().dropna()
+            if len(returns) >= 20:
+                daily_vol = float(returns.rolling(20).std().iloc[-1])
+                if not math.isnan(daily_vol):
+                    risk = daily_vol * math.sqrt(252) * 100
+
+    fundamentals = get_fundamentals(ticker) or {}
+    name = fundamentals.get("name") or ticker
+    sector = fundamentals.get("sector")
+    industry = fundamentals.get("industry")
+    mcap = fundamentals.get("market_cap")
+    pe = fundamentals.get("pe")
+    div_yield = fundamentals.get("dividend_yield")
+    if div_yield is not None and div_yield < 1:
+        div_yield = div_yield * 100
+
+    # Quality score (simple heuristic)
+    quality = None
+    if pe and pe > 0:
+        quality = max(0.0, min(100.0, 100 - min(pe, 80)))
+    # Composite score
+    composite = 50.0
+    if momentum_30d is not None:
+        composite += max(-25.0, min(25.0, momentum_30d / 2))
+    if risk is not None:
+        composite += max(-20.0, min(20.0, 20 - risk))
+    if div_yield is not None:
+        composite += max(-10.0, min(10.0, div_yield / 2))
+    score = max(0.0, min(100.0, composite))
+
+    data = {
+        "ticker": ticker,
+        "name": name,
+        "sector": sector,
+        "industry": industry,
+        "price": float(round(last_price, 4)) if last_price is not None else None,
+        "change_1d": _normalize_percent(change_1d),
+        "momentum_30d": _normalize_percent(momentum_30d),
+        "risk": _normalize_percent(risk),
+        "score": float(round(score, 2)),
+        "quality": float(round(quality, 2)) if quality is not None else None,
+        "mcap": float(mcap) if isinstance(mcap, (int, float)) else None,
+        "pe": float(pe) if isinstance(pe, (int, float)) else None,
+        "div_yield": _normalize_percent(div_yield),
+        "fetched_at": now.isoformat(),
+    }
+
+    _STOCKS_METRICS_CACHE[ticker] = {"data": data, "fetched_at": now}
+    return data
 
 # ================================= APP SETUP =================================
 
@@ -370,14 +520,44 @@ def register_routes(app: FastAPI):
     @app.get("/api/macro/series")
     async def macro_series(
         series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
-        limit: int = Query(200, ge=1, le=1000)
+        ids: Optional[str] = Query(None, description="Alias for series_ids"),
+        start: Optional[str] = Query(None, description="ISO date (e.g. 2020-01-01)"),
+        end: Optional[str] = Query(None, description="ISO date"),
+        limit: int = Query(500, ge=10, le=5000)
     ):
-        """Get macro time series data (FRED)."""
-        result = load_macro_forecast_rows(limit=limit)
-        # load_macro_forecast_rows returns {"rows": [...]}
-        if not result.get("rows"):
+        """Get macro time series data from FRED."""
+        requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
+        start_ts = pd.to_datetime(start).tz_localize(None) if start else None
+        end_ts = pd.to_datetime(end).tz_localize(None) if end else None
+
+        payload: List[Dict[str, Any]] = []
+        for series_id in requested:
+            try:
+                df = get_fred_series(series_id, start=start)
+            except Exception:
+                df = pd.DataFrame(columns=[series_id])
+            if df is None or df.empty:
+                continue
+            column = df.columns[0]
+            points = _format_points(df, column, limit=limit, start=start_ts, end=end_ts)
+            if not points:
+                continue
+            meta = MACRO_SERIES_META.get(series_id, {})
+            payload.append({
+                "id": series_id,
+                "name": meta.get("name") or series_id,
+                "unit": meta.get("unit"),
+                "frequency": meta.get("frequency") or _infer_frequency(df.index),
+                "points": points,
+            })
+
+        if not payload:
             raise HTTPException(status_code=404, detail="No macro data available")
-        return _ok(result["rows"])
+
+        return _ok({
+            "series": payload,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
 
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
@@ -479,10 +659,96 @@ def register_routes(app: FastAPI):
     @app.get("/api/stocks/universe")
     async def stock_universe():
         """Get list of tracked tickers."""
-        # TODO: Read from watchlist or config
         return _ok({
-            "tickers": ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"],
-            "count": 8
+            "tickers": DEFAULT_STOCKS_UNIVERSE,
+            "count": len(DEFAULT_STOCKS_UNIVERSE),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+
+    @app.get("/api/stocks/meta")
+    async def stocks_meta(tickers: Optional[str] = Query(None, description="Comma-separated tickers")):
+        requested = _parse_csv_list(tickers) or DEFAULT_STOCKS_UNIVERSE
+        rows = [_compute_stock_metrics(symbol) for symbol in requested]
+        items = [{
+            "ticker": row["ticker"],
+            "name": row.get("name"),
+            "sector": row.get("sector"),
+            "industry": row.get("industry"),
+            "weight": None,
+        } for row in rows]
+        return _ok({
+            "items": items,
+            "count": len(items),
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        })
+
+    @app.get("/api/stocks/screener")
+    async def stocks_screener(
+        universe: Optional[str] = Query(None, description="Comma-separated universe tickers"),
+        sectors: Optional[str] = Query(None, description="Comma-separated sectors"),
+        q: Optional[str] = Query(None, description="Text search"),
+        min_mcap: Optional[float] = Query(None),
+        max_mcap: Optional[float] = Query(None),
+        min_pe: Optional[float] = Query(None),
+        max_pe: Optional[float] = Query(None),
+        sort: str = Query("score"),
+        order: str = Query("desc"),
+        page: int = Query(1, ge=1),
+        page_size: int = Query(25, ge=1, le=200),
+    ):
+        tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
+        sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+
+        rows = [_compute_stock_metrics(symbol) for symbol in tickers]
+
+        def _match_sector(row):
+            if not sector_filters:
+                return True
+            sector = (row.get("sector") or "").lower()
+            return sector in sector_filters
+
+        filtered = []
+        query_lower = q.lower() if q else None
+        for row in rows:
+            if query_lower:
+                if query_lower not in row["ticker"].lower() and query_lower not in (row.get("name") or "").lower():
+                    continue
+            if not _match_sector(row):
+                continue
+            mcap = row.get("mcap")
+            if min_mcap is not None and (mcap is None or mcap < min_mcap):
+                continue
+            if max_mcap is not None and (mcap is None or mcap > max_mcap):
+                continue
+            pe_val = row.get("pe")
+            if min_pe is not None and (pe_val is None or pe_val < min_pe):
+                continue
+            if max_pe is not None and (pe_val is None or pe_val > max_pe):
+                continue
+            filtered.append(row)
+
+        sort_field = sort if sort in {"score", "risk", "momentum_30d", "change_1d", "mcap", "pe", "div_yield"} else "score"
+        reverse = (order or "desc").lower() != "asc"
+
+        def sort_key(item: Dict[str, Any]):
+            value = item.get(sort_field)
+            return (value is None, value)
+
+        filtered.sort(key=sort_key, reverse=reverse)
+
+        total = len(filtered)
+        start = (page - 1) * page_size
+        sliced = filtered[start:start + page_size]
+        # ensure fields subset
+        fields = ["ticker","name","sector","price","change_1d","momentum_30d","score","risk","quality","mcap","pe","div_yield"]
+        items = [{field: row.get(field) for field in fields} for row in sliced]
+
+        return _ok({
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": items,
         })
 
     @app.get("/api/stocks/{ticker}")

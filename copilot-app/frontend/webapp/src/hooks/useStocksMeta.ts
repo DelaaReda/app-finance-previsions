@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { api } from '@/api/client';
 import { ensureArray } from '@/lib/safe';
 
 export type StockMeta = {
@@ -11,16 +12,6 @@ export type StockMeta = {
 
 type Resp = { items?: StockMeta[] };
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? '/api';
-
-async function fetchStocksMeta(tickers: string[]): Promise<Resp> {
-  const qs = new URLSearchParams();
-  if (tickers.length) qs.set('tickers', tickers.join(','));
-  const res = await fetch(`${API_BASE}/stocks/meta?${qs.toString()}`, { headers: { 'Accept': 'application/json' }});
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
 /**
  * Retourne les métadonnées des tickers (secteur, industry, weight, …).
  * Affiche Empty state côté UI si l’API n’est pas encore branchée.
@@ -29,7 +20,16 @@ export function useStocksMeta(universe: string[]) {
   const uniq = Array.from(new Set(ensureArray(universe).map(t => t.trim()).filter(Boolean)));
   return useQuery({
     queryKey: ['stocks-meta', uniq],
-    queryFn: () => fetchStocksMeta(uniq),
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<Resp> => {
+      if (!uniq.length) return { items: [] };
+      const searchParams: Record<string, string> = { tickers: uniq.join(',') };
+      const json = await api.fetchJson<any>('/api/stocks/meta', { searchParams });
+      const data = json?.data ?? json ?? {};
+      return {
+        items: ensureArray<StockMeta>(data.items),
+      };
+    },
     staleTime: 60_000,
     enabled: uniq.length > 0,
   });

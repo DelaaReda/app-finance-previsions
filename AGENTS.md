@@ -18,8 +18,9 @@ Donc **pas de données simulées**.
 
 ### lire la doc apres ce markdown pour comprendre comment bien faire les choses : 
 
-
-copilot-app/docs (Une portion de la doc est ancienne et peut etre Legacy alors faites attention)
+- `copilot-app/docs` (attention : certaines parties sont legacy)
+- `docs/LLM_JUDGE.md` (LLM Judge, sélection des modèles, watcher g4f)
+- `docs/FRONTEND_DATA_DEBUG.md` (protocole CLI pour débloquer les pages, vérifier les endpoints et bannir les mocks)
 
 
 ### ✅ TOUJOURS LANCER LE PROJET AVEC LE SCRIPT FOURNI
@@ -380,161 +381,6 @@ L'application est prête pour une utilisation en production et peut être étend
 
 
 
-## ✅ SITUATION ACTUELLE
-
-### Backend API (http://localhost:8050)
-Tous les endpoints sont maintenant **opérationnels** :
-
-| Endpoint | Statut | Réponse |
-|----------|--------|---------| 
-| `/api/health` | ✅ OK | JSON avec `{"ok": true, ...}` |
-| `/api/macro/series` | ✅ OK | Données FRED (CPI, VIX, etc.) |
-| `/api/stocks/prices` | ✅ OK | Données yfinance (SPY, QQQ, etc.) |
-| `/api/news/feed` | ✅ OK | Flux RSS avec scores |
-| `/api/brief/daily` | ✅ OK | Brief quotidien avec signaux/risques |
-| `/api/brief/weekly` | ✅ OK | Brief hebdomadaire |
-| `/api/forecasts` | ✅ OK | Prévisions (vides si pas de données) |
-| `/api/dashboard/kpis` | ✅ OK | Indicateurs KPI |
-
-### Frontend UI (http://localhost:5173) 
-Toutes les pages sont **accessibles** avec données :
-
-| Page | Statut | Fonctionnalité |
-|------|--------|----------------|
-| `/` (Dashboard) | ✅ OK | Vue d'ensemble complète |
-| `/brief` (Market Brief) | ✅ OK | Briefs avec top 3 signaux/risques |
-| `/macro` | ✅ OK | Données macroéconomiques |
-| `/stocks` | ✅ OK | Prix et indicateurs boursiers |
-| `/news` | ✅ OK | Flux d'actualités |
-| `/copilot` | ✅ OK | Interface LLM avec Q&A |
-| `/forecasts` | ✅ OK | Page de prévisions |
-| `/backtests` | ✅ OK | Page de backtests |
-| `/judge` | ✅ OK | LLM Judge |
-
-## 🔧 CORRECTIONS APPLIQUÉES
-
-### 1. Problème de routage API
-**Avant** : Le frontend appelait `http://localhost:5173/api/...` mais les endpoints backend étaient sur `http://localhost:8050/api/...`
-**Solution** : Mise en place du proxy Vite dans `vite.config.ts` :
-```ts
-proxy: {
-  '/api': {
-    target: 'http://localhost:8050',
-    changeOrigin: true,
-    secure: false,
-  },
-  '/health': {
-    target: 'http://localhost:8050',
-    changeOrigin: true,
-    secure: false,
-  }
-}
-```
-
-### 2. Variable d'environnement
-**Avant** : `VITE_API_BASE_URL` dans `.env` mais pas prise en charge
-**Solution** : Mise à jour du fichier `.env` dans `webapp/` avec :
-```
-VITE_API_BASE_URL=http://localhost:8050
-```
-
-### 3. Gestion des erreurs
-**Avant** : Certains endpoints backend renvoyaient des erreurs ou `null` 
-**Solution** : Tous les endpoints renvoient maintenant des structures JSON valides :
-- Tableaux vides `[]` au lieu de `null`
-- Objets avec structure définie
-- Gestion appropriée des exceptions
-
-## 🧪 TESTS COMPLÉMENTAIRES
-
-### Vérification des endpoints backend :
-```bash
-curl http://localhost:8050/api/health
-curl http://localhost:8050/api/macro/series
-curl http://localhost:8050/api/stocks/prices?ticker=SPY
-curl http://localhost:8050/api/news/feed
-curl http://localhost:8050/api/brief/daily
-curl http://localhost:8050/api/forecasts
-```
-
-### Vérification via proxy frontend :
-```bash
-curl http://localhost:5173/api/health
-curl http://localhost:5173/api/macro/series
-curl http://localhost:5173/api/stocks/prices?ticker=SPY
-curl http://localhost:5173/api/news/feed
-curl http://localhost:5173/api/brief/daily
-curl http://localhost:5173/api/forecasts
-```
-
-## 🚀 DÉMARRAGE DE L'APPLICATION
-
-### Via scripts (recommandé) :
-```bash
-# Démarrer l'application complète
-./finance-copilot.sh start
-
-# Arrêter l'application
-./finance-copilot.sh stop
-
-# Redémarrer
-./finance-copilot.sh restart
-
-# Vérifier l'état
-./finance-copilot.sh status
-```
-
-### URLs disponibles :
-- **Frontend UI** : http://localhost:5173
-- **Backend API** : http://localhost:8050
-- **Documentation API** : http://localhost:8050/docs
-- **BrowserMCP** : http://localhost:9009
-
-## 🎯 FONCTIONNALITÉS COMPLÈTES
-
-✅ **Dashboard** - Vue d'ensemble avec filtres et indicateurs  
-✅ **Market Briefs** - Briefs quotidiens et hebdomadaires  
-✅ **5 Piliers** - Tous fonctionnels (Macro, Stocks, News, Copilot, Brief)  
-✅ **Analyse** - Prévisions, backtests, alerts  
-✅ **Outils LLM** - Copilot et Judge  
-✅ **Interface utilisateur** - Navigation complète entre toutes les pages  
-✅ **BrowserMCP** - Serveur d'automatisation prêt pour les modèles IA  
-
-## 📊 INDICATEURS DE SANTÉ
-
-- **Taux de couverture** : >90% des tickers ≤ 24h
-- **Fraîcheur news** : Médiane < 10 minutes
-- **Sources** : ≥ 2 citations pour chaque réponse LLM
-- **Performance** : Réponses < 2 secondes
-- **Robustesse** : Gestion des erreurs et fallbacks
-
----
-
-## 👨‍💻 MESSAGE AUX DÉVELOPPEURS
-
-Finance Copilot est maintenant **entièrement opérationnel** avec :
-
-1. **Backend stable** - API FastAPI avec tous les endpoints critiques
-2. **Frontend fonctionnel** - Interface React complète avec navigation
-3. **Communication correcte** - Proxy API en place pour le développement
-4. **Structure de données** - Contrats API cohérents (aucun `null` non géré)
-5. **Gestion des erreurs** - Fallbacks et erreurs capturées
-6. **Documentation** - Guides et procédures mises à jour
-
-
-
-Parfait — tu veux ajouter une section **“Règles de collaboration & bonnes pratiques”** pour garantir :
-
-* pas de duplication
-* pas de travail inutile / hors scope
-* alignement entre agents
-* validation avant création
-* cohérence de style & d’architecture
-* efficacité d’équipe
-
-Voici un bloc markdown prêt à coller dans ton doc 👇
-
----
 
 ## 🤝 Règles de Collaboration & Bonnes Pratiques
 
@@ -856,26 +702,6 @@ Voici ta version prête à commit → **`AGENTS_GAMEPLAY.md`** ✅
 ## `AGENTS_GAMEPLAY.md`
 
 # 🧠 Finance Copilot — Système de Gamification pour Agents
-
-## 🎯 BUT DU DOCUMENT
-
-Ce guide est destiné à tous les agents / devs travaillant sur **Finance Copilot**.
-
-Ici, tout est **réel** :
-
-* ❌ Pas de mocks
-* ❌ Pas de données fake
-* ❌ Pas de hacks temporaires
-
-Si un endpoint est vide → **on le remplit réellement**
-Si une page casse → **on corrige la source**, pas le symptôme.
-
-> Votre mission : amener le projet au niveau **hedge-fund grade AI system**.
-
-Plusieurs agents travaillent en parallèle → il peut y avoir des modifications imprévues.
-Ce document établit un système clair pour **livrer proprement, collaborer, progresser, compétiter intelligemment.**
-
----
 
 ## 🏆 Comment gagner des points
 

@@ -67,6 +67,23 @@
 - [x] Coordination de la résolution des problèmes critiques (real data requirements)
 - [x] Communication des exigences de données réelles à l'équipe (no mock, no loading forever)
 - [x] Établissement du processus de validation des endpoints pour données réelles
+- [x] Identification des endpoints bloquants (chargement infinis, données manquantes)
+- [x] Création des tâches spécifiques FC-EP-* pour résolution backend data (macro, stocks, brief)
+- [x] Attribution des tâches critiques à agents responsables (ALEX-BACKEND, ALEX-FINANCE)
+- [x] Établissement des DoD clairs pour chaque endpoint (données réelles, pas de chargement infini)
+- [x] Communication des exigences backend data à l'équipe
+- [x] Supervision de la progression des fixes critiques
+- [x] Documentation des besoins en données historiques (séries temporelles)
+- [x] Audit global des endpoints pour s'assurer qu'ils retournent des données réelles
+- [x] Création des tâches FC-ALIGN-* pour vérification complète de l'alignement architecture
+- [x] Attribution de vérifications spécifiques à chaque agent (API, Backend, Finance, ML, News, Tests)
+- [x] Exigence de preuves de fonctionnement avec données réelles pour chaque endpoint
+- [x] Coordination de vérification que les agents utilisent l'architecture récente
+- [x] Vérification que les données sont persistées dans les bons dossiers (data/*)
+- [x] S'assurer que les jobs s'exécutent avec fréquence appropriée (hourly/regular updates)
+- [x] Validation que tous les contrats never-empty sont respectés globalement
+- [x] Mise en place d'un système de vérification qualité systématique
+- [x] Création de tâches spécifiques pour chaque agent: FC-API-ALIGN-001, FC-BACKEND-ALIGN-002, FC-FINANCE-ALIGN-003, FC-ML-ALIGN-004, FC-NEWS-ALIGN-005, FC-TEST-ALIGN-006, FC-QM-ALIGN-007
 
 ## 📈 Points Gagnés
 - **Total**: 440 points
