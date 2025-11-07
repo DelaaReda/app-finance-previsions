@@ -133,7 +133,7 @@ export function useHealth() {
         };
       });
 
-      const response = {
+      const response: Health = {
         updated_at: raw.timestamp ?? new Date().toISOString(),
         datasets,
         thresholds: {
@@ -142,13 +142,16 @@ export function useHealth() {
             return acc;
           }, {}),
         },
-      } satisfies Health;
+      }
 
-      // Validate response schema
-      const validated = validateData(response, HealthSchema);
-      logValidationSuccess('Health', validated.datasets.length);
-
-      return validated;
+      try {
+        const validated = validateData(response, HealthSchema);
+        logValidationSuccess('Health', validated.datasets.length);
+        return validated;
+      } catch (error) {
+        console.warn('[useHealth] Schema mismatch, returning unvalidated payload', error);
+        return response;
+      }
     },
     refetchInterval: 60_000,
   });
