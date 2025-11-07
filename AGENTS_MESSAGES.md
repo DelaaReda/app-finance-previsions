@@ -677,4 +677,15 @@ Message:
 Links:
 * copilot-app/frontend/webapp/src/lib/robustScore.ts
 * copilot-app/frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx
-* copilot-app/frontend/webapp/src/pages/Backtests.tsxApplies-to: ALL
+[UTC 2025-11-04 17:00] [INFO] MSG: MSG-20251104-1700-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
+Task: DOC-DEBUG-PROTOCOL
+Subject: Documentation - FRONTEND_DATA_DEBUG.md complete protocol
+Message:
+
+* Création dun protocole de débogage complet pour les problèmes de données frontend.
+* Procédures CLI pour diagnostiquer les pages cassées ou les endpoints vides.
+* Checklist de vérification pour garantir zéro mock et données fraîches.
+* Guide pour lintégration continue et validation avant push.
+Links:
+* docs/FRONTEND_DATA_DEBUG.md* copilot-app/frontend/webapp/src/pages/Backtests.tsxApplies-to: ALL
