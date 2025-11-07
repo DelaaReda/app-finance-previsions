@@ -42,6 +42,7 @@ import {
   type PortfolioCreateRequest,
   type PortfolioUpdateRequest,
 } from '@/hooks/usePortfolios'
+import { PerformanceCharts } from '@/components/portfolios/PerformanceCharts'
 
 // ============================================================================
 // Main Widget
@@ -52,6 +53,7 @@ export function PortfolioManagerWidget() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [performanceModalOpen, setPerformanceModalOpen] = useState(false)
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null)
 
   // Handlers
@@ -67,6 +69,11 @@ export function PortfolioManagerWidget() {
   const handleDelete = (portfolio: Portfolio) => {
     setSelectedPortfolio(portfolio)
     setDeleteModalOpen(true)
+  }
+
+  const handleViewPerformance = (portfolio: Portfolio) => {
+    setSelectedPortfolio(portfolio)
+    setPerformanceModalOpen(true)
   }
 
   if (isLoading) {
@@ -127,6 +134,7 @@ export function PortfolioManagerWidget() {
                 portfolio={portfolio}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onViewPerformance={handleViewPerformance}
               />
             ))}
           </Stack>
@@ -162,6 +170,21 @@ export function PortfolioManagerWidget() {
           }}
         />
       )}
+
+      {/* Performance Modal */}
+      {selectedPortfolio && (
+        <Modal
+          opened={performanceModalOpen}
+          onClose={() => {
+            setPerformanceModalOpen(false)
+            setSelectedPortfolio(null)
+          }}
+          title={`${selectedPortfolio.name} - Performance`}
+          size="xl"
+        >
+          <PerformanceCharts portfolio={selectedPortfolio} />
+        </Modal>
+      )}
     </>
   )
 }
@@ -174,9 +197,10 @@ interface PortfolioCardProps {
   portfolio: Portfolio
   onEdit: (portfolio: Portfolio) => void
   onDelete: (portfolio: Portfolio) => void
+  onViewPerformance: (portfolio: Portfolio) => void
 }
 
-function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
+function PortfolioCard({ portfolio, onEdit, onDelete, onViewPerformance }: PortfolioCardProps) {
   const removeTicker = useRemoveTicker()
 
   const handleRemoveTicker = (ticker: string) => {
@@ -225,6 +249,9 @@ function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item leftSection={<IconChartLine size={14} />} onClick={() => onViewPerformance(portfolio)}>
+              View Performance
+            </Menu.Item>
             <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onEdit(portfolio)}>
               Edit
             </Menu.Item>
@@ -266,13 +293,23 @@ function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
         )}
       </Group>
 
-      <Group gap="md">
-        <Text size="xs" c="dimmed">
-          {portfolio.tickers.length} tickers
-        </Text>
-        <Text size="xs" c="dimmed">
-          Updated {new Date(portfolio.updated_at).toLocaleDateString()}
-        </Text>
+      <Group justify="space-between" mt="sm">
+        <Group gap="md">
+          <Text size="xs" c="dimmed">
+            {portfolio.tickers.length} tickers
+          </Text>
+          <Text size="xs" c="dimmed">
+            Updated {new Date(portfolio.updated_at).toLocaleDateString()}
+          </Text>
+        </Group>
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconChartLine size={14} />}
+          onClick={() => onViewPerformance(portfolio)}
+        >
+          View Performance
+        </Button>
       </Group>
     </Card>
   )

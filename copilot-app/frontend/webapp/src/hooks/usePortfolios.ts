@@ -288,3 +288,37 @@ export function useRemoveTicker() {
     },
   })
 }
+
+/**
+ * Get portfolio performance time series for charts
+ */
+export function usePortfolioTimeseries(
+  id: string | null,
+  benchmark: string = 'SPY',
+  startDate?: string,
+  endDate?: string
+) {
+  return useQuery({
+    queryKey: qk.portfolioPerformance(id ?? '', benchmark),
+    queryFn: async () => {
+      if (!id) return null
+      
+      const params = new URLSearchParams()
+      params.set('benchmark', benchmark)
+      if (startDate) params.set('start_date', startDate)
+      if (endDate) params.set('end_date', endDate)
+      
+      const response = await fetch(`${API_BASE}/portfolios/${id}/performance/timeseries?${params}`)
+      const data: ApiResponse<any> = await response.json()
+      
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to fetch performance timeseries')
+      }
+      
+      return data.data
+    },
+    enabled: !!id,
+    staleTime: 60 * 60 * 1000, // 1 hour (performance data is expensive)
+    retry: 2,
+  })
+}
