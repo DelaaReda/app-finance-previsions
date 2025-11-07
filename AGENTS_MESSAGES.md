@@ -372,4 +372,14 @@ Links:
 * scripts/quality/codacy-analyze.sh (à créer pour automatisation)
 * docs/quality/codacy-integration.md (à créer pour guidelines)
 Need by: 2025-11-06 12:00 UTC
-Applies-to: ALL
+[UTC 2025-11-04 19:55] [INFO] MSG: MSG-20251104-1955-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
+Task: QUALITY-IMPROVEMENT
+Subject: Code quality enhancement - Cyclomatic complexity reduced in forecast module
+Message:
+
+* Refactored predict_direction_ml function to reduce complexity from 16 to 4.
+* Split complex logic into smaller, testable functions.
+* Maintained all functionality while improving maintainability.
+Links:
+* copilot-app/backend/models/forecast_hybrid_v1.py - refactored with helper functionsApplies-to: ALL
