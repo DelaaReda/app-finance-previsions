@@ -8,9 +8,9 @@ import { Tooltip } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 
 interface SourceTooltipProps {
-  source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')
+  source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')  
   lastUpdate?: string;   // Timestamp of the last update
-  metadata?: Record<string, unknown>; // Additional metadata about the source
+  metadata?: Record<string, unknown>; // Additional metadata
   children?: React.ReactNode; // Optional custom content instead of default info
 }
 
@@ -63,8 +63,8 @@ export default function SourceTooltip({
   );
 
   return (
-    <Tooltip label={tooltipContent} position="top" withArrow multiline>
-      <span style={{ cursor: 'help', verticalAlign: 'middle' }}>
+    <Tooltip label={tooltipContent} position="top" withArrow>
+      <span style={{ cursor: 'help', verticalAlign: 'middle', display: 'inline-block', marginLeft: '4px' }}>
         <IconInfoCircle size={14} color="#999" />
       </span>
     </Tooltip>

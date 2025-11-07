@@ -835,7 +835,7 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ## FC-API-031 — Risk Analytics Dashboard
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Endpoint `/api/analytics/risks` pour l'analyse des risques de portefeuille (VaR, Beta, Corrélation).
 
@@ -866,6 +866,8 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 * Données incluent: VaR, Beta, Sharpe, Volatilité, Corrélations
 * Format prêt pour intégration UI dans dashboard de risque
 * Never-empty - même si données limitées
+
+**Preuve**: Système complet d'analyse de risque implémenté avec calculateur de VaR (historique et paramétrique), calculateur de Beta, matrice de corrélation entre actifs, volatilité annuelle, ratios de diversification, endpoint API `/api/analytics/risks` avec support de pondérations de portefeuille, endpoint `/api/analytics/var` pour calcul VaR individuel, intégration avec le système de cache pour garantir never-empty, et format adapté à l'intégration UI dans dashboard de risque.
 
 ---
 

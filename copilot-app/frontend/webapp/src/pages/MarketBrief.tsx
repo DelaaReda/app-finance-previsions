@@ -150,10 +150,21 @@ export default function MarketBrief() {
               Analyse générée pour l'univers: {ensureArray(brief.universe || universe).join(', ')}
             </div>
           </Card>
+          
+          {/* Summary content if available - for better UX */}
+          {(brief.summary || brief.content) && (
+            <Card>
+              <h3 style={{ margin: '0 0 1rem 0' }}>Résumé</h3>
+              <div style={{ lineHeight: 1.6, color: '#ccc' }}>
+                {brief.summary || brief.content}
+              </div>
+            </Card>
+          )}
+
           {/* Top 3 Signaux et Top 3 Risques */}
           <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '1fr 1fr' }}>
-            <TopSignals signals={ensureArray(brief?.top_signals)} title="Top 3 Signaux" />
-            <TopRisks risks={ensureArray(brief?.top_risks)} title="Top 3 Risques" />
+            <TopSignals signals={ensureArray(brief?.top_signals || brief?.signals || [])} title="Top 3 Signaux" />
+            <TopRisks risks={ensureArray(brief?.top_risks || brief?.risks || [])} title="Top 3 Risques" />
           </div>
 
           {/* Picks */}
@@ -170,17 +181,17 @@ export default function MarketBrief() {
                     borderRadius: '4px'
                   }}>
                     <div>
-                      <strong>{pick.ticker || pick.symbol}</strong> - Score: {pick.composite_score?.toFixed(1) || pick.score?.toFixed(1) || 'N/A'}
+                      <strong>{pick.ticker || pick.symbol || pick.asset}</strong> - Score: {pick.composite_score?.toFixed(1) || pick.score?.toFixed(1) || 'N/A'}
                     </div>
                     <div style={{ 
                       padding: '0.25rem 0.5rem', 
                       borderRadius: '4px',
-                      backgroundColor: pick.action === 'BUY' || pick.direction === 'up' ? '#4caf50' : 
-                                      pick.action === 'SELL' || pick.direction === 'down' ? '#f44336' : '#2196f3',
+                      backgroundColor: pick.action === 'BUY' || pick.action === 'buy' || pick.direction === 'up' ? '#4caf50' : 
+                                      pick.action === 'SELL' || pick.action === 'sell' || pick.direction === 'down' ? '#f44336' : '#2196f3',
                       color: 'white',
                       fontSize: '0.8rem'
                     }}>
-                      {pick.action || pick.direction || 'HOLD'}
+                      {(pick.action || pick.direction || 'HOLD').toString().toUpperCase()}
                     </div>
                   </div>
                 ))}
@@ -199,7 +210,7 @@ export default function MarketBrief() {
                     borderRadius: '12px',
                     fontSize: '0.8rem'
                   }}>
-                    {source.type || source.name || 'N/A'}: {source.series_id || source.count || source.id || 'N/A'}
+                    {source.type || source.name || source.id || 'N/A'}: {source.series_id || source.count || source.id || 'N/A'}
                   </span>
                 ))}
               </div>
@@ -213,7 +224,7 @@ export default function MarketBrief() {
       )}
       
       {/* Empty state when no data and no loading/error */}
-      {!isLoading && !error && !brief && (
+      {!isLoading && !error && (!brief || Object.keys(brief).length === 0) && (
         <div style={{ 
           display: 'flex', 
           flexDirection: 'column', 

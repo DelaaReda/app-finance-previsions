@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 
+// Force cache refresh
 interface TunerParams {
   confidenceThreshold: number;
   minSampleSize: number;
@@ -186,7 +187,7 @@ export const PresetTunerPanel: React.FC<PresetTunerPanelProps> = ({
             <span>High (0.9)</span>
           </div>
         </div>
-      </Stack>
+      </div>
 
       {showRunButton && (
         <div style={{textAlign: 'right', marginTop: '1rem'}}>
@@ -204,7 +205,7 @@ export const PresetTunerPanel: React.FC<PresetTunerPanelProps> = ({
             Apply & Run Backtest
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };

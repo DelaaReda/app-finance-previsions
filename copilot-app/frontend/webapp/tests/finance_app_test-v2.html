@@ -483,7 +483,55 @@
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+        .btn-secondary {
+            background: #374151;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #1f2937;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(55, 65, 81, 0.35);
+        }
+
+        .screenshot-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .screenshot-thumb {
+            width: 220px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+            text-decoration: none;
+            color: #111827;
+            background: #fff;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.15);
+            transition: transform 0.2s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .screenshot-thumb:hover {
+            transform: translateY(-4px);
+        }
+
+        .screenshot-thumb img {
+            width: 100%;
+            display: block;
+        }
+
+        .screenshot-thumb span {
+            padding: 8px 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            border-top: 1px solid #f3f4f6;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -508,6 +556,9 @@
             <button class="btn btn-info" onclick="testPage(null, true)">
                 <span class="icon">📄</span> Tester Page Active
             </button>
+            <button class="btn btn-secondary" onclick="captureScreenshot(null, false, true)">
+                <span class="icon">📸</span> Capture Screenshot
+            </button>
             <button class="btn btn-warning" onclick="generateReport()">
                 <span class="icon">📊</span> Générer Rapport
             </button>
@@ -523,6 +574,9 @@
                 </label>
                 <label>
                     <input type="checkbox" id="autoFix" checked> Auto-recommandations
+                </label>
+                <label>
+                    <input type="checkbox" id="autoScreenshot"> Auto screenshots pages
                 </label>
             </div>
         </div>
@@ -603,6 +657,7 @@
                     <div class="progress-fill" id="progress" style="width: 0%"></div>
                 </div>
 
+                <div class="screenshot-gallery" id="screenshotGallery"></div>
                 <div id="results-container"></div>
                 <div id="iframeContainer"></div>
 
@@ -705,6 +760,7 @@
             document.getElementById('startBtn').disabled = true;
             testResults = [];
             document.getElementById('results-container').innerHTML = '';
+            document.getElementById('screenshotGallery').innerHTML = '';
             if (document.getElementById('iframeMode').checked) {
                 await ensureIframe(baseUrl);
             }
@@ -965,6 +1021,9 @@
                 } else {
                     res.details.push('✅ Sélecteurs: OK');
                 }
+                if (res.status === 'passed' && document.getElementById('autoScreenshot').checked && document.getElementById('iframeMode').checked) {
+                    await captureScreenshot(`page-${slugify(page.path || '/')}`, true, false);
+                }
                 return res;
             } catch (e) {
                 res.status = 'failed';
@@ -1148,6 +1207,76 @@
 
         // --- Helpers & missing functions to complete the tester ---
         function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        function slugify(text) {
+            return (text || 'capture').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'capture';
+        }
+
+        function appendScreenshotThumb(dataUrl, filename, caption) {
+            const gallery = document.getElementById('screenshotGallery');
+            if (!gallery) return;
+            const anchor = document.createElement('a');
+            anchor.href = dataUrl;
+            anchor.download = filename;
+            anchor.className = 'screenshot-thumb';
+            anchor.title = `Télécharger ${filename}`;
+            anchor.innerHTML = `<img src="${dataUrl}" alt="${caption}"/><span>${caption}</span>`;
+            gallery.prepend(anchor);
+            while (gallery.children.length > 6) {
+                gallery.removeChild(gallery.lastChild);
+            }
+        }
+
+        async function captureScreenshot(label = null, skipEnsure = false, autoDownload = false) {
+            if (!document.getElementById('iframeMode').checked) {
+                log('⚠️ Activez le mode iframe pour capturer des screenshots.', 'warning');
+                return null;
+            }
+            const baseUrl = document.getElementById('baseUrl').value;
+            if (!skipEnsure) {
+                const ready = await ensureIframe(baseUrl);
+                if (!ready) {
+                    log('⚠️ Impossible de capturer (cross-origin).', 'warning');
+                    return null;
+                }
+            }
+            const iframe = document.getElementById('appFrame');
+            const win = iframe?.contentWindow;
+            const doc = iframe?.contentDocument;
+            if (!iframe || !win || !doc) {
+                log('⚠️ Iframe inaccessible pour screenshot.', 'warning');
+                return null;
+            }
+            if (typeof html2canvas !== 'function') {
+                log('❌ html2canvas indisponible.', 'error');
+                return null;
+            }
+            const target = doc.getElementById('page-content') || doc.body;
+            const canvas = await html2canvas(target, {
+                useCORS: true,
+                backgroundColor: getComputedStyle(doc.body).backgroundColor || '#050910',
+                scale: window.devicePixelRatio < 2 ? 1.4 : 1,
+                windowWidth: target.scrollWidth,
+                windowHeight: target.scrollHeight,
+            }).catch((err) => {
+                log(`❌ Capture échouée: ${err.message || err}`, 'error');
+                return null;
+            });
+            if (!canvas) return null;
+            const dataUrl = canvas.toDataURL('image/png');
+            const path = win.location.pathname || '/';
+            const slug = slugify(label || path);
+            const filename = `finance-${slug}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+            appendScreenshotThumb(dataUrl, filename, label || path);
+            if (autoDownload) {
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = filename;
+                link.click();
+            }
+            log(`📸 Screenshot capturé (${label || path})`, 'success');
+            return filename;
+        }
 
         function updateStats() {
             const total = testSuites.pages.length + testSuites.components.length + testSuites.data.length + testSuites.performance.length;

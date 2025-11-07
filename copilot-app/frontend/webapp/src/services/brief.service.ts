@@ -31,7 +31,24 @@ export const briefService = {
     // Note: universe filters are not currently supported in backend endpoints
     // This would require backend changes to support universe filtering
     
-    return apiGet<MarketBrief>(endpoint, {});
+    const response = await apiGet(endpoint, {});
+    
+    // Handle different response formats - some endpoints return nested data while others return direct
+    if (response.ok && response.data) {
+      // Check if the response follows { ok, data } format with nested content
+      if (response.data.data) {
+        // If response is { ok: true, data: { data: { ... }, ... } }
+        return {
+          ok: true,
+          data: response.data.data
+        };
+      } else {
+        // Direct format: { ok: true, data: { ... } }
+        return response;
+      }
+    }
+    
+    return response;
   }
 }
 

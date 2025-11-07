@@ -9,7 +9,7 @@ type CardProps = PropsWithChildren<{
   style?: CSSProperties
 }>
 
-export default function Card({ title, subtitle, children, style }: CardProps) {
+function Card({ title, subtitle, children, style }: CardProps) {
   return (
     <div style={{ ...styles.card, ...style }}>
       {(title || subtitle) && (
@@ -24,6 +24,10 @@ export default function Card({ title, subtitle, children, style }: CardProps) {
     </div>
   )
 }
+
+// Named and default export for compatibility
+export { Card };
+export default Card;
 
 const styles = {
   card: {

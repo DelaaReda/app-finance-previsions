@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Ring } from './Ring';
+import { Ring } from '@/ui/Ring';
 import { Card } from '@/components/common/Card';
 
 interface RobustnessScoreCardProps {

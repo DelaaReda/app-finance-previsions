@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Button } from '@mantine/core';
 import { IconDownload, IconFileDownload } from '@tabler/icons-react';
-import * as exportPdfUtils from '../utils/exportPdf';
+import * as exportPdfUtils from '../../utils/exportPdf';
 
 interface ExportReportButtonProps {
   elementId: string;

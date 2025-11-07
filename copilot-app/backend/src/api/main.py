@@ -641,7 +641,7 @@ def register_routes(app: FastAPI):
                 points = lttb(points, threshold=downsample)
 
             results[ticker_symbol] = {
-                "range": range,
+                "range": timeframe,
                 "interval": interval,
                 "points": points,
                 "count": len(points),
@@ -651,7 +651,7 @@ def register_routes(app: FastAPI):
 
         return _ok({
             "tickers": results,
-            "range": range,
+            "range": timeframe,
             "interval": interval,
             "timestamp": datetime.utcnow().isoformat()
         })

@@ -22,7 +22,7 @@ const minutesDiff = (value?: string | null) => {
   return Math.round(diffMs / 60000);
 };
 
-export default function FreshnessBadge({
+function FreshnessBadge({
   freshness,
   maxAgeHours = 24,
   maxAgeCriticalHours = 48,
@@ -77,3 +77,7 @@ export default function FreshnessBadge({
     </Badge>
   );
 }
+
+// Named and default export for compatibility
+export { FreshnessBadge };
+export default FreshnessBadge;

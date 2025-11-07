@@ -50,6 +50,16 @@ def _model_family(model: str) -> str:
     if "gpt-oss" in m or "openai/gpt-oss" in m: return "gpt-oss"
     return "other"
 
+def _is_preferred_model(model: Optional[str]) -> bool:
+    if not model:
+        return False
+    slug = model.lower()
+    blocked = ("claude", "gemini", "command", "comet", "sonnet", "cowboy", "puter")
+    if any(b in slug for b in blocked):
+        return False
+    allow = ("deepseek", "qwen", "glm", "llama", "meta-llama", "gpt-oss", "zai-org")
+    return any(a in slug for a in allow)
+
 def _pick_top3_distinct(models: List[str]) -> List[str]:
     """Prend l’ordre fourni et retient 3 modèles de familles différentes; complète si besoin."""
     chosen, seen = [], set()
@@ -75,6 +85,8 @@ MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "2048"))
 TEMPERATURE = float(os.getenv("ECON_AGENT_TEMPERATURE", "0.2"))
 TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "30"))
 RETRIES_PER_MODEL = int(os.getenv("ECON_AGENT_RETRIES", "1"))
+MODEL_LIST_LIMIT = int(os.getenv("ECON_AGENT_MAX_MODELS", "18"))
+DYNAMIC_MODEL_LIMIT = int(os.getenv("ECON_AGENT_MAX_DYNAMIC", "12"))
 
 # ======== Prompts système (structurés + JSON final) ===========================
 SYSTEM_PROMPT_FR = """Tu es un analyste macro-financier senior. Ne révèle pas ton raisonnement interne.
@@ -362,16 +374,27 @@ class EconomicAnalyst:
     ):
         env_models = self._load_models_from_env()
         base = env_models or model_candidates or DEFAULT_MODEL_CANDIDATES
+        base = [m for m in base if _is_preferred_model(m)]
+        if not base:
+            base = DEFAULT_MODEL_CANDIDATES[:]
         # Overlay dynamic working models if available (fresh within max age)
         try:
             if os.getenv("ECON_AGENT_DYNAMIC_MODELS", "1") == "1":
-                from agents.g4f_model_watcher import load_working_models
+                from agents.g4f_model_watcher import ensure_working_models
                 max_age_h = int(os.getenv("G4F_WORKING_MAX_AGE_H", "24"))
-                dyn = load_working_models(max_age_hours=max_age_h)
+                dyn = ensure_working_models(limit=DYNAMIC_MODEL_LIMIT, max_age_hours=max_age_h)
+                dyn = [m for m in dyn if _is_preferred_model(m)]
                 if dyn:
-                    # Prefer dynamic ordering; keep only intersection to ensure compatibility
-                    dyn_set = set(dyn)
-                    base = [m for m in dyn if m in dyn_set] + [m for m in base if m not in dyn_set]
+                    ordered_dyn: List[str] = []
+                    dyn_set: set[str] = set()
+                    for m in dyn:
+                        if m in dyn_set:
+                            continue
+                        ordered_dyn.append(m)
+                        dyn_set.add(m)
+                        if len(ordered_dyn) >= DYNAMIC_MODEL_LIMIT:
+                            break
+                    base = ordered_dyn + [m for m in base if m not in dyn_set]
         except Exception:
             pass
         # Reorder with a light reasoning-first preference for economic/trading analysis
@@ -392,7 +415,16 @@ class EconomicAnalyst:
             base = sorted(list(dict.fromkeys(base)), key=_key)
         except Exception:
             pass
-        self.model_candidates = base
+        dedup: List[str] = []
+        seen: set[str] = set()
+        for m in base:
+            if m in seen:
+                continue
+            dedup.append(m)
+            seen.add(m)
+        if MODEL_LIST_LIMIT:
+            dedup = dedup[:MODEL_LIST_LIMIT]
+        self.model_candidates = dedup or DEFAULT_MODEL_CANDIDATES[:]
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
@@ -490,6 +522,8 @@ class EconomicAnalyst:
         # ordre d'essai: 3 distincts d'abord, puis le reste en backfill
         backfill = [m for m in base_list if m not in first3]
         models_try_order = first3 + backfill
+        if MODEL_LIST_LIMIT:
+            models_try_order = models_try_order[:MODEL_LIST_LIMIT]
 
         messages = self._build_messages(data)
         results: List[Dict[str, Any]] = []

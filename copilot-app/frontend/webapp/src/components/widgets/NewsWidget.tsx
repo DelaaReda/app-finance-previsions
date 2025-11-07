@@ -1,74 +1,155 @@
 /**
- * Simple News Widget for Dashboard
- * Displays latest news articles
+ * News Widget for Dashboard
+ * Displays latest financial news articles with improved UI
  */
 
-import { Card, Stack, Title, Text, Badge, Group, Button, Anchor } from '@mantine/core';
-import { IconNews, IconExternalLink } from '@tabler/icons-react';
-import { useNews } from '@/hooks/useNews';
+import { Card, Stack, Title, Text, Badge, Group, ActionIcon, Alert } from '@mantine/core';
+import { IconNews, IconExternalLink, IconRefresh } from '@tabler/icons-react';
+import { useApi } from '@/hooks/useApi';
 
-type Props = {
-  universe?: string[];
-  limit?: number;
-};
+interface NewsArticle {
+  id: string;
+  title: string;
+  summary?: string;
+  url: string;
+  source?: string;
+  pubDate?: string;
+  tickers?: string[];
+  sentiment_score?: number;
+}
 
-export function NewsWidget({ universe = ['SPY', 'QQQ', 'AAPL'], limit = 5 }: Props) {
-  const { data: articles, isLoading, error, refetch } = useNews({ universe, limit });
+export function NewsWidget() {
+  const { data, isLoading, error, refetch } = useApi<any>('/api/news/feed?limit=5');
+
+  // Process the news data
+  let articles: any[] = [];
+  if (data && data.articles) {
+    articles = data.articles;
+  } else if (data && Array.isArray(data)) {
+    articles = data;
+  } else if (data && data.rows) {
+    articles = data.rows; // Different API structure
+  } else if (data && data.data) {
+    // Nested structure
+    if (data.data.articles) articles = data.data.articles;
+    else if (Array.isArray(data.data)) articles = data.data;
+  }
 
   return (
-    <Card padding="lg">
+    <Card padding="lg" shadow="sm" withBorder>
       <Stack gap="md">
         <Group justify="space-between">
           <Group gap="xs">
-            <IconNews size={24} color="#4169E1" />
-            <Title order={4}>Latest News</Title>
+            <IconNews size={24} color="#3B82F6" />
+            <Title order={4}>Market News</Title>
           </Group>
-          <Button size="xs" variant="light" onClick={() => refetch()}>
-            Refresh
-          </Button>
+          <ActionIcon 
+            size="sm" 
+            variant="light" 
+            color="blue" 
+            onClick={() => refetch()} 
+            loading={isLoading}
+          >
+            <IconRefresh size={16} />
+          </ActionIcon>
         </Group>
 
-        {isLoading && <Text c="dimmed">Loading news...</Text>}
-        {error && <Text c="red">Error loading news</Text>}
-
-        {!isLoading && !error && articles && articles.length > 0 && (
+        {isLoading && (
           <Stack gap="sm">
-            {articles.slice(0, limit).map((article) => (
-              <Card key={article.id} withBorder padding="sm">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i} withBorder padding="sm">
                 <Stack gap="xs">
-                  <Group justify="space-between" align="flex-start">
-                    <Text fw={600} size="sm" lineClamp={2} style={{ flex: 1 }}>
-                      {article.title}
-                    </Text>
-                    <Anchor href={article.link || article.url} target="_blank" rel="noopener">
-                      <IconExternalLink size={16} />
-                    </Anchor>
-                  </Group>
-
+                  <Text fw={600} size="sm">
+                    <Text size="sm" style={{ display: 'inline-block', width: '70%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
+                  </Text>
                   <Group gap="xs">
-                    {article.source && (
-                      <Badge size="xs" variant="light">{article.source}</Badge>
-                    )}
-                    {article.pubDate && (
-                      <Text size="xs" c="dimmed">
-                        {new Date(article.pubDate).toLocaleString()}
-                      </Text>
-                    )}
+                    <Text size="sm" style={{ display: 'inline-block', width: '30%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
                   </Group>
-
-                  {article.description && (
-                    <Text size="xs" c="dimmed" lineClamp={2}>
-                      {article.description}
-                    </Text>
-                  )}
+                  <Text size="xs" c="dimmed">
+                    <Text size="xs" style={{ display: 'inline-block', width: '60%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
+                  </Text>
                 </Stack>
               </Card>
             ))}
           </Stack>
         )}
 
-        {!isLoading && !error && (!articles || articles.length === 0) && (
-          <Text c="dimmed" ta="center">No news available</Text>
+        {error && (
+          <Alert color="red" variant="light" title="Data Error">
+            <Text size="sm">Failed to load news: {error}</Text>
+          </Alert>
+        )}
+
+        {!isLoading && !error && articles.length > 0 && (
+          <Stack gap="sm">
+            {articles.map((article: any, index: number) => {
+              // Handle various possible field names for articles
+              const id = article.id || `news-${index}`;
+              const title = article.title || article.headline || 'Untitled Article';
+              const url = article.url || article.link || article.href || '#';
+              const source = article.source || article.publisher || article.sourceDomain || 'Unknown Source';
+              const description = article.summary || article.description || article.excerpt || '';
+              const tickers = article.tickers || article.symbols || [];
+              const pubDate = article.pubDate || article.published_at || article.date || article.createdAt;
+              
+              return (
+                <Card key={id} withBorder padding="sm" radius="md">
+                  <Stack gap="xs">
+                    <Group justify="space-between" align="flex-start">
+                      <Text fw={600} size="sm" lineClamp={2} style={{ flex: 1 }}>
+                        {title}
+                      </Text>
+                      <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <ActionIcon size="sm" variant="subtle" color="blue">
+                          <IconExternalLink size={14} />
+                        </ActionIcon>
+                      </a>
+                    </Group>
+
+                    <Group gap="xs" wrap="wrap">
+                      {source && (
+                        <Badge size="xs" variant="light" color="blue">
+                          {source.toUpperCase()}
+                        </Badge>
+                      )}
+                      
+                      {tickers && Array.isArray(tickers) && tickers.length > 0 && tickers.slice(0, 3).map((ticker: string, idx: number) => (
+                        <Badge key={idx} size="xs" variant="light" color="indigo">
+                          {ticker}
+                        </Badge>
+                      ))}
+                      
+                      {pubDate && (
+                        <Text size="xs" c="dimmed">
+                          {new Date(pubDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </Text>
+                      )}
+                    </Group>
+
+                    {description && (
+                      <Text size="xs" c="dimmed" lineClamp={2}>
+                        {description}
+                      </Text>
+                    )}
+                  </Stack>
+                </Card>
+              );
+            })}
+          </Stack>
+        )}
+
+        {!isLoading && !error && articles.length === 0 && (
+          <Text size="sm" c="dimmed" ta="center">
+            No recent news available
+          </Text>
         )}
       </Stack>
     </Card>

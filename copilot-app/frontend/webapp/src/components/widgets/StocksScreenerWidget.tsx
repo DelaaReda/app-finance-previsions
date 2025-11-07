@@ -6,10 +6,13 @@ import {
   Group,
   MultiSelect,
   NumberInput,
+  Paper,
   Pagination,
   ScrollArea,
+  SimpleGrid,
   SegmentedControl,
   Select,
+  Skeleton,
   Stack,
   TextInput,
 } from '@mantine/core';
@@ -113,6 +116,19 @@ export function StocksScreenerWidget({
   const items = ensureArray(query.data?.items);
   const total = query.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const summary = useMemo(() => {
+    const scores = items.map((item) => item.score).filter((value): value is number => typeof value === 'number');
+    const risks = items.map((item) => item.risk).filter((value): value is number => typeof value === 'number');
+    const advancers = items.filter((item) => (item.change_1d ?? 0) > 0).length;
+    const decliners = items.filter((item) => (item.change_1d ?? 0) < 0).length;
+    return {
+      avgScore: scores.length ? Number((scores.reduce((acc, cur) => acc + cur, 0) / scores.length).toFixed(1)) : null,
+      avgRisk: risks.length ? Number((risks.reduce((acc, cur) => acc + cur, 0) / risks.length).toFixed(1)) : null,
+      advancers,
+      decliners,
+      updatedAt: query.data?.updated_at ?? null,
+    };
+  }, [items, query.data?.updated_at]);
 
   const sectorDistribution = useMemo(() => {
     const counts = new Map<string, number>();
@@ -155,8 +171,14 @@ export function StocksScreenerWidget({
     return { gainers, losers };
   }, [items]);
 
+  const glassPanel = {
+    background: 'rgba(9,16,33,0.78)',
+    border: '1px solid rgba(226,232,240,0.05)',
+    backdropFilter: 'blur(18px)',
+  };
+
   return (
-    <Card data-testid="stocks-screener">
+    <Card data-testid="stocks-screener" style={glassPanel}>
       <Group justify="space-between" align="center" wrap="wrap">
         <div>
           <Title order={4}>{title}</Title>
@@ -165,6 +187,7 @@ export function StocksScreenerWidget({
           </Text>
         </div>
         <Group gap="xs" wrap="nowrap">
+          <FreshnessBadge freshness={summary.updatedAt ?? undefined} />
           <MultiSelect
             aria-label="Univers"
             data={[...new Set([...tickers, ...initialUniverse])].map((value) => ({ value, label: value }))}
@@ -235,7 +258,28 @@ export function StocksScreenerWidget({
           />
         </Group>
 
-        {query.isLoading && <Alert color="blue" title="Chargement">Analyse en cours…</Alert>}
+        {summary && (
+          <SimpleGrid cols={{ base: 1, md: 2, lg: 4 }} spacing="md">
+            <Paper p="md" radius="lg" style={glassPanel}>
+              <Text size="xs" c="dimmed">Score moyen</Text>
+              <Text fz="xl" fw={700}>{summary.avgScore ?? '—'}</Text>
+            </Paper>
+            <Paper p="md" radius="lg" style={glassPanel}>
+              <Text size="xs" c="dimmed">Risque annualisé</Text>
+              <Text fz="xl" fw={700}>{summary.avgRisk != null ? `${summary.avgRisk}%` : '—'}</Text>
+            </Paper>
+            <Paper p="md" radius="lg" style={glassPanel}>
+              <Text size="xs" c="dimmed">Advancers</Text>
+              <Text fz="xl" fw={700} c="teal.4">{summary.advancers}</Text>
+            </Paper>
+            <Paper p="md" radius="lg" style={glassPanel}>
+              <Text size="xs" c="dimmed">Decliners</Text>
+              <Text fz="xl" fw={700} c="red.4">{summary.decliners}</Text>
+            </Paper>
+          </SimpleGrid>
+        )}
+
+        {query.isLoading && <Skeleton height={320} radius="lg" />}
         {query.error && <Alert color="red" title="Erreur">{String(query.error)}</Alert>}
 
         {!query.isLoading && !query.error && (
@@ -244,11 +288,11 @@ export function StocksScreenerWidget({
           ) : (
             <Stack gap="lg">
               <Group grow align="start">
-                <Card>
+                <Paper radius="lg" p="md" style={glassPanel}>
                   <Title order={6}>Répartition par secteur</Title>
                   <DonutChart className="mt-3 h-72" data={sectorDistribution} category="value" index="name" />
-                </Card>
-                <Card>
+                </Paper>
+                <Paper radius="lg" p="md" style={glassPanel}>
                   <Title order={6}>Score moyen par secteur</Title>
                   <div className="hide-tremor-legend">
                     <BarChart
@@ -259,23 +303,23 @@ export function StocksScreenerWidget({
                       yAxisWidth={40}
                     />
                   </div>
-                </Card>
+                </Paper>
               </Group>
 
               <Group grow align="start">
-                <Card>
+                <Paper radius="lg" p="md" style={glassPanel}>
                   <Title order={6}>Top gagnants (variation 1j)</Title>
                   <BarList className="mt-2" data={topMovers.gainers} />
-                </Card>
-                <Card>
+                </Paper>
+                <Paper radius="lg" p="md" style={glassPanel}>
                   <Title order={6}>Top perdants (variation 1j)</Title>
                   <BarList className="mt-2" data={topMovers.losers} />
-                </Card>
+                </Paper>
               </Group>
 
-              <Card>
+              <Paper radius="lg" p={0} style={glassPanel}>
                 <Title order={6}>Résultats ({total.toLocaleString()} titres)</Title>
-                <ScrollArea type="hover" h={460}>
+                <ScrollArea type="hover" h={460} style={{ borderRadius: '0 0 24px 24px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                     <thead>
                       <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--mantine-color-dark-5)' }}>
@@ -323,7 +367,7 @@ export function StocksScreenerWidget({
                   <Text c="dimmed" size="sm">Page {page} / {totalPages} • {total.toLocaleString()} titres</Text>
                   <Pagination total={totalPages} value={page} onChange={setPage} />
                 </Group>
-              </Card>
+              </Paper>
             </Stack>
           )
         )}

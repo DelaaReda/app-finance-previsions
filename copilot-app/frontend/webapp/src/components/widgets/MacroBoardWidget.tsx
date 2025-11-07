@@ -7,13 +7,17 @@ import {
   MultiSelect,
   Select,
   SegmentedControl,
+  SimpleGrid,
+  Skeleton,
   Stack,
   Switch,
   Tooltip,
+  Paper,
 } from '@mantine/core';
-import { IconDownload, IconRefresh } from '@tabler/icons-react';
-import { Card, Title, Button, Text } from '@/ui';
+import { IconDownload, IconRefresh, IconInfoCircle } from '@tabler/icons-react';
+import { Card, Title, Button, Text, Badge } from '@/ui';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
+import SourceTooltip from '@/components/ui/SourceTooltip';
 import { ensureArray } from '@/lib/safe';
 import { useMacroSeries, type MacroSeries, type MacroPoint, type MacroFreq } from '@/hooks/useMacro';
 
@@ -57,6 +61,14 @@ function yearOverYear(series: MacroSeries): MacroPoint[] {
     date: point.date,
     value: percentChange(point.value, index >= 12 ? pts[index - 12].value : null),
   }));
+}
+
+function formatLatest(value: number | null | undefined) {
+  if (value == null) return '—';
+  const abs = Math.abs(value);
+  if (abs >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  if (abs >= 10) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function exportCsv(series: MacroSeries[], options: { horizon: Horizon; base100: boolean; view: 'level' | 'mom' | 'yoy' }) {
@@ -142,17 +154,49 @@ export function MacroBoardWidget({
   }, [transformedSeries]);
 
   const categories = useMemo(() => transformedSeries.map((serie) => serie.id), [transformedSeries]);
+  const stats = useMemo(() => {
+    return transformedSeries.map((serie) => {
+      const pts = ensureArray(serie.points);
+      const last = pts[pts.length - 1];
+      const prev = pts[pts.length - 2];
+      return {
+        id: serie.id,
+        label: serie.name ?? serie.id,
+        value: last?.value ?? null,
+        delta: percentChange(last?.value ?? null, prev?.value ?? null),
+        frequency: serie.frequency ?? null,
+      };
+    });
+  }, [transformedSeries]);
+
+  const glassPanel = {
+    background: 'rgba(9,16,33,0.75)',
+    border: '1px solid rgba(226,232,240,0.05)',
+    backdropFilter: 'blur(18px)',
+  };
 
   return (
-    <Card>
+    <Card style={glassPanel}>
       <Group justify="space-between" align="center" wrap="wrap">
         <div>
-          <Title order={4}>{title}</Title>
+          <Group gap="8px">
+            <Title order={4}>{title}</Title>
+            <SourceTooltip 
+              source="FRED Economic Data"
+              lastUpdate={new Date().toISOString()}
+              metadata={{ 
+                service: 'FRED API', 
+                coverage: 'US Economic Indicators',
+                update_frequency: 'Daily'
+              }}
+            />
+          </Group>
           <Text c="dimmed" mt={4}>
             Sélectionne tes séries FRED, ajuste l'horizon, compare Niveau / MoM / YoY, normalise Base 100.
           </Text>
         </div>
         <Group gap="xs" wrap="nowrap">
+          <FreshnessBadge freshness={query.data?.updated_at ?? undefined} />
           <MultiSelect
             aria-label="Séries"
             data={[
@@ -219,12 +263,52 @@ export function MacroBoardWidget({
           <Button variant="light" onClick={() => exportCsv(seriesList, { horizon, base100, view })} leftSection={<IconDownload size={16} />}>
             Export CSV
           </Button>
-          <FreshnessBadge freshness={query.data?.updated_at ?? undefined} />
         </Group>
       </Group>
 
+      {stats.length > 0 && (
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mt="lg" spacing="md">
+          {stats.map((stat) => (
+            <Paper key={stat.id} p="md" radius="lg" style={glassPanel}>
+              <Group justify="space-between" align="flex-start">
+                <div>
+                  <Group gap="6px">
+                    <Badge size="sm" variant="light">
+                      {stat.id}
+                    </Badge>
+                    <SourceTooltip 
+                      source="FRED Economic Data"
+                      lastUpdate={new Date().toISOString()}
+                      metadata={{ 
+                        series_id: stat.id,
+                        source: 'FRED API',
+                        last_refresh: query.data?.updated_at || new Date().toISOString()
+                      }}
+                    />
+                  </Group>
+                  <Text fw={600} mt={6}>
+                    {stat.label}
+                  </Text>
+                </div>
+                {stat.frequency && (
+                  <Text size="xs" c="dimmed">
+                    {stat.frequency}
+                  </Text>
+                )}
+              </Group>
+              <Text fz="xl" fw={700} mt="sm">
+                {formatLatest(stat.value)}
+              </Text>
+              <Text size="sm" c={stat.delta == null ? 'dimmed' : stat.delta >= 0 ? 'teal.4' : 'red.4'}>
+                {stat.delta == null ? '—' : `${stat.delta >= 0 ? '+' : ''}${stat.delta.toFixed(2)}% vs prev`}
+              </Text>
+            </Paper>
+          ))}
+        </SimpleGrid>
+      )}
+
       <Stack mt="md" gap="md">
-        {query.isLoading && <Alert color="blue" title="Chargement">Récupération des séries macro…</Alert>}
+        {query.isLoading && <Skeleton height={360} radius="lg" />}
         {query.error && <Alert color="red" title="Erreur">{String(query.error)}</Alert>}
 
         {!query.isLoading && !query.error && (
@@ -233,15 +317,17 @@ export function MacroBoardWidget({
           ) : (
             <>
               <Divider label="Visualisations" />
-              {chartKind === 'area' && (
-                <AreaChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-              )}
-              {chartKind === 'line' && (
-                <LineChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-              )}
-              {chartKind === 'bar' && (
-                <BarChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-              )}
+              <Paper radius="lg" p="md" style={glassPanel}>
+                {chartKind === 'area' && (
+                  <AreaChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                )}
+                {chartKind === 'line' && (
+                  <LineChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                )}
+                {chartKind === 'bar' && (
+                  <BarChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                )}
+              </Paper>
             </>
           )
         )}

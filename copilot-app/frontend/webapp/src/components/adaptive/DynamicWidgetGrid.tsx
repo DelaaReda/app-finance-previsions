@@ -20,6 +20,7 @@ import { CorrelationIntelligenceWidget } from '../widgets/CorrelationIntelligenc
 import { ForecastCardsWidget } from '../widgets/ForecastCardsWidget';
 import { NewsWidget } from '../widgets/NewsWidget';
 import { MacroWidget } from '../widgets/MacroWidget';
+import { MacroSparklinesWidget } from '../widgets/MacroSparklinesWidget';
 import { StocksWidget } from '../widgets/StocksWidget';
 // Note: Other widgets may not exist yet - we'll handle gracefully
 
@@ -39,6 +40,7 @@ const WIDGET_REGISTRY: Record<
   forecasts: ForecastCardsWidget,
   news: NewsWidget,
   macro: MacroWidget,
+  macro_sparklines: MacroSparklinesWidget,  // Added for FC-DASH-003
   stocks: StocksWidget,
   risks: null,
   opportunities: null,

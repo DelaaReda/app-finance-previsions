@@ -80,9 +80,29 @@ Utilisez `debug.models` pour comprendre quels providers répondent et leurs late
 | `ECON_AGENT_TIMEOUT` (défaut `30`) | Timeout g4f par essai (secs) |
 | `ECON_AGENT_MODELS` | Liste fixe de modèles prioritaires (ex: `deepseek-ai/DeepSeek-V3-0324-Turbo,deepseek-ai/DeepSeek-V3`) |
 | `ECON_AGENT_DYNAMIC_MODELS` (1/0) | Autoriser ou non la fusion avec `working.json` |
+| `ECON_AGENT_MAX_MODELS` (défaut `18`) | Nombre max de modèles essayés par run (évite les boucles infinies) |
+| `ECON_AGENT_MAX_DYNAMIC` (défaut `12`) | Taille max injectée depuis `working.json` |
 | `G4F_WATCHER_INTERVAL_MINUTES` | Lance automatiquement le radar g4f via le scheduler (`120` par défaut) |
 | `G4F_WATCHER_LIMIT` | Nombre de modèles testés à chaque run |
 | `G4F_WATCHER_REFRESH_VERIFIED` | Utiliser les modèles “verified” (maruf009sultan) avant les officiels |
+
+### Maintenir `working.json`
+
+Le watcher garde uniquement les modèles “thinking” gratuits (DeepSeek/Qwen/GLM/Llama/GPT-OSS).  
+Use cases CLI depuis `copilot-app/backend` (venv activé) :
+
+```bash
+# Nettoyer le fichier (supprime Claude/Gemini/etc + limite à 64 entrées)
+python -m src.agents.g4f_model_watcher --prune
+
+# Rafraîchir et tester les modèles (prompt “hello”) en local uniquement
+python -m src.agents.g4f_model_watcher --refresh --limit 10
+
+# Mode automatique : s'assure d'avoir ≥3 modèles valides, sinon relance un refresh
+python -m src.agents.g4f_model_watcher --ensure --limit 8
+```
+
+`ECON_AGENT_DYNAMIC_MODELS=1` consomme directement le résultat de `--ensure`, donc gardez ce job frais (max_age configurable via `G4F_WORKING_MAX_AGE_H`). Pendant un refresh, vous pouvez lancer des jobs lents (ingest news, scoring) en parallèle : le watcher teste les modèles avec un simple prompt “hello”, ce qui n’impacte pas vos pipelines marché.
 
 ### Scheduler
 

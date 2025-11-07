@@ -1,6 +1,16 @@
 import { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AppShell as MantineAppShell, Box, Burger, Group, ScrollArea, Stack, Text, ThemeIcon, Tooltip } from '@mantine/core';
+import {
+  AppShell as MantineAppShell,
+  Box,
+  Burger,
+  Group,
+  ScrollArea,
+  Stack,
+  Text,
+  ThemeIcon,
+  Tooltip,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconGauge,
@@ -79,6 +89,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
       header={{ height: 72 }}
       navbar={{ width: 260, breakpoint: 'md', collapsed: { mobile: !opened } }}
       padding="xl"
+      styles={{
+        header: {
+          background: 'rgba(9, 15, 30, 0.75)',
+          borderBottom: '1px solid rgba(255,255,255,0.04)',
+          backdropFilter: 'blur(16px)',
+        },
+        navbar: {
+          background: 'rgba(7, 11, 24, 0.85)',
+          borderRight: '1px solid rgba(255,255,255,0.05)',
+          backdropFilter: 'blur(18px)',
+        },
+        main: {
+          background: 'radial-gradient(circle at 20% 20%, rgba(76,110,245,0.18), transparent 45%), radial-gradient(circle at 80% 10%, rgba(20,184,166,0.2), transparent 35%), #050910',
+        },
+      }}
     >
       <MantineAppShell.Header withBorder={false} p="md">
         <Group justify="space-between" align="center">
@@ -116,7 +141,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </MantineAppShell.Navbar>
 
       <MantineAppShell.Main>
-        <Box component="section" style={{ minHeight: '100vh' }}>
+        <Box
+          component="section"
+          style={{
+            minHeight: '100vh',
+            padding: '24px',
+            maxWidth: 1440,
+            margin: '0 auto',
+          }}
+        >
           {children}
         </Box>
       </MantineAppShell.Main>

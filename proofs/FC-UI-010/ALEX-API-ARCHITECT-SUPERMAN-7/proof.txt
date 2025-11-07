@@ -1,41 +1,41 @@
 # Preuve de mise en œuvre - FC-UI-010
 
-## Tâche: Info sources (tooltips) - Transparency sur les sources
+## Tâche: Info sources (tooltips) - Transparence sur les sources
 
 ## Résumé
-Mise en place d'outils de transparence (FRED, yfinance, RSS) sur diverses pages pour informer les utilisateurs de la provenance des données.
+Mise en place de tooltips de transparence pour informer les utilisateurs sur les sources de données (FRED, yfinance, RSS) avec dates d'actualisation et métadonnées.
 
 ## Changements apportés
-- Création du composant SourceTooltip.tsx avec affichage d'information sur la provenance des données
-- Prise en charge de différents types de sources (FRED, yfinance, RSS, etc.)
-- Affichage de la date de dernière mise à jour des données
-- Affichage des métadonnées supplémentaires si disponibles
-- Style cohérent avec le reste de l'application
-- Intégration facile avec n'importe quel élément nécessitant des informations de source
+- Création du composant SourceTooltip.tsx avec affichage d'information détaillée sur les sources de données
+- Intégration du composant dans MacroBoardWidget pour afficher la provenance des données macroéconomiques
+- Affichage de la source (FRED Economic Data), date de dernière mise à jour et métadonnées
+- Design cohérent avec les autres composants d'information
+- Icône d'information discrète avec tooltip au survol
 
 ## Structure mise en place
-- Composant SourceTooltip réutilisable avec props configurables
-- Affichage d'un indicateur d'information (icone "i")
-- Tooltip avec informations détaillées au survol
-- Gestion de cas où les données de source sont incomplètes
-- Prise en charge du mode développement avec détails techniques
+- Composant SourceTooltip réutilisable avec props pour source, lastUpdate et metadata
+- Intégration dans MacroBoardWidget avec icône InfoOutlined
+- Affichage de métadonnées pertinentes (service, fréquence de mise à jour, horodatage)
+- Gestion d'erreurs pour dates invalides
+- Design responsive et accessible
 
 ## Fichiers modifiés
-- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de source
+- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de source tooltip
+- `frontend/webapp/src/components/widgets/MacroBoardWidget.tsx` - Intégration des tooltips de sources
 
 ## Vérification
-- Le composant s'affiche avec une icône discrète d'information
-- Au survol, le tooltip affiche les détails de la source
-- Les dates sont formatées correctement
-- Les métadonnées supplémentaires sont affichées si disponibles
-- Le composant gère correctement les cas de données manquantes
-- Interface utilisateur claire et informative
+- Le tooltip apparaît au survol de l'icône d'information
+- Les informations de source sont clairement affichées
+- Les dates de mise à jour sont affichées correctement
+- Les métadonnées sont organisées et lisibles
+- Le design est cohérent avec le reste de l'application
+- Aucun crash ou erreur de rendu
 
 ## Résultats
 - Composant SourceTooltip fonctionnel: ✅
-- Affichage des détails de sources: ✅
-- Affichage des dates de mise à jour: ✅
-- Affichage des métadonnées: ✅
-- Style cohérent: ✅
-- Gestion des données manquantes: ✅
-- Mode développement détails: ✅
+- Information sur provenance des données: ✅
+- Dates de mise à jour affichées: ✅
+- Métadonnées accessibles: ✅
+- Design cohérent: ✅
+- Accessibilité: ✅
+- Intégration MacroBoard: ✅
