@@ -24,54 +24,61 @@ interface MacroSeries {
 
 export function MacroSparklinesWidget() {
   const { data, isLoading, error } = useApi<any>('/api/macro/series');
-  
-  // Create mock data for now using the known structure
-  const macroSeries: MacroSeries[] = [
-    {
-      id: 'cpi',
-      name: 'Inflation YoY',
-      description: 'Year-over-year consumer price changes',
-      current_value: 3.02,
-      unit: '%',
-      points: Array.from({ length: 30 }, (_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        value: 3.02 + (Math.random() - 0.5) * 0.2
-      }))
-    },
-    {
-      id: 'unemployment',
-      name: 'Unemployment Rate',
-      description: 'Current unemployment rate',
-      current_value: 4.3,
-      unit: '%',
-      points: Array.from({ length: 30 }, (_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        value: 4.3 + (Math.random() - 0.5) * 0.1
-      }))
-    },
-    {
-      id: 'yield_curve',
-      name: 'Yield Curve',
-      description: '10Y-2Y Treasury spread',
-      current_value: 0.53,
-      unit: '',
-      points: Array.from({ length: 30 }, (_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        value: 0.53 + (Math.random() - 0.5) * 0.1
-      }))
-    },
-    {
-      id: 'recession_prob',
-      name: 'Recession Probability',
-      description: 'Model-estimated probability',
-      current_value: 29.47,
-      unit: '%',
-      points: Array.from({ length: 30 }, (_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        value: 29.47 + (Math.random() - 0.5) * 5
-      }))
-    }
-  ];
+
+  // Parse real macro series data from API
+  const macroSeries: MacroSeries[] = [];
+
+  if (data) {
+    const actualData = data.data || data;
+    const series = actualData.series || [];
+
+    // Series mapping for display
+    const seriesMapping: Record<string, { name: string; description: string; unit: string }> = {
+      'CPIAUCSL': {
+        name: 'CPI Index',
+        description: 'Consumer Price Index',
+        unit: ''
+      },
+      'UNRATE': {
+        name: 'Unemployment',
+        description: 'Unemployment Rate',
+        unit: '%'
+      },
+      'DGS10': {
+        name: '10Y Treasury',
+        description: '10-Year Treasury Yield',
+        unit: '%'
+      },
+      'DGS2': {
+        name: '2Y Treasury',
+        description: '2-Year Treasury Yield',
+        unit: '%'
+      },
+      'VIXCLS': {
+        name: 'VIX Index',
+        description: 'Market Volatility',
+        unit: ''
+      },
+    };
+
+    series.forEach((s: any) => {
+      const mapping = seriesMapping[s.id];
+      if (mapping && s.points && s.points.length > 0) {
+        // Get last 90 points for sparkline (about 3 months)
+        const recentPoints = s.points.slice(-90);
+        const currentValue = recentPoints[recentPoints.length - 1].value;
+
+        macroSeries.push({
+          id: s.id,
+          name: mapping.name,
+          description: mapping.description,
+          current_value: currentValue,
+          unit: mapping.unit,
+          points: recentPoints
+        });
+      }
+    });
+  }
 
   return (
     <Card padding="lg" shadow="sm" withBorder>
@@ -109,13 +116,17 @@ export function MacroSparklinesWidget() {
                       <Text size="sm" fw={600}>{series.name}</Text>
                       <Text size="xs" c="dimmed">{series.description}</Text>
                     </div>
-                    <Text size="lg" fw={700}>{series.current_value.toFixed(2)}{series.unit}</Text>
+                    <Text size="lg" fw={700}>
+                      {series.id === 'CPIAUCSL'
+                        ? series.current_value.toFixed(1)
+                        : series.current_value.toFixed(2)}{series.unit}
+                    </Text>
                   </Group>
 
                   <div style={{ height: '80px', marginTop: '8px' }}>
-                    <AreaChart 
+                    <AreaChart
                       className="h-full"
-                      data={series.points} 
+                      data={series.points}
                       index="date"
                       categories={['value']}
                       colors={['blue']}
@@ -123,7 +134,12 @@ export function MacroSparklinesWidget() {
                       showGridLines={false}
                       showYAxis={false}
                       showXAxis={false}
-                      valueFormatter={(value) => `${value?.toFixed(1) ?? '0'}${series.unit}`}
+                      valueFormatter={(value) => {
+                        if (series.id === 'CPIAUCSL') {
+                          return `${value?.toFixed(1) ?? '0'}`;
+                        }
+                        return `${value?.toFixed(2) ?? '0'}${series.unit}`;
+                      }}
                     />
                   </div>
                   

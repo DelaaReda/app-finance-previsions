@@ -1,56 +1,303 @@
-import { DEFAULT_DASHBOARD_TICKERS, getTickerName, getTickerCategory } from '../config/tickers';
+import { Container, Stack, SimpleGrid, Badge, Group, Title, Tabs } from '@mantine/core';
+import { IconChartLine, IconTrendingUp, IconTrendingDown, IconMinus, IconRadar, IconSparkles } from '@tabler/icons-react';
+import { useForecasts } from '@/hooks/useForecasts';
+import PageHeader from '@/components/layout/PageHeader';
+import { ForecastsSkeleton } from '@/components/ui/Skeletons';
+import EmptyState from '@/components/ui/EmptyState';
+import { ProgressRing, StatsGrid, ComparisonChart, RadarChart, SparklineCard, DistributionChart } from '@/components/visualizations';
+import { useMemo } from 'react';
 
 /**
- * Prévisions avec tickers diversifiés réels
- * Intégration: Crypto, Gold, Tech, International, Indices
- * Optimisation: Données préchargées pour navigation rapide
+ * Prévisions avec visualisations riches
+ * Graphiques, métriques visuelles, comparaisons
  */
 export default function ForecastsMinimal() {
-  // Sample data avec tickers réels (sera remplacé par vraies données API)
-  const mockForecasts = DEFAULT_DASHBOARD_TICKERS.slice(0, 12).map((ticker, i) => ({
-    ticker,
-    name: getTickerName(ticker),
-    category: getTickerCategory(ticker),
-    score: (8.5 - i * 0.3).toFixed(1),
-    trend: i < 7 ? '📈' : '📉',
-  }));
+  const { data, isLoading, error } = useForecasts({ limit: 50 });
+
+  const forecasts = data?.rows || [];
+  
+  // Calculer statistiques pour visualisations
+  const stats = useMemo(() => {
+    if (forecasts.length === 0) return null;
+    
+    const upCount = forecasts.filter(f => f.direction === 'up').length;
+    const downCount = forecasts.filter(f => f.direction === 'down').length;
+    const avgConfidence = forecasts.reduce((sum, f) => sum + (f.confidence || 0), 0) / forecasts.length;
+    const avgReturn = forecasts.reduce((sum, f) => sum + (f.expected_return || 0), 0) / forecasts.length;
+    
+    return {
+      total: forecasts.length,
+      upCount,
+      downCount,
+      avgConfidence: avgConfidence * 100,
+      avgReturn: avgReturn * 100,
+    };
+  }, [forecasts]);
+
+  // Données pour graphique de comparaison
+  const chartData = useMemo(() => {
+    const byHorizon = forecasts.reduce((acc, f) => {
+      const horizon = f.horizon || '1d';
+      if (!acc[horizon]) {
+        acc[horizon] = { up: 0, down: 0, flat: 0 };
+      }
+      acc[horizon][f.direction || 'flat']++;
+      return acc;
+    }, {} as Record<string, { up: number; down: number; flat: number }>);
+
+    return Object.entries(byHorizon).map(([horizon, counts]) => ({
+      horizon,
+      'Hausse': counts.up,
+      'Baisse': counts.down,
+      'Neutre': counts.flat,
+    }));
+  }, [forecasts]);
+
+  // Top forecasts pour visualisation
+  const topForecasts = useMemo(() => {
+    return forecasts
+      .filter(f => f.confidence && f.confidence > 0.6)
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+      .slice(0, 12);
+  }, [forecasts]);
+
+  // Données pour RadarChart (scores multi-dimensionnels)
+  const radarData = useMemo(() => {
+    return topForecasts.slice(0, 4).map(forecast => ({
+      ticker: forecast.ticker,
+      Confiance: (forecast.confidence || 0) * 100,
+      Rendement: Math.abs((forecast.expected_return || 0) * 100),
+      Momentum: forecast.direction === 'up' ? 80 : forecast.direction === 'down' ? 20 : 50,
+      Stabilité: (forecast.confidence || 0) * 100 * 0.8,
+    }));
+  }, [topForecasts]);
+
+  // Données pour DistributionChart (distribution des confiances)
+  const confidenceDistribution = useMemo(() => {
+    const bins = [
+      { bin: '0-20', count: 0 },
+      { bin: '20-40', count: 0 },
+      { bin: '40-60', count: 0 },
+      { bin: '60-80', count: 0 },
+      { bin: '80-100', count: 0 },
+    ];
+    
+    forecasts.forEach(f => {
+      const conf = (f.confidence || 0) * 100;
+      if (conf < 20) bins[0].count++;
+      else if (conf < 40) bins[1].count++;
+      else if (conf < 60) bins[2].count++;
+      else if (conf < 80) bins[3].count++;
+      else bins[4].count++;
+    });
+    
+    return bins;
+  }, [forecasts]);
+
+  // Données pour Sparklines (tendances par ticker)
+  const sparklineData = useMemo(() => {
+    const tickerGroups = forecasts.reduce((acc, f) => {
+      if (!acc[f.ticker]) acc[f.ticker] = [];
+      acc[f.ticker].push({
+        date: f.calculation_timestamp || new Date().toISOString(),
+        value: (f.expected_return || 0) * 100,
+      });
+      return acc;
+    }, {} as Record<string, Array<{ date: string; value: number }>>);
+    
+    return Object.entries(tickerGroups)
+      .map(([ticker, data]) => ({
+        ticker,
+        data: data.sort((a, b) => a.date.localeCompare(b.date)).slice(-10), // Derniers 10 points
+        latestValue: data[data.length - 1]?.value || 0,
+        change: data.length > 1 ? data[data.length - 1].value - data[0].value : 0,
+      }))
+      .slice(0, 8); // Top 8 tickers
+  }, [forecasts]);
+
+  if (isLoading) {
+    return (
+      <Container size="xl" py="xl" data-testid="forecasts-pro">
+        <PageHeader
+          title="Prévisions de marché"
+          icon={<IconChartLine size={28} />}
+          description="Analyse prédictive avec ML + LLM"
+        />
+        <ForecastsSkeleton />
+      </Container>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <Container size="xl" py="xl">
+        <PageHeader
+          title="Prévisions de marché"
+          icon={<IconChartLine size={28} />}
+          description="Analyse prédictive avec ML + LLM"
+        />
+        <EmptyState
+          icon={<IconChartLine size={48} />}
+          title="Aucune prévision disponible"
+          description="Les prévisions seront générées toutes les 6h"
+        />
+      </Container>
+    );
+  }
 
   return (
-    <div data-testid="forecasts-pro" style={{ padding: '2rem', color: 'white' }}>
-      <h1>Prévisions de marché</h1>
-      <p>Univers complet: Crypto, Gold, Tech, International, Indices</p>
+    <Container size="xl" py="xl" data-testid="forecasts-pro">
+      <PageHeader
+        title="Prévisions de marché"
+        icon={<IconChartLine size={28} />}
+        description="Analyse prédictive avec ML + LLM"
+        stats={[
+          { label: 'Prévisions', value: stats.total },
+          { label: 'Confiance moy.', value: `${stats.avgConfidence.toFixed(1)}%` },
+        ]}
+      />
 
-      <div data-testid="forecasts-grid" style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-        {mockForecasts.map(({ ticker, name, category, score, trend }) => (
-          <div
-            key={ticker}
-            style={{
-              background: '#1a1a2e',
-              padding: '1.5rem',
-              borderRadius: '12px',
-              border: '1px solid #2a2a3e',
-              transition: 'transform 0.2s',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-              <div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{ticker}</div>
-                <div style={{ fontSize: '0.85rem', color: '#888', marginTop: '0.25rem' }}>{name}</div>
-              </div>
-              <span style={{ fontSize: '1.5rem' }}>{trend}</span>
-            </div>
+      <Stack gap="xl" mt="xl">
+        {/* Métriques visuelles */}
+        <StatsGrid
+          metrics={[
+            {
+              label: 'Hausse attendue',
+              value: stats.upCount,
+              change: (stats.upCount / stats.total) * 100,
+              icon: <IconTrendingUp size={20} />,
+              color: 'teal',
+              description: `${((stats.upCount / stats.total) * 100).toFixed(1)}% des prévisions`,
+            },
+            {
+              label: 'Baisse attendue',
+              value: stats.downCount,
+              change: -(stats.downCount / stats.total) * 100,
+              icon: <IconTrendingDown size={20} />,
+              color: 'red',
+              description: `${((stats.downCount / stats.total) * 100).toFixed(1)}% des prévisions`,
+            },
+            {
+              label: 'Confiance moyenne',
+              value: `${stats.avgConfidence.toFixed(1)}%`,
+              icon: <IconChartLine size={20} />,
+              color: 'blue',
+              description: 'Niveau de confiance global',
+            },
+            {
+              label: 'Rendement moyen',
+              value: `${stats.avgReturn > 0 ? '+' : ''}${stats.avgReturn.toFixed(2)}%`,
+              change: stats.avgReturn,
+              icon: <IconMinus size={20} />,
+              color: stats.avgReturn > 0 ? 'teal' : 'red',
+              description: 'Rendement attendu moyen',
+            },
+          ]}
+        />
 
-            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.9rem', color: '#888', background: '#2a2a3e', padding: '0.25rem 0.75rem', borderRadius: '6px' }}>
-                {category}
-              </span>
-              <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: trend === '📈' ? '#4ade80' : '#f87171' }}>
-                {score}/10
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+        {/* Graphique de comparaison par horizon */}
+        {chartData.length > 0 && (
+          <ComparisonChart
+            title="Répartition des prévisions par horizon"
+            description="Distribution des signaux haussiers, baissiers et neutres"
+            data={chartData}
+            index="horizon"
+            categories={['Hausse', 'Baisse', 'Neutre']}
+            colors={['teal', 'red', 'gray']}
+            type="bar"
+          />
+        )}
+
+        {/* Tabs pour différentes vues */}
+        <Tabs defaultValue="rings" mt="xl">
+          <Tabs.List>
+            <Tabs.Tab value="rings" leftSection={<IconSparkles size={16} />}>
+              Rings de Confiance
+            </Tabs.Tab>
+            <Tabs.Tab value="radar" leftSection={<IconRadar size={16} />}>
+              Scores Multi-Dimensionnels
+            </Tabs.Tab>
+            <Tabs.Tab value="sparklines" leftSection={<IconChartLine size={16} />}>
+              Tendances
+            </Tabs.Tab>
+            <Tabs.Tab value="distribution" leftSection={<IconChartLine size={16} />}>
+              Distribution
+            </Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="rings" pt="xl">
+            <Group justify="space-between" mb="lg">
+              <Title order={3}>Top Prévisions (Confiance ≥ 60%)</Title>
+              <Badge variant="light" size="lg">
+                {topForecasts.length} prévisions
+              </Badge>
+            </Group>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="lg" data-testid="forecasts-grid">
+              {topForecasts.map((forecast) => {
+                const confidence = (forecast.confidence || 0) * 100;
+                const expectedReturn = (forecast.expected_return || 0) * 100;
+                const isUp = forecast.direction === 'up';
+                const isDown = forecast.direction === 'down';
+                
+                return (
+                  <ProgressRing
+                    key={`${forecast.ticker}-${forecast.horizon}`}
+                    label={forecast.ticker}
+                    value={confidence}
+                    color={isUp ? 'teal' : isDown ? 'red' : 'gray'}
+                    subtitle={`${expectedReturn > 0 ? '+' : ''}${expectedReturn.toFixed(2)}% attendu`}
+                    badge={{
+                      label: forecast.horizon || '1d',
+                      color: isUp ? 'teal' : isDown ? 'red' : 'gray',
+                    }}
+                    icon={isUp ? <IconTrendingUp size={16} /> : isDown ? <IconTrendingDown size={16} /> : <IconMinus size={16} />}
+                    size={120}
+                  />
+                );
+              })}
+            </SimpleGrid>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="radar" pt="xl">
+            {radarData.length > 0 && (
+              <RadarChart
+                title="Scores Multi-Dimensionnels - Top 4 Prévisions"
+                description="Analyse complète : Confiance, Rendement, Momentum, Stabilité"
+                data={radarData}
+                index="ticker"
+                categories={['Confiance', 'Rendement', 'Momentum', 'Stabilité']}
+                colors={['teal', 'blue', 'orange', 'indigo']}
+              />
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="sparklines" pt="xl">
+            <Title order={3} mb="lg">Tendances par Ticker</Title>
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+              {sparklineData.map(({ ticker, data, latestValue, change }) => (
+                <SparklineCard
+                  key={ticker}
+                  label={ticker}
+                  value={`${latestValue > 0 ? '+' : ''}${latestValue.toFixed(2)}%`}
+                  change={change}
+                  data={data}
+                  color={change >= 0 ? 'teal' : 'red'}
+                  icon={change >= 0 ? <IconTrendingUp size={16} /> : <IconTrendingDown size={16} />}
+                />
+              ))}
+            </SimpleGrid>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="distribution" pt="xl">
+            <DistributionChart
+              title="Distribution des Niveaux de Confiance"
+              description="Répartition des prévisions par niveau de confiance"
+              data={confidenceDistribution}
+              color="blue"
+            />
+          </Tabs.Panel>
+        </Tabs>
+      </Stack>
+    </Container>
   );
 }

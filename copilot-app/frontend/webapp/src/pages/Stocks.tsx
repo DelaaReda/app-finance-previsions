@@ -1,9 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Container, Stack, Group, TextInput, Button, Card, SimpleGrid, Skeleton, Tabs } from '@mantine/core';
+import { IconTrendingDown, IconTrendingUp, IconChartLine, IconTarget, IconActivity, IconGauge, IconRadar } from '@tabler/icons-react';
 import { stocksService } from '@/services/stocks.service';
-import { AreaChart, BarList, Card, Heading, RingProgress, SimpleGrid, Stack, Text, Button, Group, Text as MantineText, TextInput } from '@/ui';
-import { IconTrendingDown, IconTrendingUp } from '@tabler/icons-react';
+import { AreaChart, BarList, Heading, RingProgress, Text, Text as MantineText } from '@/ui';
 import { StocksScreenerWidget } from '@/components/widgets/StocksScreenerWidget';
+import PageHeader from '@/components/layout/PageHeader';
+import { MetricsSkeleton } from '@/components/ui/Skeletons';
+import EmptyState from '@/components/ui/EmptyState';
+import { StatsGrid, ProgressRing, ComparisonChart, PerformanceGauge, RadarChart, RiskMatrix } from '@/components/visualizations';
 
 const formatPriceSeries = (raw?: any) => {
   if (!raw || !raw.data?.tickers) return [];
@@ -59,150 +64,290 @@ export default function Stocks() {
   }, [analysis]);
   const changePercent = analysis?.stock?.changePercent ?? 0;
 
+  const isLoading = !analysis && selectedTicker;
+
   return (
-    <Stack gap="xl" data-testid="stocks-screener">
-      <StocksScreenerWidget />
+    <Container size="xl" py="xl" data-testid="stocks-screener">
+      <PageHeader
+        title="Analyse Actions"
+        icon={<IconChartLine size={28} />}
+        description="Screener, analyse technique et signaux pour chaque ticker"
+        stats={analysis ? [
+          { label: 'Score', value: `${Math.round(analysis.score.composite ?? 0)}/100` },
+          { label: 'Prix', value: `$${analysis.stock.price?.toFixed(2) ?? '—'}` },
+        ] : undefined}
+      />
 
-      <Heading order={2}>Analyse Actions</Heading>
+      <Stack gap="xl" mt="xl">
+        <StocksScreenerWidget />
 
-      <Card>
-        <Stack gap="md">
-          <Group justify="space-between">
+        <Card padding="lg" radius="md" withBorder>
+          <Stack gap="md">
             <Heading order={4}>Recherche de ticker</Heading>
-          </Group>
-          <Group gap="sm">
-            <TextInput
-              value={searchQuery}
-              placeholder="Ticker ou nom (ex: AAPL, Apple)"
-              onChange={(e) => setSearchQuery(e.currentTarget.value)}
-              radius="md"
-              style={{ flex: 1 }}
-            />
-            <Button onClick={() => searchResults && searchResults[0] && setSelectedTicker(searchResults[0].ticker)}>
-              Explorer
-            </Button>
-          </Group>
-          {searchResults && searchResults.length > 0 && (
-            <Stack gap="xs">
-              {searchResults.map((stock: any) => {
-                const positive = stock.changePercent >= 0;
-                return (
-                  <Button
-                    key={stock.ticker}
-                    variant="light"
-                    color={positive ? 'teal' : 'red'}
-                    onClick={() => {
-                      setSelectedTicker(stock.ticker);
-                      setSearchQuery('');
-                    }}
-                    leftSection={positive ? <IconTrendingUp size={14} /> : <IconTrendingDown size={14} />}
-                  >
-                    <Group justify="space-between" style={{ width: '100%' }}>
-                      <Text fw={600}>{stock.ticker}</Text>
-                      <Text c="dimmed" fz="xs">{stock.name}</Text>
-                      <Text fw={600}>{positive ? '+' : ''}{stock.changePercent.toFixed(2)}%</Text>
-                    </Group>
-                  </Button>
-                );
-              })}
-            </Stack>
-          )}
-        </Stack>
-      </Card>
-
-      {analysis && (
-        <Stack gap="xl">
-          <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="lg">
-            <Card>
-              <Stack gap="sm">
-                <Heading order={4}>{analysis.stock.name}</Heading>
-                <Text c="dimmed">{analysis.stock.ticker}</Text>
-                <RingProgress
-                  size={150}
-                  thickness={14}
-                  roundCaps
-                  sections={[{ value: Math.max(0, Math.min(100, (analysis.score.composite ?? 0))), color: 'indigo' }]}
-                  label={<Text fw={700} fz="xl">{Math.round(analysis.score.composite ?? 0)}</Text>}
-                />
-                <Group gap="sm">
-                  <MantineText fw={600} fz="lg">${analysis.stock.price?.toFixed?.(2) ?? '—'}</MantineText>
-                  <MantineText c={changePercent >= 0 ? 'teal.5' : 'red.5'}>
-                    {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
-                  </MantineText>
-                </Group>
-                    <Text c="dimmed" fz="sm">Secteur : {analysis.stock.sector}</Text>
-                    <Text c="dimmed" fz="sm">Volume : {((analysis.stock.volume ?? 0) / 1_000_000).toFixed(2)}M</Text>
+            <Group gap="sm">
+              <TextInput
+                value={searchQuery}
+                placeholder="Ticker ou nom (ex: AAPL, Apple)"
+                onChange={(e) => setSearchQuery(e.currentTarget.value)}
+                radius="md"
+                style={{ flex: 1 }}
+              />
+              <Button onClick={() => searchResults && searchResults[0] && setSelectedTicker(searchResults[0].ticker)}>
+                Explorer
+              </Button>
+            </Group>
+            {searchResults && searchResults.length > 0 && (
+              <Stack gap="xs" mt="md">
+                {searchResults.map((stock: any) => {
+                  const positive = stock.changePercent >= 0;
+                  return (
+                    <Button
+                      key={stock.ticker}
+                      variant="light"
+                      color={positive ? 'teal' : 'red'}
+                      onClick={() => {
+                        setSelectedTicker(stock.ticker);
+                        setSearchQuery('');
+                      }}
+                      leftSection={positive ? <IconTrendingUp size={14} /> : <IconTrendingDown size={14} />}
+                    >
+                      <Group justify="space-between" style={{ width: '100%' }}>
+                        <Text fw={600}>{stock.ticker}</Text>
+                        <Text c="dimmed" fz="xs">{stock.name}</Text>
+                        <Text fw={600}>{positive ? '+' : ''}{stock.changePercent.toFixed(2)}%</Text>
+                      </Group>
+                    </Button>
+                  );
+                })}
               </Stack>
-            </Card>
+            )}
+          </Stack>
+        </Card>
 
-            <Card>
-              <Stack gap="sm">
-                <Heading order={4}>Sentiers techniques</Heading>
-                <SimpleGrid cols={2} spacing="md">
-                  <Stack gap={0}>
-                    <Text c="dimmed" fz="xs">SMA 20</Text>
-                    <Text fw={600}>${analysis.technicals.sma20?.toFixed?.(2) ?? '—'}</Text>
-                  </Stack>
-                  <Stack gap={0}>
-                    <Text c="dimmed" fz="xs">SMA 50</Text>
-                    <Text fw={600}>${analysis.technicals.sma50?.toFixed?.(2) ?? '—'}</Text>
-                  </Stack>
-                  <Stack gap={0}>
-                    <Text c="dimmed" fz="xs">SMA 200</Text>
-                    <Text fw={600}>${analysis.technicals.sma200?.toFixed?.(2) ?? '—'}</Text>
-                  </Stack>
-                  <Stack gap={0}>
-                    <Text c="dimmed" fz="xs">RSI</Text>
-                    <Text fw={600}>{analysis.technicals.rsi?.toFixed?.(1) ?? '—'}</Text>
-                  </Stack>
+        {isLoading ? (
+          <MetricsSkeleton count={4} />
+        ) : !analysis ? (
+          <EmptyState
+            icon={<IconChartLine size={48} />}
+            title="Sélectionnez un ticker"
+            description="Recherchez un ticker pour voir son analyse complète"
+          />
+        ) : (
+          <Stack gap="xl">
+            {/* Métriques visuelles principales */}
+            <StatsGrid
+              metrics={[
+                {
+                  label: 'Score Composite',
+                  value: `${Math.round(analysis.score.composite ?? 0)}/100`,
+                  icon: <IconTarget size={20} />,
+                  color: (analysis.score.composite ?? 0) > 70 ? 'teal' : (analysis.score.composite ?? 0) > 50 ? 'orange' : 'red',
+                  description: 'Score global multi-piliers',
+                },
+                {
+                  label: 'Prix',
+                  value: `$${analysis.stock.price?.toFixed?.(2) ?? '—'}`,
+                  change: changePercent,
+                  icon: changePercent >= 0 ? <IconTrendingUp size={20} /> : <IconTrendingDown size={20} />,
+                  color: changePercent >= 0 ? 'teal' : 'red',
+                  description: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}% aujourd'hui`,
+                },
+                {
+                  label: 'RSI',
+                  value: `${analysis.technicals.rsi?.toFixed?.(1) ?? '—'}`,
+                  icon: <IconActivity size={20} />,
+                  color: (analysis.technicals.rsi ?? 50) > 70 ? 'red' : (analysis.technicals.rsi ?? 50) < 30 ? 'teal' : 'blue',
+                  description: 'Relative Strength Index',
+                },
+                {
+                  label: 'Volume',
+                  value: `${((analysis.stock.volume ?? 0) / 1_000_000).toFixed(2)}M`,
+                  icon: <IconActivity size={20} />,
+                  color: 'blue',
+                  description: 'Volume échangé',
+                },
+              ]}
+            />
+
+            {/* Rings de scores */}
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+              <ProgressRing
+                label="Score Composite"
+                value={analysis.score.composite ?? 0}
+                color={(analysis.score.composite ?? 0) > 70 ? 'teal' : (analysis.score.composite ?? 0) > 50 ? 'orange' : 'red'}
+                subtitle={`${analysis.stock.name}`}
+                badge={{
+                  label: (analysis.score.composite ?? 0) > 70 ? 'Élevé' : (analysis.score.composite ?? 0) > 50 ? 'Moyen' : 'Faible',
+                  color: (analysis.score.composite ?? 0) > 70 ? 'teal' : (analysis.score.composite ?? 0) > 50 ? 'orange' : 'red',
+                }}
+                icon={<IconTarget size={16} />}
+                size={120}
+              />
+              <ProgressRing
+                label="Score Macro"
+                value={analysis.score.macro ?? 0}
+                color="blue"
+                subtitle="Alignement macro"
+                icon={<IconChartLine size={16} />}
+                size={120}
+              />
+              <ProgressRing
+                label="Score Technique"
+                value={analysis.score.technical ?? 0}
+                color="indigo"
+                subtitle="Indicateurs techniques"
+                icon={<IconActivity size={16} />}
+                size={120}
+              />
+              <ProgressRing
+                label="Score News"
+                value={analysis.score.news ?? 0}
+                color="orange"
+                subtitle="Sentiment actualités"
+                icon={<IconTrendingUp size={16} />}
+                size={120}
+              />
+            </SimpleGrid>
+
+            {/* Indicateurs techniques visuels */}
+            <Card padding="lg" radius="md" withBorder>
+              <Stack gap="md">
+                <Heading order={4}>Indicateurs Techniques</Heading>
+                <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="lg">
+                  <div>
+                    <Text c="dimmed" size="xs" mb={4}>SMA 20</Text>
+                    <Text fw={700} size="lg">${analysis.technicals.sma20?.toFixed?.(2) ?? '—'}</Text>
+                  </div>
+                  <div>
+                    <Text c="dimmed" size="xs" mb={4}>SMA 50</Text>
+                    <Text fw={700} size="lg">${analysis.technicals.sma50?.toFixed?.(2) ?? '—'}</Text>
+                  </div>
+                  <div>
+                    <Text c="dimmed" size="xs" mb={4}>SMA 200</Text>
+                    <Text fw={700} size="lg">${analysis.technicals.sma200?.toFixed?.(2) ?? '—'}</Text>
+                  </div>
+                  <div>
+                    <Text c="dimmed" size="xs" mb={4}>RSI</Text>
+                    <Text fw={700} size="lg" c={(analysis.technicals.rsi ?? 50) > 70 ? 'red' : (analysis.technicals.rsi ?? 50) < 30 ? 'teal' : undefined}>
+                      {analysis.technicals.rsi?.toFixed?.(1) ?? '—'}
+                    </Text>
+                  </div>
                 </SimpleGrid>
               </Stack>
             </Card>
 
-            <Card>
-              <Stack gap="sm">
-                <Heading order={4}>Scores multi-piliers</Heading>
-                <BarList
-                  data={[
-                    { name: 'Macro', value: Number(analysis.score.macro ?? 0) },
-                    { name: 'Technique', value: Number(analysis.score.technical ?? 0) },
-                    { name: 'News', value: Number(analysis.score.news ?? 0) },
-                  ]}
-                  color="teal"
-                />
-                <Text c="dimmed" fz="xs">
-                  Composite {Math.round(analysis.score.composite ?? 0)}/100
-                </Text>
-              </Stack>
-            </Card>
-          </SimpleGrid>
+            {/* Graphique de prix */}
+            {chartData.length > 0 && (
+              <ComparisonChart
+                title={`Courbe des prix - ${analysis.stock.ticker}`}
+                description="Évolution sur 1 an"
+                data={chartData}
+                index="date"
+                categories={['price']}
+                colors={[changePercent >= 0 ? 'teal' : 'red']}
+                type="area"
+                height={300}
+              />
+            )}
 
-          <Card>
-            <Stack gap="md">
-              <Heading order={4}>Courbe des prix (1 an)</Heading>
-                <div className="hide-tremor-legend">
-                  <AreaChart
-                    data={chartData}
-                    index="date"
-                    categories={[ 'price' ]}
-                    colors={[ 'indigo' ]}
-                    valueFormatter={(v) => `$${Number(v).toFixed(2)}`}
-                    yAxisWidth={50}
+            {/* Signaux détectés */}
+            {signals && signals.length > 0 && (
+              <Card padding="lg" radius="md" withBorder>
+                <Stack gap="md">
+                  <Heading order={4}>Signaux détectés</Heading>
+                  <BarList data={signals} color="orange" valueFormatter={(value: number) => `${value.toFixed(0)}`} />
+                </Stack>
+              </Card>
+            )}
+
+            {/* Visualisations avancées */}
+            <Tabs defaultValue="gauge" mt="xl">
+              <Tabs.List>
+                <Tabs.Tab value="gauge" leftSection={<IconGauge size={16} />}>
+                  Performance Gauge
+                </Tabs.Tab>
+                <Tabs.Tab value="radar" leftSection={<IconRadar size={16} />}>
+                  Scores Radar
+                </Tabs.Tab>
+              </Tabs.List>
+
+              <Tabs.Panel value="gauge" pt="xl">
+                <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+                  <PerformanceGauge
+                    label="Score Composite"
+                    value={analysis.score.composite ?? 0}
+                    min={0}
+                    max={100}
+                    thresholds={[
+                      { value: 0, color: 'red', label: 'Faible' },
+                      { value: 50, color: 'orange', label: 'Moyen' },
+                      { value: 75, color: 'teal', label: 'Élevé' },
+                    ]}
+                    icon={<IconTarget size={20} />}
+                    subtitle={`${analysis.stock.ticker} - ${analysis.stock.name}`}
                   />
-                </div>
-            </Stack>
-          </Card>
+                  <PerformanceGauge
+                    label="Score Technique"
+                    value={analysis.score.technical ?? 0}
+                    min={0}
+                    max={100}
+                    thresholds={[
+                      { value: 0, color: 'red', label: 'Faible' },
+                      { value: 50, color: 'orange', label: 'Moyen' },
+                      { value: 75, color: 'teal', label: 'Élevé' },
+                    ]}
+                    icon={<IconActivity size={20} />}
+                    subtitle="Indicateurs techniques"
+                  />
+                  <PerformanceGauge
+                    label="RSI"
+                    value={analysis.technicals.rsi ?? 50}
+                    min={0}
+                    max={100}
+                    thresholds={[
+                      { value: 0, color: 'teal', label: 'Oversold' },
+                      { value: 30, color: 'blue', label: 'Neutre' },
+                      { value: 70, color: 'red', label: 'Overbought' },
+                    ]}
+                    icon={<IconChartLine size={20} />}
+                    subtitle="Relative Strength Index"
+                  />
+                  <PerformanceGauge
+                    label="Rendement"
+                    value={changePercent + 50}
+                    min={0}
+                    max={100}
+                    thresholds={[
+                      { value: 0, color: 'red', label: 'Négatif' },
+                      { value: 50, color: 'orange', label: 'Neutre' },
+                      { value: 75, color: 'teal', label: 'Positif' },
+                    ]}
+                    icon={changePercent >= 0 ? <IconTrendingUp size={20} /> : <IconTrendingDown size={20} />}
+                    subtitle={`${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`}
+                  />
+                </SimpleGrid>
+              </Tabs.Panel>
 
-          {signals && signals.length > 0 && (
-            <Card>
-              <Stack gap="md">
-                <Heading order={4}>Signaux détectés</Heading>
-                <BarList data={signals} color="orange" valueFormatter={(value: number) => `${value.toFixed(0)}`} />
-              </Stack>
-            </Card>
-          )}
-        </Stack>
-      )}
-    </Stack>
+              <Tabs.Panel value="radar" pt="xl">
+                <RadarChart
+                  title={`Scores Multi-Dimensionnels - ${analysis.stock.ticker}`}
+                  description="Analyse complète sur 4 dimensions"
+                  data={[{
+                    dimension: analysis.stock.ticker,
+                    Macro: analysis.score.macro ?? 0,
+                    Technique: analysis.score.technical ?? 0,
+                    News: analysis.score.news ?? 0,
+                    Composite: analysis.score.composite ?? 0,
+                  }]}
+                  index="dimension"
+                  categories={['Macro', 'Technique', 'News', 'Composite']}
+                  colors={['blue', 'indigo', 'orange', 'teal']}
+                />
+              </Tabs.Panel>
+            </Tabs>
+          </Stack>
+        )}
+      </Stack>
+    </Container>
   );
 }

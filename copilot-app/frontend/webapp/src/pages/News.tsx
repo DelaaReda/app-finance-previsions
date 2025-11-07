@@ -1,16 +1,22 @@
-import { Container, Heading, Stack, Text } from '@/ui';
+import { Container, Stack } from '@mantine/core';
+import { IconNews } from '@tabler/icons-react';
 import { NewsRadarWidget } from '@/components/widgets/NewsRadarWidget';
 import NewsFeed from '@/components/news/NewsFeed';
+import PageHeader from '@/components/layout/PageHeader';
 
 export default function NewsPage() {
   return (
-    <Container size="lg" pt="xl" pb="xl" data-testid="news-feed">
-      <Stack gap="sm" mb="xl">
-        <Heading order={2}>Actualités de marché</Heading>
-        <Text c="dimmed">Flux temps réel scoré par pertinence et impact.</Text>
+    <Container size="lg" py="xl" data-testid="news-feed">
+      <PageHeader
+        title="Actualités de marché"
+        icon={<IconNews size={28} />}
+        description="Flux temps réel scoré par pertinence et impact"
+        badge={{ label: 'Live', color: 'green' }}
+      />
+      <Stack gap="xl">
+        <NewsRadarWidget />
+        <NewsFeed />
       </Stack>
-      <NewsRadarWidget />
-      <NewsFeed />
     </Container>
   );
 }

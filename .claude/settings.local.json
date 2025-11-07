@@ -38,7 +38,9 @@
       "Bash(if [ -f /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/forecasts.json ])",
       "Bash(then head -30 /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/forecasts.json)",
       "Bash(if [ -f /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/news_feed.json ])",
-      "Bash(then head -30 /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/news_feed.json)"
+      "Bash(then head -30 /Users/venom/Documents/analyse-financiere/copilot-app/backend/data/news_feed.json)",
+      "Bash(open http://localhost:5173/)",
+      "Bash(pnpm tsc:*)"
     ],
     "deny": [],
     "ask": []

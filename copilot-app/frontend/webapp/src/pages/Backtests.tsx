@@ -1,15 +1,21 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Container, Stack, Group, Text, Title, Card, Skeleton, SimpleGrid } from '@mantine/core';
+import { IconChartBar, IconTrendingUp, IconTarget, IconShield, IconActivity } from '@tabler/icons-react';
 import { useBacktests } from '@/hooks/useBacktests';
 import { RobustnessScoreCard } from '@/components/metrics/RobustnessScoreCard';
 import { PresetTunerPanel } from '@/components/tuner/PresetTunerPanel';
 import { ExportReportButton } from '@/components/report/ExportReportButton';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
+import PageHeader from '@/components/layout/PageHeader';
+import { TableSkeleton } from '@/components/ui/Skeletons';
+import EmptyState from '@/components/ui/EmptyState';
+import { ProgressRing, StatsGrid, MetricCard } from '@/components/visualizations';
 import { calculateRobustnessScore } from '@/lib/robustScore';
 
 export default function BacktestsPage() {
   const [params] = useSearchParams();
-  const { data, isLoading, error } = useBacktests();
+  const { data, isLoading, error, refetch } = useBacktests();
 
   const query = useMemo(() => ({
     strategy: params.get('strategy') ?? 'long_top_score',
@@ -22,27 +28,27 @@ export default function BacktestsPage() {
   const robustnessScore = data?.results ? calculateRobustnessScore(data.results) : null;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Backtests</h2>
-          <p style={{ margin: '0.25rem 0 0 0', color: '#666' }}>
-            Performance historique des stratégies Finance Copilot. Métriques de robustesse et validation statistique des prévisions.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <FreshnessBadge freshness={data?.freshness} />
-          <ExportReportButton 
-            elementId="backtests-content" 
-            fileName={`backtest-report-${new Date().toISOString().slice(0, 10)}.pdf`} 
-            title="Finance Copilot - Backtest Report"
-            label="Export PDF"
-          />
-        </div>
-      </div>
+    <Container size="xl" py="xl">
+      <PageHeader
+        title="Backtests"
+        icon={<IconChartBar size={28} />}
+        description="Performance historique des stratégies Finance Copilot. Métriques de robustesse et validation statistique des prévisions."
+        actions={
+          <Group gap="md">
+            <FreshnessBadge freshness={data?.freshness} />
+            <ExportReportButton 
+              elementId="backtests-content" 
+              fileName={`backtest-report-${new Date().toISOString().slice(0, 10)}.pdf`} 
+              title="Finance Copilot - Backtest Report"
+              label="Export PDF"
+            />
+          </Group>
+        }
+        onRefresh={() => refetch()}
+      />
       
-      {/* Parameter tuning section */}
-      <div style={{ marginBottom: '2rem' }}>
+      <Stack gap="xl" mt="xl">
+        {/* Parameter tuning section */}
         <PresetTunerPanel 
           initialParams={{
             confidenceThreshold: 0.6,
@@ -54,11 +60,9 @@ export default function BacktestsPage() {
           }}
           showRunButton={false}
         />
-      </div>
-      
-      {/* Robustness Score Card */}
-      {robustnessScore && (
-        <div style={{ marginBottom: '2rem' }}>
+        
+        {/* Robustness Score Card */}
+        {robustnessScore && (
           <RobustnessScoreCard
             score={robustnessScore.score}
             grade={robustnessScore.grade}
@@ -66,104 +70,146 @@ export default function BacktestsPage() {
             title="Robustness Score"
             showDetails={true}
           />
+        )}
+        
+        {/* Main backtest panel content */}
+        <div id="backtests-content">
+          <BacktestContent 
+            strategy={query.strategy}
+            universe={query.universe}
+            benchmark={query.benchmark}
+            horizon={query.horizon}
+            data={data}
+            isLoading={isLoading}
+            error={error}
+          />
         </div>
-      )}
-      
-      {/* Main backtest panel content */}
-      <div id="backtests-content">
-        <BacktestContent 
-          strategy={query.strategy}
-          universe={query.universe}
-          benchmark={query.benchmark}
-          horizon={query.horizon}
-          data={data}
-          isLoading={isLoading}
-          error={error}
-        />
-      </div>
-    </div>
+      </Stack>
+    </Container>
   );
 }
 
 function BacktestContent({ strategy, universe, benchmark, horizon, data, isLoading, error }: any) {
   if (isLoading) {
-    return <div>Chargement des backtests...</div>;
+    return (
+      <Stack gap="xl">
+        <TableSkeleton rows={3} />
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} height={150} />
+          ))}
+        </SimpleGrid>
+      </Stack>
+    );
   }
 
   if (error) {
-    return <div>Erreur: {String(error)}</div>;
+    return (
+      <Card padding="lg" radius="md" withBorder>
+        <Text c="red" fw={600}>Erreur: {String(error)}</Text>
+      </Card>
+    );
   }
 
   if (!data || !data.results) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        padding: '40px 20px',
-        textAlign: 'center',
-        border: '1px dashed #ddd',
-        borderRadius: '8px',
-        backgroundColor: '#fafafa',
-        minHeight: '200px',
-        marginTop: '20px'
-      }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#666' }}>Aucun backtest disponible</h3>
-        <p style={{ margin: '5px 0 0 0', color: '#888' }}>Le système de backtesting est en cours de calcul</p>
-      </div>
+      <EmptyState
+        icon={<IconChartBar size={48} />}
+        title="Aucun backtest disponible"
+        description="Le système de backtesting est en cours de calcul"
+      />
     );
   }
 
+  const hitRate = data.results.hit_rate ? data.results.hit_rate * 100 : 0;
+  const cagr = data.results.cagr ? data.results.cagr * 100 : 0;
+  const maxDrawdown = data.results.max_drawdown ? Math.abs(data.results.max_drawdown * 100) : 0;
+  const volatility = data.results.volatility ? data.results.volatility * 100 : 0;
+  const nTrades = data.results.n_trades || 0;
+
   return (
-    <div>
-      <h3>Stratégie: {strategy}</h3>
-      <p>Univers: {universe || 'Tous'} | Benchmark: {benchmark || 'Non spécifié'}</p>
+    <Stack gap="xl">
+      {/* Info stratégie */}
+      <Card padding="lg" radius="md" withBorder>
+        <Stack gap="md">
+          <Title order={4}>Stratégie: {strategy}</Title>
+          <Text c="dimmed" size="sm">
+            Univers: {universe || 'Tous'} | Benchmark: {benchmark || 'Non spécifié'}
+          </Text>
+        </Stack>
+      </Card>
       
-      {/* Display the backtest results */}
-      <div>
-        <h4>Métriques de Performance</h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f3f4f6' }}>
-              <th style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'left' }}>Métrique</th>
-              <th style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>Valeur</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb' }}>Hit Rate</td>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>
-                {data.results.hit_rate ? (data.results.hit_rate * 100).toFixed(1) + '%' : 'N/A'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb' }}>CAGR</td>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>
-                {data.results.cagr ? (data.results.cagr * 100).toFixed(2) + '%' : 'N/A'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb' }}>Max Drawdown</td>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>
-                {data.results.max_drawdown ? (data.results.max_drawdown * 100).toFixed(2) + '%' : 'N/A'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb' }}>Nombre de trades</td>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>
-                {data.results.n_trades || 'N/A'}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb' }}>Volatilité</td>
-              <td style={{ padding: '0.5rem', border: '1px solid #e5e7eb', textAlign: 'right' }}>
-                {data.results.volatility ? (data.results.volatility * 100).toFixed(2) + '%' : 'N/A'}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {/* Métriques visuelles principales */}
+      <StatsGrid
+        metrics={[
+          {
+            label: 'Hit Rate',
+            value: `${hitRate.toFixed(1)}%`,
+            icon: <IconTarget size={20} />,
+            color: hitRate > 50 ? 'teal' : 'orange',
+            description: 'Taux de réussite des prévisions',
+          },
+          {
+            label: 'CAGR',
+            value: `${cagr > 0 ? '+' : ''}${cagr.toFixed(2)}%`,
+            change: cagr,
+            icon: <IconTrendingUp size={20} />,
+            color: cagr > 0 ? 'teal' : 'red',
+            description: 'Croissance annuelle composée',
+          },
+          {
+            label: 'Max Drawdown',
+            value: `${maxDrawdown.toFixed(2)}%`,
+            icon: <IconShield size={20} />,
+            color: maxDrawdown < 20 ? 'teal' : maxDrawdown < 40 ? 'orange' : 'red',
+            description: 'Perte maximale observée',
+          },
+          {
+            label: 'Volatilité',
+            value: `${volatility.toFixed(2)}%`,
+            icon: <IconActivity size={20} />,
+            color: volatility < 15 ? 'teal' : volatility < 30 ? 'orange' : 'red',
+            description: 'Volatilité des rendements',
+          },
+        ]}
+      />
+
+      {/* Rings de performance */}
+      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
+        <ProgressRing
+          label="Hit Rate"
+          value={hitRate}
+          color={hitRate > 50 ? 'teal' : 'orange'}
+          subtitle={`${nTrades} trades exécutés`}
+          badge={{
+            label: hitRate > 50 ? 'Bon' : 'Moyen',
+            color: hitRate > 50 ? 'teal' : 'orange',
+          }}
+          icon={<IconTarget size={16} />}
+        />
+        <ProgressRing
+          label="CAGR"
+          value={Math.min(100, Math.max(0, cagr + 50))}
+          color={cagr > 0 ? 'teal' : 'red'}
+          subtitle={`${cagr > 0 ? '+' : ''}${cagr.toFixed(2)}% annuel`}
+          badge={{
+            label: cagr > 10 ? 'Excellent' : cagr > 0 ? 'Positif' : 'Négatif',
+            color: cagr > 10 ? 'teal' : cagr > 0 ? 'blue' : 'red',
+          }}
+          icon={<IconTrendingUp size={16} />}
+        />
+        <ProgressRing
+          label="Risque (Drawdown)"
+          value={Math.min(100, maxDrawdown)}
+          color={maxDrawdown < 20 ? 'teal' : maxDrawdown < 40 ? 'orange' : 'red'}
+          subtitle={`Max: ${maxDrawdown.toFixed(2)}%`}
+          badge={{
+            label: maxDrawdown < 20 ? 'Faible' : maxDrawdown < 40 ? 'Moyen' : 'Élevé',
+            color: maxDrawdown < 20 ? 'teal' : maxDrawdown < 40 ? 'orange' : 'red',
+          }}
+          icon={<IconShield size={16} />}
+        />
+      </SimpleGrid>
+    </Stack>
   );
 }

@@ -1,17 +1,31 @@
 /**
  * Page Market Brief
  * Daily/Weekly briefs avec Top 3 signaux/risques
+ * Refactorisé avec Mantine pour un look professionnel
  */
 
 import { useState } from 'react'
+import { Container, Stack, Group, SegmentedControl, Select, Alert, Button, Badge, Text, SimpleGrid, Skeleton } from '@mantine/core'
+import { IconRefresh, IconAlertTriangle, IconFileText, IconTrendingUp, IconTrendingDown } from '@tabler/icons-react'
 import { useLatestBriefWithFallback } from '@/hooks/useBriefs'
-import Card from '@/components/common/Card'
+import { Card, Title, Heading } from '@/ui'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import TopSignals from '@/components/signals/TopSignals'
 import TopRisks from '@/components/signals/TopRisks'
 import FreshnessBadge from '@/components/ui/FreshnessBadge'
+import PageHeader from '@/components/layout/PageHeader'
+import { BriefSkeleton } from '@/components/ui/Skeletons'
+import EmptyState from '@/components/ui/EmptyState'
+import { ProgressRing } from '@/components/visualizations'
 import { ensureArray } from '@/lib/safe'
+
+const UNIVERSE_OPTIONS = [
+  { value: 'SPY,QQQ', label: 'SPY,QQQ (Défaut)' },
+  { value: 'SPY,AAPL,NVDA,MSFT', label: 'SPY,AAPL,NVDA,MSFT' },
+  { value: 'QQQ,AAPL,GOOGL,AMZN', label: 'QQQ,AAPL,GOOGL,AMZN' },
+  { value: 'SPY,TSLA,META,NVDA', label: 'SPY,TSLA,META,NVDA' },
+]
 
 export default function MarketBrief() {
   const [type, setType] = useState<'daily' | 'weekly'>('daily')
@@ -19,7 +33,7 @@ export default function MarketBrief() {
   
   // Use the fallback-aware hook with callback for fallback detection
   const [fallbackMessage, setFallbackMessage] = useState<string | null>(null)
-  const { data: briefResp, isLoading, error } = useLatestBriefWithFallback(
+  const { data: briefResp, isLoading, error, refetch } = useLatestBriefWithFallback(
     type, 
     universe,
     (message) => setFallbackMessage(message)
@@ -35,213 +49,199 @@ export default function MarketBrief() {
     ('top_signals' in brief && Array.isArray(brief.top_signals) && brief.top_signals.length === 0 && 
      'top_risks' in brief && Array.isArray(brief.top_risks) && brief.top_risks.length === 0)
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>📋 Market Brief</h1>
-        
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <FreshnessBadge freshness={brief?.generated_at ?? brief?.freshness ?? undefined} />
-          
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={() => setType('daily')}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: type === 'daily' ? '#4a9eff' : '#333',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              Quotidien
-            </button>
-            <button
-              onClick={() => setType('weekly')}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: type === 'weekly' ? '#4a9eff' : '#333',
-                border: 'none',
-                borderRadius: '6px',
-                color: '#fff',
-                cursor: 'pointer',
-              }}
-            >
-              Hebdomadaire
-            </button>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label htmlFor="universe-select">Univers:</label>
-            <select
-              id="universe-select"
-              value={universe?.join(',') || 'SPY,QQQ'}
-              onChange={(e) => setUniverse(e.target.value ? e.target.value.split(',') : ['SPY', 'QQQ'])}
-              style={{
-                padding: '0.5rem',
-                backgroundColor: '#333',
-                border: '1px solid #444',
-                borderRadius: '4px',
-                color: '#fff',
-              }}
-            >
-              <option value="SPY,QQQ">SPY,QQQ (Défaut)</option>
-              <option value="SPY,AAPL,NVDA,MSFT">SPY,AAPL,NVDA,MSFT</option>
-              <option value="QQQ,AAPL,GOOGL,AMZN">QQQ,AAPL,GOOGL,AMZN</option>
-              <option value="SPY,TSLA,META,NVDA">SPY,TSLA,META,NVDA</option>
-            </select>
-          </div>
-        </div>
-      </div>
+  const handleUniverseChange = (value: string | null) => {
+    if (value) {
+      setUniverse(value.split(',').filter(Boolean))
+    }
+  }
 
-      {isLoading && <LoadingSpinner />}
+  return (
+    <Container size="xl" py="xl">
+      <PageHeader
+        title="Market Brief"
+        icon={<IconFileText size={28} />}
+        description={`Brief ${type === 'daily' ? 'quotidien' : 'hebdomadaire'} avec top signaux et risques`}
+        badge={brief?.generated_at ? { label: 'Live', color: 'green' } : undefined}
+        stats={[
+          { label: 'Signaux', value: ensureArray(brief?.top_signals || []).length },
+          { label: 'Risques', value: ensureArray(brief?.top_risks || []).length },
+        ]}
+        actions={
+          <Group gap="md">
+            <FreshnessBadge freshness={brief?.generated_at ?? brief?.freshness ?? undefined} />
+            <SegmentedControl
+              value={type}
+              onChange={(value) => setType(value as 'daily' | 'weekly')}
+              data={[
+                { label: 'Quotidien', value: 'daily' },
+                { label: 'Hebdomadaire', value: 'weekly' },
+              ]}
+              size="md"
+            />
+            <Select
+              label="Univers"
+              placeholder="Sélectionner"
+              value={universe.join(',')}
+              onChange={handleUniverseChange}
+              data={UNIVERSE_OPTIONS}
+              style={{ minWidth: 200 }}
+              size="md"
+            />
+          </Group>
+        }
+        onRefresh={() => refetch()}
+      />
+
+      {isLoading && <BriefSkeleton />}
+      
       {error && <ErrorMessage message={String(error)} />}
       
       {/* Fallback banner if needed */}
       {hasFallback && fallbackMessage && (
-        <div style={{
-          padding: '1rem',
-          backgroundColor: '#4a5568',
-          color: '#fff',
-          borderRadius: '0.5rem',
-          marginBottom: '1rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div>
-            <strong style={{ color: '#fbbd23' }}>⚠️ {fallbackMessage}</strong> • 
-            Dernière mise à jour du système: {new Date(brief?.generated_at || brief?.freshness || Date.now()).toLocaleTimeString()}
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              backgroundColor: '#2d3748',
-              border: '1px solid #4a5568',
-              color: '#fff',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Réessayer
-          </button>
-        </div>
+        <Alert
+          icon={<IconAlertTriangle size={20} />}
+          title="Mode Fallback"
+          color="yellow"
+          variant="light"
+          mb="lg"
+        >
+          <Group justify="space-between" align="center">
+            <div>
+              <Text fw={600} c="yellow.6">{fallbackMessage}</Text>
+              <Text size="sm" c="dimmed" mt={4}>
+                Dernière mise à jour: {new Date(brief?.generated_at || brief?.freshness || Date.now()).toLocaleTimeString()}
+              </Text>
+            </div>
+            <Button
+              variant="light"
+              size="sm"
+              onClick={() => refetch()}
+              leftSection={<IconRefresh size={16} />}
+            >
+              Réessayer
+            </Button>
+          </Group>
+        </Alert>
       )}
       
       {!isLoading && !error && brief && Object.keys(brief).length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <Stack gap="xl">
           <Card>
-            <h2 style={{ margin: '0 0 1rem 0' }}>Market Brief {brief.period === 'daily' ? 'Journalier' : 'Hebdomadaire'}</h2>
-            <div style={{ color: '#888', marginBottom: '1rem' }}>
-              {brief.generated_at || brief.freshness ? 
-                new Date(brief.generated_at || brief.freshness).toLocaleDateString('fr-FR', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })
-              : 'Date non disponible'}
-            </div>
-            <div style={{ lineHeight: 1.6 }}>
-              Analyse générée pour l'univers: {ensureArray(brief.universe || universe).join(', ')}
-            </div>
+            <Stack gap="md">
+              <Group justify="space-between" align="flex-start">
+                <div>
+                  <Heading order={3} mb="xs">
+                    Market Brief {brief.period === 'daily' ? 'Journalier' : 'Hebdomadaire'}
+                  </Heading>
+                  <Text c="dimmed" size="sm">
+                    {brief.generated_at || brief.freshness ? 
+                      new Date(brief.generated_at || brief.freshness).toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : 'Date non disponible'}
+                  </Text>
+                </div>
+                <Badge variant="light" color="blue" size="lg">
+                  {ensureArray(brief.universe || universe).join(', ')}
+                </Badge>
+              </Group>
+              <Text size="sm" c="dimmed">
+                Analyse générée pour l'univers: {ensureArray(brief.universe || universe).join(', ')}
+              </Text>
+            </Stack>
           </Card>
           
           {/* Summary content if available - for better UX */}
           {(brief.summary || brief.content) && (
             <Card>
-              <h3 style={{ margin: '0 0 1rem 0' }}>Résumé</h3>
-              <div style={{ lineHeight: 1.6, color: '#ccc' }}>
-                {brief.summary || brief.content}
-              </div>
+              <Stack gap="md">
+                <Heading order={4}>Résumé</Heading>
+                <Text style={{ lineHeight: 1.6 }}>
+                  {brief.summary || brief.content}
+                </Text>
+              </Stack>
             </Card>
           )}
 
           {/* Top 3 Signaux et Top 3 Risques */}
-          <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: '1fr 1fr' }}>
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
             <TopSignals signals={ensureArray(brief?.top_signals || brief?.signals || [])} title="Top 3 Signaux" />
             <TopRisks risks={ensureArray(brief?.top_risks || brief?.risks || [])} title="Top 3 Risques" />
-          </div>
+          </SimpleGrid>
 
-          {/* Picks */}
+          {/* Picks avec visualisations */}
           {brief?.picks && Array.isArray(brief.picks) && brief.picks.length > 0 && (
-            <Card title="🎯 Picks">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {ensureArray(brief.picks).map((pick: any, index: number) => (
-                  <div key={index} style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    padding: '0.5rem',
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: '4px'
-                  }}>
-                    <div>
-                      <strong>{pick.ticker || pick.symbol || pick.asset}</strong> - Score: {pick.composite_score?.toFixed(1) || pick.score?.toFixed(1) || 'N/A'}
-                    </div>
-                    <div style={{ 
-                      padding: '0.25rem 0.5rem', 
-                      borderRadius: '4px',
-                      backgroundColor: pick.action === 'BUY' || pick.action === 'buy' || pick.direction === 'up' ? '#4caf50' : 
-                                      pick.action === 'SELL' || pick.action === 'sell' || pick.direction === 'down' ? '#f44336' : '#2196f3',
-                      color: 'white',
-                      fontSize: '0.8rem'
-                    }}>
-                      {(pick.action || pick.direction || 'HOLD').toString().toUpperCase()}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <Card padding="lg" radius="md" withBorder>
+              <Stack gap="md">
+                <Heading order={4}>🎯 Picks Recommandés</Heading>
+                <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
+                  {ensureArray(brief.picks).map((pick: any, index: number) => {
+                    const action = (pick.action || pick.direction || 'HOLD').toString().toUpperCase()
+                    const isBuy = action === 'BUY' || action === 'UP'
+                    const isSell = action === 'SELL' || action === 'DOWN'
+                    const score = (pick.composite_score || pick.score || 0) * 10; // Convertir en pourcentage si 0-1
+                    const finalScore = score > 100 ? score / 10 : score; // Ajuster si déjà en pourcentage
+                    
+                    return (
+                      <ProgressRing
+                        key={index}
+                        label={pick.ticker || pick.symbol || pick.asset}
+                        value={Math.min(100, Math.max(0, finalScore))}
+                        color={isBuy ? 'teal' : isSell ? 'red' : 'gray'}
+                        subtitle={action}
+                        badge={{
+                          label: action,
+                          color: isBuy ? 'green' : isSell ? 'red' : 'blue',
+                        }}
+                        icon={isBuy ? <IconTrendingUp size={16} /> : isSell ? <IconTrendingDown size={16} /> : undefined}
+                        size={120}
+                      />
+                    )
+                  })}
+                </SimpleGrid>
+              </Stack>
             </Card>
           )}
 
           {/* Sources */}
           {brief?.sources && Array.isArray(brief.sources) && brief.sources.length > 0 && (
-            <Card title="📚 Sources">
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {ensureArray(brief.sources).map((source: any, index: number) => (
-                  <span key={index} style={{ 
-                    padding: '0.25rem 0.5rem', 
-                    backgroundColor: '#333',
-                    borderRadius: '12px',
-                    fontSize: '0.8rem'
-                  }}>
-                    {source.type || source.name || source.id || 'N/A'}: {source.series_id || source.count || source.id || 'N/A'}
-                  </span>
-                ))}
-              </div>
+            <Card>
+              <Stack gap="md">
+                <Heading order={4}>📚 Sources</Heading>
+                <Group gap="sm">
+                  {ensureArray(brief.sources).map((source: any, index: number) => (
+                    <Badge key={index} variant="dot" size="lg">
+                      {source.type || source.name || source.id || 'N/A'}: {source.series_id || source.count || source.id || 'N/A'}
+                    </Badge>
+                  ))}
+                </Group>
+              </Stack>
             </Card>
           )}
 
-          <div style={{ fontSize: '0.85rem', color: '#666', textAlign: 'center' }}>
+          <Text size="sm" c="dimmed" ta="center" mt="md">
             Généré le {brief?.generated_at || brief?.freshness ? new Date(brief.generated_at || brief.freshness).toLocaleString() : 'N/A'} • Période: {brief?.period || type || 'N/A'}
-          </div>
-        </div>
+          </Text>
+        </Stack>
       )}
       
       {/* Empty state when no data and no loading/error */}
       {!isLoading && !error && (!brief || Object.keys(brief).length === 0) && (
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          padding: '40px 20px',
-          textAlign: 'center',
-          border: '1px dashed #ddd',
-          borderRadius: '8px',
-          backgroundColor: '#fafafa',
-          minHeight: '200px',
-          marginTop: '20px'
-        }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#666' }}>Aucun brief disponible</h3>
-          <p style={{ margin: '5px 0 0 0', color: '#888' }}>Le système est en train de générer le brief de marché</p>
-        </div>
+        <EmptyState
+          icon={<IconFileText size={48} />}
+          title="Aucun brief disponible"
+          description="Le système est en train de générer le brief de marché"
+          action={{
+            label: "Rafraîchir",
+            onClick: () => refetch()
+          }}
+        />
       )}
-    </div>
+    </Container>
   )
 }

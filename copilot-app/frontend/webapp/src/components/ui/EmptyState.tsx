@@ -1,54 +1,72 @@
-import { ReactNode } from 'react';
-import { Badge, Button, Card, Chip, Heading, Stack, Text } from '@/ui';
-import { IconCalendar, IconFileText, IconRefresh } from '@tabler/icons-react';
+/**
+ * EmptyState - Composant réutilisable pour états vides
+ * Design professionnel avec icône, message et CTA
+ */
+
+import { Card, Stack, Text, Title, Button, Group } from '@mantine/core';
+import { IconRefresh } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 
 interface EmptyStateProps {
-  title?: string;
-  subtitle?: string;
-  hint?: string;
-  type?: 'data' | 'search' | 'filter' | 'initial';
+  /** Icône à afficher */
+  icon?: ReactNode;
+  /** Titre principal */
+  title: string;
+  /** Description */
+  description?: string;
+  /** Action principale (bouton) */
   action?: {
     label: string;
     onClick: () => void;
   };
-  showIcon?: boolean;
-  dataTestId?: string;
+  /** Actions secondaires */
+  secondaryActions?: Array<{
+    label: string;
+    onClick: () => void;
+  }>;
 }
 
-const ICONS: Record<string, ReactNode> = {
-  data: <IconFileText size={44} />,
-  search: <IconFileText size={44} />,
-  filter: <IconCalendar size={44} />,
-  initial: <IconRefresh size={44} />,
-};
-
 export default function EmptyState({
-  title = 'Aucune donnée disponible',
-  subtitle,
-  hint,
-  type = 'data',
+  icon,
+  title,
+  description,
   action,
-  showIcon = true,
-  dataTestId = 'empty-state',
+  secondaryActions,
 }: EmptyStateProps) {
   return (
-    <Card data-testid={dataTestId} padding="xl" radius="lg" shadow="sm">
-      <Stack gap="sm" align="center">
-        {showIcon && <Chip size="lg" radius="md" variant="light">{ICONS[type] ?? ICONS.data}</Chip>}
-        <Heading order={4}>{title}</Heading>
-        {subtitle && <Text c="dimmed" ta="center">{subtitle}</Text>}
-        {hint && <Text fz="xs" c="slate.5" ta="center">{hint}</Text>}
-        {action && (
-          <Button variant="light" onClick={action.onClick}>
-            {action.label}
-          </Button>
+    <Card padding="xl" radius="md" withBorder>
+      <Stack gap="md" align="center" py="xl">
+        {icon && <div>{icon}</div>}
+        <div style={{ textAlign: 'center' }}>
+          <Title order={4} mb="xs">{title}</Title>
+          {description && (
+            <Text c="dimmed" size="sm" ta="center">
+              {description}
+            </Text>
+          )}
+        </div>
+        {(action || secondaryActions) && (
+          <Group gap="sm" mt="md">
+            {action && (
+              <Button
+                variant="light"
+                onClick={action.onClick}
+                leftSection={<IconRefresh size={16} />}
+              >
+                {action.label}
+              </Button>
+            )}
+            {secondaryActions?.map((secondary, index) => (
+              <Button
+                key={index}
+                variant="subtle"
+                onClick={secondary.onClick}
+              >
+                {secondary.label}
+              </Button>
+            ))}
+          </Group>
         )}
-        <Badge color="slate" variant="light">
-          {type === 'data' && 'Données en cours de calcul'}
-          {type === 'search' && 'Ajustez vos critères de recherche'}
-          {type === 'filter' && 'Modifiez les filtres actifs'}
-          {type === 'initial' && 'Chargement initial en cours'}
-        </Badge>
       </Stack>
     </Card>
   );
