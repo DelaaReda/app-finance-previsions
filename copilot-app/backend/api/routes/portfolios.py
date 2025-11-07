@@ -329,3 +329,99 @@ def get_portfolio_performance(
         return ok(performance.model_dump())
     except Exception as e:
         return err(f"Failed to get performance: {str(e)}", code=500)
+
+
+@router.get("/portfolios/{portfolio_id}/performance/timeseries")
+def get_portfolio_performance_timeseries(
+    portfolio_id: str,
+    benchmark: str = Query("SPY", description="Benchmark ticker"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)")
+):
+    """
+    Get portfolio performance time series data for charts
+    
+    **Query Parameters:**
+    - `benchmark`: Benchmark ticker (default: SPY)
+    - `start_date`: Start date (YYYY-MM-DD), defaults to 1 year ago
+    - `end_date`: End date (YYYY-MM-DD), defaults to today
+    
+    **Returns:**
+    ```json
+    {
+      "ok": true,
+      "data": {
+        "portfolio": {
+          "dates": ["2024-01-01", "2024-01-02", ...],
+          "equity_curve": [100, 101.5, 103.2, ...],
+          "drawdown": [0, -0.5, -1.2, ...],
+          "returns": [0, 1.5, 1.7, ...]
+        },
+        "benchmark": {
+          "dates": ["2024-01-01", "2024-01-02", ...],
+          "equity_curve": [100, 100.8, 101.5, ...],
+          "returns": [0, 0.8, 0.7, ...]
+        },
+        "metrics": {
+          "total_return": 0.287,
+          "annualized_return": 0.287,
+          "volatility": 0.312,
+          "sharpe_ratio": 0.92,
+          "max_drawdown": -0.185,
+          "win_rate": 0.537
+        },
+        "comparison": {
+          "benchmark_ticker": "SPY",
+          "portfolio_return": 0.287,
+          "benchmark_return": 0.241,
+          "outperformance": 0.046,
+          "correlation": 0.84,
+          "beta": 1.15,
+          "alpha": 0.018
+        }
+      }
+    }
+    ```
+    
+    **Note:** Requires yfinance for historical data fetching.
+    """
+    try:
+        service = get_portfolio_service()
+        portfolio = service.get_portfolio(portfolio_id)
+        
+        if not portfolio:
+            return err(f"Portfolio {portfolio_id} not found", code=404)
+        
+        if not portfolio.tickers:
+            return err("Portfolio has no tickers", code=400)
+        
+        # Use performance service for calculations
+        from backend.services.portfolio_performance_service import get_performance_service
+        
+        perf_service = get_performance_service()
+        metrics, comparison, portfolio_timeseries = perf_service.calculate_performance(
+            tickers=portfolio.tickers,
+            weights=None,  # Equal-weighted
+            start_date=start_date,
+            end_date=end_date,
+            benchmark=benchmark
+        )
+        
+        # Also calculate benchmark timeseries
+        _, _, benchmark_timeseries = perf_service.calculate_performance(
+            tickers=[benchmark],
+            weights=None,
+            start_date=start_date,
+            end_date=end_date,
+            benchmark=benchmark
+        )
+        
+        return ok({
+            "portfolio": portfolio_timeseries.model_dump(),
+            "benchmark": benchmark_timeseries.model_dump(),
+            "metrics": metrics.model_dump(),
+            "comparison": comparison.model_dump()
+        })
+        
+    except Exception as e:
+        return err(f"Failed to get performance timeseries: {str(e)}", code=500)

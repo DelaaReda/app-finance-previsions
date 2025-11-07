@@ -259,7 +259,9 @@ class PortfolioService:
     def get_performance(
         self,
         portfolio_id: str,
-        benchmark: str = "SPY"
+        benchmark: str = "SPY",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
     ) -> Optional[PortfolioPerformance]:
         """
         Get portfolio performance metrics
@@ -267,41 +269,79 @@ class PortfolioService:
         Args:
             portfolio_id: Portfolio ID
             benchmark: Benchmark ticker (default: SPY)
+            start_date: Start date for calculation (YYYY-MM-DD), defaults to 1 year ago
+            end_date: End date for calculation (YYYY-MM-DD), defaults to today
         
         Returns:
             Performance metrics or None if not found
-        
-        Note: This is a stub implementation. Real calculation would require
-        fetching price data and computing returns, volatility, Sharpe ratio, etc.
         """
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return None
         
-        # TODO: Implement real performance calculation
-        # This would require:
-        # 1. Fetch historical price data for all tickers
-        # 2. Calculate returns for each ticker
-        # 3. Compute portfolio-level metrics
-        # 4. Compare against benchmark
+        if not portfolio.tickers:
+            # Empty portfolio
+            return PortfolioPerformance(
+                portfolio_id=portfolio.id,
+                portfolio_name=portfolio.name,
+                tickers_count=0,
+                total_return=None,
+                avg_return=None,
+                volatility=None,
+                sharpe_ratio=None,
+                vs_benchmark={
+                    "benchmark": benchmark,
+                    "outperformance": None
+                }
+            )
         
-        # For now, return placeholder structure
-        performance = PortfolioPerformance(
-            portfolio_id=portfolio.id,
-            portfolio_name=portfolio.name,
-            tickers_count=len(portfolio.tickers),
-            total_return=None,  # TODO: Calculate
-            avg_return=None,  # TODO: Calculate
-            volatility=None,  # TODO: Calculate
-            sharpe_ratio=None,  # TODO: Calculate
-            vs_benchmark={
-                "benchmark": benchmark,
-                "outperformance": None  # TODO: Calculate
-            }
-        )
-        
-        logger.info(f"Generated performance metrics for portfolio {portfolio_id}")
-        return performance
+        # Use performance service for real calculations
+        try:
+            from backend.services.portfolio_performance_service import get_performance_service
+            
+            perf_service = get_performance_service()
+            metrics, comparison, _ = perf_service.calculate_performance(
+                tickers=portfolio.tickers,
+                weights=None,  # Equal-weighted for now
+                start_date=start_date,
+                end_date=end_date,
+                benchmark=benchmark
+            )
+            
+            # Map to PortfolioPerformance model
+            performance = PortfolioPerformance(
+                portfolio_id=portfolio.id,
+                portfolio_name=portfolio.name,
+                tickers_count=len(portfolio.tickers),
+                total_return=metrics.total_return,
+                avg_return=metrics.annualized_return,
+                volatility=metrics.volatility,
+                sharpe_ratio=metrics.sharpe_ratio,
+                vs_benchmark={
+                    "benchmark": comparison.benchmark_ticker,
+                    "outperformance": comparison.outperformance
+                }
+            )
+            
+            logger.info(f"Calculated performance for portfolio {portfolio_id}")
+            return performance
+            
+        except Exception as e:
+            logger.error(f"Error calculating performance: {str(e)}")
+            # Return structure with nulls on error
+            return PortfolioPerformance(
+                portfolio_id=portfolio.id,
+                portfolio_name=portfolio.name,
+                tickers_count=len(portfolio.tickers),
+                total_return=None,
+                avg_return=None,
+                volatility=None,
+                sharpe_ratio=None,
+                vs_benchmark={
+                    "benchmark": benchmark,
+                    "outperformance": None
+                }
+            )
 
 
 # Singleton instance
