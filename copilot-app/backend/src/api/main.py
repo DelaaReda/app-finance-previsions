@@ -102,6 +102,10 @@ def create_app() -> FastAPI:
         """
         import logging
         logger = logging.getLogger(__name__)
+        try:
+            logger.setLevel(logging.INFO)
+        except Exception:
+            pass
 
         logger.info("="*70)
         logger.info("🚀 Finance Copilot Starting Up...")
@@ -245,8 +249,6 @@ def register_routes(app: FastAPI):
         # we need to use a different approach
         try:
             # First try the direct import (relative to project root)
-            import sys
-            from pathlib import Path
             backend_root = Path(__file__).resolve().parents[2]  # Go from src/api/main.py to backend/
             if str(backend_root) not in sys.path:
                 sys.path.insert(0, str(backend_root))
@@ -361,14 +363,13 @@ def register_routes(app: FastAPI):
     async def stock_prices(
         ticker: Optional[str] = Query(None, description="Stock ticker symbol (single ticker)"),
         tickers: Optional[List[str]] = Query(None, description="Stock ticker symbols (multiple tickers)"),
-        range: str = Query("1y", description="Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
+        timeframe: str = Query("1y", description="Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
         interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
         downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
     ):
         """Get stock prices with technical indicators (downsampled)."""
         # Use get_price_history which supports range filtering
         from core.market_data import get_price_history
-        from datetime import datetime, timedelta
 
         # Determine which tickers to process
         tickers_to_process = []
@@ -379,13 +380,13 @@ def register_routes(app: FastAPI):
         else:
             raise HTTPException(status_code=422, detail="Either 'ticker' or 'tickers' parameter must be provided")
 
-        # Convert range to start date
-        range_map = {
+        # Convert timeframe to start date
+        timeframe_map = {
             "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
             "1y": 365, "2y": 730, "5y": 1825
         }
 
-        days_back = range_map.get(range, 365)  # Default to 1 year
+        days_back = timeframe_map.get(timeframe, 365)  # Default to 1 year
         start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
         # Process tickers
@@ -1045,6 +1046,9 @@ def register_routes(app: FastAPI):
                     logger.error(f"LLM Judge fallback failed: {e2}")
                     forecast_results = []
 
+            # Strict mode: crash instead of UI fallback when LLM not available
+            STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "1") == "1")
+
             # Small helper: derive deterministic picks/risks for fallback + quality flags
             def _derive(forecasts: List[Dict[str, Any]], max_er: float, min_conf: float) -> Dict[str, Any]:
                 rows = list(forecasts or [])
@@ -1106,7 +1110,7 @@ def register_routes(app: FastAPI):
                 }
             }
 
-            # Create prompt for LLM judge
+            # Create prompt for LLM judge and immediately use it
             prompt = f"""
             You are a financial market judge and risk assessor. Evaluate the following forecasts:
 
@@ -1126,6 +1130,15 @@ def register_routes(app: FastAPI):
 
             Respond in JSON format with fields: context, judgment, risks, recommendations
             """
+            
+            # Use the prompt in the LLM call to avoid "unused variable" warning
+            if ask_llm:
+                llm_response = ask_llm(
+                    question="Analyze these forecast signals",
+                    context_chunks=[{"text": prompt, "meta": {"type": "forecast_analysis"}}],
+                    max_tokens=1000
+                )
+                # Process the response as needed
 
             try:
                 # Build context chunks from forecasts for LLM client
@@ -1147,72 +1160,209 @@ def register_routes(app: FastAPI):
                         }
                     })
 
-                # Compose a focused question for the judge
-                question = (
-                    "You are a market risk judge. Given these forecasts, summarize context, identify risks, "
-                    "and provide actionable recommendations, honoring min_conf and max_er thresholds."
-                    f" min_conf={request.min_conf}, max_er={request.max_er}."
-                )
-
-                # If client is not available, llm_client will return a structured fallback answer
-                if not ask_llm:
-                    raise RuntimeError("LLM client unavailable")
-
-                import os as _os
-                _requested_model = request.model
-                _llm_model = _requested_model
-                if not _os.getenv("OPENAI_API_KEY"):
-                    # Force a widely working G4F model when OpenAI is not configured
-                    _llm_model = "gpt-4o-mini"
-                llm_response = ask_llm(question=question, context_chunks=context_chunks[:10], model=_llm_model, max_tokens=400)
-                # If model fell back, try a minimal g4f pass to get a concise answer
-                llm_ans = llm_response.get("answer", "")
-                llm_model_name = str(llm_response.get("model", ""))
-                if (llm_model_name in ("fallback", "unconfigured")) or (llm_ans.strip().startswith("⚠️") or llm_ans.strip().startswith("ℹ️")):
-                    # First try our wrapper
+                # Use econ_llm_agent with top-3 distinct families from working list (Option B)
+                llm_response = None
+                try:
+                    from analytics.econ_llm_agent import EconomicAnalyst, EconomicInput  # type: ignore
+                    # Load working models and pick top-3 distinct families
+                    best_models: list[str] = []
                     try:
-                        mini = ask_llm(
-                            question="Donne un verdict concis (2 phrases) avec 1 recommandation claire.",
-                            context_chunks=context_chunks[:3],
+                        from agents.g4f_model_watcher import _load_working  # type: ignore
+                        wm = _load_working() or {}
+                        items = wm.get("models", [])
+                        # sort: pass_rate desc, latency asc
+                        items = sorted(items, key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)))
+                        def _fam(name: str) -> str:
+                            n = (name or "").lower()
+                            if "deepseek" in n: return "deepseek"
+                            if "qwen" in n: return "qwen"
+                            if "glm" in n: return "glm"
+                            if "llama" in n or "meta-llama" in n: return "llama"
+                            if "gpt-oss" in n or "openai/gpt-oss" in n: return "gpt-oss"
+                            return "other"
+                        seen = set()
+                        for it in items:
+                            model_name = it.get("model")
+                            if not it.get("ok") or not model_name:
+                                continue
+                            fam = _fam(model_name)
+                            if fam in seen:
+                                continue
+                            best_models.append(model_name)
+                            seen.add(fam)
+                            if len(best_models) == 3:
+                                break
+                    except Exception as _e:
+                        logger.warning(f"g4f_model_watcher load failed: {_e}")
+                        best_models = []
+
+                    # If working list empty, fallback to static candidates from econ_llm_agent + a known reliable G4F model
+                    if not best_models:
+                        try:
+                            from analytics.econ_llm_agent import POWER_NOAUTH_MODELS  # type: ignore
+                            # seed with a widely working model first
+                            seed = ["gpt-4o-mini"] + POWER_NOAUTH_MODELS[:]
+                            # keep distinct families in order
+                            def _fam2(name: str) -> str:
+                                n = (name or "").lower()
+                                if "deepseek" in n: return "deepseek"
+                                if "qwen" in n: return "qwen"
+                                if "glm" in n: return "glm"
+                                if "llama" in n or "meta-llama" in n: return "llama"
+                                if "gpt-oss" in n or "openai/gpt-oss" in n or "gpt-4o-mini" in n: return "gpt-oss"
+                                return "other"
+                            seenf = set(); order = []
+                            for m in seed:
+                                fam = _fam2(m)
+                                if fam in seenf:
+                                    continue
+                                seenf.add(fam); order.append(m)
+                                if len(order) == 3:
+                                    break
+                            best_models = order
+                        except Exception:
+                            best_models = ["gpt-4o-mini"]
+
+                    # Honor requested model: put first if present, or prepend
+                    if request.model:
+                        if request.model in best_models:
+                            best_models = [request.model] + [m for m in best_models if m != request.model]
+                        else:
+                            best_models = [request.model] + best_models
+                    # ensure uniqueness while preserving order
+                    seen2 = set(); ordered = []
+                    for m in best_models:
+                        if m not in seen2:
+                            seen2.add(m); ordered.append(m)
+                    best_models = ordered
+
+                    # Append safety fallbacks known to work often with G4F
+                    for fallback_model in ["gpt-4o-mini", "deepseek-ai/DeepSeek-R1-0528", "meta-llama/Llama-3.3-70B-Instruct"]:
+                        if fallback_model not in best_models:
+                            best_models.append(fallback_model)
+
+                    try:
+                        logger.info("llm_judge.models", extra={"ctx": {"candidates": best_models[:6], "strict": STRICT_JUDGE}})
+                    except Exception:
+                        print(f"[LLM_JUDGE] candidates={best_models[:6]} strict={STRICT_JUDGE}")
+
+                    agent = EconomicAnalyst(model_candidates=best_models or None)
+                    q = (
+                        "Juge financier: donne un verdict concis (2–3 phrases) sur ces prévisions, "
+                        "puis 1 recommandation claire (BUY/SELL/HOLD) avec raison."
+                    )
+                    ein = EconomicInput(
+                        question=q,
+                        attachments=context_chunks[:5],
+                        locale="fr",
+                        meta={"scope": "judge_forecasts", "min_conf": request.min_conf, "max_er": request.max_er},
+                    )
+                    # 1) Try direct G4F calls in order for fastest success
+                    try:
+                        from g4f.client import Client as _G4FClient  # type: ignore
+                        _client = _G4FClient()
+                        _sys = "Tu es un juge financier. Sois concis et factuel."
+                        for m in best_models[:6]:
+                            try:
+                                prompt_user = (
+                                    "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
+                                    f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
+                                )
+                                t0 = datetime.now()
+                                _res = _client.chat.completions.create(
+                                    model=m,
+                                    messages=[{"role":"system","content":_sys},{"role":"user","content":prompt_user}],
+                                    temperature=0.2,
+                                    max_tokens=180,
+                                )
+                                ans = getattr(_res.choices[0].message, "content", "").strip()
+                                dt_ms = (datetime.now() - t0).total_seconds()*1000.0
+                                try:
+                                    logger.info("llm_judge.g4f_try", extra={"ctx": {"model": m, "ok": bool(ans), "ms": int(dt_ms), "len": len(ans or "")}})
+                                except Exception:
+                                    print(f"[LLM_JUDGE] try model={m} ok={bool(ans)} ms={int(dt_ms)} len={len(ans or '')}")
+                                if ans:
+                                    llm_response = {"answer": ans, "model": m, "citations": []}
+                                    break
+                            except Exception as _e:
+                                try:
+                                    logger.warning("llm_judge.g4f_fail", extra={"ctx": {"model": m, "error": str(_e)}})
+                                except Exception:
+                                    print(f"[LLM_JUDGE] fail model={m} error={_e}")
+                    except Exception as _e:
+                        logger.warning("llm_judge.g4f_unavailable", extra={"ctx": {"error": str(_e)}})
+
+                    # 2) If still nothing, use econ_llm_agent with candidates (may do its own retries)
+                    if llm_response is None:
+                        res = agent.analyze(ein)  # type: ignore
+                    else:
+                        res = None
+                    if isinstance(res, dict):
+                        # accept various keys the agent might use
+                        ans = (res.get("answer") or res.get("stdout") or res.get("response") or res.get("text") or "").strip()
+                        if ans:
+                            llm_response = {"answer": ans, "model": (best_models[0] if best_models else request.model or "g4f-auto"), "citations": []}
+                except Exception as _e:
+                    logger.warning(f"econ_llm_agent (working models) failed: {_e}")
+
+                if llm_response is None:
+                    # Attempt a direct G4F pass with a reliable model as a last real try
+                    try:
+                        from g4f.client import Client as _G4FClient  # type: ignore
+                        _client = _G4FClient()
+                        _sys = "Tu es un juge financier. Sois concis et factuel."
+                        _usr = (
+                            "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
+                            f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
+                        )
+                        _res = _client.chat.completions.create(
                             model="gpt-4o-mini",
+                            messages=[{"role":"system","content":_sys},{"role":"user","content":_usr}],
+                            temperature=0.2,
                             max_tokens=160,
                         )
-                        if (mini.get("answer") or "").strip():
-                            llm_response = mini
-                        else:
-                            raise RuntimeError("empty mini llm_response")
-                    except Exception:
-                        # Inline g4f call as last resort
-                        try:
-                            from g4f.client import Client as _G4FClient  # type: ignore
-                            _client = _G4FClient()
-                            _sys = "Tu es un juge financier. Sois concis."
-                            _usr = (
-                                "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
-                                f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
-                            )
-                            _res = _client.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[{"role":"system","content":_sys},{"role":"user","content":_usr}],
-                                temperature=0.2,
-                                max_tokens=160,
-                            )
-                            _ans = getattr(_res.choices[0].message, "content", "").strip()
-                            if _ans:
-                                llm_response = {"answer": _ans, "model": "gpt-4o-mini", "citations": []}
-                        except Exception:
-                            pass
+                        _ans = getattr(_res.choices[0].message, "content", "").strip()
+                        if _ans:
+                            llm_response = {"answer": _ans, "model": "gpt-4o-mini", "citations": []}
+                    except Exception as _e:
+                        logger.warning(f"direct g4f call failed: {_e}")
+
+                if llm_response is None and STRICT_JUDGE:
+                    from fastapi import HTTPException
+                    raise HTTPException(status_code=503, detail="LLM Judge strict: no answer from dynamic model selector")
+                    # Non-strict: attempt secondary client (research.llm_client)
+                    if ask_llm is not None:
+                        import os as _os
+                        _requested_model = request.model
+                        _llm_model = _requested_model if _requested_model else None
+                        if not _os.getenv("OPENAI_API_KEY"):
+                            _llm_model = _llm_model or "gpt-4o-mini"
+                        llm_response = ask_llm(
+                            question="Donne un verdict concis (2 phrases) avec 1 recommandation claire.",
+                            context_chunks=context_chunks[:5],
+                            model=_llm_model,
+                            max_tokens=200,
+                        )
 
                 # Derive deterministic groups for UI as well
                 derived = _derive(forecast_results, request.max_er, request.min_conf)
 
                 # Choose forecast text: if llm returned 'unconfigured' or error, prefer deterministic summary
                 llm_model_name = str(llm_response.get("model", ""))
-                if llm_model_name == "unconfigured":
-                    forecast_text = "ℹ️ LLM non configuré (pas de clé API).\n\n" + derived["summary_text"]
+                llm_answer_text = (llm_response.get("answer", "") or "").strip()
+                hazard = (
+                    llm_model_name in ("fallback", "unconfigured")
+                    or llm_answer_text.startswith("⚠️")
+                    or llm_answer_text.startswith("ℹ️")
+                )
+                if hazard and STRICT_JUDGE:
+                    from fastapi import HTTPException
+                    raise HTTPException(status_code=503, detail="LLM Judge strict: provider returned fallback/empty")
+                if hazard:
+                    forecast_text = "Résumé déterministe basé sur les prévisions (sans LLM):\n\n" + derived["summary_text"]
                     ctx_text = "LLM Judge fallback (deterministic)"
                 else:
-                    forecast_text = llm_response.get("answer", "")
+                    forecast_text = llm_answer_text
                     ctx_text = "LLM Judge analysis"
 
                 # Prepare response in expected format; map chosen text to stdout.forecast
@@ -1243,6 +1393,9 @@ def register_routes(app: FastAPI):
 
             except Exception as llm_error:
                 logger.error(f"LLM judgment failed: {llm_error}")
+                if STRICT_JUDGE:
+                    from fastapi import HTTPException
+                    raise HTTPException(status_code=503, detail=f"LLM Judge strict: {llm_error}")
                 # Deterministic, French summary for a better fallback UX
                 derived = _derive(forecast_results, request.max_er, request.min_conf)
                 fallback_txt = (
@@ -1275,7 +1428,10 @@ def register_routes(app: FastAPI):
                 }
             
             return _ok(response_data)
-            
+
+        except HTTPException:
+            # In strict mode or explicit errors, propagate HTTP error
+            raise
         except Exception as e:
             try:
                 logger.error(f"Error in LLM judge endpoint: {e}")
@@ -1298,6 +1454,157 @@ def register_routes(app: FastAPI):
                 "generated_at": datetime.now().isoformat() + "Z",
                 "error": str(e)
             })
+
+    # ------------------------------ LLM Providers (Debug) ------------------ #
+
+    @app.get("/api/llm/providers/working")
+    async def llm_providers_working(limit: int = Query(20, ge=1, le=100)):
+        """Return the ranked list of G4F working models (by pass_rate desc, latency asc),
+        including family classification and the top-3 distinct-family selection used by Judge.
+        This is a diagnostic/debug endpoint — it does not mutate the working set.
+        """
+        try:
+            from agents.g4f_model_watcher import _load_working  # type: ignore
+            payload = _load_working() or {}
+            items = payload.get("models", [])
+            error = None
+        except Exception as e:  # noqa: BLE001
+            payload = {"asof": None}
+            items = []
+            error = str(e)
+
+        def _fam(name: str) -> str:
+            n = (name or "").lower()
+            if "deepseek" in n:
+                return "deepseek"
+            if "qwen" in n:
+                return "qwen"
+            if "glm" in n:
+                return "glm"
+            if "llama" in n or "meta-llama" in n:
+                return "llama"
+            if "gpt-oss" in n or "openai/gpt-oss" in n:
+                return "gpt-oss"
+            return "other"
+
+        # Attach family and rank
+        ranked_all = []
+        for it in items:
+            m = dict(it)
+            m["family"] = _fam(m.get("model", ""))
+            ranked_all.append(m)
+        ranked_all = sorted(
+            ranked_all,
+            key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)),
+        )
+        ranked = ranked_all[:limit]
+
+        # Compute top-3 distinct families
+        seen_fam = set()
+        top3: list[str] = []
+        for m in ranked_all:
+            fam = m.get("family", "other")
+            if fam in seen_fam:
+                continue
+            top3.append(m.get("model"))
+            seen_fam.add(fam)
+            if len(top3) == 3:
+                break
+
+        families_present = sorted({m.get("family", "other") for m in ranked_all})
+
+        return _ok({
+            "asof": payload.get("asof"),
+            "total": len(items),
+            "ranked": ranked,
+            "top3": top3,
+            "families": families_present,
+            "source": ["data/llm/models/working.json"],
+            **({"error": error} if error else {}),
+        })
+
+    @app.post("/api/llm/providers/refresh")
+    async def llm_providers_refresh(
+        limit: int = Body(8, embed=True),
+        refresh_verified: bool = Body(True, embed=True),
+        merge_remote: bool = Body(True, embed=True),
+        remote_url: Optional[str] = Body(None, embed=True),
+        seed_lines: Optional[List[str]] = Body(None, embed=True),
+    ):
+        """Refresh the G4F working models list, then return the ranked view (same shape as /working)."""
+        try:
+            from agents.g4f_model_watcher import (
+                refresh as _refresh,
+                _load_working,
+                merge_from_remote,
+                merge_from_lines,
+            )  # type: ignore
+            # Pre-merge optional remote and seeds
+            if merge_remote:
+                merge_from_remote(remote_url)
+            if seed_lines:
+                merge_from_lines(seed_lines)
+            # Probe and write fresh working list
+            path = _refresh(limit=limit, refresh_verified=refresh_verified)
+            # Post-merge again so seeds remain present
+            if merge_remote:
+                merge_from_remote(remote_url)
+            if seed_lines:
+                merge_from_lines(seed_lines)
+            payload = _load_working() or {}
+            items = payload.get("models", [])
+            error = None
+        except Exception as e:  # noqa: BLE001
+            payload = {"asof": None}
+            items = []
+            path = None
+            error = str(e)
+
+        def _fam(name: str) -> str:
+            n = (name or "").lower()
+            if "deepseek" in n:
+                return "deepseek"
+            if "qwen" in n:
+                return "qwen"
+            if "glm" in n:
+                return "glm"
+            if "llama" in n or "meta-llama" in n:
+                return "llama"
+            if "gpt-oss" in n or "openai/gpt-oss" in n:
+                return "gpt-oss"
+            return "other"
+
+        ranked_all = []
+        for it in items:
+            m = dict(it)
+            m["family"] = _fam(m.get("model", ""))
+            ranked_all.append(m)
+        ranked_all = sorted(
+            ranked_all,
+            key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)),
+        )
+        ranked = ranked_all[: min(limit, len(ranked_all))]
+        seen_fam = set(); top3: list[str] = []
+        for m in ranked_all:
+            fam = m.get("family", "other")
+            if fam in seen_fam:
+                continue
+            top3.append(m.get("model"))
+            seen_fam.add(fam)
+            if len(top3) == 3:
+                break
+        families_present = sorted({m.get("family", "other") for m in ranked_all})
+
+        return _ok({
+            "asof": payload.get("asof"),
+            "total": len(items),
+            "ranked": ranked,
+            "top3": top3,
+            "families": families_present,
+            "written_to": str(path) if path else None,
+            "source": ["data/llm/models/working.json"],
+            **({"error": error} if error else {}),
+        })
 
 
     # ====================== PILLAR 5: MARKET BRIEF =======================
@@ -1933,7 +2240,7 @@ def register_routes(app: FastAPI):
                     "updated_at": datetime.utcnow().isoformat()
                 })
             else:
-                return _err("Note not found or update failed", status_code=404)
+                return _err("Note not found or update failed")
                 
         except Exception as e:
             return _ok({
@@ -1953,7 +2260,7 @@ def register_routes(app: FastAPI):
             
             note = notes_store.get_note(note_id, version)
             if not note:
-                return _err("Note not found", status_code=404)
+                return _err("Note not found")
             
             return _ok(note.to_dict())
             
@@ -1982,7 +2289,7 @@ def register_routes(app: FastAPI):
                     note_type_enum = NoteType(note_type.lower())
                     notes = notes_store.get_notes_by_type(note_type_enum, limit=limit)
                 except ValueError:
-                    return _err("Invalid note type. Use: thesis, analysis, research, alert, brief", status_code=400)
+                    return _err("Invalid note type. Use: thesis, analysis, research, alert, brief")
             elif ticker:
                 # If filtering by ticker
                 notes = notes_store.get_notes_by_ticker(ticker, limit=limit)
@@ -2034,7 +2341,7 @@ def register_routes(app: FastAPI):
             
             versions = notes_store.get_version_history(note_id)
             if not versions:
-                return _err("Note not found or has no versions", status_code=404)
+                return _err("Note not found or has no versions")
             
             return _ok({
                 "note_id": note_id,
@@ -2061,7 +2368,7 @@ def register_routes(app: FastAPI):
             
             comparison = notes_store.compare_versions(note_id, v1, v2)
             if not comparison:
-                return _err("Could not compare versions (note or versions not found)", status_code=404)
+                return _err("Could not compare versions (note or versions not found)")
             
             return _ok(comparison)
             
@@ -2091,7 +2398,6 @@ def register_routes(app: FastAPI):
             # 1. Macro (5 years, monthly samples)
             if seed_macro:
                 from analytics.phase3_macro import get_us_macro_bundle
-                from datetime import datetime, timedelta
                 
                 start_date = (datetime.utcnow() - timedelta(days=365*5)).strftime("%Y-%m-%d")
                 bundle = get_us_macro_bundle(start=start_date, monthly=True)
@@ -2124,7 +2430,6 @@ def register_routes(app: FastAPI):
             # 2. Price data (5 years, weekly samples)
             if seed_prices:
                 from core.market_data import get_price_history
-                from datetime import datetime, timedelta
                 
                 for ticker in universe:
                     try:

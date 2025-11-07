@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { Group, MultiSelect, SegmentedControl, Select, Alert, Table, Badge, Tooltip, Button, Card, Title, TextInput, Checkbox, Loader } from '@mantine/core';
+import { useNavigate } from 'react-router-dom';
 import { AreaChart, BarList, DonutChart } from '@tremor/react';
 import { IconRefresh, IconDownload, IconArrowUp, IconArrowDown, IconMinus, IconTrendingUp, IconTrendingDown, IconInfoCircle } from '@tabler/icons-react';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
@@ -75,6 +76,7 @@ function percent(value?: number | null) {
 }
 
 export default function ForecastsProBoard() {
+  const navigate = useNavigate();
   const [tickers, setTickers] = useState<string[]>([]);
   const [horizons, setHorizons] = useState<string[]>([]);
   const [themes, setThemes] = useState<string[]>([]);
@@ -308,10 +310,18 @@ export default function ForecastsProBoard() {
                 const ticker = item.ticker ?? item.symbol;
                 const direction = item.direction ?? item.forecast_direction;
                 
+                const goDetail = () => navigate(`/ticker/${ticker}`);
+                const bg = direction === 'up' ? '#e6f7e9' : direction === 'down' ? '#f9eaea' : '#f5f5f5';
                 return (
-                  <Table.Tr 
-                    key={`${ticker}-${item.horizon ?? 'all'}-${index}`} 
-                    style={{ backgroundColor: direction === 'up' ? '#e6f7e9' : direction === 'down' ? '#f9eaea' : '#f5f5f5' }}
+                  <Table.Tr
+                    key={`${ticker}-${item.horizon ?? 'all'}-${index}`}
+                    style={{ backgroundColor: bg, cursor: 'pointer' }}
+                    onClick={goDetail}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goDetail(); } }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open details for ${ticker}`}
+                    data-testid={`forecast-row-${ticker}`}
                   >
                     <Table.Td>
                       <strong>{ticker}</strong>
