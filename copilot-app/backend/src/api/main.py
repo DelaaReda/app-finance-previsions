@@ -571,7 +571,7 @@ def register_routes(app: FastAPI):
                     "technical": composite_score.get("technical_score"), 
                     "news": composite_score.get("news_score")
                 }
-            except:
+            except Exception:
                 ticker_sheet["composite_score"] = None
                 ticker_sheet["score_breakdown"] = None
             
@@ -691,14 +691,14 @@ def register_routes(app: FastAPI):
                     "technical": comp_score.get("technical_score"), 
                     "news": comp_score.get("news_score")
                 }
-            except:
+            except Exception:
                 pass  # Use None values if scoring fails
             
             # Get alerts for this ticker
             alerts = []
             try:
                 alerts = alerts_for_ticker(df_prices, pd.DataFrame(technical_indicators, index=[0]), news_sentiment, ticker.upper())
-            except:
+            except Exception:
                 alerts = []
             
             # Create comprehensive ticker sheet (Fiches Ticker)
@@ -1328,8 +1328,8 @@ def register_routes(app: FastAPI):
                         logger.warning(f"direct g4f call failed: {_e}")
 
                 if llm_response is None and STRICT_JUDGE:
-                    from fastapi import HTTPException
                     raise HTTPException(status_code=503, detail="LLM Judge strict: no answer from dynamic model selector")
+                elif llm_response is None:
                     # Non-strict: attempt secondary client (research.llm_client)
                     if ask_llm is not None:
                         import os as _os
@@ -1356,7 +1356,6 @@ def register_routes(app: FastAPI):
                     or llm_answer_text.startswith("ℹ️")
                 )
                 if hazard and STRICT_JUDGE:
-                    from fastapi import HTTPException
                     raise HTTPException(status_code=503, detail="LLM Judge strict: provider returned fallback/empty")
                 if hazard:
                     forecast_text = "Résumé déterministe basé sur les prévisions (sans LLM):\n\n" + derived["summary_text"]
@@ -1394,7 +1393,6 @@ def register_routes(app: FastAPI):
             except Exception as llm_error:
                 logger.error(f"LLM judgment failed: {llm_error}")
                 if STRICT_JUDGE:
-                    from fastapi import HTTPException
                     raise HTTPException(status_code=503, detail=f"LLM Judge strict: {llm_error}")
                 # Deterministic, French summary for a better fallback UX
                 derived = _derive(forecast_results, request.max_er, request.min_conf)
@@ -1910,9 +1908,8 @@ def register_routes(app: FastAPI):
         """
         try:
             # Compute KPIs using DuckDB directly to avoid CWD-dependent paths
-            from pathlib import Path as _P
             from core.duck import query_parquet as _qp
-            base_dir = _P(__file__).resolve().parents[2]
+            base_dir = Path(__file__).resolve().parents[2]
             fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
             # Latest dt by filesystem
             parts = sorted((base_dir / 'data' / 'forecast').glob('dt=*'))
@@ -1940,8 +1937,7 @@ def register_routes(app: FastAPI):
             # If heavy scoring not requested, compute a lightweight top/bottom from final.parquet
             if not include_signals:
                 from core.duck import query_parquet as _qp
-                from pathlib import Path as _P
-                base_dir = _P(__file__).resolve().parents[2]
+                base_dir = Path(__file__).resolve().parents[2]
                 fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
 
                 # Map UI horizons to dataset horizons
