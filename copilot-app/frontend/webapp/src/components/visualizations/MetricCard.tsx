@@ -8,7 +8,7 @@ import { IconTrendingUp, IconTrendingDown, IconMinus } from '@tabler/icons-react
 import { LineChart } from '@tremor/react';
 import type { ReactNode } from 'react';
 
-interface MetricCardProps {
+export interface MetricCardProps {
   /** Label de la métrique */
   label: string;
   /** Valeur principale */

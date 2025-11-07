@@ -94,7 +94,17 @@ export default function MarketBrief() {
 
       {isLoading && <BriefSkeleton />}
       
-      {error && <ErrorMessage message={String(error)} />}
+      {error && (
+        <EmptyState
+          icon={<IconAlertTriangle size={48} />}
+          title="Erreur de chargement"
+          description={error instanceof Error ? error.message : "Impossible de charger le brief. Veuillez réessayer."}
+          action={{
+            label: "Rafraîchir",
+            onClick: () => refetch()
+          }}
+        />
+      )}
       
       {/* Fallback banner if needed */}
       {hasFallback && fallbackMessage && (

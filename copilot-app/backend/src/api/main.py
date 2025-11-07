@@ -49,6 +49,8 @@ def _configure_debug_logging():
         logging.getLogger(name).setLevel(logging.DEBUG)
     _configure_debug_logging._configured = True  # type: ignore[attr-defined]
 
+logger = logging.getLogger("api.routes")
+
 # ------------------------------ Constants ---------------------------------- #
 MACRO_SERIES_META: Dict[str, Dict[str, Optional[str]]] = {
     "CPIAUCSL": {"name": "US CPI (All Items)", "unit": "index", "frequency": "monthly"},
@@ -99,6 +101,10 @@ from api.services.news_service import (
     get_news_events as lakehouse_news_events,
     get_sentiment as lakehouse_news_sentiment,
 )
+from services.intelligence_service import (
+    get_market_context_snapshot,
+    get_market_intelligence_snapshot,
+)
 
 
 def _parse_csv_list(value: Optional[str]) -> List[str]:
@@ -118,6 +124,54 @@ def _infer_frequency(index: pd.Index) -> Optional[str]:
         return "monthly"
     if "q" in freq:
         return "quarterly"
+
+
+def _fallback_intelligence_snapshot(message: str) -> Dict[str, Any]:
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    return {
+        "insights": {
+            "summary": message,
+            "market_regime": {
+                "current": "NORMAL",
+                "explanation": "Fallback snapshot (pipeline unavailable).",
+            },
+            "opportunities": [],
+            "risks": [],
+        },
+        "data_freshness": {
+            "forecasts_age": "unknown",
+            "macro_age": "unknown",
+            "news_age": "unknown",
+        },
+        "timestamp": now_iso,
+        "drivers": [],
+        "sources": {
+            "forecasts": False,
+            "brief": False,
+            "news": False,
+        },
+    }
+
+
+def _fallback_market_context(message: str) -> Dict[str, Any]:
+    return {
+        "regime": "NORMAL",
+        "confidence": 0.0,
+        "key_drivers": [],
+        "characteristics": {
+            "volatility": "medium",
+            "sentiment": "neutral",
+            "trend": "sideways",
+            "momentum": "weak",
+            "risk_level": "medium",
+        },
+        "recommended_layout": {
+            "primary_widgets": ["intelligence", "forecasts", "news"],
+            "emphasis": "opportunities",
+        },
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "note": message,
+    }
     if "w" in freq:
         return "weekly"
     return "daily"
@@ -2166,6 +2220,26 @@ def register_routes(app: FastAPI):
                 "cache_status": "error"
             })
 
+    @app.get("/api/intelligence/snapshot")
+    async def intelligence_snapshot():
+        """Return unified market intelligence snapshot (opportunities + risks + data freshness)."""
+        try:
+            snapshot = await run_in_threadpool(get_market_intelligence_snapshot)
+            return _ok(snapshot)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("market_intelligence.snapshot_failed", exc_info=exc)
+            return _ok(_fallback_intelligence_snapshot("Market intelligence service temporarily unavailable."))
+
+    @app.get("/api/context/current")
+    async def market_context_current():
+        """Return the current market regime/context."""
+        try:
+            context = await run_in_threadpool(get_market_context_snapshot)
+            return _ok(context)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("market_context.snapshot_failed", exc_info=exc)
+            return _ok(_fallback_market_context("Market context service temporarily unavailable."))
+
     @app.get("/api/dashboard/kpis")
     async def dashboard_kpis(
         sectors: List[str] = Query([], description="Filter by sectors (e.g., Technology, Healthcare, Financials)"),
@@ -2751,6 +2825,173 @@ def register_routes(app: FastAPI):
                 "message": "Failed to seed RAG"
             })
 
+    # ====================== CORRELATIONS =======================
+    
+    @app.get("/api/correlations/matrix")
+    async def correlations_matrix():
+        """Get correlation matrix for tickers."""
+        try:
+            from src.services.correlation_service import get_correlation_matrix
+            matrix_data = get_correlation_matrix()
+            return _ok({
+                "data": matrix_data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in correlations_matrix: {e}", exc_info=True)
+            return _ok({
+                "data": {"matrix": {}, "tickers": [], "lookback_days": 90},
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
+    @app.get("/api/correlations/network")
+    async def correlations_network(threshold: float = Query(0.5, ge=0.0, le=1.0, description="Correlation threshold")):
+        """Get correlation network (nodes + links) for visualization."""
+        try:
+            from src.services.correlation_service import get_correlation_network
+            network_data = get_correlation_network(threshold=threshold)
+            return _ok({
+                "data": network_data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in correlations_network: {e}", exc_info=True)
+            return _ok({
+                "data": {"nodes": [], "links": [], "threshold": threshold},
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
+    # ====================== SECTORS =======================
+    
+    @app.get("/api/stocks/sectors")
+    async def stocks_sectors():
+        """Get sector allocation data for SectorWheel/TreemapChart."""
+        try:
+            # Try to load from storage
+            backend_root = Path(__file__).resolve().parents[2]
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            
+            try:
+                from storage.io import load_json
+            except ImportError:
+                from storage.base import load_json
+            
+            sectors_data = load_json("stocks/sectors")
+            
+            if sectors_data:
+                # Extract data if wrapped
+                if "data" in sectors_data:
+                    data = sectors_data["data"]
+                elif "payload" in sectors_data:
+                    data = sectors_data["payload"]
+                else:
+                    data = sectors_data
+            else:
+                data = {"sectors": [], "total_tickers": 0, "total_sectors": 0}
+            
+            return _ok({
+                "data": data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in stocks_sectors: {e}", exc_info=True)
+            return _ok({
+                "data": {"sectors": [], "total_tickers": 0, "total_sectors": 0},
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
+    # ====================== EFFICIENT FRONTIER =======================
+    
+    @app.get("/api/backtests/efficient_frontier")
+    async def efficient_frontier():
+        """Get efficient frontier data for portfolio optimization."""
+        try:
+            # Try to load from storage
+            backend_root = Path(__file__).resolve().parents[2]
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            
+            try:
+                from storage.io import load_json
+            except ImportError:
+                from storage.base import load_json
+            
+            frontier_data = load_json("backtests/efficient_frontier")
+            
+            if frontier_data:
+                # Extract data if wrapped
+                if "data" in frontier_data:
+                    data = frontier_data["data"]
+                elif "payload" in frontier_data:
+                    data = frontier_data["payload"]
+                else:
+                    data = frontier_data
+            else:
+                data = {"frontier": [], "tickers": [], "lookback_days": 252}
+            
+            return _ok({
+                "data": data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in efficient_frontier: {e}", exc_info=True)
+            return _ok({
+                "data": {"frontier": [], "tickers": [], "lookback_days": 252},
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
+    # ====================== CAPITAL FLOWS =======================
+    
+    @app.get("/api/flows/capital")
+    async def capital_flows():
+        """Get capital flows data for SankeyDiagram."""
+        try:
+            from src.services.flows_service import get_capital_flows
+            flows_data = get_capital_flows()
+            return _ok({
+                "data": flows_data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in capital_flows: {e}", exc_info=True)
+            return _ok({
+                "data": {"nodes": [], "links": [], "lookback_days": 30},
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
+    # ====================== ORDERBOOK =======================
+    
+    @app.get("/api/orderbook")
+    async def orderbook(ticker: str = Query(..., description="Stock ticker symbol")):
+        """Get orderbook data (bids/asks) for a ticker."""
+        try:
+            from src.services.market_microstructure import get_orderbook
+            orderbook_data = get_orderbook(ticker.upper())
+            return _ok({
+                "data": orderbook_data,
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            logger.error(f"Error in orderbook: {e}", exc_info=True)
+            return _ok({
+                "data": {
+                    "ticker": ticker.upper(),
+                    "bids": [],
+                    "asks": [],
+                    "lastPrice": 0.0,
+                    "spread": 0.0,
+                    "spreadPct": 0.0,
+                },
+                "generated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
+    
     @app.get("/api/rag/stats")
     async def rag_stats():
         """Get RAG store statistics."""

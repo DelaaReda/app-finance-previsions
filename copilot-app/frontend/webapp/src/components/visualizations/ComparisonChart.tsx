@@ -45,6 +45,13 @@ export function ComparisonChart({
     ? BarChart 
     : LineChart;
 
+  const formatValue = (value: any) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString();
+    }
+    return String(value);
+  };
+
   return (
     <Card padding="lg" radius="md" withBorder>
       <Stack gap="md">
@@ -58,18 +65,13 @@ export function ComparisonChart({
           {legend && <div>{legend}</div>}
         </Group>
         
-        <div style={{ height }}>
+        <div style={{ height: typeof height === 'number' ? `${height}px` : height }}>
           <ChartComponent
             data={data}
             index={index}
             categories={categories}
             colors={colors}
-            valueFormatter={(value) => {
-              if (typeof value === 'number') {
-                return value.toLocaleString();
-              }
-              return String(value);
-            }}
+            valueFormatter={formatValue}
             showLegend={!legend}
             showGridLines
             showAnimation

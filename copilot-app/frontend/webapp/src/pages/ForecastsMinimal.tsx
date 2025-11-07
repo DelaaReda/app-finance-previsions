@@ -128,7 +128,30 @@ export default function ForecastsMinimal() {
     );
   }
 
-  if (error || !stats) {
+  // Gérer les cas d'erreur ou de données vides
+  if (error) {
+    return (
+      <Container size="xl" py="xl">
+        <PageHeader
+          title="Prévisions de marché"
+          icon={<IconChartLine size={28} />}
+          description="Analyse prédictive avec ML + LLM"
+        />
+        <EmptyState
+          icon={<IconChartLine size={48} />}
+          title="Erreur de chargement"
+          description={error instanceof Error ? error.message : "Impossible de charger les prévisions. Veuillez réessayer."}
+          action={{
+            label: "Rafraîchir",
+            onClick: () => window.location.reload()
+          }}
+        />
+      </Container>
+    );
+  }
+
+  // Si pas d'erreur mais pas de données
+  if (!isLoading && forecasts.length === 0) {
     return (
       <Container size="xl" py="xl">
         <PageHeader
@@ -139,7 +162,29 @@ export default function ForecastsMinimal() {
         <EmptyState
           icon={<IconChartLine size={48} />}
           title="Aucune prévision disponible"
-          description="Les prévisions seront générées toutes les 6h"
+          description="Les prévisions seront générées toutes les 6h. Le système est en train de calculer les premières prévisions."
+          action={{
+            label: "Rafraîchir",
+            onClick: () => window.location.reload()
+          }}
+        />
+      </Container>
+    );
+  }
+
+  // Si pas de stats calculables (données invalides)
+  if (!stats) {
+    return (
+      <Container size="xl" py="xl">
+        <PageHeader
+          title="Prévisions de marché"
+          icon={<IconChartLine size={28} />}
+          description="Analyse prédictive avec ML + LLM"
+        />
+        <EmptyState
+          icon={<IconChartLine size={48} />}
+          title="Données invalides"
+          description="Les prévisions chargées ne sont pas dans un format valide. Veuillez réessayer plus tard."
         />
       </Container>
     );
@@ -232,34 +277,42 @@ export default function ForecastsMinimal() {
                 {topForecasts.length} prévisions
               </Badge>
             </Group>
-            <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="lg" data-testid="forecasts-grid">
-              {topForecasts.map((forecast) => {
-                const confidence = (forecast.confidence || 0) * 100;
-                const expectedReturn = (forecast.expected_return || 0) * 100;
-                const isUp = forecast.direction === 'up';
-                const isDown = forecast.direction === 'down';
-                
-                return (
-                  <ProgressRing
-                    key={`${forecast.ticker}-${forecast.horizon}`}
-                    label={forecast.ticker}
-                    value={confidence}
-                    color={isUp ? 'teal' : isDown ? 'red' : 'gray'}
-                    subtitle={`${expectedReturn > 0 ? '+' : ''}${expectedReturn.toFixed(2)}% attendu`}
-                    badge={{
-                      label: forecast.horizon || '1d',
-                      color: isUp ? 'teal' : isDown ? 'red' : 'gray',
-                    }}
-                    icon={isUp ? <IconTrendingUp size={16} /> : isDown ? <IconTrendingDown size={16} /> : <IconMinus size={16} />}
-                    size={120}
-                  />
-                );
-              })}
-            </SimpleGrid>
+            {topForecasts.length > 0 ? (
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="lg" data-testid="forecasts-grid">
+                {topForecasts.map((forecast) => {
+                  const confidence = (forecast.confidence || 0) * 100;
+                  const expectedReturn = (forecast.expected_return || 0) * 100;
+                  const isUp = forecast.direction === 'up';
+                  const isDown = forecast.direction === 'down';
+                  
+                  return (
+                    <ProgressRing
+                      key={`${forecast.ticker}-${forecast.horizon}`}
+                      label={forecast.ticker}
+                      value={confidence}
+                      color={isUp ? 'teal' : isDown ? 'red' : 'gray'}
+                      subtitle={`${expectedReturn > 0 ? '+' : ''}${expectedReturn.toFixed(2)}% attendu`}
+                      badge={{
+                        label: forecast.horizon || '1d',
+                        color: isUp ? 'teal' : isDown ? 'red' : 'gray',
+                      }}
+                      icon={isUp ? <IconTrendingUp size={16} /> : isDown ? <IconTrendingDown size={16} /> : <IconMinus size={16} />}
+                      size={120}
+                    />
+                  );
+                })}
+              </SimpleGrid>
+            ) : (
+              <EmptyState
+                icon={<IconSparkles size={48} />}
+                title="Aucune prévision avec confiance élevée"
+                description="Il n'y a pas de prévisions avec une confiance ≥ 60%. Réduisez le seuil ou attendez de nouvelles prévisions."
+              />
+            )}
           </Tabs.Panel>
 
           <Tabs.Panel value="radar" pt="xl">
-            {radarData.length > 0 && (
+            {radarData.length > 0 ? (
               <RadarChart
                 title="Scores Multi-Dimensionnels - Top 4 Prévisions"
                 description="Analyse complète : Confiance, Rendement, Momentum, Stabilité"
@@ -268,24 +321,38 @@ export default function ForecastsMinimal() {
                 categories={['Confiance', 'Rendement', 'Momentum', 'Stabilité']}
                 colors={['teal', 'blue', 'orange', 'indigo']}
               />
+            ) : (
+              <EmptyState
+                icon={<IconRadar size={48} />}
+                title="Pas de données pour le radar"
+                description="Il faut au moins 4 prévisions avec confiance élevée pour afficher le graphique radar"
+              />
             )}
           </Tabs.Panel>
 
           <Tabs.Panel value="sparklines" pt="xl">
             <Title order={3} mb="lg">Tendances par Ticker</Title>
-            <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
-              {sparklineData.map(({ ticker, data, latestValue, change }) => (
-                <SparklineCard
-                  key={ticker}
-                  label={ticker}
-                  value={`${latestValue > 0 ? '+' : ''}${latestValue.toFixed(2)}%`}
-                  change={change}
-                  data={data}
-                  color={change >= 0 ? 'teal' : 'red'}
-                  icon={change >= 0 ? <IconTrendingUp size={16} /> : <IconTrendingDown size={16} />}
-                />
-              ))}
-            </SimpleGrid>
+            {sparklineData.length > 0 ? (
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+                {sparklineData.map(({ ticker, data, latestValue, change }) => (
+                  <SparklineCard
+                    key={ticker}
+                    label={ticker}
+                    value={`${latestValue > 0 ? '+' : ''}${latestValue.toFixed(2)}%`}
+                    change={change}
+                    data={data}
+                    color={change >= 0 ? 'teal' : 'red'}
+                    icon={change >= 0 ? <IconTrendingUp size={16} /> : <IconTrendingDown size={16} />}
+                  />
+                ))}
+              </SimpleGrid>
+            ) : (
+              <EmptyState
+                icon={<IconChartLine size={48} />}
+                title="Pas de données de tendances"
+                description="Il faut au moins une prévision avec historique pour afficher les tendances"
+              />
+            )}
           </Tabs.Panel>
 
           <Tabs.Panel value="distribution" pt="xl">

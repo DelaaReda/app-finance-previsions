@@ -47,6 +47,10 @@ export function RiskMatrix({
     { label: 'Bas Rendement / Haut Risque', x: 50, y: 0, color: 'red' },
   ];
 
+  const formatValue = (value: number) => {
+    return `${value.toFixed(1)}%`;
+  };
+
   return (
     <Card padding="lg" radius="md" withBorder>
       <Stack gap="md">
@@ -70,7 +74,7 @@ export function RiskMatrix({
             showLegend={false}
             showGridLines
             showAnimation
-            valueFormatter={(value) => `${value.toFixed(1)}%`}
+            valueFormatter={formatValue}
           />
           
           {/* Quadrants overlay */}

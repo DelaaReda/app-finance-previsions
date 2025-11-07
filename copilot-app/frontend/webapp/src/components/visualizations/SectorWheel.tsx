@@ -60,6 +60,14 @@ export function SectorWheel({
   const radius = size / 2;
   const innerRadius = radius * 0.4;
 
+  const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+    return {
+      x: centerX + (radius * Math.cos(angleInRadians)),
+      y: centerY + (radius * Math.sin(angleInRadians)),
+    };
+  };
+
   const getPath = (startAngle: number, endAngle: number, outerRadius: number, innerRadius: number) => {
     const start = polarToCartesian(radius, radius, outerRadius, startAngle);
     const end = polarToCartesian(radius, radius, outerRadius, endAngle);
@@ -75,14 +83,6 @@ export function SectorWheel({
       `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
       'Z',
     ].join(' ');
-  };
-
-  const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
-    const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
-    return {
-      x: centerX + (radius * Math.cos(angleInRadians)),
-      y: centerY + (radius * Math.sin(angleInRadians)),
-    };
   };
 
   return (

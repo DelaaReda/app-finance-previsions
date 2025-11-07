@@ -24,8 +24,9 @@ export default function BacktestsPage() {
     horizon: params.get('horizon') ?? undefined,
   }), [params]);
 
-  // Calculate robustness score if available
-  const robustnessScore = data?.results ? calculateRobustnessScore(data.results) : null;
+  // Calculate robustness score if available (gérer différentes structures)
+  const resultsForScore = data?.results || data?.overall_metrics || null;
+  const robustnessScore = resultsForScore ? calculateRobustnessScore(resultsForScore) : null;
 
   return (
     <Container size="xl" py="xl">
@@ -105,27 +106,41 @@ function BacktestContent({ strategy, universe, benchmark, horizon, data, isLoadi
 
   if (error) {
     return (
-      <Card padding="lg" radius="md" withBorder>
-        <Text c="red" fw={600}>Erreur: {String(error)}</Text>
-      </Card>
-    );
-  }
-
-  if (!data || !data.results) {
-    return (
       <EmptyState
         icon={<IconChartBar size={48} />}
-        title="Aucun backtest disponible"
-        description="Le système de backtesting est en cours de calcul"
+        title="Erreur de chargement"
+        description={error instanceof Error ? error.message : "Impossible de charger les backtests. Veuillez réessayer."}
+        action={{
+          label: "Rafraîchir",
+          onClick: () => window.location.reload()
+        }}
       />
     );
   }
 
-  const hitRate = data.results.hit_rate ? data.results.hit_rate * 100 : 0;
-  const cagr = data.results.cagr ? data.results.cagr * 100 : 0;
-  const maxDrawdown = data.results.max_drawdown ? Math.abs(data.results.max_drawdown * 100) : 0;
-  const volatility = data.results.volatility ? data.results.volatility * 100 : 0;
-  const nTrades = data.results.n_trades || 0;
+  // Vérifier si data.results existe (structure peut varier selon le hook)
+  const results = data?.results || data?.overall_metrics || null;
+  
+  if (!data || !results) {
+    return (
+      <EmptyState
+        icon={<IconChartBar size={48} />}
+        title="Aucun backtest disponible"
+        description="Le système de backtesting est en cours de calcul. Les résultats seront disponibles une fois les calculs terminés."
+        action={{
+          label: "Rafraîchir",
+          onClick: () => window.location.reload()
+        }}
+      />
+    );
+  }
+
+  // Gérer différentes structures de données (results ou overall_metrics)
+  const hitRate = (results.hit_rate ?? 0) * 100;
+  const cagr = (results.cagr ?? results.avg_return ?? 0) * 100;
+  const maxDrawdown = Math.abs((results.max_drawdown ?? 0) * 100);
+  const volatility = (results.volatility ?? 0) * 100;
+  const nTrades = results.n_trades ?? results.total_trades ?? 0;
 
   return (
     <Stack gap="xl">

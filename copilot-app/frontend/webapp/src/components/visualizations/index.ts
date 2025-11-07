@@ -19,4 +19,9 @@ export { SectorWheel } from './SectorWheel';
 export { HeatmapCalendar } from './HeatmapCalendar';
 export { VolumeProfile } from './VolumeProfile';
 export { SentimentGauge } from './SentimentGauge';
+export { OrderBook } from './OrderBook';
+export { EfficientFrontier } from './EfficientFrontier';
+export { CorrelationNetwork } from './CorrelationNetwork';
+export { TreemapChart } from './TreemapChart';
+export { SankeyDiagram } from './SankeyDiagram';
 
