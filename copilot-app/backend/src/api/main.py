@@ -1316,14 +1316,51 @@ def register_routes(app: FastAPI):
                         locale="fr",
                         meta={"scope": "judge_forecasts", "min_conf": request.min_conf, "max_er": request.max_er},
                     )
-                    # 1) Try direct G4F calls in order for fastest success
-                    try:
-                        from g4f.client import Client as _G4FClient  # type: ignore
-                        _client = _G4FClient()
-                        _sys = "Tu es un juge financier. Sois concis et factuel."
-                        selected_model = None
-                        for m in best_models[:6]:
-                            try:
+                    # 1) Try MULTIPLE PROVIDERS for maximum reliability
+                    tried_models = []
+                    
+                    # 1a) Try OpenAI directly if API key available (fastest + most reliable)
+                    import os as _os
+                    if _os.getenv("OPENAI_API_KEY") and not llm_response:
+                        try:
+                            import openai
+                            openai_client = openai.OpenAI(api_key=_os.getenv("OPENAI_API_KEY"))
+                            openai_models = ["gpt-4o-mini", "gpt-4o"]
+                            for om in openai_models:
+                                if om in [m.replace("openai/", "") for m in best_models[:3]]:  # Only if in best list
+                                    try:
+                                        t0 = datetime.now()
+                                        _res = openai_client.chat.completions.create(
+                                            model=om,
+                                            messages=[
+                                                {"role":"system","content":"Tu es un juge financier. Sois concis et factuel."},
+                                                {"role":"user","content":f"Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) + f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."}
+                                            ],
+                                            temperature=0.2,
+                                            max_tokens=180,
+                                        )
+                                        ans = _res.choices[0].message.content.strip()
+                                        dt_ms = (datetime.now() - t0).total_seconds()*1000.0
+                                        if ans:
+                                            llm_response = {"answer": ans, "model": f"openai/{om}", "citations": [], "provider": "OpenAI", "latency_ms": int(dt_ms)}
+                                            tried_models.append({"model": f"openai/{om}", "success": True, "latency_ms": int(dt_ms), "provider": "OpenAI"})
+                                            logger.info(f"[LLM_JUDGE] ✅ OpenAI SUCCESS: {om} in {int(dt_ms)}ms")
+                                            break
+                                    except Exception as _e:
+                                        tried_models.append({"model": f"openai/{om}", "success": False, "error": str(_e)[:50], "provider": "OpenAI"})
+                                        logger.warning(f"[LLM_JUDGE] OpenAI {om} failed: {str(_e)[:50]}")
+                        except Exception as _e:
+                            logger.warning(f"[LLM_JUDGE] OpenAI unavailable: {_e}")
+                    
+                    # 1b) Try G4F with TOP models (MORE models: 10 instead of 6)
+                    if not llm_response:
+                        try:
+                            from g4f.client import Client as _G4FClient  # type: ignore
+                            _client = _G4FClient()
+                            _sys = "Tu es un juge financier. Sois concis et factuel."
+                            selected_model = None
+                            for m in best_models[:10]:  # Try MORE models (was 6)
+                                try:
                                 prompt_user = (
                                     "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
                                     f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."
@@ -1335,34 +1372,45 @@ def register_routes(app: FastAPI):
                                     temperature=0.2,
                                     max_tokens=180,
                                 )
-                                ans = getattr(_res.choices[0].message, "content", "").strip()
-                                dt_ms = (datetime.now() - t0).total_seconds()*1000.0
-                                try:
-                                    logger.info("llm_judge.g4f_try", extra={"ctx": {"model": m, "ok": bool(ans), "ms": int(dt_ms), "len": len(ans or "")}})
-                                except Exception:
-                                    print(f"[LLM_JUDGE] try model={m} ok={bool(ans)} ms={int(dt_ms)} len={len(ans or '')}")
-                                if ans:
-                                    selected_model = m
-                                    llm_response = {"answer": ans, "model": m, "citations": []}
-                                    break
-                            except Exception as _e:
-                                try:
-                                    logger.warning("llm_judge.g4f_fail", extra={"ctx": {"model": m, "error": str(_e)}})
-                                except Exception:
-                                    print(f"[LLM_JUDGE] fail model={m} error={_e}")
-                    except Exception as _e:
-                        logger.warning("llm_judge.g4f_unavailable", extra={"ctx": {"error": str(_e)}})
+                                    ans = getattr(_res.choices[0].message, "content", "").strip()
+                                    dt_ms = (datetime.now() - t0).total_seconds()*1000.0
+                                    tried_models.append({"model": m, "success": bool(ans), "latency_ms": int(dt_ms), "provider": "G4F"})
+                                    try:
+                                        logger.info("llm_judge.g4f_try", extra={"ctx": {"model": m, "ok": bool(ans), "ms": int(dt_ms), "len": len(ans or "")}})
+                                    except Exception:
+                                        print(f"[LLM_JUDGE] try model={m} ok={bool(ans)} ms={int(dt_ms)} len={len(ans or '')}")
+                                    if ans:
+                                        selected_model = m
+                                        llm_response = {"answer": ans, "model": m, "citations": [], "provider": "G4F", "latency_ms": int(dt_ms)}
+                                        logger.info(f"[LLM_JUDGE] ✅ G4F SUCCESS: {m} in {int(dt_ms)}ms")
+                                        break
+                                except Exception as _e:
+                                    tried_models.append({"model": m, "success": False, "error": str(_e)[:50], "provider": "G4F"})
+                                    try:
+                                        logger.warning("llm_judge.g4f_fail", extra={"ctx": {"model": m, "error": str(_e)[:50]}})
+                                    except Exception:
+                                        print(f"[LLM_JUDGE] fail model={m} error={str(_e)[:50]}")
+                        except Exception as _e:
+                            logger.warning("llm_judge.g4f_unavailable", extra={"ctx": {"error": str(_e)}})
 
-                    # 2) If still nothing, use econ_llm_agent with candidates (may do its own retries)
+                    # 2) If still nothing, use econ_llm_agent (has its own multi-provider retry logic)
                     if llm_response is None:
-                        res = agent.analyze(ein)  # type: ignore
-                    else:
-                        res = None
-                    if isinstance(res, dict):
-                        # accept various keys the agent might use
-                        ans = (res.get("answer") or res.get("stdout") or res.get("response") or res.get("text") or "").strip()
-                        if ans:
-                            llm_response = {"answer": ans, "model": (best_models[0] if best_models else request.model or "g4f-auto"), "citations": []}
+                        try:
+                            t0 = datetime.now()
+                            res = agent.analyze(ein)  # type: ignore
+                            dt_ms = (datetime.now() - t0).total_seconds()*1000.0
+                            if isinstance(res, dict):
+                                # accept various keys the agent might use
+                                ans = (res.get("answer") or res.get("stdout") or res.get("response") or res.get("text") or "").strip()
+                                used_model = res.get("model") or (best_models[0] if best_models else request.model or "g4f-auto")
+                                if ans:
+                                    llm_response = {"answer": ans, "model": used_model, "citations": [], "provider": "EconomicAnalyst", "latency_ms": int(dt_ms)}
+                                    tried_models.append({"model": used_model, "success": True, "latency_ms": int(dt_ms), "provider": "EconomicAnalyst"})
+                                    logger.info(f"[LLM_JUDGE] EconomicAnalyst SUCCESS: {used_model} in {int(dt_ms)}ms")
+                                else:
+                                    tried_models.append({"model": used_model, "success": False, "error": "empty response", "provider": "EconomicAnalyst"})
+                        except Exception as _e:
+                            tried_models.append({"model": "EconomicAnalyst", "success": False, "error": str(_e)[:100], "provider": "EconomicAnalyst"})
                 except Exception as _e:
                     logger.warning(f"econ_llm_agent (working models) failed: {_e}")
 
@@ -1407,11 +1455,21 @@ def register_routes(app: FastAPI):
                 # Derive deterministic groups for UI quality flags only (not for fallback!)
                 derived = _derive(forecast_results, request.max_er, request.min_conf)
 
+                # Log final stats
+                if tried_models:
+                    success_models = [t for t in tried_models if t.get("success")]
+                    failed_models = [t for t in tried_models if not t.get("success")]
+                    logger.info(f"[LLM_JUDGE] FINAL STATS: tried={len(tried_models)} success={len(success_models)} failed={len(failed_models)}")
+                    if success_models:
+                        fastest = min(success_models, key=lambda x: x.get("latency_ms", 999999))
+                        logger.info(f"[LLM_JUDGE] FASTEST: {fastest['model']} ({fastest['provider']}) in {fastest['latency_ms']}ms")
+                
                 # Validate LLM response - NO FALLBACK allowed
                 if llm_response is None:
+                    tried_summary = f"Tried {len(tried_models)} models: " + ", ".join([f"{t['model']} ({t['provider']})" for t in tried_models[:5]])
                     raise HTTPException(
                         status_code=503, 
-                        detail="LLM Judge: All models failed. Tried multiple providers (DeepSeek, Qwen, Llama). No LLM available."
+                        detail=f"LLM Judge: All models failed. {tried_summary}. Check G4F connectivity or add OpenAI key."
                     )
                 
                 llm_model_name = str(llm_response.get("model", ""))
@@ -1426,7 +1484,9 @@ def register_routes(app: FastAPI):
                 
                 # Valid LLM response - use it!
                 forecast_text = llm_answer_text
-                ctx_text = f"LLM Judge analysis ({llm_model_name})"
+                provider_info = llm_response.get("provider", "unknown")
+                latency = llm_response.get("latency_ms", 0)
+                ctx_text = f"LLM Judge analysis ({llm_model_name} via {provider_info} - {latency}ms)"
 
                 # Prepare response in expected format; map chosen text to stdout.forecast
                 response_data = {
