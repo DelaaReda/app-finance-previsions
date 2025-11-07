@@ -21,7 +21,7 @@ Donc **pas de données simulées**.
 - `copilot-app/docs` (attention : certaines parties sont legacy)
 - `docs/LLM_JUDGE.md` (LLM Judge, sélection des modèles, watcher g4f)
 - `docs/FRONTEND_DATA_DEBUG.md` (protocole CLI pour débloquer les pages, vérifier les endpoints et bannir les mocks)
-
+- MUI is absolete, we use mantine and tremor frontend
 
 ### ✅ TOUJOURS LANCER LE PROJET AVEC LE SCRIPT FOURNI
 
@@ -303,11 +303,12 @@ curl http://localhost:5173/api/forecasts
 
 ## 🧠 COMMANDES UTILES
 
-### Trouver processus sur ports
+### Ports backend/frontend
 ```bash
-lsof -i :8050
-lsof -i :5173
-kill -9 <PID>
+# Les ports 8050 (backend) et 5173 (frontend) sont gérés par les scripts.
+# Si un conflit apparaît, évitez toute commande manuelle : relancez simplement le script officiel.
+./finance-copilot.sh stop
+./finance-copilot.sh start
 ```
 
 ### Arrêter tous les services proprement

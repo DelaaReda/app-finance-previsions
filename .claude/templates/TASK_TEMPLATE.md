@@ -68,20 +68,10 @@ def get_forecasts():
     return data
 ```
 
-### Material-UI Standards (Frontend):
+### Standards (Frontend):
 ```typescript
-// ✅ BON: Use MUI components
-import { Container, Box, Typography, Card, CardContent } from '@mui/material'
+// ✅ BON: MUI is absolete, we use mantine and tremor
 
-return (
-  <Container maxWidth="lg">
-    <Card>
-      <CardContent>
-        <Typography variant="h5">Title</Typography>
-      </CardContent>
-    </Card>
-  </Container>
-)
 
 // ❌ MAUVAIS: Inline styles
 return (

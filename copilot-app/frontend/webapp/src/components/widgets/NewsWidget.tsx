@@ -59,15 +59,11 @@ export function NewsWidget() {
             {[...Array(3)].map((_, i) => (
               <Card key={i} withBorder padding="sm">
                 <Stack gap="xs">
-                  <Text fw={600} size="sm">
-                    <Text size="sm" style={{ display: 'inline-block', width: '70%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
-                  </Text>
+                  <span style={{ display: 'block', width: '70%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginBottom: '8px' }}>&nbsp;</span>
                   <Group gap="xs">
-                    <Text size="sm" style={{ display: 'inline-block', width: '30%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
+                    <span style={{ display: 'inline-block', width: '30%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</span>
                   </Group>
-                  <Text size="xs" c="dimmed">
-                    <Text size="xs" style={{ display: 'inline-block', width: '60%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</Text>
-                  </Text>
+                  <span style={{ display: 'block', width: '60%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</span>
                 </Stack>
               </Card>
             ))}

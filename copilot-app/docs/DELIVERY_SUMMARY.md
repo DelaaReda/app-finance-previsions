@@ -331,7 +331,8 @@ tail -f logs/webapp.log
 
 **Port occupé:**
 ```bash
-lsof -ti:8050 | xargs kill -9
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh stop
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh start
 ```
 
 **Dépendances manquantes:**
