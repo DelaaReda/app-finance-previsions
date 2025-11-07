@@ -45,7 +45,7 @@ export function useForecasts(filters: {
         params.min_confidence = filters.min_confidence;
       }
       
-      const response = await apiGet<any>('/forecasts', params);
+      const response = await apiGet<any>('/api/forecasts', params);
       
       // Handle the response according to the backend's {ok, data} format
       if (response.ok && response.data) {

@@ -55,12 +55,13 @@ export function useMarketContext() {
   return useQuery<MarketContext>({
     queryKey: ['context', 'current'],
     queryFn: async () => {
-      const response = await apiGet<MarketContext>('/api/context/current');
-      if (response.ok && response.data) {
-        return response.data;
-      }
+      // TEMPORARY: Endpoint not yet implemented - return mock data
+      // TODO: Re-enable when /api/context/current is ready
+      // const response = await apiGet<MarketContext>('/api/context/current');
+      // if (response.ok && response.data) {
+      //   return response.data;
+      // }
 
-      console.warn('useMarketContext: endpoint /api/context/current indisponible', response.error);
       return {
         regime: 'NORMAL',
         confidence: 0,
@@ -78,8 +79,7 @@ export function useMarketContext() {
       } satisfies MarketContext;
     },
     staleTime: 5 * 60_000, // 5 minutes
-    refetchInterval: 5 * 60_000, // Auto-refetch every 5 minutes
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    refetchInterval: false, // Disabled while using mock data
+    retry: false, // No need to retry mock data
   });
 }

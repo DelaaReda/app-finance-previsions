@@ -60,7 +60,7 @@ export default function Stocks() {
   const changePercent = analysis?.stock?.changePercent ?? 0;
 
   return (
-    <Stack gap="xl">
+    <Stack gap="xl" data-testid="stocks-screener">
       <StocksScreenerWidget />
 
       <Heading order={2}>Analyse Actions</Heading>

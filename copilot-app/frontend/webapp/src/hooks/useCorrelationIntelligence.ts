@@ -49,27 +49,39 @@ export function useCorrelationIntelligence(options: UseCorrelationIntelligenceOp
   return useQuery<CorrelationIntelligence>({
     queryKey: ['correlations', 'analyzed', universe, window, threshold],
     queryFn: async () => {
-      // Build URL with query params
-      const params = new URLSearchParams();
-      if (universe && universe.length > 0) {
-        universe.forEach(ticker => params.append('universe', ticker));
-      }
-      params.append('window', window);
-      params.append('threshold', threshold.toString());
+      // TEMPORARY: Endpoint not yet implemented - return mock data
+      // TODO: Re-enable when /api/correlations/analyzed is ready
+      // const params = new URLSearchParams();
+      // if (universe && universe.length > 0) {
+      //   universe.forEach(ticker => params.append('universe', ticker));
+      // }
+      // params.append('window', window);
+      // params.append('threshold', threshold.toString());
+      //
+      // const url = `/api/correlations/analyzed?${params.toString()}`;
+      // const response = await fetch(url);
+      //
+      // if (!response.ok) {
+      //   throw new Error(`Failed to fetch correlation intelligence: ${response.statusText}`);
+      // }
+      //
+      // const data = await response.json();
+      // return data;
 
-      const url = `/api/correlations/analyzed?${params.toString()}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch correlation intelligence: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return {
+        matrix: [],
+        tickers: universe || [],
+        interesting_pairs: [],
+        summary: 'Correlation analysis coming soon.',
+        market_context: {
+          regime: 'normal',
+        },
+        generated_at: new Date().toISOString(),
+        valid_until: new Date().toISOString(),
+      } satisfies CorrelationIntelligence;
     },
     staleTime: 60 * 60_000, // 1 hour - correlations don't change frequently
-    refetchInterval: 60 * 60_000, // Auto-refetch every hour
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    refetchInterval: false, // Disabled while using mock data
+    retry: false, // No need to retry mock data
   });
 }

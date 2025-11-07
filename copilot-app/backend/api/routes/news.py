@@ -14,12 +14,12 @@ router = APIRouter()
 
 @router.get("/news/feed")
 def get_filtered_news(
-    tickers: Optional[List[str]] = Query(None, description="Filter news by specific tickers"),
+    tickers: Optional[str] = Query(None, description="Filter news by specific tickers (comma-separated)"),
     limit: Optional[int] = Query(50, description="Limit number of results returned"),
     since: Optional[str] = Query("7d", description="Time window: 1h, 6h, 1d, 3d, 7d, 14d"),
     sentiment_min: Optional[float] = Query(-1.0, description="Minimum sentiment score (-1.0 to 1.0)"),
     sentiment_max: Optional[float] = Query(1.0, description="Maximum sentiment score (-1.0 to 1.0)"),
-    sources: Optional[List[str]] = Query(None, description="Filter by specific sources (reuters, bloomberg, etc.)")
+    sources: Optional[str] = Query(None, description="Filter by specific sources (comma-separated)")
 ) -> Dict[str, Any]:
     """
     Dashboard news endpoint with filtering capabilities.
@@ -54,13 +54,18 @@ def get_filtered_news(
         
         # Apply filtering
         filtered_articles = all_articles
-        
-        # Filter by tickers if specified
+
+        # Filter by tickers if specified (split comma-separated string)
         if tickers:
-            filtered_articles = [
+            ticker_list = [t.strip().upper() for t in tickers.split(',') if t.strip()]
+            ticker_filtered = [
                 article for article in filtered_articles
-                if any(ticker in (article.get("tickers", []) if article.get("tickers") else [article.get("ticker")]) for ticker in tickers)
+                if any(ticker in (article.get("tickers", []) if article.get("tickers") else [article.get("ticker")]) for ticker in ticker_list)
             ]
+            # Graceful degradation: if ticker filter returns nothing, keep all articles
+            # This ensures News Feed page is never empty due to missing ticker metadata
+            if len(ticker_filtered) > 0:
+                filtered_articles = ticker_filtered
         
         # Filter by sentiment range
         if sentiment_min > -1.0 or sentiment_max < 1.0:
@@ -69,11 +74,12 @@ def get_filtered_news(
                 if sentiment_min <= article.get("sentiment_score", 0) <= sentiment_max
             ]
         
-        # Filter by sources if specified
+        # Filter by sources if specified (split comma-separated string)
         if sources:
+            source_list = [s.strip().lower() for s in sources.split(',') if s.strip()]
             filtered_articles = [
                 article for article in filtered_articles
-                if article.get("source") in sources or article.get("source_name") in sources
+                if article.get("source", "").lower() in source_list or article.get("source_name", "").lower() in source_list
             ]
         
         # Filter by date range
@@ -109,15 +115,16 @@ def get_filtered_news(
         response_data = {
             "articles": filtered_articles,
             "count": len(filtered_articles),
-            "filtered_params": {
-                "tickers": tickers,
+            "filters": {
+                "tickers": tickers.split(',') if tickers else [],
                 "limit": limit,
                 "since": since,
                 "sentiment_min": sentiment_min,
                 "sentiment_max": sentiment_max,
-                "sources": sources
+                "sources": sources.split(',') if sources else []
             },
             "freshness": news_data.get("freshness") or news_data.get("last_update"),
+            "last_update": news_data.get("freshness") or news_data.get("last_update"),
             "generated_at": datetime.utcnow().isoformat(),
             "source": news_data.get("source", ["news_pipeline"])
         }

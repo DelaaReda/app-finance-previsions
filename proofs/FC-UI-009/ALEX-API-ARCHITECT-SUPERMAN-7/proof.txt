@@ -3,34 +3,33 @@
 ## Tâche: Error Boundary global
 
 ## Résumé
-Mise en place d'un ErrorBoundary global pour intercepter les erreurs runtime front-end et afficher un état contrôlé au lieu d'un crash brutal.
+Implémentation d'un ErrorBoundary global pour intercepter les erreurs JavaScript runtime et afficher un état contrôlé au lieu d'un crash brutal de l'interface.
 
 ## Changements apportés
-- Création du composant GlobalErrorBoundary.tsx avec gestion complète des erreurs
+- Création du composant GlobalErrorBoundary.tsx avec gestion complète des erreurs React
 - Intégration du composant dans main.tsx pour protéger l'application entière
 - Intégration du composant dans App.tsx pour protéger les routes
 - Journalisation des erreurs via console.error() avec détails du stack
-- Affichage d'UI contrôlée avec possibilité de réessayer
+- Interface utilisateur contrôlée avec bouton de réinitialisation
 - Affichage des détails techniques en mode développement
 
 ## Structure mise en place
-- Composant GlobalErrorBoundary basé sur la méthode class React Component
-- Utilisation de getDerivedStateFromError pour capturer les erreurs
-- Utilisation de componentDidCatch pour loguer les erreurs et le stack
-- Interface utilisateur dédiée avec bouton de réinitialisation
-- Informations détaillées accessibles en mode dev
-- ID unique pour chaque erreur affichée
+- Composant GlobalErrorBoundary basé sur React.Component avec getDerivedStateFromError et componentDidCatch
+- Fallback UI avec message d'erreur clair et bouton de réinitialisation
+- Gestion du state d'erreur avec details techniques
+- Affichage conditionnel des détails en mode développement seulement
+- Style consistant avec l'UI existante
 
 ## Fichiers modifiés
 - `frontend/webapp/src/components/system/GlobalErrorBoundary.tsx` - Nouveau composant ErrorBoundary
-- `frontend/webapp/src/main.tsx` - Remplacement de l'ErrorBoundary existant
-- `frontend/webapp/src/App.tsx` - Remplacement de l'ErrorBoundary existant
+- `frontend/webapp/src/main.tsx` - Intégration du wrapper ErrorBoundary
+- `frontend/webapp/src/App.tsx` - Intégration du wrapper ErrorBoundary
 
 ## Vérification
 - Le composant intercepte les erreurs JavaScript dans la chaîne des composants enfants
-- Les erreurs sont loguées dans la console avec details techniques
-- L'interface utilisateur affiche un message contrôlé au lieu du crash
-- L'utilisateur peut réessayer via le bouton de rafraîchissement
+- Les erreurs sont loguées dans la console avec détails du stack
+- L'interface utilisateur affiche un message contrôlé au lieu de crasher
+- L'utilisateur peut réinitialiser l'application via le bouton de rafraîchissement
 - Les détails techniques sont disponibles en mode développement
 - Le composant est placé au niveau le plus élevé possible pour couvrir l'application
 

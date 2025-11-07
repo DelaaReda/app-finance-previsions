@@ -49,18 +49,19 @@ export function useIntelligence() {
   return useQuery<IntelligenceSnapshot>({
     queryKey: ['intelligence', 'snapshot'],
     queryFn: async () => {
-      const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
-      if (response.ok && response.data) {
-        return response.data;
-      }
+      // TEMPORARY: Endpoint not yet implemented - return mock data
+      // TODO: Re-enable when /api/intelligence/snapshot is ready
+      // const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
+      // if (response.ok && response.data) {
+      //   return response.data;
+      // }
 
-      console.warn('useIntelligence: endpoint /api/intelligence/snapshot indisponible', response.error);
       return {
         insights: {
-          summary: 'Données intelligence indisponibles pour le moment.',
+          summary: 'Intelligence service coming soon.',
           market_regime: {
-            current: 'unknown',
-            explanation: 'Aucune donnée reçue du service.',
+            current: 'normal',
+            explanation: 'Mock data - endpoint not yet implemented.',
           },
           opportunities: [],
           risks: [],
@@ -74,8 +75,7 @@ export function useIntelligence() {
       } as IntelligenceSnapshot;
     },
     staleTime: 5 * 60_000, // 5 minutes
-    refetchInterval: 5 * 60_000, // Auto-refetch every 5 minutes
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    refetchInterval: false, // Disabled while using mock data
+    retry: false, // No need to retry mock data
   });
 }

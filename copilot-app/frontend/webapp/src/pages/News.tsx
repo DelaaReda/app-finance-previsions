@@ -4,7 +4,7 @@ import NewsFeed from '@/components/news/NewsFeed';
 
 export default function NewsPage() {
   return (
-    <Container size="lg" pt="xl" pb="xl">
+    <Container size="lg" pt="xl" pb="xl" data-testid="news-feed">
       <Stack gap="sm" mb="xl">
         <Heading order={2}>Actualités de marché</Heading>
         <Text c="dimmed">Flux temps réel scoré par pertinence et impact.</Text>

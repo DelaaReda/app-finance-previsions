@@ -41,10 +41,10 @@ function buildSearchParams(params: NewsRadarParams): Record<string, string> {
   if (universe.length) searchParams.tickers = universe.join(',');
   if (themes.length) searchParams.themes = themes.join(',');
   if (params.q) searchParams.q = params.q;
-  if (params.from) searchParams.from = params.from;
-  if (params.to) searchParams.to = params.to;
+  // Backend doesn't support 'from', 'to', 'sort' - use 'since' instead (e.g. "7d", "1h")
+  // Default to 7 days if no time range specified
+  searchParams.since = '7d';
   if (params.limit) searchParams.limit = String(params.limit);
-  if (params.sort) searchParams.sort = params.sort;
 
   return searchParams;
 }

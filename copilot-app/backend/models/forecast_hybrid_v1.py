@@ -4,8 +4,7 @@
 # Task: FC-P1-013 - ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Any
 import logging
 from datetime import datetime
 from g4f.client import Client
@@ -13,7 +12,6 @@ import json
 from pathlib import Path
 
 from .pipeline_news_macro_stocks_forecast import NewsMacroStocksForecastPipeline
-from .required_indicators import technical, fundamental, regime
 
 class ForecastHybridV1:
     """
@@ -42,8 +40,30 @@ class ForecastHybridV1:
         # Get the latest row
         latest = features_df.iloc[-1]
         
-        # Simple ML logic based on technical signals
-        signals = {
+        # Calculate signals using helper method
+        signals = self._calculate_technical_signals(latest)
+        
+        # Calculate composite direction based on signals
+        bullish_signals = self._calculate_bullish_score(signals)
+        bearish_signals = self._calculate_bearish_score(signals)
+        
+        # Determine direction and probability
+        direction, probability = self._determine_direction(bullish_signals, bearish_signals)
+        
+        # Calculate expected return based on signal strength
+        signal_strength = abs(bullish_signals - bearish_signals)
+        expected_return = signal_strength * (0.02 if direction == "up" else -0.02)  # Max 2% daily
+        
+        return {
+            "direction": direction,
+            "probability": probability,
+            "expected_return": expected_return,
+            "confidence": signal_strength
+        }
+    
+    def _calculate_technical_signals(self, latest: pd.Series) -> Dict[str, float]:
+        """Calculate technical signals from the latest data point."""
+        return {
             'ma_bullish': 1 if latest.get('sma_20', 0) > latest.get('sma_50', 0) else 0,
             'rsi_oversold': 1 if latest.get('rsi', 50) < 30 else 0,
             'rsi_overbought': 1 if latest.get('rsi', 50) > 70 else 0,
@@ -55,41 +75,32 @@ class ForecastHybridV1:
             'news_negative': 1 if latest.get('news_sentiment_score', 0) < -0.2 else 0,
             'high_volatility': 1 if latest.get('atr', 0) > latest.get('close', 1) * 0.03 else 0  # 3% of price
         }
-        
-        # Calculate composite direction based on signals
-        bullish_signals = (signals['ma_bullish'] * 0.2 +
-                          signals['rsi_oversold'] * 0.15 +
-                          signals['bb_bullish_breakout'] * 0.15 +
-                          signals['macd_bullish'] * 0.15 +
-                          signals['news_positive'] * 0.15)
-        
-        bearish_signals = (signals['rsi_overbought'] * 0.15 +
-                          signals['bb_bearish_breakout'] * 0.15 +
-                          signals['macd_bearish'] * 0.15 +
-                          signals['news_negative'] * 0.15 +
-                          signals['high_volatility'] * 0.1)
-        
-        # Determine direction
-        if bullish_signals > bearish_signals + 0.1:  # Threshold to avoid neutral
-            direction = "up"
-            probability = min(0.8, bullish_signals)
-        elif bearish_signals > bullish_signals + 0.1:
-            direction = "down"
-            probability = min(0.8, bearish_signals)
+    
+    def _calculate_bullish_score(self, signals: Dict[str, float]) -> float:
+        """Calculate bullish signal score."""
+        return (signals['ma_bullish'] * 0.2 +
+                signals['rsi_oversold'] * 0.15 +
+                signals['bb_bullish_breakout'] * 0.15 +
+                signals['macd_bullish'] * 0.15 +
+                signals['news_positive'] * 0.15)
+    
+    def _calculate_bearish_score(self, signals: Dict[str, float]) -> float:
+        """Calculate bearish signal score."""
+        return (signals['rsi_overbought'] * 0.15 +
+                signals['bb_bearish_breakout'] * 0.15 +
+                signals['macd_bearish'] * 0.15 +
+                signals['news_negative'] * 0.15 +
+                signals['high_volatility'] * 0.1)
+    
+    def _determine_direction(self, bullish_signals: float, bearish_signals: float) -> tuple:
+        """Determine forecast direction and probability based on signal strengths."""
+        threshold = 0.1  # Minimum difference to avoid neutral
+        if bullish_signals > bearish_signals + threshold:  # Bullish threshold
+            return "up", min(0.8, bullish_signals)
+        elif bearish_signals > bullish_signals + threshold:
+            return "down", min(0.8, bearish_signals)
         else:
-            direction = "neutral"
-            probability = 0.5
-            
-        # Calculate expected return based on signal strength
-        signal_strength = abs(bullish_signals - bearish_signals)
-        expected_return = signal_strength * (0.02 if direction == "up" else -0.02)  # Max 2% daily
-        
-        return {
-            "direction": direction,
-            "probability": probability,
-            "expected_return": expected_return,
-            "confidence": signal_strength
-        }
+            return "neutral", 0.5
     
     def get_llm_validation(self, ticker: str, ml_prediction: Dict, market_context: Dict) -> Dict:
         """
