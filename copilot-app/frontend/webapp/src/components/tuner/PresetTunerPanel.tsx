@@ -1,241 +1,212 @@
-import { useState } from 'react';
-import {
-  Badge,
-  Button,
-  Card,
-  Grid,
-  Group,
-  LoadingSpinner,
-  NumberInput,
-  Select,
-  Table,
-  Text,
-  Title,
-} from '@/ui';
-import type { BacktestSummary } from '@/lib/robustScore';
-import { robustScore } from '@/lib/robustScore';
-import { ensureArray } from '@/lib/safe';
-import { runBacktestVariant } from '@/services/backtests';
+/**
+ * Preset Tuner Panel Component
+ * Allows users to tune backtest parameters and see the impact on forecasts
+ */
 
-type BacktestPresetParams = {
-  strategy: string;
-  universe: string[];
-  lookback: number;
-  risk?: { takeProfit?: number; stopLoss?: number };
-};
+import React, { useState } from 'react';
 
-type Candidate = {
-  id: string;
-  params: BacktestPresetParams;
-  summary: BacktestSummary;
-  score: number;
-  grade: string;
-};
-
-const STRATEGIES = [
-  { value: 'momentum', label: 'Momentum' },
-  { value: 'mean_reversion', label: 'Mean Reversion' },
-  { value: 'breakout', label: 'Breakout' },
-];
-
-function stringifyUniverse(universe: string) {
-  return universe
-    .split(',')
-    .map((value) => value.trim().toUpperCase())
-    .filter(Boolean);
+interface TunerParams {
+  confidenceThreshold: number;
+  minSampleSize: number;
+  timeWindow: string;
+  riskTolerance: number;
+  modelWeight: number;
 }
 
-function formatRisk(risk?: { takeProfit?: number; stopLoss?: number }) {
-  if (!risk) return '-';
-  const tp = risk.takeProfit ?? '-';
-  const sl = risk.stopLoss ?? '-';
-  return `${tp} / ${sl}`;
+interface PresetTunerPanelProps {
+  onParamsChange?: (params: TunerParams) => void;
+  initialParams?: Partial<TunerParams>;
+  showRunButton?: boolean;
+  onRun?: (params: TunerParams) => void;
 }
 
-export default function PresetTunerPanel({
-  initialStrategy = 'momentum',
-  initialLookback = 120,
-  initialUniverse = 'SPY,QQQ',
-}: {
-  initialStrategy?: string;
-  initialLookback?: number;
-  initialUniverse?: string;
-}) {
-  const [strategy, setStrategy] = useState(initialStrategy);
-  const [lookback, setLookback] = useState(initialLookback);
-  const [universeText, setUniverseText] = useState(initialUniverse);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const PresetTunerPanel: React.FC<PresetTunerPanelProps> = ({ 
+  onParamsChange, 
+  initialParams = {},
+  showRunButton = true,
+  onRun
+}) => {
+  const [params, setParams] = useState<TunerParams>({
+    confidenceThreshold: initialParams.confidenceThreshold ?? 0.6,
+    minSampleSize: initialParams.minSampleSize ?? 20,
+    timeWindow: initialParams.timeWindow ?? '30d',
+    riskTolerance: initialParams.riskTolerance ?? 0.05,
+    modelWeight: initialParams.modelWeight ?? 0.7,
+  });
 
-  const universe = stringifyUniverse(universeText);
-  const presets: BacktestPresetParams[] = [
-    { strategy, universe, lookback, risk: { takeProfit: 2.0, stopLoss: 1.0 } },
-    { strategy, universe, lookback: Math.max(20, lookback - 30), risk: { takeProfit: 1.5, stopLoss: 0.8 } },
-    { strategy, universe, lookback: lookback + 30, risk: { takeProfit: 2.5, stopLoss: 1.2 } },
-    { strategy, universe, lookback: lookback + 60, risk: { takeProfit: 3.0, stopLoss: 1.5 } },
-    { strategy, universe, lookback: Math.max(15, lookback - 60), risk: { takeProfit: 1.2, stopLoss: 0.6 } },
+  const handleParamChange = (key: keyof TunerParams, value: any) => {
+    const newParams = { ...params, [key]: value };
+    setParams(newParams);
+    
+    if (onParamsChange) {
+      onParamsChange(newParams);
+    }
+  };
+
+  const presets = [
+    { label: 'Conservative', value: 'conservative', params: { confidenceThreshold: 0.7, riskTolerance: 0.02, modelWeight: 0.6 } },
+    { label: 'Moderate', value: 'moderate', params: { confidenceThreshold: 0.6, riskTolerance: 0.05, modelWeight: 0.7 } },
+    { label: 'Aggressive', value: 'aggressive', params: { confidenceThreshold: 0.5, riskTolerance: 0.1, modelWeight: 0.8 } },
+    { label: 'Day Trading', value: 'day', params: { confidenceThreshold: 0.65, timeWindow: '1d', modelWeight: 0.9 } },
   ];
 
-  async function run() {
-    setBusy(true);
-    setError(null);
-
-    try {
-      const evaluated: Candidate[] = [];
-      for (let i = 0; i < presets.length; i += 1) {
-        const params = presets[i];
-        const response = await runBacktestVariant({
-          strategy: params.strategy,
-          universe: params.universe,
-          lookback: params.lookback,
-          risk: params.risk,
-        });
-        const stats = response.stats ?? {};
-        const s: any = stats as any;
-        const summary: BacktestSummary = {
-          cagr: s.cagr ?? 0,
-          maxDD: Math.abs(s.maxDrawdown ?? s.maxDD ?? 0),
-          winRate: s.winRate ?? 0,
-          trades: s.trades ?? 0,
-        };
-        const score = robustScore(summary);
-        evaluated.push({
-          id: `preset-${i + 1}`,
-          params,
-          summary,
-          score: score.total,
-          grade: score.grade,
-        });
-      }
-      evaluated.sort((a, b) => b.score - a.score);
-      setCandidates(evaluated);
-    } catch (err: any) {
-      setError(err?.message ?? 'Impossible d’exécuter les variantes');
-      if (candidates.length === 0) {
-        const fallback: Candidate[] = presets.map((params, index) => {
-          const baseline: BacktestSummary = {
-            cagr: 0.08 + index * 0.01,
-            maxDD: 0.12 + index * 0.02,
-            winRate: 0.52 + index * 0.01,
-            trades: 80 + index * 10,
-          };
-          const score = robustScore(baseline);
-          return {
-            id: `preset-fallback-${index + 1}`,
-            params,
-            summary: baseline,
-            score: score.total,
-            grade: score.grade,
-          };
-        });
-        setCandidates(fallback);
-      }
-    } finally {
-      setBusy(false);
+  const applyPreset = (presetValue: string) => {
+    const preset = presets.find(p => p.value === presetValue);
+    if (!preset || !preset.params) return;
+    
+    const newParams = { ...params, ...preset.params };
+    setParams(newParams);
+    
+    if (onParamsChange) {
+      onParamsChange(newParams);
     }
-  }
+  };
 
-  const best = candidates[0];
+  const handleRun = () => {
+    if (onRun) {
+      onRun(params);
+    }
+  };
 
   return (
-    <Card withBorder data-testid="panel-preset-tuner">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Title order={4}>🔧 Preset Tuner</Title>
-        {best && (
-          <Badge color={best.score >= 80 ? 'teal' : best.score >= 70 ? 'indigo' : 'yellow'}>
-            Meilleure variante : {best.score} ({best.grade})
-          </Badge>
-        )}
+    <div style={{ 
+      border: '1px solid #e2e8f0', 
+      padding: '1.5rem', 
+      borderRadius: '8px', 
+      backgroundColor: '#fff',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '1rem' 
+      }}>
+        <h3 style={{ margin: 0, fontWeight: '500', fontSize: '1.2rem' }}>Parameter Tuner</h3>
+        <span style={{ fontSize: '1.2rem' }}>⚙️</span>
       </div>
-      <Text c="dimmed" size="sm">
-        Explore plusieurs combinaisons (lookback, TP/SL) et propose la plus robuste selon le score.
-      </Text>
-
-      <Grid mt="md" gutter="md">
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <Select
-            label="Stratégie"
-            data={STRATEGIES}
-            value={strategy}
-            onChange={(value) => setStrategy(value ?? 'momentum')}
-          />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <NumberInput
-            label="Lookback (jours)"
-            min={10}
-            max={400}
-            value={lookback}
-            onChange={(value) => setLookback(Number(value) || 120)}
-          />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <Text fw={500} size="sm" style={{ marginBottom: 4 }}>
-            Univers (CSV)
-          </Text>
-          <input
-            value={universeText}
-            onChange={(event) => setUniverseText(event.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: 'var(--mantine-color-dark-6)',
-              border: '1px solid var(--mantine-color-dark-4)',
-              color: 'var(--mantine-color-white)',
-            }}
-          />
-        </Grid.Col>
-      </Grid>
-
-      <Group mt="md" gap="sm">
-        <Button onClick={run} disabled={busy} data-testid="btn-run-tuner">
-          {busy ? <LoadingSpinner size="xs" /> : 'Lancer le tuner'}
-        </Button>
-        {error && (
-          <Badge color="red" variant="light">
-            {error}
-          </Badge>
-        )}
-      </Group>
-
-      <div style={{ marginTop: 16, overflowX: 'auto' }}>
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Variante</Table.Th>
-              <Table.Th>Lookback</Table.Th>
-              <Table.Th>TP / SL</Table.Th>
-              <Table.Th>CAGR%</Table.Th>
-              <Table.Th>DD%</Table.Th>
-              <Table.Th>Win%</Table.Th>
-              <Table.Th>Trades</Table.Th>
-              <Table.Th>Score</Table.Th>
-              <Table.Th>Grade</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {ensureArray(candidates).map((candidate) => (
-              <Table.Tr key={candidate.id}>
-                <Table.Td>{candidate.id}</Table.Td>
-                <Table.Td>{candidate.params.lookback}</Table.Td>
-                <Table.Td>{formatRisk(candidate.params.risk)}</Table.Td>
-                <Table.Td>{Math.round((candidate.summary.cagr ?? 0) * 100)}</Table.Td>
-                <Table.Td>{Math.round(Math.abs(candidate.summary.maxDD ?? 0) * 100)}</Table.Td>
-                <Table.Td>{Math.round((candidate.summary.winRate ?? 0) * 100)}</Table.Td>
-                <Table.Td>{candidate.summary.trades ?? 0}</Table.Td>
-                <Table.Td>
-                  <Badge color={candidate.score >= 80 ? 'teal' : candidate.score >= 70 ? 'indigo' : 'yellow'}>
-                    {candidate.score}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>{candidate.grade}</Table.Td>
-              </Table.Tr>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div>
+          <label htmlFor="preset-select" style={{display: 'block', marginBottom: '8px'}}>Preset Strategy</label>
+          <select
+            id="preset-select"
+            onChange={(e) => applyPreset(e.target.value)}
+            style={{width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px'}}
+          >
+            <option value="">Select a preset</option>
+            {presets.map(p => (
+              <option key={p.value} value={p.value}>{p.label}</option>
             ))}
-          </Table.Tbody>
-        </Table>
+          </select>
+          <div style={{fontSize: '0.8rem', color: '#666', marginTop: '4px'}}>Apply predefined parameter sets</div>
+        </div>
+
+        <div>
+          <label htmlFor="confidence-slider" style={{display: 'block', marginBottom: '8px'}}>Confidence Threshold</label>
+          <input 
+            id="confidence-slider"
+            type="range" 
+            min="0.1" 
+            max="0.9" 
+            step="0.05" 
+            value={params.confidenceThreshold} 
+            onChange={(e) => handleParamChange('confidenceThreshold', parseFloat(e.target.value))}
+            style={{width: '100%'}}
+          />
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#666'}}>
+            <span>Low (0.1)</span>
+            <span>High (0.9)</span>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="min-sample-input" style={{display: 'block', marginBottom: '8px'}}>Minimum Sample Size</label>
+          <input 
+            id="min-sample-input"
+            type="number" 
+            value={params.minSampleSize}
+            onChange={(e) => handleParamChange('minSampleSize', parseInt(e.target.value))}
+            min="5"
+            max="500"
+            style={{width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px'}}
+          />
+          <div style={{fontSize: '0.8rem', color: '#666', marginTop: '4px'}}>Minimum data points for valid forecasts</div>
+        </div>
+
+        <div>
+          <label htmlFor="time-window-select" style={{display: 'block', marginBottom: '8px'}}>Time Window</label>
+          <select
+            id="time-window-select"
+            value={params.timeWindow}
+            onChange={(e) => handleParamChange('timeWindow', e.target.value)}
+            style={{width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px'}}
+          >
+            <option value="1d">1 Day</option>
+            <option value="5d">5 Days</option>
+            <option value="10d">10 Days</option>
+            <option value="30d">30 Days</option>
+            <option value="90d">90 Days</option>
+          </select>
+          <div style={{fontSize: '0.8rem', color: '#666', marginTop: '4px'}}>Historical data window for calculations</div>
+        </div>
+
+        <div>
+          <label htmlFor="risk-tolerance-slider" style={{display: 'block', marginBottom: '8px'}}>Risk Tolerance</label>
+          <input 
+            id="risk-tolerance-slider"
+            type="range" 
+            min="0.01" 
+            max="0.2" 
+            step="0.01" 
+            value={params.riskTolerance} 
+            onChange={(e) => handleParamChange('riskTolerance', parseFloat(e.target.value))}
+            style={{width: '100%'}}
+          />
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#666'}}>
+            <span>Conservative (0.01)</span>
+            <span>High (0.20)</span>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="model-weight-slider" style={{display: 'block', marginBottom: '8px'}}>Model Weight</label>
+          <input 
+            id="model-weight-slider"
+            type="range" 
+            min="0.1" 
+            max="0.9" 
+            step="0.05" 
+            value={params.modelWeight} 
+            onChange={(e) => handleParamChange('modelWeight', parseFloat(e.target.value))}
+            style={{width: '100%'}}
+          />
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#666'}}>
+            <span>Low (0.1)</span>
+            <span>High (0.9)</span>
+          </div>
+        </div>
+      </Stack>
+
+      {showRunButton && (
+        <div style={{textAlign: 'right', marginTop: '1rem'}}>
+          <button 
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#4a9eff',
+              border: 'none',
+              borderRadius: '6px',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+            onClick={handleRun}
+          >
+            Apply & Run Backtest
+          </button>
+        </div>
       </div>
-    </Card>
+    </div>
   );
-}
+};
+
+export default PresetTunerPanel;

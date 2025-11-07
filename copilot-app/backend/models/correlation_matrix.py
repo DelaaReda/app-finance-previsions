@@ -5,10 +5,50 @@ Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
 """
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
-import numpy as np
-from scipy.stats import pearsonr
-from pathlib import Path
-import json
+import sys
+import math
+import hashlib
+import re
+
+# Import numpy and scipy with fallbacks for environments where they're not available
+try:
+    import numpy as np
+    from scipy.stats import pearsonr
+    NUMPY_AVAILABLE = True
+except ImportError:
+    # Define basic fallbacks for environments without numpy/scipy
+    np = None
+    def pearsonr(x, y):
+        # Simple implementation of Pearson correlation coefficient
+        n = len(x)
+        if n <= 1:
+            return 0.0, 0.0  # No correlation with single point
+        
+        # Calculate means
+        try:
+            mean_x = sum(x) / n
+            mean_y = sum(y) / n
+        except:
+            return 0.0, 0.0  # Handle any numerical errors
+        
+        # Calculate numerator and denominators
+        try:
+            numerator = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+            sum_sq_x = sum((xi - mean_x) ** 2 for xi in x)
+            sum_sq_y = sum((yi - mean_y) ** 2 for yi in y)
+        except:
+            return 0.0, 0.0  # Handle any calculation errors
+        
+        denominator = math.sqrt(sum_sq_x * sum_sq_y)
+        
+        if denominator == 0:
+            return 0.0, 0.0  # No correlation if zero variance
+        
+        correlation = numerator / denominator
+        return correlation, 0.0  # Return 0.0 for p-value since we're not calculating it
+    
+    NUMPY_AVAILABLE = False
+
 
 class CorrelationMatrixCalculator:
     """
@@ -34,7 +74,7 @@ class CorrelationMatrixCalculator:
             # Extract common dates across all tickers
             all_dates = set()
             for ticker, prices in price_data.items():
-                dates = {p["date"] for p in prices if "date" in p and "close" in p}
+                dates = {str(p.get("date")) for p in prices if "date" in p and "close" in p and p.get("date")}
                 all_dates.update(dates)
             
             # Sort dates to ensure chronological order
@@ -54,25 +94,29 @@ class CorrelationMatrixCalculator:
             for ticker in tickers:
                 prices = price_data[ticker]
                 # Filter to only recent dates that are available for this ticker
-                ticker_prices = {p["date"]: p["close"] for p in prices if "date" in p and "close" in p}
+                ticker_prices = {str(p.get("date")): p.get("close") for p in prices if "date" in p and "close" in p and p.get("date")}
                 
                 closes = []
                 for date in recent_dates:
-                    if date in ticker_prices:
-                        closes.append(ticker_prices[date])
+                    date_str = str(date)
+                    if date_str in ticker_prices and ticker_prices[date_str] is not None:
+                        closes.append(ticker_prices[date_str])
                     else:
                         closes.append(None)  # Represent missing data as None
                 
                 # Only include tickers that have sufficient data
-                if all(c is not None for c in closes) and len(closes) >= 2:
+                non_none_closes = [c for c in closes if c is not None]
+                if len(non_none_closes) >= 2:  # Need at least 2 points for correlation
                     # Calculate returns from closes
                     returns = []
                     for i in range(1, len(closes)):
-                        if closes[i-1] != 0:
+                        if closes[i-1] is not None and closes[i] is not None and closes[i-1] != 0:
                             ret = (closes[i] - closes[i-1]) / closes[i-1]
                             returns.append(ret)
-                        else:
+                        elif closes[i-1] is not None and closes[i] is not None and closes[i-1] == 0:
                             returns.append(0.0)  # Default return if previous close is 0
+                        else:
+                            returns.append(0.0)  # Default for missing data points
                     
                     if len(returns) >= 2:  # Need at least 2 points for correlation
                         returns_matrix.append(returns)
@@ -90,31 +134,71 @@ class CorrelationMatrixCalculator:
                     "status": "insufficient_data"
                 }
             
-            # Convert to numpy array for correlation calculation
-            returns_array = np.array(returns_matrix)
-            
-            # Calculate correlation matrix
-            n_tickers = len(valid_tickers)
-            correlation_matrix = np.eye(n_tickers)  # Initialize identity matrix
-            
-            for i in range(n_tickers):
-                for j in range(i+1, n_tickers):
-                    # Calculate Pearson correlation coefficient
-                    try:
-                        correlation, _ = pearsonr(returns_array[i], returns_array[j])
-                        correlation_matrix[i][j] = correlation
-                        correlation_matrix[j][i] = correlation  # Correlation matrix is symmetric
-                    except Exception as e:
-                        # If correlation calculation fails, default to 0
-                        correlation_matrix[i][j] = 0.0
-                        correlation_matrix[j][i] = 0.0
+            # Convert to numpy array if available, otherwise use Python lists
+            if np is not None:
+                returns_array = np.array(returns_matrix)
+                
+                # Calculate correlation matrix using numpy
+                n_tickers = len(valid_tickers)
+                correlation_matrix = np.eye(n_tickers)  # Initialize identity matrix
+                
+                for i in range(n_tickers):
+                    for j in range(i+1, n_tickers):
+                        # Calculate Pearson correlation coefficient
+                        try:
+                            # Only use valid (non-null) returns for both tickers
+                            ticker1_returns = returns_array[i]
+                            ticker2_returns = returns_array[j]
+                            
+                            # Create mask for valid returns (non-NaN)
+                            valid_mask = ~(np.isnan(ticker1_returns) | np.isnan(ticker2_returns))
+                            if np.sum(valid_mask) >= 2:  # Need at least 2 valid points for correlation
+                                correlation, _ = pearsonr(ticker1_returns[valid_mask], ticker2_returns[valid_mask])
+                                correlation_matrix[i][j] = correlation
+                                correlation_matrix[j][i] = correlation  # Correlation matrix is symmetric
+                            else:
+                                correlation_matrix[i][j] = 0.0
+                                correlation_matrix[j][i] = 0.0
+                        except Exception as e:
+                            # If correlation calculation fails, default to 0
+                            print(f"Correlation calc error for {valid_tickers[i]} vs {valid_tickers[j]}: {e}")
+                            correlation_matrix[i][j] = 0.0
+                            correlation_matrix[j][i] = 0.0
+            else:
+                # Use fallback without numpy
+                n_tickers = len(valid_tickers)
+                correlation_matrix = [[0.0 if i != j else 1.0 for j in range(n_tickers)] for i in range(n_tickers)]
+                
+                for i in range(n_tickers):
+                    for j in range(i+1, n_tickers):
+                        # Calculate Pearson correlation coefficient using fallback
+                        try:
+                            ticker1_returns = returns_matrix[i]
+                            ticker2_returns = returns_matrix[j]
+                            
+                            # Only compute correlation for pairs where both have at least 2 valid values
+                            valid_pairs = [(r1, r2) for r1, r2 in zip(ticker1_returns, ticker2_returns) if r1 is not None and r2 is not None]
+                            if len(valid_pairs) >= 2:
+                                r1_vals, r2_vals = zip(*valid_pairs)
+                                correlation, _ = pearsonr(list(r1_vals), list(r2_vals))
+                                correlation_matrix[i][j] = correlation
+                                correlation_matrix[j][i] = correlation  # Correlation matrix is symmetric
+                            else:
+                                correlation_matrix[i][j] = 0.0
+                                correlation_matrix[j][i] = 0.0
+                        except Exception as e:
+                            # If correlation calculation fails, default to 0
+                            print(f"Correlation calc error for {valid_tickers[i]} vs {valid_tickers[j]}: {e}")
+                            correlation_matrix[i][j] = 0.0
+                            correlation_matrix[j][i] = 0.0
             
             # Convert matrix to dict format with ticker labels
             matrix_dict = {}
             for i, ticker_i in enumerate(valid_tickers):
                 matrix_dict[ticker_i] = {}
                 for j, ticker_j in enumerate(valid_tickers):
-                    matrix_dict[ticker_i][ticker_j] = float(correlation_matrix[i][j])
+                    correlation_value = correlation_matrix[i][j] if np is not None else correlation_matrix[i][j]
+                    matrix_dict[ticker_i][ticker_j] = float(correlation_value)
             
             return {
                 "matrix": matrix_dict,
@@ -127,6 +211,9 @@ class CorrelationMatrixCalculator:
             
         except Exception as e:
             print(f"Error calculating correlation matrix: {e}")
+            import traceback
+            traceback.print_exc()
+            
             # Return fallback structure to maintain never-empty contract
             return {
                 "matrix": {},

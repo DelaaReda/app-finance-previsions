@@ -51,6 +51,7 @@
 - [x] FC-P0-009: Vite proxy + .env configuration (devx improvement) - Proper proxy and env setup
 - [x] FC-P0-007: ErrorBoundary global (frontend) - Global error handling for stable UX
 - [x] FC-P0-010: Pre-push smoke hook infrastructure (quality gate) - Quality gates with automatic testing
+- [x] FC-NEW-021: Robustness Scoring & PDF Export - Complete scoring system for forecasts and backtests (Enhanced metrics)
 
 ## 📈 Points Gagnés
 - **Total**: 990 points

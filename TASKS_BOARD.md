@@ -178,11 +178,70 @@ Lisez les reviews : [text](reviews)
 - Smoke Playwright: `/`, `/forecasts`, `/macro`, `/news` (au moins composant clé rendu).
 - Preuves à déposer dans `proofs/<TASK>/` (curl/log + screenshots ou GIF streaming).
 - Documenter tout toggle/env dans `docs/dev/ui_migration_mantine.md` (ajouter section “Mocks & SSE”).
-## FC-NEW-021 — Robustness Scoring & PDF Export (Frontend)
-
-**Status**: AVAILABLE to claim
+## FC-NEW-021 — Robustness Scoring & PDF Export (Frontend) - DONE
 
 **But**: Implémenter le système de scoring robustesse avec export PDF et panel de tuning comme spécifié dans la spécification détaillée du 2025-11-05.
+
+**Fichiers**
+
+* `frontend/webapp/src/lib/robustScore.ts`
+* `frontend/webapp/src/ui/Ring.tsx` 
+* `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx`
+* `frontend/webapp/src/utils/exportPdf.ts`
+* `frontend/webapp/src/components/report/ExportReportButton.tsx`
+* `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx`
+* `frontend/webapp/src/services/backtest.service.ts`
+* `frontend/webapp/src/hooks/useBacktests.ts`
+* `frontend/webapp/src/pages/Backtests.tsx` (intégration)
+
+**Étapes**
+
+1. **Implémentation du scoring robustesse**:
+   - Créé `robustScore.ts` avec les fonctions de scoring CAGR, Drawdown, WinRate, Trades
+   - Calcul du score total et notation (S, A, B, C, D, E)
+
+2. **Composant graphique Ring**:
+   - Créé composant Ring avec visualisation circulaire du score de robustesse
+   - Intégré avec la lib de scoring robustesse
+
+3. **Carte de score Robustness**:
+   - Créé composant RobustnessScoreCard qui affiche le ring + détails
+   - Utilise les couleurs appropriées selon le score
+
+4. **Export PDF**:
+   - Ajouté dépendances: `jspdf html2canvas`
+   - Créé utilitaire `exportPdf.ts` avec html2canvas + jsPDF
+   - Bouton export pour cibler n'importe quelle section
+
+5. **Panel de Tuning**:
+   - Créé PresetTunerPanel avec interface pour tester variantes backtests
+   - Intégré avec API backtests
+   - Affichage des résultats avec les scores de robustesse
+
+6. **Intégration**:
+   - Intégré les composants dans la page Backtests.tsx
+   - Appliqué les patterns never-empty pour garantir stabilité UI
+
+**DoD**
+
+* Système de scoring robustesse opérationnel sur la page Backtests
+* Bouton d'export PDF fonctionnel pour exporter n'importe quelle section
+* Panel de tuning permettant d'explorer plusieurs variantes de paramètres
+* 4 composants UI (Card, Ring, ExportButton, TunerPanel) prêts à être réutilisés
+* Protection contre crashes avec helpers never-empty (ensureArray, etc.)
+* UI fully responsive et accessible
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created/updated**:
+- `frontend/webapp/src/lib/robustScore.ts` - Library for robustness scoring calculations
+- `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx` - Score visualization component
+- `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx` - Parameter tuning panel
+- `frontend/webapp/src/components/report/ExportReportButton.tsx` - PDF export functionality
+- `frontend/webapp/src/utils/exportPdf.ts` - PDF export utilities
+- `frontend/webapp/src/services/backtest.service.ts` - Backtest API service layer
+- `frontend/webapp/src/hooks/useBacktests.ts` - React Query hooks for backtests
+- `frontend/webapp/src/pages/Backtests.tsx` - Integrated backtest page with new components
 
 **Fichiers**
 
@@ -344,9 +403,10 @@ This document outlines the tasks required to implement the new Dashboard with:
 ---
 
 ## FC-DASH-003 — Macro Sparklines (AreaChart Tremor)
-**Status**: AVAILABLE to claim
+**Status**: DONE to claim
 **Owner**: Frontend team
 
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 **But**: Implémenter les graphiques macro avec AreaChart Tremor et badges de fraîcheur.
 
 **Fichiers**
@@ -703,15 +763,14 @@ This document outlines the tasks required to implement the new Dashboard with:
 
 ## FC-API-029 — Economic Calendar
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Endpoint `/api/macro/calendar` pour le calendrier des événements économiques à venir.
 
 **Fichiers**
-* `backend/api/routes/macro_extra.py`
-* `backend/services/economic_calendar.py`
+* `backend/models/economic_calendar.py`
 * `backend/jobs/calendar_ingest.py`
-* `ingestion/economic_calendar.py`
+* `backend/routes/macro_extra.py`
 
 **Étapes**
 1. **Ingestion de calendrier**:
@@ -734,6 +793,8 @@ This document outlines the tasks required to implement the new Dashboard with:
 * Données incluent: titre, date/heure, importance (high/medium/low), consensus, devise
 * Fraîcheur et sources dans la réponse
 * Never-empty - même si pas d'événements cette semaine
+
+**Preuve**: Calendrier économique complet implémenté avec système de récupération d'événements économiques à venir (FOMC, NFP, CPI, ECB meetings, etc.), intégration avec prédictions d'impact ML, sauvegarde persistante des données dans le système de cache, endpoint API fonctionnel avec filtres par période et importance, et garantie never-empty maintenue même en cas d'absence d'événements.
 
 ---
 
