@@ -56,11 +56,8 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/news" element={<News />} />
     <Route path="/news/radar" element={<NewsSignalRadar />} /> {/* FC-UX-002: News Signal Radar */}
     <Route path="/copilot" element={<Copilot />} />
-<<<<<<< HEAD
     <Route path="/portfolios" element={<Portfolios />} /> {/* API-PORTFOLIO-002: Portfolio management */}
-=======
     <Route path="/health" element={<HealthPage />} /> {/* FC-PHASE1-002: Health & Freshness Overview */}
->>>>>>> 7ea99cd (Phase stabilisation)
     <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<ForecastsMinimal />} />
     <Route path="/test" element={<TestSimple />} />

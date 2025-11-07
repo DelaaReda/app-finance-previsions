@@ -51,7 +51,7 @@
 - [x] Méthodologie de capture des problèmes avec screenshots documentée
 
 ## 📈 Points Gagnés
-- **Total**: 240 points
+- **Total**: 340 points
 - **Dernière mise à jour**: 2025-11-05
 
 ## 🔄 Tâches Planifiées
