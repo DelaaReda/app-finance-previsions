@@ -80,7 +80,7 @@ function DatasetHealthCard({
   const progressValue = Math.min(100, (latency_sec / 3600) * 100); // % of 1h
 
   return (
-    <Card withBorder shadow="sm" padding="lg" radius="md">
+    <Card withBorder shadow="sm" padding="lg" radius="md" data-testid="dataset-health-card">
       <Stack gap="md">
         {/* Header */}
         <Group justify="space-between" align="flex-start">
@@ -169,6 +169,7 @@ export default function HealthPage() {
           styles={{
             root: { borderLeft: `4px solid var(--mantine-color-${statusColor}-6)` }
           }}
+          data-testid="health-status-banner"
         >
           <Group justify="space-between">
             <div>
