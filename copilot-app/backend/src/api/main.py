@@ -1195,22 +1195,24 @@ def register_routes(app: FastAPI):
                         logger.warning(f"g4f_model_watcher load failed: {_e}")
                         best_models = []
 
-                    # If working list empty, fallback to VERIFIED working models from GitHub list
-                    # https://github.com/maruf009sultan/g4f-working/blob/main/working/working_results.txt
+                    # If working list empty, fallback to VERIFIED FREE models PRIORITIZED BY INTELLIGENCE
+                    # Strategy: Best REASONING models first (for financial forecasting)
                     if not best_models:
-                        # VERIFIED WORKING MODELS (tested and confirmed working)
+                        # TIER S - Best FREE Reasoning Models (Financial Analysis)
                         verified = [
-                            "deepseek-ai/DeepSeek-R1-0528",
-                            "deepseek-ai/DeepSeek-V3",
-                            "deepseek-ai/DeepSeek-V3-0324-Turbo",
-                            "Qwen/Qwen3-235B-A22B-Instruct-2507",
-                            "Qwen/Qwen3-Next-80B-A3B-Instruct",
-                            "Qwen/Qwen3-Coder-480B-A35B-Instruct-Turbo",
-                            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-                            "openai/gpt-oss-120b",
-                            "command-a-03-2025",
-                            "command-r-plus-08-2024",
-                            "gpt-4o-mini",
+                            "deepseek-ai/DeepSeek-R1-0528",           # #1 Best reasoning (CoT native)
+                            "deepseek-ai/DeepSeek-V3",                # #2 671B params, very powerful
+                            "claude-3-5-sonnet-20241022",             # #3 Puter.com - Excellent reasoning
+                            "Qwen/Qwen3-235B-A22B-Thinking-2507",     # #4 Reasoning mode native
+                            "deepseek-chat",                          # #5 Puter.com - Fast DeepSeek
+                            "Qwen/Qwen3-235B-A22B-Instruct-2507",     # #6 235B params
+                            "gemini-2.0-flash-exp",                   # #7 Puter.com - Google knowledge
+                            "meta-llama/Llama-3.3-70B-Instruct-Turbo", # #8 70B open source
+                            "command-r-plus-08-2024",                 # #9 Français natif
+                            "openai/gpt-oss-120b",                    # #10 120B params
+                            "deepseek-ai/DeepSeek-V3-0324-Turbo",     # Fallback
+                            "Qwen/Qwen3-Next-80B-A3B-Instruct",       # Fallback
+                            "command-a-03-2025",                      # Fallback
                         ]
                         try:
                             from analytics.econ_llm_agent import POWER_NOAUTH_MODELS  # type: ignore
@@ -1257,15 +1259,17 @@ def register_routes(app: FastAPI):
                     # drop obvious placeholder entries
                     best_models = [m for m in best_models if m and m != "*"]
 
-                    # Append MORE safety fallbacks (verified working)
+                    # Append MORE safety fallbacks (FREE, prioritized by intelligence)
                     safety_fallbacks = [
-                        "deepseek-ai/DeepSeek-R1-0528",
-                        "deepseek-ai/DeepSeek-V3",
-                        "Qwen/Qwen3-235B-A22B-Instruct-2507",
-                        "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-                        "openai/gpt-oss-120b",
-                        "command-a-03-2025",
-                        "gpt-4o-mini",
+                        "deepseek-ai/DeepSeek-R1-0528",           # Best reasoning
+                        "deepseek-ai/DeepSeek-V3",                # 671B params
+                        "claude-3-5-sonnet-20241022",             # Puter - Claude
+                        "deepseek-chat",                          # Puter - DeepSeek
+                        "gemini-2.0-flash-exp",                   # Puter - Gemini
+                        "Qwen/Qwen3-235B-A22B-Instruct-2507",     # 235B params
+                        "meta-llama/Llama-3.3-70B-Instruct-Turbo", # 70B
+                        "openai/gpt-oss-120b",                    # 120B
+                        "command-r-plus-08-2024",                 # Cohere
                     ]
                     for fallback_model in safety_fallbacks:
                         if fallback_model not in best_models:
@@ -1316,50 +1320,60 @@ def register_routes(app: FastAPI):
                         locale="fr",
                         meta={"scope": "judge_forecasts", "min_conf": request.min_conf, "max_er": request.max_er},
                     )
-                    # 1) Try MULTIPLE PROVIDERS for maximum reliability
+                    # 1) Try MULTIPLE FREE PROVIDERS prioritized by INTELLIGENCE/REASONING
                     tried_models = []
                     
-                    # 1a) Try OpenAI directly if API key available (fastest + most reliable)
+                    # 1a) Try Puter.com first (FREE + Good reasoning models: Claude, DeepSeek, Gemini)
                     import os as _os
-                    if _os.getenv("OPENAI_API_KEY") and not llm_response:
+                    puter_token = _os.getenv("PUTER_API_TOKEN")
+                    if puter_token and not llm_response:
                         try:
                             import openai
-                            openai_client = openai.OpenAI(api_key=_os.getenv("OPENAI_API_KEY"))
-                            openai_models = ["gpt-4o-mini", "gpt-4o"]
-                            for om in openai_models:
-                                if om in [m.replace("openai/", "") for m in best_models[:3]]:  # Only if in best list
+                            puter_client = openai.OpenAI(
+                                api_key=puter_token,
+                                base_url="https://api.puter.com/v1"
+                            )
+                            # PRIORITY: Best reasoning models from Puter
+                            puter_models = [
+                                "claude-3-5-sonnet-20241022",  # Best reasoning
+                                "deepseek-chat",               # Fast reasoning
+                                "gemini-2.0-flash-exp",        # Google knowledge
+                            ]
+                            for pm in puter_models:
+                                if pm in best_models[:5]:  # Only if in our best list
                                     try:
                                         t0 = datetime.now()
-                                        _res = openai_client.chat.completions.create(
-                                            model=om,
+                                        _res = puter_client.chat.completions.create(
+                                            model=pm,
                                             messages=[
-                                                {"role":"system","content":"Tu es un juge financier. Sois concis et factuel."},
-                                                {"role":"user","content":f"Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) + f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco."}
+                                                {"role":"system","content":"Tu es un juge financier expert. Analyse avec reasoning approfondi et sois factuel."},
+                                                {"role":"user","content":f"Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) + f"\n\nmin_conf={request.min_conf}, max_er={request.max_er}. Verdict court + 1 reco claire."}
                                             ],
                                             temperature=0.2,
-                                            max_tokens=180,
+                                            max_tokens=200,
                                         )
                                         ans = _res.choices[0].message.content.strip()
                                         dt_ms = (datetime.now() - t0).total_seconds()*1000.0
                                         if ans:
-                                            llm_response = {"answer": ans, "model": f"openai/{om}", "citations": [], "provider": "OpenAI", "latency_ms": int(dt_ms)}
-                                            tried_models.append({"model": f"openai/{om}", "success": True, "latency_ms": int(dt_ms), "provider": "OpenAI"})
-                                            logger.info(f"[LLM_JUDGE] ✅ OpenAI SUCCESS: {om} in {int(dt_ms)}ms")
+                                            llm_response = {"answer": ans, "model": f"puter/{pm}", "citations": [], "provider": "Puter.com", "latency_ms": int(dt_ms)}
+                                            tried_models.append({"model": f"puter/{pm}", "success": True, "latency_ms": int(dt_ms), "provider": "Puter.com"})
+                                            logger.info(f"[LLM_JUDGE] ✅ Puter.com SUCCESS: {pm} in {int(dt_ms)}ms")
                                             break
                                     except Exception as _e:
-                                        tried_models.append({"model": f"openai/{om}", "success": False, "error": str(_e)[:50], "provider": "OpenAI"})
-                                        logger.warning(f"[LLM_JUDGE] OpenAI {om} failed: {str(_e)[:50]}")
+                                        tried_models.append({"model": f"puter/{pm}", "success": False, "error": str(_e)[:50], "provider": "Puter.com"})
+                                        logger.warning(f"[LLM_JUDGE] Puter.com {pm} failed: {str(_e)[:50]}")
                         except Exception as _e:
-                            logger.warning(f"[LLM_JUDGE] OpenAI unavailable: {_e}")
+                            logger.warning(f"[LLM_JUDGE] Puter.com unavailable: {_e}")
                     
-                    # 1b) Try G4F with TOP models (MORE models: 10 instead of 6)
+                    # 1b) Try G4F with BEST REASONING models (prioritized by intelligence)
                     if not llm_response:
                         try:
                             from g4f.client import Client as _G4FClient  # type: ignore
                             _client = _G4FClient()
-                            _sys = "Tu es un juge financier. Sois concis et factuel."
+                            _sys = "Tu es un juge financier expert. Utilise ton reasoning pour une analyse approfondie et factuelle."
                             selected_model = None
-                            for m in best_models[:10]:  # Try MORE models (was 6)
+                            # Try TOP 12 models (prioritized by intelligence/reasoning)
+                            for m in best_models[:12]:  # More tries for better success
                                 try:
                                 prompt_user = (
                                     "Contexte:\n" + "\n".join(c["text"] for c in context_chunks[:3]) +
