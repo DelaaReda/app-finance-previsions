@@ -11,9 +11,9 @@ import { IconBriefcase, IconChartPie, IconChartBar, IconTrendingUp } from '@tabl
 import { PortfolioManagerWidget } from '@/components/widgets/PortfolioManagerWidget'
 import PageHeader from '@/components/layout/PageHeader'
 import { SectorWheel, TreemapChart, EfficientFrontier } from '@/components/visualizations'
-import { useSectorAllocation, useEfficientFrontier } from '@/hooks'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { IconChartLine } from '@tabler/icons-react'
+import { useSectorAllocation } from '@/hooks/useSectorAllocation'
+import { useEfficientFrontier } from '@/hooks/useEfficientFrontier'
+import EmptyState from '@/components/ui/EmptyState'
 
 export default function Portfolios() {
   const { data: sectorData, isLoading: sectorLoading, error: sectorError } = useSectorAllocation()

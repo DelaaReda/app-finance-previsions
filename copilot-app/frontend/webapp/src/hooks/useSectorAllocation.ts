@@ -47,10 +47,12 @@ export function useSectorAllocation() {
         generated_at: new Date().toISOString(),
       } as SectorAllocation;
     },
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    staleTime: 15 * 60 * 1000, // 15 minutes - secteurs changent rarement
+    cacheTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: false, // Ne pas refetch si déjà en cache
   });
 }
 

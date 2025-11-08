@@ -71,10 +71,12 @@ export function useDashboardKPIs() {
         generated_at: new Date().toISOString(),
       } as DashboardKPIs;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes - données KPIs changent souvent
+    cacheTime: 5 * 60 * 1000, // 5 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: true, // Refetch au montage pour données fraîches
   });
 }
 

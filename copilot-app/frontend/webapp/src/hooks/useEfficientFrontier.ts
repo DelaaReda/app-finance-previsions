@@ -44,10 +44,12 @@ export function useEfficientFrontier() {
         generated_at: new Date().toISOString(),
       } as EfficientFrontier;
     },
-    staleTime: 60 * 60 * 1000, // 1 hour
-    cacheTime: 2 * 60 * 60 * 1000, // 2 hours
+    staleTime: 15 * 60 * 1000, // 15 minutes - calculs lourds mais cache agressif
+    cacheTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: false, // Ne pas refetch si déjà en cache
   });
 }
 

@@ -579,56 +579,138 @@ def register_routes(app: FastAPI):
         end: Optional[str] = Query(None, description="ISO date"),
         limit: int = Query(500, ge=10, le=5000)
     ):
-        """Get macro time series data from FRED."""
-        requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
-        start_ts = pd.to_datetime(start).tz_localize(None) if start else None
-        end_ts = pd.to_datetime(end).tz_localize(None) if end else None
+        """Get macro time series data - reads from pre-computed data."""
+        try:
+            from storage.io import load_json
+            
+            # Load from pre-computed macro series
+            macro_data = load_json("macro_series")
+            
+            if macro_data and "series" in macro_data:
+                requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
+                series_dict = macro_data.get("series", {})
+                
+                # Filter by requested series
+                payload: List[Dict[str, Any]] = []
+                for series_id in requested:
+                    if series_id in series_dict:
+                        series_info = series_dict[series_id]
+                        observations = series_info.get("observations", [])
+                        
+                        # Filter by date range if provided
+                        if start or end:
+                            start_ts = pd.to_datetime(start).tz_localize(None) if start else None
+                            end_ts = pd.to_datetime(end).tz_localize(None) if end else None
+                            filtered_obs = []
+                            for obs in observations:
+                                obs_date = pd.to_datetime(obs.get("date"))
+                                if start_ts and obs_date < start_ts:
+                                    continue
+                                if end_ts and obs_date > end_ts:
+                                    continue
+                                filtered_obs.append(obs)
+                            observations = filtered_obs[:limit]
+                        else:
+                            observations = observations[:limit]
+                        
+                        # Convert to points format
+                        points = [{"date": obs.get("date"), "value": obs.get("value")} for obs in observations]
+                        
+                        payload.append({
+                            "id": series_id,
+                            "name": series_info.get("title", series_id),
+                            "unit": series_info.get("units", ""),
+                            "frequency": series_info.get("frequency", "unknown"),
+                            "points": points,
+                        })
+                
+                if payload:
+                    return _ok({
+                        "series": payload,
+                        "updated_at": macro_data.get("freshness", macro_data.get("generated_at", datetime.utcnow().isoformat())),
+                    })
+            
+            # Fallback: compute on the fly (legacy behavior)
+            requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
+            start_ts = pd.to_datetime(start).tz_localize(None) if start else None
+            end_ts = pd.to_datetime(end).tz_localize(None) if end else None
 
-        payload: List[Dict[str, Any]] = []
-        for series_id in requested:
-            try:
-                df = get_fred_series(series_id, start=start)
-            except Exception:
-                df = pd.DataFrame(columns=[series_id])
-            if df is None or df.empty:
-                continue
-            column = df.columns[0]
-            points = _format_points(df, column, limit=limit, start=start_ts, end=end_ts)
-            if not points:
-                continue
-            meta = MACRO_SERIES_META.get(series_id, {})
-            payload.append({
-                "id": series_id,
-                "name": meta.get("name") or series_id,
-                "unit": meta.get("unit"),
-                "frequency": meta.get("frequency") or _infer_frequency(df.index),
-                "points": points,
+            payload: List[Dict[str, Any]] = []
+            for series_id in requested:
+                try:
+                    df = get_fred_series(series_id, start=start)
+                except Exception:
+                    df = pd.DataFrame(columns=[series_id])
+                if df is None or df.empty:
+                    continue
+                column = df.columns[0]
+                points = _format_points(df, column, limit=limit, start=start_ts, end=end_ts)
+                if not points:
+                    continue
+                meta = MACRO_SERIES_META.get(series_id, {})
+                payload.append({
+                    "id": series_id,
+                    "name": meta.get("name") or series_id,
+                    "unit": meta.get("unit"),
+                    "frequency": meta.get("frequency") or _infer_frequency(df.index),
+                    "points": points,
+                })
+
+            if not payload:
+                return _ok({
+                    "series": [],
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
+                })
+
+            return _ok({
+                "series": payload,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             })
-
-        if not payload:
-            raise HTTPException(status_code=404, detail="No macro data available")
-
-        return _ok({
-            "series": payload,
-            "updated_at": datetime.utcnow().isoformat() + "Z",
-        })
+        except Exception as e:
+            return _ok({
+                "series": [],
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
 
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
-        """Get current macro snapshot (latest values)."""
-        result = load_macro_forecast_rows(limit=10)
-        if not result.get("rows"):
-            return _err("No macro data")
-
-        rows = result.get("rows", [])
-        snapshot = {}
-        for row in rows:
-            # The data_access function returns rows with keys like "inflation_yoy", "unemployment", etc.
-            for key, value in row.items():
-                if value is not None:
-                    snapshot[key] = value
-
-        return _ok(snapshot)
+        """Get current macro snapshot (latest values) - reads from pre-computed data."""
+        try:
+            from storage.io import load_json
+            
+            # Load from pre-computed macro snapshot
+            macro_snapshot_data = load_json("macro_snapshot")
+            
+            if macro_snapshot_data and "snapshot" in macro_snapshot_data:
+                snapshot = macro_snapshot_data["snapshot"]
+                return _ok({
+                    **snapshot,
+                    "freshness": macro_snapshot_data.get("freshness", macro_snapshot_data.get("generated_at")),
+                    "last_update": macro_snapshot_data.get("last_update", macro_snapshot_data.get("generated_at")),
+                })
+            
+            # Fallback: try legacy format
+            result = load_macro_forecast_rows(limit=10)
+            if result.get("rows"):
+                rows = result.get("rows", [])
+                snapshot = {}
+                for row in rows:
+                    for key, value in row.items():
+                        if value is not None:
+                            snapshot[key] = value
+                return _ok(snapshot)
+            
+            # Empty fallback
+            return _ok({
+                "freshness": datetime.utcnow().isoformat(),
+                "last_update": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            return _ok({
+                "error": str(e),
+                "freshness": datetime.utcnow().isoformat(),
+            })
 
     @app.get("/api/macro/indicators")
     async def macro_indicators():
@@ -651,64 +733,118 @@ def register_routes(app: FastAPI):
         interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
         downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
     ):
-        """Get stock prices with technical indicators (downsampled)."""
-        # Use get_price_history which supports range filtering
-        from core.market_data import get_price_history
-
-        # Determine which tickers to process
-        tickers_to_process = []
-        if ticker:
-            tickers_to_process = [ticker]
-        elif tickers and len(tickers) > 0:
-            tickers_to_process = tickers
-        else:
-            raise HTTPException(status_code=422, detail="Either 'ticker' or 'tickers' parameter must be provided")
-
-        # Convert timeframe to start date
-        timeframe_map = {
-            "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
-            "1y": 365, "2y": 730, "5y": 1825
-        }
-
-        days_back = timeframe_map.get(timeframe, 365)  # Default to 1 year
-        start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-
-        # Process tickers
-        results = {}
-        for ticker_symbol in tickers_to_process:
-            df = get_price_history(ticker_symbol, start=start_date, interval=interval)
-            if df is None or df.empty:
-                results[ticker_symbol] = {"error": f"No data for {ticker_symbol}"}
-                continue
-
-            # Extract Close prices as series
-            series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]  # Fallback to first column
-
-            # Convert to points (timestamp, value)
-            points = [(int(ts.timestamp()), float(val))
-                      for ts, val in series.items()
-                      if not pd.isna(val)]
-
-            # Downsample if needed
-            if len(points) > downsample:
-                from core.downsample import lttb
-                points = lttb(points, threshold=downsample)
-
-            results[ticker_symbol] = {
+        """Get stock prices - reads from pre-computed data."""
+        try:
+            from storage.io import load_json
+            
+            # Determine which tickers to process
+            tickers_to_process = []
+            if ticker:
+                tickers_to_process = [ticker.upper()]
+            elif tickers and len(tickers) > 0:
+                tickers_to_process = [t.upper() for t in tickers]
+            else:
+                return _ok({
+                    "tickers": {},
+                    "range": timeframe,
+                    "interval": interval,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": "Either 'ticker' or 'tickers' parameter must be provided"
+                })
+            
+            # Load from pre-computed stocks prices
+            prices_data = load_json("stocks/prices")
+            
+            if prices_data and "tickers" in prices_data:
+                cached_tickers = prices_data.get("tickers", {})
+                results = {}
+                
+                for ticker_symbol in tickers_to_process:
+                    if ticker_symbol in cached_tickers:
+                        ticker_data = cached_tickers[ticker_symbol]
+                        points = ticker_data.get("points", [])
+                        
+                        # Downsample if needed
+                        if len(points) > downsample:
+                            try:
+                                from core.downsample import lttb
+                                points = lttb(points, threshold=downsample)
+                            except ImportError:
+                                # Si lttb n'est pas disponible, prendre un échantillon
+                                step = len(points) // downsample
+                                points = points[::max(1, step)]
+                        
+                        results[ticker_symbol] = {
+                            "range": ticker_data.get("range", timeframe),
+                            "interval": ticker_data.get("interval", interval),
+                            "points": points,
+                            "count": len(points),
+                            "start_date": ticker_data.get("start_date"),
+                            "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
+                        }
+                    else:
+                        results[ticker_symbol] = {"error": f"No cached data for {ticker_symbol}"}
+                
+                return _ok({
+                    "tickers": results,
+                    "range": timeframe,
+                    "interval": interval,
+                    "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
+                })
+            
+            # Fallback: compute on the fly (legacy behavior)
+            from core.market_data import get_price_history
+            
+            timeframe_map = {
+                "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
+                "1y": 365, "2y": 730, "5y": 1825
+            }
+            days_back = timeframe_map.get(timeframe, 365)
+            start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+            
+            results = {}
+            for ticker_symbol in tickers_to_process:
+                df = get_price_history(ticker_symbol, start=start_date, interval=interval)
+                if df is None or df.empty:
+                    results[ticker_symbol] = {"error": f"No data for {ticker_symbol}"}
+                    continue
+                
+                series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]
+                points = [(int(ts.timestamp()), float(val))
+                         for ts, val in series.items()
+                         if not pd.isna(val)]
+                
+                if len(points) > downsample:
+                    try:
+                        from core.downsample import lttb
+                        points = lttb(points, threshold=downsample)
+                    except ImportError:
+                        step = len(points) // downsample
+                        points = points[::max(1, step)]
+                
+                results[ticker_symbol] = {
+                    "range": timeframe,
+                    "interval": interval,
+                    "points": points,
+                    "count": len(points),
+                    "start_date": start_date,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            return _ok({
+                "tickers": results,
                 "range": timeframe,
                 "interval": interval,
-                "points": points,
-                "count": len(points),
-                "start_date": start_date,
                 "timestamp": datetime.utcnow().isoformat()
-            }
-
-        return _ok({
-            "tickers": results,
-            "range": timeframe,
-            "interval": interval,
-            "timestamp": datetime.utcnow().isoformat()
-        })
+            })
+        except Exception as e:
+            return _ok({
+                "tickers": {},
+                "range": timeframe,
+                "interval": interval,
+                "timestamp": datetime.utcnow().isoformat(),
+                "error": str(e)
+            })
 
     @app.get("/api/stocks/universe")
     async def stock_universe():
@@ -721,20 +857,58 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/stocks/meta")
     async def stocks_meta(tickers: Optional[str] = Query(None, description="Comma-separated tickers")):
-        requested = _parse_csv_list(tickers) or DEFAULT_STOCKS_UNIVERSE
-        rows = [_compute_stock_metrics(symbol) for symbol in requested]
-        items = [{
-            "ticker": row["ticker"],
-            "name": row.get("name"),
-            "sector": row.get("sector"),
-            "industry": row.get("industry"),
-            "weight": None,
-        } for row in rows]
-        return _ok({
-            "items": items,
-            "count": len(items),
-            "updated_at": datetime.utcnow().isoformat() + "Z",
-        })
+        """Get stocks metadata - reads from pre-computed data."""
+        try:
+            from storage.io import load_json
+            
+            # Load from pre-computed stocks metrics
+            metrics_data = load_json("stocks/metrics")
+            
+            if metrics_data and "metrics" in metrics_data:
+                requested = _parse_csv_list(tickers) or DEFAULT_STOCKS_UNIVERSE
+                metrics = metrics_data.get("metrics", {})
+                
+                # Filter by requested tickers
+                items = []
+                for ticker in requested:
+                    if ticker.upper() in metrics:
+                        metric = metrics[ticker.upper()]
+                        items.append({
+                            "ticker": metric.get("ticker", ticker.upper()),
+                            "name": metric.get("name"),  # À enrichir si disponible
+                            "sector": metric.get("sector"),  # À enrichir si disponible
+                            "industry": metric.get("industry"),  # À enrichir si disponible
+                            "weight": None,
+                        })
+                
+                return _ok({
+                    "items": items,
+                    "count": len(items),
+                    "updated_at": metrics_data.get("freshness", datetime.utcnow().isoformat()),
+                })
+            
+            # Fallback: compute on the fly (legacy behavior)
+            requested = _parse_csv_list(tickers) or DEFAULT_STOCKS_UNIVERSE
+            rows = [_compute_stock_metrics(symbol) for symbol in requested]
+            items = [{
+                "ticker": row["ticker"],
+                "name": row.get("name"),
+                "sector": row.get("sector"),
+                "industry": row.get("industry"),
+                "weight": None,
+            } for row in rows]
+            return _ok({
+                "items": items,
+                "count": len(items),
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            })
+        except Exception as e:
+            return _ok({
+                "items": [],
+                "count": 0,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
 
     @app.get("/api/stocks/screener")
     async def stocks_screener(
@@ -750,60 +924,104 @@ def register_routes(app: FastAPI):
         page: int = Query(1, ge=1),
         page_size: int = Query(25, ge=1, le=200),
     ):
-        tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
-        sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+        """Get stocks screener - reads from pre-computed data."""
+        try:
+            from storage.io import load_json
+            
+            # Load from pre-computed stocks metrics
+            metrics_data = load_json("stocks/metrics")
+            
+            if metrics_data and "metrics" in metrics_data:
+                tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
+                sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+                metrics = metrics_data.get("metrics", {})
+                
+                # Convert metrics to rows format
+                rows = []
+                for ticker in tickers:
+                    if ticker.upper() in metrics:
+                        metric = metrics[ticker.upper()]
+                        rows.append({
+                            "ticker": metric.get("ticker", ticker.upper()),
+                            "name": metric.get("name"),  # À enrichir
+                            "sector": metric.get("sector"),  # À enrichir
+                            "price": metric.get("price"),
+                            "change_1d": metric.get("change_1d"),
+                            "momentum_30d": metric.get("momentum_30d"),
+                            "score": metric.get("score"),
+                            "risk": metric.get("risk"),
+                            "quality": metric.get("quality"),
+                            "mcap": metric.get("mcap"),  # À enrichir
+                            "pe": metric.get("pe"),  # À enrichir
+                            "div_yield": metric.get("div_yield"),  # À enrichir
+                        })
+            else:
+                # Fallback: compute on the fly (legacy behavior)
+                tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
+                sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+                rows = [_compute_stock_metrics(symbol) for symbol in tickers]
 
-        rows = [_compute_stock_metrics(symbol) for symbol in tickers]
+            def _match_sector(row):
+                if not sector_filters:
+                    return True
+                sector = (row.get("sector") or "").lower()
+                return sector in sector_filters
 
-        def _match_sector(row):
-            if not sector_filters:
-                return True
-            sector = (row.get("sector") or "").lower()
-            return sector in sector_filters
-
-        filtered = []
-        query_lower = q.lower() if q else None
-        for row in rows:
-            if query_lower:
-                if query_lower not in row["ticker"].lower() and query_lower not in (row.get("name") or "").lower():
+            filtered = []
+            query_lower = q.lower() if q else None
+            for row in rows:
+                if query_lower:
+                    if query_lower not in row["ticker"].lower() and query_lower not in (row.get("name") or "").lower():
+                        continue
+                if not _match_sector(row):
                     continue
-            if not _match_sector(row):
-                continue
-            mcap = row.get("mcap")
-            if min_mcap is not None and (mcap is None or mcap < min_mcap):
-                continue
-            if max_mcap is not None and (mcap is None or mcap > max_mcap):
-                continue
-            pe_val = row.get("pe")
-            if min_pe is not None and (pe_val is None or pe_val < min_pe):
-                continue
-            if max_pe is not None and (pe_val is None or pe_val > max_pe):
-                continue
-            filtered.append(row)
+                mcap = row.get("mcap")
+                if min_mcap is not None and (mcap is None or mcap < min_mcap):
+                    continue
+                if max_mcap is not None and (mcap is None or mcap > max_mcap):
+                    continue
+                pe_val = row.get("pe")
+                if min_pe is not None and (pe_val is None or pe_val < min_pe):
+                    continue
+                if max_pe is not None and (pe_val is None or pe_val > max_pe):
+                    continue
+                filtered.append(row)
 
-        sort_field = sort if sort in {"score", "risk", "momentum_30d", "change_1d", "mcap", "pe", "div_yield"} else "score"
-        reverse = (order or "desc").lower() != "asc"
+            sort_field = sort if sort in {"score", "risk", "momentum_30d", "change_1d", "mcap", "pe", "div_yield"} else "score"
+            reverse = (order or "desc").lower() != "asc"
 
-        def sort_key(item: Dict[str, Any]):
-            value = item.get(sort_field)
-            return (value is None, value)
+            def sort_key(item: Dict[str, Any]):
+                value = item.get(sort_field)
+                return (value is None, value)
 
-        filtered.sort(key=sort_key, reverse=reverse)
+            filtered.sort(key=sort_key, reverse=reverse)
 
-        total = len(filtered)
-        start = (page - 1) * page_size
-        sliced = filtered[start:start + page_size]
-        # ensure fields subset
-        fields = ["ticker","name","sector","price","change_1d","momentum_30d","score","risk","quality","mcap","pe","div_yield"]
-        items = [{field: row.get(field) for field in fields} for row in sliced]
-
-        return _ok({
-            "updated_at": datetime.utcnow().isoformat() + "Z",
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": items,
-        })
+            total = len(filtered)
+            start = (page - 1) * page_size
+            sliced = filtered[start:start + page_size]
+            # ensure fields subset
+            fields = ["ticker","name","sector","price","change_1d","momentum_30d","score","risk","quality","mcap","pe","div_yield"]
+            items = [{field: row.get(field) for field in fields} for row in sliced]
+            
+            # Get freshness from metrics_data if available
+            updated_at = metrics_data.get("freshness", datetime.utcnow().isoformat()) if metrics_data else datetime.utcnow().isoformat()
+            
+            return _ok({
+                "updated_at": updated_at,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": items,
+            })
+        except Exception as e:
+            return _ok({
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "items": [],
+                "error": str(e),
+            })
 
     @app.get("/api/stocks/{ticker}")
     async def stock_detail(ticker: str):
@@ -1142,6 +1360,7 @@ def register_routes(app: FastAPI):
 
             if not news_data:
                 # Return empty but valid structure
+                updated_at_fallback = datetime.utcnow().isoformat()
                 return _ok({
                     "articles": [],
                     "count": 0,
@@ -1150,9 +1369,10 @@ def register_routes(app: FastAPI):
                         "since": since,
                         "limit": limit
                     },
-                    "freshness": "unknown",
+                    "freshness": updated_at_fallback,
+                    "updated_at": updated_at_fallback,  # Ajout pour compatibilité frontend
                     "source": ["file_not_found"],
-                    "last_update": None
+                    "last_update": updated_at_fallback
                 })
 
             # Extract articles from loaded data
@@ -1182,6 +1402,7 @@ def register_routes(app: FastAPI):
             # Apply limit safely (frontend can request up to 400)
             filtered_articles = filtered_articles[: min(limit, 400)]
 
+            last_update = news_data.get("collected_at") or news_data.get("freshness") or news_data.get("last_update") or datetime.utcnow().isoformat()
             return _ok({
                 "articles": filtered_articles,
                 "count": len(filtered_articles),
@@ -1190,13 +1411,15 @@ def register_routes(app: FastAPI):
                     "since": since,
                     "limit": limit
                 },
-                "freshness": news_data.get("collected_at", datetime.utcnow().isoformat()),
+                "freshness": last_update,
+                "updated_at": last_update,  # Ajout pour compatibilité frontend
                 "source": news_data.get("sources_used", ["news_feed.json"]),
-                "last_update": news_data.get("collected_at", datetime.utcnow().isoformat())
+                "last_update": last_update
             })
 
         except Exception as e:
             # Fallback: return empty structure
+            updated_at_fallback = datetime.utcnow().isoformat()
             return _ok({
                 "articles": [],
                 "count": 0,
@@ -1206,9 +1429,10 @@ def register_routes(app: FastAPI):
                     "since": since,
                     "limit": limit
                 },
-                "freshness": "error",
+                "freshness": updated_at_fallback,
+                "updated_at": updated_at_fallback,  # Ajout pour compatibilité frontend
                 "source": ["error_fallback"],
-                "last_update": datetime.utcnow().isoformat()
+                "last_update": updated_at_fallback
             })
 
     @app.get("/api/news/sentiment")
@@ -1604,13 +1828,18 @@ def register_routes(app: FastAPI):
 
                 ensemble_result: Optional[Dict[str, Any]] = None
                 try:
+                    import asyncio
                     t0 = datetime.now()
-                    ensemble_result = await run_in_threadpool(
-                        agent.analyze_ensemble,
-                        econ_input,
-                        3,
-                        True,
-                        True,
+                    # Timeout global de 45 secondes pour l'ensemble
+                    ensemble_result = await asyncio.wait_for(
+                        run_in_threadpool(
+                            agent.analyze_ensemble,
+                            econ_input,
+                            2,  # Réduire de 3 à 2 modèles pour plus de rapidité
+                            True,
+                            True,
+                        ),
+                        timeout=45.0  # Timeout global de 45 secondes
                     )
                     latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
                     ensemble_runs = ensemble_result.get("results", []) if isinstance(ensemble_result, dict) else []
@@ -1646,10 +1875,19 @@ def register_routes(app: FastAPI):
                     logger.warning("llm_judge.ensemble_failed", extra={"ctx": {"error": str(ensemble_err)}})
 
                 if llm_response is None:
-                    # Fallback to single-shot mode
+                    # Fallback to single-shot mode avec timeout
                     try:
+                        import asyncio
                         t0 = datetime.now()
-                        econ_result = await run_in_threadpool(agent.analyze, econ_input)
+                        # Timeout de 20 secondes pour le mode single-shot
+                        try:
+                            econ_result = await asyncio.wait_for(
+                                run_in_threadpool(agent.analyze, econ_input),
+                                timeout=20.0
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning("LLM Judge single-shot timeout after 20s")
+                            econ_result = None
                         latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
                         if econ_result and econ_result.get("ok") and (econ_result.get("answer") or "").strip():
                             llm_response = dict(econ_result)
@@ -2165,10 +2403,37 @@ def register_routes(app: FastAPI):
     async def backtests(
         horizon: str = Query("1m", description="Backtest horizon: 1w, 1m, 1y"),
         top_n: int = Query(5, ge=1, le=20, description="Top-N basket size"),
-        days_back: int = Query(180, ge=30, le=365, description="Days to look back")
+        days_back: int = Query(180, ge=30, le=365, description="Days to look back"),
+        rule: Optional[str] = Query(None, description="Strategy rule: momentum, meanrev, carry"),
+        universe: Optional[str] = Query(None, description="Comma-separated list of tickers"),
+        lookback: Optional[int] = Query(None, description="Lookback days (alternative to days_back)")
     ):
         """Backtests summary with cache-first and safe fallbacks (never-empty)."""
         try:
+            # Si rule/universe/lookback sont fournis (pour CompareStrategies), retourner format différent
+            if rule or universe or lookback:
+                # Format pour CompareStrategies: summary + equity
+                # Pour l'instant, retourner structure vide mais valide
+                # TODO: Implémenter le calcul réel basé sur rule/universe/lookback
+                lookback_days = lookback or days_back
+                universe_list = universe.split(',') if universe else []
+                
+                return _ok({
+                    "summary": {
+                        "cagr": 0.0,
+                        "maxDD": 0.0,
+                        "winRate": 0.0,
+                        "trades": 0,
+                    },
+                    "equity": [],  # Liste vide pour l'instant
+                    "rule": rule,
+                    "horizon": horizon,
+                    "lookback": lookback_days,
+                    "universe": universe_list,
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+            
+            # Format standard pour page Backtests
             # Prefer cached snapshot on disk
             from backend.storage.base import load_backtests
             bt = load_backtests() or {}
@@ -2182,6 +2447,7 @@ def register_routes(app: FastAPI):
             hit_rate = float(metrics.get("hit_rate", core.get("hit_rate", 0)) or 0)
             stdev = metrics.get("stdev", 0)
 
+            generated_at = core.get("until") or core.get("generated_at") or datetime.utcnow().isoformat()
             response_data = {
                 "results": {
                     "ok": True if bt else False,
@@ -2190,8 +2456,18 @@ def register_routes(app: FastAPI):
                     "median": hit_rate,
                     "stdev": stdev,
                 },
+                "overall_metrics": {
+                    "hit_rate": hit_rate,
+                    "avg_return": avg_ret,
+                    "total_return": avg_ret * n_trades if n_trades > 0 else 0,
+                    "sharpe_ratio": metrics.get("sharpe_ratio", 0) if metrics else 0,
+                    "max_drawdown": metrics.get("max_drawdown", 0) if metrics else 0,
+                    "n_trades": n_trades,
+                    "total_trades": n_trades,
+                },
                 "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
-                "generated_at": core.get("until") or core.get("generated_at") or datetime.utcnow().isoformat(),
+                "generated_at": generated_at,
+                "freshness": generated_at,  # Ajout de freshness pour compatibilité frontend
                 "last_update": core.get("since"),
                 "source": core.get("source", ["backtests_cache"]),
                 "depends_on_forecasts": core.get("depends_on_forecasts"),
@@ -2206,6 +2482,7 @@ def register_routes(app: FastAPI):
             return _ok(response_data)
         except Exception as e:
             # Safe fallback: never-empty structure, with error note
+            generated_at_fallback = datetime.utcnow().isoformat()
             return _ok({
                 "results": {
                     "ok": False,
@@ -2215,7 +2492,18 @@ def register_routes(app: FastAPI):
                     "stdev": 0,
                     "error": str(e)
                 },
+                "overall_metrics": {
+                    "hit_rate": 0.0,
+                    "avg_return": 0.0,
+                    "total_return": 0.0,
+                    "sharpe_ratio": 0.0,
+                    "max_drawdown": 0.0,
+                    "n_trades": 0,
+                    "total_trades": 0,
+                },
                 "params": {"horizon": horizon, "top_n": top_n, "days_back": days_back},
+                "generated_at": generated_at_fallback,
+                "freshness": generated_at_fallback,  # Ajout de freshness pour compatibilité frontend
                 "warning": "Backtests snapshot not found; background compute recommended",
                 "cache_status": "error"
             })

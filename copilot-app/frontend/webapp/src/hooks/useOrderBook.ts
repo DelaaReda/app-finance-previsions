@@ -58,6 +58,7 @@ export function useOrderBook(ticker: string, enabled: boolean = true) {
     retry: 1,
     retryDelay: 500,
     refetchInterval: 10 * 1000, // Refetch every 10 seconds for real-time feel
+    refetchOnWindowFocus: false, // Éviter refetch automatique (déjà géré par refetchInterval)
   });
 }
 

@@ -6,9 +6,12 @@ import json
 import os
 import sys
 import re
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 import time
+
+logger = logging.getLogger(__name__)
 
 try:
     from g4f.client import Client as G4FClient
@@ -83,7 +86,7 @@ def _pick_top3_distinct(models: List[str]) -> List[str]:
 CHAR_BUDGET = int(os.getenv("ECON_AGENT_CHAR_BUDGET", "60000"))
 MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "2048"))
 TEMPERATURE = float(os.getenv("ECON_AGENT_TEMPERATURE", "0.2"))
-TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "30"))
+TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "15"))  # Réduit de 30s à 15s par défaut
 RETRIES_PER_MODEL = int(os.getenv("ECON_AGENT_RETRIES", "1"))
 MODEL_LIST_LIMIT = int(os.getenv("ECON_AGENT_MAX_MODELS", "18"))
 DYNAMIC_MODEL_LIMIT = int(os.getenv("ECON_AGENT_MAX_DYNAMIC", "12"))

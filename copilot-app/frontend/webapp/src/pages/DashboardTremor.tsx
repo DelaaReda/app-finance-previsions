@@ -1,13 +1,16 @@
 // Dashboard VIVANT - Mantine + Tremor avec graphiques partout
 // Migration from MUI to Mantine/Tremor for better UX
 
-import { Container, Title, Text, Grid, Card, Badge, Group, Stack, Loader, Alert, Box } from '@mantine/core'
+import { Container, Title, Text, Grid, Card, Badge, Group, Stack, Loader, Alert, Box, SimpleGrid } from '@mantine/core'
 import { BarList, Metric, DonutChart } from '@tremor/react'
-import { IconTrendingUp, IconTrendingDown, IconActivity, IconAlertCircle } from '@tabler/icons-react'
+import { IconTrendingUp, IconTrendingDown, IconActivity, IconAlertCircle, IconChartLine } from '@tabler/icons-react'
 import { safeArray } from '@/lib/safe'
 import { useForecasts } from '@/hooks/useForecasts'
 import { useMacroSnapshot } from '@/hooks/useMacroData'
 import { useNewsCompat } from '@/hooks/useNewsCompat'
+import { useDashboardKPIs } from '@/hooks/useDashboardKPIs'
+import { StatsGrid } from '@/components/visualizations'
+import { Skeleton } from '@mantine/core'
 
 type CompositeSignal = {
   ticker: string
@@ -39,9 +42,10 @@ export default function DashboardTremor() {
   const forecastsQ = useForecasts({ horizon: 'short', universe: [] });
   const macroQ = useMacroSnapshot();
   const newsQ = useNewsCompat();
+  const kpisQ = useDashboardKPIs();
 
-  const isLoading = forecastsQ.isLoading || macroQ.isLoading || newsQ.loading;
-  const error = (forecastsQ.error ?? macroQ.error ?? (newsQ.error as any)) as any;
+  const isLoading = forecastsQ.isLoading || macroQ.isLoading || newsQ.loading || kpisQ.isLoading;
+  const error = (forecastsQ.error ?? macroQ.error ?? (newsQ.error as any) ?? kpisQ.error) as any;
 
   // Compose lightweight data
   const signals = safeArray(forecastsQ.data?.items).slice(0, 5).map((f: any) => ({
@@ -124,78 +128,113 @@ export default function DashboardTremor() {
           </Box>
         )}
 
-        {/* KPIs - Tremor Metrics */}
+        {/* KPIs - Enhanced with StatsGrid */}
         {!isLoading && data && (
           <>
-            <Grid gutter="lg">
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Card shadow="sm" padding="lg" radius="md" withBorder>
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="center">
-                      <Text size="sm" c="dimmed" fw={500}>
-                        Prévisions
+            {kpisQ.data && kpisQ.data.forecasts ? (
+              <StatsGrid
+                metrics={[
+                  {
+                    label: 'Prévisions',
+                    value: kpisQ.data.forecasts.total || 0,
+                    icon: <IconActivity size={20} />,
+                    color: 'blue',
+                    description: `${kpisQ.data.forecasts.high_confidence || 0} haute confiance`,
+                  },
+                  {
+                    label: 'Confiance Moy.',
+                    value: `${kpisQ.data.forecasts.avg_confidence || 0}%`,
+                    icon: <IconChartLine size={20} />,
+                    color: (kpisQ.data.forecasts.avg_confidence || 0) >= 70 ? 'teal' : 'orange',
+                    description: `Bullish: ${kpisQ.data.forecasts.bullish || 0} | Bearish: ${kpisQ.data.forecasts.bearish || 0}`,
+                  },
+                  {
+                    label: 'Hit Rate',
+                    value: `${kpisQ.data.backtests?.hit_rate || 0}%`,
+                    icon: <IconTrendingUp size={20} />,
+                    color: (kpisQ.data.backtests?.hit_rate || 0) >= 50 ? 'teal' : 'orange',
+                    description: `Sharpe: ${kpisQ.data.backtests?.sharpe_ratio || 0}`,
+                  },
+                  {
+                    label: 'News Récentes',
+                    value: kpisQ.data.news?.recent_count || 0,
+                    icon: <IconActivity size={20} />,
+                    color: 'indigo',
+                    description: `Score moy: ${kpisQ.data.news?.avg_score || 0}`,
+                  },
+                ]}
+              />
+            ) : (
+              <Grid gutter="lg">
+                <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                  <Card shadow="sm" padding="lg" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between" align="center">
+                        <Text size="sm" c="dimmed" fw={500}>
+                          Prévisions
+                        </Text>
+                        <IconActivity size={20} color="blue" />
+                      </Group>
+                      <Metric>{data.forecasts_count ?? 0}</Metric>
+                      <Text size="xs" c="dimmed">
+                        Dernière: {data.last_forecast_dt || '—'}
                       </Text>
-                      <IconActivity size={20} color="blue" />
-                    </Group>
-                    <Metric>{data.forecasts_count ?? 0}</Metric>
-                    <Text size="xs" c="dimmed">
-                      Dernière: {data.last_forecast_dt || '—'}
-                    </Text>
-                  </Stack>
-                </Card>
-              </Grid.Col>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
 
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Card shadow="sm" padding="lg" radius="md" withBorder>
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="center">
-                      <Text size="sm" c="dimmed" fw={500}>
-                        Tickers suivis
+                <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                  <Card shadow="sm" padding="lg" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between" align="center">
+                        <Text size="sm" c="dimmed" fw={500}>
+                          Tickers suivis
+                        </Text>
+                        <IconTrendingUp size={20} color="green" />
+                      </Group>
+                      <Metric>{data.tickers ?? 0}</Metric>
+                      <Text size="xs" c="dimmed">
+                        Univers analysé
                       </Text>
-                      <IconTrendingUp size={20} color="green" />
-                    </Group>
-                    <Metric>{data.tickers ?? 0}</Metric>
-                    <Text size="xs" c="dimmed">
-                      Univers analysé
-                    </Text>
-                  </Stack>
-                </Card>
-              </Grid.Col>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
 
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Card shadow="sm" padding="lg" radius="md" withBorder>
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="center">
-                      <Text size="sm" c="dimmed" fw={500}>
-                        Signaux détectés
+                <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                  <Card shadow="sm" padding="lg" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between" align="center">
+                        <Text size="sm" c="dimmed" fw={500}>
+                          Signaux détectés
+                        </Text>
+                        <IconTrendingUp size={20} color="teal" />
+                      </Group>
+                      <Metric>{signals.length}</Metric>
+                      <Text size="xs" c="dimmed">
+                        Opportunités
                       </Text>
-                      <IconTrendingUp size={20} color="teal" />
-                    </Group>
-                    <Metric>{signals.length}</Metric>
-                    <Text size="xs" c="dimmed">
-                      Opportunités
-                    </Text>
-                  </Stack>
-                </Card>
-              </Grid.Col>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
 
-              <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                <Card shadow="sm" padding="lg" radius="md" withBorder>
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="center">
-                      <Text size="sm" c="dimmed" fw={500}>
-                        Risques
+                <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
+                  <Card shadow="sm" padding="lg" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between" align="center">
+                        <Text size="sm" c="dimmed" fw={500}>
+                          Risques
+                        </Text>
+                        <IconTrendingDown size={20} color="red" />
+                      </Group>
+                      <Metric>{risks.length}</Metric>
+                      <Text size="xs" c="dimmed">
+                        Points d'attention
                       </Text>
-                      <IconTrendingDown size={20} color="red" />
-                    </Group>
-                    <Metric>{risks.length}</Metric>
-                    <Text size="xs" c="dimmed">
-                      Points d'attention
-                    </Text>
-                  </Stack>
-                </Card>
-              </Grid.Col>
-            </Grid>
+                    </Stack>
+                  </Card>
+                </Grid.Col>
+              </Grid>
+            )}
 
             {/* Signals & Risks - Tremor BarList */}
             <Grid gutter="lg">

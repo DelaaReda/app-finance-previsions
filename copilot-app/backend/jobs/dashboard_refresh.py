@@ -19,18 +19,22 @@ logger = logging.getLogger(__name__)
 
 try:
     from storage.io import save_json, load_json
-    from storage.base import save_json as save_json_base
 except ImportError:
     logger.warning("storage.io not available, using fallback")
     def save_json(key, payload, source=None, version="v1"):
-        data_dir = Path(__file__).parent.parent / "data" / "dashboard"
-        data_dir.mkdir(parents=True, exist_ok=True)
+        # Handle nested paths (e.g., "dashboard/kpis" -> data/dashboard/kpis.json)
+        data_dir = Path(__file__).parent.parent / "data"
         filepath = data_dir / f"{key}.json"
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         import json
-        filepath.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        final_payload = dict(payload)
+        final_payload["freshness"] = datetime.utcnow().isoformat() + "Z"
+        final_payload["source"] = source or []
+        final_payload["version"] = version
+        filepath.write_text(json.dumps(final_payload, ensure_ascii=False, indent=2))
     
     def load_json(key):
-        data_dir = Path(__file__).parent.parent / "data" / "dashboard"
+        data_dir = Path(__file__).parent.parent / "data"
         filepath = data_dir / f"{key}.json"
         if not filepath.exists():
             return None

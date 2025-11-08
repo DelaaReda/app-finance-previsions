@@ -60,7 +60,10 @@ class BacktestService {
       if (params.horizon) queryParams.horizon = params.horizon;
 
       // Use the apiGet function that already handles the {ok, data} envelope
-      const response = await apiGet<ApiResponse<BacktestMetrics>>('/backtests', queryParams);
+      // Timeout augmenté à 60s pour les backtests qui peuvent prendre du temps
+      const response = await apiGet<ApiResponse<BacktestMetrics>>('/backtests', queryParams, {
+        timeoutMs: 60000 // 60s pour permettre le calcul des backtests
+      });
       
       return response;
     } catch (error) {
@@ -93,9 +96,13 @@ class BacktestService {
       if (params.horizon) queryParams.horizon = params.horizon;
 
       // Use the apiGet function that already handles the {ok, data} envelope
+      // Timeout augmenté à 60s pour les backtests qui peuvent prendre du temps
       const response = await apiGet<ApiResponse<BacktestResult[]>>(
         `/backtests/detail/${ticker}`, 
-        queryParams
+        queryParams,
+        {
+          timeoutMs: 60000 // 60s pour permettre le calcul des backtests
+        }
       );
 
       return response;
@@ -114,7 +121,10 @@ class BacktestService {
   async getBacktestMetrics(): Promise<ApiResponse<any>> {
     try {
       // Use the apiGet function that already handles the {ok, data} envelope
-      const response = await apiGet<ApiResponse<any>>('/backtests/metrics');
+      // Timeout augmenté à 60s pour les backtests qui peuvent prendre du temps
+      const response = await apiGet<ApiResponse<any>>('/backtests/metrics', undefined, {
+        timeoutMs: 60000 // 60s pour permettre le calcul des backtests
+      });
       
       return response;
     } catch (error) {

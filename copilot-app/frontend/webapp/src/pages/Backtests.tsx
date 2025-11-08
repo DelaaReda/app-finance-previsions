@@ -136,11 +136,13 @@ function BacktestContent({ strategy, universe, benchmark, horizon, data, isLoadi
   }
 
   // Gérer différentes structures de données (results ou overall_metrics)
-  const hitRate = (results.hit_rate ?? 0) * 100;
-  const cagr = (results.cagr ?? results.avg_return ?? 0) * 100;
-  const maxDrawdown = Math.abs((results.max_drawdown ?? 0) * 100);
-  const volatility = (results.volatility ?? 0) * 100;
-  const nTrades = results.n_trades ?? results.total_trades ?? 0;
+  // Essayer d'abord overall_metrics, puis results, puis valeurs par défaut
+  const metrics = data?.overall_metrics || results || {};
+  const hitRate = (metrics.hit_rate ?? results?.hit_rate ?? 0) * 100;
+  const cagr = (metrics.cagr ?? metrics.avg_return ?? results?.cagr ?? results?.avg_return ?? 0) * 100;
+  const maxDrawdown = Math.abs((metrics.max_drawdown ?? results?.max_drawdown ?? 0) * 100);
+  const volatility = (metrics.volatility ?? results?.volatility ?? 0) * 100;
+  const nTrades = metrics.n_trades ?? metrics.total_trades ?? results?.n_trades ?? results?.total_trades ?? 0;
 
   return (
     <Stack gap="xl">

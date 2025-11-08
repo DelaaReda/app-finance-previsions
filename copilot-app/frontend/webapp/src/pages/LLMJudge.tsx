@@ -128,7 +128,7 @@ export default function LLMJudge() {
       const res = await apiPost<JudgeResponse>(
         '/api/llm/judge/run',
         { model, max_er: 0.08, min_conf: 0.6, tickers },
-        { timeoutMs: 60000 }
+        { timeoutMs: 90000 } // 90s pour permettre les optimisations backend (max 45s + overhead)
       )
       if (res.ok && res.data) {
         const ctx = res.data.stdout?.context ?? '—'

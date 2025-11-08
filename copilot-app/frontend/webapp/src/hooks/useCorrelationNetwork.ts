@@ -58,10 +58,12 @@ export function useCorrelationMatrix() {
         generated_at: new Date().toISOString(),
       } as CorrelationMatrix;
     },
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - corrélations changent moins souvent
     cacheTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: false, // Ne pas refetch si déjà en cache
   });
 }
 
@@ -89,10 +91,12 @@ export function useCorrelationNetwork(threshold: number = 0.5) {
         generated_at: new Date().toISOString(),
       } as CorrelationNetwork;
     },
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - corrélations changent moins souvent
     cacheTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: false, // Ne pas refetch si déjà en cache
   });
 }
 

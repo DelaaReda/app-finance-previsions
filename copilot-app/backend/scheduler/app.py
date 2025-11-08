@@ -87,6 +87,53 @@ class JobScheduler:
         )
         logger.info("Scheduled backtests job Wednesdays at 3:00 AM")
         
+        # Stocks metrics job - daily at 1:00 AM
+        try:
+            from backend.jobs.stocks_metrics_refresh import run_stocks_metrics_job
+            self.scheduler.add_job(
+                func=self._run_stocks_metrics_job,
+                trigger="cron",
+                hour=1,
+                minute=0,  # Daily at 1:00 AM
+                id='stocks_metrics_job',
+                name='Refresh stocks metrics',
+                replace_existing=True
+            )
+            logger.info("Scheduled stocks metrics job daily at 1:00 AM")
+        except ImportError as e:
+            logger.warning(f"Could not schedule stocks metrics job: {e}")
+        
+        # Stocks prices job - every 4 hours
+        try:
+            from backend.jobs.stocks_prices_refresh import run_stocks_prices_job
+            self.scheduler.add_job(
+                func=self._run_stocks_prices_job,
+                trigger="interval",
+                hours=4,  # Every 4 hours
+                id='stocks_prices_job',
+                name='Refresh stocks prices',
+                replace_existing=True
+            )
+            logger.info("Scheduled stocks prices job every 4 hours")
+        except ImportError as e:
+            logger.warning(f"Could not schedule stocks prices job: {e}")
+        
+        # Macro ingest job - daily at 0:30 AM
+        try:
+            from backend.jobs.macro_ingest import run_macro_ingest_job
+            self.scheduler.add_job(
+                func=self._run_macro_ingest_job,
+                trigger="cron",
+                hour=0,
+                minute=30,  # Daily at 0:30 AM
+                id='macro_ingest_job',
+                name='Refresh macro data',
+                replace_existing=True
+            )
+            logger.info("Scheduled macro ingest job daily at 0:30 AM")
+        except ImportError as e:
+            logger.warning(f"Could not schedule macro ingest job: {e}")
+        
         # G4F model watcher job - interval (default 120 minutes)
         watcher_interval_minutes = int(os.getenv("G4F_WATCHER_INTERVAL_MINUTES", "120") or "0")
         if watcher_interval_minutes > 0:
@@ -268,6 +315,96 @@ class JobScheduler:
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             save_json("job_g4f_watcher", job_metadata, source=["scheduler", "g4f_watcher", "error"])
+    
+    def _run_stocks_metrics_job(self):
+        """Run stocks metrics refresh job with error handling and logging"""
+        try:
+            from backend.jobs.stocks_metrics_refresh import run_stocks_metrics_job
+            logger.info("Starting stocks metrics job...")
+            start_time = datetime.utcnow()
+            result = run_stocks_metrics_job(force=False)
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            job_metadata = {
+                "job_id": "stocks_metrics_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            save_json("job_stocks_metrics", job_metadata, source=["scheduler", "stocks_metrics"])
+            logger.info(f"Stocks metrics job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Stocks metrics job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "stocks_metrics_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_stocks_metrics", job_metadata, source=["scheduler", "stocks_metrics", "error"])
+    
+    def _run_stocks_prices_job(self):
+        """Run stocks prices refresh job with error handling and logging"""
+        try:
+            from backend.jobs.stocks_prices_refresh import run_stocks_prices_job
+            logger.info("Starting stocks prices job...")
+            start_time = datetime.utcnow()
+            result = run_stocks_prices_job(force=False, timeframe="1y")
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            job_metadata = {
+                "job_id": "stocks_prices_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            save_json("job_stocks_prices", job_metadata, source=["scheduler", "stocks_prices"])
+            logger.info(f"Stocks prices job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Stocks prices job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "stocks_prices_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_stocks_prices", job_metadata, source=["scheduler", "stocks_prices", "error"])
+    
+    def _run_macro_ingest_job(self):
+        """Run macro ingest job with error handling and logging"""
+        try:
+            from backend.jobs.macro_ingest import run_macro_ingest_job
+            logger.info("Starting macro ingest job...")
+            start_time = datetime.utcnow()
+            result = run_macro_ingest_job()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            job_metadata = {
+                "job_id": "macro_ingest_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            save_json("job_macro_ingest", job_metadata, source=["scheduler", "macro_ingest"])
+            logger.info(f"Macro ingest job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Macro ingest job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "macro_ingest_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_macro_ingest", job_metadata, source=["scheduler", "macro_ingest", "error"])
     
     def start(self):
         """

@@ -25,6 +25,9 @@ import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSh
 import MarketBrief from './pages/MarketBrief'
 import Portfolios from './pages/Portfolios' // API-PORTFOLIO-002: Portfolio/Watchlist management
 import HealthPage from './pages/Health' // FC-PHASE1-002: Health & Freshness Overview
+import Diagnostics from './pages/Diagnostics' // Correlation analysis
+import Analytics from './pages/Analytics' // Capital flows analysis
+import Trading from './pages/Trading' // OrderBook visualization
 import TestSimple from './pages/TestSimple'
 
 // AppContent wrapper with Command Palette
@@ -61,6 +64,9 @@ const router = createBrowserRouter(
     <Route path="/copilot" element={<Copilot />} />
     <Route path="/portfolios" element={<Portfolios />} /> {/* API-PORTFOLIO-002: Portfolio management */}
     <Route path="/health" element={<HealthPage />} /> {/* FC-PHASE1-002: Health & Freshness Overview */}
+    <Route path="/diagnostics" element={<Diagnostics />} /> {/* Correlation analysis */}
+    <Route path="/analytics" element={<Analytics />} /> {/* Capital flows analysis */}
+    <Route path="/trading" element={<Trading />} /> {/* OrderBook visualization */}
     <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<ForecastsMinimal />} />
     <Route path="/test" element={<TestSimple />} />

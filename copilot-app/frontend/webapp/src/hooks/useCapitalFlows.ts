@@ -50,10 +50,12 @@ export function useCapitalFlows() {
         generated_at: new Date().toISOString(),
       } as CapitalFlows;
     },
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - flux changent modérément
     cacheTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,
     retryDelay: 1000,
+    refetchOnWindowFocus: false, // Éviter refetch automatique
+    refetchOnMount: false, // Ne pas refetch si déjà en cache
   });
 }
 
