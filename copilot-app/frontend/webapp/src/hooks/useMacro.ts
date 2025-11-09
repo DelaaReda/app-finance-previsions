@@ -49,6 +49,38 @@ export function useMacroSeries(params: {
       const json = await api.fetchJson<any>('/api/macro/series', { searchParams });
       const rawData = json?.data ?? json;
 
+      // Handle map format response from backend (when format=map is requested)
+      if (rawData && typeof rawData === 'object' && rawData.series_map) {
+        const seriesMap = rawData.series_map;
+        
+        // Convert map format to array format expected by UI
+        const series: MacroSeries[] = Object.entries(seriesMap).map(([seriesId, seriesDataAny]) => {
+          const seriesData = seriesDataAny as any;
+          
+          // Extract points from the series data
+          const points = ensureArray(seriesData.points || seriesData.data || []);
+          
+          return {
+            id: String(seriesId),
+            name: seriesData.name || seriesData.title || seriesId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            unit: seriesData.unit || null,
+            frequency: (seriesData.frequency || seriesData.freq || 'monthly') as MacroFreq,
+            points: points.map((point: any) => ({
+              date: String(point?.date || point?.time || point?.t || new Date().toISOString()),
+              value: point?.value != null ? Number(point.value) : null,
+            })),
+          };
+        });
+        
+        return {
+          updated_at: rawData?.updated_at || rawData?.generated_at || json?.updated_at || null,
+          series,
+          count: series.length,
+          filtered_params: { ids, start, end, frequency, collapse, format: 'map' },
+          format: 'map',  // Indicate the format for UI decision-making
+        };
+      }
+      
       // Handle snapshot data (array of objects with metrics as keys)
       if (Array.isArray(rawData) && rawData.length > 0 && !rawData[0]?.id && !rawData[0]?.points) {
         const snapshot = rawData[0]; // First (and likely only) snapshot
@@ -72,8 +104,8 @@ export function useMacroSeries(params: {
         };
       }
 
-      // Handle normal time series data
-      const series = ensureArray(json?.series ?? json?.items ?? json).map((serie: any) => ({
+      // Handle normal time series data (array format)
+      const series = ensureArray(rawData?.series ?? rawData?.items ?? rawData).map((serie: any) => ({
         id: String(serie?.id ?? ''),
         name: serie?.name ?? serie?.title ?? serie?.id ?? null,
         unit: serie?.unit ?? null,
@@ -87,6 +119,8 @@ export function useMacroSeries(params: {
       return {
         updated_at: json?.updated_at ?? null,
         series,
+        count: series.length,
+        format: 'array',
       };
     },
   });

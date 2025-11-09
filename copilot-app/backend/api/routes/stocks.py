@@ -202,3 +202,139 @@ def get_stocks_universe() -> Dict[str, Any]:
             "generated_at": datetime.utcnow().isoformat()
         })
 
+
+@router.get("/stocks/screener")
+def stocks_screener(
+    universe: Optional[str] = Query(None, description="Comma-separated universe tickers"),
+    sectors: Optional[str] = Query(None, description="Comma-separated sectors"),
+    q: Optional[str] = Query(None, description="Text search"),
+    min_mcap: Optional[float] = Query(None),
+    max_mcap: Optional[float] = Query(None),
+    min_pe: Optional[float] = Query(None),
+    max_pe: Optional[float] = Query(None),
+    sort: str = Query("score", description="Sort field: score, risk, momentum_30d, change_1d, mcap, pe, div_yield"),
+    order: str = Query("desc", description="Sort order: asc or desc"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(25, ge=1, le=200, description="Page size"),
+) -> Dict[str, Any]:
+    """
+    Get stocks screener with advanced filtering.
+    
+    Reads from pre-computed stocks metrics or computes on the fly.
+    
+    Returns:
+        Paginated list of stocks with metrics (score, risk, quality, etc.)
+    """
+    try:
+        # Default universe
+        DEFAULT_STOCKS_UNIVERSE = [
+            "SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "IBM"
+        ]
+        
+        def _parse_csv_list(value: Optional[str]) -> List[str]:
+            """Parse comma-separated string into list."""
+            if not value:
+                return []
+            return [t.strip().upper() for t in value.split(",") if t.strip()]
+        
+        # Load from pre-computed stocks metrics
+        metrics_data = load_json("stocks/metrics")
+        
+        if metrics_data and "metrics" in metrics_data:
+            tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
+            sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+            metrics = metrics_data.get("metrics", {})
+            
+            # Convert metrics to rows format
+            rows = []
+            for ticker in tickers:
+                if ticker.upper() in metrics:
+                    metric = metrics[ticker.upper()]
+                    rows.append({
+                        "ticker": metric.get("ticker", ticker.upper()),
+                        "name": metric.get("name"),
+                        "sector": metric.get("sector"),
+                        "price": metric.get("price"),
+                        "change_1d": metric.get("change_1d"),
+                        "momentum_30d": metric.get("momentum_30d"),
+                        "score": metric.get("score"),
+                        "risk": metric.get("risk"),
+                        "quality": metric.get("quality"),
+                        "mcap": metric.get("mcap"),
+                        "pe": metric.get("pe"),
+                        "div_yield": metric.get("div_yield"),
+                    })
+        else:
+            # Fallback: return empty with metadata
+            tickers = _parse_csv_list(universe) or DEFAULT_STOCKS_UNIVERSE
+            sector_filters = {s.lower() for s in _parse_csv_list(sectors)}
+            rows = []  # Empty fallback - data will be computed by jobs
+        
+        def _match_sector(row):
+            if not sector_filters:
+                return True
+            sector = (row.get("sector") or "").lower()
+            return sector in sector_filters
+        
+        # Apply filters
+        filtered = []
+        query_lower = q.lower() if q else None
+        for row in rows:
+            if query_lower:
+                if query_lower not in row["ticker"].lower() and query_lower not in (row.get("name") or "").lower():
+                    continue
+            if not _match_sector(row):
+                continue
+            mcap = row.get("mcap")
+            if min_mcap is not None and (mcap is None or mcap < min_mcap):
+                continue
+            if max_mcap is not None and (mcap is None or mcap > max_mcap):
+                continue
+            pe_val = row.get("pe")
+            if min_pe is not None and (pe_val is None or pe_val < min_pe):
+                continue
+            if max_pe is not None and (pe_val is None or pe_val > max_pe):
+                continue
+            filtered.append(row)
+        
+        # Sort
+        sort_field = sort if sort in {"score", "risk", "momentum_30d", "change_1d", "mcap", "pe", "div_yield"} else "score"
+        reverse = (order or "desc").lower() != "asc"
+        
+        def sort_key(item: Dict[str, Any]):
+            value = item.get(sort_field)
+            return (value is None, value)
+        
+        filtered.sort(key=sort_key, reverse=reverse)
+        
+        # Paginate
+        total = len(filtered)
+        start = (page - 1) * page_size
+        sliced = filtered[start:start + page_size]
+        
+        # Ensure fields subset
+        fields = ["ticker", "name", "sector", "price", "change_1d", "momentum_30d", "score", "risk", "quality", "mcap", "pe", "div_yield"]
+        items = [{field: row.get(field) for field in fields} for row in sliced]
+        
+        # Get freshness from metrics_data if available
+        updated_at = metrics_data.get("freshness", datetime.utcnow().isoformat()) if metrics_data else datetime.utcnow().isoformat()
+        
+        return ok({
+            "updated_at": updated_at,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": items,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in stocks screener: {str(e)}", exc_info=True)
+        return ok({
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "items": [],
+            "error": str(e),
+        })
+

@@ -345,6 +345,13 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include portfolios routes: {e}")
 
+    # Include analytics routes
+    try:
+        from api.routes.analytics import router as analytics_router
+        app.include_router(analytics_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include analytics routes: {e}")
+
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")
     async def startup_event():

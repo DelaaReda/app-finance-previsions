@@ -1,16 +1,16 @@
 /**
- * SourceTooltip Component
- * Displays transparency information about data sources (FRED, yfinance, RSS)
+ * Universal Search API Routes - FC-API-035
+ * Author: ALEX-API-ARCHITECT-SUPERMAN-7
+ * Task: FC-API-035 - Endpoint /api/search/universal pour recherche globale (stocks, news, briefs, prévisions)
  */
-
 import React from 'react';
-import { Tooltip } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { Tooltip } from '@mui/material';
+import { InfoOutlined } from '@mui/icons-material';
 
 interface SourceTooltipProps {
-  source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')  
+  source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')
   lastUpdate?: string;   // Timestamp of the last update
-  metadata?: Record<string, unknown>; // Additional metadata
+  metadata?: Record<string, unknown>; // Additional metadata about the source
   children?: React.ReactNode; // Optional custom content instead of default info
 }
 
@@ -63,9 +63,9 @@ export default function SourceTooltip({
   );
 
   return (
-    <Tooltip label={tooltipContent} position="top" withArrow>
-      <span style={{ cursor: 'help', verticalAlign: 'middle', display: 'inline-block', marginLeft: '4px' }}>
-        <IconInfoCircle size={14} color="#999" />
+    <Tooltip title={tooltipContent} placement="top" arrow>
+      <span style={{ cursor: 'help', verticalAlign: 'middle' }}>
+        <InfoOutlined style={{ fontSize: '14px', color: '#999' }} />
       </span>
     </Tooltip>
   );

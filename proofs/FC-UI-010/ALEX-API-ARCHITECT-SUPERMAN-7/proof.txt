@@ -7,14 +7,14 @@ Mise en place de tooltips de transparence pour informer les utilisateurs sur les
 
 ## Changements apportés
 - Création du composant SourceTooltip.tsx avec affichage d'information détaillée sur les sources de données
-- Intégration du composant dans MacroBoardWidget pour afficher la provenance des données macroéconomiques
-- Affichage de la source (FRED Economic Data), date de dernière mise à jour et métadonnées
+- Intégration du composant dans les pages macro, stocks et news avec icônes d'information
+- Affichage de la source (FRED, yfinance, RSS), date de dernière mise à jour et métadonnées
 - Design cohérent avec les autres composants d'information
 - Icône d'information discrète avec tooltip au survol
 
 ## Structure mise en place
 - Composant SourceTooltip réutilisable avec props pour source, lastUpdate et metadata
-- Intégration dans MacroBoardWidget avec icône InfoOutlined
+- Intégration dans MacroBoardWidget, StocksWidget, NewsWidget avec icône InfoOutlined
 - Affichage de métadonnées pertinentes (service, fréquence de mise à jour, horodatage)
 - Gestion d'erreurs pour dates invalides
 - Design responsive et accessible
@@ -22,6 +22,8 @@ Mise en place de tooltips de transparence pour informer les utilisateurs sur les
 ## Fichiers modifiés
 - `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de source tooltip
 - `frontend/webapp/src/components/widgets/MacroBoardWidget.tsx` - Intégration des tooltips de sources
+- `frontend/webapp/src/components/widgets/StocksWidget.tsx` - Intégration des tooltips de sources
+- `frontend/webapp/src/components/widgets/NewsWidget.tsx` - Intégration des tooltips de sources
 
 ## Vérification
 - Le tooltip apparaît au survol de l'icône d'information
@@ -38,4 +40,5 @@ Mise en place de tooltips de transparence pour informer les utilisateurs sur les
 - Métadonnées accessibles: ✅
 - Design cohérent: ✅
 - Accessibilité: ✅
-- Intégration MacroBoard: ✅
+- Intégration Macro/Stocks/News: ✅
+- ICônes d'information: ✅

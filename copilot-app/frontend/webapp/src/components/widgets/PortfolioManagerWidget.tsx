@@ -19,7 +19,6 @@ import {
   Menu,
   Loader,
   Alert,
-  MultiSelect,
 } from '@mantine/core'
 import {
   IconPlus,
@@ -328,8 +327,17 @@ function CreatePortfolioModal({ opened, onClose }: CreatePortfolioModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [tickers, setTickers] = useState<string[]>([])
+  const [newTicker, setNewTicker] = useState('')
   
   const createMutation = useCreatePortfolio()
+
+  const handleAddTicker = () => {
+    const ticker = newTicker.trim().toUpperCase()
+    if (ticker && !tickers.includes(ticker)) {
+      setTickers([...tickers, ticker])
+      setNewTicker('')
+    }
+  }
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -388,21 +396,49 @@ function CreatePortfolioModal({ opened, onClose }: CreatePortfolioModalProps) {
           minRows={2}
         />
 
-        <MultiSelect
-          label="Tickers"
-          placeholder="Enter tickers (e.g. AAPL, MSFT, GOOGL)"
-          data={[]}
-          value={tickers}
-          onChange={setTickers}
-          searchable
-          creatable
-          getCreateLabel={(query) => `+ Add ${query.toUpperCase()}`}
-          onCreate={(query) => {
-            const ticker = query.toUpperCase()
-            setTickers([...tickers, ticker])
-            return ticker
-          }}
-        />
+        <div>
+          <Text size="sm" fw={500} mb="xs">
+            Tickers
+          </Text>
+          <Group gap="xs" mb="xs">
+            <TextInput
+              placeholder="Enter ticker (e.g. AAPL)"
+              value={newTicker}
+              onChange={(e) => setNewTicker(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddTicker()
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+            <Button onClick={handleAddTicker} size="sm">
+              Add
+            </Button>
+          </Group>
+          {tickers.length > 0 && (
+            <Group gap="xs" mt="xs">
+              {tickers.map((ticker) => (
+                <Badge
+                  key={ticker}
+                  size="lg"
+                  variant="light"
+                  rightSection={
+                    <ActionIcon
+                      size="xs"
+                      variant="transparent"
+                      onClick={() => setTickers(tickers.filter((t) => t !== ticker))}
+                    >
+                      ×
+                    </ActionIcon>
+                  }
+                >
+                  {ticker}
+                </Badge>
+              ))}
+            </Group>
+          )}
+        </div>
 
         <Group justify="flex-end" mt="md">
           <Button variant="subtle" onClick={onClose}>
@@ -431,8 +467,17 @@ function EditPortfolioModal({ opened, portfolio, onClose }: EditPortfolioModalPr
   const [name, setName] = useState(portfolio.name)
   const [description, setDescription] = useState(portfolio.description)
   const [tickers, setTickers] = useState<string[]>(portfolio.tickers)
+  const [newTicker, setNewTicker] = useState('')
   
   const updateMutation = useUpdatePortfolio()
+
+  const handleAddTicker = () => {
+    const ticker = newTicker.trim().toUpperCase()
+    if (ticker && !tickers.includes(ticker)) {
+      setTickers([...tickers, ticker])
+      setNewTicker('')
+    }
+  }
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -491,21 +536,49 @@ function EditPortfolioModal({ opened, portfolio, onClose }: EditPortfolioModalPr
           minRows={2}
         />
 
-        <MultiSelect
-          label="Tickers"
-          placeholder="Enter tickers (e.g. AAPL, MSFT, GOOGL)"
-          data={tickers}
-          value={tickers}
-          onChange={setTickers}
-          searchable
-          creatable
-          getCreateLabel={(query) => `+ Add ${query.toUpperCase()}`}
-          onCreate={(query) => {
-            const ticker = query.toUpperCase()
-            setTickers([...tickers, ticker])
-            return ticker
-          }}
-        />
+        <div>
+          <Text size="sm" fw={500} mb="xs">
+            Tickers
+          </Text>
+          <Group gap="xs" mb="xs">
+            <TextInput
+              placeholder="Enter ticker (e.g. AAPL)"
+              value={newTicker}
+              onChange={(e) => setNewTicker(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddTicker()
+                }
+              }}
+              style={{ flex: 1 }}
+            />
+            <Button onClick={handleAddTicker} size="sm">
+              Add
+            </Button>
+          </Group>
+          {tickers.length > 0 && (
+            <Group gap="xs" mt="xs">
+              {tickers.map((ticker) => (
+                <Badge
+                  key={ticker}
+                  size="lg"
+                  variant="light"
+                  rightSection={
+                    <ActionIcon
+                      size="xs"
+                      variant="transparent"
+                      onClick={() => setTickers(tickers.filter((t) => t !== ticker))}
+                    >
+                      ×
+                    </ActionIcon>
+                  }
+                >
+                  {ticker}
+                </Badge>
+              ))}
+            </Group>
+          )}
+        </div>
 
         <Group justify="flex-end" mt="md">
           <Button variant="subtle" onClick={onClose}>

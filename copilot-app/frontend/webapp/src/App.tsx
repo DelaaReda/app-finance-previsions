@@ -9,7 +9,7 @@ import DevDebugPanel from './debug/DevDebugPanel';
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
-import ForecastsMinimal from './pages/ForecastsMinimal'
+import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
 import CompareStrategies from './pages/CompareStrategies'
@@ -68,7 +68,7 @@ const router = createBrowserRouter(
     <Route path="/analytics" element={<Analytics />} /> {/* Capital flows analysis */}
     <Route path="/trading" element={<Trading />} /> {/* OrderBook visualization */}
     <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
-    <Route path="/forecasts" element={<ForecastsMinimal />} />
+    <Route path="/forecasts" element={<Forecasts />} />
     <Route path="/test" element={<TestSimple />} />
     <Route path="/backtests" element={<Backtests />} />
     <Route path="/compare" element={<CompareStrategies />} />

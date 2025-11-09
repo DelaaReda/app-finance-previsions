@@ -52,7 +52,7 @@ export function useSearchTickers(
         params.append('sector', sector);
       }
 
-      const data = await api.fetchJson<any>('/search/tickers', {
+      const data = await api.fetchJson<any>('/api/search/tickers', {
         searchParams: params,
       });
 
@@ -81,7 +81,7 @@ export function useSectors(): UseQueryResult<string[]> {
     staleTime: 60 * 60_000, // 1 hour (sectors don't change)
     gcTime: 2 * 60 * 60_000, // 2 hours
     queryFn: async () => {
-      const data = await api.fetchJson<any>('/search/sectors');
+      const data = await api.fetchJson<any>('/api/search/sectors');
 
       // Extract from API response envelope
       if (data && data.ok && data.data && data.data.sectors) {

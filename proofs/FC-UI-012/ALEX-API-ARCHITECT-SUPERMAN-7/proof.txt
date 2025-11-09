@@ -1,0 +1,40 @@
+# Preuve de mise en œuvre - FC-UI-012
+
+## Tâche: Adapter Macro UI au schéma API (array → mapping)
+
+## Résumé
+Mise à jour de la page Macro pour gérer le format de réponse API 'map' demandé via le paramètre format_resp=map, permettant l'affichage direct d'un mapping {seriesId: data} au lieu d'un array avec clés numériques.
+
+## Changements apportés
+- Mise à jour du hook useMacro pour supporter le paramètre format_resp=map
+- Ajout de la logique de traitement pour les réponses au format mapping
+- Modification du composant MacroBoardWidget pour gérer les deux formats (array et map)
+- Correction des clés d'affichage dans le rendu pour éviter les clés numériques
+- Adaptation de la structure de données pour utiliser l'ID de série comme clé
+
+## Structure mise en place
+- Le hook useMacroSeries supporte explicitement format_resp=map
+- Traitement conditionnel des réponses dans le même hook selon le format
+- Mapping des données {seriesId: data} converti en format array pour le rendu UI
+- Maintien de la compatibilité descendante avec le format array existant
+- Meilleure lisibilité des clés de série dans l'UI
+
+## Fichiers modifiés
+- `frontend/webapp/src/hooks/useMacro.ts` - Support pour format_resp=map
+- `frontend/webapp/src/components/widgets/MacroBoardWidget.tsx` - Adaptation au schéma API
+- `frontend/webapp/src/services/macro.service.ts` - Support du paramètre format dans le service
+
+## Vérification
+- L'API recoit le paramètre format_resp=map dans les requêtes
+- La page Macro affiche les noms des séries (CPI, VIX...) et non des clés numériques
+- Aucune clé '0' affichée dans la page Macro
+- Le format map est correctement traité côté frontend
+- Le format array est toujours supporté pour compatibilité
+
+## Résultats
+- Support du format map: ✅
+- Clés numériques évitées: ✅
+- Noms série affichés: ✅
+- Compatibilité descendante: ✅
+- UI correctement affichée: ✅
+- Paramètre format_resp=map: ✅

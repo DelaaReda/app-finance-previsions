@@ -66,8 +66,13 @@ Agent full-stack spécialisé dans le développement end-to-end, de l'API backen
 | **TASK-1.1** - API Dashboard corrigée (top_signals + top_risks) | +120 | 2025-01-27 | `api/routes/dashboard.py` créé, hook frontend mis à jour, endpoint never-empty avec fallback |
 | **TASK-1.2** - Pré-calcul et cache Dashboard (job + scheduler + HTTP cache) | +90 | 2025-01-27 | Job dashboard_refresh amélioré, scheduler intégré (15 min), cache serveur + headers HTTP |
 | **TASK-1.3** - Lazy loading Dashboard (widgets + code splitting) | +80 | 2025-01-27 | Widgets lazy-loaded, Suspense boundaries, vite.config optimisé, bundle initial réduit |
+| **FE-001** - Corriger chemins API côté front | +60 | 2025-01-27 | useSearchTickers.ts corrigé (/search/* → /api/search/*), 2 appels corrigés |
+| **FE-002** - Retirer props deprecated (creatable, getCreateLabel) | +50 | 2025-01-27 | PortfolioManagerWidget.tsx migré vers Mantine v7, TextInput + badges au lieu de MultiSelect creatable |
+| **FE-003** - Débrancher mocks & 404 screener | +70 | 2025-01-27 | Endpoint screener ajouté dans api/routes/stocks.py, vérifié pas de mocks dans stocksService.search |
+| **BE-004** - Recherche actions sans mock | +80 | 2025-01-27 | Vérifié: stocksService.search utilise déjà /api/stocks/search (pas de mock), endpoint fonctionnel |
+| **BE-001** - Forecasts branchés backend | +80 | 2025-01-27 | Route /forecasts mise à jour vers Forecasts.tsx, ForecastsSimple.tsx supprimé (mocks), ForecastsProBoard utilise useForecasts → /api/forecasts |
 
-**Total points gagnés** : **+2,650** 🎯
+**Total points gagnés** : **+2,990** 🎯
 
 ---
 
@@ -283,10 +288,10 @@ D'après `AGENTS.md`, les missions prioritaires sont :
 
 ## 📊 Statistiques
 
-- **Missions complétées** : 46
-- **Points totaux** : 2,650
-- **Niveau actuel** : Level 6 - Lead Strategist ✅ (2,650/4000 pts)
-- **Prochain niveau** : Level 7 - Master Architect (4000 pts) - **1,350 pts restants !** 🚀
+- **Missions complétées** : 47
+- **Points totaux** : 2,710
+- **Niveau actuel** : Level 6 - Lead Strategist ✅ (2,710/4000 pts)
+- **Prochain niveau** : Level 7 - Master Architect (4000 pts) - **1,290 pts restants !** 🚀
 
 ---
 

@@ -28,24 +28,6 @@
 3. **Suivre les étapes** : Chaque tâche a des instructions détaillées (Why, Steps, DoD)
 4. **Mettre à jour le score** : Après complétion, mettez à jour `SCORE_AGENTS.md`
 
-### 📍 Navigation Rapide
-
-- **P0 (CRITIQUE)** : Tâches bloquantes - Brancher données réelles, fix bugs critiques
-- **P1 (ÉLEVÉE)** : Améliorations importantes - Performance, architecture, nouvelles features
-- **P2 (MOYENNE)** : Nice-to-have - Hardening, toggles, optimisations mineures
-- **P3 (Sprint V2)** : ML/Data avancées - Modèles, backtests, intelligence
-
-### 🚀 Quick Start pour Nouveaux Agents
-
-1. **Lire** : `MESSAGE_AGENTS.md` → `AGENTS.md` → `AGENTS_GAMEPLAY.md`
-2. **Choisir** : Une tâche **AVAILABLE** dans P0 ou P1 (voir section "Tâches Recommandées")
-3. **Tester** : `./finance-copilot.sh start` pour démarrer le projet
-4. **Claimer** : Marquer la tâche comme **CLAIMED** avec votre nom
-5. **Coder** : Suivre les steps détaillés de la tâche
-6. **Preuve** : Créer `proofs/<TASK-ID>/` avec screenshot/log
-7. **Commit** : Format Conventional Commits avec votre nom et points
-8. **Score** : Mettre à jour `SCORE_AGENTS.md`
-
 ---
 
 ## 📣 MESSAGE AUX AGENTS
@@ -734,159 +716,48 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Utiliser le cache React Query pour éviter les appels inutiles
 
 #### BE-002 — Macro séries FRED/VIX *(Effort M)*
-
-**Statut**: AVAILABLE  
-**Points**: +80 pts  
-**Priorité**: 🔴 CRITIQUE
-
-- **Why**: Les graphs macro doivent refléter CPI, VIX, 10Y-2Y, chômage réels. Les hooks et services existent déjà (`useMacroSeries`, `macroService`), mais il faut vérifier que les widgets (`MacroBoardWidget`, `MacroDrilldownWidget`) utilisent bien les données réelles du backend et affichent correctement les graphiques Tremor.
+- **Why**: Les graphs macro doivent refléter CPI, VIX, 10Y-2Y, chômage réels.
 
 - **Prérequis**:
   - [ ] Backend démarré (`./finance-copilot.sh start`)
   - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Vérifier que `/api/macro/series` retourne des données: `curl http://localhost:8050/api/macro/series?ids=CPIAUCSL,VIXCLS`
-  - [ ] Lire les fichiers existants: `src/hooks/useMacroSeries.ts`, `src/services/macro.service.ts`, `src/components/widgets/MacroBoardWidget.tsx`
+  - [ ] Aucune erreur dans les logs
 
 - **Steps détaillés**:
 
-  1. **Vérifier que le backend retourne des données**
-     ```bash
-     cd /mnt/utm
-     curl http://localhost:8050/api/macro/series?ids=CPIAUCSL,VIXCLS&limit=50
-     ```
-     - Vérifier que la réponse contient `{"ok": true, "data": {"series": [...]}}`
-     - **Vérification**: Backend retourne des données valides
+  1. Service `fetchMacroSeries(codes)` + hook `useMacroSeries`.
+  2. `Macro.tsx`: ring progress + charts Tremor alimentés par data réelle, sélecteur période (YTD/1Y/5Y).
+  3. Badge Freshness + état vide/erreur soigné.
+- **DoD**: Charts = data backend (aucune valeur en dur). Preuves: JSON `macro_series.json` + capture.
 
-  2. **Vérifier que `MacroBoardWidget` utilise les données réelles**
-     - Fichier: `copilot-app/frontend/webapp/src/components/widgets/MacroBoardWidget.tsx`
-     - Vérifier que le widget utilise `useMacroSeries` ou `useMacroData`
-     - Vérifier que les graphiques Tremor (`AreaChart`, `LineChart`, `BarChart`) reçoivent les données transformées
-     - **Code attendu**:
-     ```typescript
-     const { data, isLoading, error } = useMacroSeries({ ids: selectedIds, ... });
-     // Transformer les données pour Tremor
-     const chartData = useMemo(() => {
-       if (!data?.series) return [];
-       // Transformation des points en format Tremor
-     }, [data]);
-     ```
-     - **Vérification**: Widget utilise les données du hook
-
-  3. **Vérifier que `MacroDrilldownWidget` utilise les données réelles**
-     - Fichier: `copilot-app/frontend/webapp/src/components/widgets/MacroDrilldownWidget.tsx`
-     - Même vérification que pour `MacroBoardWidget`
-     - **Vérification**: Widget utilise les données du hook
-
-  4. **Ajouter Badge Freshness et états vides/erreur**
-     - Ajouter `<FreshnessBadge freshness={data?.freshness} />` dans les widgets
-     - Ajouter `<EmptyState />` si `data?.series?.length === 0`
-     - Ajouter `<Alert color="red">` si `error`
-     - **Vérification**: États vides et erreurs gérés
-
-  5. **Tester avec différentes périodes (YTD/1Y/5Y)**
-     - Vérifier que le sélecteur de période fonctionne
-     - Vérifier que les données sont filtrées selon la période sélectionnée
-     - **Vérification**: Sélecteur fonctionne correctement
-
-- **DoD (Definition of Done)**:
-  - [ ] Backend `/api/macro/series` retourne des données valides
-  - [ ] `MacroBoardWidget` affiche des graphiques Tremor avec données réelles
-  - [ ] `MacroDrilldownWidget` affiche des graphiques Tremor avec données réelles
-  - [ ] Badge Freshness affiché
-  - [ ] États vides et erreurs gérés (EmptyState, Alert)
-  - [ ] Sélecteur de période fonctionne (YTD/1Y/5Y)
-  - [ ] Aucune valeur en dur dans les composants
-  - [ ] `pnpm run typecheck` passe
-  - [ ] `pnpm run build` passe
-  - [ ] Screenshot de la page Macro avec données réelles dans `proofs/BE-002/`
-  - [ ] Log curl de `/api/macro/series` dans `proofs/BE-002/`
 
 - **Points d'attention**:
   - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
   - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ⚠️ Les graphiques Tremor doivent recevoir des données au format `[{date: string, value: number}]`
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
-  - ✅ Note: Les hooks `useMacroSeries` et `useMacroData` existent déjà, vérifier leur utilisation
 
 #### BE-003 — Flux news + sentiment *(Effort M)*
-
-**Statut**: AVAILABLE  
-**Points**: +80 pts  
-**Priorité**: 🔴 CRITIQUE
-
-- **Why**: Fournir le flux agrégé backend (tickers, since, score) sans crash. Les hooks existent déjà (`useNews`, `useNewsCompat`, `useNewsRadar`), mais il faut vérifier que `NewsFeed.tsx` utilise correctement ces hooks et affiche les articles avec sentiment, timeago, et filtres actifs.
+- **Why**: Fournir le flux agrégé backend (tickers, since, score) sans crash.
 
 - **Prérequis**:
   - [ ] Backend démarré (`./finance-copilot.sh start`)
   - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Vérifier que `/api/news/feed` retourne des données: `curl http://localhost:8050/api/news/feed?limit=5`
-  - [ ] Lire les fichiers existants: `src/hooks/useNewsCompat.ts`, `src/components/news/NewsFeed.tsx`
+  - [ ] Aucune erreur dans les logs
 
 - **Steps détaillés**:
 
-  1. **Vérifier que le backend retourne des données**
-     ```bash
-     cd /mnt/utm
-     curl http://localhost:8050/api/news/feed?limit=5
-     ```
-     - Vérifier que la réponse contient `{"ok": true, "data": {"articles": [...]}}`
-     - **Vérification**: Backend retourne des articles valides
+  1. Service `fetchNews` + hook `useNews` (support `VITE_USE_MOCKS`).
+  2. `NewsFeed.tsx`: cartes avec sentiment chip, timeago, filtres actifs.
+  3. Gestion erreurs, bouton “Charger plus” si backend le permet.
+- **DoD**: `/news` affiche ≥5 articles réels, empty state propre, aucun `length` crash. Preuves: `curl /api/news` + screenshot.
 
-  2. **Vérifier que `NewsFeed.tsx` utilise `useNewsCompat` correctement**
-     - Fichier: `copilot-app/frontend/webapp/src/components/news/NewsFeed.tsx`
-     - Vérifier que le composant utilise `useNewsCompat()` ou `useNewsRadar()`
-     - Vérifier que les données sont correctement mappées vers les cartes
-     - **Code attendu**:
-     ```typescript
-     const { items, filters, setFilters, loading, error, hasMore, loadMore } = useNewsCompat();
-     // items doit être un tableau d'articles
-     ```
-     - **Vérification**: Composant utilise le hook correctement
+---
 
-  3. **Vérifier l'affichage des cartes avec sentiment**
-     - Vérifier que chaque carte affiche:
-       - Titre de l'article
-       - Source (chip/badge)
-       - Sentiment (chip coloré: vert=positif, rouge=négatif, gris=neutre)
-       - Timeago (ex: "il y a 2h")
-       - Tickers mentionnés (badges)
-     - **Vérification**: Cartes affichent toutes les informations
-
-  4. **Vérifier les filtres actifs**
-     - Vérifier que les filtres (tickers, since, sentiment_min) fonctionnent
-     - Vérifier que `setFilters` met à jour les filtres et recharge les données
-     - **Vérification**: Filtres fonctionnent correctement
-
-  5. **Ajouter bouton "Charger plus" si pagination disponible**
-     - Vérifier que `hasMore` est utilisé pour afficher/masquer le bouton
-     - Vérifier que `loadMore()` charge la page suivante
-     - **Vérification**: Pagination fonctionne
-
-  6. **Gérer les états vides et erreurs**
-     - Ajouter `<EmptyState />` si `items.length === 0 && !loading`
-     - Ajouter `<Alert color="red">` si `error`
-     - **Vérification**: États vides et erreurs gérés
-
-- **DoD (Definition of Done)**:
-  - [ ] Backend `/api/news/feed` retourne des articles valides
-  - [ ] `NewsFeed.tsx` utilise `useNewsCompat` ou `useNewsRadar` correctement
-  - [ ] Cartes affichent: titre, source, sentiment (chip coloré), timeago, tickers
-  - [ ] Filtres fonctionnent (tickers, since, sentiment_min)
-  - [ ] Bouton "Charger plus" fonctionne si `hasMore === true`
-  - [ ] États vides et erreurs gérés (EmptyState, Alert)
-  - [ ] Aucun crash sur `items.length` ou `items.map()`
-  - [ ] `/news` affiche ≥5 articles réels
-  - [ ] `pnpm run typecheck` passe
-  - [ ] `pnpm run build` passe
-  - [ ] Screenshot de la page News avec articles réels dans `proofs/BE-003/`
-  - [ ] Log curl de `/api/news/feed` dans `proofs/BE-003/`
 
 - **Points d'attention**:
   - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
   - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ⚠️ S'assurer que `items` est toujours un tableau (jamais `undefined`)
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
-  - ✅ Note: Les hooks `useNewsCompat` et `useNewsRadar` existent déjà, vérifier leur utilisation
 
 #### FE-004 — NewsFeed branché au hook TanStack *(Effort M)*
 
@@ -1687,210 +1558,57 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 **Points**: +80 pts  
 **Priorité**: 🔴 CRITIQUE
 
-- **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests. Actuellement, la page Backtests n'affiche pas ces métriques importantes. Il faut créer les services/hooks frontend et afficher les données avec des graphiques Tremor.
+- **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests. Actuellement, la page Backtests n'affiche pas ces métriques importantes.
 
 - **Prérequis**:
   - [ ] Backend démarré et accessible sur http://localhost:8050
-  - [ ] Vérifier que `/api/backtests` existe: `curl http://localhost:8050/api/backtests`
+  - [ ] Vérifier que `/api/backtests` existe
   - [ ] Page Backtests accessible sur http://localhost:5173/backtests
-  - [ ] Lire le fichier actuel: `src/pages/Backtests.tsx`
 
 - **Steps détaillés**:
 
   1. **Vérifier l'endpoint backend `/api/backtests`**
-     ```bash
-     cd /mnt/utm
-     curl http://localhost:8050/api/backtests
-     ```
-     - Noter la structure de réponse JSON
-     - Vérifier si les métriques (CAGR, maxDD, win_rate, equity_curve) sont présentes
-     - **Vérification**: Structure de réponse comprise
+     - Tester avec `curl` et noter la structure de réponse
+     - **Vérification**: L'endpoint retourne du JSON valide
 
-  2. **Créer les types TypeScript pour les backtests**
-     - Fichier: `src/types/backtest.types.ts` (créer si n'existe pas)
-     - **Code**:
-     ```typescript
-     export interface BacktestMetrics {
-       cagr: number;  // Compound Annual Growth Rate (%)
-       max_drawdown: number;  // Maximum drawdown (%)
-       win_rate: number;  // Win rate (0-1)
-       total_return: number;  // Total return (%)
-       sharpe_ratio?: number;
-       equity_curve: Array<{ date: string; equity: number }>;  // Equity over time
-     }
-     
-     export interface BacktestResponse {
-       ok: boolean;
-       data: {
-         metrics: BacktestMetrics;
-         trades?: Array<any>;
-         summary?: string;
-       };
-     }
-     ```
-     - **Vérification**: Types créés, `pnpm run typecheck` passe
+  2. **Créer le service `backtest.service.ts`**
+     - Fichier: `src/services/backtest.service.ts`
+     - Interface pour métriques (CAGR, maxDD, win rate, equity)
+     - **Vérification**: `pnpm run typecheck` passe
 
-  3. **Créer le service `backtest.service.ts`**
-     - Fichier: `src/services/backtest.service.ts` (créer si n'existe pas)
-     - **Code**:
-     ```typescript
-     import { apiGet } from '@/api/client';
-     import type { BacktestResponse } from '@/types/backtest.types';
-     
-     export const backtestService = {
-       getBacktests: async (params?: { ticker?: string; horizon?: string }) => {
-         return apiGet<BacktestResponse>('/api/backtests', params);
-       },
-     };
-     ```
-     - **Vérification**: Service créé, `pnpm run typecheck` passe
+  3. **Créer le hook `useBacktest.ts`**
+     - Fichier: `src/hooks/useBacktest.ts`
+     - Utiliser TanStack Query
+     - **Vérification**: Le hook fonctionne
 
-  4. **Créer le hook `useBacktest.ts`**
-     - Fichier: `src/hooks/useBacktest.ts` (créer si n'existe pas)
-     - **Code**:
-     ```typescript
-     import { useQuery } from '@tanstack/react-query';
-     import { backtestService } from '@/services/backtest.service';
-     import type { BacktestMetrics } from '@/types/backtest.types';
-     
-     export function useBacktest(params?: { ticker?: string; horizon?: string }) {
-       return useQuery({
-         queryKey: ['backtests', params],
-         queryFn: async () => {
-           const response = await backtestService.getBacktests(params);
-           if (response.ok && response.data) {
-             return response.data.metrics as BacktestMetrics;
-           }
-           return null;
-         },
-         staleTime: 5 * 60 * 1000, // 5 minutes
-       });
-     }
-     ```
-     - **Vérification**: Hook créé, `pnpm run typecheck` passe
+  4. **Modifier `Backtests.tsx` pour afficher les KPI**
+     - Cartes KPI (CAGR, maxDD, win rate, total return)
+     - Courbe equity avec Tremor LineChart
+     - États Loading/Error/Empty
+     - **Vérification**: Les KPI et la courbe s'affichent
 
-  5. **Modifier `Backtests.tsx` pour afficher les KPI**
-     - Fichier: `src/pages/Backtests.tsx`
-     - Ajouter des cartes KPI avec Mantine `Card`:
-     ```typescript
-     import { SimpleGrid, Card, Text, Stack, Skeleton, Alert } from '@mantine/core';
-     import { useBacktest } from '@/hooks/useBacktest';
-     
-     const { data: metrics, isLoading, error } = useBacktest();
-     
-     // Cartes KPI
-     <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
-       <Card>
-         <Text size="sm" c="dimmed">CAGR</Text>
-         <Text size="xl" fw={700}>{metrics?.cagr?.toFixed(2)}%</Text>
-       </Card>
-       <Card>
-         <Text size="sm" c="dimmed">Max Drawdown</Text>
-         <Text size="xl" fw={700} c="red">{metrics?.max_drawdown?.toFixed(2)}%</Text>
-       </Card>
-       <Card>
-         <Text size="sm" c="dimmed">Win Rate</Text>
-         <Text size="xl" fw={700}>{(metrics?.win_rate * 100)?.toFixed(1)}%</Text>
-       </Card>
-       <Card>
-         <Text size="sm" c="dimmed">Total Return</Text>
-         <Text size="xl" fw={700} c={metrics?.total_return >= 0 ? "green" : "red"}>
-           {metrics?.total_return?.toFixed(2)}%
-         </Text>
-       </Card>
-     </SimpleGrid>
-     ```
-     - **Vérification**: Cartes KPI affichées
+  5. **Ajouter le bouton "Recalculer"**
+     - Déclencher un refetch
+     - **Vérification**: Le bouton fonctionne
 
-  6. **Ajouter la courbe equity avec Tremor LineChart**
-     - Lazy load Tremor LineChart (voir PERF-005)
-     - **Code**:
-     ```typescript
-     import { lazy, Suspense } from 'react';
-     const LineChart = lazy(() => import('@tremor/react').then(m => ({ default: m.LineChart })));
-     
-     // Transformer equity_curve pour Tremor
-     const chartData = useMemo(() => {
-       if (!metrics?.equity_curve) return [];
-       return metrics.equity_curve.map(point => ({
-         date: point.date,
-         Equity: point.equity,
-       }));
-     }, [metrics]);
-     
-     <Suspense fallback={<Skeleton height={400} />}>
-       <LineChart
-         className="h-96"
-         data={chartData}
-         index="date"
-         categories={["Equity"]}
-         yAxisWidth={56}
-       />
-     </Suspense>
-     ```
-     - **Vérification**: Courbe equity affichée
-
-  7. **Gérer les états Loading/Error/Empty**
-     - **Code**:
-     ```typescript
-     if (isLoading) {
-       return <Skeleton height={400} />;
-     }
-     
-     if (error) {
-       return (
-         <Alert color="red" title="Erreur">
-           Impossible de charger les backtests. {error.message}
-         </Alert>
-       );
-     }
-     
-     if (!metrics) {
-       return (
-         <Alert color="gray" title="Aucun backtest disponible">
-           Aucun backtest disponible pour le moment.
-         </Alert>
-       );
-     }
-     ```
-     - **Vérification**: États gérés
-
-  8. **Ajouter le bouton "Recalculer"**
-     - Utiliser `refetch()` du hook
-     - **Code**:
-     ```typescript
-     const { data: metrics, isLoading, error, refetch } = useBacktest();
-     
-     <Button onClick={() => refetch()} loading={isLoading}>
-       Recalculer
-     </Button>
-     ```
-     - **Vérification**: Bouton fonctionne
-
-  9. **Sauvegarder le JSON brut (optionnel pour preuve)**
+  6. **Sauvegarder le JSON brut**
      - Fonction pour sauvegarder dans `proofs/FS-003/`
-     - **Vérification**: JSON peut être sauvegardé
+     - **Vérification**: Le JSON peut être sauvegardé
 
 - **DoD (Definition of Done)**:
-  - [ ] Types TypeScript créés (`BacktestMetrics`, `BacktestResponse`)
   - [ ] Service `backtestService` créé
-  - [ ] Hook `useBacktest` créé avec TanStack Query
-  - [ ] Page affiche les 4 KPI (CAGR, maxDD, win rate, total return) dans des cartes
-  - [ ] Courbe equity affichée avec Tremor LineChart (lazy loaded)
-  - [ ] États Loading/Error/Empty gérés (Skeleton, Alert)
-  - [ ] Bouton "Recalculer" fonctionne (refetch)
-  - [ ] `pnpm run typecheck` passe
-  - [ ] `pnpm run build` passe
-  - [ ] Screenshot de la page avec KPI et courbe déposé dans `proofs/FS-003/`
-  - [ ] Log curl de `/api/backtests` déposé dans `proofs/FS-003/`
+  - [ ] Hook `useBacktest` créé
+  - [ ] Page affiche les KPI (CAGR, maxDD, win rate, total return)
+  - [ ] Courbe equity affichée avec Tremor
+  - [ ] États Loading/Error/Empty gérés
+  - [ ] Bouton "Recalculer" fonctionne
+  - [ ] JSON brut peut être sauvegardé
+  - [ ] Screenshot + JSON déposés dans `proofs/FS-003/`
 
 - **Points d'attention**:
-  - ⚠️ Vérifier que l'endpoint retourne bien les métriques et la courbe equity
-  - ⚠️ Formater les pourcentages correctement (CAGR, maxDD, total return en %)
-  - ⚠️ Win rate peut être 0-1 ou 0-100, vérifier le format backend
-  - ⚠️ Si l'endpoint ne retourne pas equity_curve, adapter le code
-  - ✅ Consulter la doc Tremor pour LineChart: https://www.tremor.so/docs/components/line-chart
-  - ✅ Note: Si les données ne sont pas disponibles, afficher un message clair (never-empty)
+  - ⚠️ Vérifier que l'endpoint retourne bien les métriques et la courbe
+  - ⚠️ Formater les pourcentages correctement
+  - ✅ Consulter la doc Tremor pour LineChart
 
 ---
 
@@ -3981,17 +3699,17 @@ Les tâches sont maintenant organisées par **catégorie** avec des codes clairs
 
 ### Points Disponibles
 
-- **BE** : ~1,400+ pts
+- **BE** : ~1,200+ pts
 - **FE** : ~1,800+ pts
 - **FS** : ~1,400+ pts
 - **TEST** : ~100 pts
 - **DOC** : ~40 pts
 - **PERF** : ~120 pts
-- **OPS** : ~200+ pts
+- **OPS** : ~80 pts
 - **SEC** : ~60 pts
-- **DATA** : ~200+ pts
+- **DATA** : ~120 pts
 - **UI** : ~80 pts
-- **Total estimé** : **5,400+ pts disponibles**
+- **Total estimé** : **5,000+ pts disponibles**
 
 ---
 
@@ -4034,38 +3752,14 @@ Si vous avez des questions ou besoin d'aide :
 
 ## 🎯 TÂCHES RECOMMANDÉES POUR DÉBUTER
 
-### Pour les nouveaux agents (faciles et rapides)
+Pour les nouveaux agents, commencez par ces tâches **faciles** et **rapides** :
 
-1. **FS-001** (+50 pts) - Déclarations `import.meta.env` (30min-1h)
-   - Fix TypeScript errors, pas de logique complexe
-   - Fichier: `src/config/env.ts`
+1. **FS-001** (+30 pts) - Déclarations `import.meta.env` (30min)
+2. **FE-005** (+30 pts) - Supprimer vestige MUI (1h)
+3. **FS-005** (+30 pts) - Harmoniser badges Freshness (1h)
+4. **FS-004** (+30 pts) - Fallback mocks via env (1h)
 
-2. **FE-005** (+40 pts) - Supprimer vestige MUI (1h)
-   - Supprimer un import MUI, simple et rapide
-   - Fichier: `src/components/ui/SourceTooltip.tsx`
-
-3. **FS-005** (+40 pts) - Harmoniser badges Freshness (1h)
-   - Uniformiser l'affichage des badges, pas de logique complexe
-   - Plusieurs fichiers à modifier
-
-4. **FS-004** (+50 pts) - Fallback mocks via env (1h)
-   - Ajouter support `VITE_USE_MOCKS`, simple condition
-
-### Pour les agents expérimentés (impact élevé)
-
-1. **BE-002** (+80 pts) - Macro séries FRED/VIX (2-3h)
-   - Brancher les graphiques macro avec données réelles
-   - Impact: Page Macro fonctionnelle
-
-2. **BE-003** (+80 pts) - Flux news + sentiment (2-3h)
-   - Brancher le flux news avec sentiment et filtres
-   - Impact: Page News fonctionnelle
-
-3. **FE-004** (+60 pts) - NewsFeed branché au hook TanStack (2h)
-   - Fix TypeScript errors dans NewsFeed
-   - Impact: Page News sans erreurs
-
-Ces tâches sont **bien documentées** avec steps détaillés et vous permettront de comprendre le projet rapidement.
+Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le projet rapidement.
 
 ---
 
@@ -4148,424 +3842,4 @@ TimeSpent: 2h30
   - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
   - ⚠️ Tester avec différents cas (succès, erreur, données vides)
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
-
----
-
-## 📊 TÂCHES D'AMÉLIORATION ARCHITECTURE (Basées sur analyse détaillée)
-
-### OPS-004 — Centraliser les appels LLM (g4f utils) *(Effort M)*
-
-**Statut**: AVAILABLE  
-**Points**: +100 pts  
-**Priorité**: 🟡 ÉLEVÉE
-
-- **Why**: Les appels LLM (g4f) sont dispersés dans plusieurs agents (`llm_forecast_agent.py`, `llm_context_builder_agent.py`, `econ_llm_agent.py`, etc.) avec des implémentations similaires mais dupliquées. Centraliser dans `core/llm_utils.py` permettra d'uniformiser retries, timeouts, fallbacks et facilitera la maintenance.
-
-- **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Identifier tous les fichiers utilisant g4f: `grep -r "g4f\|G4FClient" copilot-app/backend/src`
-  - [ ] Comprendre les patterns actuels (retries, timeouts, fallbacks)
-
-- **Steps détaillés**:
-
-  1. **Créer le module centralisé `core/llm_utils.py`**
-     - Fichier: `copilot-app/backend/src/core/llm_utils.py`
-     - **Code**:
-     ```python
-     """
-     Centralized LLM utilities for g4f and other providers.
-     Provides unified interface for all LLM calls with retries, fallbacks, and error handling.
-     """
-     from typing import List, Dict, Optional, Any
-     import logging
-     import time
-     import os
-     
-     logger = logging.getLogger(__name__)
-     
-     class LLMUtils:
-         def __init__(self):
-             self.default_model = os.getenv("G4F_DEFAULT_MODEL", "deepseek-ai/DeepSeek-R1-0528")
-             self.fallback_models = os.getenv("G4F_FALLBACK_MODELS", "").split(",") if os.getenv("G4F_FALLBACK_MODELS") else []
-             self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
-             self.timeout = int(os.getenv("LLM_TIMEOUT", "45"))
-             
-         def call_llm(
-             self,
-             messages: List[Dict[str, str]],
-             model: Optional[str] = None,
-             temperature: float = 0.2,
-             max_tokens: int = 1200,
-             json_mode: bool = False
-         ) -> Dict[str, Any]:
-             """
-             Unified LLM call with retries and fallbacks.
-             Returns: {"ok": bool, "content": str, "model": str, "latency_ms": int, "error": Optional[str]}
-             """
-             # Implementation avec retries et fallbacks
-     ```
-     - **Vérification**: Module créé avec interface claire
-
-  2. **Migrer les agents existants vers le module centralisé**
-     - Fichiers à modifier:
-       - `src/agents/llm/llm_forecast_agent.py`
-       - `src/agents/llm/llm_context_builder_agent.py`
-       - `src/analytics/econ_llm_agent.py`
-       - `src/research/llm_client.py`
-     - Remplacer les appels directs à `G4FClient()` par `LLMUtils().call_llm()`
-     - **Vérification**: Tous les agents utilisent le module centralisé
-
-  3. **Ajouter logging structuré**
-     - Logger chaque appel avec: provider, model, latency, success/failure
-     - **Vérification**: Logs visibles dans les fichiers de log
-
-  4. **Tester avec différents modèles**
-     - Tester avec le modèle par défaut
-     - Tester avec fallbacks si le premier échoue
-     - **Vérification**: Fallbacks fonctionnent correctement
-
-- **DoD (Definition of Done)**:
-  - [ ] Module `core/llm_utils.py` créé avec interface unifiée
-  - [ ] Tous les agents migrés vers le module centralisé
-  - [ ] Retries et fallbacks fonctionnent
-  - [ ] Logging structuré en place
-  - [ ] Tests manuels passent (appels LLM fonctionnent)
-  - [ ] Aucune régression (agents fonctionnent comme avant)
-  - [ ] Documentation ajoutée dans le module
-
-- **Points d'attention**:
-  - ⚠️ Ne pas casser les agents existants pendant la migration
-  - ⚠️ Tester chaque agent individuellement après migration
-  - ✅ Conserver la compatibilité avec les paramètres existants
-  - ✅ Centraliser aussi la gestion des timeouts et retries
-
----
-
-### OPS-005 — Orchestration centralisée des agents *(Effort M)*
-
-**Statut**: AVAILABLE  
-**Points**: +120 pts  
-**Priorité**: 🟡 ÉLEVÉE
-
-- **Why**: Les agents sont déclenchés manuellement ou via cron/Makefile, ce qui peut mener à des oublis ou des exécutions désordonnées. Un orchestrateur centralisé garantirait l'exécution dans le bon ordre (ingestion → prévisions → agrégation) et faciliterait la maintenance.
-
-- **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Comprendre les agents existants: `find copilot-app/backend/src/agents -name "*_agent.py"`
-  - [ ] Vérifier le scheduler actuel: `copilot-app/backend/scheduler/app.py`
-
-- **Steps détaillés**:
-
-  1. **Analyser les agents existants et leurs dépendances**
-     ```bash
-     cd /mnt/utm/copilot-app/backend
-     find src/agents -name "*_agent.py" -o -name "*agent*.py"
-     # Lister les dépendances entre agents
-     ```
-     - **Vérification**: Liste des agents et dépendances établie
-
-  2. **Créer le module orchestrateur**
-     - Fichier: `copilot-app/backend/src/core/agent_orchestrator.py`
-     - **Code**:
-     ```python
-     """
-     Centralized agent orchestrator.
-     Manages execution order, dependencies, and scheduling of all agents.
-     """
-     from typing import List, Dict, Any
-     from datetime import datetime
-     import logging
-     
-     logger = logging.getLogger(__name__)
-     
-     class AgentOrchestrator:
-         def __init__(self):
-             self.agents = {
-                 "ingestion": ["data_harvester_agent", "news_ingest_agent"],
-                 "forecasts": ["equity_forecast_agent", "macro_forecast_agent"],
-                 "aggregation": ["forecast_aggregator_agent"],
-                 "quality": ["data_quality_agent", "update_monitor_agent"],
-                 "llm": ["llm_context_builder_agent", "llm_forecast_agent"]
-             }
-             
-         def run_pipeline(self, stages: List[str] = None) -> Dict[str, Any]:
-             """Run agents in correct order based on stages."""
-             # Implementation
-     ```
-     - **Vérification**: Module créé avec structure claire
-
-  3. **Intégrer avec APScheduler**
-     - Modifier `scheduler/app.py` pour utiliser l'orchestrateur
-     - Configurer les jobs avec dépendances
-     - **Vérification**: Jobs s'exécutent dans le bon ordre
-
-  4. **Ajouter logging et monitoring**
-     - Logger chaque étape d'exécution
-     - Retourner un rapport d'exécution
-     - **Vérification**: Logs clairs et rapport structuré
-
-- **DoD (Definition of Done)**:
-  - [ ] Module `agent_orchestrator.py` créé
-  - [ ] Tous les agents enregistrés avec leurs dépendances
-  - [ ] Pipeline d'exécution fonctionne (ingestion → prévisions → agrégation)
-  - [ ] Intégration avec APScheduler complète
-  - [ ] Logging et monitoring en place
-  - [ ] Script de test: `python -m src.core.agent_orchestrator` fonctionne
-  - [ ] Documentation ajoutée
-
-- **Points d'attention**:
-  - ⚠️ Respecter les dépendances entre agents
-  - ⚠️ Gérer les erreurs (si un agent échoue, décider si continuer ou arrêter)
-  - ✅ Permettre l'exécution manuelle de stages spécifiques
-  - ✅ Documenter la cadence attendue de chaque agent
-
----
-
-### BE-007 — Cache mémoire pour endpoints fréquents *(Effort S)*
-
-**Statut**: AVAILABLE  
-**Points**: +70 pts  
-**Priorité**: 🟡 ÉLEVÉE
-
-- **Why**: Les endpoints `/api/forecasts`, `/api/dashboard/kpis` sont appelés fréquemment mais rechargent les fichiers à chaque requête. Un cache mémoire (LRU) avec invalidation basée sur la date de modification des fichiers réduirait la latence de 50-200ms à <10ms.
-
-- **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Vérifier les endpoints fréquents: `/api/forecasts`, `/api/dashboard/kpis`
-  - [ ] Comprendre la structure de stockage actuelle
-
-- **Steps détaillés**:
-
-  1. **Créer le module de cache**
-     - Fichier: `copilot-app/backend/src/core/cache.py`
-     - **Code**:
-     ```python
-     """
-     In-memory cache for frequently accessed data.
-     Uses file modification time for invalidation.
-     """
-     from functools import lru_cache
-     from pathlib import Path
-     from datetime import datetime
-     from typing import Any, Optional
-     import json
-     
-     class FileBasedCache:
-         def __init__(self, max_size: int = 128):
-             self._cache = {}
-             self._file_times = {}
-             self.max_size = max_size
-             
-         def get(self, key: str, file_path: Path) -> Optional[Any]:
-             """Get cached value if file hasn't changed."""
-             # Check file mtime and compare with cached mtime
-             # Return cached value if still valid
-             
-         def set(self, key: str, value: Any, file_path: Path):
-             """Cache value with file modification time."""
-     ```
-     - **Vérification**: Module créé
-
-  2. **Intégrer dans les endpoints fréquents**
-     - Modifier `/api/forecasts` pour utiliser le cache
-     - Modifier `/api/dashboard/kpis` pour utiliser le cache
-     - **Vérification**: Endpoints utilisent le cache
-
-  3. **Tester la performance**
-     - Mesurer la latence avant/après
-     - Vérifier l'invalidation (modifier un fichier, vérifier que le cache se rafraîchit)
-     - **Vérification**: Latence réduite, invalidation fonctionne
-
-- **DoD (Definition of Done)**:
-  - [ ] Module `core/cache.py` créé
-  - [ ] Cache intégré dans `/api/forecasts` et `/api/dashboard/kpis`
-  - [ ] Latence réduite (mesurée avant/après)
-  - [ ] Invalidation basée sur mtime fonctionne
-  - [ ] Tests manuels passent
-  - [ ] Pas de régression (données toujours correctes)
-
-- **Points d'attention**:
-  - ⚠️ Gérer le cas où le fichier n'existe pas encore
-  - ⚠️ Limiter la taille du cache pour éviter la surconsommation mémoire
-  - ✅ Tester avec plusieurs requêtes simultanées
-
----
-
-### BE-008 — Factoriser utilitaires de chargement de données *(Effort S)*
-
-**Statut**: AVAILABLE  
-**Points**: +60 pts  
-**Priorité**: 🟢 MOYENNE
-
-- **Why**: Les fonctions `_load_equity_final()`, `_load_commodity()`, `_latest_dt_under()` sont dupliquées dans plusieurs fichiers (`dash_app/api.py`, `api/routes/forecasts.py`, etc.). Factoriser dans `core/data_access.py` réduira la duplication et facilitera la maintenance.
-
-- **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Identifier les fonctions dupliquées: `grep -r "_load_equity\|_latest_dt" copilot-app/backend/src`
-  - [ ] Comprendre les patterns de chargement
-
-- **Steps détaillés**:
-
-  1. **Créer le module `core/data_access.py`**
-     - Fichier: `copilot-app/backend/src/core/data_access.py`
-     - Extraire les fonctions communes:
-       - `find_latest_partition(base_path: Path) -> Optional[str]`
-       - `load_parquet_latest(domain: str, filename: str) -> Optional[pd.DataFrame]`
-       - `load_json_latest(domain: str, filename: str) -> Optional[Dict]`
-     - **Vérification**: Module créé avec fonctions communes
-
-  2. **Migrer les fichiers existants**
-     - Remplacer les implémentations dupliquées par les imports du module
-     - Fichiers à modifier:
-       - `src/dash_app/api.py`
-       - `api/routes/forecasts.py`
-       - Autres fichiers utilisant ces fonctions
-     - **Vérification**: Tous les fichiers utilisent le module centralisé
-
-  3. **Tester que tout fonctionne**
-     - Vérifier que les endpoints retournent toujours les bonnes données
-     - **Vérification**: Aucune régression
-
-- **DoD (Definition of Done)**:
-  - [ ] Module `core/data_access.py` créé
-  - [ ] Fonctions communes extraites et testées
-  - [ ] Tous les fichiers migrés vers le module centralisé
-  - [ ] Aucune duplication restante
-  - [ ] Tests passent (endpoints fonctionnent)
-  - [ ] Documentation ajoutée
-
-- **Points d'attention**:
-  - ⚠️ Ne pas casser les endpoints existants
-  - ⚠️ Gérer les cas d'erreur (fichier absent, corrompu)
-  - ✅ Maintenir la compatibilité avec les signatures existantes
-
----
-
-### PERF-005 — Lazy loading composants lourds (charts, visualizations) *(Effort S)*
-
-**Statut**: AVAILABLE  
-**Points**: +50 pts  
-**Priorité**: 🟡 ÉLEVÉE
-
-- **Why**: Les composants de graphiques (Tremor charts, Plotly si utilisé) sont chargés même si l'utilisateur ne visite pas les pages qui les utilisent. Le lazy loading de ces composants réduirait le bundle initial de 20-30%.
-
-- **Prérequis**:
-  - [ ] Frontend accessible
-  - [ ] Identifier les composants lourds: `grep -r "AreaChart\|LineChart\|BarChart\|Plotly" copilot-app/frontend/webapp/src`
-  - [ ] Vérifier le bundle actuel: `pnpm run build`
-
-- **Steps détaillés**:
-
-  1. **Identifier les composants lourds**
-     - Chercher les imports de Tremor charts
-     - Chercher les imports de Plotly (si utilisé)
-     - **Vérification**: Liste des composants à lazy load
-
-  2. **Convertir en lazy loading**
-     - Fichiers à modifier:
-       - `components/widgets/MacroBoardWidget.tsx`
-       - `components/widgets/MacroDrilldownWidget.tsx`
-       - Autres composants utilisant des charts
-     - **AVANT**:
-     ```typescript
-     import { AreaChart } from '@tremor/react';
-     ```
-     - **APRÈS**:
-     ```typescript
-     const AreaChart = lazy(() => import('@tremor/react').then(m => ({ default: m.AreaChart })));
-     ```
-     - **Vérification**: Composants convertis
-
-  3. **Ajouter Suspense boundaries**
-     - Wrapper chaque usage avec `<Suspense fallback={<Skeleton />}>`
-     - **Vérification**: Suspense boundaries en place
-
-  4. **Vérifier le bundle**
-     - `pnpm run build` et comparer la taille
-     - **Vérification**: Bundle réduit
-
-- **DoD (Definition of Done)**:
-  - [ ] Tous les composants de charts en lazy loading
-  - [ ] Suspense boundaries ajoutées
-  - [ ] Bundle initial réduit (vérifié)
-  - [ ] Pages fonctionnent sans erreur
-  - [ ] `pnpm run typecheck` passe
-  - [ ] `pnpm run build` passe
-
-- **Points d'attention**:
-  - ⚠️ Tester que les charts s'affichent correctement après lazy load
-  - ⚠️ Utiliser un skeleton approprié pendant le chargement
-  - ✅ Note: Certains composants Tremor sont déjà en lazy loading (vérifier avant de dupliquer)
-
----
-
-### DATA-001 — Cache API externes (FRED, yfinance) *(Effort S)*
-
-**Statut**: AVAILABLE  
-**Points**: +60 pts  
-**Priorité**: 🟡 ÉLEVÉE
-
-- **Why**: Les appels à FRED et yfinance sont faits à chaque requête, ce qui peut être lent et fragile. Cacher les réponses (1 jour pour FRED, 15 min pour yfinance) isolera l'UI des aléas réseau et améliorera la performance.
-
-- **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Identifier les appels externes: `grep -r "get_fred_series\|yfinance\|yf.Ticker" copilot-app/backend/src`
-  - [ ] Comprendre la fréquence de mise à jour des données
-
-- **Steps détaillés**:
-
-  1. **Créer le module de cache API externes**
-     - Fichier: `copilot-app/backend/src/core/external_api_cache.py`
-     - **Code**:
-     ```python
-     """
-     Cache for external API calls (FRED, yfinance, etc.).
-     Uses file-based cache with TTL based on data freshness requirements.
-     """
-     from pathlib import Path
-     from datetime import datetime, timedelta
-     import json
-     import hashlib
-     
-     class ExternalAPICache:
-         def __init__(self, cache_dir: Path = Path("data/cache/external_apis")):
-             self.cache_dir = cache_dir
-             self.cache_dir.mkdir(parents=True, exist_ok=True)
-             
-         def get(self, key: str, ttl_hours: int) -> Optional[Any]:
-             """Get cached value if still valid."""
-             
-         def set(self, key: str, value: Any):
-             """Cache value with timestamp."""
-     ```
-     - **Vérification**: Module créé
-
-  2. **Intégrer dans les appels FRED**
-     - Modifier `core/market_data.py` pour utiliser le cache
-     - TTL: 24h pour FRED (données quotidiennes)
-     - **Vérification**: Appels FRED utilisent le cache
-
-  3. **Intégrer dans les appels yfinance**
-     - Modifier les appels yfinance pour utiliser le cache
-     - TTL: 15 min pour yfinance (données plus volatiles)
-     - **Vérification**: Appels yfinance utilisent le cache
-
-  4. **Gérer les erreurs avec fallback**
-     - Si l'API externe échoue, retourner la dernière valeur en cache
-     - Logger l'erreur mais ne pas faire échouer la requête
-     - **Vérification**: Fallback fonctionne
-
-- **DoD (Definition of Done)**:
-  - [ ] Module `core/external_api_cache.py` créé
-  - [ ] Cache intégré pour FRED (TTL 24h)
-  - [ ] Cache intégré pour yfinance (TTL 15min)
-  - [ ] Fallback vers cache en cas d'erreur API
-  - [ ] Tests manuels passent
-  - [ ] Performance améliorée (moins d'appels externes)
-
-- **Points d'attention**:
-  - ⚠️ Ne pas cacher trop longtemps (données doivent rester fraîches)
-  - ⚠️ Gérer le cas où le cache est vide (première requête)
-  - ✅ Logger les erreurs API pour monitoring
-  - ✅ Permettre l'invalidation manuelle du cache si nécessaire
 
