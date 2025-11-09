@@ -59,6 +59,12 @@ export default function NewsFeed() {
               value={filters.tickers ?? ''}
               onChange={(e) => setFilters({ ...filters, tickers: e.currentTarget.value })}
             />
+            <TextInput
+              label="Recherche (mot-clé)"
+              placeholder="Ex: earnings, inflation"
+              value={filters.q ?? ''}
+              onChange={(e) => setFilters({ ...filters, q: e.currentTarget.value })}
+            />
             <Select
               label="Fenêtre"
               data={SINCE_OPTIONS}

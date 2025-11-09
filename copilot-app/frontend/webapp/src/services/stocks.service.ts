@@ -67,29 +67,22 @@ export const stocksService = {
   },
 
   /**
-   * Search for stocks by ticker or name
+   * Search for stocks by ticker or name (Sprint 3 - Tâche 3.1 - Real API)
    */
   search: async (query: string) => {
-    const universe = await apiGet<Universe>('/api/stocks/universe')
-
-    if (!universe.ok || !universe.data) {
-      return universe as any
-    }
-
-    const lowerQuery = query.trim().toLowerCase()
-    const tickers = universe.data.tickers ?? []
-
-    const results: StockSearchResult[] = tickers
-      .filter((ticker) => ticker.toLowerCase().includes(lowerQuery))
-      .map((ticker) => ({
-        ticker,
-        name: `${ticker} Corp`,
-        changePercent: 0,
-        change: 0,
-      }))
-      .slice(0, 10)
-
-    return { ok: true, data: results } as any
+    // Use real API endpoint instead of mock
+    return apiGet<{ results: StockSearchResult[] }>('/api/stocks/search', {
+      q: query,
+      limit: 10
+    }).then(response => {
+      if (response.ok && response.data) {
+        return {
+          ok: true,
+          data: response.data.results || []
+        } as any
+      }
+      return response as any
+    })
   },
 
   /**

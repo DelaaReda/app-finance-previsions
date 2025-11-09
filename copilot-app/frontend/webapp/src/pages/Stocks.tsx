@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useDebouncedValue } from '@mantine/hooks';
 import { Container, Stack, Group, TextInput, Button, Card, SimpleGrid, Skeleton, Tabs } from '@mantine/core';
 import { IconTrendingDown, IconTrendingUp, IconChartLine, IconTarget, IconActivity, IconGauge, IconRadar } from '@tabler/icons-react';
 import { stocksService } from '@/services/stocks.service';
@@ -23,16 +24,18 @@ const formatPriceSeries = (raw?: any) => {
 
 export default function Stocks() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, 300); // 300ms debounce (Sprint 3 - Tâche 3.2)
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
 
   const { data: searchResults } = useQuery({
-    queryKey: ['stocks-search', searchQuery],
+    queryKey: ['stocks-search', debouncedSearchQuery],
     queryFn: async () => {
-      if (!searchQuery || searchQuery.length < 2) return [];
-      const result = await stocksService.search(searchQuery);
+      if (!debouncedSearchQuery || debouncedSearchQuery.length < 2) return [];
+      const result = await stocksService.search(debouncedSearchQuery);
       return result.ok ? result.data : [];
     },
-    enabled: searchQuery.length >= 2,
+    enabled: debouncedSearchQuery.length >= 2,
+    staleTime: 5 * 60 * 1000, // Cache results for 5 minutes (Sprint 3 - Tâche 3.2)
   });
 
   const { data: analysis } = useQuery({

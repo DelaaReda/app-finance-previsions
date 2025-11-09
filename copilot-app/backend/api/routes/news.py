@@ -15,11 +15,13 @@ router = APIRouter()
 @router.get("/news/feed")
 def get_filtered_news(
     tickers: Optional[str] = Query(None, description="Filter news by specific tickers (comma-separated)"),
-    limit: Optional[int] = Query(50, description="Limit number of results returned"),
+    limit: Optional[int] = Query(50, description="Limit number of results returned (max 200)"),
+    page: Optional[int] = Query(1, ge=1, description="Page number (1-based)"),
     since: Optional[str] = Query("7d", description="Time window: 1h, 6h, 1d, 3d, 7d, 14d"),
     sentiment_min: Optional[float] = Query(-1.0, description="Minimum sentiment score (-1.0 to 1.0)"),
     sentiment_max: Optional[float] = Query(1.0, description="Maximum sentiment score (-1.0 to 1.0)"),
-    sources: Optional[str] = Query(None, description="Filter by specific sources (comma-separated)")
+    sources: Optional[str] = Query(None, description="Filter by specific sources (comma-separated)"),
+    q: Optional[str] = Query(None, description="Search keyword in title/description")
 ) -> Dict[str, Any]:
     """
     Dashboard news endpoint with filtering capabilities.
@@ -82,6 +84,14 @@ def get_filtered_news(
                 if article.get("source", "").lower() in source_list or article.get("source_name", "").lower() in source_list
             ]
         
+        # Filter by keyword (q) in title/description (Sprint 4 - Tâche 4.2)
+        if q:
+            q_lower = q.lower()
+            filtered_articles = [
+                article for article in filtered_articles
+                if q_lower in (article.get("title", "") or "").lower() or q_lower in (article.get("description", "") or "").lower() or q_lower in (article.get("summary", "") or "").lower()
+            ]
+        
         # Filter by date range
         if since:
             # Parse the time window
@@ -107,21 +117,38 @@ def get_filtered_news(
             reverse=True
         )
         
-        # Apply limit
-        if limit and limit > 0:
-            filtered_articles = filtered_articles[:limit]
+        # Calculate pagination (Sprint 4 - Tâche 4.1)
+        total_count = len(filtered_articles)
+        page_num = page or 1
+        limit_num = min(limit or 50, 200)  # Cap at 200
         
-        # Prepare response data
+        # Calculate offset
+        offset = (page_num - 1) * limit_num
+        
+        # Apply pagination
+        paginated_articles = filtered_articles[offset:offset + limit_num]
+        
+        # Calculate if there are more pages
+        has_more = offset + limit_num < total_count
+        
+        # Prepare response data (Sprint 4 - Tâche 4.1)
         response_data = {
-            "articles": filtered_articles,
-            "count": len(filtered_articles),
+            "articles": paginated_articles,
+            "count": len(paginated_articles),
+            "total": total_count,
+            "page": page_num,
+            "limit": limit_num,
+            "has_more": has_more,
+            "next_page": page_num + 1 if has_more else None,
             "filters": {
                 "tickers": tickers.split(',') if tickers else [],
-                "limit": limit,
+                "limit": limit_num,
+                "page": page_num,
                 "since": since,
                 "sentiment_min": sentiment_min,
                 "sentiment_max": sentiment_max,
-                "sources": sources.split(',') if sources else []
+                "sources": sources.split(',') if sources else [],
+                "q": q
             },
             "freshness": news_data.get("freshness") or news_data.get("last_update"),
             "last_update": news_data.get("freshness") or news_data.get("last_update"),
@@ -139,10 +166,12 @@ def get_filtered_news(
             "filtered_params": {
                 "tickers": tickers,
                 "limit": limit,
+                "page": page,
                 "since": since,
                 "sentiment_min": sentiment_min,
                 "sentiment_max": sentiment_max,
-                "sources": sources
+                "sources": sources,
+                "q": q
             },
             "error": str(e),
             "message": "News temporarily unavailable - showing fallback data",

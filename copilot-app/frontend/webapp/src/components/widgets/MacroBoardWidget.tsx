@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { AreaChart, LineChart, BarChart } from '@tremor/react';
+import { useMemo, useState, Suspense, lazy } from 'react';
 import {
   Alert,
   Divider,
@@ -14,6 +13,11 @@ import {
   Tooltip,
   Paper,
 } from '@mantine/core';
+
+// Lazy load Tremor charts for code splitting (Sprint 2 - Tâche 2.1)
+const AreaChart = lazy(() => import('@tremor/react').then(m => ({ default: m.AreaChart })));
+const LineChart = lazy(() => import('@tremor/react').then(m => ({ default: m.LineChart })));
+const BarChart = lazy(() => import('@tremor/react').then(m => ({ default: m.BarChart })));
 import { IconDownload, IconRefresh, IconInfoCircle } from '@tabler/icons-react';
 import { Card, Title, Button, Text, Badge } from '@/ui';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
@@ -318,15 +322,17 @@ export function MacroBoardWidget({
             <>
               <Divider label="Visualisations" />
               <Paper radius="lg" p="md" style={glassPanel}>
-                {chartKind === 'area' && (
-                  <AreaChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-                )}
-                {chartKind === 'line' && (
-                  <LineChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-                )}
-                {chartKind === 'bar' && (
-                  <BarChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
-                )}
+                <Suspense fallback={<Skeleton height={384} radius="md" />}>
+                  {chartKind === 'area' && (
+                    <AreaChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                  )}
+                  {chartKind === 'line' && (
+                    <LineChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                  )}
+                  {chartKind === 'bar' && (
+                    <BarChart className="h-96" data={chartData} index="date" categories={categories} yAxisWidth={56} />
+                  )}
+                </Suspense>
               </Paper>
             </>
           )

@@ -19,7 +19,8 @@ def get_filtered_forecasts(
     sort_by: Optional[str] = Query("confidence", description="Sort by: confidence, expected_return, ticker, date"),
     limit: Optional[int] = Query(50, description="Limit number of results returned"),
     tickers: Optional[List[str]] = Query(None, description="Specific tickers to include"),
-    themes: Optional[List[str]] = Query(None, description="Specific themes to filter (growth, value, momentum, etc.)")
+    themes: Optional[List[str]] = Query(None, description="Specific themes to filter (growth, value, momentum, etc.)"),
+    min_confidence: Optional[float] = Query(0.0, ge=0.0, le=1.0, description="Minimum confidence threshold (0.0-1.0)")
 ) -> Dict[str, Any]:
     """
     Dashboard forecasts endpoint with filtering capabilities.
@@ -40,7 +41,8 @@ def get_filtered_forecasts(
                     "sort_by": sort_by,
                     "limit": limit,
                     "tickers": tickers,
-                    "themes": themes
+                    "themes": themes,
+                    "min_confidence": min_confidence
                 },
                 "message": "No forecast data available - system calculating in background",
                 "freshness": "unknown",
@@ -66,6 +68,13 @@ def get_filtered_forecasts(
         
         if themes:
             filtered_rows = [row for row in filtered_rows if row.get("theme") in themes or row.get("category") in themes]
+        
+        # Filter by minimum confidence (Sprint 5 - Tâche 5.1)
+        if min_confidence and min_confidence > 0:
+            filtered_rows = [
+                row for row in filtered_rows
+                if row.get("confidence", 0) >= min_confidence
+            ]
         
         # Sort results
         if sort_by == "confidence":
@@ -110,7 +119,8 @@ def get_filtered_forecasts(
                 "asset_type": asset_type,
                 "limit": limit,
                 "tickers": tickers,
-                "themes": themes
+                "themes": themes,
+                "min_confidence": min_confidence
             },
             "error": str(e),
             "message": "Forecasts temporarily unavailable - showing fallback data",

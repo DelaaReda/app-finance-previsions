@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
-import { LineChart } from '@tremor/react';
+import { useMemo, useState, Suspense, lazy } from 'react';
 import { IconDownload } from '@tabler/icons-react';
-import { Alert, Group, MultiSelect, SegmentedControl, Stack, Switch } from '@mantine/core';
+
+// Lazy load Tremor LineChart for code splitting (Sprint 2 - Tâche 2.1)
+const LineChart = lazy(() => import('@tremor/react').then(m => ({ default: m.LineChart })));
+import { Alert, Group, MultiSelect, SegmentedControl, Stack, Switch, Skeleton } from '@mantine/core';
 import { Card, Title, Button, Text } from '@/ui';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
 import {
@@ -153,16 +155,18 @@ export function MacroDrilldownWidget({
           </Alert>
         ) : (
           <Stack mt="md" gap="md">
-            <LineChart
-              className="h-80"
-              data={table}
-              index="date"
-              categories={categories}
-              valueFormatter={valueFormatter}
-              showXAxis
-              showGridLines
-              yAxisWidth={56}
-            />
+            <Suspense fallback={<Skeleton height={320} radius="md" />}>
+              <LineChart
+                className="h-80"
+                data={table}
+                index="date"
+                categories={categories}
+                valueFormatter={valueFormatter}
+                showXAxis
+                showGridLines
+                yAxisWidth={56}
+              />
+            </Suspense>
           </Stack>
         )
       )}

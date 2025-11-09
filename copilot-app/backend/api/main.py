@@ -325,6 +325,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No dashboard routes module found: {str(e)}")
     
+    # Stocks router (Sprint 3 - Tâche 3.1 by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77)
+    try:
+        from api.routes.stocks import router as stocks_router
+        app.include_router(stocks_router, prefix="/api", tags=["stocks"])
+        logger.info("✅ Stocks router registered at /api/stocks")
+    except ImportError as e:
+        logger.info(f"No stocks routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 
