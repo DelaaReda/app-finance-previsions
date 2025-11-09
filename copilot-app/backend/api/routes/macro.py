@@ -201,4 +201,102 @@ def _apply_macro_filters(
         response_data["series_map"] = series_map
         response_data["format"] = "map"
     
+    # Enhance data format for Tremor charts - ensure data points have proper structure
+    for series in response_data["series"]:
+        if "data" in series and isinstance(series["data"], list):
+            # Ensure data points are in the format expected by Tremor (with proper date/value fields)
+            formatted_data = []
+            for point in series["data"]:
+                if isinstance(point, dict):
+                    # Ensure the data point has both date and value fields for Tremor charts
+                    formatted_point = {
+                        "date": point.get("date") or point.get("timestamp") or point.get("time") or "",
+                        "value": point.get("value") or point.get("level") or point.get("close") or point.get("price") or 0.0,
+                        **{k: v for k, v in point.items() if k not in ["date", "timestamp", "time", "value", "level", "close", "price"]}
+                    }
+                    formatted_data.append(formatted_point)
+                elif isinstance(point, (list, tuple)) and len(point) >= 2:
+                    # Handle list format [date, value]
+                    formatted_data.append({
+                        "date": point[0],
+                        "value": point[1]
+                    })
+            
+            series["data"] = formatted_data
+    
     return response_data
+
+
+@router.get("/macro/latest")
+def get_macro_latest(
+    ids: Optional[List[str]] = Query(None, description="FRED series IDs: CPIAUCSL, VIXCLS, DGS10, etc.")
+) -> Dict[str, Any]:
+    """
+    Get the latest values for specified macro series - useful for live dashboards.
+    """
+    try:
+        # Try to load from cache first
+        cached_macro = load_json("macro_series")
+        if cached_macro:
+            data_payload = cached_macro.get("data") or cached_macro.get("payload") or cached_macro
+            all_series = data_payload.get("series", data_payload if isinstance(data_payload, list) else [])
+            
+            # Filter series by IDs if specified
+            if ids:
+                filtered_series = [
+                    series for series in all_series
+                    if series.get("id") in ids or series.get("series_id") in ids or series.get("name") in ids
+                ]
+            else:
+                filtered_series = all_series
+            
+            # Get the latest data point for each series
+            latest_values = []
+            for series in filtered_series:
+                series_id = series.get("id") or series.get("series_id") or series.get("name", "unnamed")
+                series_name = series.get("name") or series.get("title") or series_id
+                
+                # Get latest data point
+                data_points = series.get("data", [])
+                if data_points:
+                    latest_point = data_points[-1]  # Last point is typically most recent
+                    latest_value = {
+                        "id": series_id,
+                        "name": series_name,
+                        "date": latest_point.get("date") or latest_point.get("timestamp") or "",
+                        "value": latest_point.get("value") or latest_point.get("level") or latest_point.get("close") or 0.0,
+                        "change": latest_point.get("change_pct") or latest_point.get("change") or 0.0,
+                        "last_update": data_payload.get("last_update") or datetime.utcnow().isoformat()
+                    }
+                    latest_values.append(latest_value)
+            
+            return ok({
+                "latest": latest_values,
+                "count": len(latest_values),
+                "requested_ids": ids,
+                "freshness": data_payload.get("freshness") or data_payload.get("last_update"),
+                "generated_at": datetime.utcnow().isoformat(),
+                "source": data_payload.get("source", ["macro_service"])
+            })
+        
+        # Fallback if no cache data
+        return ok({
+            "latest": [],
+            "count": 0,
+            "requested_ids": ids,
+            "message": "No macro data available - system fetching from FRED in background",
+            "freshness": "unknown",
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["fallback_empty"]
+        })
+        
+    except Exception as e:
+        return ok({
+            "latest": [],
+            "count": 0,
+            "requested_ids": ids,
+            "error": str(e),
+            "message": "Error retrieving latest macro values",
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["error_fallback"]
+        })

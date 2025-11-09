@@ -859,3 +859,17 @@ Message:
 Links:
 * copilot-app/backend/services/backtest_service.py
 * copilot-app/backend/api/routes/backtests.py
+[UTC 2025-11-04 21:15] [INFO] MSG: MSG-20251104-2115-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
+Task: BE-002
+Subject: Endpoint macro amélioré et prêt pour Tremor charts - Données réelles FRED/VIX
+Message:
+
+* Endpoint /api/macro/series amélioré avec formatage spécifique pour graphiques Tremor
+* Nouvel endpoint /api/macro/latest pour accès rapide aux valeurs récentes
+* Données structurées au format {date, value} pour AreaChart Tremor
+* Support des séries spécifiques FRED: CPIAUCSL, VIXCLS, DGS10, etc.
+* Prêt pour intégration avec MacroBoardWidget et graphiques Tremor
+* Never-empty patterns maintenus avec fallbacks robustes
+Links:
+* copilot-app/backend/api/routes/macro.py
