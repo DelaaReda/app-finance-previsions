@@ -40,6 +40,7 @@ export function useMacroSeries(params: {
   if (end) searchParams.end = end;
   if (frequency) searchParams.frequency = frequency;
   if (collapse && collapse !== 'none') searchParams.collapse = collapse;
+  searchParams.format_resp = 'map';  // Explicitly request map format as per FC-API-019
 
   return useQuery<MacroResponse>({
     queryKey: ['macro-series', list, start ?? '', end ?? '', frequency ?? '', collapse ?? ''] as const,

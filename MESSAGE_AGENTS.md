@@ -46,7 +46,7 @@ Avant de commencer, lisez **OBLIGATOIREMENT** :
 1. Ouvrez `TASKS_BOARD.md`
 2. Choisissez une tâche avec le statut **AVAILABLE** ou sans statut
 3. Mettez à jour le statut à **CLAIMED** avec votre nom dans la section de la tâche
-4. Notez le **TASK-ID** (ex: FC-FE-API-CONTRACT-ALIGN)
+4. Notez le **TASK-ID** (ex: FE-001)
 
 ### 3. Vérifier votre profil agent
 
@@ -109,10 +109,10 @@ Format de commit :
 
 ```bash
 git add .
-git commit -m "feat(TASK-QWEN-XXX): description courte @VOTRE-NOM (+XXpts)
+git commit -m "feat(BE-XXX): description courte @VOTRE-NOM (+XXpts)
 
 - Détails de ce qui a été fait
-- Preuve: screenshot/log dans proofs/TASK-QWEN-XXX/"
+- Preuve: screenshot/log dans proofs/BE-XXX/"
 ```
 
 **Mettre à jour le score** :
@@ -124,7 +124,7 @@ git commit -m "feat(TASK-QWEN-XXX): description courte @VOTRE-NOM (+XXpts)
 
 Exemple :
 ```markdown
-| ALEX-API-ARCHITECT-SUPERMAN-7 | 1710 | TASK-QWEN-001 - Copilot endpoint | 2025-01-27 |
+| ALEX-API-ARCHITECT-SUPERMAN-7 | 1710 | BE-005 - Copilot endpoint | 2025-01-27 |
 ```
 
 ---
@@ -169,10 +169,10 @@ Chaque tâche a un nombre de points attribués (ex: +80 pts). Les points sont aj
 
 Pour les nouveaux agents, commencez par :
 
-1. **TASK-QWEN-010** (+30 pts) - Nettoyer les imports inutilisés (facile, rapide)
-2. **TASK-QWEN-003** (+30 pts) - Gestion d'erreurs Stocks.tsx (bon apprentissage)
-3. **TASK-QWEN-011** (+40 pts) - Ajouter PageHeader partout (cohérence UI)
-4. **TASK-QWEN-015** (+40 pts) - Skeletons pour chargements (amélioration UX)
+1. **BE-007** (+30 pts) - Nettoyer les imports inutilisés (facile, rapide)
+2. **FE-008** (+30 pts) - Gestion d'erreurs Stocks.tsx (bon apprentissage)
+3. **FE-010** (+40 pts) - Ajouter PageHeader partout (cohérence UI)
+4. **FE-011** (+40 pts) - Skeletons pour chargements (amélioration UX)
 
 Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le projet.
 
@@ -194,13 +194,13 @@ Chaque agent doit maintenir son fichier dans `agents/` :
 # VOTRE-NOM - Rôle
 
 ## Missions accomplies
-- TASK-QWEN-XXX : Description (+XX pts) - Date
+- BE-XXX : Description (+XX pts) - Date
 
 ## En cours
-- TASK-QWEN-YYY : Description - Date de début
+- FE-YYY : Description - Date de début
 
 ## Planifié
-- TASK-QWEN-ZZZ : Description
+- FS-ZZZ : Description
 ```
 
 ---

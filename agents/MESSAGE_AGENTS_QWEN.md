@@ -1,12 +1,12 @@
-# 🚀 MESSAGE D'ACCUEIL POUR LES AGENTS
+# 🚀 MESSAGE D'ACCUEIL POUR LES AGENTS QWEN
 
 **Date**: 2025-01-27  
 **Projet**: Finance Copilot  
-**Pour**: Tous les agents (ALEX, MICHEL, LENA, MAXIMILIAN, etc.)
+**Pour**: Tous les agents Qwen (ALEX, MICHEL, LENA, MAXIMILIAN, etc.)
 
 ---
 
-## 👋 Salut les agents !
+## 👋 Salut les agents Qwen !
 
 Bienvenue dans **Finance Copilot** ! 🎉
 
@@ -20,15 +20,21 @@ Vous faites partie d'une équipe qui construit un système d'analyse financière
 
 ### ⚠️ FICHIER UNIQUE - NE VOUS PERDEZ PAS !
 
-**UN SEUL fichier de tâches** : `TASKS_FOR_OTHER_AGENTS.md` (à la racine)
+**UN SEUL fichier de tâches** : `TASKS_BOARD.md` (à la racine)
 
-Ce fichier contient **65 tâches détaillées** organisées par priorité :
-- **P0 - Critiques** (001-020) : Endpoints, lazy loading, tests
-- **P1 - Importantes** (021-035) : Features, améliorations
-- **P2 - Améliorations** (036-050) : Enrichissements
-- **P3 - Optimisations** (051-065) : Performance, analytics
+Ce fichier contient **79 tâches** organisées par catégorie :
+- **BE-XXX** : Backend (15 tâches) - API, routes, services, cache
+- **FE-XXX** : Frontend (29 tâches) - Composants, pages, hooks, UI
+- **FS-XXX** : Fullstack (23 tâches) - Intégrations complètes
+- **TEST-XXX** : Tests (2 tâches) - E2E, unitaires
+- **DOC-XXX** : Documentation (1 tâche)
+- **PERF-XXX** : Performance (3 tâches)
+- **OPS-XXX** : Operations (1 tâche)
+- **SEC-XXX** : Sécurité (1 tâche)
+- **DATA-XXX** : Data/ML (2 tâches)
+- **UI-XXX** : UI/UX (2 tâches)
 
-**❌ IGNOREZ** : `TASKS_BOARD.md` (ancien fichier, archivé)
+**❌ IGNOREZ** : `TASKS_FOR_OTHER_AGENTS.md` (obsolète, fusionné dans TASKS_BOARD.md)
 
 ---
 
@@ -39,7 +45,7 @@ Ce fichier contient **65 tâches détaillées** organisées par priorité :
 1. **`MESSAGE_AGENTS.md`** (à la racine) - Instructions complètes
 2. **`AGENTS.md`** - Guide de déploiement et règles fondamentales
 3. **`AGENTS_GAMEPLAY.md`** - Système de points et gamification
-4. **`TASKS_FOR_OTHER_AGENTS.md`** - Liste complète des 65 tâches
+4. **`TASKS_BOARD.md`** - Liste complète des 79 tâches organisées par catégorie
 
 ### Étape 2 : Vérifier votre profil agent
 
@@ -51,14 +57,14 @@ Si votre fichier n'existe pas, créez-le en vous inspirant des autres.
 
 ### Étape 3 : Choisir une tâche
 
-1. Ouvrez `TASKS_FOR_OTHER_AGENTS.md`
+1. Ouvrez `TASKS_BOARD.md`
 2. Cherchez une tâche avec statut **AVAILABLE**
 3. **Changez immédiatement** le statut à **CLAIMED avec votre nom**
-4. Notez le **TASK-ID** (ex: TASK-QWEN-001)
+4. Notez le **TASK-ID** (ex: BE-005)
 
 **Exemple de modification** :
 ```markdown
-| TASK-QWEN-001 | ALEX-API-ARCHITECT-SUPERMAN-7 | CLAIMED | +80 | 2025-01-27 |
+| BE-005 | ALEX-API-ARCHITECT-SUPERMAN-7 | CLAIMED | +80 | 2025-01-27 |
 ```
 
 ### Étape 4 : Démarrer le projet localement
@@ -90,10 +96,10 @@ Vérifiez que :
 
 ```bash
 git add .
-git commit -m "feat(TASK-QWEN-XXX): description courte @VOTRE-NOM (+XXpts)
+git commit -m "feat(BE-XXX): description courte @VOTRE-NOM (+XXpts)
 
 - Détails de ce qui a été fait
-- Preuve: screenshot/log dans proofs/TASK-QWEN-XXX/"
+- Preuve: screenshot/log dans proofs/BE-XXX/"
 ```
 
 ### Mettre à jour le score
@@ -105,7 +111,7 @@ git commit -m "feat(TASK-QWEN-XXX): description courte @VOTRE-NOM (+XXpts)
 
 **Exemple** :
 ```markdown
-| ALEX-API-ARCHITECT-SUPERMAN-7 | 1640 | TASK-QWEN-001 - Copilot endpoint | 2025-01-27 |
+| ALEX-API-ARCHITECT-SUPERMAN-7 | 1640 | BE-005 - Copilot endpoint | 2025-01-27 |
 ```
 
 ---
@@ -134,10 +140,10 @@ git commit -m "feat(TASK-QWEN-XXX): description courte @VOTRE-NOM (+XXpts)
 
 Pour les nouveaux agents, commencez par ces tâches **faciles** et **rapides** :
 
-1. **TASK-QWEN-010** (+30 pts) - Nettoyer les imports inutilisés (30min)
-2. **TASK-QWEN-003** (+30 pts) - Gestion d'erreurs Stocks.tsx (1h)
-3. **TASK-QWEN-011** (+40 pts) - Ajouter PageHeader partout (1-2h)
-4. **TASK-QWEN-015** (+40 pts) - Skeletons pour chargements (2h)
+1. **BE-007** (+30 pts) - Nettoyer les imports inutilisés (30min)
+2. **FE-008** (+30 pts) - Gestion d'erreurs Stocks.tsx (1h)
+3. **FE-010** (+40 pts) - Ajouter PageHeader partout (1-2h)
+4. **FE-011** (+40 pts) - Skeletons pour chargements (2h)
 
 Ces tâches vous permettront de comprendre le projet rapidement.
 
@@ -147,7 +153,7 @@ Ces tâches vous permettront de comprendre le projet rapidement.
 
 ### Éviter les conflits
 
-1. **Vérifier avant de commencer** : Regardez dans `TASKS_FOR_OTHER_AGENTS.md` si une tâche est déjà **CLAIMED**
+1. **Vérifier avant de commencer** : Regardez dans `TASKS_BOARD.md` si une tâche est déjà **CLAIMED**
 2. **Mettre à jour immédiatement** : Dès que vous choisissez une tâche, changez le statut à **CLAIMED** avec votre nom
 3. **Communiquer** : Si vous travaillez sur une tâche longue (>1 jour), mettez à jour votre fichier agent dans `agents/`
 
@@ -159,13 +165,13 @@ Chaque agent doit maintenir son fichier dans `agents/` :
 # VOTRE-NOM - Rôle
 
 ## ✅ Accompli
-- TASK-QWEN-XXX : Description (+XX pts) - Date
+- BE-XXX : Description (+XX pts) - Date
 
 ## 🚧 En Cours
-- TASK-QWEN-YYY : Description - Date de début
+- FE-YYY : Description - Date de début
 
 ## 📅 Planifié
-- TASK-QWEN-ZZZ : Description
+- FS-ZZZ : Description
 ```
 
 ---
@@ -177,7 +183,7 @@ Chaque agent doit maintenir son fichier dans `agents/` :
 - [ ] Lu `AGENTS_GAMEPLAY.md` (système de points)
 - [ ] Vérifié que mon fichier agent existe dans `agents/`
 - [ ] Testé `./finance-copilot.sh start` localement
-- [ ] Choisi une tâche **AVAILABLE** dans `TASKS_FOR_OTHER_AGENTS.md`
+- [ ] Choisi une tâche **AVAILABLE** dans `TASKS_BOARD.md`
 - [ ] Mis à jour le statut de la tâche à **CLAIMED** avec mon nom
 - [ ] Noté le **TASK-ID** pour le commit
 
@@ -190,7 +196,7 @@ Chaque agent doit maintenir son fichier dans `agents/` :
 - `MESSAGE_AGENTS.md` - Instructions complètes
 - `AGENTS.md` - Guide de déploiement
 - `AGENTS_GAMEPLAY.md` - Système de points
-- `TASKS_FOR_OTHER_AGENTS.md` - Toutes les tâches avec détails
+- `TASKS_BOARD.md` - Toutes les tâches avec détails (79 tâches organisées par catégorie)
 - `copilot-app/docs/` - Documentation technique
 
 ### Vérifications rapides
@@ -222,7 +228,7 @@ Chaque contribution compte. Chaque point gagné vous rapproche du niveau supéri
 - ✅ Code testé, pas de shortcuts
 - ✅ Preuves à chaque commit
 - ✅ Communication claire
-- ✅ **UN SEUL fichier de tâches** : `TASKS_FOR_OTHER_AGENTS.md`
+- ✅ **UN SEUL fichier de tâches** : `TASKS_BOARD.md`
 
 **Let's build and dominate!** 🚀
 

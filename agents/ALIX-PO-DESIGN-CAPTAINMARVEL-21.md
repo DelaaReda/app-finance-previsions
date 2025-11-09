@@ -15,10 +15,10 @@
 
 ## 📌 Prochaines étapes
 1. Semaine 1
-   - Obtenir validation dev leads sur tâches `FC-FE-API-CONTRACT-ALIGN` & `FC-FE-MANTINE-V7-HARDEN` (blocage console actuel).
+   - Obtenir validation dev leads sur tâches `FE-001` & `FE-002` (blocage console actuel).
    - Monter un mini spec « UI Health Contract » listant métriques & endpoints attendus pour Dashboard/HealthBar.
 2. Semaine 2
-   - Coordonner avec backend pour `FC-FE-STOCKS-LIVE-DATA` (contrat `/api/stocks/screener`).
+   - Coordonner avec backend pour `FE-003` (contrat `/api/stocks/screener`).
    - Préparer maquette Figma (ou Markdown) pour états vides FR conformément à vision.
 
 ## 🤝 Besoins / Risques

@@ -52,66 +52,698 @@ Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data*
 
 ## 🔥 PRIORITY BOARD — Toutes les Tâches
 
+### Système de Nommage des Tâches
+
+Les tâches sont organisées par **catégorie** avec des codes clairs :
+- **BE-XXX** : Backend (API, routes, services, cache, logging, validations)
+- **FE-XXX** : Frontend (composants, pages, hooks, UI, animations, thèmes)
+- **FS-XXX** : Fullstack (intégrations backend+frontend, exports, notifications)
+- **TEST-XXX** : Tests (E2E, unitaires, intégration)
+- **DOC-XXX** : Documentation
+- **PERF-XXX** : Performance (optimisations, métriques)
+- **OPS-XXX** : Operations/Monitoring
+- **SEC-XXX** : Sécurité
+- **DATA-XXX** : Data/ML
+- **UI-XXX** : UI/UX
+
 ### Legend
 - **Effort**: S (≤0.5j) • M (1–2j) • L (3–5j)
 - **Priorité**: 🔴 CRITIQUE • 🟡 ÉLEVÉE • 🟢 MOYENNE
 - **Statut**: AVAILABLE • CLAIMED • IN_PROGRESS • DONE
-- Tous les lots ⇒ **never-empty + preuves (curl/log + screenshot) dans `proofs/<TASK>`**
+- Tous les lots ⇒ **never-empty + preuves (curl/log + screenshot) dans `proofs/<TASK-ID>`**
 
 ---
 
 ## P0 — Brancher la donnée réelle (immédiat)
 
-#### FC-FE-API-CONTRACT-ALIGN — Corriger les chemins API côté front *(Effort S)*
+#### FE-001 — Corriger les chemins API côté front *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🔴 CRITIQUE
+
 - **Why**: Les hooks `useLegacyHealth`, `useHealth`, `useStocksScreener`, `stocksService.getPrices` appellent `/health` ou `/stocks/*` sans préfixe `/api`, entraînant des 404 malgré un backend prêt. Cela casse Dashboard (HealthBar), Stocks Screener et monitoring.
-- **Steps**:
-  1. Mettre à jour les services/hooks pour cibler `/api/...` (ex. `useHealth` → `/api/health` & `/api/analytics/health` lorsque disponible).
-  2. Faire respecter ce contrat via un helper `pathWithApiPrefix()` dans `api/client.ts` (défaut `/api`, override env pour staging/prod) + tests unitaires.
-  3. Ajouter doc courte dans `copilot-app/docs/frontend/integration.md` rappelant la règle « routes FastAPI ⇒ /api/... ».
-- **DoD**:
-  - `curl http://localhost:5173/api/health` via proxy OK, Dashboard affiche badges sans erreur console.
-  - `pnpm run typecheck` + `pnpm run build` passent.
-  - Capture Dashboard + log curl déposés dans `proofs/FC-FE-API-CONTRACT-ALIGN/`.
 
-#### FC-FE-MANTINE-V7-HARDEN — Retirer props deprecated (refs & creatable) *(Effort S)*
+- **Steps détaillés**:
+
+  1. **Identifier tous les fichiers concernés**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les appels API sans /api
+     grep -r "fetch.*['\"]/health" src/
+     grep -r "fetch.*['\"]/stocks" src/
+     grep -r "apiGet.*['\"]/health" src/
+     grep -r "apiGet.*['\"]/stocks" src/
+     ```
+     - Notez tous les fichiers trouvés
+     - Vérifiez que le backend expose bien ces endpoints avec `/api/` préfixe
+
+  2. **Créer/modifier le helper `pathWithApiPrefix()`**
+     - Fichier: `src/api/client.ts`
+     - Ajouter la fonction :
+     ```typescript
+     /**
+      * Ajoute le préfixe /api si nécessaire
+      * @param path - Chemin de l'endpoint (ex: "/health" ou "/api/health")
+      * @returns Chemin avec préfixe /api (ex: "/api/health")
+      */
+     export function pathWithApiPrefix(path: string): string {
+       const apiBase = (import.meta.env as any).VITE_API_BASE_URL || '/api';
+       // Si le chemin commence déjà par /api, ne pas dupliquer
+       if (path.startsWith('/api')) {
+         return path;
+       }
+       // Si le chemin commence par /, enlever le / initial
+       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+       return `${apiBase}/${cleanPath}`;
+     }
+     ```
+     - **Vérification**: Testez la fonction avec différents chemins :
+       ```typescript
+       pathWithApiPrefix('/health') // → '/api/health'
+       pathWithApiPrefix('/api/health') // → '/api/health'
+       pathWithApiPrefix('stocks/search') // → '/api/stocks/search'
+       ```
+
+  3. **Mettre à jour `useHealth` hook**
+     - Fichier: `src/hooks/useHealth.ts` (ou similaire)
+     - Remplacer :
+     ```typescript
+     // AVANT
+     const response = await fetch('/health');
+     
+     // APRÈS
+     import { pathWithApiPrefix } from '@/api/client';
+     const response = await fetch(pathWithApiPrefix('/health'));
+     ```
+     - **Vérification**: Vérifiez que l'appel fonctionne avec `curl http://localhost:5173/api/health`
+
+  4. **Mettre à jour `useStocksScreener` hook**
+     - Fichier: `src/hooks/useStocksScreener.ts` (ou similaire)
+     - Remplacer tous les appels `/stocks/*` par `pathWithApiPrefix('/stocks/*')`
+     - **Vérification**: Testez la page Stocks dans le navigateur, vérifiez la console (pas d'erreur 404)
+
+  5. **Mettre à jour `stocksService.getPrices`**
+     - Fichier: `src/services/stocks.service.ts`
+     - Remplacer les appels directs par `pathWithApiPrefix()`
+     - **Vérification**: Testez la recherche de stocks dans l'UI
+
+  6. **Mettre à jour `useLegacyHealth` si existe**
+     - Chercher le fichier avec `grep -r "useLegacyHealth" src/`
+     - Appliquer le même pattern
+     - **Vérification**: Vérifiez que le Dashboard affiche correctement les badges de santé
+
+  7. **Ajouter tests unitaires pour `pathWithApiPrefix`**
+     - Fichier: `src/api/__tests__/client.test.ts` (créer si n'existe pas)
+     ```typescript
+     import { pathWithApiPrefix } from '../client';
+     
+     describe('pathWithApiPrefix', () => {
+       it('should add /api prefix to paths without it', () => {
+         expect(pathWithApiPrefix('/health')).toBe('/api/health');
+         expect(pathWithApiPrefix('stocks/search')).toBe('/api/stocks/search');
+       });
+       
+       it('should not duplicate /api prefix', () => {
+         expect(pathWithApiPrefix('/api/health')).toBe('/api/health');
+       });
+     });
+     ```
+     - **Vérification**: `pnpm test` doit passer
+
+  8. **Documenter la règle**
+     - Fichier: `copilot-app/docs/frontend/integration.md` (créer si n'existe pas)
+     - Ajouter section :
+     ```markdown
+     ## Règle: Préfixe /api pour toutes les routes FastAPI
+     
+     Tous les appels API doivent utiliser le préfixe `/api`.
+     Utilisez `pathWithApiPrefix()` du helper `@/api/client` pour garantir la cohérence.
+     
+     ❌ Incorrect: `fetch('/health')`
+     ✅ Correct: `fetch(pathWithApiPrefix('/health'))`
+     ```
+
+  9. **Vérification finale**
+     - Démarrer le projet: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173
+     - Vérifier la console du navigateur (F12) : **AUCUNE erreur 404**
+     - Vérifier que le Dashboard affiche les badges de santé
+     - Vérifier que la page Stocks fonctionne sans erreur
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les appels API utilisent `pathWithApiPrefix()` ou `/api/` directement
+  - [ ] `grep -r "fetch.*['\"]/[^a]" src/` ne trouve plus d'appels sans `/api/` (sauf pour les assets statiques)
+  - [ ] `curl http://localhost:5173/api/health` via proxy retourne 200 OK
+  - [ ] Dashboard affiche badges sans erreur console
+  - [ ] Page Stocks fonctionne sans erreur 404
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Tests unitaires pour `pathWithApiPrefix` passent
+  - [ ] Documentation ajoutée dans `docs/frontend/integration.md`
+  - [ ] Capture Dashboard + log curl déposés dans `proofs/FE-001/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas modifier les appels vers les assets statiques (`/assets/`, `/images/`, etc.)
+  - ⚠️ Vérifier que le backend expose bien les endpoints avec `/api/` préfixe
+  - ⚠️ Tester avec différents environnements (dev, staging) si `VITE_API_BASE_URL` est défini
+
+
+#### FE-002 — Retirer props deprecated (refs & creatable) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
 - **Why**: Mantine v7 rejette `creatable`, `getCreateLabel` et refs sur composants fonctionnels (`Tooltip` + `ActionIcon` wrapper), générant warnings persistants et risque de régression lors des upgrades.
-- **Steps**:
-  1. Mettre en place `forwardRef` sur `ActionIcon` exporté `src/ui/index.tsx` et sur `ThemeToggle` si custom wrapper nécessaire.
-  2. Migrer `MultiSelect`/`Combobox` vers API v7 (`withCheckIcon`, `useCombobox`, `creatable` → `combobox.createOption`). Fichiers concernés : `StocksScreenerWidget.tsx`, éventuels duplicates (grep `creatable`).
-  3. Ajouter test Playwright rapide (Stocks page) pour garantir absence de toast d’erreur.
-- **DoD**: Console Vite sans warning Mantine, test UI passe, diff validé.
 
-#### FC-FE-STOCKS-LIVE-DATA — Débrancher mocks & 404 screener *(Effort M)*
+- **Prérequis**:
+  - [ ] Projet démarré (`./finance-copilot.sh start`)
+  - [ ] Console du navigateur ouverte (F12) pour voir les warnings
+  - [ ] Connaissance de Mantine v7 API
+
+- **Steps détaillés**:
+
+  1. **Identifier tous les usages de `creatable`**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher tous les usages de creatable
+     grep -r "creatable" src/ --include="*.tsx" --include="*.ts"
+     grep -r "getCreateLabel" src/ --include="*.tsx" --include="*.ts"
+     ```
+     - Notez tous les fichiers trouvés (probablement `StocksScreenerWidget.tsx` et autres)
+     - **Vérification**: Liste tous les fichiers à modifier
+
+  2. **Corriger `ActionIcon` avec `forwardRef`**
+     - Fichier: `src/ui/index.tsx` (ou `src/components/ui/ActionIcon.tsx`)
+     - **AVANT**:
+     ```typescript
+     export const ActionIcon = ({ children, ...props }) => {
+       return <MantineActionIcon {...props}>{children}</MantineActionIcon>;
+     };
+     ```
+     - **APRÈS**:
+     ```typescript
+     import { forwardRef } from 'react';
+     import { ActionIcon as MantineActionIcon } from '@mantine/core';
+     
+     export const ActionIcon = forwardRef<HTMLButtonElement, any>(
+       ({ children, ...props }, ref) => {
+         return (
+           <MantineActionIcon ref={ref} {...props}>
+             {children}
+           </MantineActionIcon>
+         );
+       }
+     );
+     ActionIcon.displayName = 'ActionIcon';
+     ```
+     - **Vérification**: `pnpm run typecheck` ne doit plus avoir d'erreur sur ActionIcon
+
+  3. **Corriger `ThemeToggle` si nécessaire**
+     - Fichier: Chercher avec `grep -r "ThemeToggle" src/`
+     - Si `ThemeToggle` utilise `ActionIcon`, vérifier qu'il passe le ref correctement
+     - **Vérification**: Pas de warning dans la console
+
+  4. **Migrer `MultiSelect` avec `creatable` vers API v7**
+     - Fichier: `src/components/widgets/StocksScreenerWidget.tsx` (ou similaire)
+     - **AVANT** (Mantine v6):
+     ```typescript
+     <MultiSelect
+       creatable
+       getCreateLabel={(query) => `+ Create ${query}`}
+       onCreate={(query) => {
+         // Créer nouvelle option
+         return { value: query, label: query };
+       }}
+     />
+     ```
+     - **APRÈS** (Mantine v7):
+     ```typescript
+     import { useCombobox } from '@mantine/core';
+     
+     const combobox = useCombobox({
+       onDropdownClose: () => combobox.resetSelectedOption(),
+     });
+     
+     <Combobox
+       store={combobox}
+       withinPortal={false}
+       onOptionSubmit={(val) => {
+         // Gérer sélection
+         combobox.closeDropdown();
+       }}
+     >
+       <Combobox.Target>
+         <TextInput
+           placeholder="Search or create..."
+           value={search}
+           onChange={(event) => {
+             combobox.openDropdown();
+             setSearch(event.currentTarget.value);
+           }}
+           onClick={() => combobox.openDropdown()}
+         />
+       </Combobox.Target>
+       <Combobox.Dropdown>
+         <Combobox.Options>
+           {filteredOptions.map((item) => (
+             <Combobox.Option key={item.value} value={item.value}>
+               {item.label}
+             </Combobox.Option>
+           ))}
+           {!filteredOptions.some((item) => item.value === search) && search && (
+             <Combobox.Option value={search}>
+               + Create {search}
+             </Combobox.Option>
+           )}
+         </Combobox.Options>
+       </Combobox.Dropdown>
+     </Combobox>
+     ```
+     - **Vérification**: Le composant fonctionne toujours, pas d'erreur console
+
+  5. **Vérifier tous les autres usages**
+     - Pour chaque fichier trouvé à l'étape 1, appliquer la même migration
+     - **Vérification**: `grep -r "creatable" src/` ne doit plus rien trouver
+
+  6. **Corriger les refs sur composants fonctionnels**
+     - Chercher: `grep -r "ref=" src/ --include="*.tsx" | grep -v "forwardRef"`
+     - Pour chaque composant fonctionnel avec ref, utiliser `forwardRef`
+     - **Vérification**: Pas de warning "Function components cannot be given refs"
+
+  7. **Tester avec Playwright**
+     - Fichier: `tests/ui/stocks.spec.ts` (créer si n'existe pas)
+     ```typescript
+     import { test, expect } from '@playwright/test';
+     
+     test('Stocks page should not show Mantine warnings', async ({ page }) => {
+       await page.goto('http://localhost:5173/stocks');
+       
+       // Vérifier qu'il n'y a pas de toast d'erreur
+       const errorToast = page.locator('[role="alert"]').filter({ hasText: /error|warning/i });
+       await expect(errorToast).toHaveCount(0);
+       
+       // Vérifier que la page se charge correctement
+       await expect(page.locator('h1, h2')).toContainText(/stocks|actions/i);
+     });
+     ```
+     - **Vérification**: `pnpm test:e2e` ou `npx playwright test` passe
+
+  8. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUN warning Mantine dans la console**
+     - Naviguer vers la page Stocks
+     - **Vérifier**: Pas de toast d'erreur, tout fonctionne normalement
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les usages de `creatable` migrés vers API v7
+  - [ ] Tous les composants fonctionnels avec ref utilisent `forwardRef`
+  - [ ] `grep -r "creatable" src/` ne retourne rien
+  - [ ] `grep -r "getCreateLabel" src/` ne retourne rien
+  - [ ] Console Vite sans warning Mantine
+  - [ ] Console navigateur sans warning React/Mantine
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Test Playwright passe (si ajouté)
+  - [ ] Page Stocks fonctionne sans erreur
+  - [ ] Diff validé et commit avec preuve dans `proofs/FE-002/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas supprimer la fonctionnalité "créer nouvelle option", juste migrer l'API
+  - ⚠️ Tester que les options créées sont bien sauvegardées/utilisées
+  - ⚠️ Vérifier la compatibilité avec les autres composants Mantine v7
+  - ✅ Consulter la doc Mantine v7: https://mantine.dev/guides/combobox/
+  - ✅ Tester sur plusieurs pages si `ActionIcon` est utilisé partout
+
+
+#### FE-003 — Débrancher mocks & 404 screener *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +70 pts  
+**Priorité**: 🔴 CRITIQUE
+
 - **Why**: `useStocksScreener` tape `/stocks/screener` (inexistant) et `stocksService.search` renvoie un tableau mocké, brisant la promesse « no mocks » et empêchant la page Stocks de montrer les scores réels.
-- **Steps**:
-  1. Travailler avec backend pour exposer `/api/stocks/screener` & `/api/stocks/search` (contrat inspiré de `docs/INTEGRATION_PLAN.md`), ou adapter le front sur endpoint existant + doc.
-  2. Remplacer les mocks par véritable appel TanStack Query + états Loading/Empty/Errored.
-  3. Ajouter preuve via `curl` + screenshot page `/stocks` affichant résultats.
-- **DoD**: `/stocks` affiche données réelles sans 404; `pnpm run typecheck` OK; preuve déposée.
 
-#### FC-API-FORECASTS-REAL — Forecasts branchés backend *(Effort M)*
-- **Why**: Remplacer les mocks par les vraies prévisions pour `/forecasts` (liste + détail).
-- **Inputs**: `GET /api/forecasts`, `GET /api/forecasts/:id` (cf. spec ci-dessous).
-- **Steps**:
-  1. Implémenter `src/services/forecasts.ts` + `src/hooks/useForecasts.ts` (TanStack Query, ensureArray, fallback env).
-  2. Brancher `Forecasts.tsx` (table + panneau détail) sur le hook, supprimer mock local.
-  3. Bouton “Rafraîchir” qui refetch + badge Freshness alimenté par le payload backend.
-- **DoD**:
-  - Page affiche ≥1 ligne en mode backend, état vide propre quand aucun résultat.
-  - `pnpm run typecheck` + `pnpm run build` OK.
-  - Preuves: `curl /api/forecasts`, screenshots (liste + détail) dans `proofs/FC-API-FORECASTS-REAL/`.
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/stocks/search` existe: `curl http://localhost:8050/api/stocks/search?q=AAPL`
+  - [ ] Vérifier que `/api/stocks/screener` existe (ou identifier l'endpoint équivalent)
+  - [ ] Page Stocks accessible sur http://localhost:5173/stocks
 
-#### FC-API-MACRO-REAL — Macro séries FRED/VIX *(Effort M)*
+- **Steps détaillés**:
+
+  1. **Vérifier les endpoints backend disponibles**
+     ```bash
+     # Vérifier l'endpoint de recherche
+     curl http://localhost:8050/api/stocks/search?q=AAPL
+     
+     # Vérifier l'endpoint screener (peut ne pas exister)
+     curl http://localhost:8050/api/stocks/screener
+     
+     # Vérifier la documentation API
+     curl http://localhost:8050/docs
+     ```
+     - Notez la structure de réponse de chaque endpoint
+     - **Vérification**: Les endpoints retournent du JSON valide (pas d'erreur 404)
+
+  2. **Identifier les fichiers avec mocks**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les mocks dans stocksService
+     grep -r "mockResults\|mock.*stock" src/ --include="*.ts" --include="*.tsx"
+     # Chercher useStocksScreener
+     grep -r "useStocksScreener" src/
+     # Chercher stocksService.search
+     grep -r "stocksService\.search" src/
+     ```
+     - Fichiers probables: `src/services/stocks.service.ts`, `src/hooks/useStocksScreener.ts`
+     - **Vérification**: Liste tous les fichiers à modifier
+
+  3. **Vérifier/créer l'endpoint `/api/stocks/search` côté backend**
+     - Si l'endpoint n'existe pas, voir tâche BE-004 (Recherche actions sans mock)
+     - Si l'endpoint existe, noter la structure de réponse attendue
+     - **Vérification**: `curl http://localhost:8050/api/stocks/search?q=AAPL` retourne des résultats
+
+  4. **Remplacer le mock dans `stocksService.search`**
+     - Fichier: `src/services/stocks.service.ts`
+     - **AVANT** (mock):
+     ```typescript
+     search: async (query: string) => {
+       // Mock data
+       const mockResults = [
+         { ticker: 'AAPL', name: 'Apple Inc.', price: 150.0 },
+         { ticker: 'MSFT', name: 'Microsoft Corp.', price: 300.0 },
+       ];
+       return { ok: true, data: mockResults };
+     }
+     ```
+     - **APRÈS** (vraie API):
+     ```typescript
+     import { apiGet } from '@/api/client';
+     
+     search: async (query: string) => {
+       try {
+         const response = await apiGet<{ results: StockSearchResult[] }>(
+           '/api/stocks/search',
+           { q: query, limit: 10 }
+         );
+         return response;
+       } catch (error) {
+         console.error('Error searching stocks:', error);
+         return { ok: false, error: 'Failed to search stocks' };
+       }
+     }
+     ```
+     - **Vérification**: Testez la recherche dans l'UI, vérifiez la console réseau (F12 → Network)
+
+  5. **Créer/modifier le hook `useStocksScreener`**
+     - Fichier: `src/hooks/useStocksScreener.ts` (créer si n'existe pas)
+     - **AVANT** (404):
+     ```typescript
+     const { data } = useQuery({
+       queryKey: ['stocks-screener'],
+       queryFn: () => fetch('/stocks/screener').then(r => r.json()), // ❌ 404
+     });
+     ```
+     - **APRÈS** (vraie API):
+     ```typescript
+     import { useQuery } from '@tanstack/react-query';
+     import { apiGet } from '@/api/client';
+     
+     export function useStocksScreener(filters?: ScreenerFilters) {
+       return useQuery({
+         queryKey: ['stocks-screener', filters],
+         queryFn: async () => {
+           // Utiliser l'endpoint existant ou créer un nouveau
+           // Option 1: Utiliser /api/stocks/search avec filtres
+           // Option 2: Créer /api/stocks/screener côté backend
+           const response = await apiGet('/api/stocks/search', {
+             // Ajouter filtres si endpoint le supporte
+           });
+           return response.data;
+         },
+         staleTime: 5 * 60 * 1000, // Cache 5 minutes
+       });
+     }
+     ```
+     - **Vérification**: Le hook ne génère plus d'erreur 404
+
+  6. **Ajouter les états Loading/Empty/Error**
+     - Fichier: `src/pages/Stocks.tsx` ou composant utilisant `useStocksScreener`
+     - **Code**:
+     ```typescript
+     const { data, isLoading, error } = useStocksScreener(filters);
+     
+     if (isLoading) {
+       return <Skeleton height={400} />;
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           Impossible de charger les données. {error.message}
+         </Alert>
+       );
+     }
+     
+     if (!data || data.length === 0) {
+       return <EmptyState message="Aucun résultat trouvé" />;
+     }
+     
+     return <StocksTable data={data} />;
+     ```
+     - **Vérification**: Tous les états sont gérés (loading, error, empty, success)
+
+  7. **Tester avec curl et screenshot**
+     ```bash
+     # Test de l'endpoint
+     curl http://localhost:8050/api/stocks/search?q=AAPL > proof_search.json
+     
+     # Test via proxy frontend
+     curl http://localhost:5173/api/stocks/search?q=AAPL > proof_proxy.json
+     ```
+     - Prendre un screenshot de la page Stocks avec des résultats réels
+     - **Vérification**: Les données affichées correspondent aux données de l'API
+
+  8. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/stocks
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUNE erreur 404**, **AUCUN mock utilisé**
+     - Tester la recherche: taper "AAPL" dans le champ de recherche
+     - **Vérifier**: Des résultats réels s'affichent (pas de données hardcodées)
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "mockResults\|mock.*stock" src/` ne trouve plus de mocks dans stocksService
+  - [ ] `useStocksScreener` n'appelle plus `/stocks/screener` (404)
+  - [ ] `stocksService.search` appelle `/api/stocks/search` (vraie API)
+  - [ ] Page `/stocks` affiche des données réelles (vérifiable via Network tab)
+  - [ ] États Loading/Empty/Error sont gérés et affichés
+  - [ ] `curl http://localhost:8050/api/stocks/search?q=AAPL` retourne des résultats
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshot de la page Stocks avec résultats réels
+  - [ ] Log curl de l'endpoint déposé dans `proofs/FE-003/`
+
+- **Points d'attention**:
+  - ⚠️ Si `/api/stocks/screener` n'existe pas, utiliser `/api/stocks/search` avec filtres ou créer l'endpoint (voir BE-004)
+  - ⚠️ Ne pas supprimer la fonctionnalité de recherche, juste remplacer les mocks
+  - ⚠️ Vérifier que les filtres du screener sont bien transmis à l'API
+  - ⚠️ Tester avec différents tickers (AAPL, MSFT, NVDA, etc.)
+  - ✅ Consulter `docs/INTEGRATION_PLAN.md` pour le contrat API attendu
+  - ✅ Si l'endpoint backend n'existe pas, coordonner avec l'agent backend (BE-004)
+
+
+#### BE-001 — Forecasts branchés backend *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Remplacer les mocks par les vraies prévisions pour `/forecasts` (liste + détail). Actuellement, la page Forecasts affiche "Aucune prévision" car elle n'est pas connectée au backend.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/forecasts` existe: `curl http://localhost:8050/api/forecasts`
+  - [ ] Vérifier la structure de réponse de l'endpoint
+  - [ ] Page Forecasts accessible sur http://localhost:5173/forecasts
+
+- **Steps détaillés**:
+
+  1. **Vérifier l'endpoint backend `/api/forecasts`**
+     ```bash
+     # Tester l'endpoint
+     curl http://localhost:8050/api/forecasts
+     
+     # Vérifier la structure de réponse
+     curl http://localhost:8050/api/forecasts | jq .
+     ```
+     - Notez la structure de réponse attendue (probablement `{ok: true, data: {rows: [...]}}`)
+     - **Vérification**: L'endpoint retourne du JSON valide
+
+  2. **Créer le service `forecasts.service.ts`**
+     - Fichier: `src/services/forecasts.service.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { apiGet } from '@/api/client';
+     
+     export interface Forecast {
+       ticker: string;
+       horizon: string;
+       direction: 'up' | 'down' | 'flat';
+       confidence: number;
+       expected_return: number;
+       timestamp: string;
+     }
+     
+     export interface ForecastsResponse {
+       rows: Forecast[];
+       count: number;
+       freshness?: string;
+     }
+     
+     export const forecastsService = {
+       getAll: async (filters?: {
+         horizon?: string;
+         asset_type?: string;
+         min_confidence?: number;
+       }): Promise<{ ok: boolean; data?: ForecastsResponse; error?: string }> => {
+         try {
+           const params = new URLSearchParams();
+           if (filters?.horizon) params.append('horizon', filters.horizon);
+           if (filters?.asset_type) params.append('asset_type', filters.asset_type);
+           if (filters?.min_confidence !== undefined) {
+             params.append('min_confidence', String(filters.min_confidence));
+           }
+           
+           const response = await apiGet<ForecastsResponse>(
+             `/api/forecasts?${params.toString()}`
+           );
+           return response;
+         } catch (error) {
+           console.error('Error fetching forecasts:', error);
+           return { ok: false, error: 'Failed to fetch forecasts' };
+         }
+       },
+       
+       getById: async (id: string): Promise<{ ok: boolean; data?: Forecast; error?: string }> => {
+         try {
+           const response = await apiGet<Forecast>(`/api/forecasts/${id}`);
+           return response;
+         } catch (error) {
+           console.error('Error fetching forecast:', error);
+           return { ok: false, error: 'Failed to fetch forecast' };
+         }
+       },
+     };
+     ```
+     - **Vérification**: `pnpm run typecheck` passe sans erreur
+
+  3. **Créer le hook `useForecasts.ts`**
+     - Fichier: `src/hooks/useForecasts.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { useQuery } from '@tanstack/react-query';
+     import { forecastsService, ForecastsResponse } from '@/services/forecasts.service';
+     
+     export function useForecasts(filters?: {
+       horizon?: string;
+       asset_type?: string;
+       min_confidence?: number;
+     }) {
+       return useQuery({
+         queryKey: ['forecasts', filters],
+         queryFn: async () => {
+           const response = await forecastsService.getAll(filters);
+           if (!response.ok || !response.data) {
+             throw new Error(response.error || 'Failed to fetch forecasts');
+           }
+           return response.data;
+         },
+         staleTime: 5 * 60 * 1000, // Cache 5 minutes
+         retry: 2,
+       });
+     }
+     ```
+     - **Vérification**: Le hook peut être importé sans erreur
+
+  4. **Modifier `Forecasts.tsx` pour utiliser le hook**
+     - Fichier: `src/pages/Forecasts.tsx`
+     - Remplacer les mocks par l'utilisation du hook `useForecasts()`
+     - Ajouter les états Loading/Error/Empty
+     - Ajouter le bouton "Rafraîchir" avec `refetch()`
+     - Ajouter le badge Freshness avec `data.freshness`
+     - **Vérification**: La page affiche des données réelles (ou un état vide propre)
+
+  5. **Tester avec curl et screenshot**
+     ```bash
+     curl http://localhost:8050/api/forecasts > proof_forecasts.json
+     ```
+     - Prendre un screenshot de la page Forecasts avec des données réelles
+     - **Vérification**: Les données affichées correspondent aux données de l'API
+
+  6. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/forecasts
+     - **Vérifier**: Des données s'affichent (ou état vide propre), pas d'erreur console
+
+- **DoD (Definition of Done)**:
+  - [ ] Service `forecastsService` créé avec méthodes `getAll` et `getById`
+  - [ ] Hook `useForecasts` créé avec TanStack Query
+  - [ ] Page `Forecasts.tsx` utilise le hook (plus de mock)
+  - [ ] Page affiche ≥1 ligne si des données existent
+  - [ ] État vide propre affiché si aucune donnée
+  - [ ] États Loading/Error gérés et affichés
+  - [ ] Bouton "Rafraîchir" fonctionne (refetch)
+  - [ ] Badge Freshness affiche la date de dernière mise à jour
+  - [ ] `curl http://localhost:8050/api/forecasts` retourne des données
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshot de la page Forecasts avec données réelles
+  - [ ] Log curl de l'endpoint déposé dans `proofs/BE-001/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que l'endpoint `/api/forecasts` retourne bien `{ok: true, data: {rows: [...]}}`
+  - ⚠️ Si l'endpoint retourne une structure différente, adapter le service
+  - ⚠️ Ne pas supprimer les filtres existants, juste les connecter à l'API
+  - ⚠️ Tester avec différents filtres (horizon, asset_type, min_confidence)
+  - ✅ Suivre le pattern "never-empty" : toujours afficher quelque chose (données ou état vide)
+  - ✅ Utiliser le cache React Query pour éviter les appels inutiles
+
+#### BE-002 — Macro séries FRED/VIX *(Effort M)*
 - **Why**: Les graphs macro doivent refléter CPI, VIX, 10Y-2Y, chômage réels.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Service `fetchMacroSeries(codes)` + hook `useMacroSeries`.
   2. `Macro.tsx`: ring progress + charts Tremor alimentés par data réelle, sélecteur période (YTD/1Y/5Y).
   3. Badge Freshness + état vide/erreur soigné.
 - **DoD**: Charts = data backend (aucune valeur en dur). Preuves: JSON `macro_series.json` + capture.
 
-#### FC-API-NEWS-REAL — Flux news + sentiment *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### BE-003 — Flux news + sentiment *(Effort M)*
 - **Why**: Fournir le flux agrégé backend (tickers, since, score) sans crash.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Service `fetchNews` + hook `useNews` (support `VITE_USE_MOCKS`).
   2. `NewsFeed.tsx`: cartes avec sentiment chip, timeago, filtres actifs.
   3. Gestion erreurs, bouton “Charger plus” si backend le permet.
@@ -119,45 +751,110 @@ Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data*
 
 ---
 
-#### FC-UI-NEWS-HOOKS — NewsFeed branché au hook TanStack *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FE-004 — NewsFeed branché au hook TanStack *(Effort M)*
 - **Why**: `NewsFeed.tsx` destructure `useNews()` comme un store custom (`items`, `filters`, `loadMore`…), ce qui casse le runtime et `pnpm run typecheck`.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Conserver `useNews` (UseQueryResult) et déplacer la gestion des filtres/pagination dans `NewsFeed` via `useState` + `refetch`.
   2. Alimenter les cartes depuis `data?.articles`, utiliser `isLoading` / `error` / `refetch` pour les états.
   3. Couvrir les états Loading/Empty/Error/Freshness (Mantine + composants existants).
 - **DoD**: `/news` tourne sans erreur console; `pnpm run typecheck` ne remonte plus les 9 erreurs NewsFeed; capture UI (articles + filtres actifs).
 - **Proof**: log typecheck + screenshot.
 
-#### FC-UI-REMOVE-MUI — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FE-005 — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
 - **Why**: `src/components/ui/SourceTooltip.tsx` importe `@mui/*`, interdit (cf. `UI_PROCESS_IMPROVEMENTS`) et casse tsc faute de types.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Réécrire le composant avec Mantine Tooltip (ou supprimer si inutilisé).
   2. Retirer `@mui/*` des deps & lockfile, ajouter règle ESLint `no-restricted-imports` si absente.
   3. Vérifier que les pages news/brief utilisent le nouveau composant.
 - **DoD**: `rg \"@mui/\"` → 0; `pnpm run typecheck` passe cette étape; ESLint bloque toute régression.
 - **Proof**: log typecheck + diff ESLint.
 
-#### FC-BUILD-ENV-TYPES — Déclarations `import.meta.env` fiables *(Effort S)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-001 — Déclarations `import.meta.env` fiables *(Effort S)*
 - **Why**: `src/config/env.ts` déclenche 3 erreurs TS (`ImportMetaEnv` incomplet), bloquant CI.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Ajouter `src/vite-env.d.ts` (ou équivalent) avec interface `ImportMetaEnv` (API_BASE, USE_MOCKS, ENABLE_SSE).
   2. Documenter la convention dans `docs/dev/ui_migration_mantine.md`.
   3. Vérifier `pnpm run typecheck`.
 - **DoD**: Les erreurs `ImportMetaEnv` disparaissent; doc à jour.
 - **Proof**: log typecheck + snippet doc.
 
-#### FC-API-STOCKS-SEARCH-REAL — Recherche actions sans mock *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### BE-004 — Recherche actions sans mock *(Effort M)*
 - **Why**: `stocksService.search` renvoie une liste mockée (AAPL/MSFT hardcodés), contraire à la règle « no mocks » et génère des signaux erronés.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Exposer un endpoint backend (`GET /stocks/search?q=`) ou, à défaut, réutiliser `/stocks/universe` + filtrage réel (aucun tableau mock).
   2. Supprimer le tableau `mockResults`, gérer le cas 0 résultat avec `EmptyState` + CTA “élargir la requête”.
   3. Couvrir par un test (unit/service + Playwright) montrant qu’un ticker réellement suivi (ex: `NVDA`) est proposé.
 - **DoD**: `rg "mockResults"` → 0; page Stocks affiche résultats backend + état vide propre; curl `/api/stocks/search?q=AAPL` figure dans les preuves.
 - **Proof**: log tests + screenshot recherche + captures curl.
 
-#### FC-UI-BRIEF-MANTINE — Refonte Market Brief Mantine/Tremor *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FE-006 — Refonte Market Brief Mantine/Tremor *(Effort M)*
 - **Why**: `MarketBrief.tsx` utilise encore layout legacy (inline styles, boutons custom, `<select>` brut) en contradiction avec la vision Mantine.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Remplacer layout par composants Mantine (`Stack`, `Card`, `SegmentedControl`, `MultiSelect`) + stylage thème.
   2. Normaliser Loading/Empty/Error + `FreshnessBadge` partagé; conserver bannière fallback mais via `Alert` Mantine.
   3. Brancher la sélection d’univers sur un refetch réel et loguer si backend ignore le param (note PO dans preuve).
@@ -168,17 +865,43 @@ Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data*
 
 ## P1 — Copilot & Backtests (48–72h)
 
-#### FC-COPILOT-SSE — Copilot streaming avec contexte *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-002 — Copilot streaming avec contexte *(Effort M)*
 - **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs).
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Implémenter `askCopilotSSE` (SSE ou fetch stream) + gestion abort.
   2. `Copilot.tsx`: zone chat, boutons rapides (“Explique la prévision”, “Risques & invalidation”), affichage streaming incremental.
   3. Gestion erreurs/réessai + log simple (optionnel) pour audits.
-- **DoD**: Démo streaming (GIF/vidéo), transcript sauvegardé. Preuves: capture vidéo + log dans `proofs/FC-COPILOT-SSE/`.
+- **DoD**: Démo streaming (GIF/vidéo), transcript sauvegardé. Preuves: capture vidéo + log dans `proofs/FS-002/`.
 
-#### FC-BACKTESTS-REAL — Résumé & equity curve *(Effort M)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-003 — Résumé & equity curve *(Effort M)*
 - **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Service/hook `useBacktest(params)`.
   2. `Backtests.tsx`: cartes KPI + courbe Tremor + empty/erreur soigné, bouton “Recalculer”.
   3. Stocker JSON brut dans `proofs/` pour audit.
@@ -188,16 +911,42 @@ Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data*
 
 ## P2 — Hardening & Toggles (72–96h)
 
-#### FC-MOCK-TOGGLE — Fallback mocks via env *(Effort S)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-004 — Fallback mocks via env *(Effort S)*
 - **Why**: Ne jamais casser l’UI si backend HS; dev rapide.
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Lire `VITE_USE_MOCKS` dans services, router vers MSW/mock si true.
   2. Documenter dans `docs/dev/ui_migration_mantine.md` (section “Mocks & SSE”).
 - **DoD**: Mode mock ON sert des données locales sans crash; OFF = backend. Preuves: notes + capture.
 
-#### FC-OBS-FRESHNESS — Harmoniser badges Freshness *(Effort S)*
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-005 — Harmoniser badges Freshness *(Effort S)*
 - **Why**: Garantir cohérence freshness (forecasts, macro, news, backtests).
-- **Steps**:
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
   1. Uniformiser `FreshnessBadge` (minutes + tooltip).
   2. Vérifier `/health` expose `last_updates` pour routes branchées.
 - **DoD**: Badge indique minutes depuis dernier update (capture + log `/health`).
@@ -1395,23 +2144,48 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 
 ## 📊 RÉSUMÉ ET STATISTIQUES
 
-### Tâches par Priorité
+### Tâches par Catégorie
 
-- **P0 - Critiques** : 12 tâches (FC-FE-*, FC-API-*, FC-UI-*)
-- **P1 - Importantes** : 2 tâches (FC-COPILOT-*, FC-BACKTESTS-*)
-- **P2 - Hardening** : 2 tâches (FC-MOCK-*, FC-OBS-*)
-- **P3 - Sprint V2** : 6 tâches (V2-ML-*, V2-DATA-*, V2-API-*, V2-OPS-*)
-- **Autres tâches** : Tâches complétées (FC-NEW-*, FC-DASH-*, FC-INT-*, FC-API-*, FC-QM-*)
+- **BE (Backend)** : 15 tâches - API, routes, services, cache, logging, validations
+- **FE (Frontend)** : 29 tâches - Composants, pages, hooks, UI, animations, thèmes
+- **FS (Fullstack)** : 23 tâches - Intégrations backend+frontend, exports, notifications, webhooks
+- **TEST (Tests)** : 2 tâches - Tests E2E, tests unitaires
+- **DOC (Documentation)** : 1 tâche - Documentation des patterns
+- **PERF (Performance)** : 3 tâches - Optimisations, métriques de performance
+- **OPS (Operations)** : 1 tâche - Monitoring, observability
+- **SEC (Sécurité)** : 1 tâche - Quotas, limites utilisateur
+- **DATA (Data/ML)** : 2 tâches - Versioning modèles ML, validation prévisions
+- **UI (UI/UX)** : 2 tâches - A/B testing, templates rapports
 
-**Total** : **22+ tâches actives** disponibles pour les agents
+**Total** : **79 tâches** disponibles pour les agents
+
+### Système de Nommage
+
+Les tâches sont maintenant organisées par **catégorie** avec des codes clairs :
+- `BE-XXX` : Backend (API, services, cache, etc.)
+- `FE-XXX` : Frontend (composants, pages, hooks, etc.)
+- `FS-XXX` : Fullstack (intégrations complètes)
+- `TEST-XXX` : Tests (E2E, unitaires, intégration)
+- `DOC-XXX` : Documentation
+- `PERF-XXX` : Performance
+- `OPS-XXX` : Operations/Monitoring
+- `SEC-XXX` : Sécurité
+- `DATA-XXX` : Data/ML
+- `UI-XXX` : UI/UX
 
 ### Points Disponibles
 
-- **P0** : ~1,200+ pts
-- **P1** : ~180 pts
-- **P2** : ~60 pts
-- **P3** : Variables selon tâche
-- **Total estimé** : **1,500+ pts disponibles**
+- **BE** : ~1,200+ pts
+- **FE** : ~1,800+ pts
+- **FS** : ~1,400+ pts
+- **TEST** : ~100 pts
+- **DOC** : ~40 pts
+- **PERF** : ~120 pts
+- **OPS** : ~80 pts
+- **SEC** : ~60 pts
+- **DATA** : ~120 pts
+- **UI** : ~80 pts
+- **Total estimé** : **5,000+ pts disponibles**
 
 ---
 
@@ -1456,10 +2230,10 @@ Si vous avez des questions ou besoin d'aide :
 
 Pour les nouveaux agents, commencez par ces tâches **faciles** et **rapides** :
 
-1. **FC-BUILD-ENV-TYPES** (+30 pts) - Déclarations `import.meta.env` (30min)
-2. **FC-UI-REMOVE-MUI** (+30 pts) - Supprimer vestige MUI (1h)
-3. **FC-OBS-FRESHNESS** (+30 pts) - Harmoniser badges Freshness (1h)
-4. **FC-MOCK-TOGGLE** (+30 pts) - Fallback mocks via env (1h)
+1. **FS-001** (+30 pts) - Déclarations `import.meta.env` (30min)
+2. **FE-005** (+30 pts) - Supprimer vestige MUI (1h)
+3. **FS-005** (+30 pts) - Harmoniser badges Freshness (1h)
+4. **FS-004** (+30 pts) - Fallback mocks via env (1h)
 
 Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le projet rapidement.
 
@@ -1468,3 +2242,48 @@ Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le p
 **Bonne chance, agents !** 🚀
 
 **Rappelez-vous** : Ce fichier (`TASKS_BOARD.md`) est le **SEUL** fichier de tâches à utiliser.
+
+# 📋 Tâches Détaillées pour Autres Agents Qwen
+
+**Créé par**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Date**: 2025-01-27  
+**But**: Fournir des tâches très détaillées et claires pour les agents Qwen moins expérimentés
+
+---
+
+## 🎯 Instructions Générales
+
+### Avant de commencer
+1. **Lire** `AGENTS.md` pour comprendre les règles du projet
+2. **Vérifier** qu'aucun autre agent ne travaille sur la même tâche
+3. **Tester** localement avec `./finance-copilot.sh start`
+4. **Commit** avec votre nom et preuve de fonctionnement
+5. **Mettre à jour** `SCORE_AGENTS.md` avec vos points
+
+### Format de commit
+```
+feat(task-id): description courte @agentName (+points)
+```
+
+### Preuve requise
+- Screenshot de la fonctionnalité
+- Log curl de l'endpoint (si API)
+- Test passant (si applicable)
+
+---
+
+## 🔥 PRIORITÉ P0 - Tâches Critiques
+
+### BE-005 — Vérifier et compléter l'endpoint `/api/copilot/ask`
+
+**Agent recommandé**: Agent backend Python  
+**Points**: +80 pts  
+**Effort estimé**: 2-3h  
+**Priorité**: 🔴 CRITIQUE
+
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
