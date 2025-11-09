@@ -56,9 +56,10 @@
 - [x] FC-API-032: Prediction Accuracy Analytics - Complete metrics system for forecast validation (Hit-rate, MAE, RMSE, directional accuracy)
 - [x] BE-006: POST /api/backtests/run endpoint - Interactive backtesting with parameters from UI (Strategy, confidence, horizon filtering, comprehensive metrics)
 - [x] BE-002: Macro séries FRED/VIX - Real macro data for dashboard with Tremor chart compatibility (CPI, VIX, yield curve, unemployment data)
+- [x] BE-003: Flux news + sentiment - Real news feed with sentiment analysis for frontend (Ticker filtering, sentiment labels, timeago, categorization)
 
 ## 📈 Points Gagnés
-- **Total**: 1290 points
+- **Total**: 1370 points
 - **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées

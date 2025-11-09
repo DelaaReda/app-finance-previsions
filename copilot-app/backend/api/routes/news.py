@@ -156,7 +156,116 @@ def get_filtered_news(
             "source": news_data.get("source", ["news_pipeline"])
         }
         
+        # Enhance response for frontend consumption with additional metrics
+        # Format articles to support frontend components like NewsFeed.tsx
+        enhanced_articles = []
+        for article in paginated_articles:
+            # Enhance each article with frontend-required fields
+            enhanced_article = {
+                "id": article.get("id") or article.get("url") or f"news_{hash(article.get('title', '') + article.get('pubDate', ''))}",
+                "title": article.get("title", ""),
+                "description": article.get("description", "") or article.get("summary", ""),
+                "url": article.get("url") or article.get("link", ""),
+                "pubDate": article.get("pubDate") or article.get("published_at") or article.get("timestamp") or "",
+                "source": article.get("source") or article.get("publisher") or "Unknown",
+                "tickers": article.get("tickers") or article.get("symbols") or [],
+                "sentiment": {
+                    "score": article.get("sentiment_score", 0),
+                    "label": _get_sentiment_label(article.get("sentiment_score", 0)),
+                    "magnitude": abs(article.get("sentiment_score", 0))
+                },
+                "score": article.get("score") or article.get("confidence", 0.5),
+                "themes": article.get("themes") or article.get("tags", []),
+                "summary": article.get("summary") or article.get("description", ""),
+                # For frontend timeago display:
+                "timeago": _calculate_timeago(article.get("pubDate", "")),
+                # For frontend categorization:
+                "category": article.get("category") or _infer_category(article),
+                "thumbnail": article.get("thumbnail") or article.get("image_url") or "",
+                "read_time": article.get("read_time") or _estimate_read_time(article.get("content", ""))
+            }
+            enhanced_articles.append(enhanced_article)
+        
+        # Update the response with enhanced articles
+        response_data["articles"] = enhanced_articles
+        
         return ok(response_data)
+
+
+def _get_sentiment_label(sentiment_score: float) -> str:
+    """Helper to convert numeric sentiment score to human-readable label."""
+    if sentiment_score >= 0.6:
+        return "very-positive"
+    elif sentiment_score >= 0.2:
+        return "positive"
+    elif sentiment_score >= -0.2:
+        return "neutral"
+    elif sentiment_score >= -0.6:
+        return "negative"
+    else:
+        return "very-negative"
+
+
+def _calculate_timeago(pub_date: str) -> str:
+    """Helper to calculate relative time ago string."""
+    try:
+        from datetime import datetime
+        if not pub_date:
+            return "Just now"
+        
+        # Parse the date string
+        if "T" in pub_date:
+            dt = datetime.fromisoformat(pub_date.replace("Z", "+00:00").replace("z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(pub_date)
+        
+        diff = datetime.utcnow() - dt.replace(tzinfo=None) if dt.tzinfo else datetime.utcnow() - dt
+        
+        if diff.days > 0:
+            return f"{diff.days}d ago"
+        elif diff.seconds >= 3600:
+            hours = diff.seconds // 3600
+            return f"{hours}h ago" if hours > 1 else "1h ago"
+        elif diff.seconds >= 60:
+            mins = diff.seconds // 60
+            return f"{mins}m ago" if mins > 1 else "1m ago"
+        else:
+            return "Just now"
+    except:
+        return "Unknown"
+
+
+def _infer_category(article: Dict[str, Any]) -> str:
+    """Helper to infer article category from content or keywords."""
+    title = article.get("title", "").lower()
+    content = article.get("content", "").lower()
+    
+    # Common categories based on keywords
+    if any(word in title or word in content for word in ["earnings", "quarter", "revenue", "profit", "report"]):
+        return "earnings"
+    elif any(word in title or word in content for word in ["merger", "acquisition", "acquire", "buyout"]):
+        return "mergers"
+    elif any(word in title or word in content for word in ["ipo", "public", "shares", "debut"]):
+        return "ipos"
+    elif any(word in title or word in content for word in ["fed", "interest", "policy", "rates", "monetary"]):
+        return "policy"
+    elif any(word in title or word in content for word in ["crypto", "bitcoin", "ethereum", "blockchain"]):
+        return "crypto"
+    elif any(word in title or word in content for word in ["tech", "technology", "software", "cloud", "ai", "artificial intelligence"]):
+        return "technology"
+    else:
+        return "general"
+
+
+def _estimate_read_time(content: str) -> int:
+    """Helper to estimate read time based on content length."""
+    words_per_minute = 225  # Average reading speed
+    if not content:
+        return 1  # Minimum 1 minute
+    
+    word_count = len(content.split())
+    minutes = max(1, round(word_count / words_per_minute))
+    return minutes
         
     except Exception as e:
         # Return structured response even on error to maintain never-empty contract

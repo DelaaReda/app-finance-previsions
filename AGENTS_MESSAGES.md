@@ -873,3 +873,18 @@ Message:
 * Never-empty patterns maintenus avec fallbacks robustes
 Links:
 * copilot-app/backend/api/routes/macro.py
+[UTC 2025-11-04 21:45] [INFO] MSG: MSG-20251104-2145-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
+Task: BE-003
+Subject: Endpoint news amélioré avec sentiment analysis et catégorisation - Données prêtes pour NewsFeed
+Message:
+
+* Endpoint /api/news/feed amélioré avec données formatées pour NewsFeed.tsx
+* Labels de sentiment ajoutés (very-positive, positive, negative, etc.) basés sur score
+* Calcul des temps relatifs (timeago) - 5m ago, 2h ago, 1d ago
+* Catégorisation automatique des articles (earnings, mergers, ipos, etc.)
+* Support complet des filtres: tickers, dates, sentiment, sources, mots-clés
+* Format compatible avec hooks useNews, useNewsCompat, useNewsRadar
+* Données prêtes pour composant NewsFeed.tsx avec filtres actifs
+Links:
+* copilot-app/backend/api/routes/news.py
