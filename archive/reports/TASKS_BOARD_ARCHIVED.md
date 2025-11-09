@@ -1,61 +1,17 @@
-# 📋 TASKS_BOARD.md — FICHIER UNIQUE DE RÉFÉRENCE POUR TOUTES LES TÂCHES
-
-**Créé par**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
-**Date**: 2025-01-27  
-**Dernière mise à jour**: 2025-01-27  
-**But**: **FICHIER UNIQUE** contenant toutes les tâches pour les agents Qwen
-
----
-
-## ⚠️ IMPORTANT - LISEZ-MOI D'ABORD
-
-**Ce fichier (`TASKS_BOARD.md`) est le SEUL fichier de tâches à utiliser.**
-
-- ✅ **Utilisez ce fichier** : `TASKS_BOARD.md`
-- ❌ **Ignorez** : `TASKS_FOR_OTHER_AGENTS.md` (vide/obsolète)
-
-**Avant de commencer, lisez** :
-1. `MESSAGE_AGENTS.md` - Message d'accueil et instructions complètes
-2. `AGENTS.md` - Guide de déploiement et règles fondamentales
-3. `AGENTS_GAMEPLAY.md` - Système de points et gamification
-
----
-
-## 🎯 COMMENT UTILISER CE FICHIER
-
-1. **Choisir une tâche** : Cherchez une tâche avec statut **AVAILABLE** ou sans statut
-2. **Marquer comme CLAIMED** : Changez le statut et ajoutez votre nom dans la section de la tâche
-3. **Suivre les étapes** : Chaque tâche a des instructions détaillées (Why, Steps, DoD)
-4. **Mettre à jour le score** : Après complétion, mettez à jour `SCORE_AGENTS.md`
-
----
-
-## 📣 MESSAGE AUX AGENTS
+# 📣 MESSAGE AUX AGENTS — Lisez-moi et démarrez
 
 Équipe, bienvenue dans **Finance Copilot**.
-
-Ici on livre **du vrai**: zéro mock, zéro "quick fix" qui masque les problèmes.
-Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data**.
-
-**Règles d'or** :
-- ❌ **Pas de mocks** - Toujours utiliser de vraies données
-- ❌ **Pas de réponse vide** - Les endpoints doivent toujours retourner une structure valide
-- ✅ **Toujours tester** avant commit
-- ✅ **Toujours preuve** avec commit (screenshot/log dans `proofs/<TASK-ID>/`)
-- ✅ **Mettre à jour score** dans `SCORE_AGENTS.md` après chaque tâche
-
-**Documentation** :
-- [➡️ Sprint V2 (plan détaillé prêt à l'emploi)](docs/product/SPRINT_V2_TASKS.md)
-- [📚 Dashboard templates (Mantine + Tremor) — Guide d'utilisation](docs/DASHBOARD_TEMPLATES.md)
-
+Ici on livre **du vrai**: zéro mock, zéro “quick fix” qui masque les problèmes.
+Votre mission: **rendre l’app stable, rapide et alimentée par de la vraie data**.
+Lisez les reviews : [text](reviews)
+[➡️ Sprint V2 (plan détaillé prêt à l’emploi)](docs/product/SPRINT_V2_TASKS.md)
+[📚 Dashboard templates (Mantine + Tremor) — Guide d'utilisation](docs/DASHBOARD_TEMPLATES.md)
 ---
 
-## 🔥 PRIORITY BOARD — Toutes les Tâches
+## 🔥 PRIORITY BOARD — Novembre 2025
 
 ### Legend
-- **Effort**: S (≤0.5j) • M (1–2j) • L (3–5j)
-- **Priorité**: 🔴 CRITIQUE • 🟡 ÉLEVÉE • 🟢 MOYENNE
-- **Statut**: AVAILABLE • CLAIMED • IN_PROGRESS • DONE
+- Effort: S (≤0.5j) • M (1–2j) • L (3–5j)
 - Tous les lots ⇒ **never-empty + preuves (curl/log + screenshot) dans `proofs/<TASK>`**
 
 ---
@@ -1390,81 +1346,3 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 * Problèmes identifiés et corrigés dans chaque fichier
 * Fonctionnalité des composants critiques maintenue ou améliorée
 * Rapports SARIF générés par fichier avec preuves des corrections
-
----
-
-## 📊 RÉSUMÉ ET STATISTIQUES
-
-### Tâches par Priorité
-
-- **P0 - Critiques** : 12 tâches (FC-FE-*, FC-API-*, FC-UI-*)
-- **P1 - Importantes** : 2 tâches (FC-COPILOT-*, FC-BACKTESTS-*)
-- **P2 - Hardening** : 2 tâches (FC-MOCK-*, FC-OBS-*)
-- **P3 - Sprint V2** : 6 tâches (V2-ML-*, V2-DATA-*, V2-API-*, V2-OPS-*)
-- **Autres tâches** : Tâches complétées (FC-NEW-*, FC-DASH-*, FC-INT-*, FC-API-*, FC-QM-*)
-
-**Total** : **22+ tâches actives** disponibles pour les agents
-
-### Points Disponibles
-
-- **P0** : ~1,200+ pts
-- **P1** : ~180 pts
-- **P2** : ~60 pts
-- **P3** : Variables selon tâche
-- **Total estimé** : **1,500+ pts disponibles**
-
----
-
-## ✅ CHECKLIST POUR CHAQUE AGENT
-
-Avant de commencer:
-- [ ] Lu `MESSAGE_AGENTS.md` (message d'accueil)
-- [ ] Lu `AGENTS.md` (guide de déploiement)
-- [ ] Lu `AGENTS_GAMEPLAY.md` (système de points)
-- [ ] Vérifié qu'aucun autre agent ne travaille sur la tâche (statut AVAILABLE)
-- [ ] Vérifié que mon fichier agent existe dans `agents/`
-- [ ] Testé `./finance-copilot.sh start` localement
-- [ ] Marqué la tâche comme **CLAIMED** avec mon nom dans ce fichier
-
-Pendant le travail:
-- [ ] Suivi les étapes détaillées de la tâche (Why, Steps, DoD)
-- [ ] Testé régulièrement (backend + frontend)
-- [ ] Respecté les patterns (never-empty, lazy loading, caching)
-- [ ] Mis à jour mon fichier agent dans `agents/` si tâche longue
-
-Après complétion:
-- [ ] Tous les DoD vérifiés (checklist complète)
-- [ ] Preuve créée (screenshot/log/vidéo) dans `proofs/<TASK-ID>/`
-- [ ] Tests passent (`pnpm run typecheck`, `pnpm run build`)
-- [ ] Commit avec format correct : `feat(FC-XXX): description @NOM (+XXpts)`
-- [ ] Score mis à jour dans `SCORE_AGENTS.md`
-- [ ] Statut de la tâche changé à **DONE** dans ce fichier
-
----
-
-## 📞 SUPPORT ET QUESTIONS
-
-Si vous avez des questions ou besoin d'aide :
-1. Consultez `MESSAGE_AGENTS.md` pour les instructions générales
-2. Consultez `AGENTS.md` pour les règles du projet
-3. Vérifiez les exemples dans les autres fichiers agents dans `agents/`
-4. Regardez les preuves dans `proofs/` pour voir comment d'autres agents ont résolu des tâches similaires
-
----
-
-## 🎯 TÂCHES RECOMMANDÉES POUR DÉBUTER
-
-Pour les nouveaux agents, commencez par ces tâches **faciles** et **rapides** :
-
-1. **FC-BUILD-ENV-TYPES** (+30 pts) - Déclarations `import.meta.env` (30min)
-2. **FC-UI-REMOVE-MUI** (+30 pts) - Supprimer vestige MUI (1h)
-3. **FC-OBS-FRESHNESS** (+30 pts) - Harmoniser badges Freshness (1h)
-4. **FC-MOCK-TOGGLE** (+30 pts) - Fallback mocks via env (1h)
-
-Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le projet rapidement.
-
----
-
-**Bonne chance, agents !** 🚀
-
-**Rappelez-vous** : Ce fichier (`TASKS_BOARD.md`) est le **SEUL** fichier de tâches à utiliser.
