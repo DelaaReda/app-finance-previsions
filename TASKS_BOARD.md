@@ -758,25 +758,189 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FE-004 — NewsFeed branché au hook TanStack *(Effort M)*
-- **Why**: `NewsFeed.tsx` destructure `useNews()` comme un store custom (`items`, `filters`, `loadMore`…), ce qui casse le runtime et `pnpm run typecheck`.
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `NewsFeed.tsx` destructure `useNews()` comme un store custom (`items`, `filters`, `loadMore`…), ce qui casse le runtime et `pnpm run typecheck`. Le hook `useNews` retourne un `UseQueryResult` de TanStack Query, pas un objet custom.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
-  - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/news/feed` fonctionne: `curl http://localhost:8050/api/news/feed?limit=5`
+  - [ ] Page News accessible sur http://localhost:5173/news
+  - [ ] Vérifier les erreurs TypeScript actuelles: `pnpm run typecheck`
 
 - **Steps détaillés**:
 
-  1. Conserver `useNews` (UseQueryResult) et déplacer la gestion des filtres/pagination dans `NewsFeed` via `useState` + `refetch`.
-  2. Alimenter les cartes depuis `data?.articles`, utiliser `isLoading` / `error` / `refetch` pour les états.
-  3. Couvrir les états Loading/Empty/Error/Freshness (Mantine + composants existants).
-- **DoD**: `/news` tourne sans erreur console; `pnpm run typecheck` ne remonte plus les 9 erreurs NewsFeed; capture UI (articles + filtres actifs).
-- **Proof**: log typecheck + screenshot.
+  1. **Identifier le problème dans `NewsFeed.tsx`**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les erreurs TypeScript
+     pnpm run typecheck 2>&1 | grep -i "NewsFeed\|useNews"
+     
+     # Lire le fichier NewsFeed.tsx
+     cat src/components/news/NewsFeed.tsx | head -50
+     ```
+     - Notez les erreurs TypeScript (probablement 9 erreurs mentionnées)
+     - **Vérification**: Liste des erreurs identifiées
 
+  2. **Vérifier la signature du hook `useNews`**
+     - Fichier: `src/hooks/useNews.ts` (ou similaire)
+     - Vérifier que le hook retourne un `UseQueryResult` de TanStack Query
+     - **Code attendu**:
+     ```typescript
+     export function useNews(filters?: NewsFilters) {
+       return useQuery({
+         queryKey: ['news-feed', filters],
+         queryFn: async () => { ... },
+       });
+     }
+     ```
+     - **Vérification**: Le hook retourne bien un `UseQueryResult`
+
+  3. **Corriger `NewsFeed.tsx` pour utiliser `UseQueryResult`**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - **AVANT** (incorrect):
+     ```typescript
+     const { items, filters, loadMore } = useNews(); // ❌ Erreur: useNews ne retourne pas ça
+     ```
+     - **APRÈS** (correct):
+     ```typescript
+     import { useNews } from '@/hooks/useNews';
+     import { useState } from 'react';
+     
+     export default function NewsFeed() {
+       // Gérer les filtres localement
+       const [filters, setFilters] = useState({
+         tickers: '',
+         since: '7d',
+         sentiment_min: -1,
+         sentiment_max: 1,
+       });
+       
+       // Utiliser le hook correctement
+       const { data, isLoading, error, refetch } = useNews(filters);
+       
+       // Extraire les articles depuis data
+       const articles = data?.articles || [];
+       
+       // Fonction pour charger plus (si pagination)
+       const loadMore = () => {
+         // Implémenter la pagination si nécessaire
+         refetch();
+       };
+       
+       // Reste du composant...
+     }
+     ```
+     - **Vérification**: `pnpm run typecheck` ne montre plus d'erreurs sur NewsFeed
+
+  4. **Déplacer la gestion des filtres dans le composant**
+     - Utiliser `useState` pour gérer les filtres localement
+     - Quand les filtres changent, déclencher un `refetch()` avec les nouveaux filtres
+     - **Code**:
+     ```typescript
+     const [filters, setFilters] = useState<NewsFilters>({
+       tickers: [],
+       since: '7d',
+       sentiment_min: -1,
+       sentiment_max: 1,
+     });
+     
+     const { data, isLoading, error, refetch } = useNews(filters);
+     
+     // Quand les filtres changent, refetch automatiquement
+     useEffect(() => {
+       refetch();
+     }, [filters, refetch]);
+     ```
+     - **Vérification**: Changer les filtres met à jour la liste d'articles
+
+  5. **Alimenter les cartes depuis `data?.articles`**
+     - Remplacer `items` par `data?.articles || []`
+     - **Code**:
+     ```typescript
+     const articles = data?.articles || [];
+     
+     return (
+       <Stack>
+         {articles.map((article) => (
+           <NewsCard key={article.id} article={article} />
+         ))}
+       </Stack>
+     );
+     ```
+     - **Vérification**: Les articles s'affichent correctement
+
+  6. **Gérer les états Loading/Error/Empty/Freshness**
+     - **Code**:
+     ```typescript
+     if (isLoading) {
+       return <Skeleton height={400} />;
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           {error.message}
+         </Alert>
+       );
+     }
+     
+     const articles = data?.articles || [];
+     
+     if (articles.length === 0) {
+       return <EmptyState message="Aucune actualité disponible" />;
+     }
+     
+     return (
+       <Stack>
+         {data?.freshness && <FreshnessBadge freshness={data.freshness} />}
+         {articles.map((article) => (
+           <NewsCard key={article.id} article={article} />
+         ))}
+       </Stack>
+     );
+     ```
+     - **Vérification**: Tous les états sont gérés et affichés
+
+  7. **Vérifier que `pnpm run typecheck` passe**
+     ```bash
+     pnpm run typecheck
+     ```
+     - **Vérification**: **AUCUNE erreur** liée à NewsFeed ou useNews
+
+  8. **Tester dans le navigateur**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/news
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUNE erreur console**, les articles s'affichent
+     - Tester les filtres
+     - **Vérifier**: Les filtres fonctionnent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] `NewsFeed.tsx` utilise correctement `useNews()` comme `UseQueryResult`
+  - [ ] Plus de destructuring incorrect (`items`, `filters`, `loadMore` depuis `useNews`)
+  - [ ] Gestion des filtres déplacée dans le composant avec `useState`
+  - [ ] Articles extraits depuis `data?.articles` (pas depuis un store custom)
+  - [ ] États Loading/Error/Empty/Freshness gérés et affichés
+  - [ ] `pnpm run typecheck` ne montre plus les 9 erreurs NewsFeed
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Page `/news` fonctionne sans erreur console
+  - [ ] Filtres fonctionnent correctement
+  - [ ] Screenshot de la page News avec articles + filtres actifs
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FE-004/`
 
 - **Points d'attention**:
+  - ⚠️ `useNews` retourne un `UseQueryResult`, pas un objet custom
+  - ⚠️ Utiliser `data?.articles` au lieu de `items`
+  - ⚠️ Utiliser `isLoading`, `error`, `refetch` depuis le `UseQueryResult`
+  - ⚠️ Gérer les filtres localement avec `useState`, pas depuis le hook
   - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
   - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Consulter la doc TanStack Query pour comprendre `UseQueryResult`
+  - ✅ Tester que les filtres déclenchent bien un nouveau fetch
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FE-005 — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
