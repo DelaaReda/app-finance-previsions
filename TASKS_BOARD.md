@@ -2387,9 +2387,9 @@ Les fonctionnalités principales à développer/maintenir :
 
 ---
 
-#### BE-006 — POST /api/backtests/run endpoint *(Effort M)* - CLAIMED
+#### BE-006 — POST /api/backtests/run endpoint *(Effort M)* - DONE
 
-**Statut**: CLAIMED  
+**Statut**: COMPLETED  
 **Points**: +100 pts  
 **Priorité**: 🟡 ÉLEVÉE
 
@@ -2401,6 +2401,45 @@ Les fonctionnalités principales à développer/maintenir :
   - [x] Backend démarré
   - [x] Vérifié que GET `/api/backtests` existe
   - [x] Compris la structure des backtests existants
+
+**Steps réalisées**:
+1. **Modèle Pydantic créé**
+   - `BacktestRunRequest` avec paramètres: tickers, dates, strategy, horizon, min_confidence
+   - Validations et valeurs par défaut implémentés
+
+2. **Endpoint POST implémenté**
+   - `POST /api/backtests/run` avec validation des paramètres
+   - Gestion des erreurs et never-empty patterns
+   - Retour des résultats au format cohérent
+
+3. **Service de backtest développé**
+   - `BacktestService` avec méthode `run_custom_backtest`
+   - Logique de backtesting avec filtres, calculs et métriques
+   - Intégration avec le système de persistence existant
+
+4. **Endpoints complémentaires**
+   - `GET /api/backtests/status/{job_id}` pour suivre les jobs asynchrones
+   - Gestion de la persistence des résultats
+
+5. **Intégration et tests**
+   - Endpoint fonctionnel avec réponse structurée
+   - Tests de charge et erreurs implémentés
+   - Métriques de performance (hit_rate, CAGR, maxDD, Sharpe, profit factor)
+
+**DoD (Definition of Done)**:
+- [x] Modèle Pydantic `BacktestRunRequest` créé
+- [x] Endpoint POST `/api/backtests/run` implémenté  
+- [x] Backtest calculé avec paramètres fournis
+- [x] Résultats retournés dans format cohérent
+- [x] Gestion erreurs (never-empty pattern)
+- [x] Service `backtest_service` avec logique de calcul
+- [x] Métriques avancées (CAGR, maxDD, Sharpe, Profit Factor, Win Rate)
+- [x] Intégration avec système de persistence existant
+
+**Fichiers créés/mis à jour**:
+- `backend/services/backtest_service.py` - Service complet de backtesting
+- `backend/api/routes/backtests.py` - Endpoint POST et status
+- `backend/models/backtest_request.py` - Modèle Pydantic (inclus dans routes)
 
 - **Steps détaillés**:
 

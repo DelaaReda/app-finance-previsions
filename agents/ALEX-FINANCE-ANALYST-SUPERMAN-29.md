@@ -54,9 +54,10 @@
 - [x] FC-NEW-021: Robustness Scoring & PDF Export - Complete scoring system for forecasts and backtests (Enhanced metrics)
 - [x] DOC-DEBUG-PROTOCOL: FRONTEND_DATA_DEBUG.md - Complete debugging protocol for frontend data issues (Enhanced DX)
 - [x] FC-API-032: Prediction Accuracy Analytics - Complete metrics system for forecast validation (Hit-rate, MAE, RMSE, directional accuracy)
+- [x] BE-006: POST /api/backtests/run endpoint - Interactive backtesting with parameters from UI (Strategy, confidence, horizon filtering, comprehensive metrics)
 
 ## 📈 Points Gagnés
-- **Total**: 1110 points
+- **Total**: 1210 points
 - **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées

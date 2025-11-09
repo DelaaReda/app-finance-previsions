@@ -3,12 +3,14 @@ API Routes for Backtests - Finance Copilot System
 Serves backtest results comparing forecasts to actual market performance
 """
 from fastapi import APIRouter, Query
+from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 import json
 from datetime import datetime
 
 from core.response import ok, err
-from storage.io import load_json
+from backend.storage.io import load_json, save_json
+from backend.services.cache_layer import load_or_compute
 
 router = APIRouter()
 
@@ -187,3 +189,84 @@ def get_backtest_detail(ticker: str) -> Dict[str, Any]:
         
     except Exception as e:
         return err(500, f"Error getting details for {ticker}: {str(e)}")
+
+
+# Pydantic model for backtest parameters
+class BacktestRunRequest(BaseModel):
+    tickers: Optional[List[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    strategy: Optional[str] = "momentum"
+    horizon: Optional[str] = "1d"
+    min_confidence: Optional[float] = 0.55
+    benchmark: Optional[str] = "SPY"
+
+
+@router.post("/backtests/run")
+def run_backtest(request: BacktestRunRequest) -> Dict[str, Any]:
+    """
+    Run a backtest with specified parameters.
+    This endpoint allows interactive backtesting from the UI with custom parameters.
+    """
+    try:
+        from backend.services.backtest_service import backtest_service
+        
+        # Run backtest with the specified parameters
+        result = backtest_service.run_custom_backtest(
+            tickers=request.tickers or ["SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "META"],
+            start_date=request.start_date,
+            end_date=request.end_date,
+            strategy=request.strategy,
+            horizon=request.horizon,
+            min_confidence=request.min_confidence,
+            benchmark=request.benchmark
+        )
+        
+        # Save the result for later retrieval
+        job_id = f"backtest_{request.strategy}_{int(datetime.utcnow().timestamp())}"
+        save_json(job_id, result, 
+                  source=["interactive_backtest", "custom_params"])
+        
+        return ok({
+            "result": result,
+            "params": request.dict(),
+            "job_id": job_id,
+            "status": "completed",
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["backtest_service", "interactive_calculation"]
+        })
+        
+    except Exception as e:
+        # Return structured response even if backtest fails
+        return err(500, f"Error running backtest: {str(e)}")
+
+
+# Endpoint to check backtest status (for async jobs)
+@router.get("/backtests/status/{job_id}")
+def get_backtest_status(job_id: str) -> Dict[str, Any]:
+    """
+    Get status of a backtest job.
+    """
+    try:
+        # Try to load the results for the specific job
+        job_result = load_json(f"backtest_{job_id}")
+        
+        if job_result:
+            return ok({
+                "job_id": job_id,
+                "status": "completed",
+                "result": job_result,
+                "completed_at": datetime.utcnow().isoformat()
+            })
+        else:
+            # Check if it's running or queued
+            # For now, return a default response indicating status unknown
+            return ok({
+                "job_id": job_id,
+                "status": "unknown",
+                "message": f"Backtest job {job_id} not found or still running",
+                "checked_at": datetime.utcnow().isoformat()
+            })
+            
+    except Exception as e:
+        return err(500, f"Error checking backtest status: {str(e)}")
