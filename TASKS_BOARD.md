@@ -78,7 +78,7 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### FE-001 — Corriger les chemins API côté front *(Effort S)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +60 pts  
 **Priorité**: 🔴 CRITIQUE
 
@@ -211,7 +211,7 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### FE-002 — Retirer props deprecated (refs & creatable) *(Effort S)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +50 pts  
 **Priorité**: 🔴 CRITIQUE
 
@@ -381,11 +381,12 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### FE-003 — Débrancher mocks & 404 screener *(Effort M)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +70 pts  
 **Priorité**: 🔴 CRITIQUE
 
 - **Why**: `useStocksScreener` tape `/stocks/screener` (inexistant) et `stocksService.search` renvoie un tableau mocké, brisant la promesse « no mocks » et empêchant la page Stocks de montrer les scores réels.
+- **Note**: `stocksService.search` utilisait déjà `/api/stocks/search` (pas de mock). L'endpoint screener a été ajouté dans `api/routes/stocks.py` pour cohérence avec le router.
 
 - **Prérequis**:
   - [ ] Backend démarré et accessible sur http://localhost:8050
@@ -559,11 +560,12 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### BE-001 — Forecasts branchés backend *(Effort M)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +80 pts  
 **Priorité**: 🔴 CRITIQUE
 
 - **Why**: Remplacer les mocks par les vraies prévisions pour `/forecasts` (liste + détail). Actuellement, la page Forecasts affiche "Aucune prévision" car elle n'est pas connectée au backend.
+- **Note**: Route `/forecasts` mise à jour pour utiliser `Forecasts.tsx` qui utilise `ForecastsProBoard` → `useForecasts` → `/api/forecasts`. `ForecastsSimple.tsx` supprimé (mocks non utilisés).
 
 - **Prérequis**:
   - [ ] Backend démarré et accessible sur http://localhost:8050
@@ -944,51 +946,317 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FE-005 — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
-- **Why**: `src/components/ui/SourceTooltip.tsx` importe `@mui/*`, interdit (cf. `UI_PROCESS_IMPROVEMENTS`) et casse tsc faute de types.
+
+**Statut**: AVAILABLE  
+**Points**: +40 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `src/components/ui/SourceTooltip.tsx` importe `@mui/*`, interdit (cf. `UI_PROCESS_IMPROVEMENTS`) et casse tsc faute de types. Le projet utilise Mantine, pas MUI.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
   - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Vérifier les erreurs TypeScript: `pnpm run typecheck`
+  - [ ] Vérifier les usages de SourceTooltip: `grep -r "SourceTooltip" src/`
 
 - **Steps détaillés**:
 
-  1. Réécrire le composant avec Mantine Tooltip (ou supprimer si inutilisé).
-  2. Retirer `@mui/*` des deps & lockfile, ajouter règle ESLint `no-restricted-imports` si absente.
-  3. Vérifier que les pages news/brief utilisent le nouveau composant.
-- **DoD**: `rg \"@mui/\"` → 0; `pnpm run typecheck` passe cette étape; ESLint bloque toute régression.
-- **Proof**: log typecheck + diff ESLint.
+  1. **Identifier tous les usages de MUI**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher tous les imports MUI
+     grep -r "@mui/" src/ --include="*.ts" --include="*.tsx"
+     
+     # Chercher SourceTooltip
+     grep -r "SourceTooltip" src/
+     
+     # Lire le fichier SourceTooltip.tsx
+     cat src/components/ui/SourceTooltip.tsx
+     ```
+     - Notez tous les fichiers qui importent MUI
+     - **Vérification**: Liste des fichiers concernés
 
+  2. **Vérifier si SourceTooltip est utilisé**
+     ```bash
+     # Chercher les usages
+     grep -r "SourceTooltip\|from.*SourceTooltip" src/ --include="*.tsx"
+     ```
+     - Si utilisé, noter où (pages news/brief probablement)
+     - Si non utilisé, on peut le supprimer directement
+     - **Vérification**: Liste des fichiers qui utilisent SourceTooltip
+
+  3. **Réécrire SourceTooltip avec Mantine Tooltip**
+     - Fichier: `src/components/ui/SourceTooltip.tsx`
+     - **AVANT** (MUI):
+     ```typescript
+     import { Tooltip } from '@mui/material';
+     
+     export const SourceTooltip = ({ children, source }) => {
+       return (
+         <Tooltip title={source}>
+           {children}
+         </Tooltip>
+       );
+     };
+     ```
+     - **APRÈS** (Mantine):
+     ```typescript
+     import { Tooltip } from '@mantine/core';
+     
+     interface SourceTooltipProps {
+       children: React.ReactNode;
+       source: string;
+     }
+     
+     export const SourceTooltip: React.FC<SourceTooltipProps> = ({ children, source }) => {
+       return (
+         <Tooltip label={source} withArrow>
+           {children}
+         </Tooltip>
+       );
+     };
+     ```
+     - **Vérification**: `pnpm run typecheck` ne montre plus d'erreur sur SourceTooltip
+
+  4. **Si SourceTooltip n'est pas utilisé, le supprimer**
+     ```bash
+     # Supprimer le fichier
+     rm src/components/ui/SourceTooltip.tsx
+     
+     # Vérifier qu'il n'est plus importé nulle part
+     grep -r "SourceTooltip" src/
+     ```
+     - **Vérification**: Aucun import de SourceTooltip restant
+
+  5. **Retirer `@mui/*` des dépendances**
+     - Fichier: `package.json`
+     - **Chercher**:
+     ```bash
+     grep -i "@mui" package.json
+     ```
+     - **Supprimer** toutes les dépendances `@mui/*`:
+     ```json
+     // AVANT
+     {
+       "dependencies": {
+         "@mui/material": "^5.0.0",
+         "@mui/icons-material": "^5.0.0"
+       }
+     }
+     
+     // APRÈS
+     {
+       "dependencies": {
+         // @mui/* supprimé
+       }
+     }
+     ```
+     - Exécuter: `pnpm install` pour mettre à jour le lockfile
+     - **Vérification**: `grep -i "@mui" package.json` ne trouve plus rien
+
+  6. **Ajouter règle ESLint `no-restricted-imports`**
+     - Fichier: `.eslintrc.json` ou `.eslintrc.js` (créer si n'existe pas)
+     - **Code**:
+     ```json
+     {
+       "rules": {
+         "no-restricted-imports": [
+           "error",
+           {
+             "paths": [
+               {
+                 "name": "@mui/material",
+                 "message": "MUI is deprecated. Use Mantine components instead."
+               },
+               {
+                 "name": "@mui/icons-material",
+                 "message": "MUI is deprecated. Use @tabler/icons-react instead."
+               }
+             ],
+             "patterns": [
+               {
+                 "group": ["@mui/*"],
+                 "message": "MUI is deprecated. Use Mantine instead."
+               }
+             ]
+           }
+         ]
+       }
+     }
+     ```
+     - **Vérification**: `pnpm run lint` bloque les imports MUI
+
+  7. **Vérifier que les pages utilisent le nouveau composant**
+     - Fichiers probables: `src/pages/News.tsx`, `src/pages/Brief.tsx`
+     - Vérifier que SourceTooltip fonctionne correctement (ou supprimer si non utilisé)
+     - **Vérification**: Les pages se chargent sans erreur
+
+  8. **Vérification finale**
+     ```bash
+     # Vérifier qu'il n'y a plus d'imports MUI
+     grep -r "@mui/" src/ --include="*.ts" --include="*.tsx"
+     
+     # Vérifier TypeScript
+     pnpm run typecheck
+     
+     # Vérifier ESLint
+     pnpm run lint
+     ```
+     - **Vérification**: **AUCUN import MUI**, **AUCUNE erreur TypeScript**, **ESLint passe**
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "@mui/" src/` ne trouve plus d'imports MUI
+  - [ ] `SourceTooltip.tsx` utilise Mantine Tooltip (ou est supprimé)
+  - [ ] `@mui/*` supprimé de `package.json` et `pnpm-lock.yaml`
+  - [ ] Règle ESLint `no-restricted-imports` ajoutée pour bloquer MUI
+  - [ ] Pages news/brief fonctionnent avec le nouveau composant (ou sans)
+  - [ ] `pnpm run typecheck` passe sans erreur liée à MUI
+  - [ ] `pnpm run lint` bloque les imports MUI (test avec un import test)
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FE-005/`
+  - [ ] Diff ESLint déposé dans `proofs/FE-005/`
 
 - **Points d'attention**:
-  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
-  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ⚠️ Vérifier que SourceTooltip est bien utilisé avant de le réécrire (ou supprimer si inutilisé)
+  - ⚠️ Mantine Tooltip utilise `label` au lieu de `title` (comme MUI)
+  - ⚠️ Vérifier que les pages qui utilisent SourceTooltip fonctionnent toujours
+  - ⚠️ Ne pas supprimer la fonctionnalité, juste remplacer MUI par Mantine
+  - ✅ Consulter la doc Mantine Tooltip: https://mantine.dev/core/tooltip/
+  - ✅ Tester que le tooltip s'affiche correctement dans les pages
 
 #### FS-001 — Déclarations `import.meta.env` fiables *(Effort S)*
-- **Why**: `src/config/env.ts` déclenche 3 erreurs TS (`ImportMetaEnv` incomplet), bloquant CI.
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `src/config/env.ts` déclenche 3 erreurs TS (`ImportMetaEnv` incomplet), bloquant CI. TypeScript ne connaît pas les variables d'environnement Vite (`VITE_*`).
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
   - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Vérifier les erreurs TypeScript: `pnpm run typecheck`
+  - [ ] Vérifier les variables d'environnement utilisées: `grep -r "import.meta.env" src/`
 
 - **Steps détaillés**:
 
-  1. Ajouter `src/vite-env.d.ts` (ou équivalent) avec interface `ImportMetaEnv` (API_BASE, USE_MOCKS, ENABLE_SSE).
-  2. Documenter la convention dans `docs/dev/ui_migration_mantine.md`.
-  3. Vérifier `pnpm run typecheck`.
-- **DoD**: Les erreurs `ImportMetaEnv` disparaissent; doc à jour.
-- **Proof**: log typecheck + snippet doc.
+  1. **Identifier les erreurs TypeScript actuelles**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Vérifier les erreurs
+     pnpm run typecheck 2>&1 | grep -i "ImportMetaEnv\|import.meta.env"
+     
+     # Chercher les usages de import.meta.env
+     grep -r "import.meta.env" src/ --include="*.ts" --include="*.tsx"
+     ```
+     - Notez les erreurs TypeScript (probablement 3 erreurs)
+     - Notez toutes les variables d'environnement utilisées
+     - **Vérification**: Liste des erreurs et variables identifiées
 
+  2. **Vérifier si `vite-env.d.ts` existe**
+     ```bash
+     # Chercher les fichiers de déclaration TypeScript
+     find src/ -name "*.d.ts" -o -name "vite-env.d.ts"
+     ls -la src/vite-env.d.ts 2>/dev/null || echo "Fichier n'existe pas"
+     ```
+     - Si le fichier existe, le lire pour voir ce qui est déjà déclaré
+     - **Vérification**: État actuel du fichier (existe ou non)
+
+  3. **Créer/modifier `src/vite-env.d.ts`**
+     - Fichier: `src/vite-env.d.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     /// <reference types="vite/client" />
+
+     interface ImportMetaEnv {
+       readonly VITE_API_BASE_URL?: string;
+       readonly VITE_USE_MOCKS?: string;
+       readonly VITE_ENABLE_SSE?: string;
+       readonly VITE_APP_DEBUG?: string;
+       // Ajouter d'autres variables VITE_* utilisées dans le projet
+     }
+
+     interface ImportMeta {
+       readonly env: ImportMetaEnv;
+     }
+     ```
+     - **Vérification**: Le fichier est créé/modifié correctement
+
+  4. **Vérifier toutes les variables utilisées dans le projet**
+     ```bash
+     # Extraire toutes les variables VITE_* utilisées
+     grep -roh "VITE_[A-Z_]*" src/ | sort -u
+     ```
+     - Ajouter toutes les variables trouvées dans `ImportMetaEnv`
+     - **Vérification**: Toutes les variables sont déclarées
+
+  5. **Vérifier que `pnpm run typecheck` passe**
+     ```bash
+     pnpm run typecheck
+     ```
+     - **Vérification**: **AUCUNE erreur** liée à `ImportMetaEnv` ou `import.meta.env`
+
+  6. **Documenter la convention**
+     - Fichier: `docs/dev/ui_migration_mantine.md` (créer si n'existe pas)
+     - Ajouter section :
+     ```markdown
+     ## Variables d'environnement
+
+     Toutes les variables d'environnement doivent être préfixées par `VITE_` pour être accessibles côté client.
+
+     Variables disponibles :
+     - `VITE_API_BASE_URL` : URL de base de l'API backend (défaut: `/api`)
+     - `VITE_USE_MOCKS` : Activer les mocks pour le développement (défaut: `0`)
+     - `VITE_ENABLE_SSE` : Activer Server-Sent Events (défaut: `0`)
+     - `VITE_APP_DEBUG` : Activer le mode debug (défaut: `0`)
+
+     Pour ajouter une nouvelle variable :
+     1. Ajouter la variable dans `.env` avec le préfixe `VITE_`
+     2. Déclarer la variable dans `src/vite-env.d.ts` dans l'interface `ImportMetaEnv`
+     3. Utiliser la variable avec `import.meta.env.VITE_*`
+     ```
+     - **Vérification**: La documentation est à jour
+
+  7. **Vérification finale**
+     ```bash
+     # Vérifier TypeScript
+     pnpm run typecheck
+     
+     # Vérifier que les variables sont bien typées
+     # Créer un fichier test temporaire
+     cat > /tmp/test-env.ts << 'EOF'
+     const apiUrl = import.meta.env.VITE_API_BASE_URL;
+     const useMocks = import.meta.env.VITE_USE_MOCKS;
+     EOF
+     npx tsc --noEmit /tmp/test-env.ts
+     rm /tmp/test-env.ts
+     ```
+     - **Vérification**: **AUCUNE erreur TypeScript**, les variables sont bien typées
+
+- **DoD (Definition of Done)**:
+  - [ ] Fichier `src/vite-env.d.ts` créé/modifié avec interface `ImportMetaEnv` complète
+  - [ ] Toutes les variables `VITE_*` utilisées dans le projet sont déclarées
+  - [ ] `pnpm run typecheck` ne montre plus d'erreurs liées à `ImportMetaEnv`
+  - [ ] Documentation ajoutée dans `docs/dev/ui_migration_mantine.md`
+  - [ ] Les 3 erreurs TypeScript initiales sont résolues
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FS-001/`
+  - [ ] Snippet de documentation déposé dans `proofs/FS-001/`
 
 - **Points d'attention**:
-  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
-  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ⚠️ Toutes les variables doivent être préfixées par `VITE_` pour être accessibles côté client
+  - ⚠️ Les variables sont toujours des `string | undefined` (même si on attend un booléen)
+  - ⚠️ Utiliser `readonly` pour éviter les modifications accidentelles
+  - ⚠️ Ajouter `/// <reference types="vite/client" />` en haut du fichier
+  - ✅ Consulter la doc Vite: https://vitejs.dev/guide/env-and-mode.html
+  - ✅ Tester que les variables sont bien accessibles dans le code
 
 #### BE-004 — Recherche actions sans mock *(Effort M)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
 - **Why**: `stocksService.search` renvoie une liste mockée (AAPL/MSFT hardcodés), contraire à la règle « no mocks » et génère des signaux erronés.
+- **Note**: Vérifié - `stocksService.search` utilise déjà `/api/stocks/search` (pas de mock). L'endpoint backend existe et fonctionne correctement.
 
 - **Prérequis**:
   - [ ] Backend démarré (`./finance-copilot.sh start`)
@@ -1010,20 +1278,199 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FE-006 — Refonte Market Brief Mantine/Tremor *(Effort M)*
-- **Why**: `MarketBrief.tsx` utilise encore layout legacy (inline styles, boutons custom, `<select>` brut) en contradiction avec la vision Mantine.
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `MarketBrief.tsx` utilise encore layout legacy (inline styles, boutons custom, `<select>` brut) en contradiction avec la vision Mantine. Le composant doit être refait avec Mantine pour la cohérence UI.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
-  - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/brief/daily` et `/api/brief/weekly` fonctionnent
+  - [ ] Page Brief accessible sur http://localhost:5173/brief
+  - [ ] Lire le fichier actuel: `cat src/pages/MarketBrief.tsx` ou `src/components/MarketBrief.tsx`
 
 - **Steps détaillés**:
 
-  1. Remplacer layout par composants Mantine (`Stack`, `Card`, `SegmentedControl`, `MultiSelect`) + stylage thème.
-  2. Normaliser Loading/Empty/Error + `FreshnessBadge` partagé; conserver bannière fallback mais via `Alert` Mantine.
-  3. Brancher la sélection d’univers sur un refetch réel et loguer si backend ignore le param (note PO dans preuve).
-- **DoD**: `rg 'backgroundColor' MarketBrief.tsx` → 0; Playwright `/brief` vert; screenshots avant/après + log réseau.
-- **Proof**: Diff + vidéo toggle quotidien/hebdo + traces refetch.
+  1. **Analyser le code actuel de MarketBrief**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Trouver le fichier
+     find src/ -name "*MarketBrief*" -o -name "*Brief*"
+     
+     # Lire le fichier
+     cat src/pages/MarketBrief.tsx | head -100
+     
+     # Chercher les styles inline
+     grep -n "style=" src/pages/MarketBrief.tsx
+     grep -n "backgroundColor" src/pages/MarketBrief.tsx
+     ```
+     - Notez tous les styles inline, `<select>` bruts, boutons custom
+     - **Vérification**: Liste des éléments à remplacer
+
+  2. **Remplacer les styles inline par composants Mantine**
+     - Fichier: `src/pages/MarketBrief.tsx` ou `src/components/MarketBrief.tsx`
+     - **AVANT** (legacy):
+     ```typescript
+     <div style={{ backgroundColor: '#f0f0f0', padding: '16px' }}>
+       <select onChange={...}>
+         <option>Quotidien</option>
+         <option>Hebdomadaire</option>
+       </select>
+       <button onClick={...}>Custom Button</button>
+     </div>
+     ```
+     - **APRÈS** (Mantine):
+     ```typescript
+     import { Stack, Card, SegmentedControl, Button, Alert } from '@mantine/core';
+     
+     <Card p="md" radius="md">
+       <Stack gap="md">
+         <SegmentedControl
+           value={briefType}
+           onChange={setBriefType}
+           data={[
+             { value: 'daily', label: 'Quotidien' },
+             { value: 'weekly', label: 'Hebdomadaire' },
+           ]}
+         />
+         <Button onClick={handleRefresh}>Rafraîchir</Button>
+       </Stack>
+     </Card>
+     ```
+     - **Vérification**: Plus de styles inline, tout utilise Mantine
+
+  3. **Remplacer `<select>` par `SegmentedControl` ou `Select` Mantine**
+     - Utiliser `SegmentedControl` pour toggle quotidien/hebdomadaire
+     - Utiliser `Select` pour sélection d'univers si nécessaire
+     - **Vérification**: Plus de `<select>` HTML brut
+
+  4. **Normaliser Loading/Empty/Error avec composants Mantine**
+     - **Code**:
+     ```typescript
+     import { Skeleton, Alert, Stack } from '@mantine/core';
+     
+     if (isLoading) {
+       return (
+         <Stack>
+           <Skeleton height={200} radius="md" />
+           <Skeleton height={100} radius="md" />
+         </Stack>
+       );
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           Impossible de charger le brief. {error.message}
+         </Alert>
+       );
+     }
+     
+     if (!data || data.length === 0) {
+       return (
+         <Alert color="gray" title="Aucun brief disponible">
+           Aucun brief disponible pour le moment.
+         </Alert>
+       );
+     }
+     ```
+     - **Vérification**: Tous les états utilisent des composants Mantine
+
+  5. **Ajouter `FreshnessBadge` partagé**
+     - Utiliser le composant `FreshnessBadge` existant
+     - Passer `data.freshness` du backend
+     - **Vérification**: Le badge s'affiche correctement
+
+  6. **Brancher la sélection d'univers sur un refetch réel**
+     - Quand l'utilisateur change l'univers, déclencher un `refetch()` avec les nouveaux paramètres
+     - **Code**:
+     ```typescript
+     const [universe, setUniverse] = useState<string[]>([]);
+     
+     const { data, refetch } = useBrief({
+       type: briefType,
+       universe: universe,
+     });
+     
+     const handleUniverseChange = (newUniverse: string[]) => {
+       setUniverse(newUniverse);
+       // Refetch avec nouveau paramètre
+       refetch();
+     };
+     ```
+     - Logger si le backend ignore le paramètre (console.warn)
+     - **Vérification**: Changer l'univers déclenche un nouveau fetch
+
+  7. **Vérifier qu'il n'y a plus de styles inline**
+     ```bash
+     # Vérifier qu'il n'y a plus de backgroundColor inline
+     grep -n "backgroundColor" src/pages/MarketBrief.tsx
+     
+     # Vérifier qu'il n'y a plus de style= inline
+     grep -n 'style=' src/pages/MarketBrief.tsx
+     ```
+     - **Vérification**: **AUCUN style inline**, **AUCUN backgroundColor**
+
+  8. **Tester avec Playwright**
+     - Fichier: `tests/ui/brief.spec.ts` (créer si n'existe pas)
+     - **Test**:
+     ```typescript
+     import { test, expect } from '@playwright/test';
+     
+     test('Market Brief page should load', async ({ page }) => {
+       await page.goto('http://localhost:5173/brief');
+       
+       // Vérifier que la page se charge
+       await expect(page.locator('h1, h2')).toContainText(/brief|marché/i);
+       
+       // Vérifier que le SegmentedControl est présent
+       await expect(page.locator('[role="radiogroup"]')).toBeVisible();
+       
+       // Tester le toggle quotidien/hebdomadaire
+       await page.click('text=Hebdomadaire');
+       await page.waitForTimeout(500);
+       
+       // Vérifier qu'il n'y a pas d'erreur
+       const errors = await page.locator('[role="alert"]').count();
+       expect(errors).toBe(0);
+     });
+     ```
+     - **Vérification**: `npx playwright test tests/ui/brief.spec.ts` passe
+
+  9. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/brief
+     - Prendre un screenshot AVANT (si possible) et APRÈS
+     - Tester le toggle quotidien/hebdomadaire
+     - Vérifier la console réseau (F12 → Network) pour voir les refetch
+     - **Vérification**: Page fonctionne, pas d'erreur, refetch fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "backgroundColor" src/pages/MarketBrief.tsx` ne trouve plus rien
+  - [ ] `grep -r 'style=' src/pages/MarketBrief.tsx` ne trouve plus de styles inline
+  - [ ] Plus de `<select>` HTML brut, remplacé par `SegmentedControl` ou `Select` Mantine
+  - [ ] Plus de boutons custom, remplacés par `Button` Mantine
+  - [ ] Layout utilise `Stack`, `Card`, `Group` Mantine
+  - [ ] États Loading/Empty/Error utilisent `Skeleton`, `Alert` Mantine
+  - [ ] `FreshnessBadge` affiché correctement
+  - [ ] Sélection d'univers déclenche un refetch réel
+  - [ ] Test Playwright `/brief` passe
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshots avant/après déposés dans `proofs/FE-006/`
+  - [ ] Log réseau (refetch) déposé dans `proofs/FE-006/`
+  - [ ] Diff du code déposé dans `proofs/FE-006/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas supprimer la fonctionnalité, juste remplacer l'UI legacy par Mantine
+  - ⚠️ Vérifier que tous les styles inline sont remplacés (pas seulement backgroundColor)
+  - ⚠️ Utiliser le thème Mantine pour les couleurs (pas de couleurs hardcodées)
+  - ⚠️ Tester que le toggle quotidien/hebdomadaire fonctionne toujours
+  - ⚠️ Si le backend ignore le paramètre univers, logger un warning
+  - ✅ Consulter la doc Mantine: https://mantine.dev/
+  - ✅ Utiliser `SegmentedControl` pour les toggles, `Select` pour les dropdowns
 
 ---
 
@@ -1036,40 +1483,861 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FS-002 — Copilot streaming avec contexte *(Effort M)*
-- **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs).
+
+**Statut**: AVAILABLE  
+**Points**: +90 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs). Actuellement, le copilot n'utilise pas de streaming et n'a pas de contexte sur les prévisions sélectionnées.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
-  - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/copilot/ask` existe
+  - [ ] Page Copilot accessible sur http://localhost:5173/copilot
+  - [ ] Vérifier si le backend supporte SSE/streaming
 
 - **Steps détaillés**:
 
-  1. Implémenter `askCopilotSSE` (SSE ou fetch stream) + gestion abort.
-  2. `Copilot.tsx`: zone chat, boutons rapides (“Explique la prévision”, “Risques & invalidation”), affichage streaming incremental.
-  3. Gestion erreurs/réessai + log simple (optionnel) pour audits.
-- **DoD**: Démo streaming (GIF/vidéo), transcript sauvegardé. Preuves: capture vidéo + log dans `proofs/FS-002/`.
+  1. **Vérifier le support streaming du backend**
+     ```bash
+     curl -X POST http://localhost:8050/api/copilot/ask \
+       -H "Content-Type: application/json" \
+       -d '{"question": "test"}'
+     ```
+     - Notez si le backend supporte déjà le streaming
+     - **Vérification**: État actuel du backend
 
+  2. **Créer le service `askCopilotSSE` avec gestion abort**
+     - Fichier: `src/services/copilot.service.ts`
+     - Implémenter SSE ou fetch stream avec `AbortController`
+     - **Vérification**: Le service peut être importé
+
+  3. **Créer le hook `useCopilotStream`**
+     - Fichier: `src/hooks/useCopilotStream.ts`
+     - Gérer l'état de streaming, les chunks, et l'abort
+     - **Vérification**: Le hook fonctionne
+
+  4. **Modifier `Copilot.tsx` pour utiliser le streaming**
+     - Zone chat avec affichage progressif
+     - Boutons rapides ("Explique la prévision", "Risques & invalidation")
+     - **Vérification**: Le streaming fonctionne
+
+  5. **Ajouter la gestion du contexte**
+     - Récupérer la prévision sélectionnée
+     - Passer le contexte au service
+     - **Vérification**: Le contexte est transmis
+
+  6. **Gestion erreurs/réessai**
+     - Ajouter un bouton "Réessayer"
+     - Logger les erreurs
+     - **Vérification**: Le réessai fonctionne
+
+  7. **Sauvegarder le transcript**
+     - Fonction pour sauvegarder dans `proofs/FS-002/`
+     - **Vérification**: Le transcript peut être sauvegardé
+
+- **DoD (Definition of Done)**:
+  - [ ] Service `askCopilotSSE` créé avec support SSE/streaming
+  - [ ] Hook `useCopilotStream` créé avec gestion abort
+  - [ ] Page `Copilot.tsx` utilise le streaming
+  - [ ] Boutons rapides fonctionnent
+  - [ ] Contexte (prévision sélectionnée) est transmis
+  - [ ] Gestion erreurs/réessai implémentée
+  - [ ] Transcript peut être sauvegardé
+  - [ ] Vidéo/GIF du streaming déposé dans `proofs/FS-002/`
 
 - **Points d'attention**:
-  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
-  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ⚠️ Si le backend ne supporte pas SSE, utiliser fetch avec streaming
+  - ⚠️ Gérer l'abort correctement
+  - ⚠️ Le contexte doit être optionnel
+  - ✅ Tester avec différentes longueurs de réponse
 
 #### FS-003 — Résumé & equity curve *(Effort M)*
-- **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests.
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests. Actuellement, la page Backtests n'affiche pas ces métriques importantes.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
-  - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/backtests` existe
+  - [ ] Page Backtests accessible sur http://localhost:5173/backtests
 
 - **Steps détaillés**:
 
-  1. Service/hook `useBacktest(params)`.
-  2. `Backtests.tsx`: cartes KPI + courbe Tremor + empty/erreur soigné, bouton “Recalculer”.
-  3. Stocker JSON brut dans `proofs/` pour audit.
-- **DoD**: KPI cohérents, courbe visible. Preuves: screenshot + JSON `backtest_<date>.json`.
+  1. **Vérifier l'endpoint backend `/api/backtests`**
+     - Tester avec `curl` et noter la structure de réponse
+     - **Vérification**: L'endpoint retourne du JSON valide
+
+  2. **Créer le service `backtest.service.ts`**
+     - Fichier: `src/services/backtest.service.ts`
+     - Interface pour métriques (CAGR, maxDD, win rate, equity)
+     - **Vérification**: `pnpm run typecheck` passe
+
+  3. **Créer le hook `useBacktest.ts`**
+     - Fichier: `src/hooks/useBacktest.ts`
+     - Utiliser TanStack Query
+     - **Vérification**: Le hook fonctionne
+
+  4. **Modifier `Backtests.tsx` pour afficher les KPI**
+     - Cartes KPI (CAGR, maxDD, win rate, total return)
+     - Courbe equity avec Tremor LineChart
+     - États Loading/Error/Empty
+     - **Vérification**: Les KPI et la courbe s'affichent
+
+  5. **Ajouter le bouton "Recalculer"**
+     - Déclencher un refetch
+     - **Vérification**: Le bouton fonctionne
+
+  6. **Sauvegarder le JSON brut**
+     - Fonction pour sauvegarder dans `proofs/FS-003/`
+     - **Vérification**: Le JSON peut être sauvegardé
+
+- **DoD (Definition of Done)**:
+  - [ ] Service `backtestService` créé
+  - [ ] Hook `useBacktest` créé
+  - [ ] Page affiche les KPI (CAGR, maxDD, win rate, total return)
+  - [ ] Courbe equity affichée avec Tremor
+  - [ ] États Loading/Error/Empty gérés
+  - [ ] Bouton "Recalculer" fonctionne
+  - [ ] JSON brut peut être sauvegardé
+  - [ ] Screenshot + JSON déposés dans `proofs/FS-003/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que l'endpoint retourne bien les métriques et la courbe
+  - ⚠️ Formater les pourcentages correctement
+  - ✅ Consulter la doc Tremor pour LineChart
+
+---
+
+## P1 — Optimisations Performance (basées sur analyse ChatGPT)
+
+#### PERF-001 — Code splitting routes App.tsx (lazy loading) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Toutes les pages sont importées statiquement dans `App.tsx`, ce qui alourdit le bundle initial. Le lazy loading au niveau routing réduirait significativement le Time to First Byte.
+
+- **Prérequis**:
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier le bundle actuel: `pnpm run build` et noter la taille
+  - [ ] Lire `App.tsx` pour comprendre la structure actuelle
+
+- **Steps détaillés**:
+
+  1. **Analyser le bundle actuel**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     pnpm run build
+     # Noter la taille du bundle principal
+     ```
+     - **Vérification**: Taille du bundle initial notée
+
+  2. **Convertir les imports statiques en React.lazy**
+     - Fichier: `src/App.tsx`
+     - **AVANT**:
+     ```typescript
+     import Dashboard from './pages/Dashboard'
+     import ForecastsMinimal from './pages/ForecastsMinimal'
+     // ... tous les autres imports statiques
+     ```
+     - **APRÈS**:
+     ```typescript
+     import { lazy, Suspense } from 'react'
+     import { Skeleton } from '@mantine/core'
+     
+     const Dashboard = lazy(() => import('./pages/Dashboard'))
+     const ForecastsMinimal = lazy(() => import('./pages/ForecastsMinimal'))
+     // ... tous les autres en lazy
+     ```
+     - **Vérification**: `pnpm run typecheck` passe
+
+  3. **Ajouter Suspense boundaries pour chaque route**
+     - Créer un composant `PageSkeleton` pour le fallback
+     - Wrapper chaque route avec `<Suspense fallback={<PageSkeleton />}>`
+     - **Vérification**: Les pages se chargent avec skeleton
+
+  4. **Vérifier le bundle après**
+     ```bash
+     pnpm run build
+     # Comparer la taille du bundle initial (devrait être réduite)
+     ```
+     - **Vérification**: Bundle initial réduit de 30-50%
+
+  5. **Tester la navigation**
+     - Naviguer entre toutes les pages
+     - Vérifier que le lazy loading fonctionne (Network tab)
+     - **Vérification**: Pages chargées à la demande
+
+- **DoD (Definition of Done)**:
+  - [ ] Toutes les pages converties en `React.lazy()`
+  - [ ] Suspense boundaries ajoutées avec fallback approprié
+  - [ ] Bundle initial réduit (vérifié avec `pnpm run build`)
+  - [ ] Navigation fonctionne sans erreur
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Screenshot Network tab (avant/après) déposé dans `proofs/PERF-001/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas lazy load les composants critiques (ErrorBoundary, AppProviders)
+  - ⚠️ Utiliser un skeleton approprié pour chaque type de page
+  - ✅ Tester que les routes fonctionnent toujours après conversion
+
+---
+
+#### PERF-002 — Redis cache layer pour endpoints fréquents *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +90 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Le cache actuel est file-based seulement (TTLCache, Cache class). Un cache Redis permettrait un cache distribué et de meilleures performances sous charge pour les endpoints fréquents (macro, news, dashboard KPIs).
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible
+  - [ ] Redis installé ou accessible (ou Docker Redis)
+  - [ ] Vérifier les endpoints fréquents: `/api/macro/series`, `/api/news/feed`, `/api/dashboard/kpis`
+
+- **Steps détaillés**:
+
+  1. **Installer/Configurer Redis**
+     ```bash
+     # Option 1: Docker
+     docker run -d -p 6379:6379 redis:7-alpine
+     
+     # Option 2: Local
+     # sudo apt install redis-server (ou équivalent)
+     ```
+     - **Vérification**: Redis accessible sur `localhost:6379`
+
+  2. **Installer redis-py**
+     - Fichier: `copilot-app/backend/requirements.txt`
+     - Ajouter: `redis>=5.0.0`
+     - Exécuter: `pip install redis`
+     - **Vérification**: `python -c "import redis; print('OK')"`
+
+  3. **Créer le service Redis cache**
+     - Fichier: `copilot-app/backend/services/redis_cache.py`
+     - Implémenter classe `RedisCache` avec get/set/delete
+     - **Vérification**: Le service peut être importé
+
+  4. **Intégrer Redis dans les endpoints fréquents**
+     - Fichier: `copilot-app/backend/api/routes/macro.py` (TTL 15 min)
+     - Fichier: `copilot-app/backend/api/routes/news.py` (TTL 5 min)
+     - Fichier: `copilot-app/backend/api/routes/dashboard.py` (TTL 10 min)
+     - **Vérification**: Les endpoints utilisent Redis
+
+  5. **Fallback si Redis indisponible**
+     - Si Redis down, utiliser le cache file-based existant
+     - Logger un warning mais continuer à fonctionner
+     - **Vérification**: L'app fonctionne même si Redis est down
+
+  6. **Tester les performances**
+     ```bash
+     # Premier appel (cache miss)
+     time curl http://localhost:8050/api/macro/series?ids=CPIAUCSL
+     
+     # Deuxième appel (cache hit)
+     time curl http://localhost:8050/api/macro/series?ids=CPIAUCSL
+     ```
+     - **Vérification**: Cache hit 5-10x plus rapide
+
+- **DoD (Definition of Done)**:
+  - [ ] Redis installé et accessible
+  - [ ] Service `redis_cache.py` créé
+  - [ ] Endpoints macro/news/dashboard utilisent Redis
+  - [ ] Fallback file-based si Redis down
+  - [ ] Tests de performance montrent amélioration
+  - [ ] Logs de cache hit/miss fonctionnent
+  - [ ] Preuve de performance (avant/après) déposée dans `proofs/PERF-002/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser le cache file-based existant (fallback)
+  - ⚠️ Gérer les erreurs Redis gracieusement
+  - ⚠️ TTL appropriés selon le type de données (macro: 15min, news: 5min)
+  - ✅ Tester avec Redis down pour vérifier le fallback
+
+---
+
+#### PERF-003 — Virtualisation listes longues (react-window) *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +70 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Les listes longues (stocks universe, news feed avec 1000+ items) peuvent dégrader les performances. La virtualisation ne render que les éléments visibles.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] Identifier les listes longues (>100 items)
+  - [ ] Vérifier si react-window est déjà installé
+
+- **Steps détaillés**:
+
+  1. **Identifier les listes longues**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les .map() sur de grandes listes
+     grep -r "\.map(" src/pages/ src/components/ | grep -v "node_modules"
+     ```
+     - Cibles probables: Stocks universe, News feed, Forecasts table
+     - **Vérification**: Listes identifiées
+
+  2. **Installer react-window**
+     ```bash
+     pnpm add react-window @types/react-window
+     ```
+     - **Vérification**: Package installé
+
+  3. **Virtualiser Stocks universe**
+     - Fichier: `src/pages/Stocks.tsx` ou composant liste
+     - Remplacer `.map()` par `FixedSizeList` ou `VariableSizeList`
+     - **Vérification**: Liste virtualisée fonctionne
+
+  4. **Virtualiser News feed**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - Virtualiser la liste d'articles
+     - **Vérification**: News feed virtualisé
+
+  5. **Tester les performances**
+     - Charger 1000+ items
+     - Vérifier le scroll fluide
+     - **Vérification**: Performance améliorée
+
+- **DoD (Definition of Done)**:
+  - [ ] react-window installé
+  - [ ] Au moins 2 listes longues virtualisées
+  - [ ] Scroll fluide avec 1000+ items
+  - [ ] Tests de performance montrent amélioration
+  - [ ] Preuve (screenshot/vidéo) déposée dans `proofs/PERF-003/`
+
+- **Points d'attention**:
+  - ⚠️ Ne virtualiser que les listes vraiment longues (>100 items)
+  - ⚠️ Gérer la hauteur dynamique si items de taille variable
+  - ✅ Tester avec différentes tailles d'écran
+
+---
+
+#### PERF-004 — Audit et amélioration memoization *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Memoization partielle actuellement. Audit et amélioration sur composants critiques pour éviter re-renders inutiles.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] React DevTools installé (pour profiler)
+  - [ ] Identifier les composants qui re-rendent souvent
+
+- **Steps détaillés**:
+
+  1. **Profiler avec React DevTools**
+     - Ouvrir React DevTools → Profiler
+     - Enregistrer une session (navigation, filtres, etc.)
+     - Identifier les composants qui re-rendent souvent
+     - **Vérification**: Composants problématiques identifiés
+
+  2. **Ajouter React.memo sur composants purs**
+     - Wrapper les composants qui reçoivent les mêmes props
+     - **Vérification**: Re-renders réduits
+
+  3. **Utiliser useMemo pour calculs coûteux**
+     - Liste triée/filtrée
+     - Transformations de données
+     - **Vérification**: Calculs optimisés
+
+  4. **Utiliser useCallback pour fonctions passées en props**
+     - Handlers passés à des composants enfants
+     - **Vérification**: Props stables
+
+  5. **Vérifier l'amélioration**
+     - Re-profiler après optimisations
+     - **Vérification**: Re-renders réduits de 30-50%
+
+- **DoD (Definition of Done)**:
+  - [ ] Audit profiler effectué
+  - [ ] Au moins 5 composants optimisés avec memo/useMemo/useCallback
+  - [ ] Re-renders réduits (mesuré avec profiler)
+  - [ ] Fonctionnalité maintenue
+  - [ ] Preuve profiler (avant/après) déposée dans `proofs/PERF-004/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas over-memoizer (peut ralentir si mal fait)
+  - ⚠️ Tester que les optimisations ne cassent pas la fonctionnalité
+  - ✅ Focus sur les composants critiques (Dashboard, Forecasts, Stocks)
+
+---
+
+#### BE-006 — POST /api/backtests/run endpoint *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Actuellement seulement GET `/api/backtests` existe. Pas de POST pour lancer un backtest interactif avec paramètres depuis l'UI. Cette fonctionnalité est mentionnée dans l'analyse ChatGPT.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Vérifier que GET `/api/backtests` existe
+  - [ ] Comprendre la structure des backtests existants
+
+- **Steps détaillés**:
+
+  1. **Analyser l'endpoint GET existant**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     - Comprendre la structure de données
+     - **Vérification**: Structure comprise
+
+  2. **Créer le modèle Pydantic pour la requête**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     ```python
+     from pydantic import BaseModel
+     from typing import Optional, List
+     
+     class BacktestRunRequest(BaseModel):
+         tickers: Optional[List[str]] = None
+         start_date: Optional[str] = None
+         end_date: Optional[str] = None
+         strategy: Optional[str] = "momentum"
+         horizon: Optional[str] = "1m"
+         min_confidence: Optional[float] = 0.5
+     ```
+     - **Vérification**: Modèle créé
+
+  3. **Implémenter l'endpoint POST**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     ```python
+     @router.post("/backtests/run")
+     def run_backtest(request: BacktestRunRequest):
+         """Run a backtest with specified parameters."""
+         # Queue asynchrone ou calcul direct selon complexité
+         # Retourner job_id ou résultats selon stratégie
+     ```
+     - **Vérification**: Endpoint créé
+
+  4. **Intégrer avec le job existant**
+     - Utiliser `jobs/backtests.py` si existe
+     - Ou créer la logique de calcul
+     - **Vérification**: Backtest calculé
+
+  5. **Gérer la queue asynchrone (optionnel)**
+     - Si calcul long, retourner job_id
+     - Endpoint GET `/api/backtests/status/{job_id}` pour poller
+     - **Vérification**: Queue fonctionne
+
+  6. **Tester l'endpoint**
+     ```bash
+     curl -X POST http://localhost:8050/api/backtests/run \
+       -H "Content-Type: application/json" \
+       -d '{"tickers": ["AAPL", "MSFT"], "strategy": "momentum"}'
+     ```
+     - **Vérification**: Endpoint fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Modèle Pydantic `BacktestRunRequest` créé
+  - [ ] Endpoint POST `/api/backtests/run` implémenté
+  - [ ] Backtest calculé avec paramètres fournis
+  - [ ] Résultats retournés dans format cohérent
+  - [ ] Gestion erreurs (never-empty pattern)
+  - [ ] Tests curl passent
+  - [ ] Preuve (log curl + résultat) déposée dans `proofs/BE-006/`
+
+- **Points d'attention**:
+  - ⚠️ Si calcul long, utiliser queue asynchrone
+  - ⚠️ Respecter le pattern never-empty (structure valide même en erreur)
+  - ⚠️ Valider les paramètres (dates, tickers, etc.)
+  - ✅ Tester avec différents paramètres
+
+---
+
+#### FS-006 — Export PDF/Markdown briefs *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Permettre l'export des briefs en PDF/Markdown pour partage. Fonctionnalité mentionnée dans l'analyse ChatGPT comme amélioration future.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Endpoints `/api/brief/daily` et `/api/brief/weekly` fonctionnent
+  - [ ] Vérifier si bibliothèques PDF existent
+
+- **Steps détaillés**:
+
+  1. **Installer bibliothèques d'export**
+     - Backend: `pip install weasyprint` ou `reportlab` (PDF)
+     - Markdown: Utiliser template Jinja2
+     - **Vérification**: Bibliothèques installées
+
+  2. **Créer endpoint export PDF**
+     - Fichier: `copilot-app/backend/api/routes/brief.py` (ou créer)
+     - Endpoint: `GET /api/brief/{daily|weekly}/export?format=pdf`
+     - Générer PDF depuis le brief JSON
+     - **Vérification**: PDF généré
+
+  3. **Créer endpoint export Markdown**
+     - Endpoint: `GET /api/brief/{daily|weekly}/export?format=markdown`
+     - Générer Markdown depuis le brief JSON
+     - **Vérification**: Markdown généré
+
+  4. **Ajouter boutons export frontend**
+     - Fichier: `src/pages/MarketBrief.tsx`
+     - Boutons "Télécharger PDF" et "Copier Markdown"
+     - **Vérification**: Boutons fonctionnent
+
+  5. **Tester les exports**
+     - Télécharger PDF et vérifier le contenu
+     - Copier Markdown et vérifier le format
+     - **Vérification**: Exports fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] Endpoints export PDF et Markdown créés
+  - [ ] Boutons export ajoutés dans MarketBrief.tsx
+  - [ ] PDF contient le brief complet
+  - [ ] Markdown formaté correctement
+  - [ ] Tests manuels passent
+  - [ ] Preuve (PDF + Markdown exemple) déposée dans `proofs/FS-006/`
+
+- **Points d'attention**:
+  - ⚠️ Génération PDF peut être lente → faire en background si nécessaire
+  - ⚠️ Gérer les erreurs gracieusement
+  - ✅ Tester avec briefs vides (never-empty)
+
+---
+
+#### FS-007 — WebSocket/SSE news temps réel *(Effort L)*
+
+**Statut**: AVAILABLE  
+**Points**: +120 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Permettre la mise à jour temps réel des news sans refresh manuel. Feature additionnelle mentionnée dans l'analyse ChatGPT.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Endpoint `/api/news/feed` fonctionne
+  - [ ] Comprendre le job news_ingest
+
+- **Steps détaillés**:
+
+  1. **Choisir technologie (WebSocket vs SSE)**
+     - SSE plus simple pour unidirectionnel
+     - WebSocket pour bidirectionnel
+     - **Recommandation**: SSE pour news (unidirectionnel)
+     - **Vérification**: Choix fait
+
+  2. **Implémenter endpoint SSE backend**
+     - Fichier: `copilot-app/backend/api/routes/news.py`
+     - Endpoint: `GET /api/news/stream`
+     - Streamer nouvelles news via SSE
+     - **Vérification**: Endpoint SSE fonctionne
+
+  3. **Créer hook frontend `useNewsStream`**
+     - Fichier: `src/hooks/useNewsStream.ts`
+     - Connexion EventSource pour SSE
+     - Mise à jour automatique de la liste
+     - **Vérification**: Hook fonctionne
+
+  4. **Intégrer dans NewsFeed**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - Utiliser `useNewsStream` en plus de `useNewsCompat`
+     - Ajouter nouvelles news en temps réel
+     - **Vérification**: News mises à jour automatiquement
+
+  5. **Gérer reconnexion**
+     - Auto-reconnect si connexion perdue
+     - **Vérification**: Reconnexion fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Endpoint SSE `/api/news/stream` créé
+  - [ ] Hook `useNewsStream` créé
+  - [ ] NewsFeed utilise le stream
+  - [ ] Nouvelles news apparaissent automatiquement
+  - [ ] Reconnexion automatique fonctionne
+  - [ ] Preuve (vidéo du stream) déposée dans `proofs/FS-007/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas surcharger le backend avec trop de connexions
+  - ⚠️ Gérer la déconnexion proprement
+  - ⚠️ Optionnel: Limiter le nombre de clients simultanés
+  - ✅ Tester avec plusieurs onglets ouverts
+
+---
+
+## P1 — Qualité & Hygiène (48–72h)
+
+### OPS-001 — Améliorer convention de commits (Conventional Commits) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les commits actuels utilisent `done: <TASK-ID> (+points)` qui est peu traçable et casse l'historique. Il faut adopter Conventional Commits pour une meilleure traçabilité et intégration CI/CD.
+
+- **Prérequis**:
+  - [ ] Vérifier le format actuel: `cat .gitmessage.txt`
+  - [ ] Vérifier les hooks git: `ls -la .git/hooks/`
+
+- **Steps détaillés**:
+
+  1. **Analyser les commits récents**
+     ```bash
+     git log --oneline -20
+     git log --format="%s" -20
+     ```
+     - Notez les formats de commits actuels
+     - **Vérification**: Liste des formats identifiés
+
+  2. **Créer/modifier `.gitmessage.txt` avec Conventional Commits**
+     - Fichier: `.gitmessage.txt`
+     - **Nouveau format**:
+     ```
+     <type>(<scope>): <subject> @<agent-name> (+<points>)
+
+     <body>
+
+     **Changes**:
+     - File X: did Y
+     - File Z: did W
+
+     **Impact**: One line impact
+
+     Task: <TASK-ID>
+     Agent: @<handle>
+     Domain: <backend|frontend|infra>/<zone>
+     Proofs: proofs/<TASK-ID>/<handle>/
+     TimeSpent: <H>h<M>
+     ```
+     - Types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`
+     - **Vérification**: Le template est créé
+
+  3. **Mettre à jour le hook `commit-msg`**
+     - Fichier: `.git/hooks/commit-msg` (créer si n'existe pas)
+     - **Code**:
+     ```bash
+     #!/bin/bash
+     # Vérifier le format Conventional Commits
+     commit_msg=$(cat "$1")
+     
+     # Vérifier le type
+     if ! echo "$commit_msg" | grep -qE "^(feat|fix|chore|refactor|docs|test|perf)\([^)]+\):"; then
+       echo "❌ Commit message must follow Conventional Commits format"
+       echo "Format: <type>(<scope>): <subject>"
+       echo "Types: feat, fix, chore, refactor, docs, test, perf"
+       exit 1
+     fi
+     
+     # Vérifier la présence de Task trailer
+     if ! echo "$commit_msg" | grep -q "Task:"; then
+       echo "⚠️  Warning: No Task trailer found"
+     fi
+     ```
+     - Rendre exécutable: `chmod +x .git/hooks/commit-msg`
+     - **Vérification**: Le hook valide le format
+
+  4. **Mettre à jour la documentation**
+     - Fichier: `docs/dev/COMMIT_CONVENTION.md` (créer)
+     - Documenter le nouveau format avec exemples
+     - **Vérification**: La documentation est à jour
+
+  5. **Tester le nouveau format**
+     ```bash
+     # Test commit
+     git commit --allow-empty -m "feat(api): add new endpoint @TEST (+50pts)
+
+     Added /api/test endpoint for validation.
+
+     Task: TEST-001
+     Agent: @TEST
+     "
+     ```
+     - **Vérification**: Le commit passe avec le nouveau format
+
+- **DoD (Definition of Done)**:
+  - [ ] `.gitmessage.txt` mis à jour avec Conventional Commits
+  - [ ] Hook `commit-msg` valide le format
+  - [ ] Documentation créée dans `docs/dev/COMMIT_CONVENTION.md`
+  - [ ] Test commit réussi avec nouveau format
+  - [ ] Exemples de commits dans la documentation
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser les commits existants, juste améliorer le format
+  - ⚠️ Garder la compatibilité avec les trailers (Task, Agent, Proofs)
+  - ✅ Consulter: https://www.conventionalcommits.org/
+
+### TEST-001 — Tests E2E Playwright pour endpoints critiques *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Le script `smoke.sh` vérifie les endpoints mais ne teste pas que les réponses ne sont pas vides. Il faut des tests E2E Playwright pour vérifier que l'UI affiche réellement des données.
+
+- **Prérequis**:
+  - [ ] Playwright installé: `pnpm add -D @playwright/test`
+  - [ ] Backend et frontend démarrés
+  - [ ] Lire `scripts/smoke.sh` pour comprendre les checks actuels
+
+- **Steps détaillés**:
+
+  1. **Analyser les checks actuels dans `smoke.sh`**
+     - Lire le script pour voir ce qui est vérifié
+     - **Vérification**: Compréhension des checks actuels
+
+  2. **Créer les tests Playwright**
+     - Fichier: `tests/e2e/critical-pages.spec.ts`
+     - Tester que les pages affichent des données (pas juste que l'endpoint répond)
+     - **Vérification**: Les tests sont créés
+
+  3. **Ajouter vérification endpoints vides dans CI**
+     - Créer script `scripts/verify_endpoints.sh`
+     - Vérifier que les endpoints ne retournent pas de structures vides
+     - **Vérification**: Le script échoue si endpoints vides
+
+  4. **Intégrer dans CI/CD**
+     - Ajouter les tests dans le workflow CI
+     - **Vérification**: Les tests s'exécutent en CI
+
+- **DoD (Definition of Done)**:
+  - [ ] Tests Playwright créés pour pages critiques
+  - [ ] Script `verify_endpoints.sh` créé
+  - [ ] Tests intégrés dans CI
+  - [ ] Tests passent localement et en CI
+
+- **Points d'attention**:
+  - ⚠️ Les tests doivent vérifier que des données s'affichent, pas juste que la page charge
+  - ⚠️ Gérer les cas où les données peuvent être vides (mais avec fallback UX)
+
+### OPS-002 — Provider registry déclaratif pour LLM *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +90 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les modèles G4F sont codés en dur dans plusieurs fichiers (`econ_llm_agent.py`, etc.). Il faut un registry déclaratif (YAML/JSON) pour faciliter la gestion et éviter la duplication.
+
+- **Prérequis**:
+  - [ ] Identifier tous les fichiers avec modèles en dur: `grep -r "POWER_NOAUTH_MODELS\|g4f.*model" backend/`
+  - [ ] Lire `copilot-app/backend/src/analytics/econ_llm_agent.py`
+
+- **Steps détaillés**:
+
+  1. **Créer le fichier de config YAML**
+     - Fichier: `copilot-app/backend/config/llm_providers.yaml`
+     - Structure avec nom, base_url, modèle, coût, timeout, p95, ToS risk, statut
+     - **Vérification**: Le fichier est créé
+
+  2. **Créer le loader de config**
+     - Fichier: `copilot-app/backend/src/config/llm_registry.py`
+     - Charger et parser le YAML
+     - **Vérification**: Le loader fonctionne
+
+  3. **Remplacer les listes en dur**
+     - Modifier `econ_llm_agent.py` et autres fichiers
+     - Utiliser le registry au lieu de listes hardcodées
+     - **Vérification**: Plus de modèles en dur
+
+  4. **Ajouter health checks programmés**
+     - Vérifier périodiquement que les providers fonctionnent
+     - Désactiver automatiquement si taux d'erreurs élevé
+     - **Vérification**: Health checks fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] Fichier `llm_providers.yaml` créé
+  - [ ] Loader de config créé
+  - [ ] Tous les modèles en dur remplacés
+  - [ ] Health checks programmés fonctionnent
+  - [ ] Documentation mise à jour
+
+- **Points d'attention**:
+  - ⚠️ Garder la compatibilité avec le code existant
+  - ⚠️ Permettre le fallback si le fichier de config n'existe pas
+  - ✅ Format YAML facile à maintenir
+
+### OPS-003 — Circuit breaker et retry contextuel pour LLM *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Actuellement, le système peut essayer 10+ modèles en chaîne sans borne, ce qui peut dégrader les performances. Il faut un circuit breaker et un retry contextuel.
+
+- **Prérequis**:
+  - [ ] Comprendre le système LLM actuel
+  - [ ] Identifier où les retries sont faits
+
+- **Steps détaillés**:
+
+  1. **Implémenter circuit breaker**
+     - Pattern circuit breaker pour désactiver temporairement les providers défaillants
+     - **Vérification**: Circuit breaker fonctionne
+
+  2. **Ajouter retry contextuel**
+     - Limiter le nombre de retries
+     - Stratégie de backoff
+     - **Vérification**: Retries sont limités
+
+  3. **Ajouter logging structuré**
+     - Logger provider, modèle, tokens, latence, statut
+     - **Vérification**: Logs sont structurés
+
+- **DoD (Definition of Done)**:
+  - [ ] Circuit breaker implémenté
+  - [ ] Retry contextuel avec limites
+  - [ ] Logging structuré ajouté
+  - [ ] Tests passent
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser le fonctionnement actuel
+  - ⚠️ Permettre le bypass en cas d'urgence
+  - ✅ Documenter le comportement
+
+### SEC-001 — Politique de données et secret management *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Utiliser G4F et multiples fournisseurs sans politique de données claire (PII, logs prompts/réponses), ni secret management standardisé pose des risques de sécurité.
+
+- **Prérequis**:
+  - [ ] Identifier où les secrets sont utilisés
+  - [ ] Vérifier s'il y a des logs de prompts/réponses
+
+- **Steps détaillés**:
+
+  1. **Créer politique de données**
+     - Documenter le masquage PII
+     - Retention des logs
+     - Régions de stockage
+     - **Vérification**: Politique créée
+
+  2. **Standardiser secret management**
+     - Utiliser `.env.example` pour template
+     - Jamais de secrets en clair dans le code
+     - **Vérification**: Secrets gérés proprement
+
+  3. **Masquer PII dans les logs**
+     - Fonction pour masquer les données sensibles
+     - **Vérification**: PII masquée
+
+- **DoD (Definition of Done)**:
+  - [ ] Politique de données créée
+  - [ ] Secret management standardisé
+  - [ ] PII masquée dans les logs
+  - [ ] Documentation mise à jour
+
+- **Points d'attention**:
+  - ⚠️ Ne pas exposer de données sensibles
+  - ⚠️ Respecter les réglementations (RGPD, etc.)
+  - ✅ Documenter clairement
 
 ---
 
@@ -1082,38 +2350,127 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
 
 #### FS-004 — Fallback mocks via env *(Effort S)*
-- **Why**: Ne jamais casser l’UI si backend HS; dev rapide.
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Ne jamais casser l'UI si backend HS; dev rapide. Permettre de basculer entre données réelles et mocks via variable d'environnement.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
   - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Vérifier si `VITE_USE_MOCKS` est déjà utilisé
+  - [ ] Vérifier si MSW est installé
 
 - **Steps détaillés**:
 
-  1. Lire `VITE_USE_MOCKS` dans services, router vers MSW/mock si true.
-  2. Documenter dans `docs/dev/ui_migration_mantine.md` (section “Mocks & SSE”).
-- **DoD**: Mode mock ON sert des données locales sans crash; OFF = backend. Preuves: notes + capture.
+  1. **Vérifier l'état actuel des mocks**
+     - Chercher les usages de `VITE_USE_MOCKS`
+     - Chercher les mocks existants
+     - **Vérification**: État actuel identifié
 
+  2. **Installer MSW si nécessaire**
+     - `pnpm add -D msw`
+     - **Vérification**: MSW est installé
+
+  3. **Créer les handlers MSW**
+     - Fichier: `src/mocks/handlers.ts`
+     - Handlers pour `/api/forecasts`, `/api/macro/series`, etc.
+     - **Vérification**: Les handlers sont créés
+
+  4. **Créer le setup MSW**
+     - Fichier: `src/mocks/browser.ts`
+     - **Vérification**: Le worker est créé
+
+  5. **Modifier les services pour router vers mocks**
+     - Détecter `VITE_USE_MOCKS=true`
+     - **Vérification**: La détection fonctionne
+
+  6. **Initialiser MSW dans `main.tsx`**
+     - Démarrer MSW si mocks activés
+     - **Vérification**: MSW démarre correctement
+
+  7. **Documenter dans `docs/dev/ui_migration_mantine.md`**
+     - Section "Mocks & SSE"
+     - **Vérification**: Documentation à jour
+
+  8. **Tester le mode mock et réel**
+     - Tester avec `VITE_USE_MOCKS=1` et `VITE_USE_MOCKS=0`
+     - **Vérification**: Les deux modes fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] MSW installé et configuré
+  - [ ] Handlers MSW créés pour endpoints principaux
+  - [ ] `shouldUseMocks()` détecte `VITE_USE_MOCKS`
+  - [ ] Mode mock ON sert des données locales
+  - [ ] Mode mock OFF utilise le backend réel
+  - [ ] Documentation ajoutée
+  - [ ] Capture mode mock déposée dans `proofs/FS-004/`
 
 - **Points d'attention**:
-  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
-  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
-  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ⚠️ Les mocks ne doivent être utilisés QUE en développement
+  - ⚠️ Les mocks doivent retourner la même structure que le backend
+  - ✅ Consulter la doc MSW
 
 #### FS-005 — Harmoniser badges Freshness *(Effort S)*
-- **Why**: Garantir cohérence freshness (forecasts, macro, news, backtests).
+
+**Statut**: AVAILABLE  
+**Points**: +40 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Garantir cohérence freshness (forecasts, macro, news, backtests). Actuellement, les badges Freshness peuvent avoir des formats différents.
 
 - **Prérequis**:
-  - [ ] Backend démarré (`./finance-copilot.sh start`)
-  - [ ] Frontend accessible sur http://localhost:5173
-  - [ ] Aucune erreur dans les logs
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/health` expose `last_updates`
+  - [ ] Vérifier les usages de FreshnessBadge
 
 - **Steps détaillés**:
 
-  1. Uniformiser `FreshnessBadge` (minutes + tooltip).
-  2. Vérifier `/health` expose `last_updates` pour routes branchées.
-- **DoD**: Badge indique minutes depuis dernier update (capture + log `/health`).
+  1. **Identifier tous les usages de FreshnessBadge**
+     - Chercher `FreshnessBadge` et `freshness` dans le code
+     - **Vérification**: Liste des fichiers concernés
+
+  2. **Vérifier le composant FreshnessBadge actuel**
+     - Lire le composant pour voir son format
+     - **Vérification**: Format actuel identifié
+
+  3. **Uniformiser FreshnessBadge avec format standard**
+     - Format: "Il y a X min" avec couleur selon l'âge
+     - Tooltip avec date complète
+     - **Vérification**: Le composant est uniformisé
+
+  4. **Vérifier que `/api/health` expose `last_updates`**
+     - Tester avec `curl`
+     - **Vérification**: Les timestamps sont disponibles
+
+  5. **Remplacer tous les usages par le composant uniformisé**
+     - Pour chaque fichier, utiliser le même composant
+     - **Vérification**: Tous les usages sont uniformisés
+
+  6. **Vérifier la cohérence sur toutes les pages**
+     - Pages: Forecasts, Macro, News, Backtests, Brief
+     - **Vérification**: Format cohérent partout
+
+  7. **Tester avec différents âges de données**
+     - Fraîches (< 5 min) → vert
+     - Récentes (5-30 min) → jaune
+     - Anciennes (> 60 min) → rouge
+     - **Vérification**: Les couleurs changent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] Composant `FreshnessBadge` uniformisé
+  - [ ] Tous les usages utilisent le même composant
+  - [ ] Badge affiche "Il y a X min" avec couleur
+  - [ ] Tooltip affiche la date complète
+  - [ ] Format cohérent sur toutes les pages
+  - [ ] Capture de toutes les pages avec badges déposée dans `proofs/FS-005/`
+
+- **Points d'attention**:
+  - ⚠️ Format cohérent partout (minutes, pas heures/jours)
+  - ⚠️ Couleurs reflètent la fraîcheur
+  - ⚠️ Gérer les cas où `freshness` est invalide
+  - ✅ Utiliser `date-fns` pour le formatage
 
 ---
 
@@ -1134,7 +2491,10 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 - Tests: `pnpm run typecheck` + `pnpm run build`.
 - Smoke Playwright: `/`, `/forecasts`, `/macro`, `/news` (au moins composant clé rendu).
 - Preuves à déposer dans `proofs/<TASK>/` (curl/log + screenshots ou GIF streaming).
-- Documenter tout toggle/env dans `docs/dev/ui_migration_mantine.md` (ajouter section “Mocks & SSE”).
+- Documenter tout toggle/env dans `docs/dev/ui_migration_mantine.md` (ajouter section "Mocks & SSE").
+- **Commits**: Utiliser Conventional Commits (`feat(scope): description @NOM (+pts)`) - voir OPS-001.
+- **Endpoints**: Jamais de réponse vide - toujours structure valide (never-empty pattern).
+- **Tests E2E**: Vérifier que l'UI affiche des données, pas juste que la page charge (voir TEST-001).
 ## FC-NEW-021 — Robustness Scoring & PDF Export (Frontend) - DONE
 
 **But**: Implémenter le système de scoring robustesse avec export PDF et panel de tuning comme spécifié dans la spécification détaillée du 2025-11-05.
@@ -2310,18 +3670,18 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 
 ### Tâches par Catégorie
 
-- **BE (Backend)** : 15 tâches - API, routes, services, cache, logging, validations
-- **FE (Frontend)** : 29 tâches - Composants, pages, hooks, UI, animations, thèmes
-- **FS (Fullstack)** : 23 tâches - Intégrations backend+frontend, exports, notifications, webhooks
+- **BE (Backend)** : 17 tâches - API, routes, services, cache, logging, validations (ajout: BE-006)
+- **FE (Frontend)** : 30 tâches - Composants, pages, hooks, UI, animations, thèmes
+- **FS (Fullstack)** : 27 tâches - Intégrations backend+frontend, exports, notifications, webhooks (ajout: FS-006, FS-007)
 - **TEST (Tests)** : 2 tâches - Tests E2E, tests unitaires
 - **DOC (Documentation)** : 1 tâche - Documentation des patterns
-- **PERF (Performance)** : 3 tâches - Optimisations, métriques de performance
+- **PERF (Performance)** : 8 tâches - Optimisations, métriques de performance (ajout: PERF-001 à PERF-004)
 - **OPS (Operations)** : 1 tâche - Monitoring, observability
 - **SEC (Sécurité)** : 1 tâche - Quotas, limites utilisateur
 - **DATA (Data/ML)** : 2 tâches - Versioning modèles ML, validation prévisions
 - **UI (UI/UX)** : 2 tâches - A/B testing, templates rapports
 
-**Total** : **79 tâches** disponibles pour les agents
+**Total** : **85 tâches** disponibles pour les agents (ajout de 7 nouvelles tâches basées sur analyse ChatGPT)
 
 ### Système de Nommage
 
@@ -2339,17 +3699,17 @@ Les tâches sont maintenant organisées par **catégorie** avec des codes clairs
 
 ### Points Disponibles
 
-- **BE** : ~1,200+ pts
+- **BE** : ~1,400+ pts
 - **FE** : ~1,800+ pts
 - **FS** : ~1,400+ pts
 - **TEST** : ~100 pts
 - **DOC** : ~40 pts
 - **PERF** : ~120 pts
-- **OPS** : ~80 pts
+- **OPS** : ~200+ pts
 - **SEC** : ~60 pts
-- **DATA** : ~120 pts
+- **DATA** : ~200+ pts
 - **UI** : ~80 pts
-- **Total estimé** : **5,000+ pts disponibles**
+- **Total estimé** : **5,400+ pts disponibles**
 
 ---
 
@@ -2374,7 +3734,7 @@ Après complétion:
 - [ ] Tous les DoD vérifiés (checklist complète)
 - [ ] Preuve créée (screenshot/log/vidéo) dans `proofs/<TASK-ID>/`
 - [ ] Tests passent (`pnpm run typecheck`, `pnpm run build`)
-- [ ] Commit avec format correct : `feat(FC-XXX): description @NOM (+XXpts)`
+- [ ] Commit avec format Conventional Commits : `feat(scope): description @NOM (+XXpts)`
 - [ ] Score mis à jour dans `SCORE_AGENTS.md`
 - [ ] Statut de la tâche changé à **DONE** dans ce fichier
 
@@ -2424,9 +3784,41 @@ Ces tâches sont **faciles**, **rapides** et vous permettront de comprendre le p
 4. **Commit** avec votre nom et preuve de fonctionnement
 5. **Mettre à jour** `SCORE_AGENTS.md` avec vos points
 
-### Format de commit
+### Format de commit (Conventional Commits)
+
+**Format obligatoire** :
 ```
-feat(task-id): description courte @agentName (+points)
+<type>(<scope>): <subject> @<agent-name> (+<points>)
+
+<body détaillant les changements>
+
+Task: <TASK-ID>
+Agent: @<handle>
+Domain: <backend|frontend|infra>/<zone>
+Proofs: proofs/<TASK-ID>/<handle>/
+TimeSpent: <H>h<M>
+```
+
+**Types** : `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`
+
+**Exemple** :
+```
+feat(api): add /api/stocks/search endpoint @ALEX-BACKEND (+70pts)
+
+Added new endpoint for stock search with fuzzy matching and real-time prices.
+
+**Changes**:
+- Created /api/routes/stocks.py with search endpoint
+- Integrated yfinance for real-time prices
+- Added fuzzy matching logic
+
+**Impact**: Stocks page can now search real stocks instead of mocks
+
+Task: BE-004
+Agent: @ALEX-BACKEND
+Domain: backend/api
+Proofs: proofs/BE-004/ALEX-BACKEND/
+TimeSpent: 2h30
 ```
 
 ### Preuve requise
@@ -2450,4 +3842,424 @@ feat(task-id): description courte @agentName (+points)
   - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
   - ⚠️ Tester avec différents cas (succès, erreur, données vides)
   - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+---
+
+## 📊 TÂCHES D'AMÉLIORATION ARCHITECTURE (Basées sur analyse détaillée)
+
+### OPS-004 — Centraliser les appels LLM (g4f utils) *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les appels LLM (g4f) sont dispersés dans plusieurs agents (`llm_forecast_agent.py`, `llm_context_builder_agent.py`, `econ_llm_agent.py`, etc.) avec des implémentations similaires mais dupliquées. Centraliser dans `core/llm_utils.py` permettra d'uniformiser retries, timeouts, fallbacks et facilitera la maintenance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Identifier tous les fichiers utilisant g4f: `grep -r "g4f\|G4FClient" copilot-app/backend/src`
+  - [ ] Comprendre les patterns actuels (retries, timeouts, fallbacks)
+
+- **Steps détaillés**:
+
+  1. **Créer le module centralisé `core/llm_utils.py`**
+     - Fichier: `copilot-app/backend/src/core/llm_utils.py`
+     - **Code**:
+     ```python
+     """
+     Centralized LLM utilities for g4f and other providers.
+     Provides unified interface for all LLM calls with retries, fallbacks, and error handling.
+     """
+     from typing import List, Dict, Optional, Any
+     import logging
+     import time
+     import os
+     
+     logger = logging.getLogger(__name__)
+     
+     class LLMUtils:
+         def __init__(self):
+             self.default_model = os.getenv("G4F_DEFAULT_MODEL", "deepseek-ai/DeepSeek-R1-0528")
+             self.fallback_models = os.getenv("G4F_FALLBACK_MODELS", "").split(",") if os.getenv("G4F_FALLBACK_MODELS") else []
+             self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
+             self.timeout = int(os.getenv("LLM_TIMEOUT", "45"))
+             
+         def call_llm(
+             self,
+             messages: List[Dict[str, str]],
+             model: Optional[str] = None,
+             temperature: float = 0.2,
+             max_tokens: int = 1200,
+             json_mode: bool = False
+         ) -> Dict[str, Any]:
+             """
+             Unified LLM call with retries and fallbacks.
+             Returns: {"ok": bool, "content": str, "model": str, "latency_ms": int, "error": Optional[str]}
+             """
+             # Implementation avec retries et fallbacks
+     ```
+     - **Vérification**: Module créé avec interface claire
+
+  2. **Migrer les agents existants vers le module centralisé**
+     - Fichiers à modifier:
+       - `src/agents/llm/llm_forecast_agent.py`
+       - `src/agents/llm/llm_context_builder_agent.py`
+       - `src/analytics/econ_llm_agent.py`
+       - `src/research/llm_client.py`
+     - Remplacer les appels directs à `G4FClient()` par `LLMUtils().call_llm()`
+     - **Vérification**: Tous les agents utilisent le module centralisé
+
+  3. **Ajouter logging structuré**
+     - Logger chaque appel avec: provider, model, latency, success/failure
+     - **Vérification**: Logs visibles dans les fichiers de log
+
+  4. **Tester avec différents modèles**
+     - Tester avec le modèle par défaut
+     - Tester avec fallbacks si le premier échoue
+     - **Vérification**: Fallbacks fonctionnent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/llm_utils.py` créé avec interface unifiée
+  - [ ] Tous les agents migrés vers le module centralisé
+  - [ ] Retries et fallbacks fonctionnent
+  - [ ] Logging structuré en place
+  - [ ] Tests manuels passent (appels LLM fonctionnent)
+  - [ ] Aucune régression (agents fonctionnent comme avant)
+  - [ ] Documentation ajoutée dans le module
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser les agents existants pendant la migration
+  - ⚠️ Tester chaque agent individuellement après migration
+  - ✅ Conserver la compatibilité avec les paramètres existants
+  - ✅ Centraliser aussi la gestion des timeouts et retries
+
+---
+
+### OPS-005 — Orchestration centralisée des agents *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +120 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les agents sont déclenchés manuellement ou via cron/Makefile, ce qui peut mener à des oublis ou des exécutions désordonnées. Un orchestrateur centralisé garantirait l'exécution dans le bon ordre (ingestion → prévisions → agrégation) et faciliterait la maintenance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Comprendre les agents existants: `find copilot-app/backend/src/agents -name "*_agent.py"`
+  - [ ] Vérifier le scheduler actuel: `copilot-app/backend/scheduler/app.py`
+
+- **Steps détaillés**:
+
+  1. **Analyser les agents existants et leurs dépendances**
+     ```bash
+     cd /mnt/utm/copilot-app/backend
+     find src/agents -name "*_agent.py" -o -name "*agent*.py"
+     # Lister les dépendances entre agents
+     ```
+     - **Vérification**: Liste des agents et dépendances établie
+
+  2. **Créer le module orchestrateur**
+     - Fichier: `copilot-app/backend/src/core/agent_orchestrator.py`
+     - **Code**:
+     ```python
+     """
+     Centralized agent orchestrator.
+     Manages execution order, dependencies, and scheduling of all agents.
+     """
+     from typing import List, Dict, Any
+     from datetime import datetime
+     import logging
+     
+     logger = logging.getLogger(__name__)
+     
+     class AgentOrchestrator:
+         def __init__(self):
+             self.agents = {
+                 "ingestion": ["data_harvester_agent", "news_ingest_agent"],
+                 "forecasts": ["equity_forecast_agent", "macro_forecast_agent"],
+                 "aggregation": ["forecast_aggregator_agent"],
+                 "quality": ["data_quality_agent", "update_monitor_agent"],
+                 "llm": ["llm_context_builder_agent", "llm_forecast_agent"]
+             }
+             
+         def run_pipeline(self, stages: List[str] = None) -> Dict[str, Any]:
+             """Run agents in correct order based on stages."""
+             # Implementation
+     ```
+     - **Vérification**: Module créé avec structure claire
+
+  3. **Intégrer avec APScheduler**
+     - Modifier `scheduler/app.py` pour utiliser l'orchestrateur
+     - Configurer les jobs avec dépendances
+     - **Vérification**: Jobs s'exécutent dans le bon ordre
+
+  4. **Ajouter logging et monitoring**
+     - Logger chaque étape d'exécution
+     - Retourner un rapport d'exécution
+     - **Vérification**: Logs clairs et rapport structuré
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `agent_orchestrator.py` créé
+  - [ ] Tous les agents enregistrés avec leurs dépendances
+  - [ ] Pipeline d'exécution fonctionne (ingestion → prévisions → agrégation)
+  - [ ] Intégration avec APScheduler complète
+  - [ ] Logging et monitoring en place
+  - [ ] Script de test: `python -m src.core.agent_orchestrator` fonctionne
+  - [ ] Documentation ajoutée
+
+- **Points d'attention**:
+  - ⚠️ Respecter les dépendances entre agents
+  - ⚠️ Gérer les erreurs (si un agent échoue, décider si continuer ou arrêter)
+  - ✅ Permettre l'exécution manuelle de stages spécifiques
+  - ✅ Documenter la cadence attendue de chaque agent
+
+---
+
+### BE-007 — Cache mémoire pour endpoints fréquents *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +70 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les endpoints `/api/forecasts`, `/api/dashboard/kpis` sont appelés fréquemment mais rechargent les fichiers à chaque requête. Un cache mémoire (LRU) avec invalidation basée sur la date de modification des fichiers réduirait la latence de 50-200ms à <10ms.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Vérifier les endpoints fréquents: `/api/forecasts`, `/api/dashboard/kpis`
+  - [ ] Comprendre la structure de stockage actuelle
+
+- **Steps détaillés**:
+
+  1. **Créer le module de cache**
+     - Fichier: `copilot-app/backend/src/core/cache.py`
+     - **Code**:
+     ```python
+     """
+     In-memory cache for frequently accessed data.
+     Uses file modification time for invalidation.
+     """
+     from functools import lru_cache
+     from pathlib import Path
+     from datetime import datetime
+     from typing import Any, Optional
+     import json
+     
+     class FileBasedCache:
+         def __init__(self, max_size: int = 128):
+             self._cache = {}
+             self._file_times = {}
+             self.max_size = max_size
+             
+         def get(self, key: str, file_path: Path) -> Optional[Any]:
+             """Get cached value if file hasn't changed."""
+             # Check file mtime and compare with cached mtime
+             # Return cached value if still valid
+             
+         def set(self, key: str, value: Any, file_path: Path):
+             """Cache value with file modification time."""
+     ```
+     - **Vérification**: Module créé
+
+  2. **Intégrer dans les endpoints fréquents**
+     - Modifier `/api/forecasts` pour utiliser le cache
+     - Modifier `/api/dashboard/kpis` pour utiliser le cache
+     - **Vérification**: Endpoints utilisent le cache
+
+  3. **Tester la performance**
+     - Mesurer la latence avant/après
+     - Vérifier l'invalidation (modifier un fichier, vérifier que le cache se rafraîchit)
+     - **Vérification**: Latence réduite, invalidation fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/cache.py` créé
+  - [ ] Cache intégré dans `/api/forecasts` et `/api/dashboard/kpis`
+  - [ ] Latence réduite (mesurée avant/après)
+  - [ ] Invalidation basée sur mtime fonctionne
+  - [ ] Tests manuels passent
+  - [ ] Pas de régression (données toujours correctes)
+
+- **Points d'attention**:
+  - ⚠️ Gérer le cas où le fichier n'existe pas encore
+  - ⚠️ Limiter la taille du cache pour éviter la surconsommation mémoire
+  - ✅ Tester avec plusieurs requêtes simultanées
+
+---
+
+### BE-008 — Factoriser utilitaires de chargement de données *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Les fonctions `_load_equity_final()`, `_load_commodity()`, `_latest_dt_under()` sont dupliquées dans plusieurs fichiers (`dash_app/api.py`, `api/routes/forecasts.py`, etc.). Factoriser dans `core/data_access.py` réduira la duplication et facilitera la maintenance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Identifier les fonctions dupliquées: `grep -r "_load_equity\|_latest_dt" copilot-app/backend/src`
+  - [ ] Comprendre les patterns de chargement
+
+- **Steps détaillés**:
+
+  1. **Créer le module `core/data_access.py`**
+     - Fichier: `copilot-app/backend/src/core/data_access.py`
+     - Extraire les fonctions communes:
+       - `find_latest_partition(base_path: Path) -> Optional[str]`
+       - `load_parquet_latest(domain: str, filename: str) -> Optional[pd.DataFrame]`
+       - `load_json_latest(domain: str, filename: str) -> Optional[Dict]`
+     - **Vérification**: Module créé avec fonctions communes
+
+  2. **Migrer les fichiers existants**
+     - Remplacer les implémentations dupliquées par les imports du module
+     - Fichiers à modifier:
+       - `src/dash_app/api.py`
+       - `api/routes/forecasts.py`
+       - Autres fichiers utilisant ces fonctions
+     - **Vérification**: Tous les fichiers utilisent le module centralisé
+
+  3. **Tester que tout fonctionne**
+     - Vérifier que les endpoints retournent toujours les bonnes données
+     - **Vérification**: Aucune régression
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/data_access.py` créé
+  - [ ] Fonctions communes extraites et testées
+  - [ ] Tous les fichiers migrés vers le module centralisé
+  - [ ] Aucune duplication restante
+  - [ ] Tests passent (endpoints fonctionnent)
+  - [ ] Documentation ajoutée
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser les endpoints existants
+  - ⚠️ Gérer les cas d'erreur (fichier absent, corrompu)
+  - ✅ Maintenir la compatibilité avec les signatures existantes
+
+---
+
+### PERF-005 — Lazy loading composants lourds (charts, visualizations) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les composants de graphiques (Tremor charts, Plotly si utilisé) sont chargés même si l'utilisateur ne visite pas les pages qui les utilisent. Le lazy loading de ces composants réduirait le bundle initial de 20-30%.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] Identifier les composants lourds: `grep -r "AreaChart\|LineChart\|BarChart\|Plotly" copilot-app/frontend/webapp/src`
+  - [ ] Vérifier le bundle actuel: `pnpm run build`
+
+- **Steps détaillés**:
+
+  1. **Identifier les composants lourds**
+     - Chercher les imports de Tremor charts
+     - Chercher les imports de Plotly (si utilisé)
+     - **Vérification**: Liste des composants à lazy load
+
+  2. **Convertir en lazy loading**
+     - Fichiers à modifier:
+       - `components/widgets/MacroBoardWidget.tsx`
+       - `components/widgets/MacroDrilldownWidget.tsx`
+       - Autres composants utilisant des charts
+     - **AVANT**:
+     ```typescript
+     import { AreaChart } from '@tremor/react';
+     ```
+     - **APRÈS**:
+     ```typescript
+     const AreaChart = lazy(() => import('@tremor/react').then(m => ({ default: m.AreaChart })));
+     ```
+     - **Vérification**: Composants convertis
+
+  3. **Ajouter Suspense boundaries**
+     - Wrapper chaque usage avec `<Suspense fallback={<Skeleton />}>`
+     - **Vérification**: Suspense boundaries en place
+
+  4. **Vérifier le bundle**
+     - `pnpm run build` et comparer la taille
+     - **Vérification**: Bundle réduit
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les composants de charts en lazy loading
+  - [ ] Suspense boundaries ajoutées
+  - [ ] Bundle initial réduit (vérifié)
+  - [ ] Pages fonctionnent sans erreur
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+
+- **Points d'attention**:
+  - ⚠️ Tester que les charts s'affichent correctement après lazy load
+  - ⚠️ Utiliser un skeleton approprié pendant le chargement
+  - ✅ Note: Certains composants Tremor sont déjà en lazy loading (vérifier avant de dupliquer)
+
+---
+
+### DATA-001 — Cache API externes (FRED, yfinance) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les appels à FRED et yfinance sont faits à chaque requête, ce qui peut être lent et fragile. Cacher les réponses (1 jour pour FRED, 15 min pour yfinance) isolera l'UI des aléas réseau et améliorera la performance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Identifier les appels externes: `grep -r "get_fred_series\|yfinance\|yf.Ticker" copilot-app/backend/src`
+  - [ ] Comprendre la fréquence de mise à jour des données
+
+- **Steps détaillés**:
+
+  1. **Créer le module de cache API externes**
+     - Fichier: `copilot-app/backend/src/core/external_api_cache.py`
+     - **Code**:
+     ```python
+     """
+     Cache for external API calls (FRED, yfinance, etc.).
+     Uses file-based cache with TTL based on data freshness requirements.
+     """
+     from pathlib import Path
+     from datetime import datetime, timedelta
+     import json
+     import hashlib
+     
+     class ExternalAPICache:
+         def __init__(self, cache_dir: Path = Path("data/cache/external_apis")):
+             self.cache_dir = cache_dir
+             self.cache_dir.mkdir(parents=True, exist_ok=True)
+             
+         def get(self, key: str, ttl_hours: int) -> Optional[Any]:
+             """Get cached value if still valid."""
+             
+         def set(self, key: str, value: Any):
+             """Cache value with timestamp."""
+     ```
+     - **Vérification**: Module créé
+
+  2. **Intégrer dans les appels FRED**
+     - Modifier `core/market_data.py` pour utiliser le cache
+     - TTL: 24h pour FRED (données quotidiennes)
+     - **Vérification**: Appels FRED utilisent le cache
+
+  3. **Intégrer dans les appels yfinance**
+     - Modifier les appels yfinance pour utiliser le cache
+     - TTL: 15 min pour yfinance (données plus volatiles)
+     - **Vérification**: Appels yfinance utilisent le cache
+
+  4. **Gérer les erreurs avec fallback**
+     - Si l'API externe échoue, retourner la dernière valeur en cache
+     - Logger l'erreur mais ne pas faire échouer la requête
+     - **Vérification**: Fallback fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/external_api_cache.py` créé
+  - [ ] Cache intégré pour FRED (TTL 24h)
+  - [ ] Cache intégré pour yfinance (TTL 15min)
+  - [ ] Fallback vers cache en cas d'erreur API
+  - [ ] Tests manuels passent
+  - [ ] Performance améliorée (moins d'appels externes)
+
+- **Points d'attention**:
+  - ⚠️ Ne pas cacher trop longtemps (données doivent rester fraîches)
+  - ⚠️ Gérer le cas où le cache est vide (première requête)
+  - ✅ Logger les erreurs API pour monitoring
+  - ✅ Permettre l'invalidation manuelle du cache si nécessaire
 

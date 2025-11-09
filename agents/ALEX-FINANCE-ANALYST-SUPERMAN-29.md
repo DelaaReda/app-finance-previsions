@@ -53,9 +53,10 @@
 - [x] FC-P0-010: Pre-push smoke hook infrastructure (quality gate) - Quality gates with automatic testing
 - [x] FC-NEW-021: Robustness Scoring & PDF Export - Complete scoring system for forecasts and backtests (Enhanced metrics)
 - [x] DOC-DEBUG-PROTOCOL: FRONTEND_DATA_DEBUG.md - Complete debugging protocol for frontend data issues (Enhanced DX)
+- [x] FC-API-032: Prediction Accuracy Analytics - Complete metrics system for forecast validation (Hit-rate, MAE, RMSE, directional accuracy)
 
 ## 📈 Points Gagnés
-- **Total**: 990 points
+- **Total**: 1110 points
 - **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées
