@@ -1,15 +1,15 @@
 """
 Universal Search API Routes - FC-API-035
-Author: ALEX-API-ARCHITECT-SUPERMAN-7
 Task: FC-API-035 - Endpoint /api/search/universal pour recherche globale (stocks, news, briefs, prévisions)
 """
-from fastapi import APIRouter, Query, HTTPException
-from typing import List, Dict, Any, Optional
+
+from fastapi import APIRouter, Query
+from typing import Dict, Any, Optional
+import logging
+import time
+from datetime import datetime
 from core.response import ok, err
 from storage.io import load_json
-import logging
-import re
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -31,69 +31,32 @@ def calculate_similarity(query: str, target: str) -> float:
         # Higher score for substring matches
         return 0.8
     
-    # Check for word matches
+    # Simple word overlap check
     query_words = set(query_lower.split())
-    target_words = set(re.split(r'\W+', target_lower))
-    intersection = query_words.intersection(target_words)
-    union = query_words.union(target_words)
+    target_words = set(target_lower.split())
+    overlap = len(query_words.intersection(target_words))
     
-    if not union:
+    if len(query_words) == 0 or len(target_words) == 0:
         return 0.0
     
-    # Jaccard similarity for word overlap
-    jaccard = len(intersection) / len(union)
-    return jaccard
+    # Jaccard similarity
+    union = len(query_words.union(target_words))
+    return overlap / union if union > 0 else 0.0
 
-
-@router.post("/universal")
 @router.get("/universal")
 async def universal_search_endpoint(
-    q: str = Query(default=None, description="Search query string", min_length=1),
+    q: str = Query(..., description="Search query string", min_length=1),
     type: Optional[str] = Query(None, description="Type of search (stocks, news, briefs, forecasts) or 'all'"),
     tickers: Optional[str] = Query(None, description="Restrict search to specific tickers (comma-separated)"),
-    limit: int = Query(20, le=100, description="Maximum number of results per category"),
-    sort_by: Optional[str] = Query('relevance', description="Sort order: relevance, date, score"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of results per category"),
+    sort_by: str = Query('relevance', description="Sort order: relevance, date, score"),
     date_from: Optional[str] = Query(None, description="Filter from date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Filter to date (YYYY-MM-DD)")
 ):
     """
     Universal search endpoint for stocks, news, briefs, and forecasts
-    
-    **Parameters:**
-    - q: Search query (required)
-    - type: Search specific data type or 'all' (default: all)
-    - tickers: Filter by specific tickers (comma-separated)
-    - limit: Max results per category (default: 20, max: 100)
-    - sort_by: Order results by 'relevance', 'date', 'score' (default: relevance)
-    - date_from, date_to: Date range filters (for news/briefs)
-    
-    **Returns:**
-    ```json
-    {
-      "query": "NVDA",
-      "results": {
-        "stocks": [...],
-        "news": [...],
-        "briefs": [...],
-        "forecasts": [...]
-      },
-      "total": 45,
-      "execution_time": 123,
-      "search_metadata": {
-        "types_searched": ["stocks", "news", "forecasts"],
-        "tickers_filtered": ["NVDA"],
-        "date_range": {"from": "2025-11-01", "to": "2025-11-05"}
-      }
-    }
-    ```
     """
     start_time = time.time()
-    
-    # Validate required parameter
-    if not q:
-        raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
-    
-    logger.info(f"Universal search started: query='{q}', type='{type}', tickers='{tickers}'")
     
     # Normalize search types
     search_types = ['stocks', 'news', 'briefs', 'forecasts']
@@ -111,12 +74,13 @@ async def universal_search_endpoint(
         if 'stocks' in search_types:
             stocks_data = load_json('stocks_universe') or []
             filtered_stocks = []
+            
             for stock in stocks_data:
                 ticker = str(stock.get('ticker', ''))
                 name = str(stock.get('name', ''))
                 
                 # Filter by tickers if specified
-                if ticker_list and ticker not in ticker_list:
+                if ticker_list and ticker.upper() not in ticker_list:
                     continue
                 
                 # Calculate relevance score
@@ -125,7 +89,7 @@ async def universal_search_endpoint(
                 
                 max_relevance = max(ticker_relevance, name_relevance)
                 
-                # Only include if relevance score is above a threshold
+                # Only include if relevance score is above threshold
                 if max_relevance > 0.1:
                     filtered_stocks.append({
                         **stock,
@@ -137,9 +101,8 @@ async def universal_search_endpoint(
             if sort_by == 'relevance':
                 filtered_stocks.sort(key=lambda x: x.get('relevance', 0), reverse=True)
             # Sort by score if available
-            elif sort_by == 'score' and len(filtered_stocks) > 0 and 'score' in filtered_stocks[0]:
-                filtered_stocks.sort(key=lambda x: x.get('score', 0), reverse=True)
-            # Default sorting
+            elif sort_by == 'score':
+                filtered_stocks.sort(key=lambda x: x.get('score', 0) or x.get('composite_score', 0), reverse=True)
             
             results['stocks'] = filtered_stocks[:limit]
             total_results += len(results['stocks'])
@@ -164,7 +127,7 @@ async def universal_search_endpoint(
                 tickers_in_article = article.get('tickers', []) or []
                 
                 # Filter by tickers if specified
-                if ticker_list and not any(ticker in tickers_in_article for ticker in ticker_list):
+                if ticker_list and not any(ticker.upper() in [t.upper() for t in tickers_in_article] for ticker in ticker_list):
                     continue
                 
                 # Calculate relevance score
@@ -206,15 +169,13 @@ async def universal_search_endpoint(
                     for key in ['top_signals', 'top_risks', 'picks', 'highlights', 'signals', 'risks']:
                         if key in brief_data and isinstance(brief_data[key], list):
                             brief_items.extend(brief_data[key])
-            elif isinstance(briefs_data, dict) and 'top_signals' in briefs_data:
-                # Check if briefs_data has top_signals directly
-                for key in ['top_signals', 'top_risks', 'picks', 'highlights', 'signals', 'risks']:
-                    if key in briefs_data and isinstance(briefs_data[key], list):
-                        brief_items.extend(briefs_data[key])
+            # Check if briefs_data itself is an array of items
+            elif isinstance(briefs_data, list):
+                brief_items = briefs_data
             
             filtered_briefs = []
             for item in brief_items:
-                title = str(item.get('title', str(item.get('ticker', '')) or ''))
+                title = str(item.get('title', '') or item.get('ticker', '') or '')
                 content = str(item.get('summary', '') or item.get('description', '') or str(item.get('reason', '')) or '')
                 
                 # Calculate relevance score
@@ -314,15 +275,5 @@ async def universal_search_endpoint(
         logger.error(f"Error in universal search: {str(e)}", exc_info=True)
         return err(f"Universal search failed: {str(e)}", code=500)
 
-
-# Legacy compatibility: alias to /global
-@router.get("/global")
-async def search_global_alias(
-    q: str = Query(..., description="Search query", min_length=1),
-    type: Optional[str] = Query(None, description="Type filter"),
-    limit: int = Query(20, le=100, description="Limit per category")
-):
-    """
-    Alias for universal search - maintains compatibility with existing /global endpoint
-    """
-    return await universal_search(q=q, type=type, limit=limit, sort_by='relevance')
+# Export the router for use in main API app
+search_router = router

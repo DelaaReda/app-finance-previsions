@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import importlib.util
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -263,25 +264,111 @@ def llm_judge_run(model: str, max_er: float = 0.08, min_conf: float = 0.6, ticke
     try:
         _prof.log_event("http", {"path": "/api/llm/judge/run", "model": model, "max_er": max_er, "min_conf": min_conf, "tickers": tickers})
         _log.info("api.llm_judge.start", extra={"ctx": {"model": model, "max_er": max_er, "min_conf": min_conf, "tickers": tickers}})
-        cmd_ctx = ["python3", "-m", "src.agents.llm_context_builder_agent"]
-        if tickers and tickers.strip():
-            cmd_ctx += ["--tickers", tickers.strip()]
-        out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
-        env = {
-            'LLM_USE_G4F': '1',
-            'LLM_MODEL': model,
-            'LLM_MAX_ER': str(max_er),
-        }
-        # Preserve current environment (PATH, locale, proxies, etc.) and override with our vars
-        import os as _os
-        out2 = subprocess.run(
-            ["python3", "scripts/llm_forecast_agent.py"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-            env={**_os.environ, **env},
-        )
-        # Read latest llm_agents.json
+        
+        # Set environment variables for G4F usage
+        import os
+        os.environ['LLM_USE_G4F'] = '1'
+        os.environ['LLM_MODEL'] = model
+        os.environ['LLM_MAX_ER'] = str(max_er)
+        
+        # For efficiency, try to import and call agents directly instead of subprocess
+        # but maintain backward compatibility with subprocess fallback
+        try:
+            # Try direct imports first (more efficient)
+            import importlib.util
+            
+            # Try to run context builder agent directly
+            spec = importlib.util.spec_from_file_location("llm_context_builder", 
+                str(Path(__file__).resolve().parents[2] / "src" / "agents" / "llm_context_builder_agent.py"))
+            if spec and spec.loader:
+                ctx_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(ctx_module)
+                if hasattr(ctx_module, 'main'):
+                    ctx_module.main()
+                    ctx_stdout = "Context builder executed directly"
+                else:
+                    # Fallback to subprocess if no main function
+                    cmd_ctx = ["python3", "-m", "src.agents.llm_context_builder_agent"]
+                    if tickers and tickers.strip():
+                        cmd_ctx += ["--tickers", tickers.strip()]
+                    out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+                    ctx_stdout = (out1.stdout or '').strip()
+            else:
+                # Fallback to subprocess if import fails
+                cmd_ctx = ["python3", "-m", "src.agents.llm_context_builder_agent"]
+                if tickers and tickers.strip():
+                    cmd_ctx += ["--tickers", tickers.strip()]
+                out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+                ctx_stdout = (out1.stdout or '').strip()
+        except Exception as ctx_error:
+            # Fallback to subprocess if direct import fails
+            cmd_ctx = ["python3", "-m", "src.agents.llm_context_builder_agent"]
+            if tickers and tickers.strip():
+                cmd_ctx += ["--tickers", tickers.strip()]
+            out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+            ctx_stdout = f"Direct import failed: {str(ctx_error)}\n{out1.stdout or ''}".strip()
+        
+        # Run forecast agent (similar approach)
+        import importlib.util
+        try:
+            spec = importlib.util.spec_from_file_location("llm_forecast_agent", 
+                str(Path(__file__).resolve().parents[2] / "scripts" / "llm_forecast_agent.py"))
+            if spec and spec.loader:
+                forecast_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(forecast_module)
+                if hasattr(forecast_module, 'main'):
+                    forecast_module.main()
+                    forecast_stdout = "Forecast agent executed directly"
+                else:
+                    # Fallback to subprocess
+                    env = {
+                        'LLM_USE_G4F': '1',
+                        'LLM_MODEL': model,
+                        'LLM_MAX_ER': str(max_er),
+                    }
+                    import os as _os
+                    out2 = subprocess.run(
+                        ["python3", "scripts/llm_forecast_agent.py"],
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                        env={**_os.environ, **env},
+                    )
+                    forecast_stdout = (out2.stdout or '').strip()
+            else:
+                # Fallback to subprocess
+                env = {
+                    'LLM_USE_G4F': '1',
+                    'LLM_MODEL': model,
+                    'LLM_MAX_ER': str(max_er),
+                }
+                import os as _os
+                out2 = subprocess.run(
+                    ["python3", "scripts/llm_forecast_agent.py"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    env={**_os.environ, **env},
+                )
+                forecast_stdout = (out2.stdout or '').strip()
+        except Exception as forecast_error:
+            # Fallback to subprocess if direct import fails
+            env = {
+                'LLM_USE_G4F': '1',
+                'LLM_MODEL': model,
+                'LLM_MAX_ER': str(max_er),
+            }
+            import os as _os
+            out2 = subprocess.run(
+                ["python3", "scripts/llm_forecast_agent.py"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**_os.environ, **env},
+            )
+            forecast_stdout = f"Direct import failed: {str(forecast_error)}\n{out2.stdout or ''}".strip()
+        
+        # Read latest llm_agents.json 
         base = Path('data/forecast')
         parts = sorted(base.glob('dt=*/llm_agents.json'))
         rows: List[Dict[str, Any]] = []
@@ -302,8 +389,8 @@ def llm_judge_run(model: str, max_er: float = 0.08, min_conf: float = 0.6, ticke
         _log.info("api.llm_judge.done", extra={"ctx": {"rows": len(rows)}})
         return _ok({
             "stdout": {
-                "context": (out1.stdout or '').strip(),
-                "forecast": (out2.stdout or '').strip(),
+                "context": ctx_stdout,
+                "forecast": forecast_stdout,
             },
             "rows": rows,
         })

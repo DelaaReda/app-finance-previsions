@@ -1,22 +1,36 @@
-import { IconClock, IconExclamationMark, IconCheck } from '@tabler/icons-react';
-import { Badge, Group, Stack, Text } from '@/ui';
+import { IconClock, IconAlertTriangle, IconCircleCheck, IconAlertCircle } from '@tabler/icons-react';
+import { Badge, Group, Stack, Text, Tooltip } from '@/ui';
+import { formatDistanceStrict } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { isValid } from 'date-fns';
 
 export interface FreshnessBadgeProps {
-  freshness?: string | null;
-  maxAgeHours?: number;
-  maxAgeCriticalHours?: number;
+  freshness?: string | number | null;
+  maxAgeFreshMinutes?: number;
+  maxAgeStaleMinutes?: number;
   dataTestId?: string;
   labelPrefix?: string;
+  showDetailedTime?: boolean;
 }
 
-const toDate = (value?: string | null) => {
+const toDateTime = (value?: string | number | null) => {
   if (!value) return null;
+  if (typeof value === 'number') {
+    // Assume Unix timestamp in seconds if it's a number
+    if (value.toString().length === 10) {
+      // Unix timestamp in seconds
+      return new Date(value * 1000);
+    } else {
+      // Unix timestamp in milliseconds
+      return new Date(value);
+    }
+  }
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || !isValid(date) ? null : date;
 };
 
-const minutesDiff = (value?: string | null) => {
-  const date = toDate(value);
+const minutesDiff = (value?: string | number | null) => {
+  const date = toDateTime(value);
   if (!date) return null;
   const diffMs = Date.now() - date.getTime();
   return Math.round(diffMs / 60000);
@@ -24,10 +38,11 @@ const minutesDiff = (value?: string | null) => {
 
 function FreshnessBadge({
   freshness,
-  maxAgeHours = 24,
-  maxAgeCriticalHours = 48,
+  maxAgeFreshMinutes = 60,   // Fresh if < 1 hour
+  maxAgeStaleMinutes = 360, // Stale if > 6 hours (360 mins)
   dataTestId = 'freshness-badge',
-  labelPrefix = 'Mise à jour',
+  labelPrefix = 'Mis à jour',
+  showDetailedTime = true,
 }: FreshnessBadgeProps) {
   const diffMinutes = minutesDiff(freshness);
 
@@ -36,45 +51,63 @@ function FreshnessBadge({
       <Badge data-testid={dataTestId} color="gray" variant="light">
         <Group gap="xs">
           <IconClock size={14} />
-          <Text fz="xs">{labelPrefix}: inconnue</Text>
+          <Text fz="xs" fw={600}>Données indisponibles</Text>
         </Group>
       </Badge>
     );
   }
 
-  const hours = diffMinutes / 60;
-  const isFresh = hours <= maxAgeHours;
-  const isCritical = hours > maxAgeCriticalHours;
+  const isFresh = diffMinutes <= maxAgeFreshMinutes;
+  const isStale = diffMinutes > maxAgeStaleMinutes;
+  const isOld = diffMinutes > maxAgeFreshMinutes && diffMinutes <= maxAgeStaleMinutes;
 
-  let color = 'indigo';
-  let icon = <IconClock size={14} />;
-  let label = 'À jour';
+  let color = 'teal';
+  let icon = <IconCircleCheck size={14} />;
+  let statusLabel = 'Fraîche';
 
   if (isFresh) {
     color = 'teal';
-    icon = <IconCheck size={14} />;
-    label = 'Fraîche';
-  } else if (isCritical) {
-    color = 'red';
-    icon = <IconExclamationMark size={14} />;
-    label = 'Critique';
-  } else {
+    icon = <IconCircleCheck size={14} />;
+    statusLabel = 'Fraîches';
+  } else if (isOld) {
     color = 'orange';
-    label = 'Ancienne';
+    icon = <IconAlertTriangle size={14} />;
+    statusLabel = 'Anciennes';
+  } else { // isStale
+    color = 'red';
+    icon = <IconAlertCircle size={14} />;
+    statusLabel = 'Périmées';
   }
 
-  const formattedDate = new Date(freshness).toLocaleString('fr-FR');
+  // Format as "Il y a X min/heure/jour"
+  const timeAgo = formatDistanceStrict(
+    toDateTime(freshness)!,
+    new Date(),
+    { addSuffix: true, locale: fr }
+  );
+
+  const detailedTime = showDetailedTime 
+    ? new Date(freshness).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : '';
 
   return (
-    <Badge data-testid={dataTestId} color={color} variant="light">
-      <Group gap="xs">
-        {icon}
-        <Stack gap={0}>
-          <Text fz="xs" fw={600}>{labelPrefix}: {formattedDate}</Text>
-          <Text fz="10px" c="dimmed">{label} • {diffMinutes} min</Text>
-        </Stack>
-      </Group>
-    </Badge>
+    <Tooltip label={detailedTime || "Donnée sans horodatage"}>
+      <Badge data-testid={dataTestId} color={color} variant="light" style={{ cursor: 'help' }}>
+        <Group gap="xs">
+          {icon}
+          <Stack gap={0}>
+            <Text fz="xs" fw={600}>{timeAgo}</Text>
+            <Text fz="10px" c="dimmed">{statusLabel} • {diffMinutes} min</Text>
+          </Stack>
+        </Group>
+      </Badge>
+    </Tooltip>
   );
 }
 

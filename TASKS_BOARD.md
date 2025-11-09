@@ -14,6 +14,12 @@
 - ✅ **Utilisez ce fichier** : `TASKS_BOARD.md`
 - ❌ **Ignorez** : `TASKS_FOR_OTHER_AGENTS.md` (vide/obsolète)
 
+**⚠️ ATTENTION - Sections Obsolètes** :
+- Les sections avec format `FC-XXX` (ex: `FC-DASH-001`, `FC-API-031`) sont dans l'ancien format
+- **Utilisez les tâches BE-XXX, FE-XXX, FS-XXX en haut du document** pour les tâches actuelles
+- Les références à **MUI, Dash, Streamlit** sont obsolètes → Stack actuelle: **Mantine v7 + Tremor v3**
+- Les références à `dash_app/api.py` sont obsolètes (Dash/Streamlit legacy)
+
 **Avant de commencer, lisez** :
 1. `MESSAGE_AGENTS.md` - Message d'accueil et instructions complètes
 2. `AGENTS.md` - Guide de déploiement et règles fondamentales
@@ -55,6 +61,33 @@
 Ici on livre **du vrai**: zéro mock, zéro "quick fix" qui masque les problèmes.
 Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data**.
 
+### 🎨 Stack Technique Actuelle (2025)
+
+**Frontend** :
+- **UI Library** : **Mantine v7.13.5** (pas MUI - Material UI est obsolète)
+- **Charts** : **Tremor v3.18.7** (AreaChart, LineChart, BarChart, DonutChart, BarList)
+- **Icons** : **@tabler/icons-react** (pas @mui/icons-material)
+- **State Management** : TanStack Query (React Query)
+- **Routing** : React Router v6
+
+**Backend** :
+- **Framework** : FastAPI (Python)
+- **Data Sources** : yfinance, FRED API, RSS feeds
+- **Storage** : JSON files + Parquet (DuckDB optionnel)
+- **Scheduler** : APScheduler
+
+**⚠️ IMPORTANT** : Toutes les références à MUI, Dash, ou Streamlit dans ce board sont **obsolètes** et doivent être ignorées ou supprimées. Le projet utilise **Mantine + Tremor** uniquement.
+
+### 🎯 Chantiers Actuels (Priorités)
+
+Les fonctionnalités principales à développer/maintenir :
+
+1. **Market Intelligence** : Forecasts (prévisions ML+LLM), Backtests (performance historique)
+2. **News & Sentiment** : Flux RSS, scoring sentiment, filtres avancés
+3. **Macro Data** : Séries FRED (CPI, VIX, Yield Curve), visualisations Tremor
+4. **Stocks Analysis** : Recherche, screener, indicateurs techniques, scores composites
+5. **Copilot LLM** : Q&A avec contexte, streaming SSE, RAG
+
 **Règles d'or** :
 - ❌ **Pas de mocks** - Toujours utiliser de vraies données
 - ❌ **Pas de réponse vide** - Les endpoints doivent toujours retourner une structure valide
@@ -70,9 +103,9 @@ Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data*
 
 ## 🔥 PRIORITY BOARD — Toutes les Tâches
 
-### Système de Nommage des Tâches
+### ⚠️ Format des Tâches
 
-Les tâches sont organisées par **catégorie** avec des codes clairs :
+**Format actuel (à utiliser)** :
 - **BE-XXX** : Backend (API, routes, services, cache, logging, validations)
 - **FE-XXX** : Frontend (composants, pages, hooks, UI, animations, thèmes)
 - **FS-XXX** : Fullstack (intégrations backend+frontend, exports, notifications)
@@ -83,6 +116,12 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 - **SEC-XXX** : Sécurité
 - **DATA-XXX** : Data/ML
 - **UI-XXX** : UI/UX
+
+**Format legacy (à éviter)** :
+- **FC-XXX** : Ancien format (ex: `FC-DASH-001`, `FC-API-031`)
+  - Certaines sont DONE (historique)
+  - Certaines sont obsolètes (références MUI/Dash)
+  - **Consultez les tâches BE/FE/FS en haut du document pour les tâches actuelles**
 
 ### Legend
 - **Effort**: S (≤0.5j) • M (1–2j) • L (3–5j)
@@ -1076,7 +1115,7 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### FE-005 — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +40 pts  
 **Priorité**: 🔴 CRITIQUE
 
@@ -1254,7 +1293,7 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 #### FS-001 — Déclarations `import.meta.env` fiables *(Effort S)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Points**: +50 pts  
 **Priorité**: 🔴 CRITIQUE
 
@@ -1617,69 +1656,261 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 **Points**: +90 pts  
 **Priorité**: 🔴 CRITIQUE
 
-- **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs). Actuellement, le copilot n'utilise pas de streaming et n'a pas de contexte sur les prévisions sélectionnées.
+- **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs) avec streaming pour une meilleure UX. Actuellement, `Copilot.tsx` utilise `useCopilotQuery` qui fait un appel POST normal (pas de streaming). Le service `askCopilotStream` existe déjà dans `src/services/copilot.ts` mais n'est pas utilisé. Il faut migrer la page vers le streaming et ajouter la gestion du contexte.
 
 - **Prérequis**:
   - [ ] Backend démarré et accessible sur http://localhost:8050
-  - [ ] Vérifier que `/api/copilot/ask` existe
+  - [ ] Vérifier que `/api/copilot/ask` existe: `curl -X POST http://localhost:8050/api/copilot/ask -H "Content-Type: application/json" -d '{"question": "test"}'`
   - [ ] Page Copilot accessible sur http://localhost:5173/copilot
-  - [ ] Vérifier si le backend supporte SSE/streaming
+  - [ ] Lire les fichiers existants: `src/services/copilot.ts`, `src/pages/Copilot.tsx`, `src/hooks/useCopilot.ts`
 
 - **Steps détaillés**:
 
-  1. **Vérifier le support streaming du backend**
-     ```bash
-     curl -X POST http://localhost:8050/api/copilot/ask \
-       -H "Content-Type: application/json" \
-       -d '{"question": "test"}'
+  1. **Vérifier le service streaming existant**
+     - Fichier: `src/services/copilot.ts`
+     - Vérifier que `askCopilotStream` existe et fonctionne
+     - Tester avec un appel simple:
+     ```typescript
+     import { askCopilotStream } from '@/services/copilot';
+     
+     askCopilotStream(
+       { prompt: "test", context: {} },
+       (delta) => console.log("Delta:", delta),
+       { onDone: () => console.log("Done"), onError: (e) => console.error(e) }
+     );
      ```
-     - Notez si le backend supporte déjà le streaming
-     - **Vérification**: État actuel du backend
+     - **Vérification**: Le service fonctionne
 
-  2. **Créer le service `askCopilotSSE` avec gestion abort**
-     - Fichier: `src/services/copilot.service.ts`
-     - Implémenter SSE ou fetch stream avec `AbortController`
-     - **Vérification**: Le service peut être importé
+  2. **Créer le hook `useCopilotStream`**
+     - Fichier: `src/hooks/useCopilotStream.ts` (créer)
+     - **Code**:
+     ```typescript
+     import { useState, useCallback, useRef } from 'react';
+     import { askCopilotStream } from '@/services/copilot';
+     
+     export function useCopilotStream() {
+       const [isStreaming, setIsStreaming] = useState(false);
+       const [currentResponse, setCurrentResponse] = useState('');
+       const [error, setError] = useState<Error | null>(null);
+       const abortControllerRef = useRef<AbortController | null>(null);
+       
+       const ask = useCallback(async (prompt: string, context?: any) => {
+         setIsStreaming(true);
+         setCurrentResponse('');
+         setError(null);
+         
+         const controller = new AbortController();
+         abortControllerRef.current = controller;
+         
+         try {
+           await askCopilotStream(
+             { prompt, context },
+             (delta) => {
+               setCurrentResponse(prev => prev + delta);
+             },
+             {
+               signal: controller.signal,
+               onDone: () => {
+                 setIsStreaming(false);
+                 abortControllerRef.current = null;
+               },
+               onError: (err) => {
+                 setError(err);
+                 setIsStreaming(false);
+                 abortControllerRef.current = null;
+               },
+             }
+           );
+         } catch (err) {
+           if (err instanceof Error && err.name !== 'AbortError') {
+             setError(err);
+           }
+           setIsStreaming(false);
+           abortControllerRef.current = null;
+         }
+       }, []);
+       
+       const abort = useCallback(() => {
+         if (abortControllerRef.current) {
+           abortControllerRef.current.abort();
+           setIsStreaming(false);
+         }
+       }, []);
+       
+       const reset = useCallback(() => {
+         setCurrentResponse('');
+         setError(null);
+         abort();
+       }, [abort]);
+       
+       return {
+         ask,
+         abort,
+         reset,
+         isStreaming,
+         currentResponse,
+         error,
+       };
+     }
+     ```
+     - **Vérification**: Hook créé, `pnpm run typecheck` passe
 
-  3. **Créer le hook `useCopilotStream`**
-     - Fichier: `src/hooks/useCopilotStream.ts`
-     - Gérer l'état de streaming, les chunks, et l'abort
-     - **Vérification**: Le hook fonctionne
+  3. **Modifier `Copilot.tsx` pour utiliser le streaming**
+     - Fichier: `src/pages/Copilot.tsx`
+     - Remplacer `useCopilotQuery` par `useCopilotStream`
+     - **Code**:
+     ```typescript
+     import { useCopilotStream } from '@/hooks/useCopilotStream';
+     import { useEffect } from 'react';
+     
+     const { ask, isStreaming, currentResponse, error, abort, reset } = useCopilotStream();
+     const [conversation, setConversation] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+     
+     const handleSubmit = async () => {
+       if (!question.trim()) return;
+       
+       const userMessage = question.trim();
+       setQuestion('');
+       setConversation(prev => [...prev, { role: 'user', content: userMessage }]);
+       
+       // Ajouter un message assistant vide qui sera mis à jour en streaming
+       setConversation(prev => [...prev, { role: 'assistant', content: '' }]);
+       
+       // Démarrer le streaming
+       await ask(userMessage, { /* contexte optionnel */ });
+     };
+     
+     // Mettre à jour le dernier message assistant avec currentResponse
+     useEffect(() => {
+       if (currentResponse) {
+         setConversation(prev => {
+           const newConv = [...prev];
+           const lastMsg = newConv[newConv.length - 1];
+           if (lastMsg && lastMsg.role === 'assistant') {
+             lastMsg.content = currentResponse;
+           }
+           return newConv;
+         });
+       }
+     }, [currentResponse]);
+     ```
+     - **Vérification**: Streaming fonctionne, texte apparaît progressivement
 
-  4. **Modifier `Copilot.tsx` pour utiliser le streaming**
-     - Zone chat avec affichage progressif
-     - Boutons rapides ("Explique la prévision", "Risques & invalidation")
-     - **Vérification**: Le streaming fonctionne
+  4. **Ajouter boutons rapides ("Explique la prévision", "Risques & invalidation")**
+     - Ajouter des boutons pré-remplis dans l'UI
+     - **Code**:
+     ```typescript
+     <Group gap="xs" mb="md">
+       <Button
+         variant="light"
+         size="sm"
+         onClick={() => {
+           setQuestion("Explique-moi cette prévision en détail");
+           handleSubmit();
+         }}
+       >
+         Explique la prévision
+       </Button>
+       <Button
+         variant="light"
+         size="sm"
+         onClick={() => {
+           setQuestion("Quels sont les risques et facteurs d'invalidation de cette prévision?");
+           handleSubmit();
+         }}
+       >
+         Risques & invalidation
+       </Button>
+     </Group>
+     ```
+     - **Vérification**: Boutons fonctionnent
 
-  5. **Ajouter la gestion du contexte**
-     - Récupérer la prévision sélectionnée
-     - Passer le contexte au service
-     - **Vérification**: Le contexte est transmis
+  5. **Ajouter la gestion du contexte (prévision sélectionnée)**
+     - Si l'utilisateur vient de la page Forecasts avec une prévision sélectionnée, passer le contexte
+     - **Code**:
+     ```typescript
+     // Récupérer le contexte depuis l'URL ou le state
+     const [selectedForecast, setSelectedForecast] = useState<any>(null);
+     
+     const handleSubmit = async () => {
+       // ...
+       await ask(userMessage, {
+         forecast: selectedForecast, // Contexte optionnel
+         filters: { /* filtres actifs */ },
+       });
+     };
+     ```
+     - **Vérification**: Contexte transmis au backend
 
-  6. **Gestion erreurs/réessai**
-     - Ajouter un bouton "Réessayer"
-     - Logger les erreurs
-     - **Vérification**: Le réessai fonctionne
+  6. **Ajouter bouton "Arrêter" pendant le streaming**
+     - Afficher un bouton "Arrêter" quand `isStreaming === true`
+     - **Code**:
+     ```typescript
+     {isStreaming && (
+       <Button variant="light" color="red" onClick={abort}>
+         Arrêter
+       </Button>
+     )}
+     ```
+     - **Vérification**: Bouton arrête le streaming
 
-  7. **Sauvegarder le transcript**
+  7. **Gestion erreurs/réessai**
+     - Afficher l'erreur et ajouter un bouton "Réessayer"
+     - **Code**:
+     ```typescript
+     {error && (
+       <Alert color="red" title="Erreur" mb="md">
+         {error.message}
+         <Button mt="xs" size="xs" onClick={() => {
+           reset();
+           handleSubmit(); // Réessayer la dernière question
+         }}>
+           Réessayer
+         </Button>
+       </Alert>
+     )}
+     ```
+     - **Vérification**: Réessai fonctionne
+
+  8. **Sauvegarder le transcript (optionnel pour preuve)**
      - Fonction pour sauvegarder dans `proofs/FS-002/`
-     - **Vérification**: Le transcript peut être sauvegardé
+     - **Code**:
+     ```typescript
+     const saveTranscript = () => {
+       const transcript = {
+         timestamp: new Date().toISOString(),
+         conversation,
+       };
+       // Sauvegarder (ex: download JSON)
+       const blob = new Blob([JSON.stringify(transcript, null, 2)], { type: 'application/json' });
+       const url = URL.createObjectURL(blob);
+       const a = document.createElement('a');
+       a.href = url;
+       a.download = `copilot-transcript-${Date.now()}.json`;
+       a.click();
+     };
+     ```
+     - **Vérification**: Transcript peut être sauvegardé
 
 - **DoD (Definition of Done)**:
-  - [ ] Service `askCopilotSSE` créé avec support SSE/streaming
   - [ ] Hook `useCopilotStream` créé avec gestion abort
-  - [ ] Page `Copilot.tsx` utilise le streaming
-  - [ ] Boutons rapides fonctionnent
-  - [ ] Contexte (prévision sélectionnée) est transmis
+  - [ ] Page `Copilot.tsx` utilise le streaming (texte apparaît progressivement)
+  - [ ] Boutons rapides fonctionnent ("Explique la prévision", "Risques & invalidation")
+  - [ ] Contexte (prévision sélectionnée) peut être transmis (optionnel)
+  - [ ] Bouton "Arrêter" fonctionne pendant le streaming
   - [ ] Gestion erreurs/réessai implémentée
-  - [ ] Transcript peut être sauvegardé
+  - [ ] Transcript peut être sauvegardé (optionnel)
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
   - [ ] Vidéo/GIF du streaming déposé dans `proofs/FS-002/`
 
 - **Points d'attention**:
-  - ⚠️ Si le backend ne supporte pas SSE, utiliser fetch avec streaming
-  - ⚠️ Gérer l'abort correctement
-  - ⚠️ Le contexte doit être optionnel
-  - ✅ Tester avec différentes longueurs de réponse
+  - ⚠️ Le service `askCopilotStream` existe déjà dans `src/services/copilot.ts`, ne pas le recréer
+  - ⚠️ Gérer l'abort correctement (ne pas laisser de requêtes en cours)
+  - ⚠️ Le contexte doit être optionnel (ne pas casser si pas de prévision sélectionnée)
+  - ⚠️ Tester avec différentes longueurs de réponse (courtes et longues)
+  - ✅ Note: Le backend doit supporter le streaming (vérifier avec curl d'abord)
+  - ✅ Améliorer l'UX: afficher un indicateur de streaming (typing indicator)
 
 #### FS-003 — Résumé & equity curve *(Effort M)*
 
@@ -2156,18 +2387,20 @@ Les tâches sont organisées par **catégorie** avec des codes clairs :
 
 ---
 
-#### BE-006 — POST /api/backtests/run endpoint *(Effort M)*
+#### BE-006 — POST /api/backtests/run endpoint *(Effort M)* - CLAIMED
 
-**Statut**: AVAILABLE  
+**Statut**: CLAIMED  
 **Points**: +100 pts  
 **Priorité**: 🟡 ÉLEVÉE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 - **Why**: Actuellement seulement GET `/api/backtests` existe. Pas de POST pour lancer un backtest interactif avec paramètres depuis l'UI. Cette fonctionnalité est mentionnée dans l'analyse ChatGPT.
 
 - **Prérequis**:
-  - [ ] Backend démarré
-  - [ ] Vérifier que GET `/api/backtests` existe
-  - [ ] Comprendre la structure des backtests existants
+  - [x] Backend démarré
+  - [x] Vérifié que GET `/api/backtests` existe
+  - [x] Compris la structure des backtests existants
 
 - **Steps détaillés**:
 
@@ -2898,26 +3131,30 @@ This document outlines the tasks required to implement the new Dashboard with:
 - Freshness system
 - Never-empty protections
 
-## FC-DASH-001 — Dashboard Component Implementation (MUI version - OBSOLETE)
-**Status**: OBSOLETE (migré à Mantine+Tremor)
-**Owner**: Multiple agents (LENA initially, transitionné)
-
-**But**: Implémentation initiale du Dashboard avec MUI. Cette tâche est maintenant obsolète suite à la directive de migration vers Mantine + Tremor.
-
-**Fichiers**
-* `frontend/webapp/src/pages/Dashboard.tsx` (ancienne version MUI supprimée)
-* Anciennement: MUI components (`@mui/*`)
-
-**Historique**
-- Initialement implémenté avec MUI
-- Supprimé par LENA-LLM-STRATEGIST-WONDERWOMAN-21 dans le cadre de la migration UI
-- Remplacé par nouvelle implémentation Mantine+Tremor (voir notes ci-dessous)
-
-**Statut**: REMPLACÉ par nouvelle directive UI: Mantine + Tremor
+---
 
 ---
 
-## FC-DASH-002 — Dashboard Mantine+Tremor (Nouvelle implémentation)
+## ⚠️ SECTIONS LEGACY (Format FC-XXX) - À CONSULTER AVEC PRÉCAUTION
+
+Les sections suivantes utilisent l'ancien format de nommage `FC-XXX` et peuvent contenir des références obsolètes. **Consultez les tâches BE/FE/FS en haut du document pour les tâches actuelles.**
+
+**⚠️ IMPORTANT** :
+- Les tâches `FC-DASH-*` font référence à l'ancienne migration MUI → Mantine (maintenant complétée)
+- Les références à `dash_app/api.py` sont obsolètes (Dash/Streamlit legacy)
+- Utilisez les tâches **BE-XXX, FE-XXX, FS-XXX** en haut du document pour les tâches actuelles
+
+### FC-DASH-001 — Dashboard Component Implementation (MUI version - OBSOLETE) ❌
+
+**⚠️ CETTE TÂCHE EST OBSOLÈTE - NE PAS UTILISER**
+
+Cette section fait référence à l'ancienne implémentation avec MUI qui a été remplacée par Mantine + Tremor. Le Dashboard actuel utilise **Mantine v7 + Tremor v3** uniquement.
+
+**Statut**: REMPLACÉ - Dashboard actuel utilise Mantine + Tremor (voir BE-001, FE-001 pour les tâches actuelles)
+
+---
+
+### FC-DASH-002 — Dashboard Mantine+Tremor (Nouvelle implémentation)
 **Status**: DONE by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
 **Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
 
@@ -3507,12 +3744,12 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ## FC-API-033 — User Preferences
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Endpoints `/api/user/preferences` pour gérer les préférences utilisateur (thèmes favoris, univers, seuils).
 
 **Fichiers**
-* `backend/api/routes/user.py`
+* `backend/routes/user.py`
 * `backend/services/user_prefs.py`
 * `backend/models/user_preferences.py`
 * `data/users/preferences.json` (stockage local pour MVP)
@@ -3538,6 +3775,8 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 * Système de sauvegarde/restauration fonctionnel
 * Compatible avec intégration UI pour stockage des préférences
 * Never-empty - retourne valeurs par défaut si pas de préférences
+
+**Preuve**: Système complet de gestion des préférences utilisateur implémenté avec modèle de préférences avancées (thème, univers, disposition tableau de bord, seuils d'alerte, tolérance au risque, filtres d'actualités, filtres de prévisions, rafraîchissement des données, paramètres de vie privée), service de gestion des préférences avec validation et fallbacks, endpoint API `/api/user/preferences` avec méthodes GET/PUT/POST pour lecture/mise à jour/réinitialisation des préférences, endpoint `/api/user/preferences/options` pour les options de configuration UI, et intégration avec le système de cache pour garantir never-empty avec valeurs par défaut intelligentes.
 
 ---
 
@@ -3579,10 +3818,11 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ## FC-API-035 — Universal Search
 
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED to claim
 
 **But**: Endpoint `/api/search/universal` pour recherche globale (stocks, news, briefs, prévisions).
 
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 **Fichiers**
 * `backend/api/routes/search.py`
 * `backend/services/universal_search.py`
@@ -3611,9 +3851,49 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 * Never-empty - même si pas de résultats correspondants
 ---
 
+---
+
+## 📊 CHANTIERS ACTUELS - Market Intelligence
+
+Les fonctionnalités principales en développement :
+
+### 🎯 Forecasts (Prévisions ML+LLM)
+- Endpoint: `/api/forecasts` - Prévisions multi-horizons avec scores de confiance
+- Page: `/forecasts` - Visualisation avec filtres (horizon, asset_type, min_confidence)
+- Tâches: BE-001 (✅ DONE), FS-003 (AVAILABLE)
+
+### 📰 News & Sentiment
+- Endpoint: `/api/news/feed` - Flux RSS avec scoring sentiment, pagination, filtres
+- Page: `/news` - Feed avec lazy loading, filtres avancés
+- Tâches: BE-003 (AVAILABLE), FE-004 (AVAILABLE)
+
+### 📈 Macro Data
+- Endpoint: `/api/macro/series` - Séries FRED (CPI, VIX, Yield Curve) avec cache
+- Page: `/macro` - Graphiques Tremor (AreaChart, LineChart, BarChart)
+- Tâches: BE-002 (AVAILABLE)
+
+### 📊 Stocks Analysis
+- Endpoints: `/api/stocks/search`, `/api/stocks/{ticker}`, `/api/stocks/screener`
+- Page: `/stocks` - Recherche, screener, analyse technique
+- Tâches: BE-004 (✅ DONE), FE-003 (✅ DONE)
+
+### 🧪 Backtests
+- Endpoint: `/api/backtests` - Performance historique, métriques (CAGR, maxDD, win rate)
+- Page: `/backtests` - Visualisation avec equity curve
+- Tâches: FS-003 (AVAILABLE), BE-006 (AVAILABLE)
+
+### 🤖 Copilot LLM
+- Endpoint: `/api/copilot/ask` - Q&A avec contexte, streaming SSE
+- Page: `/copilot` - Interface conversationnelle
+- Tâches: FS-002 (AVAILABLE)
+
+---
+
 ## 🚨 CRITICAL TASKS - NO-MOCKS DATA INTEGRATION
 
-These tasks address the critical findings from the end-to-end integration tests that revealed real data is missing from key endpoints.
+Ces tâches adressent les problèmes critiques où les endpoints manquent de données réelles.
+
+**⚠️ Note**: Les règles "no mocks" sont toujours valides. Ces tâches visent à s'assurer que les pipelines d'ingestion produisent des données réelles.
 
 ---
 
@@ -3907,7 +4187,7 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 
 ## FC-QM-CODACY-004 — Analyse fichier spécifique + corrections ciblées
 
-**Status**: AVAILABLE to claim
+**Status**: IN-PROGRESS by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Exécuter l'analyse Codacy sur des fichiers spécifiques identifiés comme problématiques et corriger les points critiques.
 
@@ -3945,6 +4225,12 @@ Suite à la mise en place de la directive qualité, voici les tâches spécifiqu
 * Problèmes identifiés et corrigés dans chaque fichier
 * Fonctionnalité des composants critiques maintenue ou améliorée
 * Rapports SARIF générés par fichier avec preuves des corrections
+
+**Progress**: 
+- Phase 1: Amélioration qualité fichier backend/api/main.py (corrections imports dupliqués, gestion erreurs améliorée, structure réponses standardisée, fallbacks never-empty renforcés).
+- Phase 2: Amélioration qualité fichier backend/services/cache_layer.py (renforcement sécurité cache keys, ajout TTL optionnel, amélioration fallbacks, ajout stats cache, isolation erreurs renforcée).
+- Phase 3: Amélioration sécurité fichier backend/storage/io.py (prévention traversal chemins, nettoyage clés, validation entrées, protection évasion répertoire, gestion erreurs améliorée).
+- Phase 4: En cours - Analyse de frontend API client et ErrorBoundary components.
 
 ---
 
@@ -4397,12 +4683,13 @@ TimeSpent: 2h30
 **Points**: +60 pts  
 **Priorité**: 🟢 MOYENNE
 
-- **Why**: Les fonctions `_load_equity_final()`, `_load_commodity()`, `_latest_dt_under()` sont dupliquées dans plusieurs fichiers (`dash_app/api.py`, `api/routes/forecasts.py`, etc.). Factoriser dans `core/data_access.py` réduira la duplication et facilitera la maintenance.
+- **Why**: Les fonctions `_load_equity_final()`, `_load_commodity()`, `_latest_dt_under()` sont dupliquées dans plusieurs fichiers. Factoriser dans `core/data_access.py` réduira la duplication et facilitera la maintenance.
 
 - **Prérequis**:
   - [ ] Backend démarré
   - [ ] Identifier les fonctions dupliquées: `grep -r "_load_equity\|_latest_dt" copilot-app/backend/src`
   - [ ] Comprendre les patterns de chargement
+  - [ ] **Note**: `dash_app/api.py` est obsolète (Dash/Streamlit legacy) - ne pas utiliser
 
 - **Steps détaillés**:
 
@@ -4417,9 +4704,11 @@ TimeSpent: 2h30
   2. **Migrer les fichiers existants**
      - Remplacer les implémentations dupliquées par les imports du module
      - Fichiers à modifier:
-       - `src/dash_app/api.py`
        - `api/routes/forecasts.py`
+       - `api/routes/stocks.py`
+       - `api/routes/macro.py`
        - Autres fichiers utilisant ces fonctions
+     - **⚠️ Note**: Ignorer `src/dash_app/api.py` (obsolète - Dash/Streamlit legacy)
      - **Vérification**: Tous les fichiers utilisent le module centralisé
 
   3. **Tester que tout fonctionne**
@@ -4569,3 +4858,203 @@ TimeSpent: 2h30
   - ✅ Logger les erreurs API pour monitoring
   - ✅ Permettre l'invalidation manuelle du cache si nécessaire
 
+
+---
+
+## 🚀 TÂCHES CRITIQUES D'ARCHITECTURE - Issues identifiés dans l'analyse complète
+
+Suite à l'analyse architecture complète reçue, voici les tâches prioritaires pour améliorer la stabilité, performance et qualité du système.
+
+---
+
+## FC-ARCH-UTILS-001 — Factorisation des utilitaires communs
+
+**Status**: AVAILABLE to claim
+
+**But**: Regrouper les utilitaires de chargement fichier et lecture de données pour éviter les duplications.
+
+**Fichiers**
+* `backend/src/core/data_access.py` (à créer)
+* `backend/src/utils/file_loader.py` (à créer)
+* `backend/src/api/routes/*` (migration vers les utilitaires partagés)
+* `backend/src/services/*` (migration vers les utilitaires partagés)
+
+**Étapes**
+1. **Identifier les duplications**:
+   - Trouver tous les usages de `_latest_dt_under`, `_load_equity_final`, etc.
+   - Regrouper les fonctions similaires dans `core/data_access.py`
+
+2. **Créer les utilitaires partagés**:
+   - `load_latest_snapshot(key, default=None)` - charge la dernière partition
+   - `ensure_safe_array(data, default=[])` - garantit never-empty pour collections
+   - `get_last_update(path)` - extrait timestamp de fraîcheur
+   - `load_parquet_safe(path, default=pd.DataFrame())` - charge parquet en évitant erreurs
+
+3. **Migrer les usages existants**:
+   - Changer les endpoints pour utiliser les utilitaires partagés
+   - Éliminer les réimplémentations locales
+   - Tester que les fonctionnalités restent intactes
+
+**DoD**
+* Aucune duplication des fonctions de chargement de données
+* Tous les endpoints utilisent les mêmes utilitaires partagés
+* Meilleure fiabilité des accès disque avec gestion d'erreurs centralisée
+* Performance optimisée avec code factorisé
+* Preuve: suppression de 5+ fonctions dupliquées, même comportement fonctionnel
+
+---
+
+## FC-ARCH-ERRORS-002 — Renforcement de la gestion d'erreurs
+
+**Status**: AVAILABLE to claim
+
+**But**: Remplacer les gestionnaires d'erreurs silencieux par des logs détaillés et des réponses propres.
+
+**Fichiers**
+* `backend/src/api/routes/*.py` (amélioration try/except)
+* `backend/src/services/*.py` (amélioration gestion d'erreurs)
+* `backend/src/jobs/*.py` (amélioration gestion d'erreurs)
+* `backend/src/core/error_handler.py` (à créer)
+
+**Étapes**
+1. **Identifier les `except ...: pass`**:
+   - Chercher tous les usages de `pass` dans les blocs except
+   - Remplacer par une gestion d'erreur appropriée (log + fallback)
+
+2. **Créer un handler d'erreur centralisé**:
+   - `log_error(error, context, level="ERROR")` avec contexte détaillé
+   - `safe_call(func, fallback, error_msg)` pour envelopper les appels risqués
+   - `log_structured(data, level="INFO")` pour logging uniforme
+
+3. **Mettre en place proper error responses**:
+   - Remplacer les réponses vides par des structures avec `error: {code, message}`
+   - Maintenir le contrat never-empty même en cas d'erreur
+   - Fournir des messages utiles à l'UI pour l'affichage
+
+**DoD**
+* Tous les `except ...: pass` remplacés par des handlers appropriés
+* Logging centralisé et structuré pour toutes les erreurs
+* Les endpoints servent toujours des réponses structurées même en cas d'erreur
+* Aucune erreur d'origine cachée dans les logs
+* Preuve: capture de logs montrant erreurs structurées et contexte
+
+---
+
+## FC-ARCH-SCHEDULER-003 — Orchestrateur central des agents
+
+**Status**: AVAILABLE to claim
+
+**But**: Créer un scheduler centralisé pour orchestrer les agents dans le bon ordre et éviter les oublis.
+
+**Fichiers**
+* `backend/src/scheduler/app.py` (à étendre)
+* `backend/src/scheduler/job_definitions.py` (à créer)
+* `backend/src/agents/orchestrator.py` (à créer)
+* `backend/src/jobs/scheduler_main.py` (à créer)
+
+**Étapes**
+1. **Définir les dépendances entre jobs**:
+   - Ingestion → Prévisions → Agrégation → Briefs → Backtests
+   - Créer un graphique de dépendance clair
+
+2. **Implémenter orchestrateur central**:
+   - `run_pipeline_pipeline(order=[ingestion, forecasts, aggregation, briefs, backtests])`
+   - Gestion des erreurs/failures intermédiaires
+   - Logging de progression des jobs
+
+3. **Scheduler centralisé**:
+   - Tâches planifiées dans un seul fichier
+   - Coordination des cadences (journalier, horaire, hebdomadaire)
+   - Monitoring de l'état des jobs
+
+**DoD**
+* Pipeline d'agents orchestré dans le bon ordre
+* Tâches planifiées centralisées (pas de cron分散é dans plusieurs fichiers)
+* Suivi de progression des jobs avec logs détaillés
+* Gestion des erreurs sans arrêter le reste du pipeline
+* Preuve: logs montrant l'exécution séquentielle des jobs avec dépendances respectées
+
+---
+
+## FC-ARCH-ENDPOINTS-004 — Optimisation des endpoints pour performance
+
+**Status**: AVAILABLE to claim
+
+**But**: Réduire la charge des endpoints critiques pour améliorer la performance et la réactivité.
+
+**Fichiers**
+* `backend/src/api/routes/forecasts.py`
+* `backend/src/api/routes/news.py`
+* `backend/src/api/routes/macro.py`
+* `backend/src/api/routes/stocks.py`
+* `backend/src/services/cache_service.py`
+
+**Étapes**
+1. **Analyser les endpoints les plus lents**:
+   - Utiliser les logs pour identifier les endpoints avec temps de réponse élevé
+   - Vérifier les calculs répétés à chaque requête
+
+2. **Optimiser avec caches et pré-calculs**:
+   - Pré-calculer les données lourdes en amont
+   - Mettre en cache les réponses (TTL approprié)
+   - Réduire la taille des réponses (pagination, filtrage)
+
+3. **Vérifier la logique côté serveur vs côté client**:
+   - Le tri et le filtrage devraient être faits côté serveur pour réduire la charge client
+   - Éviter les transferts de grosses structures non nécessaires
+
+**DoD**
+* Temps de réponse des endpoints < 200ms (sauf exceptions justifiées)
+* Aucun calcul lourd pendant les requêtes utilisateurs
+* Structures de réponses optimisées (moins de données inutiles transférées)
+* Caching efficace mis en place pour les endpoints coûteux
+* Preuve: mesure de performance avant/après optimisation
+
+---
+
+## FC-ARCH-CODE-QUALITY-005 — Nettoyage du code mort et unification
+
+**Status**: AVAILABLE to claim
+
+**But**: Supprimer les duplications et le code mort pour améliorer la maintenabilité.
+
+**Fichiers**
+* `backend/src/dash_app/*` (code legacy à comparer avec API v2)
+* `backend/src/api/main.py` (vs `main_v2.py`)
+* `backend/src/api/routes/brief_routes.py` (vs `routes/brief.py`)
+* `backend/src/api/services/news_service.py` (vs autres services)
+
+**Étapes**
+1. **Audit du code existant**:
+   - Identifier les endpoints/fonctions redondants
+   - Trouver les parties inutilisées du code
+   - Comparer les versions legacy avec les nouvelles
+
+2. **Consolider les duplications**:
+   - Supprimer les routes en double
+   - Fusionner les services similaires
+   - Unifier les schémas de réponse
+
+3. **Nettoyer le code mort**:
+   - Supprimer les imports inutilisés
+   - Éliminer les fonctions non appelées
+   - Clarifier les responsabilités de chaque module
+
+**DoD**
+* Code base nettoyé de 10% de duplications/redondances
+* Toutes les routes unifiées et claires
+* Aucune fonction importée mais non utilisée
+* Documentation mise à jour des responsabilités de chaque module
+* Preuve: comparaison de taille de code avant/après nettoyage
+
+---
+
+## 🎯 Priorité d'exécution
+
+1. **FC-ARCH-ERRORS-002** (gestion d'erreurs) — pour éviter les plantages silencieux
+2. **FC-ARCH-UTILS-001** (utilitaires communs) — pour éviter duplication
+3. **FC-ARCH-CODE-QUALITY-005** (nettoyage) — pour clarifier structure
+4. **FC-ARCH-SCHEDULER-003** (orchestration) — pour pipeline stable
+5. **FC-ARCH-ENDPOINTS-004** (optimisation) — pour performance
+
+Ces tâches sont critiques pour la qualité, la performance et la maintenabilité du système.
