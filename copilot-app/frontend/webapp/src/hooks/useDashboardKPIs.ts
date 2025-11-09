@@ -7,23 +7,56 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/api/client';
 
 export interface DashboardKPIs {
-  forecasts: {
+  // KPIs basiques
+  last_forecast_dt?: string | null;
+  total_forecasts?: number;
+  tickers_tracked?: number;
+  available_horizons?: string[];
+  
+  // Top signaux et risques (nouveau)
+  top_signals?: Array<{
+    ticker: string;
+    direction?: string;
+    confidence?: number;
+    expected_return?: number;
+    horizon?: string;
+    reason?: string;
+    composite_score?: number;
+    macro_score?: number;
+    technical_score?: number;
+    news_score?: number;
+  }>;
+  top_risks?: Array<{
+    ticker: string;
+    direction?: string;
+    confidence?: number;
+    expected_return?: number;
+    horizon?: string;
+    reason?: string;
+    composite_score?: number;
+    macro_score?: number;
+    technical_score?: number;
+    news_score?: number;
+  }>;
+  
+  // Structure legacy (pour compatibilité)
+  forecasts?: {
     total: number;
     high_confidence: number;
     avg_confidence: number;
     bullish: number;
     bearish: number;
   };
-  backtests: {
+  backtests?: {
     hit_rate: number;
     sharpe_ratio: number;
     status: string;
   };
-  news: {
+  news?: {
     recent_count: number;
     avg_score: number;
   };
-  system: {
+  system?: {
     last_forecast_update?: string;
     last_news_update?: string;
     last_backtest_update?: string;

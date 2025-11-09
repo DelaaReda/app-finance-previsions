@@ -66,9 +66,8 @@ Agent full-stack spécialisé dans le développement end-to-end, de l'API backen
 | **TASK-1.1** - API Dashboard corrigée (top_signals + top_risks) | +120 | 2025-01-27 | `api/routes/dashboard.py` créé, hook frontend mis à jour, endpoint never-empty avec fallback |
 | **TASK-1.2** - Pré-calcul et cache Dashboard (job + scheduler + HTTP cache) | +90 | 2025-01-27 | Job dashboard_refresh amélioré, scheduler intégré (15 min), cache serveur + headers HTTP |
 | **TASK-1.3** - Lazy loading Dashboard (widgets + code splitting) | +80 | 2025-01-27 | Widgets lazy-loaded, Suspense boundaries, vite.config optimisé, bundle initial réduit |
-| **CLEANUP-001** - Nettoyage repository (legacy docs + organisation) | +30 | 2025-01-27 | 70+ fichiers archivés, structure organisée, documentation legacy déplacée, TASK_* et rapports déplacés |
 
-**Total points gagnés** : **+2,680** 🎯
+**Total points gagnés** : **+2,650** 🎯
 
 ---
 
@@ -237,17 +236,6 @@ Agent full-stack spécialisé dans le développement end-to-end, de l'API backen
 
 **Résultat** : **Dashboard optimisé avec lazy loading et code splitting !** ⚡🔥🚀
 
-✅ **CLEANUP-001 REPOSITORY CLEANUP** - Phase 19 complétée
-- 70+ fichiers obsolètes archivés (TEMP/URGENT/CRITICAL, messages, docs legacy) ✅
-- Documentation Dash/Streamlit legacy déplacée vers archive ✅
-- 17 profils agents organisés dans dossier `agents/` ✅
-- Structure archive créée avec README explicatif ✅
-- Fichiers .bak/.backup nettoyés ✅
-- Documentation UI obsolète archivée ✅
-- Repository maintenant clair et organisé ✅
-
-**Résultat** : **Repository nettoyé et organisé, plus de confusion avec la documentation legacy !** 🧹✨
-
 ---
 
 ## 📅 Planifié
@@ -295,10 +283,10 @@ D'après `AGENTS.md`, les missions prioritaires sont :
 
 ## 📊 Statistiques
 
-- **Missions complétées** : 47
-- **Points totaux** : 2,680
-- **Niveau actuel** : Level 6 - Lead Strategist ✅ (2,680/4000 pts)
-- **Prochain niveau** : Level 7 - Master Architect (4000 pts) - **1,320 pts restants !** 🚀
+- **Missions complétées** : 46
+- **Points totaux** : 2,650
+- **Niveau actuel** : Level 6 - Lead Strategist ✅ (2,650/4000 pts)
+- **Prochain niveau** : Level 7 - Master Architect (4000 pts) - **1,350 pts restants !** 🚀
 
 ---
 

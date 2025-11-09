@@ -317,6 +317,14 @@ def create_app():
     except ImportError as e:
         logger.info(f"No portfolios routes module found: {str(e)}")
     
+    # Dashboard router (Tâche 1.1 by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77)
+    try:
+        from api.routes.dashboard import router as dashboard_router
+        app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
+        logger.info("✅ Dashboard router registered at /api/dashboard")
+    except ImportError as e:
+        logger.info(f"No dashboard routes module found: {str(e)}")
+    
     logger.info("FastAPI application created successfully")
     return app
 

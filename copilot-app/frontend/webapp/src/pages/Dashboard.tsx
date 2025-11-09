@@ -1,10 +1,19 @@
 import { Stack, Title, Text, Group, Alert } from '@mantine/core';
 import { IconSparkles, IconInfoCircle } from '@tabler/icons-react';
+import { Suspense, lazy } from 'react';
 import HealthBar from '@/components/widgets/HealthBar';
 import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
-import { RegimeBadgeAdaptive } from '@/components/adaptive/RegimeBadgeAdaptive';
-import { LayoutModeToggle } from '@/components/adaptive/LayoutModeToggle';
-import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
+
+// Lazy load non-critical components for initial load optimization (TASK-1.3)
+const RegimeBadgeAdaptive = lazy(() => 
+  import('@/components/adaptive/RegimeBadgeAdaptive').then(m => ({ default: m.RegimeBadgeAdaptive }))
+);
+const LayoutModeToggle = lazy(() => 
+  import('@/components/adaptive/LayoutModeToggle').then(m => ({ default: m.LayoutModeToggle }))
+);
+const DynamicWidgetGrid = lazy(() => 
+  import('@/components/adaptive/DynamicWidgetGrid').then(m => ({ default: m.DynamicWidgetGrid }))
+);
 
 /**
  * Dashboard - Adaptive Layout
@@ -14,6 +23,8 @@ import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
  * 
  * Author: ELENA-39
  * Task: FC-INT-026
+ * Optimized: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+ * Task: TASK-1.3 - Lazy loading for initial load optimization
  */
 function DashboardContent() {
   return (
@@ -31,10 +42,12 @@ function DashboardContent() {
             </Text>
           </div>
 
-          <Group gap="md" align="center">
-            <RegimeBadgeAdaptive />
-            <LayoutModeToggle />
-          </Group>
+          <Suspense fallback={<div style={{ width: '200px', height: '40px' }} />}>
+            <Group gap="md" align="center">
+              <RegimeBadgeAdaptive />
+              <LayoutModeToggle />
+            </Group>
+          </Suspense>
         </Group>
 
         {/* Info Alert */}
@@ -49,8 +62,14 @@ function DashboardContent() {
       {/* System Health Bar */}
       <HealthBar />
 
-      {/* Dynamic Widget Grid - Adapts to market context */}
-      <DynamicWidgetGrid />
+      {/* Dynamic Widget Grid - Adapts to market context (lazy-loaded) */}
+      <Suspense fallback={
+        <Stack gap="md" p="xl" align="center">
+          <Text c="dimmed">Loading dashboard widgets...</Text>
+        </Stack>
+      }>
+        <DynamicWidgetGrid />
+      </Suspense>
     </Stack>
   );
 }

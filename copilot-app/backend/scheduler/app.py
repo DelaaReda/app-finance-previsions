@@ -146,6 +146,21 @@ class JobScheduler:
                 replace_existing=True
             )
             logger.info("Scheduled G4F watcher job every %s minutes", watcher_interval_minutes)
+        
+        # Dashboard refresh job - every 15 minutes (Tâche 1.2)
+        try:
+            from backend.jobs.dashboard_refresh import run_dashboard_refresh_job
+            self.scheduler.add_job(
+                func=self._run_dashboard_refresh_job,
+                trigger="interval",
+                minutes=15,  # Every 15 minutes
+                id='dashboard_refresh_job',
+                name='Refresh dashboard KPIs and cache',
+                replace_existing=True
+            )
+            logger.info("Scheduled dashboard refresh job every 15 minutes")
+        except ImportError as e:
+            logger.warning(f"Could not schedule dashboard refresh job: {e}")
     
     def _run_news_refresh_job(self):
         """
@@ -405,6 +420,36 @@ class JobScheduler:
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             save_json("job_macro_ingest", job_metadata, source=["scheduler", "macro_ingest", "error"])
+    
+    def _run_dashboard_refresh_job(self):
+        """Run dashboard refresh job with error handling and logging (Tâche 1.2)"""
+        try:
+            from backend.jobs.dashboard_refresh import run_dashboard_refresh_job
+            logger.info("Starting dashboard refresh job...")
+            start_time = datetime.utcnow()
+            result = run_dashboard_refresh_job(force=False)
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            job_metadata = {
+                "job_id": "dashboard_refresh_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": result
+            }
+            save_json("job_dashboard_refresh", job_metadata, source=["scheduler", "dashboard_refresh"])
+            logger.info(f"Dashboard refresh job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"Dashboard refresh job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "dashboard_refresh_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_dashboard_refresh", job_metadata, source=["scheduler", "dashboard_refresh", "error"])
     
     def start(self):
         """

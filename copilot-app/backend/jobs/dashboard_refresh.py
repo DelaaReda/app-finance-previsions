@@ -45,6 +45,7 @@ except ImportError:
 def calculate_dashboard_kpis() -> Dict[str, Any]:
     """
     Calcule les KPIs du dashboard en agrégeant les données disponibles
+    Inclut maintenant top_signals et top_risks depuis brief_weekly
     """
     logger.info("Calculating dashboard KPIs...")
     
@@ -52,13 +53,14 @@ def calculate_dashboard_kpis() -> Dict[str, Any]:
     forecasts_data = load_json("forecasts") or {}
     news_data = load_json("news_feed") or {}
     backtests_data = load_json("backtests") or {}
+    brief_data = load_json("brief_weekly") or {}
     
     # Extraire les données
     forecasts = forecasts_data.get("data", {}).get("rows", []) or forecasts_data.get("rows", [])
     news_articles = news_data.get("data", {}).get("articles", []) or news_data.get("articles", [])
     backtest_results = backtests_data.get("data", {}).get("results", {}) or backtests_data.get("results", {})
     
-    # Calculer les KPIs
+    # Calculer les KPIs basiques
     total_forecasts = len(forecasts)
     high_confidence_forecasts = len([f for f in forecasts if f.get("confidence", 0) >= 0.7])
     avg_confidence = sum(f.get("confidence", 0) for f in forecasts) / total_forecasts if total_forecasts > 0 else 0
@@ -66,6 +68,15 @@ def calculate_dashboard_kpis() -> Dict[str, Any]:
     # KPIs basés sur les prévisions
     bullish_count = len([f for f in forecasts if f.get("direction") == "up"])
     bearish_count = len([f for f in forecasts if f.get("direction") == "down"])
+    
+    # Count unique tickers and horizons
+    tickers_set = set()
+    horizons_set = set()
+    for f in forecasts:
+        if f.get("ticker"):
+            tickers_set.add(f["ticker"])
+        if f.get("horizon"):
+            horizons_set.add(f["horizon"])
     
     # KPIs basés sur les backtests
     hit_rate = backtest_results.get("hit_rate", 0) * 100 if isinstance(backtest_results.get("hit_rate"), (int, float)) else 0
@@ -75,7 +86,69 @@ def calculate_dashboard_kpis() -> Dict[str, Any]:
     recent_news_count = len(news_articles)
     avg_news_score = sum(a.get("score", 0) for a in news_articles) / recent_news_count if recent_news_count > 0 else 0
     
+    # Extraire top_signals et top_risks depuis brief
+    top_signals = []
+    top_risks = []
+    
+    if brief_data and "data" in brief_data:
+        brief_weekly = brief_data["data"].get("weekly", {})
+        top_signals = brief_weekly.get("top_signals", [])[:3] or brief_data["data"].get("top_signals", [])[:3]
+        top_risks = brief_weekly.get("top_risks", [])[:3] or brief_data["data"].get("top_risks", [])[:3]
+    
+    # Fallback: générer depuis forecasts si brief vide
+    if not top_signals and not top_risks and forecasts:
+        # Top signals: bullish forecasts avec haute confiance
+        bullish_forecasts = [
+            f for f in forecasts 
+            if f.get("direction") == "up" and f.get("confidence", 0) > 0.5
+        ]
+        bullish_forecasts.sort(
+            key=lambda x: x.get("confidence", 0) * abs(x.get("expected_return", 0)),
+            reverse=True
+        )
+        
+        for f in bullish_forecasts[:3]:
+            top_signals.append({
+                "ticker": f.get("ticker"),
+                "direction": "up",
+                "confidence": f.get("confidence", 0),
+                "expected_return": f.get("expected_return", 0),
+                "horizon": f.get("horizon", "1m"),
+                "reason": f.get("explanation", "Bullish forecast"),
+            })
+        
+        # Top risks: bearish forecasts ou faible confiance
+        bearish_forecasts = [
+            f for f in forecasts 
+            if f.get("direction") == "down" or f.get("confidence", 0) < 0.3
+        ]
+        bearish_forecasts.sort(
+            key=lambda x: (1 - x.get("confidence", 0)) * abs(x.get("expected_return", 0)),
+            reverse=True
+        )
+        
+        for f in bearish_forecasts[:3]:
+            top_risks.append({
+                "ticker": f.get("ticker"),
+                "direction": "down",
+                "confidence": f.get("confidence", 0),
+                "expected_return": f.get("expected_return", 0),
+                "horizon": f.get("horizon", "1m"),
+                "reason": f.get("explanation", "Bearish forecast"),
+            })
+    
     kpis = {
+        # KPIs basiques
+        "last_forecast_dt": forecasts_data.get("last_update") or forecasts_data.get("freshness"),
+        "total_forecasts": total_forecasts,
+        "tickers_tracked": len(tickers_set),
+        "available_horizons": sorted(list(horizons_set)),
+        
+        # Top signaux et risques (NOUVEAU)
+        "top_signals": top_signals,
+        "top_risks": top_risks,
+        
+        # Structure legacy (pour compatibilité)
         "forecasts": {
             "total": total_forecasts,
             "high_confidence": high_confidence_forecasts,
@@ -100,7 +173,7 @@ def calculate_dashboard_kpis() -> Dict[str, Any]:
         "generated_at": datetime.utcnow().isoformat() + "Z",
     }
     
-    logger.info(f"✅ Calculated {len(kpis)} KPI categories")
+    logger.info(f"✅ Calculated {len(kpis)} KPI categories with {len(top_signals)} signals and {len(top_risks)} risks")
     return kpis
 
 

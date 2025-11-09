@@ -56,7 +56,35 @@ export default defineConfig(({ mode }) => {
           }
           warn(warning)
         },
+        // Code splitting optimization (TASK-1.3)
+        output: {
+          manualChunks: {
+            // Vendor chunks
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'mantine-vendor': ['@mantine/core', '@mantine/hooks', '@tabler/icons-react'],
+            'query-vendor': ['@tanstack/react-query'],
+            // Widget chunks (lazy-loaded)
+            'widgets-intelligence': [
+              './src/components/widgets/IntelligenceDashboardWidget',
+              './src/components/widgets/SmartRecommendationsWidget',
+            ],
+            'widgets-data': [
+              './src/components/widgets/ForecastCardsWidget',
+              './src/components/widgets/NewsWidget',
+              './src/components/widgets/MacroWidget',
+            ],
+            'widgets-analysis': [
+              './src/components/widgets/CorrelationIntelligenceWidget',
+              './src/components/widgets/StocksWidget',
+            ],
+          },
+          // Optimize chunk size
+          chunkSizeWarningLimit: 1000,
+        },
       },
+      // Optimize build performance
+      target: 'esnext',
+      minify: 'esbuild',
     },
   }
 })
