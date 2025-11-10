@@ -45,7 +45,7 @@ async def get_daily_recommendations(
         from services.recommendations_service import RecommendationsService
 
         service = RecommendationsService()
-        recommendations = await service.get_daily_recommendations(
+        recommendations = await service.generate_daily_recommendations(
             universe=universe,
             limit=limit
         )
@@ -67,3 +67,6 @@ async def get_daily_recommendations(
             "valid_until": None,
             "status": "fallback"
         })
+
+# Export router with expected name for main.py registration
+recommendations_router = router
