@@ -1,0 +1,16 @@
+.widgetCard {
+  min-height: 100%;
+}
+
+.recommendationsList {
+  display: grid;
+  gap: 18px;
+}
+
+.contextBar {
+  margin-top: 4px;
+}
+
+.skeletonCard {
+  min-height: 140px;
+}

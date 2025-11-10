@@ -565,3 +565,6 @@ async def universal_search_endpoint(
     except Exception as e:
         logger.error(f"Error in universal search: {str(e)}", exc_info=True)
         return err(f"Universal search failed: {str(e)}", code=500)
+
+# Export router with expected name for main.py registration
+search_router = router

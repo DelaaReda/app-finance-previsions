@@ -1,0 +1,33 @@
+.navCard {
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+}
+
+.navCard:hover {
+  transform: translateX(4px);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.navCardActive {
+  background: rgba(79, 132, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 30px rgba(24, 61, 155, 0.3);
+}
+
+.navLabel {
+  letter-spacing: 0.08em;
+}
+
+.navIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

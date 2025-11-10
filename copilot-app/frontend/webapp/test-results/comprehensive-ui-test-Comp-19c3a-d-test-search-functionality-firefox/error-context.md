@@ -1,0 +1,473 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Finance Copilot
+            - paragraph [ref=e9]: Systèmes d'intelligence de marché
+          - generic [ref=e10]:
+            - generic [ref=e14]: Healthy
+            - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+              - img [ref=e17]
+      - navigation [ref=e20]:
+        - generic [ref=e24]:
+          - generic [ref=e26] [cursor=pointer]:
+            - img [ref=e28]
+            - paragraph [ref=e33]: dashboard
+          - generic [ref=e35] [cursor=pointer]:
+            - img [ref=e37]
+            - paragraph [ref=e41]: brief
+          - generic [ref=e43] [cursor=pointer]:
+            - img [ref=e45]
+            - paragraph [ref=e54]: macro
+          - generic [ref=e56] [cursor=pointer]:
+            - img [ref=e58]
+            - paragraph [ref=e61]: stocks
+          - generic [ref=e63] [cursor=pointer]:
+            - img [ref=e65]
+            - paragraph [ref=e70]: news
+          - generic [ref=e72] [cursor=pointer]:
+            - img [ref=e74]
+            - paragraph [ref=e77]: copilot
+          - generic [ref=e79] [cursor=pointer]:
+            - img [ref=e81]
+            - paragraph [ref=e89]: forecasts
+          - generic [ref=e91] [cursor=pointer]:
+            - img [ref=e93]
+            - paragraph [ref=e100]: backtests
+          - generic [ref=e102] [cursor=pointer]:
+            - img [ref=e104]
+            - paragraph [ref=e109]: compare
+          - generic [ref=e111] [cursor=pointer]:
+            - img [ref=e113]
+            - paragraph [ref=e116]: judge
+      - main [ref=e117]:
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - img [ref=e124]
+                - generic [ref=e127]:
+                  - heading "Analyse Actions" [level=2] [ref=e129]
+                  - paragraph [ref=e130]: Screener, analyse technique et signaux pour chaque ticker
+              - generic [ref=e132]:
+                - generic [ref=e133]:
+                  - paragraph [ref=e134]: Score
+                  - paragraph [ref=e135]: 50/100
+                - generic [ref=e136]:
+                  - paragraph [ref=e137]: Prix
+                  - paragraph [ref=e138]: $268.47
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - generic [ref=e141]:
+                  - generic [ref=e142]:
+                    - heading "📈 Stocks Screener" [level=4] [ref=e143]
+                    - paragraph [ref=e144]:
+                      - text: Filtres multi-critères, scores, risques, momentum, export CSV — connecté à
+                      - code [ref=e145]: /stocks/screener
+                      - text: .
+                  - generic [ref=e146]:
+                    - generic [ref=e149]:
+                      - img [ref=e150]
+                      - generic [ref=e153]:
+                        - paragraph [ref=e154]: dans 5 heures
+                        - paragraph [ref=e155]: Fraîches • -300 min
+                    - generic [ref=e157]:
+                      - generic [ref=e159]:
+                        - generic [ref=e160]:
+                          - generic [ref=e161]: AAPL
+                          - button [ref=e162] [cursor=pointer]:
+                            - img
+                        - generic [ref=e163]:
+                          - generic [ref=e164]: MSFT
+                          - button [ref=e165] [cursor=pointer]:
+                            - img
+                        - generic [ref=e166]:
+                          - generic [ref=e167]: NVDA
+                          - button [ref=e168] [cursor=pointer]:
+                            - img
+                        - generic [ref=e169]:
+                          - generic [ref=e170]: QQQ
+                          - button [ref=e171] [cursor=pointer]:
+                            - img
+                        - generic [ref=e172]:
+                          - generic [ref=e173]: SPY
+                          - button [ref=e174] [cursor=pointer]:
+                            - img
+                        - textbox "Univers" [ref=e175]:
+                          - /placeholder: Tickers (SPY,QQQ,...)
+                      - generic:
+                        - img
+                    - generic [ref=e177]:
+                      - textbox "Secteurs" [ref=e180]
+                      - generic:
+                        - img
+                    - radiogroup "Horizon" [ref=e181]:
+                      - generic [ref=e183]:
+                        - radio "Court" [checked]
+                        - generic [ref=e184] [cursor=pointer]: Court
+                      - generic [ref=e185]:
+                        - radio "Moyen"
+                        - generic [ref=e186] [cursor=pointer]: Moyen
+                      - generic [ref=e187]:
+                        - radio "Long"
+                        - generic [ref=e188] [cursor=pointer]: Long
+                    - textbox "Recherche" [ref=e191]:
+                      - /placeholder: Recherche (ticker, nom)
+                    - button "Export CSV" [ref=e192] [cursor=pointer]:
+                      - generic [ref=e193]:
+                        - img [ref=e195]
+                        - generic [ref=e199]: Export CSV
+                    - button "Refresh" [ref=e200] [cursor=pointer]:
+                      - generic [ref=e201]:
+                        - img [ref=e203]
+                        - generic [ref=e206]: Refresh
+                    - generic [ref=e209]:
+                      - img [ref=e210]
+                      - generic [ref=e213]:
+                        - paragraph [ref=e214]: dans 5 heures
+                        - paragraph [ref=e215]: Fraîches • -300 min
+                - generic [ref=e216]:
+                  - generic [ref=e217]:
+                    - generic [ref=e218]:
+                      - generic [ref=e219]: Min MCAP (USD)
+                      - generic [ref=e220]:
+                        - textbox "Min MCAP (USD)" [ref=e221]
+                        - generic [ref=e223]:
+                          - button [ref=e224] [cursor=pointer]:
+                            - img [ref=e225]
+                          - button [ref=e227] [cursor=pointer]:
+                            - img [ref=e228]
+                    - generic [ref=e230]:
+                      - generic [ref=e231]: Max MCAP (USD)
+                      - generic [ref=e232]:
+                        - textbox "Max MCAP (USD)" [ref=e233]
+                        - generic [ref=e235]:
+                          - button [ref=e236] [cursor=pointer]:
+                            - img [ref=e237]
+                          - button [ref=e239] [cursor=pointer]:
+                            - img [ref=e240]
+                    - generic [ref=e242]:
+                      - generic [ref=e243]: Min P/E
+                      - generic [ref=e244]:
+                        - textbox "Min P/E" [ref=e245]
+                        - generic [ref=e247]:
+                          - button [ref=e248] [cursor=pointer]:
+                            - img [ref=e249]
+                          - button [ref=e251] [cursor=pointer]:
+                            - img [ref=e252]
+                    - generic [ref=e254]:
+                      - generic [ref=e255]: Max P/E
+                      - generic [ref=e256]:
+                        - textbox "Max P/E" [ref=e257]
+                        - generic [ref=e259]:
+                          - button [ref=e260] [cursor=pointer]:
+                            - img [ref=e261]
+                          - button [ref=e263] [cursor=pointer]:
+                            - img [ref=e264]
+                    - generic [ref=e266]:
+                      - generic [ref=e267]: Tri
+                      - generic [ref=e268]:
+                        - textbox "Tri" [ref=e269] [cursor=pointer]: Score
+                        - generic:
+                          - img
+                    - radiogroup [ref=e270]:
+                      - generic [ref=e272]:
+                        - radio "Desc" [checked]
+                        - generic [ref=e273] [cursor=pointer]: Desc
+                      - generic [ref=e274]:
+                        - radio "Asc"
+                        - generic [ref=e275] [cursor=pointer]: Asc
+                  - generic [ref=e276]:
+                    - generic [ref=e277]:
+                      - paragraph [ref=e278]: Score moyen
+                      - paragraph [ref=e279]: "50"
+                    - generic [ref=e280]:
+                      - paragraph [ref=e281]: Risque annualisé
+                      - paragraph [ref=e282]: —
+                    - generic [ref=e283]:
+                      - paragraph [ref=e284]: Advancers
+                      - paragraph [ref=e285]: "0"
+                    - generic [ref=e286]:
+                      - paragraph [ref=e287]: Decliners
+                      - paragraph [ref=e288]: "0"
+                  - generic [ref=e289]:
+                    - generic [ref=e290]:
+                      - generic [ref=e291]:
+                        - heading "Répartition par secteur" [level=6] [ref=e292]
+                        - img [ref=e296]:
+                          - text: "5"
+                          - img [ref=e299]
+                      - generic [ref=e300]:
+                        - heading "Score moyen par secteur" [level=6] [ref=e301]
+                        - img [ref=e306]:
+                          - generic [ref=e317]: —
+                          - generic [ref=e319]:
+                            - generic [ref=e321]: "0"
+                            - generic [ref=e323]: "15"
+                            - generic [ref=e325]: "30"
+                            - generic [ref=e327]: "45"
+                            - generic [ref=e329]: "60"
+                    - generic [ref=e335]:
+                      - heading "Top gagnants (variation 1j)" [level=6] [ref=e337]
+                      - heading "Top perdants (variation 1j)" [level=6] [ref=e339]
+                    - generic [ref=e340]:
+                      - heading "Résultats (5 titres)" [level=6] [ref=e341]
+                      - table [ref=e345]:
+                        - rowgroup [ref=e346]:
+                          - row "Ticker Nom Secteur Prix 1j Momentum 30j Score Risque Qualité MCAP P/E Div%" [ref=e347]:
+                            - cell "Ticker" [ref=e348]
+                            - cell "Nom" [ref=e349]
+                            - cell "Secteur" [ref=e350]
+                            - cell "Prix" [ref=e351]
+                            - cell "1j" [ref=e352]
+                            - cell "Momentum 30j" [ref=e353]
+                            - cell "Score" [ref=e354]
+                            - cell "Risque" [ref=e355]
+                            - cell "Qualité" [ref=e356]
+                            - cell "MCAP" [ref=e357]
+                            - cell "P/E" [ref=e358]
+                            - cell "Div%" [ref=e359]
+                        - rowgroup [ref=e360]:
+                          - row "AAPL AAPL — — — — 50 — — — — —" [ref=e361]:
+                            - cell "AAPL" [ref=e362]:
+                              - generic [ref=e364]: AAPL
+                            - cell "AAPL" [ref=e365]
+                            - cell "—" [ref=e366]
+                            - cell "—" [ref=e367]
+                            - cell "—" [ref=e368]
+                            - cell "—" [ref=e369]
+                            - cell "50" [ref=e370]
+                            - cell "—" [ref=e371]
+                            - cell "—" [ref=e372]
+                            - cell "—" [ref=e373]
+                            - cell "—" [ref=e374]
+                            - cell "—" [ref=e375]
+                          - row "MSFT MSFT — — — — 50 — — — — —" [ref=e376]:
+                            - cell "MSFT" [ref=e377]:
+                              - generic [ref=e379]: MSFT
+                            - cell "MSFT" [ref=e380]
+                            - cell "—" [ref=e381]
+                            - cell "—" [ref=e382]
+                            - cell "—" [ref=e383]
+                            - cell "—" [ref=e384]
+                            - cell "50" [ref=e385]
+                            - cell "—" [ref=e386]
+                            - cell "—" [ref=e387]
+                            - cell "—" [ref=e388]
+                            - cell "—" [ref=e389]
+                            - cell "—" [ref=e390]
+                          - row "NVDA NVDA — — — — 50 — — — — —" [ref=e391]:
+                            - cell "NVDA" [ref=e392]:
+                              - generic [ref=e394]: NVDA
+                            - cell "NVDA" [ref=e395]
+                            - cell "—" [ref=e396]
+                            - cell "—" [ref=e397]
+                            - cell "—" [ref=e398]
+                            - cell "—" [ref=e399]
+                            - cell "50" [ref=e400]
+                            - cell "—" [ref=e401]
+                            - cell "—" [ref=e402]
+                            - cell "—" [ref=e403]
+                            - cell "—" [ref=e404]
+                            - cell "—" [ref=e405]
+                          - row "QQQ QQQ — — — — 50 — — — — —" [ref=e406]:
+                            - cell "QQQ" [ref=e407]:
+                              - generic [ref=e409]: QQQ
+                            - cell "QQQ" [ref=e410]
+                            - cell "—" [ref=e411]
+                            - cell "—" [ref=e412]
+                            - cell "—" [ref=e413]
+                            - cell "—" [ref=e414]
+                            - cell "50" [ref=e415]
+                            - cell "—" [ref=e416]
+                            - cell "—" [ref=e417]
+                            - cell "—" [ref=e418]
+                            - cell "—" [ref=e419]
+                            - cell "—" [ref=e420]
+                          - row "SPY SPY — — — — 50 — — — — —" [ref=e421]:
+                            - cell "SPY" [ref=e422]:
+                              - generic [ref=e424]: SPY
+                            - cell "SPY" [ref=e425]
+                            - cell "—" [ref=e426]
+                            - cell "—" [ref=e427]
+                            - cell "—" [ref=e428]
+                            - cell "—" [ref=e429]
+                            - cell "50" [ref=e430]
+                            - cell "—" [ref=e431]
+                            - cell "—" [ref=e432]
+                            - cell "—" [ref=e433]
+                            - cell "—" [ref=e434]
+                            - cell "—" [ref=e435]
+                      - generic [ref=e436]:
+                        - paragraph [ref=e437]: Page 1 / 1 • 5 titres
+                        - generic [ref=e439]:
+                          - button [disabled] [ref=e440]:
+                            - img [ref=e441]
+                          - button "1" [ref=e443] [cursor=pointer]
+                          - button [disabled] [ref=e444]:
+                            - img [ref=e445]
+              - generic [ref=e448]:
+                - heading "Recherche de ticker" [level=4] [ref=e449]
+                - generic [ref=e450]:
+                  - 'textbox "Ticker ou nom (ex: AAPL, Apple)" [ref=e453]'
+                  - button "Explorer" [ref=e454] [cursor=pointer]:
+                    - generic [ref=e456]: Explorer
+              - generic [ref=e457]:
+                - generic [ref=e458]:
+                  - generic [ref=e461]:
+                    - generic [ref=e462]:
+                      - paragraph [ref=e463]: Score Composite
+                      - paragraph [ref=e465]: 50/100
+                      - paragraph [ref=e466]: Score global multi-piliers
+                    - img [ref=e468]
+                  - generic [ref=e474]:
+                    - generic [ref=e475]:
+                      - paragraph [ref=e476]: Prix
+                      - generic [ref=e477]:
+                        - paragraph [ref=e478]: $268.47
+                        - generic [ref=e479]:
+                          - img [ref=e481]
+                          - generic [ref=e484]: "-0.48%"
+                      - paragraph [ref=e485]: "-0.48% aujourd'hui"
+                    - img [ref=e487]
+                  - generic [ref=e492]:
+                    - generic [ref=e493]:
+                      - paragraph [ref=e494]: RSI
+                      - paragraph [ref=e496]: —
+                      - paragraph [ref=e497]: Relative Strength Index
+                    - img [ref=e499]
+                  - generic [ref=e503]:
+                    - generic [ref=e504]:
+                      - paragraph [ref=e505]: Volume
+                      - paragraph [ref=e507]: 0.00M
+                      - paragraph [ref=e508]: Volume échangé
+                    - img [ref=e510]
+                - generic [ref=e512]:
+                  - generic [ref=e514]:
+                    - generic [ref=e515]:
+                      - img [ref=e517]
+                      - paragraph [ref=e521]: Score Composite
+                      - generic [ref=e523]: Faible
+                    - generic [ref=e524]:
+                      - img [ref=e525]
+                      - paragraph [ref=e529]: 50%
+                    - paragraph [ref=e530]: AAPL Corp
+                  - generic [ref=e532]:
+                    - generic [ref=e533]:
+                      - img [ref=e535]
+                      - paragraph [ref=e538]: Score Macro
+                    - generic [ref=e539]:
+                      - img [ref=e540]
+                      - paragraph [ref=e544]: 50%
+                    - paragraph [ref=e545]: Alignement macro
+                  - generic [ref=e547]:
+                    - generic [ref=e548]:
+                      - img [ref=e550]
+                      - paragraph [ref=e552]: Score Technique
+                    - generic [ref=e553]:
+                      - img [ref=e554]
+                      - paragraph [ref=e558]: 50%
+                    - paragraph [ref=e559]: Indicateurs techniques
+                  - generic [ref=e561]:
+                    - generic [ref=e562]:
+                      - img [ref=e564]
+                      - paragraph [ref=e567]: Score News
+                    - generic [ref=e568]:
+                      - img [ref=e569]
+                      - paragraph [ref=e573]: 50%
+                    - paragraph [ref=e574]: Sentiment actualités
+                - generic [ref=e576]:
+                  - heading "Indicateurs Techniques" [level=4] [ref=e577]
+                  - generic [ref=e578]:
+                    - generic [ref=e579]:
+                      - paragraph [ref=e580]: SMA 20
+                      - paragraph [ref=e581]: $—
+                    - generic [ref=e582]:
+                      - paragraph [ref=e583]: SMA 50
+                      - paragraph [ref=e584]: $—
+                    - generic [ref=e585]:
+                      - paragraph [ref=e586]: SMA 200
+                      - paragraph [ref=e587]: $—
+                    - generic [ref=e588]:
+                      - paragraph [ref=e589]: RSI
+                      - paragraph [ref=e590]: —
+                - generic [ref=e591]:
+                  - tablist [ref=e592]:
+                    - tab "Performance Gauge" [selected] [ref=e593] [cursor=pointer]:
+                      - img [ref=e595]
+                      - generic [ref=e600]: Performance Gauge
+                    - tab "Scores Radar" [ref=e601] [cursor=pointer]:
+                      - img [ref=e603]
+                      - generic [ref=e607]: Scores Radar
+                  - tabpanel "Performance Gauge" [ref=e608]:
+                    - generic [ref=e609]:
+                      - generic [ref=e611]:
+                        - generic [ref=e612]:
+                          - img [ref=e614]
+                          - paragraph [ref=e618]: Score Composite
+                        - generic [ref=e620]:
+                          - img [ref=e621]
+                          - generic [ref=e627]:
+                            - paragraph [ref=e628]: "50.0"
+                            - paragraph [ref=e629]: / 100
+                        - paragraph [ref=e631]: AAPL - AAPL Corp
+                        - generic [ref=e633]: Faible
+                      - generic [ref=e635]:
+                        - generic [ref=e636]:
+                          - img [ref=e638]
+                          - paragraph [ref=e640]: Score Technique
+                        - generic [ref=e642]:
+                          - img [ref=e643]
+                          - generic [ref=e649]:
+                            - paragraph [ref=e650]: "50.0"
+                            - paragraph [ref=e651]: / 100
+                        - paragraph [ref=e653]: Indicateurs techniques
+                        - generic [ref=e655]: Faible
+                      - generic [ref=e657]:
+                        - generic [ref=e658]:
+                          - img [ref=e660]
+                          - paragraph [ref=e663]: RSI
+                        - generic [ref=e665]:
+                          - img [ref=e666]
+                          - generic [ref=e672]:
+                            - paragraph [ref=e673]: "50.0"
+                            - paragraph [ref=e674]: / 100
+                        - paragraph [ref=e676]: Relative Strength Index
+                        - generic [ref=e678]: Oversold
+                      - generic [ref=e680]:
+                        - generic [ref=e681]:
+                          - img [ref=e683]
+                          - paragraph [ref=e686]: Rendement
+                        - generic [ref=e688]:
+                          - img [ref=e689]
+                          - generic [ref=e695]:
+                            - paragraph [ref=e696]: "49.5"
+                            - paragraph [ref=e697]: / 100
+                        - paragraph [ref=e699]: "-0.48%"
+                        - generic [ref=e701]: Négatif
+          - generic [ref=e703]:
+            - generic [ref=e704]:
+              - generic [ref=e705]:
+                - generic [ref=e707]: DEV DEBUG
+                - generic [ref=e709]: idle
+              - paragraph [ref=e710]: No errors captured yet
+            - generic [ref=e711]:
+              - button "Clear" [ref=e712] [cursor=pointer]:
+                - generic [ref=e714]: Clear
+              - button "Details" [ref=e715] [cursor=pointer]:
+                - generic [ref=e717]: Details
+    - generic [ref=e718]:
+      - img [ref=e720]
+      - button "Open Tanstack query devtools" [ref=e769] [cursor=pointer]:
+        - img [ref=e770]
+    - generic [ref=e819]:
+      - img [ref=e821]
+      - button "Open Tanstack query devtools" [ref=e870] [cursor=pointer]:
+        - img [ref=e871]
+  - generic [ref=e920]: "0"
+```

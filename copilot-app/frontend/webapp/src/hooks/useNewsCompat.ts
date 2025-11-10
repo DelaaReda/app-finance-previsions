@@ -78,7 +78,7 @@ export function useNewsCompat(tickers: string[] = []) {
   }));
 
   const loading = isLoading || isFetching;
-  const freshness = data?.freshness || data?.last_update || null;
+  const freshness = currentPageData?.freshness || currentPageData?.last_update || allData[0]?.freshness || allData[0]?.last_update || null;
 
   const setFilters = (newFilters: any) => {
     setFiltersState((prev) => ({ ...prev, ...newFilters }));

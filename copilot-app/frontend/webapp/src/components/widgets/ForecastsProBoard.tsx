@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import { Group, MultiSelect, SegmentedControl, Select, Alert, Table, Badge, Tooltip, Button, Card, Title, TextInput, Checkbox, Loader } from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, BarList, DonutChart } from '@tremor/react';
-import { IconRefresh, IconDownload, IconArrowUp, IconArrowDown, IconMinus, IconTrendingUp, IconTrendingDown, IconInfoCircle } from '@tabler/icons-react';
+import { IconRefresh, IconDownload, IconArrowUp, IconArrowDown, IconMinus, IconTrendingUp, IconTrendingDown, IconInfoCircle, IconAlertCircle } from '@tabler/icons-react';
 import FreshnessBadge from '@/components/ui/FreshnessBadge';
 import { useForecasts } from '@/hooks/useForecasts';
 import { ensureArray } from '@/lib/safe';
@@ -231,7 +231,19 @@ export default function ForecastsProBoard() {
         </Alert>
       )}
       
-      {error && <Alert color="red" mt="md">Failed to load forecasts: {String(error)}</Alert>}
+      {error && (
+        <Alert color="red" mt="md" icon={<IconAlertCircle size={20} />}>
+          <Text fw={500} mb="xs">Impossible de récupérer les prévisions</Text>
+          <Text size="sm" c="dimmed">
+            {String(error).includes('Backend unavailable') || String(error).includes('timeout')
+              ? 'Le backend ne répond pas. Vérifiez qu\'il est démarré sur http://localhost:8050'
+              : String(error)}
+          </Text>
+          <Button mt="xs" size="xs" variant="light" onClick={() => refetch()}>
+            Réessayer
+          </Button>
+        </Alert>
+      )}
 
       {!isLoading && !error && items.length === 0 && (
         <Alert color="yellow" mt="md">

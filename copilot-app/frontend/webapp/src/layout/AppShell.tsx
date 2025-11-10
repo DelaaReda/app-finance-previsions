@@ -13,35 +13,39 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
-  IconGauge,
-  IconPresentationAnalytics,
+  IconLayoutDashboard,
+  IconNotebook,
   IconBuildingBank,
+  IconTrendingUp,
+  IconArticle,
+  IconMessages,
+  IconChartDots3,
   IconChartHistogram,
-  IconNews,
-  IconRobot,
-  IconChartDots,
-  IconChartBubble,
+  IconArrowsShuffle,
+  IconScaleOutline,
 } from '@tabler/icons-react';
 import { HealthStatusBadge } from '@/components/ui/HealthStatusBadge';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import classes from './AppShell.module.css';
 
 interface NavItem {
   label: string;
   to: string;
   icon: React.ComponentType<any>;
+  gradient: { from: string; to: string };
 }
 
 const navItems: NavItem[] = [
-  { label: 'dashboard', to: '/', icon: IconGauge },
-  { label: 'brief', to: '/brief', icon: IconPresentationAnalytics },
-  { label: 'macro', to: '/macro', icon: IconBuildingBank },
-  { label: 'stocks', to: '/stocks', icon: IconChartHistogram },
-  { label: 'news', to: '/news', icon: IconNews },
-  { label: 'copilot', to: '/copilot', icon: IconRobot },
-  { label: 'forecasts', to: '/forecasts', icon: IconChartDots },
-  { label: 'backtests', to: '/backtests', icon: IconChartBubble },
-  { label: 'compare', to: '/compare', icon: IconChartDots },
-  { label: 'judge', to: '/judge', icon: IconRobot },
+  { label: 'dashboard', to: '/', icon: IconLayoutDashboard, gradient: { from: 'indigo', to: 'cyan' } },
+  { label: 'brief', to: '/brief', icon: IconNotebook, gradient: { from: 'grape', to: 'pink' } },
+  { label: 'macro', to: '/macro', icon: IconBuildingBank, gradient: { from: 'teal', to: 'lime' } },
+  { label: 'stocks', to: '/stocks', icon: IconTrendingUp, gradient: { from: 'orange', to: 'yellow' } },
+  { label: 'news', to: '/news', icon: IconArticle, gradient: { from: 'red', to: 'orange' } },
+  { label: 'copilot', to: '/copilot', icon: IconMessages, gradient: { from: 'violet', to: 'cyan' } },
+  { label: 'forecasts', to: '/forecasts', icon: IconChartDots3, gradient: { from: 'blue', to: 'green' } },
+  { label: 'backtests', to: '/backtests', icon: IconChartHistogram, gradient: { from: 'cyan', to: 'lime' } },
+  { label: 'compare', to: '/compare', icon: IconArrowsShuffle, gradient: { from: 'purple', to: 'teal' } },
+  { label: 'judge', to: '/judge', icon: IconScaleOutline, gradient: { from: 'gray', to: 'indigo' } },
 ];
 
 function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate: () => void }) {
@@ -50,22 +54,19 @@ function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean;
     <Group
       data-testid={`nav-${item.label}`}
       onClick={onNavigate}
-      gap="sm"
-      px="md"
-      py="sm"
-      justify="space-between"
-      style={{
-        borderRadius: '12px',
-        background: active ? 'rgba(76,110,245,0.15)' : 'transparent',
-        cursor: 'pointer',
-        transition: 'background 150ms ease',
-      }}
+      className={`${classes.navCard} ${active ? classes.navCardActive : ''}`}
     >
       <Group gap="sm">
-        <ThemeIcon variant={active ? 'gradient' : 'light'} gradient={{ from: 'indigo', to: 'teal' }}>
-          <Icon size={16} />
+        <ThemeIcon
+          size="lg"
+          radius="md"
+          variant="gradient"
+          gradient={item.gradient}
+          className={classes.navIcon}
+        >
+          <Icon size={18} />
         </ThemeIcon>
-        <Text tt="uppercase" fw={600} fz="xs" c={active ? 'indigo.4' : 'slate.6'}>
+        <Text tt="uppercase" fw={600} fz="xs" c={active ? 'indigo.2' : 'gray.3'} className={classes.navLabel}>
           {item.label}
         </Text>
       </Group>
@@ -111,7 +112,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             <Burger opened={opened} onClick={toggle} size="sm" hiddenFrom="md" color="white" />
             <Stack gap={0}>
               <Text fw={700} fz="lg">Finance Copilot</Text>
-              <Text c="dimmed" fz="xs">Systèmes d’intelligence de marché</Text>
+              <Text c="gray.3" fz="xs">Systèmes d'intelligence de marché</Text>
             </Stack>
           </Group>
           <Group gap="md">

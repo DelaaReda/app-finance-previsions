@@ -237,7 +237,7 @@ def run_news_ingest():
                 for article in articles:
                     # Add metadata
                     article['source'] = source['name']
-                    article['category'] = source['category']
+                    article['category'] = source.get('category', 'general')
                     
                     # Score article
                     article['score'] = score_article(article)

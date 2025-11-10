@@ -259,7 +259,7 @@ class ModelPerformanceTracker:
                 "calculated_at": datetime.utcnow().isoformat() + "Z"
             }
         
-        # Calculate metrics
+        # Calculate metrics - y_true are the actuals, y_pred are the predictions
         classification_metrics = self.calculate_binary_classification_metrics(actuals, predictions)
         regression_metrics = self.calculate_regression_metrics(actuals, predictions)
         
@@ -325,9 +325,9 @@ class ModelPerformanceTracker:
             },
             "overall_metrics": overall_metrics,
             "model_performance": self.tracking_data["models"],
-            "metrics_history": self.tracking_data["metrics_history"],
+            "metrics_history": self.tracking_data.get("metrics_history", []),
             "generated_at": datetime.utcnow().isoformat() + "Z",
-            "last_update": self.tracking_data["metrics_history"][-1]["timestamp"] if self.tracking_data["metrics_history"] else None
+            "last_update": self.tracking_data.get("metrics_history", [])[-1]["timestamp"] if self.tracking_data.get("metrics_history", []) else None
         }
 
 

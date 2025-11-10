@@ -108,7 +108,7 @@ function WidgetWrapper({
   if (WidgetComponent === null) {
     return (
       <Alert color="gray" variant="light" icon={<IconInfoCircle size={20} />}>
-        <Text size="sm" c="dimmed">
+        <Text size="sm" c="gray.3">
           Widget "{widgetId}" coming soon
         </Text>
       </Alert>
@@ -225,7 +225,7 @@ export function DynamicWidgetGrid() {
   if (isLoading) {
     return (
       <Stack gap="md">
-        <Text c="dimmed" ta="center">
+        <Text c="gray.3" ta="center">
           Loading adaptive layout...
         </Text>
       </Stack>
@@ -240,7 +240,7 @@ export function DynamicWidgetGrid() {
       {topRow.length > 0 && (
         <Suspense fallback={
           <Stack gap="md">
-            <Text c="dimmed" size="sm">Loading priority widgets...</Text>
+            <Text c="gray.3" size="sm">Loading priority widgets...</Text>
             <Grid gutter="md">
               {topRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: topRow.length === 1 ? 12 : 6 }}>
@@ -259,7 +259,7 @@ export function DynamicWidgetGrid() {
       {middleRow.length > 0 && (
         <Suspense fallback={
           <Stack gap="md">
-            <Text c="dimmed" size="sm">Loading secondary widgets...</Text>
+            <Text c="gray.3" size="sm">Loading secondary widgets...</Text>
             <Grid gutter="md">
               {middleRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: middleRow.length === 1 ? 12 : middleRow.length === 2 ? 6 : 4 }}>
@@ -278,7 +278,7 @@ export function DynamicWidgetGrid() {
       {bottomRow.length > 0 && (
         <Suspense fallback={
           <Stack gap="md">
-            <Text c="dimmed" size="sm">Loading additional widgets...</Text>
+            <Text c="gray.3" size="sm">Loading additional widgets...</Text>
             <Grid gutter="md">
               {bottomRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: bottomRow.length <= 2 ? 6 : bottomRow.length === 3 ? 4 : 3 }}>

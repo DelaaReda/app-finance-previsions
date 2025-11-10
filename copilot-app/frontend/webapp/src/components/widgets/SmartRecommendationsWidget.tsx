@@ -1,7 +1,9 @@
-import { Stack, Text, Group, ActionIcon, Alert, Badge, Skeleton } from '@mantine/core';
-import { IconRefresh, IconAlertCircle, IconSparkles, IconLoader } from '@tabler/icons-react';
+import { Stack, Text, Group, ActionIcon, Alert, Badge, Skeleton, Card } from '@mantine/core';
+import { IconRefresh, IconAlertCircle, IconSparkles, IconLoader, IconArrowUpRight, IconShieldCheck } from '@tabler/icons-react';
 import { useRecommendations } from '../../hooks/useRecommendations';
 import { RecommendationCard } from '../recommendations/RecommendationCard';
+import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
+import classes from './SmartRecommendationsWidget.module.css';
 
 interface SmartRecommendationsWidgetProps {
   universe?: string[];
@@ -34,10 +36,15 @@ export function SmartRecommendationsWidget({
   limit = 3 
 }: SmartRecommendationsWidgetProps) {
   const { data, isLoading, error, refetch, isFetching } = useRecommendations(universe, limit);
-  
-  // Loading state
+
+  const glassWrapper = (children: React.ReactNode) => (
+    <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${classes.widgetCard}`}>
+      {children}
+    </Card>
+  );
+
   if (isLoading) {
-    return (
+    return glassWrapper(
       <Stack gap="md">
         <Group justify="space-between">
           <Group gap="xs">
@@ -46,9 +53,17 @@ export function SmartRecommendationsWidget({
           </Group>
         </Group>
         <Stack gap="md">
-          <Skeleton height={200} radius="md" />
-          <Skeleton height={200} radius="md" />
-          <Skeleton height={200} radius="md" />
+          {[...Array(3)].map((_, idx) => (
+            <Card key={idx} padding="md" radius="lg" className={`${sharedStyles.skeletonCard} ${classes.skeletonCard}`}>
+              <Stack gap="sm">
+                <Skeleton height={18} width="40%" radius="xl" />
+                <Skeleton height={28} width="50%" />
+                <Skeleton height={12} width="60%" />
+                <Skeleton height={12} width="50%" />
+                <Skeleton height={12} width="70%" />
+              </Stack>
+            </Card>
+          ))}
         </Stack>
       </Stack>
     );
@@ -56,7 +71,7 @@ export function SmartRecommendationsWidget({
   
   // Error state
   if (error) {
-    return (
+    return glassWrapper(
       <Alert
         icon={<IconAlertCircle size={20} />}
         title="Failed to Load Recommendations"
@@ -77,7 +92,7 @@ export function SmartRecommendationsWidget({
   
   // Empty state
   if (!data || !data.recommendations || data.recommendations.length === 0) {
-    return (
+    return glassWrapper(
       <Alert
         icon={<IconAlertCircle size={20} />}
         title="No Recommendations Available"
@@ -97,12 +112,14 @@ export function SmartRecommendationsWidget({
   const hoursRemaining = Math.max(0, Math.round((validUntil.getTime() - now.getTime()) / (60 * 60 * 1000)));
   
   // Success state
-  return (
-    <Stack gap="md">
-      {/* Header */}
-      <Group justify="space-between" align="center">
-        <Group gap="xs">
-          <IconSparkles size={24} color="#4169E1" />
+  return glassWrapper(
+      <Stack gap="md">
+        {/* Header */}
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <div className={sharedStyles.sparkIcon}>
+              <IconSparkles size={18} />
+            </div>
           <Text size="lg" fw={700}>Today's Smart Picks</Text>
           <Badge variant="light" color="blue">
             {data.recommendations.length} {data.recommendations.length === 1 ? 'pick' : 'picks'}
@@ -114,25 +131,24 @@ export function SmartRecommendationsWidget({
           onClick={() => refetch()}
           loading={isFetching}
           aria-label="Refresh recommendations"
+          className={sharedStyles.actionIcon}
         >
           {isFetching ? <IconLoader size={18} /> : <IconRefresh size={18} />}
         </ActionIcon>
       </Group>
       
       {/* Market Context Badge */}
-      <Group gap="xs">
-        <Text size="sm" c="dimmed">Market:</Text>
-        <Badge variant="light" color="gray">
+      <div className={sharedStyles.contextPill}>
+        <Badge size="xs" variant="dot" color="cyan">
           {data.market_context.regime}
         </Badge>
-        <Text size="sm" c="dimmed">•</Text>
         <Text size="sm" c="dimmed">
           Valid for {hoursRemaining}h
         </Text>
-      </Group>
+      </div>
       
       {/* Recommendations List */}
-      <Stack gap="md">
+      <Stack gap="md" className={classes.recommendationsList}>
         {data.recommendations.map((rec, index) => (
           <RecommendationCard key={`${rec.ticker}-${index}`} recommendation={rec} />
         ))}

@@ -1,0 +1,33 @@
+.widgetCard {
+  min-height: 100%;
+}
+
+.newsIcon {
+  color: #f5f7ff;
+}
+
+.newsSkeleton {
+  min-height: 90px;
+}
+
+.newsList {
+  display: grid;
+  gap: 14px;
+}
+
+.newsCard {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.newsCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 45px rgba(2, 8, 23, 0.45);
+}
+
+.newsBody {
+  flex: 1;
+}
+
+.newsLink {
+  color: inherit;
+}

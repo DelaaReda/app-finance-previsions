@@ -3,9 +3,11 @@
  * Displays latest financial news articles with improved UI
  */
 
-import { Card, Stack, Title, Text, Badge, Group, ActionIcon, Alert } from '@mantine/core';
+import { Card, Stack, Title, Text, Badge, Group, ActionIcon, Alert, Skeleton } from '@mantine/core';
 import { IconNews, IconExternalLink, IconRefresh } from '@tabler/icons-react';
 import { useApi } from '@/hooks/useApi';
+import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
+import styles from './NewsWidget.module.css';
 
 interface NewsArticle {
   id: string;
@@ -36,11 +38,13 @@ export function NewsWidget() {
   }
 
   return (
-    <Card padding="lg" shadow="sm" withBorder>
+    <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard}`}>
       <Stack gap="md">
         <Group justify="space-between">
-          <Group gap="xs">
-            <IconNews size={24} color="#3B82F6" />
+          <Group gap="xs" align="center">
+            <div className={`${sharedStyles.sparkIcon} ${styles.newsIcon}`}>
+              <IconNews size={18} />
+            </div>
             <Title order={4}>Market News</Title>
           </Group>
           <ActionIcon 
@@ -49,6 +53,7 @@ export function NewsWidget() {
             color="blue" 
             onClick={() => refetch()} 
             loading={isLoading}
+            className={sharedStyles.actionIcon}
           >
             <IconRefresh size={16} />
           </ActionIcon>
@@ -57,15 +62,11 @@ export function NewsWidget() {
         {isLoading && (
           <Stack gap="sm">
             {[...Array(3)].map((_, i) => (
-              <Card key={i} withBorder padding="sm">
-                <Stack gap="xs">
-                  <span style={{ display: 'block', width: '70%', height: '16px', backgroundColor: '#e2e8f0', borderRadius: '4px', marginBottom: '8px' }}>&nbsp;</span>
-                  <Group gap="xs">
-                    <span style={{ display: 'inline-block', width: '30%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</span>
-                  </Group>
-                  <span style={{ display: 'block', width: '60%', height: '12px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>&nbsp;</span>
-                </Stack>
-              </Card>
+              <div key={i} className={`${sharedStyles.skeletonCard} ${styles.newsSkeleton}`}>
+                <Skeleton height={16} width="70%" radius="xl" />
+                <Skeleton height={12} width="40%" radius="xl" />
+                <Skeleton height={12} width="60%" radius="xl" />
+              </div>
             ))}
           </Stack>
         )}
@@ -77,7 +78,7 @@ export function NewsWidget() {
         )}
 
         {!isLoading && !error && articles.length > 0 && (
-          <Stack gap="sm">
+          <Stack gap="sm" className={styles.newsList}>
             {articles.map((article: any, index: number) => {
               // Handle various possible field names for articles
               const id = article.id || `news-${index}`;
@@ -89,54 +90,40 @@ export function NewsWidget() {
               const pubDate = article.pubDate || article.published_at || article.date || article.createdAt;
               
               return (
-                <Card key={id} withBorder padding="sm" radius="md">
-                  <Stack gap="xs">
-                    <Group justify="space-between" align="flex-start">
-                      <Text fw={600} size="sm" lineClamp={2} style={{ flex: 1 }}>
+                <div key={id} className={`${sharedStyles.flatCard} ${styles.newsCard}`}>
+                  <Group justify="space-between" align="flex-start">
+                    <Stack gap={4} className={styles.newsBody}>
+                      <Text fw={600} size="sm" lineClamp={2}>
                         {title}
                       </Text>
-                      <a 
-                        href={url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ textDecoration: 'none', color: 'inherit' }}
-                      >
-                        <ActionIcon size="sm" variant="subtle" color="blue">
-                          <IconExternalLink size={14} />
-                        </ActionIcon>
-                      </a>
-                    </Group>
-
-                    <Group gap="xs" wrap="wrap">
-                      {source && (
-                        <Badge size="xs" variant="light" color="blue">
-                          {source.toUpperCase()}
-                        </Badge>
-                      )}
-                      
-                      {tickers && Array.isArray(tickers) && tickers.length > 0 && tickers.slice(0, 3).map((ticker: string, idx: number) => (
-                        <Badge key={idx} size="xs" variant="light" color="indigo">
-                          {ticker}
-                        </Badge>
-                      ))}
-                      
-                      {pubDate && (
-                        <Text size="xs" c="dimmed">
-                          {new Date(pubDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric'
-                          })}
+                      <Group gap="xs" wrap="wrap">
+                        {source && (
+                          <Badge size="xs" variant="light" color="blue">
+                            {source.toUpperCase()}
+                          </Badge>
+                        )}
+                        {tickers && Array.isArray(tickers) && tickers.length > 0 && tickers.slice(0, 3).map((ticker: string, idx: number) => (
+                          <Badge key={idx} size="xs" variant="dot" color="indigo">
+                            {ticker}
+                          </Badge>
+                        ))}
+                      </Group>
+                      {description && (
+                        <Text size="xs" c="dimmed" lineClamp={2}>
+                          {description}
                         </Text>
                       )}
-                    </Group>
-
-                    {description && (
-                      <Text size="xs" c="dimmed" lineClamp={2}>
-                        {description}
-                      </Text>
-                    )}
-                  </Stack>
-                </Card>
+                      {pubDate && (
+                        <Text size="xs" c="dimmed">
+                          {new Date(pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      )}
+                    </Stack>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className={styles.newsLink}>
+                      <IconExternalLink size={16} />
+                    </a>
+                  </Group>
+                </div>
               );
             })}
           </Stack>

@@ -1,0 +1,1015 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]:
+            - button [ref=e7] [cursor=pointer]
+            - generic [ref=e9]:
+              - paragraph [ref=e10]: Finance Copilot
+              - paragraph [ref=e11]: Systèmes d'intelligence de marché
+          - generic [ref=e12]:
+            - generic [ref=e16]: Healthy
+            - button "Basculer en mode clair" [ref=e17] [cursor=pointer]:
+              - img [ref=e19]
+      - navigation [ref=e22]:
+        - generic [ref=e26]:
+          - generic [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+            - paragraph [ref=e35]: dashboard
+          - generic [ref=e37] [cursor=pointer]:
+            - img [ref=e39]
+            - paragraph [ref=e41]: brief
+          - generic [ref=e43] [cursor=pointer]:
+            - img [ref=e45]
+            - paragraph [ref=e47]: macro
+          - generic [ref=e49] [cursor=pointer]:
+            - img [ref=e51]
+            - paragraph [ref=e54]: stocks
+          - generic [ref=e56] [cursor=pointer]:
+            - img [ref=e58]
+            - paragraph [ref=e60]: news
+          - generic [ref=e62] [cursor=pointer]:
+            - img [ref=e64]
+            - paragraph [ref=e67]: copilot
+          - generic [ref=e69] [cursor=pointer]:
+            - img [ref=e71]
+            - paragraph [ref=e79]: forecasts
+          - generic [ref=e81] [cursor=pointer]:
+            - img [ref=e83]
+            - paragraph [ref=e86]: backtests
+          - generic [ref=e88] [cursor=pointer]:
+            - img [ref=e90]
+            - paragraph [ref=e95]: compare
+          - generic [ref=e97] [cursor=pointer]:
+            - img [ref=e99]
+            - paragraph [ref=e102]: judge
+      - main [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e108]:
+              - img [ref=e110]
+              - generic [ref=e112]:
+                - generic [ref=e113]:
+                  - heading "Actualités de marché" [level=2] [ref=e114]
+                  - generic [ref=e116]: Live
+                - paragraph [ref=e117]: Flux temps réel scoré par pertinence et impact
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - generic [ref=e120]:
+                  - generic [ref=e121]:
+                    - heading "🛰️ News Radar" [level=4] [ref=e122]
+                    - paragraph [ref=e123]: "Explorer l’actualité: thèmes, tickers, sentiment, time-line, export CSV."
+                  - generic [ref=e124]:
+                    - generic [ref=e126]:
+                      - generic [ref=e128]:
+                        - generic [ref=e129]:
+                          - generic [ref=e130]: QQQ
+                          - button [ref=e131] [cursor=pointer]:
+                            - img
+                        - generic [ref=e132]:
+                          - generic [ref=e133]: SPY
+                          - button [ref=e134] [cursor=pointer]:
+                            - img
+                        - textbox "Univers" [ref=e135]:
+                          - /placeholder: Tickers (SPY, QQQ, NVDA...)
+                      - generic:
+                        - img
+                    - generic [ref=e137]:
+                      - textbox "Thèmes" [ref=e140]:
+                        - /placeholder: Thèmes (AI, chips, macro...)
+                      - generic:
+                        - img
+                    - radiogroup "Fenêtre temporelle" [ref=e141]:
+                      - generic [ref=e143]:
+                        - radio "24h"
+                        - generic [ref=e144] [cursor=pointer]: 24h
+                      - generic [ref=e145]:
+                        - radio "7j" [checked]
+                        - generic [ref=e146] [cursor=pointer]: 7j
+                      - generic [ref=e147]:
+                        - radio "30j"
+                        - generic [ref=e148] [cursor=pointer]: 30j
+                    - textbox "Recherche" [ref=e151]:
+                      - /placeholder: Recherche plein texte
+                    - button "Rafraîchir" [ref=e152] [cursor=pointer]:
+                      - generic [ref=e154]: Rafraîchir
+                    - button "Export CSV" [ref=e155] [cursor=pointer]:
+                      - generic [ref=e156]:
+                        - img [ref=e158]
+                        - generic [ref=e161]: Export CSV
+                    - generic [ref=e164]:
+                      - img [ref=e165]
+                      - generic [ref=e167]:
+                        - paragraph [ref=e168]: il y a 5 jours
+                        - paragraph [ref=e169]: Périmées • 6716 min
+                - generic [ref=e170]:
+                  - generic [ref=e171]:
+                    - heading "Top thèmes" [level=6] [ref=e173]
+                    - generic [ref=e174]:
+                      - heading "Top tickers" [level=6] [ref=e175]
+                      - generic [ref=e176]:
+                        - paragraph [ref=e181]: META
+                        - paragraph [ref=e184]: "1"
+                  - generic [ref=e185]:
+                    - heading "Sentiment par thème" [level=6] [ref=e186]
+                    - paragraph [ref=e190]: No data
+                  - generic [ref=e191]:
+                    - heading "Flux temporel" [level=6] [ref=e192]
+                    - img [ref=e197]:
+                      - generic [ref=e204]: 2025-11-04
+                      - generic [ref=e206]:
+                        - generic [ref=e208]: "0"
+                        - generic [ref=e210]: "15"
+                        - generic [ref=e212]: "30"
+                        - generic [ref=e214]: "45"
+                        - generic [ref=e216]: "60"
+                  - generic [ref=e222]:
+                    - heading "Articles" [level=6] [ref=e223]
+                    - generic [ref=e227]:
+                      - generic [ref=e228]:
+                        - generic [ref=e229]:
+                          - link "McDonald's sales rise, but CEO expects low-income diners to spend less into next year" [ref=e230]:
+                            - /url: https://www.cnbc.com/2025/11/05/mcdonalds-mcd-q3-2025-earnings.html
+                          - generic [ref=e231]: 11/5/2025, 8:53:19 AM • cnbc_markets
+                        - generic [ref=e234]: Neutral
+                      - generic [ref=e235]:
+                        - generic [ref=e236]:
+                          - link "US Companies Added 42,000 jobs in October, Per ADP Data" [ref=e237]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/us-companies-added-42-000-jobs-in-october-adp-video
+                          - generic [ref=e238]: 11/5/2025, 8:52:05 AM • bloomberg
+                        - generic [ref=e241]: Neutral
+                      - generic [ref=e242]:
+                        - generic [ref=e243]:
+                          - link "UPS cargo plane crash near Louisville airport kills at least 9" [ref=e244]:
+                            - /url: https://www.cnbc.com/2025/11/04/ups-plane-louisville.html
+                          - generic [ref=e245]: 11/5/2025, 8:51:15 AM • cnbc_markets
+                        - generic [ref=e248]: Neutral
+                      - generic [ref=e249]:
+                        - generic [ref=e250]:
+                          - link "How Mamdani Won Over New York City" [ref=e251]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/opinion-how-mamdani-won-over-new-york-city-video
+                          - generic [ref=e252]: 11/5/2025, 8:47:27 AM • bloomberg
+                        - generic [ref=e255]: Neutral
+                      - generic [ref=e256]:
+                        - generic [ref=e257]:
+                          - link "McDonald’s customers are spending more per visit as sales top expectations again" [ref=e258]:
+                            - /url: https://www.marketwatch.com/story/mcdonalds-customers-are-spending-more-per-visit-as-sales-top-expectations-again-64865bac?mod=mw_rss_topstories
+                          - generic [ref=e259]: 11/5/2025, 8:45:00 AM • market_watch
+                        - generic [ref=e262]: Neutral
+                      - generic [ref=e263]:
+                        - generic [ref=e264]:
+                          - link "Apollo’s Jim Zelter Says Not Seeing Credit Cycle Waning Anytime Soon" [ref=e265]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/jim-zelter-not-seeing-credit-cycle-waning-anytime-soon-video
+                          - generic [ref=e266]: 11/5/2025, 8:40:07 AM • bloomberg
+                        - generic [ref=e269]: Neutral
+                      - generic [ref=e270]:
+                        - generic [ref=e271]:
+                          - link "Amazon to Offer Nubank Customers More Credit in Brazil Push" [ref=e272]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/amazon-to-offer-nubank-customers-more-credit-in-brazil-push
+                          - generic [ref=e273]: 11/5/2025, 8:38:00 AM • bloomberg
+                        - generic [ref=e276]: Neutral
+                      - generic [ref=e277]:
+                        - generic [ref=e278]:
+                          - 'link "What the AI phenomenon means for the dollar: It’s complicated." [ref=e279]':
+                            - /url: https://www.marketwatch.com/story/what-the-ai-phenomenon-means-for-the-dollar-its-complicated-7f998822?mod=mw_rss_topstories
+                          - generic [ref=e280]: 11/5/2025, 8:38:00 AM • market_watch
+                        - generic [ref=e283]: Neutral
+                      - generic [ref=e284]:
+                        - generic [ref=e285]:
+                          - link "Treasury says it plans to hold note, bond sales steady for ‘several quarters,’ but has begun considering future increases" [ref=e286]:
+                            - /url: https://www.marketwatch.com/story/treasury-says-it-plans-to-hold-note-bond-sales-steady-for-several-quarters-but-has-begun-considering-future-increases-b0b22290?mod=mw_rss_topstories
+                          - generic [ref=e287]: 11/5/2025, 8:37:00 AM • market_watch
+                        - generic [ref=e290]: Neutral
+                      - generic [ref=e291]:
+                        - generic [ref=e292]:
+                          - link "US to Keep Note, Bond Sales Steady for at Least Several Quarters" [ref=e293]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/us-to-keep-note-bond-sales-steady-for-at-least-several-quarters
+                          - generic [ref=e294]: 11/5/2025, 8:33:45 AM • bloomberg
+                        - generic [ref=e297]: Neutral
+                      - generic [ref=e298]:
+                        - generic [ref=e299]:
+                          - link "Those millions of dead people supposedly claiming Social Security? It’s obvious now that they were bogus." [ref=e300]:
+                            - /url: https://www.marketwatch.com/story/those-millions-of-dead-people-supposedly-claiming-social-security-its-obvious-now-that-they-were-bogus-12f71c14?mod=mw_rss_topstories
+                          - generic [ref=e301]: 11/5/2025, 8:30:00 AM • market_watch
+                        - generic [ref=e304]: Neutral
+                      - generic [ref=e305]:
+                        - generic [ref=e306]:
+                          - link "ADP says businesses create 42,000 jobs in October — but the labor market is still not great" [ref=e307]:
+                            - /url: https://www.marketwatch.com/story/adp-says-businesses-create-42-000-job-in-october-but-the-labor-market-is-still-not-great-667628e7?mod=mw_rss_topstories
+                          - generic [ref=e308]: 11/5/2025, 8:24:00 AM • market_watch
+                        - generic [ref=e311]: Neutral
+                      - generic [ref=e312]:
+                        - generic [ref=e313]:
+                          - link "Humana’s stock falls as Medicaid, health-benefit costs are still problems" [ref=e314]:
+                            - /url: https://www.marketwatch.com/story/humanas-stock-falls-as-medicaid-health-benefit-costs-are-still-problems-091e8e15?mod=mw_rss_topstories
+                          - generic [ref=e315]: 11/5/2025, 8:20:00 AM • market_watch
+                        - generic [ref=e318]: Neutral
+                      - generic [ref=e319]:
+                        - generic [ref=e320]:
+                          - link "South Africa’s Commodity Boom Set to Spill Into Wider Economy" [ref=e321]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/south-africa-commodity-boom-boosts-economy-and-markets
+                          - generic [ref=e322]: 11/5/2025, 8:16:23 AM • bloomberg
+                        - generic [ref=e325]: Neutral
+                      - generic [ref=e326]:
+                        - generic [ref=e327]:
+                          - link "These are my biggest investing regrets — and how I’m hitting reset in retirement" [ref=e328]:
+                            - /url: https://www.marketwatch.com/story/this-hidden-force-trips-up-investors-in-retirement-heres-how-i-recovered-cee3b1c4?mod=mw_rss_topstories
+                          - generic [ref=e329]: 11/5/2025, 8:12:00 AM • market_watch
+                        - generic [ref=e332]: Neutral
+                      - generic [ref=e333]:
+                        - generic [ref=e334]:
+                          - link "AI companies have money and momentum. But look who’s stuck with their utility bill." [ref=e335]:
+                            - /url: https://www.marketwatch.com/story/ai-companies-have-money-and-momentum-but-look-whos-stuck-with-their-utility-bill-e68ce9d3?mod=mw_rss_topstories
+                          - generic [ref=e336]: 11/5/2025, 8:05:00 AM • market_watch
+                        - generic [ref=e339]: Neutral
+                      - generic [ref=e340]:
+                        - generic [ref=e341]:
+                          - link "Corporate Bond World Set to Get Its First Daily Closing Auction" [ref=e342]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/corporate-bond-world-set-to-get-its-first-daily-closing-auction
+                          - generic [ref=e343]: 11/5/2025, 8:02:44 AM • bloomberg
+                        - generic [ref=e346]: Neutral
+                      - generic [ref=e347]:
+                        - generic [ref=e348]:
+                          - link "There's an outperforming real estate sector hiding in plain sight" [ref=e349]:
+                            - /url: https://www.cnbc.com/2025/11/05/alterra-ios-ceo-industrial-outdoor-storage-real-estate-sector.html
+                          - generic [ref=e350]: 11/5/2025, 8:00:01 AM • cnbc_markets
+                        - generic [ref=e353]: Neutral
+                      - generic [ref=e354]:
+                        - generic [ref=e355]:
+                          - link "America is divided into two countries — Trump’s pro-billionaires and Mamdani’s anti-billionaires" [ref=e356]:
+                            - /url: https://www.marketwatch.com/story/america-is-divided-into-two-countries-trumps-pro-billionaires-and-mamdanis-anti-billionaires-3dd07f90?mod=mw_rss_topstories
+                          - generic [ref=e357]: 11/5/2025, 8:00:00 AM • market_watch
+                        - generic [ref=e360]: Neutral
+                      - generic [ref=e361]:
+                        - generic [ref=e362]:
+                          - link "Treasury bonds are good investments at this time of year — but not because of the Fed" [ref=e363]:
+                            - /url: https://www.marketwatch.com/story/treasury-bonds-are-good-investments-at-this-time-of-year-but-not-because-of-the-fed-5625f325?mod=mw_rss_topstories
+                          - generic [ref=e364]: 11/5/2025, 7:50:00 AM • market_watch
+                        - generic [ref=e367]: Neutral
+                      - generic [ref=e368]:
+                        - generic [ref=e369]:
+                          - link "Abu Dhabi Invests £20 Billion in the UK, Double Its 2021 Pledge" [ref=e370]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/abu-dhabi-invests-20-billion-in-the-uk-double-its-2021-pledge
+                          - generic [ref=e371]: 11/5/2025, 7:37:39 AM • bloomberg
+                        - generic [ref=e374]: Neutral
+                      - generic [ref=e375]:
+                        - generic [ref=e376]:
+                          - link "Oil Traders See Muted Impact From Russia Sanctions" [ref=e377]:
+                            - /url: https://www.bloomberg.com/news/newsletters/2025-11-05/oil-traders-see-muted-impact-from-us-sanctions-on-russia
+                          - generic [ref=e378]: 11/5/2025, 7:35:55 AM • bloomberg
+                        - generic [ref=e381]: Neutral
+                      - generic [ref=e382]:
+                        - generic [ref=e383]:
+                          - link "Diageo Unit Starts Review of Royal Challengers Bengaluru Ownership" [ref=e384]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/diageo-unit-starts-review-of-royal-challengers-bengaluru-ownership
+                          - generic [ref=e385]: 11/5/2025, 7:22:21 AM • bloomberg
+                        - generic [ref=e388]: Neutral
+                      - generic [ref=e389]:
+                        - generic [ref=e390]:
+                          - link "Wealthy investors expected to drive $32 trillion alternatives boom" [ref=e391]:
+                            - /url: https://www.cnbc.com/2025/11/05/wealthy-investors-expected-to-drive-32-trillion-alternatives-boom.html
+                          - generic [ref=e392]: 11/5/2025, 7:19:14 AM • cnbc_markets
+                        - generic [ref=e395]: Neutral
+                      - generic [ref=e396]:
+                        - generic [ref=e397]:
+                          - link "Meta Slumps on AI Spending, Echoing 2022 Metaverse Rout" [ref=e398]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/meta-spending-spree-recalls-metaverse-debacle-that-crushed-stock
+                          - generic [ref=e399]: 11/5/2025, 7:15:01 AM • bloomberg
+                          - generic [ref=e402]: META
+                        - generic [ref=e405]: Neutral
+                      - generic [ref=e406]:
+                        - generic [ref=e407]:
+                          - link "Cracks Forming in Stock Melt Up, Newedge’s Dawson Says" [ref=e408]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/cracks-forming-in-stock-melt-up-newedge-s-dawson-says-video
+                          - generic [ref=e409]: 11/5/2025, 7:03:05 AM • bloomberg
+                        - generic [ref=e412]: Neutral
+                      - generic [ref=e413]:
+                        - generic [ref=e414]:
+                          - link "The green consulting gold rush loses its sparkle" [ref=e415]:
+                            - /url: https://www.ft.com/content/85b38001-2c57-49db-8f94-df4ec2ffe5e6
+                          - generic [ref=e416]: 11/5/2025, 7:00:02 AM • ft_markets
+                        - generic [ref=e419]: Neutral
+                      - generic [ref=e420]:
+                        - generic [ref=e421]:
+                          - link "‘Casino-Like’ Market Powers Robinhood to 450% Gain in Trump Era" [ref=e422]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/-casino-like-market-powers-robinhood-to-450-gain-in-trump-era
+                          - generic [ref=e423]: 11/5/2025, 7:00:00 AM • bloomberg
+                        - generic [ref=e426]: Neutral
+                      - generic [ref=e427]:
+                        - generic [ref=e428]:
+                          - link "Trump Critic Zohran Mamdani Wins New York, US Shutdown Record | The Pulse 11/5" [ref=e429]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/mamdani-wins-new-york-the-pulse-11-5-video
+                          - generic [ref=e430]: 11/5/2025, 6:53:38 AM • bloomberg
+                        - generic [ref=e433]: Neutral
+                      - generic [ref=e434]:
+                        - generic [ref=e435]:
+                          - link "Stocks Fall for Second Day Amid Tech Selloff; Democrats Sweep Elections | Bloomberg Brief 11/05/2025" [ref=e436]:
+                            - /url: https://www.bloomberg.com/news/videos/2025-11-05/bloomberg-brief-11-05-2025-video
+                          - generic [ref=e437]: 11/5/2025, 6:46:42 AM • bloomberg
+                        - generic [ref=e440]: Neutral
+                      - generic [ref=e441]:
+                        - generic [ref=e442]:
+                          - link "Nigeria Open to Selling State Refineries to Boost Competition" [ref=e443]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/nigeria-open-to-selling-state-refineries-to-boost-competition
+                          - generic [ref=e444]: 11/5/2025, 6:43:19 AM • bloomberg
+                        - generic [ref=e447]: Neutral
+                      - generic [ref=e448]:
+                        - generic [ref=e449]:
+                          - link "Global stocks slip as US sell-off over AI valuations spreads" [ref=e450]:
+                            - /url: https://www.ft.com/content/09c64d3f-3cc5-4138-9310-e85acca0a7ce
+                          - generic [ref=e451]: 11/5/2025, 6:30:26 AM • ft_markets
+                        - generic [ref=e454]: Neutral
+                      - generic [ref=e455]:
+                        - generic [ref=e456]:
+                          - link "Qatar to Invest $3.5 Billion in Egypt Mediterranean Resort" [ref=e457]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/qatari-diar-said-to-plan-3-5-billion-cash-investment-in-egypt
+                          - generic [ref=e458]: 11/5/2025, 6:26:31 AM • bloomberg
+                        - generic [ref=e461]: Neutral
+                      - generic [ref=e462]:
+                        - generic [ref=e463]:
+                          - link "BYD Pulls Ahead of Tesla in UK, Closes Sales Gap in Germany" [ref=e464]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/byd-pulls-ahead-of-tesla-in-uk-with-sales-increasing-sixfold
+                          - generic [ref=e465]: 11/5/2025, 5:55:23 AM • bloomberg
+                        - generic [ref=e468]: Neutral
+                      - generic [ref=e469]:
+                        - generic [ref=e470]:
+                          - link "Nordea Drops as New Plan Clings to Old Profitability Target" [ref=e471]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/nordea-unveils-2030-strategy-with-focus-on-boosting-eps-levels
+                          - generic [ref=e472]: 11/5/2025, 2:46:35 AM • bloomberg
+                        - generic [ref=e475]: Neutral
+                      - generic [ref=e476]:
+                        - generic [ref=e477]:
+                          - link "RIP junk rally?" [ref=e478]:
+                            - /url: https://www.ft.com/content/96b65adb-b3cf-4731-917c-f461c2bd3bf8
+                          - generic [ref=e479]: 11/5/2025, 1:30:03 AM • ft_markets
+                        - generic [ref=e482]: Neutral
+                      - generic [ref=e483]:
+                        - generic [ref=e484]:
+                          - link "Wall Street Drops Fear of ‘Hot Commie Summer’ in Overture to Mamdani" [ref=e485]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/mamdani-gets-wary-wall-street-s-support-after-nyc-mayoral-election-win
+                          - generic [ref=e486]: 11/5/2025, 12:50:54 AM • bloomberg
+                        - generic [ref=e489]: Neutral
+                      - generic [ref=e490]:
+                        - generic [ref=e491]:
+                          - link "Flight to Treasuries Slows as Stock Futures Pare Some Declines" [ref=e492]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/flight-to-treasuries-shows-fears-stocks-slump-has-room-to-run
+                          - generic [ref=e493]: 11/5/2025, 12:35:28 AM • bloomberg
+                        - generic [ref=e496]: Neutral
+                      - generic [ref=e497]:
+                        - generic [ref=e498]:
+                          - link "Bond markets are winning the Budget stand-off" [ref=e499]:
+                            - /url: https://www.ft.com/content/ae58fbcf-605f-4e97-b0f7-50bf7af4ff9b
+                          - generic [ref=e500]: 11/5/2025, 12:00:26 AM • ft_markets
+                        - generic [ref=e503]: Neutral
+                      - generic [ref=e504]:
+                        - generic [ref=e505]:
+                          - link "ECB’s digital euro plan hits resistance from banks and EU lawmakers" [ref=e506]:
+                            - /url: https://www.ft.com/content/1654675a-9e8f-4a5e-b174-730ae0c3ab37
+                          - generic [ref=e507]: 11/5/2025, 12:00:26 AM • ft_markets
+                        - generic [ref=e510]: Neutral
+                      - generic [ref=e511]:
+                        - generic [ref=e512]:
+                          - link "China’s green bond market races ahead of global peers" [ref=e513]:
+                            - /url: https://www.ft.com/content/5cd98a31-eb4a-4fa3-b2f0-ae4f38671f7f
+                          - generic [ref=e514]: 11/5/2025, 12:00:14 AM • ft_markets
+                        - generic [ref=e517]: Neutral
+                      - generic [ref=e518]:
+                        - generic [ref=e519]:
+                          - link "UK regulator to ask judge to lift freeze on key bond market data contract" [ref=e520]:
+                            - /url: https://www.ft.com/content/9f234cdc-0509-42dc-8336-b4987c35ecb7
+                          - generic [ref=e521]: 11/5/2025, 12:00:14 AM • ft_markets
+                        - generic [ref=e524]: Neutral
+                      - generic [ref=e525]:
+                        - generic [ref=e526]:
+                          - link "Why the bond market still relies on voice" [ref=e527]:
+                            - /url: https://www.ft.com/content/287f5f16-2224-4bd0-9e6e-d965ca2cee5b
+                          - generic [ref=e528]: 11/5/2025, 12:00:14 AM • ft_markets
+                        - generic [ref=e531]: Neutral
+                      - generic [ref=e532]:
+                        - generic [ref=e533]:
+                          - link "Trump’s hamstrung hopes for fossil fuels expansion" [ref=e534]:
+                            - /url: https://www.ft.com/content/f1645637-ba89-40dc-bea8-58c605d72547
+                          - generic [ref=e535]: 11/5/2025, 12:00:05 AM • ft_markets
+                        - generic [ref=e538]: Neutral
+                      - generic [ref=e539]:
+                        - generic [ref=e540]:
+                          - link "Bitcoin Shaken by Long-Term Holders Dumping $45 Billion" [ref=e541]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/crypto-hit-by-bitcoin-whales-dumping-45-billion-in-market-bets
+                          - generic [ref=e542]: 11/4/2025, 10:23:04 PM • bloomberg
+                        - generic [ref=e545]: Neutral
+                      - generic [ref=e546]:
+                        - generic [ref=e547]:
+                          - link "Global Chip Stock Rally Founders on Concerns Over Valuations" [ref=e548]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/global-chip-selloff-erases-500-billion-in-value-as-fears-mount
+                          - generic [ref=e549]: 11/4/2025, 9:14:47 PM • bloomberg
+                        - generic [ref=e552]: Neutral
+                      - generic [ref=e553]:
+                        - generic [ref=e554]:
+                          - link "Copper Holds Loss as Equity Rout, Strong Dollar Weigh on Metals" [ref=e555]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/copper-declines-for-a-fifth-day-after-hitting-a-record-last-week
+                          - generic [ref=e556]: 11/4/2025, 9:14:44 PM • bloomberg
+                        - generic [ref=e559]: Neutral
+                      - generic [ref=e560]:
+                        - generic [ref=e561]:
+                          - link "Itau Expects Low Delinquencies in ‘Foreseeable Future’" [ref=e562]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-05/itau-expects-delinquencies-to-stay-low-for-foreseeable-future
+                          - generic [ref=e563]: 11/4/2025, 7:05:16 PM • bloomberg
+                        - generic [ref=e566]: Neutral
+                      - generic [ref=e567]:
+                        - generic [ref=e568]:
+                          - link "Oil Steadies as Traders Weigh US Stockpiles and Supply Outlook" [ref=e569]:
+                            - /url: https://www.bloomberg.com/news/articles/2025-11-04/latest-oil-market-news-and-analysis-for-nov-5
+                          - generic [ref=e570]: 11/4/2025, 6:26:27 PM • bloomberg
+                        - generic [ref=e573]: Neutral
+                      - generic [ref=e574]:
+                        - generic [ref=e575]:
+                          - link "JPMorgan discloses US inquiry into alleged debanking practices" [ref=e576]:
+                            - /url: https://www.ft.com/content/d3540c0b-a68c-484e-a628-7c720a850e0b
+                          - generic [ref=e577]: 11/4/2025, 6:15:21 PM • ft_markets
+                        - generic [ref=e580]: Neutral
+              - generic [ref=e581]:
+                - generic [ref=e583]:
+                  - generic [ref=e584]:
+                    - heading "Filtres" [level=4] [ref=e585]
+                    - generic [ref=e588]:
+                      - img [ref=e589]
+                      - generic [ref=e591]:
+                        - paragraph [ref=e592]: il y a 5 jours
+                        - paragraph [ref=e593]: Périmées • 6716 min
+                  - generic [ref=e594]:
+                    - generic [ref=e595]:
+                      - generic [ref=e596]: Tickers (virgules)
+                      - textbox "Tickers (virgules)" [ref=e598]:
+                        - /placeholder: AAPL,NVDA
+                    - generic [ref=e599]:
+                      - generic [ref=e600]: Recherche (mot-clé)
+                      - textbox "Recherche (mot-clé)" [ref=e602]:
+                        - /placeholder: "Ex: earnings, inflation"
+                    - generic [ref=e603]:
+                      - generic [ref=e604]: Fenêtre
+                      - generic [ref=e605]:
+                        - textbox "Fenêtre" [ref=e606] [cursor=pointer]: 7 jours
+                        - generic:
+                          - img
+                    - generic [ref=e607]:
+                      - generic [ref=e608]: Région
+                      - generic [ref=e609]:
+                        - textbox "Région" [ref=e610] [cursor=pointer]: Toutes régions
+                        - generic:
+                          - img
+                    - generic [ref=e611]:
+                      - generic [ref=e612]: Score minimal
+                      - generic [ref=e613]:
+                        - textbox "Score minimal" [ref=e614] [cursor=pointer]: Score ≥ 0.0
+                        - generic:
+                          - img
+                - generic [ref=e615]:
+                  - generic [ref=e617]:
+                    - generic [ref=e618]:
+                      - generic [ref=e620]: CNBC_MARKETS
+                      - generic [ref=e621]:
+                        - checkbox "05/11/2025 08:53:19"
+                        - generic [ref=e623] [cursor=pointer]: 05/11/2025 08:53:19
+                    - paragraph [ref=e624]: McDonald's sales rise, but CEO expects low-income diners to spend less into next year
+                    - paragraph [ref=e625]: McDonald's stock has risen just 3% this year, as investor concerns about the restaurant industry and the broader economy have weighed on shares.
+                    - link "Ouvrir la source" [ref=e626] [cursor=pointer]:
+                      - /url: https://www.cnbc.com/2025/11/05/mcdonalds-mcd-q3-2025-earnings.html
+                  - generic [ref=e628]:
+                    - generic [ref=e629]:
+                      - generic [ref=e631]: BLOOMBERG
+                      - generic [ref=e632]:
+                        - checkbox "05/11/2025 08:52:05"
+                        - generic [ref=e634] [cursor=pointer]: 05/11/2025 08:52:05
+                    - paragraph [ref=e635]: US Companies Added 42,000 jobs in October, Per ADP Data
+                    - paragraph [ref=e636]: "Employment at US companies increased in October as private-sector payrolls grew by 42,000 after a revised 29,000 decline a month earlier, according to ADP Research data released Wednesday. Michael McKee reports. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e637] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/us-companies-added-42-000-jobs-in-october-adp-video
+                  - generic [ref=e639]:
+                    - generic [ref=e640]:
+                      - generic [ref=e642]: CNBC_MARKETS
+                      - generic [ref=e643]:
+                        - checkbox "05/11/2025 08:51:15"
+                        - generic [ref=e645] [cursor=pointer]: 05/11/2025 08:51:15
+                    - paragraph [ref=e646]: UPS cargo plane crash near Louisville airport kills at least 9
+                    - paragraph [ref=e647]: A UPS flight with three crewmembers crashed near Louisville, but the cause and extent of injuries were unclear.
+                    - link "Ouvrir la source" [ref=e648] [cursor=pointer]:
+                      - /url: https://www.cnbc.com/2025/11/04/ups-plane-louisville.html
+                  - generic [ref=e650]:
+                    - generic [ref=e651]:
+                      - generic [ref=e653]: BLOOMBERG
+                      - generic [ref=e654]:
+                        - checkbox "05/11/2025 08:47:27"
+                        - generic [ref=e656] [cursor=pointer]: 05/11/2025 08:47:27
+                    - paragraph [ref=e657]: How Mamdani Won Over New York City
+                    - paragraph [ref=e658]: "New York City’s workforce is changing &mdash; and Mamdani’s campaign tapped into their concerns. Bloomberg Opinion columnist and economist Allison Schrager explains the data. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e659] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/opinion-how-mamdani-won-over-new-york-city-video
+                  - generic [ref=e661]:
+                    - generic [ref=e662]:
+                      - generic [ref=e664]: MARKET_WATCH
+                      - generic [ref=e665]:
+                        - checkbox "05/11/2025 08:45:00"
+                        - generic [ref=e667] [cursor=pointer]: 05/11/2025 08:45:00
+                    - paragraph [ref=e668]: McDonald’s customers are spending more per visit as sales top expectations again
+                    - paragraph [ref=e669]: McDonald’s comparable sales beat Wall Street’s expectations for the second straight quarter,
+                    - link "Ouvrir la source" [ref=e670] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/mcdonalds-customers-are-spending-more-per-visit-as-sales-top-expectations-again-64865bac?mod=mw_rss_topstories
+                  - generic [ref=e672]:
+                    - generic [ref=e673]:
+                      - generic [ref=e675]: BLOOMBERG
+                      - generic [ref=e676]:
+                        - checkbox "05/11/2025 08:40:07"
+                        - generic [ref=e678] [cursor=pointer]: 05/11/2025 08:40:07
+                    - paragraph [ref=e679]: Apollo’s Jim Zelter Says Not Seeing Credit Cycle Waning Anytime Soon
+                    - paragraph [ref=e680]: "Apollo Global Management President Jim Zelter discusses the state of the credit market and money being invested in AI data centers. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e681] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/jim-zelter-not-seeing-credit-cycle-waning-anytime-soon-video
+                  - generic [ref=e683]:
+                    - generic [ref=e684]:
+                      - generic [ref=e686]: BLOOMBERG
+                      - generic [ref=e687]:
+                        - checkbox "05/11/2025 08:38:00"
+                        - generic [ref=e689] [cursor=pointer]: 05/11/2025 08:38:00
+                    - paragraph [ref=e690]: Amazon to Offer Nubank Customers More Credit in Brazil Push
+                    - paragraph [ref=e691]: Amazon.com Inc. will offer customers of Brazilian financial firm Nu Holdings Ltd. a slew of special payment options, including more credit to shop with the e-commerce giant, as online competition intensifies ahead of the holiday season.
+                    - link "Ouvrir la source" [ref=e692] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/amazon-to-offer-nubank-customers-more-credit-in-brazil-push
+                  - generic [ref=e694]:
+                    - generic [ref=e695]:
+                      - generic [ref=e697]: MARKET_WATCH
+                      - generic [ref=e698]:
+                        - checkbox "05/11/2025 08:38:00"
+                        - generic [ref=e700] [cursor=pointer]: 05/11/2025 08:38:00
+                    - paragraph [ref=e701]: "What the AI phenomenon means for the dollar: It’s complicated."
+                    - paragraph [ref=e702]: The evidence so far from 2025 gives no clear indication of what AI might mean for the dollar, but longer-term impacts are likely to be supportive.
+                    - link "Ouvrir la source" [ref=e703] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/what-the-ai-phenomenon-means-for-the-dollar-its-complicated-7f998822?mod=mw_rss_topstories
+                  - generic [ref=e705]:
+                    - generic [ref=e706]:
+                      - generic [ref=e708]: MARKET_WATCH
+                      - generic [ref=e709]:
+                        - checkbox "05/11/2025 08:37:00"
+                        - generic [ref=e711] [cursor=pointer]: 05/11/2025 08:37:00
+                    - paragraph [ref=e712]: Treasury says it plans to hold note, bond sales steady for ‘several quarters,’ but has begun considering future increases
+                    - paragraph [ref=e713]: There may still be uncertainty over Treasury Secretary Scott Bessent’s long-term debt-management strategy.
+                    - link "Ouvrir la source" [ref=e714] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/treasury-says-it-plans-to-hold-note-bond-sales-steady-for-several-quarters-but-has-begun-considering-future-increases-b0b22290?mod=mw_rss_topstories
+                  - generic [ref=e716]:
+                    - generic [ref=e717]:
+                      - generic [ref=e719]: BLOOMBERG
+                      - generic [ref=e720]:
+                        - checkbox "05/11/2025 08:33:45"
+                        - generic [ref=e722] [cursor=pointer]: 05/11/2025 08:33:45
+                    - paragraph [ref=e723]: US to Keep Note, Bond Sales Steady for at Least Several Quarters
+                    - paragraph [ref=e724]: The US Treasury indicated it’s not looking to boost sales of notes and bonds until well into next year, in a decision that will see the government increasingly rely on bills to fund the budget deficit.
+                    - link "Ouvrir la source" [ref=e725] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/us-to-keep-note-bond-sales-steady-for-at-least-several-quarters
+                  - generic [ref=e727]:
+                    - generic [ref=e728]:
+                      - generic [ref=e730]: MARKET_WATCH
+                      - generic [ref=e731]:
+                        - checkbox "05/11/2025 08:30:00"
+                        - generic [ref=e733] [cursor=pointer]: 05/11/2025 08:30:00
+                    - paragraph [ref=e734]: Those millions of dead people supposedly claiming Social Security? It’s obvious now that they were bogus.
+                    - paragraph [ref=e735]: They don’t exist. They never did. The numbers that Musk and Trump implied were evidence of massive fraud were merely database errors.
+                    - link "Ouvrir la source" [ref=e736] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/those-millions-of-dead-people-supposedly-claiming-social-security-its-obvious-now-that-they-were-bogus-12f71c14?mod=mw_rss_topstories
+                  - generic [ref=e738]:
+                    - generic [ref=e739]:
+                      - generic [ref=e741]: MARKET_WATCH
+                      - generic [ref=e742]:
+                        - checkbox "05/11/2025 08:24:00"
+                        - generic [ref=e744] [cursor=pointer]: 05/11/2025 08:24:00
+                    - paragraph [ref=e745]: ADP says businesses create 42,000 jobs in October — but the labor market is still not great
+                    - paragraph [ref=e746]: Privately run businesses created 42,000 new jobs in October — the biggest increase in three months — in a possible sign of stabilization in a weakening U.S. labor market.
+                    - link "Ouvrir la source" [ref=e747] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/adp-says-businesses-create-42-000-job-in-october-but-the-labor-market-is-still-not-great-667628e7?mod=mw_rss_topstories
+                  - generic [ref=e749]:
+                    - generic [ref=e750]:
+                      - generic [ref=e752]: MARKET_WATCH
+                      - generic [ref=e753]:
+                        - checkbox "05/11/2025 08:20:00"
+                        - generic [ref=e755] [cursor=pointer]: 05/11/2025 08:20:00
+                    - paragraph [ref=e756]: Humana’s stock falls as Medicaid, health-benefit costs are still problems
+                    - paragraph [ref=e757]: Medicaid-membership growth outlook was slashed, and as medical costs are still a problem.
+                    - link "Ouvrir la source" [ref=e758] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/humanas-stock-falls-as-medicaid-health-benefit-costs-are-still-problems-091e8e15?mod=mw_rss_topstories
+                  - generic [ref=e760]:
+                    - generic [ref=e761]:
+                      - generic [ref=e763]: BLOOMBERG
+                      - generic [ref=e764]:
+                        - checkbox "05/11/2025 08:16:23"
+                        - generic [ref=e766] [cursor=pointer]: 05/11/2025 08:16:23
+                    - paragraph [ref=e767]: South Africa’s Commodity Boom Set to Spill Into Wider Economy
+                    - paragraph [ref=e768]: South Africa’s commodity windfall is expected to seep into the broader economy, boosting banks, retailers and property stocks as stronger prices improve the fiscal outlook and support lower interest rates, according to Old Mutual Investment Group.
+                    - link "Ouvrir la source" [ref=e769] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/south-africa-commodity-boom-boosts-economy-and-markets
+                  - generic [ref=e771]:
+                    - generic [ref=e772]:
+                      - generic [ref=e774]: MARKET_WATCH
+                      - generic [ref=e775]:
+                        - checkbox "05/11/2025 08:12:00"
+                        - generic [ref=e777] [cursor=pointer]: 05/11/2025 08:12:00
+                    - paragraph [ref=e778]: These are my biggest investing regrets — and how I’m hitting reset in retirement
+                    - paragraph [ref=e779]: For retirees, missed opportunities can feel extremely painful. Here’s how to move forward.
+                    - link "Ouvrir la source" [ref=e780] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/this-hidden-force-trips-up-investors-in-retirement-heres-how-i-recovered-cee3b1c4?mod=mw_rss_topstories
+                  - generic [ref=e782]:
+                    - generic [ref=e783]:
+                      - generic [ref=e785]: MARKET_WATCH
+                      - generic [ref=e786]:
+                        - checkbox "05/11/2025 08:05:00"
+                        - generic [ref=e788] [cursor=pointer]: 05/11/2025 08:05:00
+                    - paragraph [ref=e789]: AI companies have money and momentum. But look who’s stuck with their utility bill.
+                    - paragraph [ref=e790]: Big Tech’s data center expansion efforts are spurring rate hikes for consumers. They don’t have to stand for it.
+                    - link "Ouvrir la source" [ref=e791] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/ai-companies-have-money-and-momentum-but-look-whos-stuck-with-their-utility-bill-e68ce9d3?mod=mw_rss_topstories
+                  - generic [ref=e793]:
+                    - generic [ref=e794]:
+                      - generic [ref=e796]: BLOOMBERG
+                      - generic [ref=e797]:
+                        - checkbox "05/11/2025 08:02:44"
+                        - generic [ref=e799] [cursor=pointer]: 05/11/2025 08:02:44
+                    - paragraph [ref=e800]: Corporate Bond World Set to Get Its First Daily Closing Auction
+                    - paragraph [ref=e801]: "MarketAxess Holdings Inc. is seeking to bring a feature of fast-twitch equity markets to the relatively sedate $9 trillion universe of corporate bonds: the daily closing auction."
+                    - link "Ouvrir la source" [ref=e802] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/corporate-bond-world-set-to-get-its-first-daily-closing-auction
+                  - generic [ref=e804]:
+                    - generic [ref=e805]:
+                      - generic [ref=e807]: CNBC_MARKETS
+                      - generic [ref=e808]:
+                        - checkbox "05/11/2025 08:00:01"
+                        - generic [ref=e810] [cursor=pointer]: 05/11/2025 08:00:01
+                    - paragraph [ref=e811]: There's an outperforming real estate sector hiding in plain sight
+                    - paragraph [ref=e812]: Industrial outdoor storage (IOS) is suddenly seeing significant demand and rent growth amid lean supply.
+                    - link "Ouvrir la source" [ref=e813] [cursor=pointer]:
+                      - /url: https://www.cnbc.com/2025/11/05/alterra-ios-ceo-industrial-outdoor-storage-real-estate-sector.html
+                  - generic [ref=e815]:
+                    - generic [ref=e816]:
+                      - generic [ref=e818]: MARKET_WATCH
+                      - generic [ref=e819]:
+                        - checkbox "05/11/2025 08:00:00"
+                        - generic [ref=e821] [cursor=pointer]: 05/11/2025 08:00:00
+                    - paragraph [ref=e822]: America is divided into two countries — Trump’s pro-billionaires and Mamdani’s anti-billionaires
+                    - paragraph [ref=e823]: The 0.1% as an avatar for political polarization makes sense when you look at the world that tech billionaires have helped create.
+                    - link "Ouvrir la source" [ref=e824] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/america-is-divided-into-two-countries-trumps-pro-billionaires-and-mamdanis-anti-billionaires-3dd07f90?mod=mw_rss_topstories
+                  - generic [ref=e826]:
+                    - generic [ref=e827]:
+                      - generic [ref=e829]: MARKET_WATCH
+                      - generic [ref=e830]:
+                        - checkbox "05/11/2025 07:50:00"
+                        - generic [ref=e832] [cursor=pointer]: 05/11/2025 07:50:00
+                    - paragraph [ref=e833]: Treasury bonds are good investments at this time of year — but not because of the Fed
+                    - paragraph [ref=e834]: Prices peak in the late fall and bottom in the spring.
+                    - link "Ouvrir la source" [ref=e835] [cursor=pointer]:
+                      - /url: https://www.marketwatch.com/story/treasury-bonds-are-good-investments-at-this-time-of-year-but-not-because-of-the-fed-5625f325?mod=mw_rss_topstories
+                  - generic [ref=e837]:
+                    - generic [ref=e838]:
+                      - generic [ref=e840]: BLOOMBERG
+                      - generic [ref=e841]:
+                        - checkbox "05/11/2025 07:37:39"
+                        - generic [ref=e843] [cursor=pointer]: 05/11/2025 07:37:39
+                    - paragraph [ref=e844]: Abu Dhabi Invests £20 Billion in the UK, Double Its 2021 Pledge
+                    - paragraph [ref=e845]: Abu Dhabi has surpassed its £10 billion investment commitment to the UK, channeling more than twice that sum into British assets despite signs of strain in the bilateral relationship, according to people familiar with the matter.
+                    - link "Ouvrir la source" [ref=e846] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/abu-dhabi-invests-20-billion-in-the-uk-double-its-2021-pledge
+                  - generic [ref=e848]:
+                    - generic [ref=e849]:
+                      - generic [ref=e851]: BLOOMBERG
+                      - generic [ref=e852]:
+                        - checkbox "05/11/2025 07:35:55"
+                        - generic [ref=e854] [cursor=pointer]: 05/11/2025 07:35:55
+                    - paragraph [ref=e855]: Oil Traders See Muted Impact From Russia Sanctions
+                    - paragraph [ref=e856]: Talk at Adipec this week has centered on the latest US restrictions on Moscow’s energy industry.
+                    - link "Ouvrir la source" [ref=e857] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/newsletters/2025-11-05/oil-traders-see-muted-impact-from-us-sanctions-on-russia
+                  - generic [ref=e859]:
+                    - generic [ref=e860]:
+                      - generic [ref=e862]: BLOOMBERG
+                      - generic [ref=e863]:
+                        - checkbox "05/11/2025 07:22:21"
+                        - generic [ref=e865] [cursor=pointer]: 05/11/2025 07:22:21
+                    - paragraph [ref=e866]: Diageo Unit Starts Review of Royal Challengers Bengaluru Ownership
+                    - paragraph [ref=e867]: United Spirits Ltd., the Indian arm of Diageo Plc, has begun a review of its investment in its sports management unit that owns the Royal Challengers Bengaluru franchise in the South Asian nation’s popular cricket league.
+                    - link "Ouvrir la source" [ref=e868] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/diageo-unit-starts-review-of-royal-challengers-bengaluru-ownership
+                  - generic [ref=e870]:
+                    - generic [ref=e871]:
+                      - generic [ref=e873]: CNBC_MARKETS
+                      - generic [ref=e874]:
+                        - checkbox "05/11/2025 07:19:14"
+                        - generic [ref=e876] [cursor=pointer]: 05/11/2025 07:19:14
+                    - paragraph [ref=e877]: Wealthy investors expected to drive $32 trillion alternatives boom
+                    - paragraph [ref=e878]: A recovery in IPOs and mergers, falling interest rates and the AI boom will all drive a new growth cycle in private markets, according to Preqin.
+                    - link "Ouvrir la source" [ref=e879] [cursor=pointer]:
+                      - /url: https://www.cnbc.com/2025/11/05/wealthy-investors-expected-to-drive-32-trillion-alternatives-boom.html
+                  - generic [ref=e881]:
+                    - generic [ref=e882]:
+                      - generic [ref=e884]: BLOOMBERG
+                      - generic [ref=e885]:
+                        - checkbox "05/11/2025 07:15:01"
+                        - generic [ref=e887] [cursor=pointer]: 05/11/2025 07:15:01
+                    - paragraph [ref=e888]: Meta Slumps on AI Spending, Echoing 2022 Metaverse Rout
+                    - paragraph [ref=e889]: The huge checks Meta Platforms Inc. is writing to support its artificial intelligence ambitions are reminding some investors of the massive metaverse outlays that crippled the stock just a few years ago.
+                    - generic [ref=e891]:
+                      - checkbox "META"
+                      - generic [ref=e893] [cursor=pointer]: META
+                    - link "Ouvrir la source" [ref=e894] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/meta-spending-spree-recalls-metaverse-debacle-that-crushed-stock
+                  - generic [ref=e896]:
+                    - generic [ref=e897]:
+                      - generic [ref=e899]: BLOOMBERG
+                      - generic [ref=e900]:
+                        - checkbox "05/11/2025 07:03:05"
+                        - generic [ref=e902] [cursor=pointer]: 05/11/2025 07:03:05
+                    - paragraph [ref=e903]: Cracks Forming in Stock Melt Up, Newedge’s Dawson Says
+                    - paragraph [ref=e904]: "Cameron Dawson, CIO at Newedge Wealth, says there’s been “a deterioration in breadth over the last month or so,” as she explains the issues she sees potentially impacting markets at the start of 2026. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e905] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/cracks-forming-in-stock-melt-up-newedge-s-dawson-says-video
+                  - generic [ref=e907]:
+                    - generic [ref=e908]:
+                      - generic [ref=e910]: FT_MARKETS
+                      - generic [ref=e911]:
+                        - checkbox "05/11/2025 07:00:02"
+                        - generic [ref=e913] [cursor=pointer]: 05/11/2025 07:00:02
+                    - paragraph [ref=e914]: The green consulting gold rush loses its sparkle
+                    - paragraph [ref=e915]: Consultancies have had to adapt to a changing political environment
+                    - link "Ouvrir la source" [ref=e916] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/85b38001-2c57-49db-8f94-df4ec2ffe5e6
+                  - generic [ref=e918]:
+                    - generic [ref=e919]:
+                      - generic [ref=e921]: BLOOMBERG
+                      - generic [ref=e922]:
+                        - checkbox "05/11/2025 07:00:00"
+                        - generic [ref=e924] [cursor=pointer]: 05/11/2025 07:00:00
+                    - paragraph [ref=e925]: ‘Casino-Like’ Market Powers Robinhood to 450% Gain in Trump Era
+                    - paragraph [ref=e926]: Robinhood Markets Inc. has been one of Wall Street’s biggest winners since Donald Trump’s election victory. But with worries over expensive stocks growing, its sky-high valuation will be front-of-mind as investors parse Wednesday’s results.
+                    - link "Ouvrir la source" [ref=e927] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/-casino-like-market-powers-robinhood-to-450-gain-in-trump-era
+                  - generic [ref=e929]:
+                    - generic [ref=e930]:
+                      - generic [ref=e932]: BLOOMBERG
+                      - generic [ref=e933]:
+                        - checkbox "05/11/2025 06:53:38"
+                        - generic [ref=e935] [cursor=pointer]: 05/11/2025 06:53:38
+                    - paragraph [ref=e936]: Trump Critic Zohran Mamdani Wins New York, US Shutdown Record | The Pulse 11/5
+                    - paragraph [ref=e937]: "Zohran Mamdani was elected the 111th mayor of New York in a historic victory that will put an avowed democratic socialist in charge of the city that serves as the capital of global finance. Meanwhile the US government shutdown has become the longest in history, and with no sign of a resolution soon its economic toll is deepening. Now in its 36th day, the shutdown has surpassed the previous record set in early 2019 during President Donald Trump’s first term. Today's guests: Emmanuel Cau, Barclays, Head of European Equity Strategy; Mike Doustdar, Novo Nordisk CEO; Modupe Adegbembo, Jefferies Economist; Alastair King, City of London Lord Mayor. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e938] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/mamdani-wins-new-york-the-pulse-11-5-video
+                  - generic [ref=e940]:
+                    - generic [ref=e941]:
+                      - generic [ref=e943]: BLOOMBERG
+                      - generic [ref=e944]:
+                        - checkbox "05/11/2025 06:46:42"
+                        - generic [ref=e946] [cursor=pointer]: 05/11/2025 06:46:42
+                    - paragraph [ref=e947]: Stocks Fall for Second Day Amid Tech Selloff; Democrats Sweep Elections | Bloomberg Brief 11/05/2025
+                    - paragraph [ref=e948]: "US equity futures slide as tech stocks drag global markets lower for a second day. Zohran Mamdani wins the New York City mayoral race. The US Supreme Court is scheduled to hear on the legality of some of President Trump's tariffs. Shares of AMD fall in pre-market trading as the firm's quarterly results fail to impress investors. Katrina Dudley of Franklin Templeton discusses a potential market correction. (Source: Bloomberg)"
+                    - link "Ouvrir la source" [ref=e949] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/videos/2025-11-05/bloomberg-brief-11-05-2025-video
+                  - generic [ref=e951]:
+                    - generic [ref=e952]:
+                      - generic [ref=e954]: BLOOMBERG
+                      - generic [ref=e955]:
+                        - checkbox "05/11/2025 06:43:19"
+                        - generic [ref=e957] [cursor=pointer]: 05/11/2025 06:43:19
+                    - paragraph [ref=e958]: Nigeria Open to Selling State Refineries to Boost Competition
+                    - paragraph [ref=e959]: Nigeria is open to selling state-owned refineries as part of an effort to boost competition in the industry, which is dominated by the giant Dangote Refinery.
+                    - link "Ouvrir la source" [ref=e960] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/nigeria-open-to-selling-state-refineries-to-boost-competition
+                  - generic [ref=e962]:
+                    - generic [ref=e963]:
+                      - generic [ref=e965]: FT_MARKETS
+                      - generic [ref=e966]:
+                        - checkbox "05/11/2025 06:30:26"
+                        - generic [ref=e968] [cursor=pointer]: 05/11/2025 06:30:26
+                    - paragraph [ref=e969]: Global stocks slip as US sell-off over AI valuations spreads
+                    - paragraph [ref=e970]: Decline in Asian markets led by companies most exposed to demand for artificial intelligence
+                    - link "Ouvrir la source" [ref=e971] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/09c64d3f-3cc5-4138-9310-e85acca0a7ce
+                  - generic [ref=e973]:
+                    - generic [ref=e974]:
+                      - generic [ref=e976]: BLOOMBERG
+                      - generic [ref=e977]:
+                        - checkbox "05/11/2025 06:26:31"
+                        - generic [ref=e979] [cursor=pointer]: 05/11/2025 06:26:31
+                    - paragraph [ref=e980]: Qatar to Invest $3.5 Billion in Egypt Mediterranean Resort
+                    - paragraph [ref=e981]: A Qatari state-owned real estate company will make a $3.5 billion cash investment in Egypt, according to people familiar with the matter, in the latest Gulf backing for the North African economy.
+                    - link "Ouvrir la source" [ref=e982] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/qatari-diar-said-to-plan-3-5-billion-cash-investment-in-egypt
+                  - generic [ref=e984]:
+                    - generic [ref=e985]:
+                      - generic [ref=e987]: BLOOMBERG
+                      - generic [ref=e988]:
+                        - checkbox "05/11/2025 05:55:23"
+                        - generic [ref=e990] [cursor=pointer]: 05/11/2025 05:55:23
+                    - paragraph [ref=e991]: BYD Pulls Ahead of Tesla in UK, Closes Sales Gap in Germany
+                    - paragraph [ref=e992]: BYD Co. is building a lead over Tesla Inc. in the UK and is now neck-and-neck with the Elon Musk-led company in Germany, two of Europe’s biggest markets for plug-in cars.
+                    - link "Ouvrir la source" [ref=e993] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/byd-pulls-ahead-of-tesla-in-uk-with-sales-increasing-sixfold
+                  - generic [ref=e995]:
+                    - generic [ref=e996]:
+                      - generic [ref=e998]: BLOOMBERG
+                      - generic [ref=e999]:
+                        - checkbox "05/11/2025 02:46:35"
+                        - generic [ref=e1001] [cursor=pointer]: 05/11/2025 02:46:35
+                    - paragraph [ref=e1002]: Nordea Drops as New Plan Clings to Old Profitability Target
+                    - paragraph [ref=e1003]: Nordea Bank Abp’s shares fell after the lender unveiled a profitability target at the same level as the previous one.
+                    - link "Ouvrir la source" [ref=e1004] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/nordea-unveils-2030-strategy-with-focus-on-boosting-eps-levels
+                  - generic [ref=e1006]:
+                    - generic [ref=e1007]:
+                      - generic [ref=e1009]: FT_MARKETS
+                      - generic [ref=e1010]:
+                        - checkbox "05/11/2025 01:30:03"
+                        - generic [ref=e1012] [cursor=pointer]: 05/11/2025 01:30:03
+                    - paragraph [ref=e1013]: RIP junk rally?
+                    - paragraph [ref=e1014]: A vibe shift, and possibly more
+                    - link "Ouvrir la source" [ref=e1015] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/96b65adb-b3cf-4731-917c-f461c2bd3bf8
+                  - generic [ref=e1017]:
+                    - generic [ref=e1018]:
+                      - generic [ref=e1020]: BLOOMBERG
+                      - generic [ref=e1021]:
+                        - checkbox "05/11/2025 00:50:54"
+                        - generic [ref=e1023] [cursor=pointer]: 05/11/2025 00:50:54
+                    - paragraph [ref=e1024]: Wall Street Drops Fear of ‘Hot Commie Summer’ in Overture to Mamdani
+                    - paragraph [ref=e1025]: "New York City’s elite threw everything at Zohran Mamdani to stop him from becoming mayor: money, insults, scare tactics, and tweets."
+                    - link "Ouvrir la source" [ref=e1026] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/mamdani-gets-wary-wall-street-s-support-after-nyc-mayoral-election-win
+                  - generic [ref=e1028]:
+                    - generic [ref=e1029]:
+                      - generic [ref=e1031]: BLOOMBERG
+                      - generic [ref=e1032]:
+                        - checkbox "05/11/2025 00:35:28"
+                        - generic [ref=e1034] [cursor=pointer]: 05/11/2025 00:35:28
+                    - paragraph [ref=e1035]: Flight to Treasuries Slows as Stock Futures Pare Some Declines
+                    - paragraph [ref=e1036]: Treasuries steadied as the benchmark 10-year yield recovered from a drop to a one-week low, after US stock futures trimmed earlier losses.
+                    - link "Ouvrir la source" [ref=e1037] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/flight-to-treasuries-shows-fears-stocks-slump-has-room-to-run
+                  - generic [ref=e1039]:
+                    - generic [ref=e1040]:
+                      - generic [ref=e1042]: FT_MARKETS
+                      - generic [ref=e1043]:
+                        - checkbox "05/11/2025 00:00:26"
+                        - generic [ref=e1045] [cursor=pointer]: 05/11/2025 00:00:26
+                    - paragraph [ref=e1046]: Bond markets are winning the Budget stand-off
+                    - paragraph [ref=e1047]: Gilts investors have long suspected that Labour would abandon its manifesto promises
+                    - link "Ouvrir la source" [ref=e1048] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/ae58fbcf-605f-4e97-b0f7-50bf7af4ff9b
+                  - generic [ref=e1050]:
+                    - generic [ref=e1051]:
+                      - generic [ref=e1053]: FT_MARKETS
+                      - generic [ref=e1054]:
+                        - checkbox "05/11/2025 00:00:26"
+                        - generic [ref=e1056] [cursor=pointer]: 05/11/2025 00:00:26
+                    - paragraph [ref=e1057]: ECB’s digital euro plan hits resistance from banks and EU lawmakers
+                    - paragraph [ref=e1058]: Central Bank-backed online payments scheme could undermine private sector alternatives, critics warn
+                    - link "Ouvrir la source" [ref=e1059] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/1654675a-9e8f-4a5e-b174-730ae0c3ab37
+                  - generic [ref=e1061]:
+                    - generic [ref=e1062]:
+                      - generic [ref=e1064]: FT_MARKETS
+                      - generic [ref=e1065]:
+                        - checkbox "05/11/2025 00:00:14"
+                        - generic [ref=e1067] [cursor=pointer]: 05/11/2025 00:00:14
+                    - paragraph [ref=e1068]: China’s green bond market races ahead of global peers
+                    - paragraph [ref=e1069]: Use of sustainable finance overtakes western rivals as ESG movement faces US backlash
+                    - link "Ouvrir la source" [ref=e1070] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/5cd98a31-eb4a-4fa3-b2f0-ae4f38671f7f
+                  - generic [ref=e1072]:
+                    - generic [ref=e1073]:
+                      - generic [ref=e1075]: FT_MARKETS
+                      - generic [ref=e1076]:
+                        - checkbox "05/11/2025 00:00:14"
+                        - generic [ref=e1078] [cursor=pointer]: 05/11/2025 00:00:14
+                    - paragraph [ref=e1079]: UK regulator to ask judge to lift freeze on key bond market data contract
+                    - paragraph [ref=e1080]: Financial Conduct Authority sued over consolidated tape deal by Ediphy Analytics, which alleges conflict of interest
+                    - link "Ouvrir la source" [ref=e1081] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/9f234cdc-0509-42dc-8336-b4987c35ecb7
+                  - generic [ref=e1083]:
+                    - generic [ref=e1084]:
+                      - generic [ref=e1086]: FT_MARKETS
+                      - generic [ref=e1087]:
+                        - checkbox "05/11/2025 00:00:14"
+                        - generic [ref=e1089] [cursor=pointer]: 05/11/2025 00:00:14
+                    - paragraph [ref=e1090]: Why the bond market still relies on voice
+                    - paragraph [ref=e1091]: The machines didn’t push the humans out of fixed income trading — they made more space for them
+                    - link "Ouvrir la source" [ref=e1092] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/287f5f16-2224-4bd0-9e6e-d965ca2cee5b
+                  - generic [ref=e1094]:
+                    - generic [ref=e1095]:
+                      - generic [ref=e1097]: FT_MARKETS
+                      - generic [ref=e1098]:
+                        - checkbox "05/11/2025 00:00:05"
+                        - generic [ref=e1100] [cursor=pointer]: 05/11/2025 00:00:05
+                    - paragraph [ref=e1101]: Trump’s hamstrung hopes for fossil fuels expansion
+                    - paragraph [ref=e1102]: Oil and gas output is up but low prices and potential policy changes weigh on investment opportunities
+                    - link "Ouvrir la source" [ref=e1103] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/f1645637-ba89-40dc-bea8-58c605d72547
+                  - generic [ref=e1105]:
+                    - generic [ref=e1106]:
+                      - generic [ref=e1108]: BLOOMBERG
+                      - generic [ref=e1109]:
+                        - checkbox "04/11/2025 22:23:04"
+                        - generic [ref=e1111] [cursor=pointer]: 04/11/2025 22:23:04
+                    - paragraph [ref=e1112]: Bitcoin Shaken by Long-Term Holders Dumping $45 Billion
+                    - paragraph [ref=e1113]: Bitcoin has been falling again &mdash; but unlike in last month’s selloff, it’s not leverage breaking the market.
+                    - link "Ouvrir la source" [ref=e1114] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/crypto-hit-by-bitcoin-whales-dumping-45-billion-in-market-bets
+                  - generic [ref=e1116]:
+                    - generic [ref=e1117]:
+                      - generic [ref=e1119]: BLOOMBERG
+                      - generic [ref=e1120]:
+                        - checkbox "04/11/2025 21:14:47"
+                        - generic [ref=e1122] [cursor=pointer]: 04/11/2025 21:14:47
+                    - paragraph [ref=e1123]: Global Chip Stock Rally Founders on Concerns Over Valuations
+                    - paragraph [ref=e1124]: This year’s frenetic rally in global semiconductor stocks hit a setback on concerns that valuations for some of the biggest winners have soared too quickly and that gains have been excessive.
+                    - link "Ouvrir la source" [ref=e1125] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/global-chip-selloff-erases-500-billion-in-value-as-fears-mount
+                  - generic [ref=e1127]:
+                    - generic [ref=e1128]:
+                      - generic [ref=e1130]: BLOOMBERG
+                      - generic [ref=e1131]:
+                        - checkbox "04/11/2025 21:14:44"
+                        - generic [ref=e1133] [cursor=pointer]: 04/11/2025 21:14:44
+                    - paragraph [ref=e1134]: Copper Holds Loss as Equity Rout, Strong Dollar Weigh on Metals
+                    - paragraph [ref=e1135]: Copper held losses after four days of declines as a stronger dollar puts pressure on commodities and a global equities rout undermines broader market sentiment.
+                    - link "Ouvrir la source" [ref=e1136] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/copper-declines-for-a-fifth-day-after-hitting-a-record-last-week
+                  - generic [ref=e1138]:
+                    - generic [ref=e1139]:
+                      - generic [ref=e1141]: BLOOMBERG
+                      - generic [ref=e1142]:
+                        - checkbox "04/11/2025 19:05:16"
+                        - generic [ref=e1144] [cursor=pointer]: 04/11/2025 19:05:16
+                    - paragraph [ref=e1145]: Itau Expects Low Delinquencies in ‘Foreseeable Future’
+                    - paragraph [ref=e1146]: Itau Unibanco Holding SA is expecting its credit quality to stay stable over the next few quarters, with delinquencies in the bank’s Brazilian portfolio set to remain below overall rates in the country.
+                    - link "Ouvrir la source" [ref=e1147] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-05/itau-expects-delinquencies-to-stay-low-for-foreseeable-future
+                  - generic [ref=e1149]:
+                    - generic [ref=e1150]:
+                      - generic [ref=e1152]: BLOOMBERG
+                      - generic [ref=e1153]:
+                        - checkbox "04/11/2025 18:26:27"
+                        - generic [ref=e1155] [cursor=pointer]: 04/11/2025 18:26:27
+                    - paragraph [ref=e1156]: Oil Steadies as Traders Weigh US Stockpiles and Supply Outlook
+                    - paragraph [ref=e1157]: Oil extended a run of listless trading as traders awaited US inventory data due later and assessed a persistent outlook for oversupply.
+                    - link "Ouvrir la source" [ref=e1158] [cursor=pointer]:
+                      - /url: https://www.bloomberg.com/news/articles/2025-11-04/latest-oil-market-news-and-analysis-for-nov-5
+                  - generic [ref=e1160]:
+                    - generic [ref=e1161]:
+                      - generic [ref=e1163]: FT_MARKETS
+                      - generic [ref=e1164]:
+                        - checkbox "04/11/2025 18:15:21"
+                        - generic [ref=e1166] [cursor=pointer]: 04/11/2025 18:15:21
+                    - paragraph [ref=e1167]: JPMorgan discloses US inquiry into alleged debanking practices
+                    - paragraph [ref=e1168]: Political flashpoint emerged during Biden administration as clients claimed they were denied service for political reasons
+                    - link "Ouvrir la source" [ref=e1169] [cursor=pointer]:
+                      - /url: https://www.ft.com/content/d3540c0b-a68c-484e-a628-7c720a850e0b
+                - generic [ref=e1171]:
+                  - heading "Top impacts (score)" [level=4] [ref=e1172]
+                  - generic [ref=e1173]:
+                    - generic [ref=e1174]:
+                      - paragraph [ref=e1177]: McDonald's sales rise, but CEO expects low-income diners to spend less into next year
+                      - paragraph [ref=e1180]: US Companies Added 42,000 jobs in October, Per ADP Data
+                      - paragraph [ref=e1183]: UPS cargo plane crash near Louisville airport kills at least 9
+                      - paragraph [ref=e1186]: How Mamdani Won Over New York City
+                      - paragraph [ref=e1189]: McDonald’s customers are spending more per visit as sales top expectations again
+                      - paragraph [ref=e1192]: Apollo’s Jim Zelter Says Not Seeing Credit Cycle Waning Anytime Soon
+                      - paragraph [ref=e1195]: Amazon to Offer Nubank Customers More Credit in Brazil Push
+                      - paragraph [ref=e1198]: "What the AI phenomenon means for the dollar: It’s complicated."
+                    - generic [ref=e1199]:
+                      - paragraph [ref=e1201]: "0.00"
+                      - paragraph [ref=e1203]: "0.00"
+                      - paragraph [ref=e1205]: "0.00"
+                      - paragraph [ref=e1207]: "0.00"
+                      - paragraph [ref=e1209]: "0.00"
+                      - paragraph [ref=e1211]: "0.00"
+                      - paragraph [ref=e1213]: "0.00"
+                      - paragraph [ref=e1215]: "0.00"
+          - generic [ref=e1217]:
+            - generic [ref=e1218]:
+              - generic [ref=e1219]:
+                - generic [ref=e1221]: DEV DEBUG
+                - generic [ref=e1223]: idle
+              - paragraph [ref=e1224]: No errors captured yet
+            - generic [ref=e1225]:
+              - button "Clear" [ref=e1226] [cursor=pointer]:
+                - generic [ref=e1228]: Clear
+              - button "Details" [ref=e1229] [cursor=pointer]:
+                - generic [ref=e1231]: Details
+    - generic [ref=e1232]:
+      - img [ref=e1234]
+      - button "Open Tanstack query devtools" [ref=e1302] [cursor=pointer]:
+        - img [ref=e1303]
+    - generic [ref=e1371]:
+      - img [ref=e1373]
+      - button "Open Tanstack query devtools" [ref=e1441] [cursor=pointer]:
+        - img [ref=e1442]
+  - generic [ref=e1510]: "0"
+```

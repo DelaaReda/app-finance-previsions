@@ -19,6 +19,7 @@ Donc **pas de données simulées**.
 ### lire la doc apres ce markdown pour comprendre comment bien faire les choses : 
 
 - `copilot-app/docs` (attention : certaines parties sont legacy)
+  - `docs/FORECAST_DATA_PIPELINE.md` explique comment rafraîchir les snapshots news/macro, lancer `jobs/forecasts.py` et servir `/api/forecasts` avec les données G4F réelles.
 - `docs/LLM_JUDGE.md` (LLM Judge, sélection des modèles, watcher g4f)
 - `docs/FRONTEND_DATA_DEBUG.md` (protocole CLI pour débloquer les pages, vérifier les endpoints et bannir les mocks)
 - MUI is absolete, we use mantine and tremor frontend

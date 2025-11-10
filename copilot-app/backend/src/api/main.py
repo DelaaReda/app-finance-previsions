@@ -105,6 +105,41 @@ from services.intelligence_service import (
     get_market_context_snapshot,
     get_market_intelligence_snapshot,
 )
+try:
+    # Try importing from src.services first (since snapshot_loader is in src/services/)
+    from src.services.snapshot_loader import ensure_snapshot, resolve_payload
+except ImportError:
+    try:
+        # Fallback: try importing from services (if src is in sys.path)
+        from services.snapshot_loader import ensure_snapshot, resolve_payload
+    except ImportError:
+        # Final fallback: provide stub implementations
+        logger = logging.getLogger(__name__)
+        logger.warning("snapshot_loader module not available, using fallback implementations")
+        
+        def ensure_snapshot(key, job_runner=None, **kwargs):
+            """Fallback implementation"""
+            if job_runner:
+                return job_runner()
+            return None
+        
+        def resolve_payload(data, paths):
+            """Fallback implementation"""
+            if not data:
+                return None
+            for path in paths:
+                if isinstance(path, tuple):
+                    current = data
+                    for key in path:
+                        if isinstance(current, dict) and key in current:
+                            current = current[key]
+                        else:
+                            break
+                    else:
+                        return current
+                elif isinstance(data, dict) and path in data:
+                    return data[path]
+            return data
 
 
 def _parse_csv_list(value: Optional[str]) -> List[str]:
@@ -175,6 +210,27 @@ def _fallback_market_context(message: str) -> Dict[str, Any]:
     if "w" in freq:
         return "weekly"
     return "daily"
+
+
+def _run_macro_series_job() -> None:
+    """Trigger the macro snapshot job once to refresh cached data."""
+    from jobs import macro_series_snapshot
+
+    macro_series_snapshot.main([])  # type: ignore[arg-type]
+
+
+def _run_forecasts_job() -> None:
+    """Trigger the forecasts job to refresh cached rows."""
+    from jobs.forecasts import run_forecasts_job
+
+    run_forecasts_job()
+
+
+def _run_weekly_brief_job() -> None:
+    """Trigger the weekly brief job to refresh cached signals."""
+    from jobs.weekly_brief import run_weekly_brief_job
+
+    run_weekly_brief_job()
 
 
 def _format_points(df: pd.DataFrame, column: str, limit: int, start: Optional[pd.Timestamp], end: Optional[pd.Timestamp]) -> List[Dict[str, Any]]:
@@ -331,6 +387,13 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
 
+    # Include quality routes
+    try:
+        from api.routes.quality import router as quality_router
+        app.include_router(quality_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include quality routes: {e}")
+
     # Include cache management routes
     try:
         from api.routes.cache_routes import router as cache_router
@@ -374,65 +437,101 @@ def create_app() -> FastAPI:
         # Import necessary functions
         try:
             from storage.io import load_json
-            from jobs.forecasts import run_forecasts_job
-            from jobs.news_ingest import run_news_ingest
-            from jobs.weekly_brief import run_and_persist_weekly_brief
-            from jobs.alerts import run_alerts_job
-            from scheduler.app import start_scheduler
+            try:
+                from jobs.forecasts import run_forecasts_job
+            except ImportError:
+                from backend.jobs.forecasts import run_forecasts_job
+            try:
+                from jobs.news_ingest import run_news_ingest
+            except ImportError:
+                from backend.jobs.news_ingest import run_news_ingest
+            try:
+                from jobs.weekly_brief import run_weekly_brief_job as run_and_persist_weekly_brief
+            except ImportError:
+                from backend.jobs.weekly_brief import run_weekly_brief_job as run_and_persist_weekly_brief
+            try:
+                from jobs.alerts import run_alerts_job
+            except ImportError:
+                from backend.jobs.alerts import run_alerts_job
+            try:
+                from scheduler.app import start_scheduler
+            except ImportError:
+                from backend.scheduler.app import start_scheduler
 
             logger.info("📦 Checking data availability...")
 
-            # Check and generate forecasts if missing
-            if not load_json("forecasts.json"):
-                logger.info("⚠️  No forecasts found, generating initial set...")
-                try:
-                    run_forecasts_job()
-                    logger.info("✅ Initial forecasts generated")
-                except Exception as e:
-                    logger.error(f"❌ Failed to generate forecasts: {e}")
+            # Check and generate forecasts if missing or empty
+            forecasts_data = load_json("forecasts") or load_json("forecasts.json")
+            if not forecasts_data or not forecasts_data.get("rows") or len(forecasts_data.get("rows", [])) == 0:
+                logger.info("⚠️  No forecasts found or empty, generating initial set...")
+                if run_forecasts_job:
+                    try:
+                        run_forecasts_job()
+                        logger.info("✅ Initial forecasts generated")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to generate forecasts: {e}")
+                else:
+                    logger.warning("⚠️  run_forecasts_job not available, skipping")
             else:
-                logger.info("✅ Forecasts data found")
+                forecast_count = len(forecasts_data.get("rows", []))
+                logger.info(f"✅ Forecasts data found: {forecast_count} forecasts")
 
-            # Check and generate news feed if missing
-            if not load_json("news_feed.json"):
-                logger.info("⚠️  No news feed found, fetching initial data...")
-                try:
-                    run_news_ingest()
-                    logger.info("✅ Initial news feed generated")
-                except Exception as e:
-                    logger.error(f"❌ Failed to fetch news: {e}")
+            # Check and generate news feed if missing or empty
+            news_data = load_json("news_feed") or load_json("news_feed.json")
+            if not news_data or not news_data.get("articles") or len(news_data.get("articles", [])) == 0:
+                logger.info("⚠️  No news feed found or empty, fetching initial data...")
+                if run_news_ingest:
+                    try:
+                        run_news_ingest()
+                        logger.info("✅ Initial news feed generated")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to fetch news: {e}")
+                else:
+                    logger.warning("⚠️  run_news_ingest not available, skipping")
             else:
-                logger.info("✅ News feed data found")
+                news_count = len(news_data.get("articles", []))
+                logger.info(f"✅ News feed data found: {news_count} articles")
 
-            # Check and generate weekly brief if missing
-            if not load_json("brief_weekly.json"):
-                logger.info("⚠️  No weekly brief found, generating...")
-                try:
-                    run_and_persist_weekly_brief()
-                    logger.info("✅ Initial weekly brief generated")
-                except Exception as e:
-                    logger.error(f"❌ Failed to generate weekly brief: {e}")
+            # Check and generate weekly brief if missing or empty
+            brief_data = load_json("brief_weekly") or load_json("brief_weekly.json")
+            if not brief_data or not brief_data.get("top_signals"):
+                logger.info("⚠️  No weekly brief found or empty, generating...")
+                if run_and_persist_weekly_brief:
+                    try:
+                        run_and_persist_weekly_brief()
+                        logger.info("✅ Initial weekly brief generated")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to generate weekly brief: {e}")
+                else:
+                    logger.warning("⚠️  run_and_persist_weekly_brief not available, skipping")
             else:
-                logger.info("✅ Weekly brief data found")
+                signals_count = len(brief_data.get("top_signals", []))
+                logger.info(f"✅ Weekly brief data found: {signals_count} signals")
 
             # Check and generate alerts if missing
             if not load_json("alerts.json"):
                 logger.info("⚠️  No alerts found, generating...")
-                try:
-                    run_alerts_job()
-                    logger.info("✅ Initial alerts generated")
-                except Exception as e:
-                    logger.error(f"❌ Failed to generate alerts: {e}")
+                if run_alerts_job:
+                    try:
+                        run_alerts_job()
+                        logger.info("✅ Initial alerts generated")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to generate alerts: {e}")
+                else:
+                    logger.warning("⚠️  run_alerts_job not available, skipping")
             else:
                 logger.info("✅ Alerts data found")
 
             # Start background scheduler
-            logger.info("⏰ Starting background scheduler...")
-            try:
-                start_scheduler()
-                logger.info("✅ Scheduler started successfully")
-            except Exception as e:
-                logger.error(f"❌ Failed to start scheduler: {e}")
+            if start_scheduler:
+                logger.info("⏰ Starting background scheduler...")
+                try:
+                    start_scheduler()
+                    logger.info("✅ Scheduler started successfully")
+                except Exception as e:
+                    logger.error(f"❌ Failed to start scheduler: {e}")
+            else:
+                logger.warning("⚠️  start_scheduler not available, skipping")
 
             logger.info("="*70)
             logger.info("✅ Finance Copilot Ready!")
@@ -588,55 +687,60 @@ def register_routes(app: FastAPI):
     ):
         """Get macro time series data - reads from pre-computed data."""
         try:
-            from storage.io import load_json
-            
-            # Load from pre-computed macro series
-            macro_data = load_json("macro_series")
-            
-            if macro_data and "series" in macro_data:
+            macro_data = ensure_snapshot("macro_series", job_runner=_run_macro_series_job)
+
+            series_block = None
+            if macro_data:
+                series_block = macro_data.get("series")
+                if not isinstance(series_block, dict):
+                    payload_root = resolve_payload(macro_data, ("data",))
+                    series_block = payload_root.get("series") if isinstance(payload_root, dict) else None
+
+            if series_block:
                 requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
-                series_dict = macro_data.get("series", {})
-                
-                # Filter by requested series
                 payload: List[Dict[str, Any]] = []
                 for series_id in requested:
-                    if series_id in series_dict:
-                        series_info = series_dict[series_id]
-                        observations = series_info.get("observations", [])
-                        
-                        # Filter by date range if provided
-                        if start or end:
-                            start_ts = pd.to_datetime(start).tz_localize(None) if start else None
-                            end_ts = pd.to_datetime(end).tz_localize(None) if end else None
-                            filtered_obs = []
-                            for obs in observations:
-                                obs_date = pd.to_datetime(obs.get("date"))
-                                if start_ts and obs_date < start_ts:
-                                    continue
-                                if end_ts and obs_date > end_ts:
-                                    continue
-                                filtered_obs.append(obs)
-                            observations = filtered_obs[:limit]
-                        else:
-                            observations = observations[:limit]
-                        
-                        # Convert to points format
-                        points = [{"date": obs.get("date"), "value": obs.get("value")} for obs in observations]
-                        
-                        payload.append({
-                            "id": series_id,
-                            "name": series_info.get("title", series_id),
-                            "unit": series_info.get("units", ""),
-                            "frequency": series_info.get("frequency", "unknown"),
-                            "points": points,
-                        })
-                
+                    series_info = series_block.get(series_id)
+                    if not isinstance(series_info, dict):
+                        continue
+                    observations = list(series_info.get("observations", []))
+
+                    if start or end:
+                        start_ts = pd.to_datetime(start).tz_localize(None) if start else None
+                        end_ts = pd.to_datetime(end).tz_localize(None) if end else None
+                        filtered_obs = []
+                        for obs in observations:
+                            obs_date = pd.to_datetime(obs.get("date"))
+                            if start_ts and obs_date < start_ts:
+                                continue
+                            if end_ts and obs_date > end_ts:
+                                continue
+                            filtered_obs.append(obs)
+                        observations = filtered_obs[:limit]
+                    else:
+                        observations = observations[:limit]
+
+                    points = [{"date": obs.get("date"), "value": obs.get("value")} for obs in observations]
+
+                    payload.append({
+                        "id": series_id,
+                        "name": series_info.get("title", series_id),
+                        "unit": series_info.get("units", ""),
+                        "frequency": series_info.get("frequency", "unknown"),
+                        "points": points,
+                    })
+
                 if payload:
+                    updated_at = (
+                        macro_data.get("freshness")
+                        or macro_data.get("generated_at")
+                        or datetime.utcnow().isoformat()
+                    )
                     return _ok({
                         "series": payload,
-                        "updated_at": macro_data.get("freshness", macro_data.get("generated_at", datetime.utcnow().isoformat())),
+                        "updated_at": updated_at,
                     })
-            
+
             # Fallback: compute on the fly (legacy behavior)
             requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
             start_ts = pd.to_datetime(start).tz_localize(None) if start else None
@@ -2184,33 +2288,31 @@ def register_routes(app: FastAPI):
     async def brief_weekly():
         """Get weekly market brief with <200ms response time using pre-computed data."""
         try:
-            # Use cached snapshot approach for instant response
-            from storage.base import load_json
-            
-            cached_brief = load_json("brief_weekly.json")
-            
-            if cached_brief and "weekly" in cached_brief:
-                # Return the pre-computed weekly brief
-                brief_data = cached_brief["weekly"]
-                
-                # Add metadata for freshness tracking
-                brief_data["freshness"] = cached_brief.get("freshness", datetime.utcnow().isoformat())
-                brief_data["source"] = cached_brief.get("metadata", {}).get("source", ["precomputed_weekly_job"])
-                brief_data["generated_at"] = cached_brief.get("timestamp", datetime.utcnow().isoformat())
-                
-                return _ok(brief_data)
-            else:
-                # Fallback: if no cached data exists, return empty brief with metadata
-                return _ok({
-                    "summary": "Weekly brief is being prepared. Check back soon.",
-                    "top_signals": [],
-                    "top_risks": [],
-                    "picks": [],
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "freshness": "unknown",
-                    "source": ["placeholder"],
-                    "message": "Weekly brief computation is scheduled to run and will be available soon"
-                })
+            cached_brief = ensure_snapshot(
+                "brief_weekly",
+                job_runner=_run_weekly_brief_job,
+                aliases=["brief_weekly.json"],
+            )
+
+            if cached_brief:
+                brief_data = resolve_payload(cached_brief, ("data.weekly", "weekly", "data"))
+                if brief_data:
+                    brief_data = dict(brief_data)
+                    brief_data["freshness"] = cached_brief.get("freshness", datetime.utcnow().isoformat())
+                    brief_data["source"] = cached_brief.get("source") or brief_data.get("source") or ["precomputed_weekly_job"]
+                    brief_data["generated_at"] = cached_brief.get("timestamp") or cached_brief.get("last_update") or brief_data.get("generated_at") or datetime.utcnow().isoformat()
+                    return _ok(brief_data)
+
+            return _ok({
+                "summary": "Weekly brief is being prepared. Check back soon.",
+                "top_signals": [],
+                "top_risks": [],
+                "picks": [],
+                "generated_at": datetime.utcnow().isoformat(),
+                "freshness": "unknown",
+                "source": ["placeholder"],
+                "message": "Weekly brief computation is scheduled and will be available soon"
+            })
                 
         except Exception as e:
             # Always return a valid response structure
@@ -2230,31 +2332,32 @@ def register_routes(app: FastAPI):
     async def brief_daily():
         """Get daily market brief with cache-first, instant response (never-empty)."""
         try:
-            # 1) Try cached daily snapshot (fast path)
-            # Use storage.io helper (key-based) to avoid wrong import surface
-            from storage.io import load_json
-            snap = load_json("brief_daily") or load_json("brief_weekly")
+            snap = ensure_snapshot(
+                "brief_daily",
+                aliases=["brief_daily.json"],
+            )
+
+            if not snap:
+                snap = ensure_snapshot(
+                    "brief_weekly",
+                    job_runner=_run_weekly_brief_job,
+                    aliases=["brief_weekly.json"],
+                )
 
             if snap:
-                # Support multiple payload shapes
-                payload = (
-                    snap.get("data")
-                    or snap.get("daily")
-                    or snap.get("weekly")
-                    or snap.get("payload")
-                    or {}
+                payload = resolve_payload(
+                    snap,
+                    ("data.daily", "daily", "data.weekly", "weekly", "data", "payload"),
                 )
-                if not isinstance(payload, dict):
-                    payload = {}
+                payload = dict(payload) if isinstance(payload, dict) else {}
 
-                # Ensure minimal structure for UI
                 payload.setdefault("title", "Daily Market Brief")
                 payload.setdefault("period", "daily")
                 payload.setdefault("top_signals", [])
                 payload.setdefault("top_risks", [])
                 payload.setdefault("picks", [])
                 payload.setdefault("sources", [])
-                payload.setdefault("generated_at", snap.get("last_update") or datetime.utcnow().isoformat())
+                payload.setdefault("generated_at", snap.get("last_update") or snap.get("timestamp") or datetime.utcnow().isoformat())
                 payload.setdefault("freshness", snap.get("freshness", "unknown"))
                 payload.setdefault("source", snap.get("source", ["brief_cache"]))
 
@@ -2342,24 +2445,24 @@ def register_routes(app: FastAPI):
     ):
         """Get forecasts list - serves real data from forecasts.json"""
         try:
-            from storage.io import load_json
-
-            # Load forecasts data
-            forecasts_data = load_json("forecasts")
+            forecasts_data = ensure_snapshot(
+                "forecasts",
+                job_runner=_run_forecasts_job,
+                aliases=["forecasts.json"],
+            )
 
             if not forecasts_data:
-                # Return empty but valid structure
                 return _ok({
                     "rows": [],
                     "count": 0,
                     "asset_type": asset_type,
                     "generated_at": datetime.utcnow().isoformat(),
-                    "source": ["file_not_found"],
-                    "freshness": "unknown"
+                    "source": ["forecast_cache_missing"],
+                    "freshness": "unknown",
                 })
 
-            # Extract rows from loaded data
-            rows = forecasts_data.get("rows", [])
+            payload = resolve_payload(forecasts_data, ("data", "payload"))
+            rows = payload.get("rows") or forecasts_data.get("rows") or []
 
             # Apply filters
             filtered_rows = rows
@@ -2384,15 +2487,32 @@ def register_routes(app: FastAPI):
             else:  # score or default
                 filtered_rows = sorted(filtered_rows, key=lambda x: x.get("llm_adjusted_confidence", x.get("confidence", 0)), reverse=True)
 
+            generated_at = (
+                payload.get("generated_at")
+                or forecasts_data.get("generated_at")
+                or forecasts_data.get("last_update")
+                or datetime.utcnow().isoformat()
+            )
+            source = (
+                payload.get("source")
+                or forecasts_data.get("source")
+                or ["forecasts_cache"]
+            )
+            model_version = (
+                payload.get("model_version")
+                or forecasts_data.get("model_version")
+                or "hybrid_v1"
+            )
+
             return _ok({
                 "rows": filtered_rows,
                 "count": len(filtered_rows),
                 "asset_type": asset_type,
                 "horizon": horizon,
-                "generated_at": forecasts_data.get("generated_at", datetime.utcnow().isoformat()),
-                "source": forecasts_data.get("source", ["forecasts.json"]),
-                "model_version": forecasts_data.get("model_version", "hybrid_v1"),
-                "freshness": forecasts_data.get("freshness", datetime.utcnow().isoformat())
+                "generated_at": generated_at,
+                "source": source,
+                "model_version": model_version,
+                "freshness": forecasts_data.get("freshness", generated_at),
             })
 
         except Exception as e:

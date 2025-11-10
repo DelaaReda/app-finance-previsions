@@ -61,3 +61,6 @@ async def get_current_context():
             "timestamp": None,
             "status": "fallback"
         })
+
+# Export router with expected name for main.py registration
+context_router = router

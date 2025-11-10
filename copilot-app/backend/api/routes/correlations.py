@@ -57,3 +57,6 @@ async def get_analyzed_correlations(
             status_code=500,
             detail=f"Failed to generate correlation intelligence: {str(e)}"
         )
+
+# Export router with expected name for main.py registration
+correlations_router = router

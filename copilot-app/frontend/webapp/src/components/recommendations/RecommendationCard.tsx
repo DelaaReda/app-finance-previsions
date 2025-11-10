@@ -84,7 +84,7 @@ export function RecommendationCard({ recommendation }: RecommendationCardProps) 
   };
   
   return (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
+    <Card shadow="sm" padding="lg" radius="md" withBorder className="recommendation-card">
       <Stack gap="md">
         {/* Header: Ticker + Action + Score */}
         <Group justify="space-between" align="flex-start">

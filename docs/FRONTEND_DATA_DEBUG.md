@@ -102,6 +102,39 @@ curl -s http://localhost:8050/api/news/feed | jq '
 
 ## 🐛 Debugging Specific Pages
 
+## ⚡ Snapshot-Powered Endpoints (Macro, Forecasts, Brief)
+
+The heaviest APIs now load straight from cached JSON snapshots so the UI never waits on live scrapers:
+
+| Endpoint | Snapshot file | Refresh job |
+| --- | --- | --- |
+| `/api/macro/series` | `copilot-app/backend/data/macro_series.json` | `python jobs/macro_series_snapshot.py` |
+| `/api/forecasts` | `copilot-app/backend/data/forecasts.json` | `python jobs/forecasts.py` |
+| `/api/brief/weekly` + `/api/brief/daily` | `copilot-app/backend/data/brief_weekly.json` (daily falls back here) | `python jobs/weekly_brief.py` |
+
+### CLI loop to validate cache → API alignment
+```bash
+cd copilot-app/backend
+
+# 1. Inspect the snapshot (should exist + contain rows)
+jq '.data.rows | length' data/forecasts.json
+
+# 2. Hit the endpoint (should match the file count)
+curl -s http://localhost:8050/api/forecasts | jq '{count: (.data.rows | length), source: .data.source}'
+
+# 3. Regenerate if empty; API will serve it instantly afterwards
+python jobs/forecasts.py && curl -s http://localhost:8050/api/forecasts | jq '.data.count'
+```
+
+When a snapshot is missing, the API now triggers the corresponding job **once** then falls back to the cached file, so cold-start debugging is simply:
+
+```bash
+cd copilot-app/backend
+python jobs/macro_series_snapshot.py && python jobs/weekly_brief.py && python jobs/forecasts.py
+```
+
+If the job fails, check `/tmp/macro_series_snapshot.log` or the job's stdout (each job already logs tickers/series processed).
+
 ### Forecasts Page Debug
 ```bash
 # Test forecasts endpoint with various filters
@@ -141,6 +174,28 @@ curl -s "http://localhost:8050/api/macro/series" | jq '
   dates_recent: ((.data.CPIAUCSL.observations // .CPIAUCSL.observations // [])[-1].date // "") > "2025-01-01"
 }
 '
+```
+
+### Recommendations Widget Debug
+```bash
+# Refresh supporting data then generate fresh recommendations snapshot
+cd copilot-app/backend
+source .venv/bin/activate
+python jobs/forecasts.py
+python - <<'PY'
+import asyncio, sys
+sys.path.append('copilot-app/backend')
+from services.recommendations_service import RecommendationsService
+
+async def main():
+    svc = RecommendationsService()
+    data = await svc.generate_daily_recommendations(limit=3)
+    print(f"Generated {len(data.get('recommendations', []))} recommendations")
+asyncio.run(main())
+PY
+
+# API response now serves the cached snapshot instantly
+curl -s http://localhost:8050/api/recommendations/daily | jq '.data.recommendations'
 ```
 
 ## 🧪 Testing Never-Empty Contract

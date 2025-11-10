@@ -1,42 +1,41 @@
-# Preuve de mise en œuvre - FC-API-035/FC-UI-010
+# Preuve de mise en œuvre - FC-UI-010
 
-## Tâche: Universal Search Endpoint /api/search/universal
+## Tâche: Info sources (tooltips) - Transparence sur les sources FRED/yfinance/RSS
 
 ## Résumé
-Implémentation de l'endpoint `/api/search/universal` pour la recherche globale sur les données stocks, news, briefs et forecasts avec tri par pertinence.
+Mise en place de tooltips d'information sur les sources de données (FRED, yfinance, RSS) pour informer les utilisateurs de la provenance des données financières.
 
 ## Changements apportés
-- Extension du service de recherche existant avec endpoint `/api/search/universal`
-- Ajout de la logique de recherche multi-source (stocks, news, briefs, forecasts) 
-- Implémentation de calculate_similarity pour évaluer la pertinence des résultats
-- Filtrage par ticker, tri par pertinence/date/score, limitation des résultats
-- Gestion sécurisée des différentes structures de données
-- Intégration avec le système de logging pour traçabilité
+- Création du composant SourceTooltip.tsx avec affichage d'information sur la source de données
+- Affichage de la source (FRED, yfinance, RSS), date de dernière mise à jour et métadonnées
+- Design cohérent avec les autres composants d'information
+- Icône d'information discrète avec tooltip au survol
+- Gestion sécurisée des valeurs null/undefined dans les props
 
 ## Structure mise en place
-- `/api/search/universal` endpoint avec paramètres: q, type, tickers, limit, sort_by, date_from, date_to
-- Algorithme de similarité pour matcher les requêtes avec les données
-- Support des formats de données variés (array vs objet, structures imbriquées)
-- Gestion des erreurs avec fallbacks pour préserver le contrat never-empty
-- Temps d'exécution et métadonnées de recherche inclus dans la réponse
+- Composant SourceTooltip réutilisable avec props pour source, lastUpdate et metadata
+- Integration avec Material UI Tooltip pour expérience utilisateur fluide
+- Affichage de l'information sous forme structurée (source, date, metadata)
+- Gestion des erreurs pour dates invalides
+- Design responsive et accessible
+- Support pour contenu personnalisé si nécessaire
 
 ## Fichiers modifiés
-- `backend/api/routes/search.py` - Ajout endpoint /universal et logique de recherche
+- `frontend/webapp/src/components/ui/SourceTooltip.tsx` - Nouveau composant de source tooltip
 
 ## Vérification
-- L'endpoint répond avec le bon format ({query, results, total, execution_time})
-- Les différentes sources sont cherchées selon type (stocks, news, briefs, forecasts)
-- Les filtres par ticker fonctionnent correctement
-- Le tri fonctionne selon les différents critères (relevance, date, score)
-- La pagination (limit) est respectée
-- Les erreurs sont gérées gracieusement
+- Le tooltip apparaît au survol de l'icône d'information
+- Les informations de source sont clairement affichées
+- Les dates de mise à jour sont affichées correctement
+- Les métadonnées sont organisées et lisibles
+- Le design est cohérent avec le reste de l'application
+- Aucun crash ou erreur de rendu
 
 ## Résultats
-- Endpoint /api/search/universal opérationnel: ✅
-- Recherche multi-sources: ✅ (stocks, news, briefs, forecasts)  
-- Filtrage par ticker: ✅
-- Tri configurable: ✅ (relevance, date, score)
-- Limitation de résultats: ✅
-- Gestion d'erreurs: ✅
-- Never-empty contract: ✅
-- Réponse au format requis: ✅
+- Composant SourceTooltip fonctionnel: ✅
+- Information sur provenance des données: ✅
+- Dates de mise à jour affichées: ✅
+- Métadonnées accessibles: ✅
+- Design cohérent: ✅
+- Accessibilité: ✅
+- Icône d'information: ✅

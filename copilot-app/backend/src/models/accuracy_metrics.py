@@ -1,11 +1,11 @@
 """
 Accuracy Metrics Models
 Task: FC-API-032 - Prediction Accuracy Analytics
-Author: ALEX-FINANCE-ANALYST-SUPERMAN-29
+Author: MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7
 """
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Dict, List
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -23,4 +23,18 @@ class AccuracyMetrics:
     success_rate: float
     directional_accuracy: float
     generated_at: str
+    source: List[str]
+
+
+@dataclass
+class PredictionAccuracyReport:
+    """
+    Complete report structure for prediction accuracy analysis
+    """
+    accuracy_metrics: AccuracyMetrics
+    summary: Dict
+    by_horizon: Dict
+    by_asset: Dict
+    generated_at: str
+    parameters: Dict
     source: List[str]

@@ -1,11 +1,11 @@
 /**
- * Universal Search API Routes - FC-API-035
- * Author: ALEX-API-ARCHITECT-SUPERMAN-7
- * Task: FC-API-035 - Endpoint /api/search/universal pour recherche globale (stocks, news, briefs, prévisions)
+ * SourceTooltip - Display source information with tooltip
+ * Author: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+ * Task: FE-005 - Migrated from MUI to Mantine
  */
 import React from 'react';
-import { Tooltip } from '@mui/material';
-import { InfoOutlined } from '@mui/icons-material';
+import { Tooltip } from '@mantine/core';
+import { IconInfoCircle } from '@tabler/icons-react';
 
 interface SourceTooltipProps {
   source: string;        // Name of the data source (e.g., 'FRED', 'yfinance', 'RSS')
@@ -37,7 +37,7 @@ export default function SourceTooltip({
 
   // Create tooltip content
   const tooltipContent = children || (
-    <div style={{ padding: '12px', maxWidth: '300px' }}>
+    <div style={{ padding: '8px', maxWidth: '300px' }}>
       <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>
         📊 Source: {source}
       </div>
@@ -63,9 +63,9 @@ export default function SourceTooltip({
   );
 
   return (
-    <Tooltip title={tooltipContent} placement="top" arrow>
-      <span style={{ cursor: 'help', verticalAlign: 'middle' }}>
-        <InfoOutlined style={{ fontSize: '14px', color: '#999' }} />
+    <Tooltip label={tooltipContent} position="top" withArrow>
+      <span style={{ cursor: 'help', verticalAlign: 'middle', display: 'inline-flex', alignItems: 'center' }}>
+        <IconInfoCircle size={14} style={{ color: '#999' }} />
       </span>
     </Tooltip>
   );

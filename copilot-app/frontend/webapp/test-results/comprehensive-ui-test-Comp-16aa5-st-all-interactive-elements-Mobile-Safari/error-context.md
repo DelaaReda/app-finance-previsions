@@ -1,0 +1,135 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - button [ref=e7] [cursor=pointer]
+          - generic [ref=e9]:
+            - paragraph [ref=e10]: Finance Copilot
+            - paragraph [ref=e11]: Systèmes d'intelligence de marché
+        - generic [ref=e12]:
+          - generic [ref=e16]: Healthy
+          - button "Basculer en mode clair" [ref=e17] [cursor=pointer]:
+            - img [ref=e19]
+    - navigation [ref=e22]:
+      - generic [ref=e26]:
+        - generic [ref=e28] [cursor=pointer]:
+          - img [ref=e30]
+          - paragraph [ref=e35]: dashboard
+        - generic [ref=e37] [cursor=pointer]:
+          - img [ref=e39]
+          - paragraph [ref=e41]: brief
+        - generic [ref=e43] [cursor=pointer]:
+          - img [ref=e45]
+          - paragraph [ref=e47]: macro
+        - generic [ref=e49] [cursor=pointer]:
+          - img [ref=e51]
+          - paragraph [ref=e54]: stocks
+        - generic [ref=e56] [cursor=pointer]:
+          - img [ref=e58]
+          - paragraph [ref=e60]: news
+        - generic [ref=e62] [cursor=pointer]:
+          - img [ref=e64]
+          - paragraph [ref=e67]: copilot
+        - generic [ref=e69] [cursor=pointer]:
+          - img [ref=e71]
+          - paragraph [ref=e79]: forecasts
+        - generic [ref=e81] [cursor=pointer]:
+          - img [ref=e83]
+          - paragraph [ref=e86]: backtests
+        - generic [ref=e88] [cursor=pointer]:
+          - img [ref=e90]
+          - paragraph [ref=e95]: compare
+        - generic [ref=e97] [cursor=pointer]:
+          - img [ref=e99]
+          - paragraph [ref=e102]: judge
+    - main [ref=e103]:
+      - generic [ref=e104]:
+        - generic [ref=e106]:
+          - generic [ref=e108]:
+            - generic [ref=e109]:
+              - generic [ref=e110]:
+                - generic [ref=e111]:
+                  - img [ref=e113]
+                  - heading "Adaptive Dashboard" [level=2] [ref=e115]
+                - paragraph [ref=e116]: Intelligent layout that adapts to market conditions in real-time
+              - generic [ref=e117]:
+                - generic [ref=e119]: Live data stream
+                - generic [ref=e120]:
+                  - generic [ref=e123] [cursor=pointer]:
+                    - paragraph [ref=e124]: 📊
+                    - paragraph [ref=e125]: NORMAL
+                    - img [ref=e127]
+                  - generic [ref=e130]:
+                    - button "Auto" [ref=e131] [cursor=pointer]:
+                      - generic [ref=e132]:
+                        - img [ref=e134]
+                        - paragraph [ref=e139]: Auto
+                    - button "Refresh" [ref=e140] [cursor=pointer]:
+                      - generic [ref=e141]:
+                        - img [ref=e143]
+                        - paragraph [ref=e147]: Refresh
+            - alert [ref=e148]:
+              - generic [ref=e149]:
+                - img [ref=e151]
+                - paragraph [ref=e156]:
+                  - strong [ref=e157]: "Adaptive Mode Active:"
+                  - text: Dashboard layout automatically adjusts based on detected market regime. Switch to Manual mode to lock the current layout.
+            - generic [ref=e158]:
+              - generic [ref=e159]:
+                - generic [ref=e160]:
+                  - img [ref=e162]
+                  - paragraph [ref=e166]: Forecasts online
+                - paragraph [ref=e168]: "0"
+                - paragraph [ref=e170]: 0 tickers tracked
+              - generic [ref=e171]:
+                - generic [ref=e172]:
+                  - img [ref=e174]
+                  - paragraph [ref=e177]: High-confidence
+                - paragraph [ref=e179]: 0%
+                - paragraph [ref=e181]: 0 signals
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - img [ref=e185]
+                  - paragraph [ref=e187]: Fresh news
+                - paragraph [ref=e189]: "0"
+                - paragraph [ref=e191]: Last 60 min
+              - generic [ref=e192]:
+                - generic [ref=e193]:
+                  - img [ref=e195]
+                  - paragraph [ref=e197]: Backtest hit rate
+                - paragraph [ref=e199]: 0%
+                - paragraph [ref=e201]: Live monitor
+          - generic [ref=e204]:
+            - generic [ref=e206]: forecasts
+            - generic [ref=e208]: news
+            - generic [ref=e210]: brief_weekly
+            - generic [ref=e212]: backtests
+          - generic [ref=e213]:
+            - generic [ref=e214]:
+              - paragraph [ref=e215]: Adaptive layout
+              - paragraph [ref=e216]: Widgets reorder automatically based on market regime confidence
+            - paragraph [ref=e218]: Loading adaptive layout...
+        - generic [ref=e220]:
+          - generic [ref=e221]:
+            - generic [ref=e222]:
+              - generic [ref=e224]: DEV DEBUG
+              - generic [ref=e226]: idle
+            - paragraph [ref=e227]: No errors captured yet
+          - generic [ref=e228]:
+            - button "Clear" [ref=e229] [cursor=pointer]:
+              - generic [ref=e231]: Clear
+            - button "Details" [ref=e232] [cursor=pointer]:
+              - generic [ref=e234]: Details
+  - generic [ref=e235]:
+    - img [ref=e237]
+    - button "Open Tanstack query devtools" [ref=e305] [cursor=pointer]:
+      - img [ref=e306]
+  - generic [ref=e374]:
+    - img [ref=e376]
+    - button "Open Tanstack query devtools" [ref=e444] [cursor=pointer]:
+      - img [ref=e445]
+```

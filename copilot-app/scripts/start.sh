@@ -12,6 +12,9 @@ BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend/webapp"
 ENV_FILE="$PROJECT_DIR/.env"
 
+# Ensure backend src on PYTHONPATH for standalone jobs
+export PYTHONPATH="$BACKEND_DIR/src:$PYTHONPATH"
+
 # Couleurs pour l'affichage
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -126,6 +129,34 @@ install_dependencies() {
     fi
     
     log_success "Dépendances installées"
+}
+
+# Rafraîchit les séries macro depuis FRED
+refresh_macro_series() {
+    log "Actualisation des séries macro..."
+    if [ ! -f "$BACKEND_DIR/.venv/bin/python" ]; then
+        log_warning "Impossible d'actualiser les séries macro (venv absent)"
+        return
+    fi
+    (
+        cd "$BACKEND_DIR"
+        source "$BACKEND_DIR/.venv/bin/activate"
+        python jobs/macro_series_snapshot.py >/tmp/macro_series_snapshot.log 2>&1
+    ) && log_success "Séries macro à jour" || log_warning "Actualisation macro a échoué (voir /tmp/macro_series_snapshot.log)"
+}
+
+# Rafraîchit les snapshots Market Intelligence avant le démarrage
+refresh_market_intel() {
+    log "Actualisation des snapshots Market Intelligence..."
+    if [ ! -f "$BACKEND_DIR/.venv/bin/python" ]; then
+        log_warning "Impossible d'actualiser (venv absent)"
+        return
+    fi
+    (
+        cd "$BACKEND_DIR"
+        source "$BACKEND_DIR/.venv/bin/activate"
+        python jobs/market_intelligence_snapshot.py >/tmp/market_intel_snapshot.log 2>&1
+    ) && log_success "Snapshots Market Intelligence à jour" || log_warning "Actualisation Market Intelligence a échoué (voir /tmp/market_intel_snapshot.log)"
 }
 
 # Fonction pour démarrer le backend
@@ -273,6 +304,8 @@ main() {
         start)
             check_dependencies
             install_dependencies
+            refresh_macro_series
+            refresh_market_intel
             start_backend
             start_frontend
             log_success "Finance Copilot est maintenant disponible!"
@@ -290,6 +323,8 @@ main() {
             sleep 3
             check_dependencies
             install_dependencies
+            refresh_macro_series
+            refresh_market_intel
             start_backend
             start_frontend
             log_success "Services redémarrés avec succès!"

@@ -7,6 +7,8 @@ import { Card, Stack, Title, Text, SimpleGrid, Badge, Group, Skeleton, Alert } f
 import { IconChartLine, IconInfoCircle, IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
 import { RingProgress } from '@mantine/core';
 import { useApi } from '@/hooks/useApi';
+import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
+import styles from './MacroWidget.module.css';
 
 export function MacroWidget() {
   const { data, isLoading, error } = useApi<any>('/api/macro/series');
@@ -87,7 +89,7 @@ export function MacroWidget() {
   };
 
   return (
-    <Card padding="lg" shadow="sm" withBorder>
+    <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard}`}>
       <Stack gap="md">
         <Group gap="xs">
           <IconChartLine size={24} color="#3B82F6" />
@@ -95,17 +97,17 @@ export function MacroWidget() {
         </Group>
 
         {isLoading && (
-          <Stack gap="md">
+          <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
             {[...Array(4)].map((_, i) => (
-              <Card key={i} withBorder padding="md">
-                <Stack gap="xs" align="center">
-                  <Skeleton height={10} width="60%" />
+              <Card key={i} padding="md" radius="lg" className={`${sharedStyles.skeletonCard} ${styles.indicatorSkeleton}`}>
+                <Stack gap="sm" align="center">
+                  <Skeleton height={12} width="60%" radius="xl" />
                   <Skeleton height={60} circle />
-                  <Skeleton height={8} width="40%" />
+                  <Skeleton height={10} width="40%" radius="xl" />
                 </Stack>
               </Card>
             ))}
-          </Stack>
+          </SimpleGrid>
         )}
 
         {error && (
@@ -146,7 +148,7 @@ export function MacroWidget() {
               }
 
               return (
-                <Card key={indicator.id} withBorder padding="md" radius="md">
+                <Card key={indicator.id} padding="md" radius="lg" className={`${sharedStyles.flatCard} ${styles.indicatorCard}`}>
                   <Stack gap="xs" align="center">
                     <Text size="xs" c="dimmed" ta="center" fw={500}>{indicator.name}</Text>
                     <RingProgress
@@ -161,9 +163,9 @@ export function MacroWidget() {
                         </Text>
                       }
                     />
-                    <Group gap={4} justify="center">
-                      <Badge size="xs" color={statusInfo.color} variant="light">
-                        {statusInfo.status}
+                      <Group gap={4} justify="center">
+                        <Badge size="xs" color={statusInfo.color} variant="light">
+                          {statusInfo.status}
                       </Badge>
                     </Group>
                     <Text size="xs" c="dimmed" ta="center">{indicator.description}</Text>

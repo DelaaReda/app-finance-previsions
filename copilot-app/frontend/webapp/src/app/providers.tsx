@@ -51,6 +51,11 @@ const mantineTheme = createTheme({
       'var(--surface)','var(--surface)','var(--surface)','var(--surface)','var(--surface)',
       'var(--surface)','var(--surface)','var(--surface)','var(--surface)','var(--surface)'
     ] as unknown as [string,string,string,string,string,string,string,string,string,string],
+    // Gray scale for better text contrast in dark mode
+    gray: [
+      '#1a1f2e', '#2d3441', '#3d4554', '#4e5767', '#5f6a7a', // 0-4: darker shades
+      '#8b95a6', '#a8b2c3', '#c5d0e0', '#e2eefd', '#ffffff', // 5-9: lighter shades (better contrast)
+    ] as unknown as [string,string,string,string,string,string,string,string,string,string],
   },
   // Note: global body/background is handled by index.css (CSS variables). Mantine colors map to CSS vars above.
   components: {

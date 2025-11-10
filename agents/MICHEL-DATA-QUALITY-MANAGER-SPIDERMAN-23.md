@@ -75,6 +75,15 @@
 - [x] Supervision de la progression des fixes critiques
 - [x] Documentation des besoins en données historiques (séries temporelles)
 - [x] Audit global des endpoints pour s'assurer qu'ils retournent des données réelles
+- [x] Exécution des smoke tests pour validation qualité
+- [x] Vérification complète de tous les endpoints (health, forecasts, news, brief, backtests)
+- [x] Confirmation que tous les endpoints répondent avec structure {ok: true, data: {...}}
+- [x] Validation que les contrats never-empty sont respectés partout
+- [x] Documentation des résultats de tests dans les canaux de communication
+- [x] Révision du TASKS_BOARD.md pour éliminer les doublons de tâches
+- [x] Coordination des corrections suite à changements de directive (MUI vs Mantine+Tremor)
+- [x] Suivi de la stabilité système post-implémentation
+- [x] Vérification que le système est fonctionnel et prêt pour développement continu
 - [x] Création des tâches FC-ALIGN-* pour vérification complète de l'alignement architecture
 - [x] Attribution de vérifications spécifiques à chaque agent (API, Backend, Finance, ML, News, Tests)
 - [x] Exigence de preuves de fonctionnement avec données réelles pour chaque endpoint

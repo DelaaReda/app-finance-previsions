@@ -1,476 +1,443 @@
-# News-Macro-Stocks-Forecast Pipeline - Finance Copilot System
+# News-Macro-Stocks Forecast Pipeline (real data edition)
 # File: /models/pipeline_news_macro_stocks_forecast.py
-# Purpose: Define the complete pipeline from news to forecasts
-# Mission: ALEX-FINANCE-ANALYST-SUPERMAN-29
+# Purpose: Build forecasting features from real news, macro snapshots, and price history
 
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple, Optional
-import logging
+from __future__ import annotations
+
+import json
+import os
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+
+try:
+    from storage.io import load_json  # type: ignore
+except Exception:  # pragma: no cover - optional in some deployments
+    load_json = None
+
+try:
+    from core.market_data import get_price_history, get_fred_series  # type: ignore
+except Exception:  # pragma: no cover - keep stubs so pipeline still runs in degraded mode
+    def get_price_history(*_args, **_kwargs):  # type: ignore
+        return None
+
+    def get_fred_series(*_args, **_kwargs):  # type: ignore
+        return pd.DataFrame()
+
 
 class NewsMacroStocksForecastPipeline:
-    """
-    Pipeline to process news, macro data, stock data and generate forecasts
-    following the sequence: news→macro→stocks→forecast
-    """
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    """Pipeline that assembles features from real data sources for the hybrid forecaster."""
+
+    def __init__(self) -> None:
+        self.logger = self._get_logger()
         self.pipeline_config = self._load_pipeline_config()
-        
-    def _load_pipeline_config(self) -> Dict:
-        """
-        Load pipeline configuration including required indicators and signal weights
-        """
+        self.data_dir = Path(__file__).resolve().parents[2] / "data"
+        self.cache_dir = self.data_dir / "forecast_pipeline"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.price_cache_hours = int(os.getenv("FORECAST_PRICE_CACHE_HOURS", "6"))
+
+    # ------------------------------------------------------------------
+    # Configuration / logging helpers
+    # ------------------------------------------------------------------
+    def _get_logger(self):  # pragma: no cover - trivial wrapper
+        import logging
+
+        return logging.getLogger(__name__)
+
+    def _load_pipeline_config(self) -> Dict[str, List[str]]:
         return {
-            "data_refresh_frequency": "daily",
-            "news_sentiment_window": "24h",
-            "macro_lag": "1d",  # Macro data typically has 1 day lag
-            "forecast_horizon": ["1d", "5d", "22d"],  # 1 day, 1 week, 1 month
-            "required_news_sources": [
-                "earnings_announcements",
-                "macro_releases", 
-                "geopolitical_events",
-                "fed_speeches",
-                "economic_reports"
-            ],
+            "forecast_horizon": ["1d", "5d", "22d"],
             "required_macro_indicators": [
-                "vix",
-                "cpi",
-                "gdp_growth",
-                "unemployment_rate", 
-                "fed_rate",
-                "yield_curve"
+                "VIXCLS",
+                "CPIAUCSL",
+                "UNRATE",
+                "DGS10",
+                "DGS2",
+                "FEDFUNDS",
             ],
-            "required_stock_indicators": [
-                "price",
-                "volume", 
-                "rsi",
-                "macd",
-                "sma_20",
-                "sma_50",
-                "bb_upper",
-                "bb_lower"
-            ]
         }
 
+    # ------------------------------------------------------------------
+    # Public entrypoints
+    # ------------------------------------------------------------------
+    def run_pipeline(self, tickers: List[str]) -> Dict[str, pd.DataFrame]:
+        self.logger.info("Running forecast pipeline on %s", tickers)
+
+        news_data = self.ingest_news_data(tickers)
+        macro_data = self.ingest_macro_data()
+        stock_data = self.ingest_stock_data(tickers)
+
+        news_impact_scores = self.calculate_news_impact_score(news_data)
+        macro_regime_scores = self.calculate_macro_regime_score(macro_data)
+        technical_signals = self.generate_technical_signals(stock_data)
+
+        forecasts = self.combine_signals_for_forecast(
+            news_impact_scores,
+            macro_regime_scores,
+            technical_signals,
+            stock_data,
+        )
+
+        return forecasts
+
+    # ------------------------------------------------------------------
+    # News ingestion ----------------------------------------------------
+    # ------------------------------------------------------------------
     def ingest_news_data(self, tickers: List[str]) -> Dict[str, pd.DataFrame]:
-        """
-        Ingest news and sentiment data for given tickers
-        """
-        self.logger.info(f"Ingesting news data for tickers: {tickers}")
-        
-        # Simulate news data structure
-        news_data = {}
+        df = self._news_articles_dataframe(tickers)
+        if df.empty:
+            return {ticker: pd.DataFrame() for ticker in tickers}
+
+        grouped = (
+            df.groupby(["ticker", pd.Grouper(key="date", freq="D")])
+            .agg(
+                sentiment_score=("sentiment_value", "mean"),
+                news_volume=("article_id", "count"),
+                relevance_score=("score", "mean"),
+            )
+            .reset_index()
+        )
+
+        out: Dict[str, pd.DataFrame] = {}
         for ticker in tickers:
-            # This would connect to real news APIs in production
-            news_data[ticker] = self._fetch_news_sentiment(ticker)
-            
-        return news_data
+            subset = grouped[grouped["ticker"] == ticker].copy()
+            if subset.empty:
+                out[ticker] = pd.DataFrame()
+            else:
+                subset.sort_values("date", inplace=True)
+                subset["date"] = subset["date"].dt.tz_localize(None)
+                out[ticker] = subset
+        return out
 
-    def _fetch_news_sentiment(self, ticker: str) -> pd.DataFrame:
-        """
-        Fetch and process sentiment for a given ticker
-        """
-        # This would connect to news APIs in real implementation
-        # For now we simulate the structure
-        dates = pd.date_range(start=datetime.now() - timedelta(days=30), 
-                              end=datetime.now(), freq='D')
-        return pd.DataFrame({
-            'date': dates,
-            'ticker': ticker,
-            'sentiment_score': np.random.uniform(-1, 1, len(dates)),
-            'news_volume': np.random.randint(0, 100, len(dates)),
-            'relevance_score': np.random.uniform(0, 1, len(dates)),
-            'news_category': np.random.choice(['earnings', 'macro', 'geopolitical', 'sector'], len(dates))
-        })
+    def _news_articles_dataframe(self, tickers: List[str]) -> pd.DataFrame:
+        payload = self._load_json_payload("news_feed")
+        articles = payload.get("articles") or payload.get("data", {}).get("articles", [])
+        if not articles:
+            return pd.DataFrame()
 
-    def ingest_macro_data(self) -> Dict[str, pd.DataFrame]:
-        """
-        Ingest macroeconomic data
-        """
-        self.logger.info("Ingesting macroeconomic data")
-        
-        # This would connect to FRED API or other macro sources
-        macro_data = {}
-        for indicator in self.pipeline_config["required_macro_indicators"]:
-            macro_data[indicator] = self._fetch_macro_indicator(indicator)
-            
-        return macro_data
+        rows = []
+        universe = set(tickers)
+        for idx, article in enumerate(articles):
+            published = (
+                article.get("published_at")
+                or article.get("pubDate")
+                or article.get("timestamp")
+                or article.get("date")
+            )
+            ts = pd.to_datetime(published, errors="coerce")
+            if pd.isna(ts):
+                continue
 
-    def _fetch_macro_indicator(self, indicator: str) -> pd.DataFrame:
-        """
-        Fetch a specific macro indicator
-        """
-        dates = pd.date_range(start=datetime.now() - timedelta(days=365), 
-                              end=datetime.now(), freq='D')
-        return pd.DataFrame({
-            'date': dates,
-            'indicator': indicator,
-            'value': np.random.uniform(0.5, 2.5, len(dates)) if indicator == 'cpi' 
-                     else np.random.uniform(10, 40, len(dates)) if indicator == 'vix'
-                     else np.random.uniform(0.5, 5, len(dates)),
-            'normalized_value': np.random.uniform(-1, 1, len(dates))
-        })
+            tagged = article.get("tickers") or []
+            tagged = [t.strip().upper() for t in tagged if isinstance(t, str)]
+            if not tagged:
+                text = f"{article.get('title', '')} {article.get('summary', article.get('description', ''))}"
+                tagged = [t for t in universe if t in text.upper()]
+            if not tagged:
+                continue
 
-    def ingest_stock_data(self, tickers: List[str]) -> Dict[str, pd.DataFrame]:
-        """
-        Ingest stock price and technical indicator data
-        """
-        self.logger.info(f"Ingesting stock data for tickers: {tickers}")
-        
-        stock_data = {}
-        for ticker in tickers:
-            stock_data[ticker] = self._fetch_stock_with_indicators(ticker)
-            
-        return stock_data
+            sentiment_label = (article.get("sentiment") or "neutral").lower()
+            if sentiment_label not in ("positive", "negative", "neutral"):
+                sentiment_label = "neutral"
+            sentiment_value = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}[sentiment_label]
+            score = float(article.get("score") or 50.0)
+            score_normalized = score / 100.0
 
-    def _fetch_stock_with_indicators(self, ticker: str) -> pd.DataFrame:
-        """
-        Fetch stock data with calculated technical indicators
-        """
-        dates = pd.date_range(start=datetime.now() - timedelta(days=252), 
-                              end=datetime.now(), freq='D')
-        
-        # Generate basic OHLCV data
-        base_price = np.random.uniform(50, 200)
-        prices = [base_price]
-        for i in range(1, len(dates)):
-            change = np.random.normal(0, 0.02)  # 2% daily volatility
-            prices.append(prices[-1] * (1 + change))
-            
-        volume = np.random.uniform(100000, 10000000, len(dates))
-        
-        # Create DataFrame
-        df = pd.DataFrame({
-            'date': dates,
-            'ticker': ticker,
-            'open': prices * np.random.uniform(0.99, 1.01, len(prices)),
-            'high': prices * np.random.uniform(1.00, 1.03, len(prices)),
-            'low': prices * np.random.uniform(0.97, 1.00, len(prices)),
-            'close': prices,
-            'volume': volume
-        })
-        
-        # Add technical indicators
-        df = self._calculate_technical_indicators(df)
-        return df
-
-    def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculate required technical indicators
-        """
-        # Moving averages
-        df['sma_20'] = df['close'].rolling(window=20).mean()
-        df['sma_50'] = df['close'].rolling(window=50).mean()
-        
-        # RSI
-        delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-        
-        # MACD
-        exp1 = df['close'].ewm(span=12).mean()
-        exp2 = df['close'].ewm(span=26).mean()
-        df['macd'] = exp1 - exp2
-        df['macd_signal'] = df['macd'].ewm(span=9).mean()
-        
-        # Bollinger Bands
-        df['bb_middle'] = df['close'].rolling(window=20).mean()
-        bb_std = df['close'].rolling(window=20).std()
-        df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
-        df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
-        
-        # Volatility (ATR approximation)
-        df['atr'] = df['high'] - df['low']
-        df['atr'] = df['atr'].rolling(window=14).mean()
-        
-        return df
-
-    def calculate_news_impact_score(self, news_data: Dict[str, pd.DataFrame], 
-                                  stock_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """
-        Calculate news impact on stock prices
-        """
-        self.logger.info("Calculating news impact scores")
-        
-        impact_scores = {}
-        for ticker in news_data.keys():
-            news_df = news_data[ticker]
-            stock_df = stock_data[ticker] if ticker in stock_data else pd.DataFrame()
-            
-            # Merge news and stock data on date
-            # For simplicity, we'll just calculate a composite news sentiment score
-            if not news_df.empty:
-                # Calculate rolling news sentiment score
-                news_df['news_sentiment_rolling'] = news_df['sentiment_score'].rolling(window=5).mean()
-                news_df['news_volume_zscore'] = (news_df['news_volume'] - news_df['news_volume'].mean()) / news_df['news_volume'].std()
-                
-                # Combine sentiment and volume for impact score
-                news_df['news_impact_score'] = (
-                    news_df['sentiment_score'] * 0.6 + 
-                    news_df['relevance_score'] * 0.4
+            for ticker in tagged:
+                rows.append(
+                    {
+                        "article_id": article.get("id", f"article_{idx}"),
+                        "ticker": ticker,
+                        "date": ts,
+                        "sentiment_value": sentiment_value * score_normalized,
+                        "score": score_normalized,
+                    }
                 )
-                
-                impact_scores[ticker] = news_df[['date', 'news_impact_score', 'sentiment_score', 'relevance_score']]
-        
-        return impact_scores
+
+        return pd.DataFrame(rows)
+
+    # ------------------------------------------------------------------
+    # Macro ingestion ---------------------------------------------------
+    # ------------------------------------------------------------------
+    def ingest_macro_data(self) -> Dict[str, pd.DataFrame]:
+        payload = self._load_json_payload("macro_series")
+        series = payload.get("series", {})
+        data: Dict[str, pd.DataFrame] = {}
+
+        if series:
+            for indicator, info in series.items():
+                obs = info.get("observations") or []
+                if not obs:
+                    continue
+                df = pd.DataFrame(obs)
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                df["value"] = pd.to_numeric(df["value"], errors="coerce")
+                df.dropna(subset=["date", "value"], inplace=True)
+                df.sort_values("date", inplace=True)
+                df["normalized_value"] = self._normalize_series(df["value"])
+                data[indicator] = df[["date", "value", "normalized_value"]]
+        else:
+            for indicator in self.pipeline_config["required_macro_indicators"]:
+                df = get_fred_series(indicator)
+                if df is None or df.empty:
+                    continue
+                tmp = df.reset_index().rename(columns={df.columns[0]: "value", "index": "date"})
+                tmp["date"] = pd.to_datetime(tmp["date"], errors="coerce")
+                tmp.dropna(subset=["date", "value"], inplace=True)
+                tmp["normalized_value"] = self._normalize_series(tmp["value"])
+                data[indicator] = tmp[["date", "value", "normalized_value"]]
+
+        return data
+
+    # ------------------------------------------------------------------
+    # Stock ingestion ---------------------------------------------------
+    # ------------------------------------------------------------------
+    def ingest_stock_data(self, tickers: List[str]) -> Dict[str, pd.DataFrame]:
+        out: Dict[str, pd.DataFrame] = {}
+        for ticker in tickers:
+            df = self._load_stock_with_technicals(ticker)
+            out[ticker] = df
+        return out
+
+    def _load_stock_with_technicals(self, ticker: str) -> pd.DataFrame:
+        cache_path = self.cache_dir / "prices" / f"{ticker.upper()}.csv"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if self._is_cache_fresh(cache_path):
+            try:
+                df = pd.read_csv(cache_path, parse_dates=["date"])  # type: ignore
+                return df
+            except Exception:
+                pass
+
+        start_date = (datetime.utcnow() - timedelta(days=400)).strftime("%Y-%m-%d")
+        raw = get_price_history(ticker, start=start_date, interval="1d")
+        if raw is None or raw.empty:
+            return pd.DataFrame()
+
+        df = raw.reset_index().rename(columns=str.lower)
+        if "adj close" in df.columns and "close" not in df.columns:
+            df.rename(columns={"adj close": "close"}, inplace=True)
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.tz_localize(None)
+        df = df.dropna(subset=["date", "close"]).copy()
+
+        df = self._calculate_technical_indicators(df)
+
+        try:
+            df.to_csv(cache_path, index=False)
+        except Exception:
+            pass
+        return df
+
+    # ------------------------------------------------------------------
+    # Feature calculations ---------------------------------------------
+    # ------------------------------------------------------------------
+    def calculate_news_impact_score(self, news_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        impact: Dict[str, pd.DataFrame] = {}
+        for ticker, df in news_data.items():
+            if df.empty:
+                impact[ticker] = pd.DataFrame()
+                continue
+            tmp = df.copy()
+            tmp.sort_values("date", inplace=True)
+            tmp["news_sentiment_rolling"] = tmp["sentiment_score"].rolling(window=5, min_periods=1).mean()
+            tmp["news_volume_zscore"] = (tmp["news_volume"] - tmp["news_volume"].mean()) / (tmp["news_volume"].std() or 1.0)
+            tmp["news_impact_score"] = tmp["sentiment_score"].fillna(0) * 0.6 + tmp["relevance_score"].fillna(0) * 0.4
+            impact[ticker] = tmp[[
+                "date",
+                "news_impact_score",
+                "sentiment_score",
+                "relevance_score",
+                "news_volume",
+                "news_volume_zscore",
+            ]]
+        return impact
 
     def calculate_macro_regime_score(self, macro_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """
-        Calculate macro regime scores based on multiple indicators
-        """
-        self.logger.info("Calculating macro regime scores")
-        
-        # Combine all macro indicators into a regime score
-        dates = None
-        combined_data = {}
-        
-        for indicator, df in macro_data.items():
-            if dates is None:
-                dates = df['date'].values
-                combined_data['date'] = dates
-                combined_data[indicator] = df['normalized_value'].values
-            else:
-                # Merge on date (simplified version)
-                combined_data[indicator] = df.set_index('date').reindex(dates)['normalized_value'].fillna(method='ffill').values
-        
-        # Create a combined regime score
-        df_combined = pd.DataFrame(combined_data)
-        
-        # Calculate regime score (simplified)
-        regime_weights = {
-            'vix': 0.3,
-            'cpi': 0.2,
-            'gdp_growth': 0.2,
-            'unemployment_rate': 0.15,
-            'fed_rate': 0.15
+        if not macro_data:
+            return pd.DataFrame({"date": pd.to_datetime([]), "macro_regime_score": []})
+
+        merged = None
+        for name, df in macro_data.items():
+            if df.empty:
+                continue
+            cols = df[["date", "normalized_value"]].rename(columns={"normalized_value": name})
+            merged = cols if merged is None else merged.merge(cols, on="date", how="outer")
+
+        if merged is None:
+            return pd.DataFrame({"date": pd.to_datetime([]), "macro_regime_score": []})
+
+        merged.sort_values("date", inplace=True)
+        merged.fillna(method="ffill", inplace=True)
+
+        weights = {
+            "VIXCLS": 0.25,
+            "CPIAUCSL": 0.2,
+            "UNRATE": 0.15,
+            "DGS10": 0.15,
+            "DGS2": 0.1,
+            "FEDFUNDS": 0.15,
         }
-        
-        score_cols = [col for col in df_combined.columns if col in regime_weights]
-        regime_score = 0
-        total_weight = 0
-        
-        for col in score_cols:
-            if col in regime_weights:
-                weight = regime_weights[col]
-                regime_score += df_combined[col].fillna(0) * weight
-                total_weight += weight
-        
-        if total_weight > 0:
-            df_combined['macro_regime_score'] = regime_score / total_weight
+        score = 0
+        weight_sum = 0
+        for col, weight in weights.items():
+            if col in merged:
+                score += merged[col] * weight
+                weight_sum += weight
+        if weight_sum == 0:
+            merged["macro_regime_score"] = 0
         else:
-            df_combined['macro_regime_score'] = 0
-            
-        return df_combined[['date', 'macro_regime_score']]
+            merged["macro_regime_score"] = score / weight_sum
+
+        return merged[["date", "macro_regime_score"]]
 
     def generate_technical_signals(self, stock_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """
-        Generate technical signals based on stock indicators
-        """
-        self.logger.info("Generating technical signals")
-        
-        signals = {}
+        signals: Dict[str, pd.DataFrame] = {}
         for ticker, df in stock_data.items():
             if df.empty:
-                signals[ticker] = pd.DataFrame(columns=['date', 'signal_name', 'signal_value', 'confidence'])
+                signals[ticker] = pd.DataFrame()
                 continue
-                
-            # Calculate various technical signals
-            df_signals = df[['date']].copy()
-            
-            # RSI signals
-            df_signals['rsi_oversold'] = (df['rsi'] < 30).astype(int)
-            df_signals['rsi_overbought'] = (df['rsi'] > 70).astype(int)
-            
-            # Moving average signals
-            df_signals['ma_bullish_cross'] = ((df['sma_20'] > df['sma_50']) & 
-                                            (df['sma_20'].shift(1) <= df['sma_50'].shift(1))).astype(int)
-            df_signals['ma_bearish_cross'] = ((df['sma_20'] < df['sma_50']) & 
-                                            (df['sma_20'].shift(1) >= df['sma_50'].shift(1))).astype(int)
-            
-            # Bollinger Band signals
-            df_signals['bb_bullish_breakout'] = (df['close'] > df['bb_upper']).astype(int)
-            df_signals['bb_bearish_breakout'] = (df['close'] < df['bb_lower']).astype(int)
-            
-            # MACD signals
-            df_signals['macd_bullish_cross'] = ((df['macd'] > df['macd_signal']) & 
-                                              (df['macd'].shift(1) <= df['macd_signal'].shift(1))).astype(int)
-            df_signals['macd_bearish_cross'] = ((df['macd'] < df['macd_signal']) & 
-                                              (df['macd'].shift(1) >= df['macd_signal'].shift(1))).astype(int)
-            
-            signals[ticker] = df_signals
-        
+            tmp = df[["date"]].copy()
+            tmp["rsi_oversold"] = (df["rsi"] < 30).astype(int)
+            tmp["rsi_overbought"] = (df["rsi"] > 70).astype(int)
+            tmp["ma_bullish_cross"] = ((df["sma_20"] > df["sma_50"]) & (df["sma_20"].shift(1) <= df["sma_50"].shift(1))).astype(int)
+            tmp["ma_bearish_cross"] = ((df["sma_20"] < df["sma_50"]) & (df["sma_20"].shift(1) >= df["sma_50"].shift(1))).astype(int)
+            tmp["bb_bullish_breakout"] = (df["close"] > df["bb_upper"]).astype(int)
+            tmp["bb_bearish_breakout"] = (df["close"] < df["bb_lower"]).astype(int)
+            tmp["macd_bullish_cross"] = ((df["macd"] > df["macd_signal"]) & (df["macd"].shift(1) <= df["macd_signal"].shift(1))).astype(int)
+            tmp["macd_bearish_cross"] = ((df["macd"] < df["macd_signal"]) & (df["macd"].shift(1) >= df["macd_signal"].shift(1))).astype(int)
+            signals[ticker] = tmp
         return signals
 
-    def combine_signals_for_forecast(self, news_impact: Dict[str, pd.DataFrame],
-                                   macro_regime: pd.DataFrame,
-                                   technical_signals: Dict[str, pd.DataFrame],
-                                   stock_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        """
-        Combine news, macro, and technical signals to generate forecasts
-        """
-        self.logger.info("Combining signals for forecast generation")
-        
-        forecasts = {}
-        
-        for ticker in stock_data.keys():
-            # Get the latest data for this ticker
-            stock_df = stock_data[ticker].copy()
-            news_df = news_impact.get(ticker, pd.DataFrame()) if news_impact else pd.DataFrame()
-            tech_df = technical_signals.get(ticker, pd.DataFrame()) if technical_signals else pd.DataFrame()
-            
-            # Merge all data sources (simplified approach)
-            if not stock_df.empty:
-                # Combine relevant signals
-                result_df = stock_df[['date', 'close', 'volume', 'rsi', 'sma_20', 'sma_50']].copy()
-                
-                # Add macro regime score
-                result_df = result_df.merge(macro_regime, on='date', how='left')
-                result_df['macro_regime_score'] = result_df['macro_regime_score'].fillna(method='ffill')
-                
-                # Add news impact if available
-                if not news_df.empty:
-                    result_df = result_df.merge(news_df, on='date', how='left')
-                    result_df['news_impact_score'] = result_df['news_impact_score'].fillna(0)
-                    result_df['sentiment_score'] = result_df['sentiment_score'].fillna(0)
-                else:
-                    result_df['news_impact_score'] = 0
-                    result_df['sentiment_score'] = 0
-                
-                # Add technical signals if available
-                if not tech_df.empty:
-                    # Only merge the signal columns
-                    signal_cols = [col for col in tech_df.columns if col not in ['date']]
-                    tech_signal_df = tech_df[['date'] + signal_cols].copy()
-                    result_df = result_df.merge(tech_signal_df, on='date', how='left')
-                    
-                    # Fill missing signal values with 0
-                    for col in signal_cols:
-                        if col != 'date':
-                            result_df[col] = result_df[col].fillna(0)
-                else:
-                    # Add default signal columns
-                    for signal in ['rsi_oversold', 'rsi_overbought', 'ma_bullish_cross', 
-                                 'ma_bearish_cross', 'bb_bullish_breakout', 'bb_bearish_breakout',
-                                 'macd_bullish_cross', 'macd_bearish_cross']:
-                        result_df[signal] = 0
-                
-                # Calculate composite signal
-                result_df['composite_signal'] = (
-                    # Technical signals weighted
-                    result_df['ma_bullish_cross'] * 0.2 +
-                    result_df['ma_bearish_cross'] * -0.2 +
-                    (result_df['rsi_oversold'] * 0.15) +
-                    (result_df['rsi_overbought'] * -0.15) +
-                    (result_df['macd_bullish_cross'] * 0.15) +
-                    (result_df['macd_bearish_cross'] * -0.15) +
-                    # News impact weighted
-                    result_df['news_impact_score'] * 0.2 +
-                    # Macro regime weighted
-                    result_df['macro_regime_score'] * 0.1
-                )
-                
-                # Calculate forecast direction and confidence
-                result_df['forecast_direction'] = np.where(
-                    result_df['composite_signal'] > 0.1, 'up',
-                    np.where(result_df['composite_signal'] < -0.1, 'down', 'neutral')
-                )
-                
-                # Calculate confidence based on signal strength
-                result_df['confidence'] = np.abs(result_df['composite_signal'])
-                result_df['confidence'] = np.clip(result_df['confidence'], 0, 1)
-                
-                # Calculate expected return
-                # This is a simplified model - in practice this would be more sophisticated
-                result_df['expected_return_1d'] = result_df['composite_signal'] * 0.02  # 2% max daily move
-                result_df['expected_return_5d'] = result_df['composite_signal'] * 0.05  # 5% max 5-day move
-                result_df['expected_return_22d'] = result_df['composite_signal'] * 0.10  # 10% max monthly move
-                
-                forecasts[ticker] = result_df
-        
+    def combine_signals_for_forecast(
+        self,
+        news_impact: Dict[str, pd.DataFrame],
+        macro_regime: pd.DataFrame,
+        technical_signals: Dict[str, pd.DataFrame],
+        stock_data: Dict[str, pd.DataFrame],
+    ) -> Dict[str, pd.DataFrame]:
+        forecasts: Dict[str, pd.DataFrame] = {}
+        macro_regime = macro_regime.copy()
+        macro_regime.sort_values("date", inplace=True)
+
+        for ticker, price_df in stock_data.items():
+            if price_df.empty:
+                forecasts[ticker] = pd.DataFrame()
+                continue
+
+            df = price_df.copy()
+            df = df.merge(macro_regime, on="date", how="left")
+            df["macro_regime_score"] = df["macro_regime_score"].fillna(method="ffill").fillna(0)
+
+            news_df = news_impact.get(ticker)
+            if news_df is not None and not news_df.empty:
+                df = df.merge(news_df, on="date", how="left")
+                df["news_impact_score"] = df["news_impact_score"].fillna(0)
+                df["sentiment_score"] = df["sentiment_score"].fillna(0)
+                df["news_volume"] = df["news_volume"].fillna(0)
+                df["news_volume_zscore"] = df["news_volume_zscore"].fillna(0)
+            else:
+                df["news_impact_score"] = 0
+                df["sentiment_score"] = 0
+                df["news_volume"] = 0
+                df["news_volume_zscore"] = 0
+
+            tech_df = technical_signals.get(ticker)
+            if tech_df is not None and not tech_df.empty:
+                df = df.merge(tech_df, on="date", how="left")
+            else:
+                for col in [
+                    "rsi_oversold",
+                    "rsi_overbought",
+                    "ma_bullish_cross",
+                    "ma_bearish_cross",
+                    "bb_bullish_breakout",
+                    "bb_bearish_breakout",
+                    "macd_bullish_cross",
+                    "macd_bearish_cross",
+                ]:
+                    df[col] = 0
+
+            df.fillna(0, inplace=True)
+            df["composite_signal"] = (
+                df["ma_bullish_cross"] * 0.2
+                - df["ma_bearish_cross"] * 0.2
+                + df["rsi_oversold"] * 0.15
+                - df["rsi_overbought"] * 0.15
+                + df["macd_bullish_cross"] * 0.15
+                - df["macd_bearish_cross"] * 0.15
+                + df["news_impact_score"] * 0.2
+                + df["macro_regime_score"] * 0.1
+            )
+            df["forecast_direction"] = np.where(
+                df["composite_signal"] > 0.1,
+                "up",
+                np.where(df["composite_signal"] < -0.1, "down", "neutral"),
+            )
+            df["confidence"] = np.clip(np.abs(df["composite_signal"]), 0, 1)
+            df["expected_return_1d"] = df["composite_signal"] * 0.02
+            df["expected_return_5d"] = df["composite_signal"] * 0.05
+            df["expected_return_22d"] = df["composite_signal"] * 0.10
+
+            forecasts[ticker] = df
+
         return forecasts
 
-    def run_pipeline(self, tickers: List[str]) -> Dict[str, pd.DataFrame]:
-        """
-        Run the complete news→macro→stocks→forecast pipeline
-        """
-        self.logger.info(f"Running complete pipeline for tickers: {tickers}")
-        
-        # Step 1: Ingest news data
-        news_data = self.ingest_news_data(tickers)
-        
-        # Step 2: Ingest macro data
-        macro_data = self.ingest_macro_data()
-        
-        # Step 3: Ingest stock data
-        stock_data = self.ingest_stock_data(tickers)
-        
-        # Step 4: Calculate news impact scores
-        news_impact_scores = self.calculate_news_impact_score(news_data, stock_data)
-        
-        # Step 5: Calculate macro regime scores
-        macro_regime_scores = self.calculate_macro_regime_score(macro_data)
-        
-        # Step 6: Generate technical signals
-        technical_signals = self.generate_technical_signals(stock_data)
-        
-        # Step 7: Combine all signals for forecast
-        forecasts = self.combine_signals_for_forecast(
-            news_impact_scores, 
-            macro_regime_scores, 
-            technical_signals, 
-            stock_data
-        )
-        
-        self.logger.info("Pipeline completed successfully")
-        return forecasts
+    # ------------------------------------------------------------------
+    # Utilities --------------------------------------------------------
+    # ------------------------------------------------------------------
+    def _load_json_payload(self, key: str) -> Dict[str, Any]:
+        if load_json:
+            try:
+                data = load_json(key.rstrip(".json"))  # type: ignore[arg-type]
+                if data:
+                    return data
+            except Exception:
+                pass
+        file_path = self.data_dir / (key if key.endswith(".json") else f"{key}.json")
+        if file_path.exists():
+            try:
+                return json.loads(file_path.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        return {}
 
-    def generate_forecast_for_api(self, tickers: List[str]) -> Dict:
-        """
-        Generate forecast output in the format expected by the API
-        """
-        forecasts = self.run_pipeline(tickers)
-        
-        # Convert to API format
-        api_output = {
-            "last_update": datetime.now().isoformat(),
-            "tickers_analyzed": tickers,
-            "forecasts": {}
-        }
-        
-        for ticker, df in forecasts.items():
-            if not df.empty:
-                # Get the most recent forecast
-                latest = df.iloc[-1]
-                
-                api_output["forecasts"][ticker] = {
-                    "date": latest['date'].isoformat() if hasattr(latest['date'], 'isoformat') else str(latest['date']),
-                    "direction": latest['forecast_direction'],
-                    "confidence": float(latest['confidence']),
-                    "expected_return_1d": float(latest['expected_return_1d']),
-                    "expected_return_5d": float(latest['expected_return_5d']) if 'expected_return_5d' in df.columns else 0.0,
-                    "expected_return_22d": float(latest['expected_return_22d']) if 'expected_return_22d' in df.columns else 0.0,
-                    "composite_signal": float(latest['composite_signal']),
-                    "technical_signals": {
-                        "ma_bullish_cross": bool(latest['ma_bullish_cross']) if 'ma_bullish_cross' in df.columns else False,
-                        "ma_bearish_cross": bool(latest['ma_bearish_cross']) if 'ma_bearish_cross' in df.columns else False,
-                        "rsi_oversold": bool(latest['rsi_oversold']) if 'rsi_oversold' in df.columns else False,
-                        "rsi_overbought": bool(latest['rsi_overbought']) if 'rsi_overbought' in df.columns else False,
-                        "bb_bullish_breakout": bool(latest['bb_bullish_breakout']) if 'bb_bullish_breakout' in df.columns else False,
-                        "bb_bearish_breakout": bool(latest['bb_bearish_breakout']) if 'bb_bearish_breakout' in df.columns else False,
-                        "macd_bullish_cross": bool(latest['macd_bullish_cross']) if 'macd_bullish_cross' in df.columns else False,
-                        "macd_bearish_cross": bool(latest['macd_bearish_cross']) if 'macd_bearish_cross' in df.columns else False,
-                    },
-                    "news_impact": float(latest['news_impact_score']) if 'news_impact_score' in df.columns else 0.0,
-                    "macro_regime": float(latest['macro_regime_score']) if 'macro_regime_score' in df.columns else 0.0
-                }
-        
-        return api_output
+    def _normalize_series(self, series: pd.Series) -> pd.Series:
+        rolling = series.rolling(window=90, min_periods=10)
+        mean = rolling.mean()
+        std = rolling.std().replace(0, np.nan)
+        normalized = (series - mean) / std
+        return normalized.fillna(0)
 
-# Example usage:
-# pipeline = NewsMacroStocksForecastPipeline()
-# result = pipeline.generate_forecast_for_api(['AAPL', 'MSFT', 'GOOGL'])
+    def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        out = df.copy()
+        out["sma_20"] = out["close"].rolling(window=20).mean()
+        out["sma_50"] = out["close"].rolling(window=50).mean()
+
+        delta = out["close"].diff()
+        gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+        loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+        rs = gain / (loss.replace(0, np.nan))
+        out["rsi"] = 100 - (100 / (1 + rs))
+
+        exp1 = out["close"].ewm(span=12, adjust=False).mean()
+        exp2 = out["close"].ewm(span=26, adjust=False).mean()
+        out["macd"] = exp1 - exp2
+        out["macd_signal"] = out["macd"].ewm(span=9, adjust=False).mean()
+
+        out["bb_middle"] = out["close"].rolling(window=20).mean()
+        bb_std = out["close"].rolling(window=20).std()
+        out["bb_upper"] = out["bb_middle"] + 2 * bb_std
+        out["bb_lower"] = out["bb_middle"] - 2 * bb_std
+
+        out["atr"] = (out["high"] - out["low"]).rolling(window=14).mean()
+        return out
+
+    def _is_cache_fresh(self, path: Path) -> bool:
+        if not path.exists():
+            return False
+        age = datetime.utcnow() - datetime.utcfromtimestamp(path.stat().st_mtime)
+        return age <= timedelta(hours=self.price_cache_hours)
