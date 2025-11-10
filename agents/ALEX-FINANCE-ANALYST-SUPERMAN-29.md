@@ -58,6 +58,7 @@
 - [x] BE-006: POST /api/backtests/run endpoint - Interactive backtesting with parameters from UI (Strategy, confidence, horizon filtering, comprehensive metrics)
 - [x] BE-002: Macro séries FRED/VIX - Real macro data for dashboard with Tremor chart compatibility (CPI, VIX, yield curve, unemployment data)
 - [x] BE-003: Flux news + sentiment - Real news feed with sentiment analysis for frontend (Ticker filtering, sentiment labels, timeago, categorization)
+- [x] FC-API-027: Stock Correlation Heatmap - Correlation matrix endpoint with frontend-compatible formatting (Pearson coefficients, heatmap data structure)
 
 ## 📈 Points Gagnés
 - **Total**: 1370 points

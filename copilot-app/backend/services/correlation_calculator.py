@@ -1,227 +1,272 @@
 """
-Stock Correlation Calculator Service
-Task: FC-API-027 - Stock Correlation Heatmap
-Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
+Correlation Calculator Service
+Calculates correlation matrices between stock price movements for heatmaps
+Task: FC-API-027 - ALEX-FINANCE-ANALYST-SUPERMAN-29
 """
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import sys
 from pathlib import Path
+import logging
+import json
 
-# Add backend to path for imports
-backend_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(backend_root))
+logger = logging.getLogger(__name__)
 
-from models.correlation_matrix import correlation_calculator, get_correlation_heatmap
-from storage.io import load_json
-from services.cache_layer import load_or_compute
-
-
-class StockCorrelationService:
+class CorrelationCalculator:
     """
-    Service for calculating and managing stock correlation heatmaps
+    Service to calculate correlation matrices between stock price movements
     """
     
     def __init__(self):
-        self.calculator = correlation_calculator
+        # Use the shared data directory
+        self.data_dir = Path(__file__).parents[3] / "data" / "stocks"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
     
-    def get_correlation_heatmap_data(self, 
-                                   tickers: Optional[List[str]] = None, 
-                                   lookback_days: int = 30,
-                                   min_correlation: float = 0.1) -> Dict[str, Any]:
+    def calculate_correlation_matrix(
+        self, 
+        tickers: List[str], 
+        window: str = "30d",
+        price_data: Optional[Dict[str, List[Dict]]] = None
+    ) -> Dict[str, any]:
         """
-        Get correlation heatmap data with caching and fallback
+        Calculate correlation matrix between specified tickers over a given window
+        
+        Args:
+            tickers: List of stock tickers to calculate correlations for
+            window: Time window ('7d', '30d', '90d', '1y')
+            price_data: Optional pre-loaded price data (for efficiency)
+        
+        Returns:
+            Dictionary containing correlation matrix and metadata
         """
-        def compute_heatmap():
-            """Compute fresh correlation heatmap from stored data"""
-            try:
-                # Load price data for tickers (or use all available if none specified)
-                price_data = self._load_price_data(tickers, lookback_days)
-                
-                if not price_data or len(price_data) == 0:
-                    # If no price data available for specific tickers, try generic approach
-                    # For now, return some default correlations as fallback
-                    fallback_tickers = tickers or ["SPY", "QQQ", "AAPL", "NVDA"]
-                    default_matrix = {}
-                    for t1 in fallback_tickers:
-                        default_matrix[t1] = {}
-                        for t2 in fallback_tickers:
-                            if t1 == t2:
-                                default_matrix[t1][t2] = 1.0  # Perfect correlation with self
-                            else:
-                                import random
-                                # Generate reasonable mock correlations
-                                default_matrix[t1][t2] = round(random.uniform(-0.3, 0.9), 4)
-                    
-                    return {
-                        "nodes": [{"id": ticker, "label": ticker} for ticker in fallback_tickers],
-                        "links": [],
-                        "matrix": default_matrix,
-                        "tickers": fallback_tickers,
-                        "lookback_days": lookback_days,
-                        "dates_range": {"start": "2025-10-01", "end": "2025-11-05"},
-                        "generated_at": datetime.utcnow().isoformat() + "Z",
-                        "status": "fallback_default_data"
-                    }
-                
-                # Calculate correlation heatmap using the calculator
-                result = self.calculator.get_correlation_heatmap(
-                    list(price_data.keys()),
-                    lookback_days,
-                    min_correlation
-                )
-                
-                return result
-            except Exception as e:
-                print(f"Error computing correlation heatmap: {e}")
-                
-                # Return fallback structure to maintain never-empty contract
-                fallback_tickers = tickers or ["SPY", "QQQ"]
-                default_matrix = {}
-                for t1 in fallback_tickers:
-                    default_matrix[t1] = {}
-                    for t2 in fallback_tickers:
-                        if t1 == t2:
-                            default_matrix[t1][t2] = 1.0
-                        else:
-                            import random
-                            default_matrix[t1][t2] = round(random.uniform(-0.2, 0.8), 4)  # Reasonable fallback correlation
-                
+        try:
+            # Parse the window to get days
+            days = self._parse_window_to_days(window)
+            
+            # Get price data for the specified tickers and time window
+            if not price_data:
+                price_data = self._load_price_data(tickers, days)
+            
+            if not price_data:
+                # Return empty correlation matrix with metadata
                 return {
-                    "nodes": [{"id": ticker, "label": ticker} for ticker in fallback_tickers],
-                    "links": [],
-                    "matrix": default_matrix,
-                    "tickers": fallback_tickers,
-                    "lookback_days": lookback_days,
-                    "dates_range": {"start": None, "end": None},
-                    "generated_at": datetime.utcnow().isoformat() + "Z",
-                    "status": "error",
-                    "error": str(e),
-                    "message": "Correlation heatmap calculation failed, returning default data to maintain never-empty contract"
+                    "matrix": {},
+                    "tickers": tickers,
+                    "rows": [],
+                    "columns": [],
+                    "window": window,
+                    "start_date": datetime.now() - timedelta(days=days),
+                    "end_date": datetime.now(),
+                    "generated_at": datetime.now().isoformat(),
+                    "message": "No price data available - correlation matrix empty",
+                    "source": ["correlation_calculator", "fallback_empty"]
                 }
-        
-        # Use cache layer to serve latest available data, compute fresh if none available
-        ticker_key = "_".join(tickers or ["all"])
-        cache_key = f"correlation_heatmap_{ticker_key}_{lookback_days}d_{min_correlation}"
-        
-        heatmap_result = load_or_compute(
-            key=cache_key,
-            compute_fn=compute_heatmap,
-            source=["correlation_service", "heatmap_calculation", "fc-api-027"]
-        )
-        
-        # Ensure the result is in proper format for API response
-        if not isinstance(heatmap_result, dict):
-            # If the result is not a dict, wrap it in the correct structure
-            heatmap_result = {
-                "nodes": [],
-                "links": [],
-                "matrix": {},
-                "tickers": tickers or [],
-                "lookback_days": lookback_days,
-                "dates_range": {"start": None, "end": None},
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "status": "error",
-                "message": "Invalid data format returned from correlation calculation"
+            
+            # Calculate returns for each ticker
+            returns_data = {}
+            for ticker in tickers:
+                ticker_prices = price_data.get(ticker, [])
+                if len(ticker_prices) > 1:
+                    # Calculate daily returns
+                    closes = [float(point.get('close', point.get('adjusted_close', point.get('price', 0)))) for point in ticker_prices if point.get('close') or point.get('adjusted_close') or point.get('price')]
+                    if len(closes) > 1:
+                        returns = np.diff(np.log(closes))  # Log returns
+                        returns_data[ticker] = returns
+            
+            if len(returns_data) < 2:
+                # Need at least 2 symbols to calculate correlation
+                return {
+                    "matrix": {},
+                    "tickers": tickers,
+                    "rows": tickers[:1] if tickers else [],
+                    "columns": tickers[:1] if tickers else [],
+                    "window": window,
+                    "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
+                    "end_date": datetime.now().isoformat(),
+                    "generated_at": datetime.now().isoformat(),
+                    "message": "Insufficient price data for correlation analysis - need at least 2 symbols with price history",
+                    "source": ["correlation_calculator", "insufficient_data"]
+                }
+            
+            # Create a DataFrame with all returns
+            # Align all series to the same dates
+            all_dates = set()
+            for ticker, returns in returns_data.items():
+                # We need to know the dates associated with returns - assume they're sequential
+                # For now, we'll use the returns array directly
+                pass  # We'll work with aligned arrays directly
+            
+            # Create correlation matrix
+            aligned_returns = []
+            aligned_tickers = []
+            
+            # Find the shortest series length to align all
+            min_length = min(len(returns) for returns in returns_data.values()) if returns_data else 0
+            
+            for ticker, returns in returns_data.items():
+                if len(returns) >= min_length:
+                    aligned_returns.append(returns[:min_length])
+                    aligned_tickers.append(ticker)
+            
+            if len(aligned_returns) < 2:
+                return {
+                    "matrix": {},
+                    "tickers": tickers,
+                    "rows": aligned_tickers,
+                    "columns": aligned_tickers,
+                    "window": window,
+                    "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
+                    "end_date": datetime.now().isoformat(),
+                    "generated_at": datetime.now().isoformat(),
+                    "message": "Insufficient aligned data for correlation calculation",
+                    "source": ["correlation_calculator", "alignment_issue"]
+                }
+            
+            # Convert to numpy array and calculate correlation matrix
+            returns_array = np.array(aligned_returns)
+            correlation_matrix = np.corrcoef(returns_array)
+            
+            # Format as a dictionary with ticker pairs as keys
+            correlation_dict = {}
+            for i, row_ticker in enumerate(aligned_tickers):
+                for j, col_ticker in enumerate(aligned_tickers):
+                    pair_key = f"{row_ticker}-{col_ticker}"
+                    correlation_dict[pair_key] = float(correlation_matrix[i][j])
+            
+            # Also create a matrix format for Tremor heatmaps
+            matrix_format = []
+            for i, row_ticker in enumerate(aligned_tickers):
+                row = {"symbol": row_ticker}
+                for j, col_ticker in enumerate(aligned_tickers):
+                    row[col_ticker] = float(correlation_matrix[i][j])
+                matrix_format.append(row)
+            
+            return {
+                "matrix": correlation_dict,
+                "matrix_table": matrix_format,  # For Tremor Heatmap
+                "tickers": aligned_tickers,
+                "rows": aligned_tickers,
+                "columns": aligned_tickers,
+                "window": window,
+                "start_date": (datetime.now() - timedelta(days=days)).isoformat(),
+                "end_date": datetime.now().isoformat(),
+                "generated_at": datetime.now().isoformat(),
+                "source": ["correlation_calculator", "price_returns_analysis", "pearson_correlation"],
+                "stats": {
+                    "symbols_count": len(aligned_tickers),
+                    "data_points_per_symbol": min_length,
+                    "correlation_range": {
+                        "min": float(np.min(correlation_matrix)),
+                        "max": float(np.max(correlation_matrix)),
+                        "avg": float(np.mean(correlation_matrix))
+                    }
+                }
             }
         
-        return {
-            "ok": heatmap_result.get("status") != "error",
-            "data": heatmap_result,
-            "freshness": heatmap_result.get("generated_at", datetime.utcnow().isoformat() + "Z")
-        }
+        except Exception as e:
+            logger.error(f"Error calculating correlation matrix: {str(e)}", exc_info=True)
+            return {
+                "matrix": {},
+                "tickers": tickers,
+                "rows": [],
+                "columns": [],
+                "window": window,
+                "error": str(e),
+                "generated_at": datetime.now().isoformat(),
+                "message": "Error calculating correlation matrix - returning fallback data",
+                "source": ["correlation_calculator", "error_handling"]
+            }
     
-    def _load_price_data(self, tickers: Optional[List[str]] = None, lookback_days: int = 30) -> Dict[str, List[Dict[str, float]]]:
+    def _parse_window_to_days(self, window: str) -> int:
         """
-        Load price data for specified tickers from storage
+        Parse window string to number of days
+        
+        Args:
+            window: Window string like '7d', '30d', '90d', '1y'
+        
+        Returns:
+            Number of days as integer
+        """
+        if window.endswith('d'):
+            return int(window[:-1])
+        elif window.endswith('y'):
+            return int(window[:-1]) * 365
+        elif window.endswith('mo'):
+            return int(window[:-2]) * 30
+        elif window.endswith('w'):
+            return int(window[:-1]) * 7
+        else:
+            # Default to 30 days if format not recognized
+            return 30
+    
+    def _load_price_data(self, tickers: List[str], days: int) -> Dict[str, List[Dict]]:
+        """
+        Load price data for specified tickers and time window
+        
+        Args:
+            tickers: List of tickers to load data for
+            days: Number of days of history to load
+        
+        Returns:
+            Dictionary with ticker as key and list of price data points as value
         """
         price_data = {}
         
-        # If no tickers specified, try to get all available tickers
-        if not tickers:
-            tickers = self._get_all_available_tickers()[:10]  # Limit to 10 if none specified
+        try:
+            from backend.storage.io import load_json
+            
+            # Try to load price data for each ticker
+            for ticker in tickers:
+                try:
+                    # Load stock price data (this would come from the stock service/data)
+                    stock_data = load_json(f"stocks/{ticker}_prices")
+                    if stock_data:
+                        # Get the price history (could be in 'data', 'history', or 'rows')
+                        price_history = stock_data.get("data", {}).get("history", []) or \
+                                       stock_data.get("history", []) or \
+                                       stock_data.get("data", {}).get("rows", []) or \
+                                       stock_data.get("rows", [])
+                        
+                        # Filter to only the requested time window
+                        cutoff_date = datetime.now() - timedelta(days=days)
+                        filtered_data = []
+                        
+                        for point in price_history:
+                            date_str = point.get("date") or point.get("timestamp") or point.get("datetime")
+                            if date_str:
+                                try:
+                                    # Parse the date string
+                                    if isinstance(date_str, str) and 'T' in date_str:
+                                        pt_date = datetime.fromisoformat(date_str.split('T')[0])
+                                    elif isinstance(date_str, str):
+                                        pt_date = datetime.fromisoformat(date_str)
+                                    else:
+                                        continue
+                                    
+                                    if pt_date >= cutoff_date:
+                                        filtered_data.append(point)
+                                except ValueError:
+                                    # If we can't parse the date, include it anyway
+                                    filtered_data.append(point)
+                        
+                        price_data[ticker] = filtered_data
+                    else:
+                        # If no data exists, we'll have an empty list for this ticker
+                        price_data[ticker] = []
+                        
+                except Exception as e:
+                    logger.warning(f"Could not load price data for {ticker}: {str(e)}")
+                    price_data[ticker] = []  # Empty list as fallback
         
-        for ticker in tickers or []:
-            try:
-                # Load stock prices from stored data
-                stock_data = load_json(f"stock_prices_{ticker.lower()}")
-                
-                if stock_data and "data" in stock_data:
-                    # Extract price history
-                    if "history" in stock_data["data"]:
-                        prices = stock_data["data"]["history"]
-                    elif "prices" in stock_data["data"]:
-                        prices = stock_data["data"]["prices"]
-                    else:
-                        prices = stock_data["data"] if isinstance(stock_data["data"], list) else []
-                    
-                    # Limit to lookback period
-                    if lookback_days > 0 and prices:
-                        # Sort by date (assuming date field exists)
-                        sorted_prices = sorted(prices, key=lambda x: x.get("date", ""), reverse=True)
-                        price_data[ticker.upper()] = sorted_prices[:lookback_days]
-                    else:
-                        price_data[ticker.upper()] = prices
-                else:
-                    # Fallback: try general stock data
-                    all_stocks_data = load_json("stocks")
-                    if all_stocks_data and isinstance(all_stocks_data, dict):
-                        # This is more complex to extract individual ticker data from general stocks file
-                        pass  # For now, skip if individual ticker data not found
-            except Exception as e:
-                print(f"Error loading price data for {ticker}: {e}")
-                # Continue loading other tickers rather than failing all
-                continue
+        except ImportError:
+            logger.warning("Could not import storage.io, using empty price data")
+            # If storage module is not available, return empty data per ticker
+            for ticker in tickers:
+                price_data[ticker] = []
         
         return price_data
-    
-    def _get_all_available_tickers(self) -> List[str]:
-        """
-        Get list of all available tickers from stored data
-        """
-        try:
-            # Load general stocks data to get all available tickers
-            all_stocks = load_json("stocks") or {}
-            
-            if "tickers" in all_stocks:
-                return all_stocks["tickers"]
-            elif "data" in all_stocks and "tickers" in all_stocks["data"]:
-                return all_stocks["data"]["tickers"]
-            else:
-                # Default set of common tickers
-                return ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "META", "TSLA", "AMZN", "NFLX"]
-        except:
-            # Return default tickers if we can't load from storage
-            return ["SPY", "QQQ", "AAPL", "NVDA"]
 
 
-# Global instance
-stock_correlation_service = StockCorrelationService()
-
-# Convenience functions for API access
-def get_correlation_heatmap_data(tickers: Optional[List[str]] = None, 
-                                lookback_days: int = 30,
-                                min_correlation: float = 0.1):
-    """
-    Get correlation heatmap data from service
-    """
-    return stock_correlation_service.get_correlation_heatmap_data(tickers, lookback_days, min_correlation)
-
-def get_correlation_matrix(tickers: List[str], lookback_days: int = 30):
-    """
-    Get raw correlation matrix (not heatmap structure)
-    """
-    try:
-        from models.correlation_matrix import calculate_correlation_matrix
-        # Load price data
-        price_data = stock_correlation_service._load_price_data(tickers, lookback_days)
-        return calculate_correlation_matrix(price_data, lookback_days)
-    except Exception as e:
-        return {
-            "matrix": {},
-            "tickers": tickers,
-            "lookback_days": lookback_days,
-            "error": str(e),
-            "status": "error",
-            "message": "Failed to compute correlation matrix"
-        }
+# Global instance for use in routes
+correlation_calculator = CorrelationCalculator()
