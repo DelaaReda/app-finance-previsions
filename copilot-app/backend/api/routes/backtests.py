@@ -235,10 +235,207 @@ def run_backtest(request: BacktestRunRequest) -> Dict[str, Any]:
             "generated_at": datetime.utcnow().isoformat(),
             "source": ["backtest_service", "interactive_calculation"]
         })
+
+
+@router.get("/backtests")
+def get_backtests_overview(
+    strategy: Optional[str] = Query(None, description="Filter by strategy type (momentum, mean-reversion, etc.)"),
+    horizon: Optional[str] = Query(None, description="Filter by forecast horizon (1d, 5d, 1mo, etc.)"),
+    min_confidence: Optional[float] = Query(0.0, description="Minimum confidence threshold"),
+    benchmark: Optional[str] = Query("SPY", description="Benchmark for comparison")
+) -> Dict[str, Any]:
+    """
+    Get backtests overview with performance metrics and equity curves.
+    Main endpoint for the backtests page showing CAGR, maxDD, win rate, equity curve.
+    """
+    try:
+        # Try to load existing backtest results
+        backtests_data = load_json("backtests")
+        
+        if not backtests_data:
+            # Return empty structure but never fail
+            return ok({
+                "results": {
+                    "cagr": 0.0,
+                    "max_drawdown": 0.0,
+                    "win_rate": 0.0,
+                    "total_return": 0.0,
+                    "sharpe_ratio": 0.0,
+                    "volatility": 0.0,
+                    "profit_factor": 1.0,
+                    "total_trades": 0,
+                    "avg_return": 0.0,
+                    "best_trade": 0.0,
+                    "worst_trade": 0.0,
+                    "avg_win": 0.0,
+                    "avg_loss": 0.0,
+                    "win_loss_ratio": 0.0
+                },
+                "equity_curve": [],
+                "performance_chart": [],  # For frontend charts
+                "filtered_params": {
+                    "strategy": strategy,
+                    "horizon": horizon,
+                    "min_confidence": min_confidence,
+                    "benchmark": benchmark
+                },
+                "message": "No backtest data available - system calculating in background",
+                "freshness": "unknown",
+                "generated_at": datetime.utcnow().isoformat(),
+                "source": ["fallback_empty"],
+                "status": "waiting_for_data"
+            })
+        
+        # Calculate comprehensive metrics from existing backtests
+        comprehensive_results = calculate_comprehensive_metrics(backtests_data, strategy, horizon, min_confidence)
+        
+        return ok({
+            "results": comprehensive_results["metrics"],
+            "equity_curve": comprehensive_results["equity_curve"],
+            "performance_chart": comprehensive_results["performance_chart"],
+            "filtered_params": {
+                "strategy": strategy,
+                "horizon": horizon,
+                "min_confidence": min_confidence,
+                "benchmark": benchmark
+            },
+            "freshness": backtests_data.get("freshness", "unknown"),
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": backtests_data.get("source", ["backtests_job"]),
+            "status": "active"
+        })
         
     except Exception as e:
-        # Return structured response even if backtest fails
-        return err(500, f"Error running backtest: {str(e)}")
+        return ok({
+            "results": {
+                "cagr": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+                "total_return": 0.0,
+                "sharpe_ratio": 0.0,
+                "volatility": 0.0,
+                "profit_factor": 1.0,
+                "total_trades": 0,
+                "avg_return": 0.0,
+                "best_trade": 0.0,
+                "worst_trade": 0.0,
+                "avg_win": 0.0,
+                "avg_loss": 0.0,
+                "win_loss_ratio": 0.0
+            },
+            "equity_curve": [],
+            "performance_chart": [],
+            "error": str(e),
+            "message": "Error calculating backtest metrics",
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["fallback_error"]
+        })
+
+
+def calculate_comprehensive_metrics(backtests_data: Dict, strategy: Optional[str], horizon: Optional[str], min_confidence: float) -> Dict:
+    """
+    Calculate comprehensive backtest metrics for frontend consumption
+    """
+    # Extract the results from the backtests data
+    results = backtests_data.get("results", {})
+    
+    # Initialize default values with proper keys
+    metrics = {
+        "cagr": results.get("cagr", 0.0),
+        "max_drawdown": abs(results.get("max_drawdown", 0.0)),  # Ensure positive value for drawdown
+        "win_rate": results.get("win_rate", 0.0),
+        "total_return": results.get("total_return", 0.0),
+        "sharpe_ratio": results.get("sharpe_ratio", 0.0),
+        "volatility": results.get("volatility", 0.0),
+        "profit_factor": results.get("profit_factor", 1.0),
+        "total_trades": results.get("total_trades", 0),
+        "avg_return": results.get("avg_return", 0.0),
+        "best_trade": results.get("best_trade", 0.0),
+        "worst_trade": results.get("worst_trade", 0.0),
+        "avg_win": results.get("avg_win", 0.0),
+        "avg_loss": results.get("avg_loss", 0.0),
+        "win_loss_ratio": results.get("win_loss_ratio", 0.0)
+    }
+    
+    # If we don't have detailed metrics from stored data, calculate basic ones from whatever data is available
+    if metrics["cagr"] == 0.0 and "rows" in results:  # Changed from "cagr" to "cagr"
+        # Calculate metrics from raw backtest results if they exist
+        rows = results.get("rows", [])
+        if rows and isinstance(rows, list):
+            # Calculate basic metrics from the rows
+            successful_trades = [r for r in rows if r.get("outcome") == "win" or r.get("return", 0) > 0]
+            losing_trades = [r for r in rows if r.get("outcome") == "loss" or r.get("return", 0) < 0]
+            
+            if len(rows) > 0:
+                metrics["win_rate"] = len(successful_trades) / len(rows)
+                metrics["total_trades"] = len(rows)
+                
+                # Calculate other metrics from the data
+                returns = [r.get("return", 0) for r in rows if "return" in r]
+                if returns:
+                    metrics["avg_return"] = sum(returns) / len(returns)
+                    metrics["best_trade"] = max(returns) if returns else 0.0
+                    metrics["worst_trade"] = min(returns) if returns else 0.0
+                    
+                    # Calculate volatility (std dev)
+                    avg_ret = metrics["avg_return"]
+                    variance = sum((r - avg_ret) ** 2 for r in returns) / len(returns) if returns else 0
+                    metrics["volatility"] = variance ** 0.5 if variance > 0 else 0.0
+                    
+                    # Calculate win/loss ratios
+                    wins = [r for r in returns if r > 0]
+                    losses = [r for r in returns if r < 0]
+                    if len(losses) != 0:
+                        metrics["avg_win"] = sum(wins) / len(wins) if wins else 0.0
+                        metrics["avg_loss"] = sum(losses) / len(losses) if losses else 0.0
+                        metrics["win_loss_ratio"] = abs(metrics["avg_win"] / metrics["avg_loss"]) if abs(metrics["avg_loss"]) != 0 else float('inf')
+    
+    # Create simple equity curve based on the returns if not available
+    equity_curve = []
+    if "equity_history" in backtests_data:  # Changed from results to backtests_data
+        equity_curve_data = backtests_data["equity_history"]
+        if isinstance(equity_curve_data, list):
+            equity_curve = equity_curve_data
+        elif isinstance(equity_curve_data, dict) and "rows" in equity_curve_data:
+            # If it's a structured response, extract the rows
+            equity_curve = equity_curve_data["rows"]
+    elif "trades" in results:
+        # Generate equity curve from trades if available
+        trades = results["trades"] if isinstance(results.get("trades"), list) else []
+        # Generate simple equity curve from trade returns
+        if trades:
+            equity_curve = [{"date": t.get("date", ""), "value": t.get("equity", 1.0)} for t in trades if "date" in t and "equity" in t]
+    elif "history" in results:
+        # Alternative structure for equity history
+        history = results["history"] if isinstance(results.get("history"), list) else []
+        if history:
+            # Convert history to equity curve format expected by frontend
+            equity_curve = []
+            cumulative_value = 1.0  # Start with $1 (100%)
+            for record in history:
+                if "return" in record or "pnl" in record or "change" in record:
+                    # Calculate cumulative value based on returns
+                    ret = record.get("return", record.get("pnl", record.get("change", 0)))
+                    cumulative_value *= (1 + ret)
+                    equity_curve.append({
+                        "date": record.get("date", record.get("timestamp", record.get("time", ""))),
+                        "value": cumulative_value
+                    })
+    
+    # Performance chart data (for frontend charts)
+    performance_chart = [
+        {"metric": "CAGR", "value": metrics["cagr"] * 100, "unit": "%"},
+        {"metric": "Max DD", "value": abs(metrics["max_drawdown"]) * 100, "unit": "%"},
+        {"metric": "Win Rate", "value": metrics["win_rate"] * 100, "unit": "%"},
+        {"metric": "Sharpe", "value": metrics["sharpe_ratio"], "unit": ""},
+        {"metric": "Profit Factor", "value": metrics["profit_factor"], "unit": ""}
+    ]
+    
+    return {
+        "metrics": metrics,
+        "equity_curve": equity_curve,
+        "performance_chart": performance_chart
+    }
 
 
 # Endpoint to check backtest status (for async jobs)

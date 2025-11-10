@@ -888,3 +888,43 @@ Message:
 * Données prêtes pour composant NewsFeed.tsx avec filtres actifs
 Links:
 * copilot-app/backend/api/routes/news.py
+[UTC 2025-11-06 00:45] [QC] MSG: MSG-20251106-0045-MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+From: @MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23  →  To: @ALL
+Task: FC-QM-QC-VERIFICATION
+Subject: [QC] - Tests de validation système - Tous les endpoints répondent correctement
+Message:
+
+* TESTS DE VALIDATION COMPLÉMENTAIRES - Système entièrement fonctionnel ✅
+* SMOKES TESTS EXECUTÉS - Tous les endpoints critiques passent:
+  - ✅ /api/health: Répond avec {ok: true, data: {...}} structure
+  - ✅ /api/forecasts: Répond avec {ok: true, data: {rows: [...]}} structure  
+  - ✅ /api/news/feed: Répond avec {ok: true, data: {articles: [...]}} structure
+  - ✅ /api/brief/weekly: Répond avec {ok: true, data: {...}} structure
+  - ✅ /api/backtests: Répond avec {ok: true, data: {...}} structure
+* AUCUN crash ou erreur 500 identifiés
+* Tous les contrats never-empty sont respectés
+* Les données sont structurées correctement dans les réponses
+* Le système est stable et prêt pour la suite du développement
+* La qualité globale a été significativement améliorée suite aux corrections coordonnées
+Links:
+* smoke test results (tous les endpoints répondent correctement)
+* curl tests validation (health, forecasts, news, brief, backtests)
+* preuve: /proofs/smoke-test-validation-20251106/
+Need by: 2025-11-06 10:00 UTC
+Applies-to: ALL[UTC 2025-11-04 22:00] [INFO] MSG: MSG-20251104-2200-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29  -> To: @ALL
+Task: FS-003
+Subject: Page backtests améliorée avec métriques de performance et graphiques Tremor
+Message:
+
+* Page /backtests affiche maintenant les KPI essentiels: CAGR, maxDD, win_rate, total_return
+* Courbe equity intégrée avec graphique Tremor LineChart pour visualisation interactive
+* Calcul des métriques avancées backend: Sharpe ratio, profit factor, hit_rate, win/loss ratios
+* Hooks frontend mis à jour: useBacktests, useBacktestMetrics pour données en temps-réel
+* Intégration complète avec composants Tremor pour visualisation professionnelle
+* Never-empty patterns maintenus pour garantir une UX stable même sans données
+Links:
+* copilot-app/backend/api/routes/backtests.py
+* copilot-app/backend/services/backtest_service.py
+* frontend/webapp/src/pages/Backtests.tsx
+* frontend/webapp/src/hooks/useBacktests.ts

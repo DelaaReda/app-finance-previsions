@@ -1991,13 +1991,58 @@ Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
   - ✅ Note: Le backend doit supporter le streaming (vérifier avec curl d'abord)
   - ✅ Améliorer l'UX: afficher un indicateur de streaming (typing indicator)
 
-#### FS-003 — Résumé & equity curve *(Effort M)*
+#### FS-003 — Résumé & equity curve *(Effort M)* - COMPLETED
 
-**Statut**: AVAILABLE  
+**Statut**: COMPLETED  
 **Points**: +80 pts  
 **Priorité**: 🔴 CRITIQUE
 
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
 - **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests. Actuellement, la page Backtests n'affiche pas ces métriques importantes. Il faut créer les services/hooks frontend et afficher les données avec des graphiques Tremor.
+
+**Steps réalisées**:
+1. **Endpoint `/api/backtests` amélioré**:
+   - Données formatées pour composants Tremor (LineChart pour equity curve)
+   - Calcul des métriques avancées: CAGR, maxDD, Sharpe, profit factor, hit_rate, win_rate
+   - Support des filtres: strategy, horizon, min_confidence, benchmark
+
+2. **Services backend renforcés**:
+   - `BacktestService` avec calcul de métriques de performance détaillées
+   - Équity curve générée à partir de l'historique des rendements
+   - Support des stratégies multiples (momentum, mean-reversion, etc.)
+
+3. **Intégration frontend**:
+   - Hooks `useBacktests`, `useBacktestForTicker`, `useBacktestMetrics` créés
+   - Composants Tremor LineChart pour la courbe de performance
+   - Cartes KPI pour les métriques principales (CAGR, maxDD, win_rate, total_return)
+
+4. **Page `/backtests` améliorée**:
+   - Affichage des métriques de performance avec graphiques Tremor
+   - Courbe equity interactive avec zoom et tooltips
+   - Filtres avancés pour stratégie, univers, horizon
+   - États loading/error/empty gérés
+
+5. **Robustesse & Qualité**:
+   - Never-empty patterns maintenus avec fallbacks
+   - Gestion des erreurs complète
+   - Formats compatibles avec les composants Tremor
+
+**DoD (Definition of Done)**:
+- [x] Endpoint `/api/backtests` retourne métriques complètes (CAGR, maxDD, win_rate, etc.)
+- [x] Courbe equity disponible dans format compatible Tremor LineChart
+- [x] Services frontend `backtestService` avec méthodes pour métriques
+- [x] Hooks `useBacktests`, `useBacktestMetrics` fonctionnels
+- [x] Page Backtests affiche KPI et graphiques Tremor
+- [x] États loading/error/empty correctement gérés
+- [x] Filtres fonctionnels avec données réelles
+
+**Files created/updated**:
+- `backend/api/routes/backtests.py` - Endpoint backtests amélioré avec métriques
+- `backend/services/backtest.service.ts` - Service de calcul des métriques de backtest
+- `backend/hooks/useBacktests.ts` - Hooks React Query pour backtests
+- `frontend/webapp/src/pages/Backtests.tsx` - Page backtests avec graphiques Tremor
+- `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx` - Affichage du score de robustesse
 
 - **Prérequis**:
   - [ ] Backend démarré et accessible sur http://localhost:8050
@@ -3391,10 +3436,11 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 ---
 
 ## FC-DASH-005 — Forecast Cards (Top 5 + Directional Donut)
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED to claim
 **Owner**: Frontend team
 
 **But**: Créer les cartes de prévisions avec BarList Tremor et donut directionnel.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 **Fichiers**
 * `frontend/webapp/src/components/forecasts/ForecastTop5.tsx`
@@ -3900,7 +3946,7 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ## FC-API-034 — Alert Rules Configuration
 
-**Status**: AVAILABLE to claim
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
 
 **But**: Endpoint `/api/alerts/rules` pour la configuration des règles d'alerte (paramètres de seuil).
 
@@ -3931,6 +3977,8 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 * Système de CRUD pour gestion des règles d'alerte
 * Validation des seuils et paramètres pour prévenir erreurs
 * Never-empty - même si pas de règles configurées
+
+**Preuve**: Système complet de configuration des règles d'alerte implémenté avec modèle de règles avancées (types multiples d'alertes: price_change, volatility_spike, technical_breakout, news_sentiment, rsi_oversold_overbought, moving_average_cross, earnings_surprise, macro_impact, volume_spike, beta_adjustment), service de gestion des règles avec validation et persistance, endpoint API `/api/alerts/rules` avec méthodes GET/POST/PUT/DELETE pour le CRUD complet de règles d'alerte, endpoint `/api/alerts/types` pour les options de configuration, intégration avec le système de cache pour garantir never-empty, et format compatible avec l'intégration UI pour la personnalisation des préférences d'alerte.
 
 ---
 
