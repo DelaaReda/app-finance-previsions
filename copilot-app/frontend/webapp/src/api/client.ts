@@ -72,11 +72,37 @@ async function fetchJson<T>(
     timeoutMs?: number;
   },
 ): Promise<T> {
-  const { method = 'GET', searchParams, body, signal, timeoutMs = 15_000 } = opts ?? {};
+  // Default timeout: 15s for most endpoints, but longer for slow endpoints
+  const defaultTimeout = 15_000;
+  const { method = 'GET', searchParams, body, signal, timeoutMs = defaultTimeout } = opts ?? {};
+  
+  // Increase timeout for slow endpoints
+  let effectiveTimeout = timeoutMs;
+  if (path.includes('/api/macro/series')) {
+    effectiveTimeout = 30_000; // 30s for macro (FRED can be slow)
+  } else if (path.includes('/api/forecasts') || path.includes('/api/brief/')) {
+    effectiveTimeout = 25_000; // 25s for forecasts/brief (can be slow)
+  } else if (path.includes('/api/backtests')) {
+    effectiveTimeout = 60_000; // 60s for backtests (computation heavy)
+  } else if (path.includes('/api/intelligence/') || path.includes('/api/recommendations/')) {
+    effectiveTimeout = 30_000; // 30s for intelligence/recommendations (can be slow with LLM)
+  }
   const url = buildUrl(path, searchParams);
+  const startTime = performance.now();
+
+  // Development logging
+  if (DEBUG_ENABLED || import.meta.env.DEV) {
+    console.log(`[API] 📤 ${method} ${url}`, {
+      method,
+      path,
+      searchParams,
+      timeout: effectiveTimeout,
+      hasBody: !!body
+    });
+  }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
 
   try {
     const response = await fetch(url, {
@@ -96,23 +122,73 @@ async function fetchJson<T>(
       throw new Error(message);
     }
 
+    const elapsed = performance.now() - startTime;
+    
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.log(`[API] ✅ ${method} ${url} - ${response.status} (${elapsed.toFixed(0)}ms)`);
+    }
+
     if (response.status === 204) return undefined as T;
 
     const data = (await response.json()) as unknown;
+    
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      const dataSize = JSON.stringify(data).length;
+      console.log(`[API] 📦 Response data size: ${(dataSize / 1024).toFixed(2)}KB`, {
+        hasData: !!(data && typeof data === 'object' && 'data' in (data as any)),
+        keys: data && typeof data === 'object' ? Object.keys(data as any).slice(0, 5) : []
+      });
+    }
+    
     if (data && typeof data === 'object' && 'data' in (data as any)) {
       return (data as any).data as T;
     }
     return data as T;
   } catch (error: any) {
+    const elapsed = performance.now() - startTime;
+    
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.error(`[API] ❌ ${method} ${url} - Error after ${elapsed.toFixed(0)}ms`, {
+        error: error?.message || String(error),
+        errorType: error?.name,
+        errorStack: error?.stack?.split('\n').slice(0, 3)
+      });
+    }
+    
     if (error?.name === 'AbortError') {
+      const isBackendDown = error?.message?.includes('Failed to fetch') || 
+                            error?.message?.includes('NetworkError') ||
+                            error?.message?.includes('ERR_CONNECTION_REFUSED');
+      
       emitDebug({
         type: 'http',
         url,
         method,
-        message: `Request timeout after ${timeoutMs}ms: ${url}`,
+        message: isBackendDown 
+          ? `Backend unavailable: ${url} (check if backend is running on port 8050)`
+          : `Request timeout after ${effectiveTimeout}ms: ${url}`,
       });
-      throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+      
+      throw new Error(
+        isBackendDown
+          ? `Backend unavailable. Please ensure the backend is running on http://localhost:8050`
+          : `Request timeout after ${effectiveTimeout}ms: ${url}`
+      );
     }
+    
+    // Check for connection errors (backend not running)
+    if (error?.message?.includes('Failed to fetch') || 
+        error?.message?.includes('NetworkError') ||
+        error?.message?.includes('ERR_CONNECTION_REFUSED')) {
+      emitDebug({
+        type: 'http',
+        url,
+        method,
+        message: `Backend unavailable: ${url} (check if backend is running on port 8050)`,
+      });
+      throw new Error(`Backend unavailable. Please ensure the backend is running on http://localhost:8050`);
+    }
+    
     emitDebug({
       type: 'http',
       url,
@@ -140,14 +216,33 @@ export async function apiGet<T>(
   params?: Record<string, any>,
   options?: RequestOptions,
 ): Promise<ApiResponse<T>> {
+  if (DEBUG_ENABLED || import.meta.env.DEV) {
+    console.log(`[API] 🔵 GET ${path}`, { params, options });
+  }
+  
   try {
     const data = await api.fetchJson<T>(path, {
       searchParams: params,
       timeoutMs: options?.timeoutMs,
       signal: options?.signal,
     });
+    
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.log(`[API] ✅ GET ${path} - Success`, { 
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        size: data && typeof data === 'object' ? Object.keys(data).length : 'N/A'
+      });
+    }
+    
     return { ok: true, data };
   } catch (error: any) {
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.error(`[API] ❌ GET ${path} - Failed`, { 
+        error: error?.message || String(error),
+        params 
+      });
+    }
     return { ok: false, error: error?.message ?? String(error) };
   }
 }
@@ -157,6 +252,13 @@ export async function apiPost<T>(
   body?: unknown,
   options?: RequestOptions,
 ): Promise<ApiResponse<T>> {
+  if (DEBUG_ENABLED || import.meta.env.DEV) {
+    console.log(`[API] 🟢 POST ${path}`, { 
+      bodySize: body ? JSON.stringify(body).length : 0,
+      hasBody: !!body 
+    });
+  }
+  
   try {
     const data = await api.fetchJson<T>(path, {
       method: 'POST',
@@ -164,8 +266,18 @@ export async function apiPost<T>(
       timeoutMs: options?.timeoutMs,
       signal: options?.signal,
     });
+    
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.log(`[API] ✅ POST ${path} - Success`);
+    }
+    
     return { ok: true, data };
   } catch (error: any) {
+    if (DEBUG_ENABLED || import.meta.env.DEV) {
+      console.error(`[API] ❌ POST ${path} - Failed`, { 
+        error: error?.message || String(error) 
+      });
+    }
     return { ok: false, error: error?.message ?? String(error) };
   }
 }
