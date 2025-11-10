@@ -20,9 +20,15 @@ import os
 from pathlib import Path
 
 # Add the backend directory to the path
-backend_path = Path(__file__).parent
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+backend_path = Path(__file__).parent  # .../backend/api
+backend_root = backend_path.parent    # .../backend
+src_path = backend_root / "src"       # .../backend/src
+
+# Ensure Python can import both 'api' and 'src' packages
+for p in (backend_path, backend_root, src_path):
+    p_str = str(p)
+    if p_str not in sys.path:
+        sys.path.insert(0, p_str)
 
 # Setup structured logging
 logging.basicConfig(level=logging.INFO)

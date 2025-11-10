@@ -39,11 +39,6 @@
   padding-inline: clamp(12px, 4vw, 32px);
   padding-block: clamp(16px, 4vh, 32px);
   margin: 0 auto;
-  max-width: min(1280px, 100%);
-}
-
-@media (min-width: 1440px) {
-  .mainContainer {
-    max-width: 1400px; /* wider desktops */
-  }
+  /* Let pages manage their own max-width containers (e.g., 1600–1920px) */
+  max-width: 100%;
 }

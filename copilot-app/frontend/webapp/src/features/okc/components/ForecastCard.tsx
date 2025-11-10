@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { IconArrowUpRight, IconArrowDownRight, IconArrowRight, IconTarget, IconClock, IconAlertTriangle } from '@tabler/icons-react';
 import { cn, formatPercentage } from '@/features/okc/utils';
+import { Sparkline } from '@/features/okc/components/Sparkline';
+import { usePriceSparkline } from '@/hooks/usePriceSparkline';
 
 export interface ForecastInsight {
   id: string;
@@ -26,6 +28,7 @@ export function ForecastCard({ forecast }: { forecast: ForecastInsight }) {
   const directionInfo = directionCopy[direction] ?? directionCopy.neutral;
   const expectedPct = typeof forecast.expectedReturn === 'number' ? forecast.expectedReturn * 100 : undefined;
   const confidencePct = typeof forecast.confidence === 'number' ? Math.round(forecast.confidence * 100) : undefined;
+  const { values: spark, isLoading: sparkLoading } = usePriceSparkline(forecast.ticker, { enabled: expanded, limit: 60, interval: '1d' });
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 shadow-lg transition-all duration-300 hover:scale-[1.01] hover:shadow-xl">
@@ -60,6 +63,13 @@ export function ForecastCard({ forecast }: { forecast: ForecastInsight }) {
             </p>
           </div>
         </div>
+
+        {/* Sparkline price trend (lazy-loaded on expand) */}
+        {expanded && spark && spark.length > 0 && (
+          <div className="mt-4">
+            <Sparkline data={spark} height={40} />
+          </div>
+        )}
 
         <div className="flex items-center justify-between mt-4 text-xs text-muted">
           <span className="flex items-center gap-1">

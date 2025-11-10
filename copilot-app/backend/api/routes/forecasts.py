@@ -18,8 +18,8 @@ from storage.io import load_json
 from services.cache_layer import load_or_compute
 
 
-# Create router instance
-forecasts_router = APIRouter(prefix="/api", tags=["forecasts"])
+# Create router instance without global '/api' to avoid double prefix when included
+forecasts_router = APIRouter(tags=["forecasts"])
 
 @forecasts_router.get("/forecasts")
 async def get_forecasts(

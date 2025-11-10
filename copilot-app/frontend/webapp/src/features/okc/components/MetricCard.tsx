@@ -39,7 +39,7 @@ export function MetricCard({
           )}
           <div>
             <p className="text-sm text-muted uppercase tracking-wide">{title}</p>
-            <p className="text-2xl font-semibold text-text">{formattedValue}</p>
+            <p className="text-2xl font-semibold text-text" style={{ fontVariantNumeric: 'tabular-nums' }}>{formattedValue}</p>
           </div>
         </div>
         {trend && (

@@ -3,11 +3,12 @@
  * Displays real stock data and top movers
  */
 
-import { Card, Stack, Title, Text, Table, Badge, Group, Skeleton, Alert, ActionIcon, ScrollArea, Button } from '@mantine/core';
+import { Card, Stack, Title, Text, Table, Badge, Group, Skeleton, ActionIcon, ScrollArea, Button } from '@mantine/core';
 import { IconTrendingUp, IconTrendingDown, IconRefresh, IconChartBar } from '@tabler/icons-react';
 import { useApi } from '@/hooks/useApi';
 import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
 import styles from './StocksWidget.module.css';
+import ErrorAlert from '@/components/ui/ErrorAlert';
 
 interface StockData {
   ticker: string;
@@ -83,18 +84,12 @@ export function StocksWidget() {
         )}
 
         {error && (
-          <Alert
-            color="red"
-            variant="light"
-            title="Erreur de données"
-            action={
-              <Button size="xs" variant="light" onClick={() => refetch()}>
-                Réessayer
-              </Button>
-            }
-          >
-            <Text size="sm">Impossible de charger les actions en temps réel. {String(error)}</Text>
-          </Alert>
+          <ErrorAlert
+            title="Données indisponibles"
+            message="Impossible de charger les actions en temps réel."
+            error={error}
+            onReload={() => refetch()}
+          />
         )}
 
         {!isLoading && !error && topStocks.length > 0 && (

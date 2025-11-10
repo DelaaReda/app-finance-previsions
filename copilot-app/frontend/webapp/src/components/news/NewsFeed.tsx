@@ -120,7 +120,7 @@ export default function NewsFeed() {
                     <Chip key={ticker} size="xs" radius="sm" variant="light">{ticker}</Chip>
                   ))}
                 </Group>
-                <Anchor href={item.link} target="_blank" rel="noreferrer" fz="xs">
+                <Anchor href={item.link} target="_blank" rel="noreferrer" fz="xs" className="break-words max-w-full">
                   Ouvrir la source
                 </Anchor>
               </Stack>

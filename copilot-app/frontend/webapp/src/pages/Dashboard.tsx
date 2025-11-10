@@ -22,7 +22,11 @@ import { Sparkline } from '@/features/okc/components/Sparkline';
 import { RadialMetric } from '@/features/okc/components/RadialMetric';
 import { Card, CardHeader, CardTitle, CardContent } from '@/features/okc/components/Card';
 import { ForecastCard, ForecastInsight } from '@/features/okc/components/ForecastCard';
+import { MetricStrip, type StripMetric } from '@/features/okc/components/desktop/MetricStrip';
+import { NewsCard } from '@/features/okc/components/desktop/NewsCard';
+import { ErrorCard } from '@/features/okc/components/desktop/ErrorCard';
 import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
+import { DashboardGrid } from '@/features/okc/components/desktop/DashboardGrid';
 import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -72,6 +76,7 @@ function extractMacroSeries(raw: any): Record<string, number> {
 function DashboardContent() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [newsExpanded, setNewsExpanded] = useState(false);
 
   const { data: kpis, isLoading: kpiLoading } = useDashboardKPIs();
   const forecastsQuery = useForecasts({ limit: 24, horizon: selectedPeriod === '24h' ? 'short' : undefined });
@@ -145,6 +150,26 @@ function DashboardContent() {
       expected: Number((((row.expected_return ?? 0) * 100) || row.expected_return_pct || 0).toFixed(2)),
       confidence: Math.round((row.confidence ?? 0) * 100),
     }));
+  }, [forecastRows]);
+
+  const confidenceDistribution: ChartDataPoint[] = useMemo(() => {
+    const buckets = [
+      { label: '0–20%', from: 0, to: 20, count: 0 },
+      { label: '20–40%', from: 20, to: 40, count: 0 },
+      { label: '40–60%', from: 40, to: 60, count: 0 },
+      { label: '60–80%', from: 60, to: 80, count: 0 },
+      { label: '80–100%', from: 80, to: 100, count: 0 },
+    ];
+    forecastRows.forEach((row) => {
+      const pct = Math.round((row.confidence ?? 0) * 100);
+      for (const b of buckets) {
+        if (pct >= b.from && pct < (b.to === 100 ? 101 : b.to)) {
+          b.count += 1;
+          break;
+        }
+      }
+    });
+    return buckets.map((b) => ({ name: b.label, count: b.count }));
   }, [forecastRows]);
 
   const directionDistribution = useMemo(() => {
@@ -224,7 +249,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-8 sm:space-y-10 lg:space-y-12">
         <div className="bg-glass border border-glass-border rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-3">
@@ -244,12 +269,12 @@ function DashboardContent() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-              <div className="flex items-center gap-1 sm:gap-2 bg-surface rounded-full border border-border p-1 overflow-x-auto">
+              <div className="buttons-group bg-surface rounded-xl border border-border p-1">
                 {PERIODS.map((period) => (
                   <button
                     key={period}
                     onClick={() => setSelectedPeriod(period)}
-                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-full transition-all whitespace-nowrap ${
+                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-full transition-all ${
                       selectedPeriod === period
                         ? 'bg-primary text-white shadow-lg shadow-primary/25'
                         : 'text-muted hover:text-text hover:bg-surface-elevated'
@@ -278,6 +303,26 @@ function DashboardContent() {
               </div>
             </div>
           </div>
+          {/* News ticker: shows recent headlines inline, horizontally scrollable on small screens */}
+          {newsItems.length > 0 && (
+            <div className="mt-3 -mb-2 overflow-x-auto">
+              <div className="flex items-center gap-4 py-2 text-xs sm:text-sm min-w-full">
+                <span className="uppercase tracking-[0.3em] text-primary flex-shrink-0">Now</span>
+                {newsItems.slice(0, 8).map((article) => (
+                  <a
+                    key={article.id}
+                    href={article.url ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-muted hover:text-text transition-colors whitespace-nowrap"
+                    title={article.title}
+                  >
+                    {article.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <MetricGrid>
@@ -286,175 +331,196 @@ function DashboardContent() {
           ))}
         </MetricGrid>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-            {performanceChartData.length > 0 ? (
-              <FinancialChart
-                data={performanceChartData}
-                type="bar"
-                title="Score de confiance vs rendement attendu"
-                colors={['#3b82f6', '#10b981']}
-              />
-            ) : (
-              <Card>
-                <EmptyState
-                  title="Aucun graphique disponible"
-                  description="Les données de performance seront affichées une fois les prévisions chargées."
-                  action={{
-                    label: 'Rafraîchir',
-                    onClick: handleRefresh,
-                  }}
+        <DashboardGrid
+          left={
+            <>
+              {performanceChartData.length > 0 ? (
+                <FinancialChart
+                  data={performanceChartData}
+                  type="bar"
+                  title="Score de confiance vs rendement attendu"
+                  colors={['#3b82f6', '#10b981']}
                 />
-              </Card>
-            )}
-            {directionDistribution.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Distribution des directions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FinancialChart data={directionDistribution} type="pie" colors={['#10b981', '#ef4444', '#6366f1']} height={260} />
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Distribution des directions</CardTitle>
-                </CardHeader>
-                <CardContent>
+              ) : (
+                <Card>
                   <EmptyState
-                    title="Aucune distribution disponible"
-                    description="La distribution des directions sera affichée une fois les prévisions chargées."
+                    title="Aucun graphique disponible"
+                    description="Les données de performance seront affichées une fois les prévisions chargées."
+                    action={{ label: 'Rafraîchir', onClick: handleRefresh }}
                   />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          <div className="space-y-4 sm:space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Indicateurs Macro</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {macroQuery.isLoading && (
-                  <div className="py-8">
-                    <p className="text-sm text-muted text-center">Chargement des séries…</p>
-                  </div>
-                )}
-                {macroQuery.error && (
-                  <EmptyState
-                    title="Erreur de chargement"
-                    description={macroQuery.error}
-                    icon={<IconAlertCircle size={32} className="text-danger" />}
-                    action={{
-                      label: 'Réessayer',
-                      onClick: () => macroQuery.refetch(),
-                    }}
-                  />
-                )}
-                {!macroQuery.isLoading && !macroQuery.error && (
-                  <>
-                    {macroSummary.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {macroSummary.map((indicator) => {
-                          const val = Number(indicator.value || 0);
-                          const spark = macroSeriesMap[indicator.id] ?? [];
-                          let percent: number | undefined = undefined;
-                          let badge: { label: string; color?: string } | undefined;
-                          if (indicator.id === 'VIXCLS') {
-                            percent = Math.max(0, Math.min(100, ((val - 10) / 30) * 100));
-                            badge = { label: val < 15 ? 'low' : val < 25 ? 'moderate' : 'high', color: val < 15 ? 'teal' : val < 25 ? 'yellow' : 'red' };
-                          } else if (indicator.id === 'UNRATE') {
-                            percent = Math.max(0, Math.min(100, ((val - 3) / 5) * 100));
-                            badge = { label: val < 4 ? 'low' : val < 6 ? 'moderate' : 'high', color: val < 4 ? 'teal' : val < 6 ? 'yellow' : 'red' };
-                          } else if (indicator.id === 'DGS10' || indicator.id === 'DGS2') {
-                            percent = Math.max(0, Math.min(100, ((val - 1) / 5) * 100));
-                            badge = { label: val < 3 ? 'low' : val < 5 ? 'moderate' : 'high', color: val < 3 ? 'teal' : val < 5 ? 'yellow' : 'red' };
-                          }
-                          return (
-                            <div key={indicator.id} className="flex items-center justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <RadialMetric
-                                  label={indicator.label}
-                                  value={val}
-                                  percent={percent}
-                                  badge={badge}
-                                  color={badge?.color === 'red' ? 'red' : badge?.color === 'yellow' ? 'yellow' : 'teal'}
-                                />
-                              </div>
-                              {spark.length > 0 && <Sparkline data={spark} className="w-24 hidden sm:block" />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <EmptyState
-                        title="Aucune donnée macro"
-                        description="Les indicateurs macroéconomiques seront disponibles une fois chargés."
-                        action={{
-                          label: 'Rafraîchir',
-                          onClick: () => macroQuery.refetch(),
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                </Card>
+              )}
+              {directionDistribution.length > 0 ? (
+                <Card className="hidden sm:block">
+                  <CardHeader className="sticky top-0 z-10 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 border-b border-border">
+                    <CardTitle>Distribution des directions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FinancialChart data={directionDistribution} type="pie" colors={['#10b981', '#ef4444', '#6366f1']} height={260} />
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="hidden sm:block">
+                  <CardHeader className="sticky top-0 z-10 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 border-b border-border">
+                    <CardTitle>Distribution des directions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <EmptyState title="Aucune distribution disponible" description="La distribution des directions sera affichée une fois les prévisions chargées." />
+                  </CardContent>
+                </Card>
+              )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Focus news</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {newsQuery.isLoading && (
-                  <div className="py-8">
-                    <p className="text-sm text-muted text-center">Chargement des actualités…</p>
-                  </div>
-                )}
-                {newsQuery.error && (
-                  <EmptyState
-                    title="Erreur de chargement"
-                    description={newsQuery.error}
-                    icon={<IconAlertCircle size={32} className="text-danger" />}
-                    action={{
-                      label: 'Réessayer',
-                      onClick: () => newsQuery.refetch(),
-                    }}
-                  />
-                )}
-                {!newsQuery.isLoading && !newsQuery.error && (
-                  <>
-                    {newsItems.length > 0 ? (
-                      <ul className="space-y-2 sm:space-y-3">
-                        {newsItems.map((article) => (
-                          <li key={article.id} className="border border-border rounded-lg p-3 hover:border-primary/40 hover:bg-surface-elevated/30 transition-all">
-                            <a href={article.url ?? '#'} target="_blank" rel="noreferrer" className="text-sm font-semibold text-text flex items-start gap-2 group">
-                              <span className="flex-1 group-hover:text-primary transition-colors">{article.title}</span>
-                              <IconArrowRight size={14} className="mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </a>
-                            <p className="text-xs text-muted mt-1.5">
-                              {article.source?.toUpperCase()} • {article.date ? new Date(article.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <EmptyState
-                        title="Pas d'actualité récente"
-                        description="Les actualités financières seront affichées une fois chargées."
-                        action={{
-                          label: 'Rafraîchir',
-                          onClick: () => newsQuery.refetch(),
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              {/* Confidence distribution (desktop-focused) */}
+              {confidenceDistribution.some((d) => (d as any).count > 0) && (
+                <Card className="hidden sm:block">
+                  <CardHeader className="sticky top-0 z-10 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 border-b border-border">
+                    <CardTitle>Distribution de la confiance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FinancialChart data={confidenceDistribution} type="bar" colors={["#6366f1"]} />
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          }
+          right={
+            <>
+              <Card>
+                <CardHeader className="sticky top-0 z-10 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 border-b border-border">
+                  <CardTitle>Indicateurs Macro</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {macroQuery.isLoading && (
+                    <div className="py-8">
+                      <p className="text-sm text-muted text-center">Chargement des séries…</p>
+                    </div>
+                  )}
+                  {macroQuery.error && (
+                    <EmptyState
+                      title="Erreur de chargement"
+                      description={macroQuery.error}
+                      icon={<IconAlertCircle size={32} className="text-danger" />}
+                      action={{ label: 'Réessayer', onClick: () => macroQuery.refetch() }}
+                    />
+                  )}
+                  {!macroQuery.isLoading && !macroQuery.error && (
+                    <>
+                      {macroSummary.length > 0 ? (
+                        <>
+                          <div className="hidden xl:block">
+                            {(() => {
+                              const items: StripMetric[] = macroSummary.map((indicator) => {
+                                const val = Number(indicator.value || 0);
+                                let tone: 'low' | 'moderate' | 'high' | 'neutral' = 'neutral';
+                                if (indicator.id === 'VIXCLS') tone = val < 15 ? 'low' : val < 25 ? 'moderate' : 'high';
+                                else if (indicator.id === 'UNRATE') tone = val < 4 ? 'low' : val < 6 ? 'moderate' : 'high';
+                                else if (indicator.id === 'DGS10' || indicator.id === 'DGS2') tone = val < 3 ? 'low' : val < 5 ? 'moderate' : 'high';
+                                return { label: indicator.label, value: val, tone };
+                              });
+                              return <MetricStrip items={items} />;
+                            })()}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:hidden">
+                            {macroSummary.map((indicator) => {
+                              const val = Number(indicator.value || 0);
+                              const spark = macroSeriesMap[indicator.id] ?? [];
+                              let percent: number | undefined = undefined;
+                              let badge: { label: string; color?: string } | undefined;
+                              if (indicator.id === 'VIXCLS') {
+                                percent = Math.max(0, Math.min(100, ((val - 10) / 30) * 100));
+                                badge = { label: val < 15 ? 'low' : val < 25 ? 'moderate' : 'high', color: val < 15 ? 'teal' : val < 25 ? 'yellow' : undefined };
+                                if (val >= 25) badge.color = 'red';
+                              } else if (indicator.id === 'UNRATE') {
+                                percent = Math.max(0, Math.min(100, ((val - 3) / 5) * 100));
+                                badge = { label: val < 4 ? 'low' : val < 6 ? 'moderate' : 'high', color: val < 4 ? 'teal' : val < 6 ? 'yellow' : undefined };
+                                if (val >= 6) badge.color = 'red';
+                              } else if (indicator.id === 'DGS10' || indicator.id === 'DGS2') {
+                                percent = Math.max(0, Math.min(100, ((val - 1) / 5) * 100));
+                                badge = { label: val < 3 ? 'low' : val < 5 ? 'moderate' : 'high', color: val < 3 ? 'teal' : val < 5 ? 'yellow' : undefined };
+                                if (val >= 5) badge.color = 'red';
+                              }
+                              return (
+                                <div key={indicator.id} className="flex items-center justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <RadialMetric
+                                      label={indicator.label}
+                                      value={val}
+                                      percent={percent}
+                                      badge={badge}
+                                      color={badge?.color === 'red' ? 'red' : badge?.color === 'yellow' ? 'yellow' : 'teal'}
+                                    />
+                                  </div>
+                                  {spark.length > 0 && <Sparkline data={spark} className="w-24 hidden sm:block" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <EmptyState
+                          title="Aucune donnée macro"
+                          description="Les indicateurs macroéconomiques seront disponibles une fois chargés."
+                          action={{ label: 'Rafraîchir', onClick: () => macroQuery.refetch() }}
+                        />
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="sticky top-0 z-10 bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60 border-b border-border">
+                  <CardTitle>Focus news</CardTitle>
+                </CardHeader>
+                <CardContent className="xl:max-h-[520px] xl:overflow-auto">
+                  {newsQuery.isLoading && (
+                    <div className="py-8">
+                      <p className="text-sm text-muted text-center">Chargement des actualités…</p>
+                    </div>
+                  )}
+                  {newsQuery.error && (
+                    <EmptyState
+                      title="Erreur de chargement"
+                      description={newsQuery.error}
+                      icon={<IconAlertCircle size={32} className="text-danger" />}
+                      action={{ label: 'Réessayer', onClick: () => newsQuery.refetch() }}
+                    />
+                  )}
+                  {!newsQuery.isLoading && !newsQuery.error && (
+                    <>
+                      {newsItems.length > 0 ? (
+                        <div className="space-y-2">
+                          {(newsExpanded ? newsItems : newsItems.slice(0, 5)).map((article) => (
+                            <NewsCard
+                              key={article.id}
+                              title={article.title}
+                              source={article.source}
+                              url={article.url}
+                              time={article.date ? new Date(article.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined}
+                            />
+                          ))}
+                          {newsItems.length > 5 && (
+                            <div className="pt-1">
+                              <Button variant="ghost" size="sm" onClick={() => setNewsExpanded((v) => !v)}>
+                                {newsExpanded ? 'Afficher moins' : 'Afficher plus'}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <EmptyState
+                          title="Pas d'actualité récente"
+                          description="Les actualités financières seront affichées une fois chargées."
+                          action={{ label: 'Rafraîchir', onClick: () => newsQuery.refetch() }}
+                        />
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          }
+        />
 
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
@@ -473,15 +539,7 @@ function DashboardContent() {
           )}
           {forecastsQuery.error instanceof Error && (
             <Card>
-              <EmptyState
-                title="Erreur de chargement"
-                description={forecastsQuery.error.message}
-                icon={<IconAlertCircle size={32} className="text-danger" />}
-                action={{
-                  label: 'Réessayer',
-                  onClick: () => forecastsQuery.refetch(),
-                }}
-              />
+              <ErrorCard title="Erreur de chargement" message={forecastsQuery.error.message} onRetry={() => forecastsQuery.refetch()} />
             </Card>
           )}
           {!forecastsQuery.isLoading && !forecastsQuery.error && (

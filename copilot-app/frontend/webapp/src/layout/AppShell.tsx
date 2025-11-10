@@ -10,6 +10,8 @@ import {
   Text,
   ThemeIcon,
   Tooltip,
+  Drawer,
+  Divider,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -88,7 +90,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <MantineAppShell
       layout="alt"
       header={{ height: 72 }}
-      navbar={{ width: 260, breakpoint: 'md', collapsed: { mobile: !opened } }}
+      navbar={{ width: 260, breakpoint: 'md', collapsed: { mobile: true } }}
       padding="xl"
       styles={{
         header: {
@@ -109,7 +111,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <MantineAppShell.Header withBorder={false} p="md">
         <Group justify="space-between" align="center">
           <Group gap="sm">
-            <Burger opened={opened} onClick={toggle} size="sm" hiddenFrom="md" color="white" />
+            <Burger opened={opened} onClick={toggle} size="sm" hiddenFrom="md" color="white" aria-label={opened ? 'Fermer la navigation' : 'Ouvrir la navigation'} />
             <Stack gap={0}>
               <Text fw={700} fz="lg">Finance Copilot</Text>
               <Text c="gray.3" fz="xs">Systèmes d'intelligence de marché</Text>
@@ -126,7 +128,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </Group>
       </MantineAppShell.Header>
 
-      <MantineAppShell.Navbar p="md" withBorder={false}>
+      {/* Drawer navigation on mobile */}
+      <Drawer opened={opened} onClose={close} size="xs" overlayProps={{ blur: 4 }} hiddenFrom="md" padding="md">
+        <Stack gap="sm">
+          <Text fw={700} fz="sm" c="gray.5">Navigation</Text>
+          <Divider variant="dashed" color="gray.7" my="xs" />
+          {navItems.map((item) => (
+            <NavLink
+              key={`m-${item.to}`}
+              item={item}
+              active={location.pathname === item.to}
+              onNavigate={() => handleNavigate(item.to)}
+            />
+          ))}
+        </Stack>
+      </Drawer>
+
+      <MantineAppShell.Navbar p="md" withBorder={false} visibleFrom="md">
         <ScrollArea style={{ height: '100%' }}>
           <Stack gap="sm">
             {navItems.map((item) => (
