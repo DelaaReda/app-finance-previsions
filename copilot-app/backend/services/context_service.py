@@ -70,6 +70,27 @@ class ContextService:
             # Step 1: Get intelligence snapshot
             intel = await self.intelligence_service.get_market_snapshot_intelligence()
             
+            # Step 1.5: Enhance with recent forecasts data (24h) for dynamic regime
+            try:
+                from storage.io import load_json
+                from datetime import datetime, timedelta
+                forecasts_data = load_json("forecasts") or {}
+                forecast_rows = forecasts_data.get("rows", []) or forecasts_data.get("data", {}).get("rows", [])
+                
+                # Calculate recent sentiment from forecasts (last 24h)
+                if forecast_rows:
+                    recent_bullish = sum(1 for r in forecast_rows if (r.get("direction") or "").lower() in {"up", "bullish", "buy"})
+                    recent_bearish = sum(1 for r in forecast_rows if (r.get("direction") or "").lower() in {"down", "bearish", "sell"})
+                    recent_total = len(forecast_rows)
+                    
+                    # Override intel data with recent forecasts if available
+                    if recent_total > 0:
+                        intel.setdefault("data", {}).setdefault("derived", {}).setdefault("forecast_sentiment", {})["bullish_pct"] = (recent_bullish / recent_total) * 100
+                        intel.setdefault("data", {}).setdefault("derived", {}).setdefault("forecast_sentiment", {})["bearish_pct"] = (recent_bearish / recent_total) * 100
+                        self.logger.info(f"Enhanced context with {recent_total} recent forecasts (24h)")
+            except Exception as e:
+                self.logger.debug(f"Could not enhance with recent forecasts: {e}")
+            
             # Step 2: Classify market regime
             regime_info = self._classify_regime(intel)
             

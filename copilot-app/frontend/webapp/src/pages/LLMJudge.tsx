@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { apiGet, apiPost } from '../api/client'
 import {
   Accordion,
@@ -62,6 +63,20 @@ export default function LLMJudge() {
   const [debugInfo, setDebugInfo] = useState<JudgeDebug | null>(null)
   const [stats, setStats] = useState<{ total?: number; high_conf_count?: number } | null>(null)
   const [parameters, setParameters] = useState<{ max_er?: number; min_conf?: number; tickers?: string[] } | null>(null)
+  
+  // Load existing verdicts from GET endpoint
+  const { data: verdictsData, isLoading: verdictsLoading, refetch: refetchVerdicts } = useQuery({
+    queryKey: ['judge', 'verdicts'],
+    queryFn: async () => {
+      const response = await apiGet<any>('/api/judge', { limit: 20, min_confidence: 0.5 })
+      if (response.ok && response.data) {
+        return response.data
+      }
+      return null
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false,
+  })
   const coveragePct =
     stats && typeof stats.total === 'number' && stats.total > 0
       ? Math.round(((stats.high_conf_count ?? 0) / stats.total) * 100)
@@ -162,9 +177,78 @@ export default function LLMJudge() {
     setBusy(false)
   }
 
+  // Extract verdicts from GET endpoint data
+  const verdicts = verdictsData?.verdicts || []
+  const verdictsStats = verdictsData?.stats || {}
+
   return (
     <Stack gap="md" data-testid="judge-root">
-      <Title order={2}>LLM Judge</Title>
+      <Group justify="space-between" align="center">
+        <Title order={2}>LLM Judge</Title>
+        <Button 
+          variant="light" 
+          size="sm" 
+          onClick={() => refetchVerdicts()}
+          loading={verdictsLoading}
+        >
+          Rafraîchir les verdicts
+        </Button>
+      </Group>
+      
+      {/* Display existing verdicts from GET endpoint */}
+      {verdicts.length > 0 && (
+        <Card shadow="sm" padding="md" withBorder>
+          <Group justify="space-between" mb="md">
+            <div>
+              <Title order={4}>Verdicts existants</Title>
+              {verdictsData?.last_updated && (
+                <Text size="xs" c="dimmed" mt={4}>
+                  Mise à jour: {new Date(verdictsData.last_updated).toLocaleString('fr-FR')}
+                </Text>
+              )}
+            </div>
+            <Badge color="blue" variant="light">
+              {verdicts.length} verdicts
+            </Badge>
+          </Group>
+          <Stack gap="xs">
+            {verdicts.slice(0, 10).map((verdict: any, idx: number) => (
+              <Group key={idx} justify="space-between" p="xs" style={{ borderBottom: '1px solid #eee' }}>
+                <div>
+                  <Text fw={600}>{verdict.ticker}</Text>
+                  <Text size="xs" c="dimmed">{verdict.reasoning || verdict.horizon || 'N/A'}</Text>
+                </div>
+                <Group gap="xs">
+                  <Badge 
+                    color={
+                      verdict.verdict === 'buy' ? 'green' : 
+                      verdict.verdict === 'sell' ? 'red' : 
+                      'gray'
+                    }
+                    variant="light"
+                  >
+                    {verdict.verdict?.toUpperCase() || 'NEUTRAL'}
+                  </Badge>
+                  <Badge color="blue" variant="light">
+                    {Math.round((verdict.confidence || 0) * 100)}%
+                  </Badge>
+                </Group>
+              </Group>
+            ))}
+          </Stack>
+          {verdictsStats && (
+            <Group mt="md" gap="md">
+              <Text size="sm" c="dimmed">
+                Total: {verdictsStats.total || 0} • 
+                Buys: {verdictsStats.buys || 0} • 
+                Sells: {verdictsStats.sells || 0} • 
+                Neutrals: {verdictsStats.neutrals || 0}
+              </Text>
+            </Group>
+          )}
+        </Card>
+      )}
+      
       {err && (
         <Alert color="red" title="Erreur" variant="light">{err}</Alert>
       )}

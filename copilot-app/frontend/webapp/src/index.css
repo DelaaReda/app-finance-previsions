@@ -32,6 +32,11 @@
 	--metric-bg: rgba(255, 255, 255, 0.02);
 	--metric-border: rgba(255, 255, 255, 0.05);
 	--metric-icon-bg: rgba(255, 255, 255, 0.06);
+	
+	/* Forecast trend colors (dark mode) */
+	--bullish-color: #16a34a;
+	--bearish-color: #dc2626;
+	--neutral-color: #6b7280;
 }
 
 /* Light mode overrides */
@@ -61,6 +66,11 @@
 	--metric-bg: rgba(255, 255, 255, 0.8);
 	--metric-border: rgba(0, 0, 0, 0.06);
 	--metric-icon-bg: rgba(76, 110, 245, 0.1);
+	
+	/* Forecast trend colors (light mode) */
+	--bullish-color: #15803d;
+	--bearish-color: #b91c1c;
+	--neutral-color: #4b5563;
 }
 
 /* Base element styles */

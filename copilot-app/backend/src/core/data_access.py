@@ -1,505 +1,523 @@
 """
-Core Data Access Utilities for Finance Copilot
+Shared Data Access Utilities
 Task: FC-ARCH-UTILS-001 - Factorisation des utilitaires communs
-Author: MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-7
+Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+Purpose: Eliminate duplicate functions across multiple files by centralizing them here
 """
-from typing import Any, Dict, List, Optional, Union
-from pathlib import Path
-from datetime import datetime, timedelta
-import sys
-import json
 import pandas as pd
-from enum import Enum
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
+import sys
+from pathlib import Path
+
+# Add backend to path for imports
+backend_root = Path(__file__).resolve().parent.parent
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
+
+from storage.io import load_json
 
 
-def ensure_array(v: Union[List, str, Dict, None]) -> List:
+def _latest_dt_under(base: str, pattern: str = "dt=*") -> Optional[str]:
     """
-    Ensure a value is always returned as an array.
-    Implements never-empty principle by returning [] instead of None/list.
+    Find the latest date partition in the specified base path with the given pattern.
+    Replacement for duplicated _latest_dt_under functions.
     
     Args:
-        v: Value to convert to array (can be any type)
-        
+        base: Base directory to search
+        pattern: Pattern to match (default: "dt=*")
+    
     Returns:
-        List: Original value if it's an array, else converted to single-element array or empty array
-    """
-    if v is None:
-        return []
-    if isinstance(v, list):
-        return v
-    if isinstance(v, str):
-        # If it's a string, treat as single element or split if it looks like CSV
-        if ',' in v and len(v.split(',')) > 1:
-            return [x.strip() for x in v.split(',') if x.strip()]
-        return [v]
-    if isinstance(v, dict):
-        # If it's a dict, return as single element in array
-        return [v]
-    # For any other type, return as single element in array
-    return [v]
-
-
-def nn(v: Union[Any, None], fb: Any = 0) -> Any:
-    """
-    Not-Null utility - returns fallback value if input is null/undefined.
-    Implements safe access pattern for optional values.
-    
-    Args:
-        v: Value that may be None
-        fb: Fallback value to return if v is None (default: 0)
-        
-    Returns:
-        Value v if not null, otherwise fallback fb
-    """
-    return fb if v is None or (isinstance(v, str) and v == "") or (isinstance(v, float) and v != v) else v
-
-
-def has_items(v: Union[List, str, Dict, None]) -> bool:
-    """
-    Check if a value has items (non-empty).
-    
-    Args:
-        v: Value to check
-        
-    Returns:
-        Boolean indicating if value contains items
-    """
-    if v is None:
-        return False
-    if isinstance(v, list):
-        return len(v) > 0
-    if isinstance(v, str):
-        return len(v.strip()) > 0
-    if isinstance(v, dict):
-        return len(v.keys()) > 0
-    return True
-
-
-def safe_get(obj: Optional[Dict], key: str, default: Any = None) -> Any:
-    """
-    Safe property access with fallback.
-    
-    Args:
-        obj: Object to extract property from
-        key: Property name to extract
-        default: Default value if property doesn't exist
-        
-    Returns:
-        Property value if exists, otherwise default
-    """
-    if obj is None or not isinstance(obj, dict):
-        return default
-    return obj.get(key, default)
-
-
-def parse_csv_list(value: Union[str, List[str], None]) -> List[str]:
-    """
-    Parse CSV-formatted string or return list as-is.
-    
-    Args:
-        value: String in format "item1,item2,item3" or list of strings
-        
-    Returns:
-        List of strings
-    """
-    if value is None:
-        return []
-    
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    
-    if isinstance(value, str):
-        if ',' in value:
-            return [item.strip() for item in value.split(',') if item.strip()]
-        else:
-            # If no comma, treat as single value
-            return [value.strip()] if value.strip() else []
-    
-    return []
-
-
-def latest_partition_under(base_path: str, pattern: str = "dt=*") -> Optional[str]:
-    """
-    Get latest partition under a base path (typically dt=YYYYMMDD format).
-    Used for finding latest data in partitioned directories.
-    
-    Args:
-        base_path: Base directory to search in
-        pattern: Pattern of partitions (default: "dt=*")
-        
-    Returns:
-        Name of latest partition directory or None if none found
+        Latest date partition name or None if none found
     """
     try:
-        p = Path(base_path)
-        if not p.exists():
+        parts = sorted(Path(base).glob(pattern))
+        if not parts:
             return None
+        # Return the last part name (e.g., "dt=20251105")
+        latest_part = parts[-1]
+        return latest_part.name.split('=')[-1] if '=' in latest_part.name else latest_part.name
+    except Exception as e:
+        print(f"Error finding latest dt under {base}: {str(e)}")
+        return None  # Return None to maintain never-empty contract
+
+
+def _load_equity_final() -> pd.DataFrame:
+    """
+    Load the latest equity final data from date-partitioned storage.
+    Replacement for duplicated _load_equity_final functions.
+    
+    Returns:
+        DataFrame with equity final data or empty DataFrame
+    """
+    try:
+        from datetime import datetime
+        # Look for the latest date partition
+        base_path = Path("data/forecast")
+        if not base_path.exists():
+            # Check alternative path formats
+            alt_path = Path(__file__).resolve().parent.parent / "data" / "forecast"
+            if alt_path.exists():
+                base_path = alt_path
+            else:
+                return pd.DataFrame()  # Return empty but never-empty contract
         
-        # Get all directories matching the pattern
-        partitions = [part.name for part in p.glob(pattern) if part.is_dir()]
+        # Get all date partition directories
+        parts = sorted(base_path.glob("dt=*"))
+        if not parts:
+            return pd.DataFrame()  # No data available yet
         
-        if not partitions:
-            return None
+        # Get the latest partition
+        latest_part = parts[-1]
+        final_file = latest_part / "final.parquet"
         
-        # Sort partitions to get the latest one (assuming format dt=20251106)
-        # Extract date part and sort
-        def extract_date(part_name: str) -> str:
-            # Format is dt=YYYYMMDD, extract the date part
-            if '=' in part_name:
-                return part_name.split('=')[1]
-            return part_name
+        # Try to load the parquet file
+        if final_file.exists():
+            return pd.read_parquet(final_file)
+        else:
+            # Try alternative filenames
+            alt_final_file = latest_part / "forecasts.parquet"
+            if alt_final_file.exists():
+                return pd.read_parquet(alt_final_file)
+            else:
+                # Last resort: try JSON format
+                alt_json_file = latest_part / "forecasts.json"
+                if alt_json_file.exists():
+                    json_data = load_json(f"forecast/dt={latest_part.name.split('=')[1]}/forecasts")
+                    if json_data and "data" in json_data:
+                        # Convert to DataFrame if structured data exists
+                        if "rows" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["rows"])
+                        else:
+                            return pd.DataFrame(json_data["data"]) if isinstance(json_data["data"], list) else pd.DataFrame()
+                    else:
+                        return pd.DataFrame()
         
-        # Sort by date - get latest
-        sorted_parts = sorted(partitions, key=extract_date, reverse=True)
-        return sorted_parts[0] if sorted_parts else None
+        return pd.DataFrame()
         
     except Exception as e:
-        print(f"Error finding latest partition: {e}")
-        return None
+        print(f"Error loading equity final data: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
 
 
-def load_equity_final(ticker: str, horizon: str = "1d", base_path: Optional[str] = None) -> Optional[Dict]:
+def _load_commodity() -> pd.DataFrame:
     """
-    Load final equity data for a specific ticker and horizon.
-    Looks for data in partitioned format: base_path/dt=*/equity/final.parquet
+    Load the latest commodity data from date-partitioned storage.
+    Replacement for duplicated _load_commodity functions.
+    
+    Returns:
+        DataFrame with commodity data or empty DataFrame
+    """
+    try:
+        # Look for the latest date partition
+        base_path = Path("data/forecast") 
+        if not base_path.exists():
+            # Check alternative path formats
+            alt_path = Path(__file__).resolve().parent.parent / "data" / "forecast"
+            if alt_path.exists():
+                base_path = alt_path
+            else:
+                return pd.DataFrame()  # Return empty but maintain never-empty
+        
+        # Get all date partition directories
+        parts = sorted(base_path.glob("dt=*"))
+        if not parts:
+            return pd.DataFrame()  # No data available yet
+        
+        # Get the latest partition
+        latest_part = parts[-1]
+        commodity_file = latest_part / "commodities.parquet"
+        
+        # Try to load the parquet file
+        if commodity_file.exists():
+            return pd.read_parquet(commodity_file)
+        else:
+            # Try alternative names
+            alt_commodity_file = latest_part / "commodity.parquet"
+            if alt_commodity_file.exists():
+                return pd.read_parquet(alt_commodity_file)
+            else:
+                # Try commodities.csv
+                csv_file = latest_part / "commodities.csv"
+                if csv_file.exists():
+                    return pd.read_csv(csv_file)
+                else:
+                    # Last resort: try JSON format
+                    json_file = latest_part / "commodities.json"
+                    if json_file.exists():
+                        json_data = load_json(f"forecast/dt={latest_part.name.split('=')[1]}/commodities")
+                        if json_data and "data" in json_data:
+                            if "rows" in json_data["data"]:
+                                return pd.DataFrame(json_data["data"]["rows"])
+                            else:
+                                return pd.DataFrame(json_data["data"]) if isinstance(json_data["data"], list) else pd.DataFrame()
+                        else:
+                            return pd.DataFrame()
+        
+        return pd.DataFrame()
+        
+    except Exception as e:
+        print(f"Error loading commodity data: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
+
+
+def _load_stock_prices(ticker: str) -> pd.DataFrame:
+    """
+    Load stock prices for a specific ticker from date-partitioned storage.
     
     Args:
         ticker: Stock ticker symbol
-        horizon: Forecast horizon (1d, 1w, 1m, etc.) 
-        base_path: Base data directory (defaults to backend/data)
         
     Returns:
-        Equity final data or None if not found
+        DataFrame with stock price data or empty DataFrame
     """
     try:
-        if base_path is None:
-            # Default to backend data directory
-            backend_root = Path(__file__).resolve().parents[2]  # From src/core/data_access.py to backend/
-            base_path = str(backend_root / "data")
+        # Look for stock prices data with the ticker
+        base_path = Path("data/stocks")
         
-        base_p = Path(base_path)
+        # Try different partition formats
+        parts = sorted(list(base_path.glob("dt=*")) + list(base_path.glob(f"{ticker.lower()}_dt=*")))
         
-        # Find latest partition
-        latest_part = latest_partition_under(str(base_p))
-        if latest_part is None:
-            return None
-        
-        # Look for equity final data in the partition
-        equity_final_path = base_p / latest_part / "equity" / "final.parquet"
-        
-        if not equity_final_path.exists():
-            # Alternative location
-            equity_final_path = base_p / latest_part / "forecast" / "final.parquet"
+        if not parts:
+            # Check alternative locations
+            alt_path = Path(__file__).resolve().parent.parent / "data" / "stocks"
+            if alt_path.exists():
+                parts = sorted(list(alt_path.glob("dt=*")) + list(alt_path.glob(f"{ticker.lower()}_dt=*")))
             
-            if not equity_final_path.exists():
-                return None
+            if not parts:
+                return pd.DataFrame()
         
-        # Load the parquet file into a dataframe
-        try:
-            df = pd.read_parquet(equity_final_path)
-            
-            # Filter for the specific ticker if available in DataFrame
-            if 'ticker' in df.columns:
-                filtered_df = df[df['ticker'].str.upper() == ticker.upper()].head(1)  # Get first match
-                if not filtered_df.empty:
-                    # Convert to dict format expected by frontend
-                    row = filtered_df.iloc[0].to_dict()
-                    return {
-                        "data": row,
-                        "count": 1,
-                        "found_ticker": ticker,
-                        "partition": latest_part,
-                        "loaded_at": datetime.utcnow().isoformat() + "Z"
-                    }
-            elif 'symbol' in df.columns:
-                filtered_df = df[df['symbol'].str.upper() == ticker.upper()].head(1)  # Get first match
-                if not filtered_df.empty:
-                    row = filtered_df.iloc[0].to_dict()
-                    return {
-                        "data": row,
-                        "count": 1,
-                        "found_ticker": ticker,
-                        "partition": latest_part,
-                        "loaded_at": datetime.utcnow().isoformat() + "Z"
-                    }
+        # Get the latest partition
+        latest_part = parts[-1]
+        price_file = latest_part / f"{ticker.lower()}_prices.parquet"
+        
+        if price_file.exists():
+            return pd.read_parquet(price_file)
+        else:
+            # Try alternative formats
+            csv_file = latest_part / f"{ticker.lower()}_prices.csv"
+            if csv_file.exists():
+                return pd.read_csv(csv_file)
             else:
-                # If no ticker column found, return first few rows
-                if not df.empty:
-                    rows = df.head(10).to_dict('records')
-                    return {
-                        "data": rows,
-                        "count": len(rows),
-                        "partition": latest_part,
-                        "loaded_at": datetime.utcnow().isoformat() + "Z"
-                    }
-            
-            return None
-        except Exception as e:
-            print(f"Error loading parquet file: {e}")
-            return None
-            
+                json_file = latest_part / f"{ticker.lower()}_prices.json"
+                if json_file.exists():
+                    json_data = load_json(f"stocks/dt={latest_part.name.split('=')[1]}/{ticker.lower()}_prices")
+                    if json_data and isinstance(json_data, dict) and "data" in json_data:
+                        if isinstance(json_data["data"], list):
+                            return pd.DataFrame(json_data["data"])
+                        elif isinstance(json_data["data"], dict) and "rows" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["rows"])
+                    
+        return pd.DataFrame()
+        
     except Exception as e:
-        print(f"Error loading equity final: {e}")
+        print(f"Error loading stock prices for {ticker}: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
+
+
+def _load_macro_data(dataset_name: str) -> pd.DataFrame:
+    """
+    Load macroeconomic data from date-partitioned storage.
+    
+    Args:
+        dataset_name: Name of macro dataset (e.g., "cpi", "gdp", "employment")
+        
+    Returns:
+        DataFrame with macro data or empty DataFrame
+    """
+    try:
+        base_path = Path("data/macro")
+        
+        # Get all date partition directories
+        parts = sorted(base_path.glob("dt=*"))
+        if not parts:
+            return pd.DataFrame()
+        
+        # Get the latest partition
+        latest_part = parts[-1]
+        dataset_file = latest_part / f"{dataset_name}.parquet"
+        
+        if dataset_file.exists():
+            return pd.read_parquet(dataset_file)
+        else:
+            # Try alternative formats
+            csv_file = latest_part / f"{dataset_name}.csv"
+            if csv_file.exists():
+                return pd.read_csv(csv_file)
+            else:
+                json_file = latest_part / f"{dataset_name}.json"
+                if json_file.exists():
+                    json_data = load_json(f"macro/dt={latest_part.name.split('=')[1]}/{dataset_name}")
+                    if json_data and isinstance(json_data, dict) and "data" in json_data:
+                        if isinstance(json_data["data"], list):
+                            return pd.DataFrame(json_data["data"])
+                        elif isinstance(json_data["data"], dict) and "rows" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["rows"])
+        
+        return pd.DataFrame()
+        
+    except Exception as e:
+        print(f"Error loading macro data {dataset_name}: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
+
+
+def _load_news_data() -> pd.DataFrame:
+    """
+    Load latest news data from date-partitioned storage.
+    
+    Returns:
+        DataFrame with news data or empty DataFrame
+    """
+    try:
+        base_path = Path("data/news")
+        
+        # Get all date partition directories
+        parts = sorted(base_path.glob("dt=*"))
+        if not parts:
+            # Try alternative structures
+            parts = sorted(base_path.glob("*/dt=*"))  # Nested structure possible
+            if not parts:
+                # Last resort: look for JSON files
+                json_files = list(base_path.glob("**/*.json"))
+                if json_files:
+                    latest_json = max(json_files, key=lambda x: x.stat().st_mtime if x.exists() else datetime.min.timestamp())
+                    json_data = load_json(latest_json.stem)
+                    if json_data:
+                        if isinstance(json_data, dict) and "data" in json_data and "articles" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["articles"])
+                        elif isinstance(json_data, dict) and "articles" in json_data:
+                            return pd.DataFrame(json_data["articles"])
+                        elif isinstance(json_data, list):
+                            return pd.DataFrame(json_data)
+        
+        if parts:
+            latest_part = parts[-1]
+            news_file = latest_part / "news.parquet"
+            
+            if news_file.exists():
+                return pd.read_parquet(news_file)
+            else:
+                # Try alternative names
+                for alt_file in ["feed.parquet", "latest.parquet", "articles.parquet"]:
+                    alt_news_file = latest_part / alt_file
+                    if alt_news_file.exists():
+                        return pd.read_parquet(alt_news_file)
+                
+                # Try JSON format
+                json_file = latest_part / "news.json"
+                if json_file.exists():
+                    json_data = load_json(f"news/dt={latest_part.name.split('=')[1]}/news")
+                    if json_data and isinstance(json_data, dict) and "data" in json_data:
+                        if "articles" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["articles"])
+                        elif "rows" in json_data["data"]:
+                            return pd.DataFrame(json_data["data"]["rows"])
+        
+        return pd.DataFrame()
+        
+    except Exception as e:
+        print(f"Error loading news data: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
+
+
+def _ensure_safe_array(data: Any, default: List = None) -> List:
+    """
+    Ensure data is a safe array, maintaining never-empty contract.
+    Replacement for duplicated ensureArray patterns.
+    
+    Args:
+        data: Raw data that should be converted to array
+        default: Default array to return if conversion fails
+        
+    Returns:
+        Array of data or default array
+    """
+    if default is None:
+        default = []
+    
+    if data is None:
+        return default
+    
+    if isinstance(data, list):
+        return data
+    
+    if isinstance(data, dict):
+        # If it's a dict with a "rows" or "data" key, return that
+        if "rows" in data:
+            return data["rows"] if isinstance(data["rows"], list) else default
+        elif "data" in data:
+            if isinstance(data["data"], list):
+                return data["data"]
+            elif isinstance(data["data"], dict) and "rows" in data["data"]:
+                return data["data"]["rows"] if isinstance(data["data"]["rows"], list) else default
+            else:
+                return default
+        else:
+            # Convert dict values to array
+            return list(data.values()) if data else default
+    
+    if hasattr(data, '__iter__') and not isinstance(data, str):
+        # If it's iterable but not a string, convert to list
+        try:
+            return list(data)
+        except:
+            return default
+    
+    # For any other type, return default
+    return default
+
+
+def get_last_update_timestamp(file_path: str) -> Optional[str]:
+    """
+    Extract timestamp from file or directory that indicates last update time.
+    
+    Args:
+        file_path: Path to file or directory
+        
+    Returns:
+        Timestamp as string or None if not available
+    """
+    try:
+        path = Path(file_path)
+        
+        if path.exists():
+            # Get modification time
+            mtime = path.stat().st_mtime
+            timestamp = datetime.fromtimestamp(mtime)
+            return timestamp.isoformat() + "Z"
+        else:
+            # If path doesn't exist, return None
+            return None
+    except Exception as e:
+        print(f"Error getting last update timestamp for {file_path}: {str(e)}")
         return None
 
 
-def load_macro_forecast_rows(limit: int = 200) -> Dict[str, Any]:
+def _load_data_partitioned(base_dir: str, filename: str, date_partition: Optional[str] = None) -> pd.DataFrame:
     """
-    Load macro forecast rows with standardized return format.
-    Implements never-empty principle by providing fallback structure.
+    Generic function to load partitioned data (for any type of partitioned data).
     
     Args:
-        limit: Maximum number of rows to return (default: 200)
+        base_dir: Base directory containing date partitions
+        filename: Filename without extension (will try parquet, csv, json)
+        date_partition: Specific date partition to load (if None, loads latest)
         
     Returns:
-        Dictionary with rows and metadata in standardized format
+        DataFrame with data or empty DataFrame
     """
     try:
-        from backend.src.utils.file_loader import load_json
+        base_path = Path(base_dir)
         
-        # Load macro forecast data
-        macro_data = load_json("macro_forecasts")
-        
-        if macro_data and "rows" in macro_data:
-            rows = macro_data["rows"]
-            # Apply limit
-            limited_rows = rows[:limit]
-            return {
-                "rows": limited_rows,
-                "count": len(limited_rows),
-                "limit": limit,
-                "source": macro_data.get("source", ["load_macro_forecast_rows"]),
-                "generated_at": macro_data.get("generated_at", datetime.utcnow().isoformat() + "Z")
-            }
-        elif macro_data and isinstance(macro_data, list):
-            # If data is directly a list of rows
-            limited_rows = macro_data[:limit]
-            return {
-                "rows": limited_rows,
-                "count": len(limited_rows),
-                "limit": limit,
-                "source": ["load_macro_forecast_rows", "direct_list"],
-                "generated_at": datetime.utcnow().isoformat() + "Z"
-            }
+        if date_partition:
+            # Load specific partition
+            partition_path = base_path / f"dt={date_partition}"
+            if not partition_path.exists():
+                return pd.DataFrame()
         else:
-            # Return fallback structure to maintain never-empty contract
-            return {
-                "rows": [],
-                "count": 0,
-                "limit": limit,
-                "source": ["load_macro_forecast_rows", "fallback_empty"],
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "message": "No macro forecast data available - using fallback to maintain never-empty contract"
-            }
+            # Load latest partition
+            parts = sorted(base_path.glob("dt=*"))
+            if not parts:
+                return pd.DataFrame()
+            partition_path = parts[-1]
+        
+        # Try different file formats in order of preference
+        for fmt in ["parquet", "csv", "json"]:
+            data_file = partition_path / f"{filename}.{fmt}"
+            
+            if data_file.exists():
+                if fmt == "parquet":
+                    return pd.read_parquet(data_file)
+                elif fmt == "csv":
+                    return pd.read_csv(data_file)
+                elif fmt == "json":
+                    json_data = load_json(f"{base_dir.replace('/', '_')}/dt={partition_path.name.split('=')[1]}/{filename}")
+                    if json_data:
+                        if isinstance(json_data, dict) and "data" in json_data:
+                            if isinstance(json_data["data"], list):
+                                return pd.DataFrame(json_data["data"])
+                            elif "rows" in json_data["data"]:
+                                return pd.DataFrame(json_data["data"]["rows"])
+                        elif isinstance(json_data, list):
+                            return pd.DataFrame(json_data)
+        
+        # If no files found in the partition, return empty DataFrame
+        return pd.DataFrame()
+        
     except Exception as e:
-        print(f"Error in load_macro_forecast_rows: {e}")
-        # Return fallback structure to maintain never-empty contract
-        return {
-            "rows": [],
-            "count": 0,
-            "limit": limit,
-            "source": ["load_macro_forecast_rows", "error_fallback"],
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "error": str(e),
-            "message": "Error loading macro forecast rows but fallback returned to maintain never-empty contract"
-        }
+        print(f"Error loading partitioned data {base_dir}/{filename}: {str(e)}")
+        # Return empty DataFrame to maintain never-empty contract
+        return pd.DataFrame()
 
 
-def load_news_for_ticker(ticker: str, limit: int = 50, since_days: int = 7) -> Dict[str, Any]:
-    """
-    Load news articles for a specific ticker with time filter.
+# Convenience functions that replace duplicate functions across multiple files
+def get_latest_forecast_date() -> Optional[str]:
+    """Get the latest forecast date from date partitions"""
+    return _latest_dt_under("data/forecast", "dt=*")
+
+def get_latest_macro_date() -> Optional[str]:
+    """Get the latest macro date from date partitions"""
+    return _latest_dt_under("data/macro", "dt=*")
+
+def load_latest_forecasts_data() -> pd.DataFrame:
+    """Load latest forecasts data (equity + commodity)"""
+    equity_df = _load_equity_final()
+    commodity_df = _load_commodity()
     
-    Args:
-        ticker: Stock ticker to filter news for
-        limit: Maximum number of articles to return
-        since_days: Number of days back to include news
-        
-    Returns:
-        Dictionary with news articles and metadata
-    """
-    try:
-        from backend.src.utils.file_loader import load_json
-        
-        # Load news data
-        news_data = load_json("news_feed")
-        
-        ticker_upper = ticker.upper()
-        
-        if news_data:
-            articles = news_data.get("articles", news_data.get("rows", []))
-            
-            # Filter articles by ticker and date range
-            filtered_articles = []
-            cutoff_date = datetime.utcnow() - timedelta(days=since_days)
-            
-            for article in articles:
-                # Check if ticker is mentioned in the article
-                article_tickers = ensure_array(article.get("tickers", []))
-                
-                # Look for ticker mention in various fields
-                if ticker_upper in [t.upper() for t in article_tickers]:
-                    # Check date if available
-                    pub_date_str = article.get("pubDate") or article.get("published_at") or article.get("date")
-                    if pub_date_str:
-                        try:
-                            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
-                            if pub_date >= cutoff_date:
-                                filtered_articles.append(article)
-                        except:
-                            # If date parsing fails, include anyway (safety fallback)
-                            filtered_articles.append(article)
-                    else:
-                        # If no date, include anyway (safety fallback)
-                        filtered_articles.append(article)
-                
-                # Also check if ticker is mentioned in title/description
-                title = article.get("title", "").upper()
-                desc = article.get("description", "").upper()
-                
-                if ticker.upper() in title or ticker.upper() in desc:
-                    # Check date if available
-                    pub_date_str = article.get("pubDate") or article.get("published_at") or article.get("date")
-                    if pub_date_str:
-                        try:
-                            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
-                            if pub_date >= cutoff_date:
-                                filtered_articles.append(article)
-                        except:
-                            filtered_articles.append(article)
-                    else:
-                        filtered_articles.append(article)
-            
-            # Apply limit
-            limited_articles = filtered_articles[:limit]
-            
-            return {
-                "articles": limited_articles,
-                "count": len(limited_articles),
-                "limit": limit,
-                "ticker": ticker,
-                "since_days": since_days,
-                "source": ["load_news_for_ticker"],
-                "generated_at": datetime.utcnow().isoformat() + "Z"
-            }
-        else:
-            # Return fallback structure to maintain never-empty contract
-            return {
-                "articles": [],
-                "count": 0,
-                "limit": limit,
-                "ticker": ticker,
-                "since_days": since_days,
-                "source": ["load_news_for_ticker", "fallback_empty"],
-                "generated_at": datetime.utcnow().isoformat() + "Z",
-                "message": "No news data available for ticker - using fallback to maintain never-empty contract"
-            }
-    except Exception as e:
-        print(f"Error in load_news_for_ticker: {e}")
-        return {
-            "articles": [],
-            "count": 0,
-            "limit": limit,
-            "ticker": ticker,
-            "since_days": since_days,
-            "source": ["load_news_for_ticker", "error_fallback"],
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "error": str(e),
-            "message": "Error loading news for ticker but fallback returned to maintain never-empty contract"
-        }
+    # Combine if both exist
+    if not equity_df.empty and not commodity_df.empty:
+        try:
+            equity_df = equity_df.copy()  # Make sure we can modify
+            commodity_df = commodity_df.copy()
+            if 'asset_type' not in equity_df.columns:
+                equity_df['asset_type'] = 'equity'
+            if 'asset_type' not in commodity_df.columns:
+                commodity_df['asset_type'] = 'commodity'
+            return pd.concat([equity_df, commodity_df], ignore_index=True)
+        except Exception as e:
+            # If concat fails, return equity data with a note
+            print(f"Error combining equity and commodity data: {str(e)}")
+            return equity_df if not equity_df.empty else commodity_df
+    elif not equity_df.empty:
+        equity_df = equity_df.copy()
+        if not isinstance(equity_df, pd.DataFrame):
+            equity_df = pd.DataFrame()
+        if 'asset_type' not in equity_df.columns:
+            equity_df['asset_type'] = 'equity'
+        return equity_df
+    elif not commodity_df.empty:
+        commodity_df = commodity_df.copy()
+        if not isinstance(commodity_df, pd.DataFrame):
+            commodity_df = pd.DataFrame()
+        if 'asset_type' not in commodity_df.columns:
+            commodity_df['asset_type'] = 'commodity'
+        return commodity_df
+    else:
+        return pd.DataFrame()
 
+def get_equity_final_data() -> pd.DataFrame:
+    """Convenience function for loading equity final data"""
+    return _load_equity_final()
 
-def calculate_portfolio_metrics(positions: List[Dict[str, Any]], prices_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Calculate portfolio metrics from positions with optional current prices.
-    
-    Args:
-        positions: List of positions with 'ticker', 'quantity', 'avg_price', etc.
-        prices_data: Optional current prices data to calculate current value and PnL
-        
-    Returns:
-        Portfolio metrics including value, returns, risk measures
-    """
-    try:
-        total_cost = 0
-        total_current_value = 0
-        positions_with_pnl = []
-        
-        for pos in positions:
-            ticker = pos.get('ticker', '').upper()
-            quantity = pos.get('quantity', 0)
-            avg_price = pos.get('avg_price', 0)
-            
-            cost_basis = quantity * avg_price
-            total_cost += cost_basis
-            
-            # Get current price if available
-            current_price = None
-            if prices_data and isinstance(prices_data, dict):
-                if ticker in prices_data:
-                    current_price = prices_data[ticker]
-                elif 'rows' in prices_data or 'data' in prices_data:
-                    # If prices_data has rows or data structure
-                    data_list = prices_data.get('rows', prices_data.get('data', []))
-                    for item in ensure_array(data_list):
-                        if item.get('ticker', '').upper() == ticker.upper():
-                            current_price = item.get('current_price', item.get('price', None))
-                            break
-            
-            current_value = 0
-            pnl = 0
-            pnl_pct = 0
-            
-            if current_price is not None:
-                current_value = quantity * current_price
-                total_current_value += current_value
-                pnl = current_value - cost_basis
-                pnl_pct = (pnl / cost_basis) * 100 if cost_basis != 0 else 0
-            else:
-                # Use avg_price as current price for calculation if unavailable
-                current_value = quantity * avg_price
-                total_current_value += current_value
-                pnl = 0  # No PnL if no current price
-                pnl_pct = 0
-            
-            # Calculate position weight
-            weight = (current_value / total_current_value) if total_current_value > 0 else 0
-            
-            pos_with_metrics = {
-                **pos,
-                "current_price": current_price,
-                "current_value": current_value,
-                "cost_basis": cost_basis,
-                "pnl": pnl,
-                "pnl_pct": pnl_pct,
-                "weight": weight
-            }
-            positions_with_pnl.append(pos_with_metrics)
-        
-        # Calculate portfolio-level metrics
-        pnl_total = total_current_value - total_cost
-        pnl_total_pct = (pnl_total / total_cost) * 100 if total_cost != 0 else 0
-        
-        return {
-            "positions": positions_with_pnl,
-            "total_cost": total_cost,
-            "total_current_value": total_current_value,
-            "total_pnl": pnl_total,
-            "total_pnl_pct": pnl_total_pct,
-            "count_positions": len(positions_with_pnl),
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "source": ["calculate_portfolio_metrics"]
-        }
-    except Exception as e:
-        print(f"Error in portfolio metrics calculation: {e}")
-        return {
-            "positions": [],
-            "total_cost": 0,
-            "total_current_value": 0,
-            "total_pnl": 0,
-            "total_pnl_pct": 0,
-            "count_positions": 0,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "source": ["calculate_portfolio_metrics", "error_fallback"],
-            "error": str(e),
-            "message": "Error calculating portfolio metrics but fallback returned to maintain never-empty contract"
-        }
+def get_commodity_data() -> pd.DataFrame:
+    """Convenience function for loading commodity data"""
+    return _load_commodity()
+
+def get_equity_forecasts_data() -> pd.DataFrame:
+    """Load equity forecasts only"""
+    df = _load_equity_final()
+    if not df.empty:
+        df['asset_type'] = 'equity'
+    return df
+
+def get_commodity_forecasts_data() -> pd.DataFrame:
+    """Load commodity forecasts only"""  
+    df = _load_commodity()
+    if not df.empty:
+        df['asset_type'] = 'commodity'
+    return df

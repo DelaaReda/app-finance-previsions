@@ -19,7 +19,12 @@ from storage.io import load_json
 import logging
 
 # Import cache service for performance optimization
-from backend.src.services.cache_service import cache_service
+try:
+    from services.cache_service import cache_service
+    from services.cache_service import cache_service as cache_service_obj
+except ImportError:  # pragma: no cover
+    cache_service = None
+    cache_service_obj = None
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +56,14 @@ def get_filtered_forecasts(
         "min_confidence": min_confidence
     }
     
-    cache_key = cache_service.get_cache_key("/api/forecasts", cache_params)
+    # Check if cache_service exists before using it
+    cache_key = None
+    if cache_service_obj and hasattr(cache_service_obj, 'get_cache_key'):
+        cache_key = cache_service_obj.get_cache_key("/api/forecasts", cache_params)
+    else:
+        # Simple cache key generation if cache_service not available
+        cache_key = f"/api/forecasts_{hash(str(cache_params))}"
+    
     logger.info(f"📥 GET /api/forecasts - Request received (cache key: {cache_key})", extra={
         "horizon": horizon,
         "asset_type": asset_type,
@@ -62,8 +74,15 @@ def get_filtered_forecasts(
         "min_confidence": min_confidence
     })
     
-    # First, try to get from cache
-    cached_result = cache_service.get("/api/forecasts", cache_params)
+    # First, try to get from cache if service exists
+    cached_result = None
+    if cache_service_obj:
+        try:
+            cached_result = cache_service_obj.get("/api/forecasts", cache_params)
+        except:
+            logger.warning("Cache service unavailable, proceeding without cache")
+            cached_result = None
+    
     if cached_result is not None:
         logger.info(f"💾 Cache HIT for /api/forecasts with {len(cached_result.get('rows', []))} rows", extra={
             "cache_key": cache_key
@@ -123,12 +142,12 @@ def get_filtered_forecasts(
         # Track initial count for logging purposes
         current_count = initial_count
         
-        if asset_type != "all":
+        if asset_type and asset_type != "all":
             filtered_rows = [row for row in filtered_rows if row.get("asset_type", row.get("type", "equity")).lower() == asset_type.lower()]
             logger.debug(f"🔍 Filtered by asset_type={asset_type}: {current_count} → {len(filtered_rows)} rows")
             current_count = len(filtered_rows)
         
-        if horizon != "all":
+        if horizon and horizon != "all":
             # Map frontend horizon values to backend values
             # If data doesn't have horizon field, default to "short" for compatibility
             horizon_mapping = {
@@ -164,7 +183,7 @@ def get_filtered_forecasts(
             filtered_rows = [row for row in filtered_rows if row.get("theme") in themes or row.get("category") in themes]
             logger.debug(f"🔍 Filtered by themes: {before_themes} → {len(filtered_rows)} rows")
         
-        # Filter by minimum confidence (Sprint 5 - Tâche 5.1)
+        # Filter by minimum confidence (Sprint 5 - Task 5.1)
         if min_confidence and min_confidence > 0:
             before_confidence = len(filtered_rows)
             filtered_rows = [
@@ -195,8 +214,8 @@ def get_filtered_forecasts(
             "initial_count": initial_count,
             "final_count": len(filtered_rows),
             "filters_applied": {
-                "asset_type": asset_type != "all",
-                "horizon": horizon != "all",
+                "asset_type": asset_type != "all" if asset_type else False,
+                "horizon": horizon != "all" if horizon else False,
                 "tickers": tickers is not None,
                 "themes": themes is not None,
                 "min_confidence": min_confidence > 0 if min_confidence else False
@@ -221,16 +240,11 @@ def get_filtered_forecasts(
         }
         
         # Cache the response for future requests (BE-007 - Memory caching)
-        cache_params = {
-            "horizon": horizon,
-            "asset_type": asset_type,
-            "sort_by": sort_by,
-            "limit": limit,
-            "tickers": tickers,
-            "themes": themes,
-            "min_confidence": min_confidence
-        }
-        cache_service.set("/api/forecasts", response_data, cache_params, ttl_seconds=300)  # 5 min cache
+        if cache_service_obj:
+            try:
+                cache_service_obj.set("/api/forecasts", response_data, cache_params, ttl_seconds=300)  # 5 min cache
+            except:
+                logger.warning("Cache service unavailable for saving, proceeding without caching")
         
         logger.info(f"✅ Returning {len(filtered_rows)} forecasts to client (cached for 300s)")
         return ok({
@@ -267,17 +281,12 @@ def get_filtered_forecasts(
             "source": ["fallback", "error_handling"]
         }
         
-        # Even in error cases, we can cache the error response to avoid repeated computations
-        cache_params = {
-            "horizon": horizon,
-            "asset_type": asset_type,
-            "sort_by": sort_by,
-            "limit": limit,
-            "tickers": tickers,
-            "themes": themes,
-            "min_confidence": min_confidence
-        }
-        cache_service.set("/api/forecasts", error_response, cache_params, ttl_seconds=60)  # 1 min cache for errors
+        # Even in error cases, we can cache the error response to avoid repeated computations if cache service available
+        if cache_service_obj:
+            try:
+                cache_service_obj.set("/api/forecasts", error_response, cache_params, ttl_seconds=60)  # 1 min cache for errors
+            except:
+                logger.warning("Cache service unavailable for saving error response")
         
         return ok({
             **error_response,

@@ -158,6 +158,7 @@ def get_dashboard_kpis(
     themes: Optional[str] = Query(None, description="Filter by themes (comma-separated)"),
     tickers: Optional[str] = Query(None, description="Filter by tickers (comma-separated)"),
 ) -> Dict[str, Any]:
+    # When invoked outside FastAPI (tests), Query(...) instances may leak through.
     if not isinstance(tickers, str):
         tickers = None
 
@@ -223,6 +224,16 @@ def get_dashboard_kpis(
     
     # Calculate high confidence percentage (for frontend display)
     high_confidence_pct = (high_conf_forecasts / total_forecasts * 100) if total_forecasts > 0 else 0.0
+    
+    # Debug logging for KPI calculation
+    logger.debug(f"📊 KPI Calculation Debug:", extra={
+        "total_forecasts": total_forecasts,
+        "high_conf_forecasts": high_conf_forecasts,
+        "high_confidence_pct": high_confidence_pct,
+        "avg_confidence": avg_confidence,
+        "threshold": HIGH_CONF_THRESHOLD,
+        "sample_confidences": [row.get("confidence", 0) for row in forecast_rows[:5]] if forecast_rows else []
+    })
     bullish_signals = sum(
         1 for row in forecast_rows if (row.get("direction") or "").lower() in {"up", "bullish", "buy"}
     )

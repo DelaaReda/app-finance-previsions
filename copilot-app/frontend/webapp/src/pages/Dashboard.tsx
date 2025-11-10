@@ -29,6 +29,8 @@ function DashboardContent() {
   // Extract KPIs with proper fallbacks
   const totalForecasts = kpis?.forecasts?.total ?? kpis?.forecasts_count ?? kpis?.total_forecasts ?? 0;
   const highConv = kpis?.forecasts?.high_confidence ?? 0;
+  // Use high_confidence_pct if available (from backend), otherwise calculate
+  const highConvPct = kpis?.forecasts?.high_confidence_pct ?? (totalForecasts > 0 ? (highConv / totalForecasts * 100) : 0);
   const newsCount = kpis?.news?.recent_count ?? 0;
   // Handle hit_rate - can be 0-1 or 0-100
   const rawHitRate = kpis?.backtests?.hit_rate ?? 0;
@@ -51,11 +53,11 @@ function DashboardContent() {
     },
     {
       label: 'Haute confiance',
-      value: `${Math.round((highConv / Math.max(totalForecasts || 1, 1)) * 100) || 0}%`,
+      value: `${Math.round(highConvPct) || 0}%`,
       detail: `${highConv.toLocaleString()} signaux`,
       accent: classes.metricAccentGreen,
       icon: <IconTrendingUp size={18} />,
-      progress: safePercent(highConv / Math.max(totalForecasts || 1, 1)),
+      progress: safePercent(highConvPct / 100),
     },
     {
       label: 'Actualités récentes',

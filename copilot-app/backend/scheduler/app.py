@@ -118,6 +118,21 @@ class JobScheduler:
         except ImportError as e:
             logger.warning(f"Could not schedule stocks prices job: {e}")
         
+        # Macro series snapshot job - daily at 6:00 AM (refresh FRED data)
+        try:
+            self.scheduler.add_job(
+                func=self._run_macro_series_snapshot_job,
+                trigger="cron",
+                hour=6,
+                minute=0,  # Daily at 6:00 AM
+                id='macro_series_snapshot_job',
+                name='Refresh macro series from FRED',
+                replace_existing=True
+            )
+            logger.info("Scheduled macro series snapshot job daily at 6:00 AM")
+        except Exception as e:
+            logger.warning(f"Could not schedule macro series snapshot job: {e}")
+        
         # Macro ingest job - daily at 0:30 AM
         try:
             from backend.jobs.macro_ingest import run_macro_ingest_job
@@ -390,6 +405,72 @@ class JobScheduler:
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             save_json("job_stocks_prices", job_metadata, source=["scheduler", "stocks_prices", "error"])
+    
+    def _run_macro_series_snapshot_job(self):
+        """Run macro series snapshot job with error handling and logging"""
+        try:
+            import subprocess
+            import sys
+            from pathlib import Path
+            
+            backend_root = Path(__file__).resolve().parents[1]
+            script_path = backend_root / "jobs" / "macro_series_snapshot.py"
+            
+            if not script_path.exists():
+                logger.warning(f"Macro series snapshot script not found at {script_path}")
+                return
+            
+            logger.info("Starting macro series snapshot job...")
+            start_time = datetime.utcnow()
+            
+            # Run the script
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes max
+            )
+            
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Save job metadata
+            job_metadata = {
+                "job_id": "macro_series_snapshot_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success" if result.returncode == 0 else "failed",
+                "return_code": result.returncode,
+                "stdout": result.stdout[-500:] if result.stdout else None,
+                "stderr": result.stderr[-500:] if result.stderr else None
+            }
+            
+            save_json("job_macro_series_snapshot", job_metadata, source=["scheduler", "macro_series_snapshot"])
+            
+            if result.returncode == 0:
+                logger.info(f"Macro series snapshot job completed successfully in {duration:.2f}s")
+            else:
+                logger.warning(f"Macro series snapshot job completed with code {result.returncode} in {duration:.2f}s")
+        except subprocess.TimeoutExpired:
+            logger.error("Macro series snapshot job timed out after 5 minutes")
+            job_metadata = {
+                "job_id": "macro_series_snapshot_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "timeout",
+                "error": "Job timed out after 5 minutes",
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_macro_series_snapshot", job_metadata, source=["scheduler", "macro_series_snapshot", "error"])
+        except Exception as e:
+            logger.error(f"Macro series snapshot job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "macro_series_snapshot_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_macro_series_snapshot", job_metadata, source=["scheduler", "macro_series_snapshot", "error"])
     
     def _run_macro_ingest_job(self):
         """Run macro ingest job with error handling and logging"""

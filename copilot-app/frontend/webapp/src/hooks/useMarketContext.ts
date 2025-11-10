@@ -61,8 +61,8 @@ export function useMarketContext() {
       }
       return response.data;
     },
-    staleTime: 5 * 60_000, // 5 minutes
-    refetchInterval: 5 * 60_000,
+    staleTime: 2 * 60_000, // 2 minutes - shorter for more dynamic updates
+    refetchInterval: 2 * 60_000, // Refresh every 2 minutes to keep regime updated
     retry: 1,
   });
 }

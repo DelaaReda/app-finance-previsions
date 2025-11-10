@@ -103,7 +103,9 @@ def get_filtered_macro_series(
         filtered_response = _apply_macro_filters(data_payload, ids, limit, window, format_resp, all_series)
         
         # Add freshness and metadata
-        filtered_response["freshness"] = macro_data.get("freshness") or macro_data.get("last_update")
+        freshness = macro_data.get("freshness") or macro_data.get("last_update") or macro_data.get("generated_at")
+        filtered_response["freshness"] = freshness
+        filtered_response["last_updated"] = freshness  # Alias for frontend compatibility
         filtered_response["generated_at"] = datetime.utcnow().isoformat()
         filtered_response["source"] = macro_data.get("source", ["macro_pipeline", "fred"])
         

@@ -3,9 +3,11 @@
  * Displays real macro economic indicators
  */
 
-import { Card, Stack, Title, Text, SimpleGrid, Badge, Group, Skeleton, Alert, Button } from '@mantine/core';
-import { IconChartLine, IconInfoCircle, IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
+import { Card, Stack, Title, Text, SimpleGrid, Badge, Group, Skeleton, Alert, Button, ActionIcon } from '@mantine/core';
+import { IconChartLine, IconInfoCircle, IconTrendingUp, IconTrendingDown, IconRefresh } from '@tabler/icons-react';
 import { RingProgress } from '@mantine/core';
+import { formatDistanceToNow } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useApi } from '@/hooks/useApi';
 import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
 import styles from './MacroWidget.module.css';
@@ -139,9 +141,28 @@ export function MacroWidget() {
   return (
     <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard}`}>
       <Stack gap="md">
-        <Group gap="xs">
-          <IconChartLine size={24} color="#3B82F6" />
-          <Title order={4}>Macro Indicators</Title>
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <IconChartLine size={24} color="#3B82F6" />
+            <div>
+              <Title order={4}>Indicateurs Macroéconomiques</Title>
+              {data?.data?.last_updated || data?.last_updated ? (
+                <Text size="xs" c="dimmed" mt={4}>
+                  Dernière mise à jour: {formatDistanceToNow(new Date(data?.data?.last_updated || data?.last_updated), { addSuffix: true, locale: fr })}
+                </Text>
+              ) : null}
+            </div>
+          </Group>
+          <ActionIcon 
+            size="sm" 
+            variant="light" 
+            color="blue" 
+            onClick={() => refetch()} 
+            loading={isLoading}
+            aria-label="Rafraîchir les données macro"
+          >
+            <IconRefresh size={16} />
+          </ActionIcon>
         </Group>
 
         {isLoading && (

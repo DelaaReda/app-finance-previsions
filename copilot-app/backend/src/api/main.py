@@ -408,12 +408,61 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include portfolios routes: {e}")
 
+    # Include forecasts routes
+    try:
+        from api.routes.forecasts import forecasts_router
+        app.include_router(forecasts_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include forecasts routes: {e}")
+
+    # Include forecasts routes
+    try:
+        from api.routes.forecasts import forecasts_router
+        app.include_router(forecasts_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include forecasts routes: {e}")
+
     # Include analytics routes
     try:
         from api.routes.analytics import router as analytics_router
         app.include_router(analytics_router)
     except ImportError as e:
         print(f"⚠️  Failed to include analytics routes: {e}")
+
+    # Include stocks routes (top, universe, etc.)
+    try:
+        from api.routes.stocks import stocks_router
+        app.include_router(stocks_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include stocks routes: {e}")
+
+    # Include judge routes (LLM verdicts)
+    try:
+        from api.routes.judge import judge_router
+        app.include_router(judge_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include judge routes: {e}")
+
+    # Include forecasts routes
+    try:
+        from api.routes.forecasts import forecasts_router
+        app.include_router(forecasts_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include forecasts routes: {e}")
+
+    # Include judge routes
+    try:
+        from api.routes.judge import router as judge_router
+        app.include_router(judge_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include judge routes: {e}")
+
+    # Include stocks routes
+    try:
+        from api.routes.stocks import router as stocks_router
+        app.include_router(stocks_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include stocks routes: {e}")
 
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")

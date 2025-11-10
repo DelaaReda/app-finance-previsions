@@ -57,6 +57,28 @@ def get_filtered_news(
         data_payload = news_data.get("data", news_data.get("payload", news_data))
         all_articles = data_payload.get("articles", data_payload if isinstance(data_payload, list) else [])
         
+        # Remove duplicates by URL (fix for issue #5)
+        seen_urls = set()
+        unique_articles = []
+        for article in all_articles:
+            if not isinstance(article, dict):
+                continue
+            url = article.get("url") or article.get("link")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_articles.append(article)
+            elif not url:
+                # Keep articles without URL but with unique title+date
+                article_id = f"{article.get('title', '')}_{article.get('pubDate', '')}"
+                if article_id not in seen_urls:
+                    seen_urls.add(article_id)
+                    unique_articles.append(article)
+        
+        # Filter out articles with empty URLs (optional - can be enabled if needed)
+        # unique_articles = [a for a in unique_articles if a.get("url") or a.get("link")]
+        
+        all_articles = unique_articles
+        
         # Apply filtering
         filtered_articles = all_articles
 
