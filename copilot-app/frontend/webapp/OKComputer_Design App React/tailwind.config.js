@@ -1,46 +1,36 @@
-import type { Config } from 'tailwindcss'
-
-const config: Config = {
+/** @type {import('tailwindcss').Config} */
+export default {
   content: [
-    './index.html',
-    './src/**/*.{js,ts,jsx,tsx}',
-    // Path to Tremor module
-    './node_modules/@tremor/**/*.{js,ts,jsx,tsx}',
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
       colors: {
-        accent: {
-          DEFAULT: '#3b82f6',
-          50: '#eef2ff',
-          100: '#e6edff',
-          200: '#cbd7ff',
-        },
-        teal: {
-          DEFAULT: '#14b8a6'
-        },
-        primary: 'var(--accent)',
-        success: 'var(--accent-2)',
-        warning: 'var(--accent-3)',
-        danger: 'var(--accent-4)',
         bg: 'var(--bg)',
+        surface: 'var(--surface)',
+        'surface-elevated': 'var(--surface-elevated)',
         text: 'var(--text)',
         'text-secondary': 'var(--text-secondary)',
         muted: 'var(--muted)',
+        primary: 'var(--accent)',
+        accent: 'var(--accent)',
+        'accent-2': 'var(--accent-2)',
+        'accent-3': 'var(--accent-3)',
+        'accent-4': 'var(--accent-4)',
+        success: 'var(--accent-2)',
+        warning: 'var(--accent-3)',
+        danger: 'var(--accent-4)',
         border: 'var(--border-color)',
-        surface: {
-          DEFAULT: 'var(--surface)',
-          elevated: 'var(--surface-elevated)'
-        },
         glass: 'var(--glass-bg)',
         'glass-border': 'var(--glass-border)',
         'glass-shadow': 'var(--glass-shadow)',
         'metric-bg': 'var(--metric-bg)',
         'metric-border': 'var(--metric-border)',
-        bullish: 'var(--bullish-color)',
-        bearish: 'var(--bearish-color)',
-        neutral: 'var(--neutral-color)',
-        // Professional financial color palette (from OKComputer)
+        'bullish': 'var(--bullish-color)',
+        'bearish': 'var(--bearish-color)',
+        'neutral': 'var(--neutral-color)',
+        // Professional financial color palette
         'primary-50': 'var(--primary-50)',
         'primary-100': 'var(--primary-100)',
         'primary-200': 'var(--primary-200)',
@@ -82,11 +72,11 @@ const config: Config = {
         'danger-800': 'var(--danger-800)',
         'danger-900': 'var(--danger-900)',
       },
-      fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-      },
       borderRadius: {
         'xl': 'var(--radius)',
+      },
+      fontFamily: {
+        'sans': ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',
@@ -127,13 +117,7 @@ const config: Config = {
         'metric': '0 4px 12px rgba(0, 0, 0, 0.1)',
         'metric-hover': '0 8px 24px rgba(0, 0, 0, 0.2)',
       },
-      container: {
-        center: true,
-        padding: '1rem',
-      }
     },
   },
   plugins: [],
 }
-
-export default config

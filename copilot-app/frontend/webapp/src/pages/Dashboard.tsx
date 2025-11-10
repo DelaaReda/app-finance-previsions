@@ -1,197 +1,529 @@
-import { Stack, Title, Text, Group, Alert, Badge, Skeleton } from '@mantine/core';
-import { IconSparkles, IconInfoCircle, IconRadar2, IconTrendingUp, IconNews, IconActivity } from '@tabler/icons-react';
-import HealthBar from '@/components/widgets/HealthBar';
-import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
-import classes from './dashboard.module.css';
+import { useMemo, useState } from 'react';
+import {
+  IconRefresh,
+  IconDownload,
+  IconArrowRight,
+  IconSparkles,
+  IconChartBar,
+  IconTrendingUp,
+  IconActivity,
+  IconNews,
+  IconGauge,
+  IconAlertCircle,
+} from '@tabler/icons-react';
 import { useDashboardKPIs } from '@/hooks/useDashboardKPIs';
-
-// NOTE: These components MUST be non-lazy because they use useAdaptiveLayout hook
-// which requires AdaptiveLayoutProvider context. Lazy loading breaks context access.
-// Import directly instead of lazy loading for context-dependent components.
-import { RegimeBadgeAdaptive } from '@/components/adaptive/RegimeBadgeAdaptive';
-import { LayoutModeToggle } from '@/components/adaptive/LayoutModeToggle';
+import { useForecasts } from '@/hooks/useForecasts';
+import { useApi } from '@/hooks/useApi';
+import { ensureArray } from '@/lib/safe';
+import { MetricCard, MetricGrid } from '@/features/okc/components/MetricCard';
+import { Button } from '@/features/okc/components/Button';
+import { FinancialChart, ChartDataPoint } from '@/features/okc/components/FinancialChart';
+import { Sparkline } from '@/features/okc/components/Sparkline';
+import { RadialMetric } from '@/features/okc/components/RadialMetric';
+import { Card, CardHeader, CardTitle, CardContent } from '@/features/okc/components/Card';
+import { ForecastCard, ForecastInsight } from '@/features/okc/components/ForecastCard';
 import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
+import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
+import { EmptyState } from '@/components/ui/EmptyState';
 
-/**
- * Dashboard - Adaptive Layout
- * 
- * Dashboard that automatically adapts its layout based on market regime.
- * Surfaces the most relevant widgets first according to market context.
- * 
- * Author: ELENA-39
- * Task: FC-INT-026
- * Optimized: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
- * Task: TASK-1.3 - Lazy loading for initial load optimization
- */
+const PERIODS = ['24h', '7d', '30d', '90d'] as const;
+type Period = typeof PERIODS[number];
+
+type MacroSeriesPoint = {
+  id?: string;
+  series_id?: string;
+  name?: string;
+  points?: { date?: string; value?: number }[];
+  data?: { date?: string; value?: number }[];
+};
+
+function normalizeDirection(direction?: string): 'up' | 'down' | 'neutral' {
+  if (!direction) return 'neutral';
+  const normalized = direction.toLowerCase();
+  if (['up', 'bullish', 'haussier'].includes(normalized)) return 'up';
+  if (['down', 'bearish', 'baissier'].includes(normalized)) return 'down';
+  return 'neutral';
+}
+
+function extractMacroSeries(raw: any): Record<string, number> {
+  if (!raw) return {};
+  const payload: MacroSeriesPoint[] = Array.isArray(raw?.series)
+    ? raw.series
+    : Array.isArray(raw?.data)
+    ? raw.data
+    : Array.isArray(raw)
+    ? raw
+    : [];
+
+  const values: Record<string, number> = {};
+  payload.forEach((series) => {
+    const points = Array.isArray(series.points) ? series.points : Array.isArray(series.data) ? series.data : [];
+    if (points.length === 0) return;
+    const lastPoint = points[points.length - 1];
+    const value = lastPoint?.value ?? (Array.isArray(lastPoint) ? lastPoint[1] : undefined);
+    const key = series.id ?? series.series_id ?? series.name;
+    if (key && typeof value === 'number') {
+      values[key] = value;
+    }
+  });
+  return values;
+}
+
 function DashboardContent() {
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>('7d');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const { data: kpis, isLoading: kpiLoading } = useDashboardKPIs();
+  const forecastsQuery = useForecasts({ limit: 24, horizon: selectedPeriod === '24h' ? 'short' : undefined });
+  const macroQuery = useApi<any>('/api/macro/series');
+  const newsQuery = useApi<any>('/api/news/feed?limit=4');
 
-  // Extract KPIs with proper fallbacks
-  const totalForecasts = kpis?.forecasts?.total ?? kpis?.forecasts_count ?? kpis?.total_forecasts ?? 0;
-  const highConv = kpis?.forecasts?.high_confidence ?? 0;
-  // Use high_confidence_pct if available (from backend), otherwise calculate
-  const highConvPct = kpis?.forecasts?.high_confidence_pct ?? (totalForecasts > 0 ? (highConv / totalForecasts * 100) : 0);
-  const newsCount = kpis?.news?.recent_count ?? 0;
-  // Handle hit_rate - can be 0-1 or 0-100
-  const rawHitRate = kpis?.backtests?.hit_rate ?? 0;
-  const hitRate = rawHitRate > 1 ? rawHitRate / 100 : rawHitRate;
-  const tickersTracked = kpis?.tickers ?? kpis?.tickers_tracked ?? 0;
+  const forecastRows = ensureArray(forecastsQuery.data?.rows);
+  const macroValues = useMemo(() => extractMacroSeries(macroQuery.data), [macroQuery.data]);
+  const newsItems = useMemo(() => {
+    const raw = newsQuery.data as any;
+    if (!raw) return [] as Array<{ id: string; title: string; source?: string; url?: string; date?: string }>;
+    const articles = Array.isArray(raw?.articles)
+      ? raw.articles
+      : Array.isArray(raw?.rows)
+      ? raw.rows
+      : Array.isArray(raw?.data?.articles)
+      ? raw.data.articles
+      : Array.isArray(raw)
+      ? raw
+      : [];
+    return articles.map((article: any, index: number) => ({
+      id: article.id ?? `${article.ticker ?? 'article'}-${index}`,
+      title: article.title ?? article.headline ?? 'Sans titre',
+      source: article.source ?? article.publisher ?? article.sourceDomain,
+      url: article.url ?? article.link ?? article.href,
+      date: article.pubDate ?? article.published_at ?? article.date,
+    }));
+  }, [newsQuery.data]);
 
-  const safePercent = (value: number) => {
-    if (!Number.isFinite(value)) return 0;
-    return Math.max(0, Math.min(1, value));
+  const metrics = useMemo(() => {
+    const totalForecasts = kpis?.forecasts?.total ?? kpis?.total_forecasts ?? 0;
+    const highConfidence = kpis?.forecasts?.high_confidence ?? 0;
+    const avgConfidence = kpis?.forecasts?.avg_confidence ?? 0;
+    const newsCount = kpis?.news?.recent_count ?? 0;
+    const hitRateRaw = kpis?.backtests?.hit_rate ?? 0;
+    const hitRate = hitRateRaw > 1 ? hitRateRaw : hitRateRaw * 100;
+
+    return [
+      {
+        title: 'Prévisions actives',
+        value: totalForecasts,
+        icon: <IconChartBar size={18} />,
+        description: `${kpis?.tickers_tracked ?? 0} tickers suivis`,
+      },
+      {
+        title: 'Confiance moyenne',
+        value: avgConfidence * 100,
+        percentage: true,
+        icon: <IconTrendingUp size={18} />,
+        description: `${highConfidence} signaux > 70%`,
+      },
+      {
+        title: 'Actualités fraîches',
+        value: newsCount,
+        icon: <IconNews size={18} />,
+        description: 'Dernières 60 minutes',
+      },
+      {
+        title: 'Taux de réussite',
+        value: hitRate,
+        percentage: true,
+        icon: <IconActivity size={18} />,
+        description: kpis?.backtests?.status ?? 'Surveillance en direct',
+      },
+    ];
+  }, [kpis]);
+
+  const performanceChartData: ChartDataPoint[] = useMemo(() => {
+    return forecastRows.slice(0, 12).map((row) => ({
+      name: row.ticker ?? row.symbol ?? '—',
+      expected: Number((((row.expected_return ?? 0) * 100) || row.expected_return_pct || 0).toFixed(2)),
+      confidence: Math.round((row.confidence ?? 0) * 100),
+    }));
+  }, [forecastRows]);
+
+  const directionDistribution = useMemo(() => {
+    const counts = { Haussier: 0, Baissier: 0, Neutre: 0 };
+    forecastRows.forEach((row) => {
+      const dir = normalizeDirection(row.direction);
+      if (dir === 'up') counts.Haussier += 1;
+      else if (dir === 'down') counts.Baissier += 1;
+      else counts.Neutre += 1;
+    });
+    return Object.entries(counts)
+      .filter(([, value]) => value > 0)
+      .map(([name, value]) => ({ name, value }));
+  }, [forecastRows]);
+
+  const forecastInsights: ForecastInsight[] = useMemo(() => {
+    return forecastRows.slice(0, 6).map((row, index) => ({
+      id: `${row.ticker ?? 'forecast'}-${index}`,
+      ticker: row.ticker ?? row.symbol ?? 'N/A',
+      horizon: row.horizon ?? 'Horizon mixte',
+      direction: normalizeDirection(row.direction),
+      confidence: row.confidence,
+      expectedReturn:
+        typeof row.expected_return === 'number'
+          ? row.expected_return
+          : typeof row.expected_return_pct === 'number'
+          ? row.expected_return_pct / 100
+          : undefined,
+      reason: row.explanation ?? row.reason,
+      riskFactors: row.risk_factors ?? row.factors ?? [],
+      lastUpdated: row.timestamp ?? row.forecasted_at ?? row.updatedAt,
+    }));
+  }, [forecastRows]);
+
+  const macroSummary = useMemo(() => {
+    const map = {
+      CPIAUCSL: { label: 'CPI' },
+      UNRATE: { label: 'Chômage' },
+      DGS10: { label: 'T-Bond 10Y' },
+      DGS2: { label: 'T-Bond 2Y' },
+      VIXCLS: { label: 'Indice VIX' },
+    } as Record<string, { label: string }>;
+    return Object.entries(macroValues)
+      .filter(([key]) => key in map)
+      .map(([key, value]) => ({ id: key, label: map[key].label, value }));
+  }, [macroValues]);
+
+  const macroSeriesMap = useMemo(() => {
+    const raw = macroQuery.data as any;
+    const arr: any[] = Array.isArray(raw?.series)
+      ? raw.series
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : Array.isArray(raw)
+      ? raw
+      : [];
+    const byId: Record<string, number[]> = {};
+    arr.forEach((s) => {
+      const id = s.id ?? s.series_id ?? s.name;
+      const pts = (Array.isArray(s.points) ? s.points : Array.isArray(s.data) ? s.data : []).map((p: any) =>
+        typeof p?.value === 'number' ? p.value : Array.isArray(p) ? p[1] : undefined
+      );
+      if (id && pts.length > 0) byId[id] = pts.slice(-20).filter((v: any) => typeof v === 'number');
+    });
+    return byId;
+  }, [macroQuery.data]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.allSettled([
+      forecastsQuery.refetch(),
+      macroQuery.refetch(),
+      newsQuery.refetch(),
+    ]);
+    setIsRefreshing(false);
   };
 
-  const metrics = [
-    {
-      label: 'Prévisions actives',
-      value: totalForecasts.toLocaleString(),
-      detail: `${tickersTracked} tickers suivis`,
-      accent: classes.metricAccentBlue,
-      icon: <IconRadar2 size={18} />,
-      progress: safePercent(totalForecasts / 500),
-    },
-    {
-      label: 'Haute confiance',
-      value: `${Math.round(highConvPct) || 0}%`,
-      detail: `${highConv.toLocaleString()} signaux`,
-      accent: classes.metricAccentGreen,
-      icon: <IconTrendingUp size={18} />,
-      progress: safePercent(highConvPct / 100),
-    },
-    {
-      label: 'Actualités récentes',
-      value: newsCount.toLocaleString(),
-      detail: 'Dernières 60 min',
-      accent: classes.metricAccentPurple,
-      icon: <IconNews size={18} />,
-      progress: safePercent(newsCount / 80),
-    },
-    {
-      label: 'Taux de réussite',
-      value: `${Math.round((hitRate > 1 ? hitRate : hitRate * 100) || 0)}%`,
-      detail: kpis?.backtests?.status ?? 'Surveillance en direct',
-      accent: classes.metricAccentOrange,
-      icon: <IconActivity size={18} />,
-      progress: safePercent(hitRate > 1 ? hitRate / 100 : hitRate),
-    },
-  ];
-
   return (
-    <div className={classes.dashboardRoot}>
-      <div className={classes.gridOverlay} aria-hidden />
-      <div className={classes.ambientOrbs} aria-hidden>
-        <span className={`${classes.orb} ${classes.orbOne}`} />
-        <span className={`${classes.orb} ${classes.orbTwo}`} />
-        <span className={`${classes.orb} ${classes.orbThree}`} />
-      </div>
-      <Stack data-testid="dashboard-root" gap="xl" className={classes.inner}>
-        {/* Header */}
-        <div className={classes.hero}>
-          <Stack gap="lg">
-            <Group justify="space-between" align="flex-start">
-              <div>
-                <Group gap="xs" align="center" className={classes.heroHeading}>
-                  <div className={classes.sparkleBadge}>
-                    <IconSparkles size={20} />
-                  </div>
-                  <Title order={1} size="h2">Tableau de Bord Adaptatif</Title>
-                </Group>
-                <Text c="gray.3" size="sm" mt={4}>
-                  Mise en page intelligente qui s'adapte aux conditions de marché en temps réel
-                </Text>
+    <div className="min-h-screen bg-bg text-text">
+      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-6 sm:space-y-8 lg:space-y-10">
+        <div className="bg-glass border border-glass-border rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 text-sm text-primary uppercase tracking-[0.3em]">
+                <IconSparkles size={16} />
+                Finance Copilot
               </div>
-
-              <Stack gap={6} align="flex-end">
-                <Badge className={classes.liveBadge} radius="xl" size="lg" variant="light" color="green">
-                  Données en direct
-                </Badge>
-                <Group gap="md" align="center">
-                  <RegimeBadgeAdaptive />
-                  <LayoutModeToggle />
-                </Group>
-              </Stack>
-            </Group>
-
-            {/* Info Alert */}
-            <Alert
-              color="blue"
-              variant="light"
-              icon={<IconInfoCircle size={20} />}
-              classNames={{ root: classes.alertGlass }}
-            >
-              <Group gap="xs" align="center">
-                <Badge size="sm" color="blue" variant="dot">Mode Adaptatif Actif</Badge>
-                <Text size="sm" c="dimmed">
-                  La mise en page s'ajuste automatiquement selon le régime de marché détecté. 
-                  Passez en mode Manuel pour verrouiller la mise en page actuelle.
-                </Text>
-              </Group>
-            </Alert>
-
-            <div className={classes.metricRow}>
-              {(kpiLoading ? Array.from({ length: 4 }) : metrics).map((metric, idx) => (
-                <div key={idx} className={`${classes.metricCard} ${!kpiLoading ? metric.accent : ''}`}>
-                  {kpiLoading ? (
-                    <Stack gap={6}>
-                      <Skeleton height={18} width="60%" radius="xl" />
-                      <Skeleton height={28} width="50%" />
-                      <Skeleton height={8} radius="xl" />
-                      <Skeleton height={12} width="70%" />
-                    </Stack>
-                  ) : (
-                    <>
-                      <Group gap={8} align="center" className={classes.metricHeader}>
-                        <div className={classes.metricIcon}>{metric.icon}</div>
-                        <Text size="xs" c="gray.4" fw={600} tt="uppercase" className={classes.metricLabel}>
-                          {metric.label}
-                        </Text>
-                      </Group>
-                      <Group align="flex-end" gap={6}>
-                        <Text size="xl" fw={700} className={classes.metricValue}>
-                          {metric.value}
-                        </Text>
-                      </Group>
-                      <div className={classes.metricProgress}>
-                        <span
-                          className={classes.progressFill}
-                          style={{ width: `${Math.round((metric.progress ?? 0) * 100)}%` }}
-                        />
-                      </div>
-                      <Text size="xs" c="gray.4">{metric.detail}</Text>
-                    </>
-                  )}
-                </div>
-              ))}
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold gradient-text">Command center temps réel</h1>
+              <p className="text-muted text-sm sm:text-base">
+                Synthèse intelligente des prévisions hybrides, signaux de risques et régimes macro.
+              </p>
+              {kpis?.system?.last_forecast_update && (
+                <p className="text-xs text-muted">
+                  Dernière mise à jour forecasts : {new Date(kpis.system.last_forecast_update).toLocaleString('fr-FR')}
+                </p>
+              )}
             </div>
-          </Stack>
-        </div>
 
-        {/* System Health Bar */}
-        <div className={classes.sectionCard}>
-          <HealthBar />
-        </div>
-
-        {/* Dynamic Widget Grid - Adapts to market context */}
-        <div className={classes.widgetSection}>
-          <div className={classes.widgetSectionHeader}>
-            <Title order={3} size="h4" fw={600} c="gray.1">
-              Mise en page adaptative
-            </Title>
-            <Text size="sm" c="gray.5" mt={4}>
-              Les widgets se réorganisent automatiquement selon la confiance du régime de marché
-            </Text>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-1 sm:gap-2 bg-surface rounded-full border border-border p-1 overflow-x-auto">
+                {PERIODS.map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setSelectedPeriod(period)}
+                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-full transition-all whitespace-nowrap ${
+                      selectedPeriod === period
+                        ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                        : 'text-muted hover:text-text hover:bg-surface-elevated'
+                    }`}
+                  >
+                    {period}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRefresh}
+                  loading={isRefreshing || forecastsQuery.isFetching}
+                  leftIcon={<IconRefresh size={16} />}
+                  className="flex-1 sm:flex-none"
+                >
+                  <span className="hidden sm:inline">Rafraîchir</span>
+                  <span className="sm:hidden">Raf.</span>
+                </Button>
+                <Button variant="ghost" size="sm" leftIcon={<IconDownload size={16} />} className="flex-1 sm:flex-none">
+                  <span className="hidden sm:inline">Exporter</span>
+                  <span className="sm:hidden">Exp.</span>
+                </Button>
+              </div>
+            </div>
           </div>
-          <DynamicWidgetGrid />
         </div>
-      </Stack>
+
+        <MetricGrid>
+          {metrics.map((metric) => (
+            <MetricCard key={metric.title} {...metric} />
+          ))}
+        </MetricGrid>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+            {performanceChartData.length > 0 ? (
+              <FinancialChart
+                data={performanceChartData}
+                type="bar"
+                title="Score de confiance vs rendement attendu"
+                colors={['#3b82f6', '#10b981']}
+              />
+            ) : (
+              <Card>
+                <EmptyState
+                  title="Aucun graphique disponible"
+                  description="Les données de performance seront affichées une fois les prévisions chargées."
+                  action={{
+                    label: 'Rafraîchir',
+                    onClick: handleRefresh,
+                  }}
+                />
+              </Card>
+            )}
+            {directionDistribution.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribution des directions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FinancialChart data={directionDistribution} type="pie" colors={['#10b981', '#ef4444', '#6366f1']} height={260} />
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribution des directions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <EmptyState
+                    title="Aucune distribution disponible"
+                    description="La distribution des directions sera affichée une fois les prévisions chargées."
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+          <div className="space-y-4 sm:space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Indicateurs Macro</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {macroQuery.isLoading && (
+                  <div className="py-8">
+                    <p className="text-sm text-muted text-center">Chargement des séries…</p>
+                  </div>
+                )}
+                {macroQuery.error && (
+                  <EmptyState
+                    title="Erreur de chargement"
+                    description={macroQuery.error}
+                    icon={<IconAlertCircle size={32} className="text-danger" />}
+                    action={{
+                      label: 'Réessayer',
+                      onClick: () => macroQuery.refetch(),
+                    }}
+                  />
+                )}
+                {!macroQuery.isLoading && !macroQuery.error && (
+                  <>
+                    {macroSummary.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {macroSummary.map((indicator) => {
+                          const val = Number(indicator.value || 0);
+                          const spark = macroSeriesMap[indicator.id] ?? [];
+                          let percent: number | undefined = undefined;
+                          let badge: { label: string; color?: string } | undefined;
+                          if (indicator.id === 'VIXCLS') {
+                            percent = Math.max(0, Math.min(100, ((val - 10) / 30) * 100));
+                            badge = { label: val < 15 ? 'low' : val < 25 ? 'moderate' : 'high', color: val < 15 ? 'teal' : val < 25 ? 'yellow' : 'red' };
+                          } else if (indicator.id === 'UNRATE') {
+                            percent = Math.max(0, Math.min(100, ((val - 3) / 5) * 100));
+                            badge = { label: val < 4 ? 'low' : val < 6 ? 'moderate' : 'high', color: val < 4 ? 'teal' : val < 6 ? 'yellow' : 'red' };
+                          } else if (indicator.id === 'DGS10' || indicator.id === 'DGS2') {
+                            percent = Math.max(0, Math.min(100, ((val - 1) / 5) * 100));
+                            badge = { label: val < 3 ? 'low' : val < 5 ? 'moderate' : 'high', color: val < 3 ? 'teal' : val < 5 ? 'yellow' : 'red' };
+                          }
+                          return (
+                            <div key={indicator.id} className="flex items-center justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <RadialMetric
+                                  label={indicator.label}
+                                  value={val}
+                                  percent={percent}
+                                  badge={badge}
+                                  color={badge?.color === 'red' ? 'red' : badge?.color === 'yellow' ? 'yellow' : 'teal'}
+                                />
+                              </div>
+                              {spark.length > 0 && <Sparkline data={spark} className="w-24 hidden sm:block" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <EmptyState
+                        title="Aucune donnée macro"
+                        description="Les indicateurs macroéconomiques seront disponibles une fois chargés."
+                        action={{
+                          label: 'Rafraîchir',
+                          onClick: () => macroQuery.refetch(),
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Focus news</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {newsQuery.isLoading && (
+                  <div className="py-8">
+                    <p className="text-sm text-muted text-center">Chargement des actualités…</p>
+                  </div>
+                )}
+                {newsQuery.error && (
+                  <EmptyState
+                    title="Erreur de chargement"
+                    description={newsQuery.error}
+                    icon={<IconAlertCircle size={32} className="text-danger" />}
+                    action={{
+                      label: 'Réessayer',
+                      onClick: () => newsQuery.refetch(),
+                    }}
+                  />
+                )}
+                {!newsQuery.isLoading && !newsQuery.error && (
+                  <>
+                    {newsItems.length > 0 ? (
+                      <ul className="space-y-2 sm:space-y-3">
+                        {newsItems.map((article) => (
+                          <li key={article.id} className="border border-border rounded-lg p-3 hover:border-primary/40 hover:bg-surface-elevated/30 transition-all">
+                            <a href={article.url ?? '#'} target="_blank" rel="noreferrer" className="text-sm font-semibold text-text flex items-start gap-2 group">
+                              <span className="flex-1 group-hover:text-primary transition-colors">{article.title}</span>
+                              <IconArrowRight size={14} className="mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+                            <p className="text-xs text-muted mt-1.5">
+                              {article.source?.toUpperCase()} • {article.date ? new Date(article.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <EmptyState
+                        title="Pas d'actualité récente"
+                        description="Les actualités financières seront affichées une fois chargées."
+                        action={{
+                          label: 'Rafraîchir',
+                          onClick: () => newsQuery.refetch(),
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div>
+              <p className="text-xs sm:text-sm uppercase tracking-[0.3em] text-muted">Prévisions hybrides</p>
+              <h2 className="text-xl sm:text-2xl font-semibold text-text">Top signaux surveillés</h2>
+            </div>
+            <span className="text-xs sm:text-sm text-muted flex items-center gap-2">
+              <IconGauge size={16} /> {forecastRows.length} prévisions chargées
+            </span>
+          </div>
+          {forecastsQuery.isLoading && (
+            <div className="py-12">
+              <p className="text-sm text-muted text-center">Chargement des prévisions…</p>
+            </div>
+          )}
+          {forecastsQuery.error instanceof Error && (
+            <Card>
+              <EmptyState
+                title="Erreur de chargement"
+                description={forecastsQuery.error.message}
+                icon={<IconAlertCircle size={32} className="text-danger" />}
+                action={{
+                  label: 'Réessayer',
+                  onClick: () => forecastsQuery.refetch(),
+                }}
+              />
+            </Card>
+          )}
+          {!forecastsQuery.isLoading && !forecastsQuery.error && (
+            <>
+              {forecastInsights.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {forecastInsights.map((forecast) => (
+                    <ForecastCard key={forecast.id} forecast={forecast} />
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <EmptyState
+                    title="Aucune prévision disponible"
+                    description="Les prévisions seront affichées une fois générées."
+                    action={{
+                      label: 'Rafraîchir',
+                      onClick: handleRefresh,
+                    }}
+                  />
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="space-y-4 sm:space-y-6">
+          <div>
+            <p className="text-xs sm:text-sm uppercase tracking-[0.3em] text-muted">Widgets adaptatifs</p>
+            <h2 className="text-xl sm:text-2xl font-semibold text-text">Vue complète Finance Copilot</h2>
+          </div>
+          <Card variant="glass" hoverable={false}>
+            <CardContent className="p-4 sm:p-6">
+              <DynamicWidgetGrid />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
 
-/**
- * Dashboard with Adaptive Layout Provider
- */
 export default function Dashboard() {
   return (
     <AdaptiveLayoutProvider>

@@ -107,7 +107,6 @@ export function PerformanceGauge({
               position: 'absolute',
               top: '50%',
               left: '50%',
-              transform: 'translate(-50%, -50%)',
               width: '4px',
               height: `${size * 0.3}px`,
               backgroundColor: color,
@@ -140,4 +139,3 @@ export function PerformanceGauge({
     </Card>
   );
 }
-

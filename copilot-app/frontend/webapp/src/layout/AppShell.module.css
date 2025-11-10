@@ -31,3 +31,19 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Responsive main container for AppShell */
+.mainContainer {
+  width: 100%;
+  min-height: 100vh;
+  padding-inline: clamp(12px, 4vw, 32px);
+  padding-block: clamp(16px, 4vh, 32px);
+  margin: 0 auto;
+  max-width: min(1280px, 100%);
+}
+
+@media (min-width: 1440px) {
+  .mainContainer {
+    max-width: 1400px; /* wider desktops */
+  }
+}

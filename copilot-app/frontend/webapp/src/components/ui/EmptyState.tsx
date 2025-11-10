@@ -1,73 +1,41 @@
-/**
- * EmptyState - Composant réutilisable pour états vides
- * Design professionnel avec icône, message et CTA
- */
-
-import { Card, Stack, Text, Title, Button, Group } from '@mantine/core';
-import { IconRefresh } from '@tabler/icons-react';
-import type { ReactNode } from 'react';
+import { ReactNode } from 'react';
+import { IconInbox, IconRefresh } from '@tabler/icons-react';
+import { Button } from '@/features/okc/components/Button';
+import { cn } from '@/features/okc/utils';
 
 interface EmptyStateProps {
-  /** Icône à afficher */
-  icon?: ReactNode;
-  /** Titre principal */
-  title: string;
-  /** Description */
+  title?: string;
   description?: string;
-  /** Action principale (bouton) */
+  icon?: ReactNode;
   action?: {
     label: string;
     onClick: () => void;
   };
-  /** Actions secondaires */
-  secondaryActions?: Array<{
-    label: string;
-    onClick: () => void;
-  }>;
+  className?: string;
 }
 
-export default function EmptyState({
+export function EmptyState({
+  title = 'Aucune donnée disponible',
+  description = 'Les données seront disponibles une fois chargées.',
   icon,
-  title,
-  description,
   action,
-  secondaryActions,
+  className,
 }: EmptyStateProps) {
   return (
-    <Card padding="xl" radius="md" withBorder>
-      <Stack gap="md" align="center" py="xl">
-        {icon && <div>{icon}</div>}
-        <div style={{ textAlign: 'center' }}>
-          <Title order={4} mb="xs">{title}</Title>
-          {description && (
-            <Text c="dimmed" size="sm" ta="center">
-              {description}
-            </Text>
-          )}
-        </div>
-        {(action || secondaryActions) && (
-          <Group gap="sm" mt="md">
-            {action && (
-              <Button
-                variant="light"
-                onClick={action.onClick}
-                leftSection={<IconRefresh size={16} />}
-              >
-                {action.label}
-              </Button>
-            )}
-            {secondaryActions?.map((secondary, index) => (
-              <Button
-                key={index}
-                variant="subtle"
-                onClick={secondary.onClick}
-              >
-                {secondary.label}
-              </Button>
-            ))}
-          </Group>
-        )}
-      </Stack>
-    </Card>
+    <div className={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}>
+      <div className="w-16 h-16 rounded-full bg-surface-elevated border border-border flex items-center justify-center mb-4">
+        {icon || <IconInbox size={32} className="text-muted" />}
+      </div>
+      <h3 className="text-lg font-semibold text-text mb-2">{title}</h3>
+      <p className="text-sm text-muted max-w-md mb-6">{description}</p>
+      {action && (
+        <Button variant="secondary" size="sm" onClick={action.onClick} leftIcon={<IconRefresh size={16} />}>
+          {action.label}
+        </Button>
+      )}
+    </div>
   );
 }
+
+// Backwards compatibility: allow both default and named imports
+export default EmptyState;

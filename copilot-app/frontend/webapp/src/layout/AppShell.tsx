@@ -142,15 +142,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </MantineAppShell.Navbar>
 
       <MantineAppShell.Main>
-        <Box
-          component="section"
-          style={{
-            minHeight: '100vh',
-            padding: '24px',
-            maxWidth: 1440,
-            margin: '0 auto',
-          }}
-        >
+        <Box component="section" className={classes.mainContainer}>
           {children}
         </Box>
       </MantineAppShell.Main>
