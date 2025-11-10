@@ -4,29 +4,29 @@
  */
 
 import { useState, useMemo } from 'react';
-import { 
-  Grid, 
-  Group, 
-  Alert, 
-  SegmentedControl, 
-  Tooltip, 
-  ActionIcon, 
-  Button, 
-  Card as MantineCard, 
-  Title, 
-  Text, 
+import {
+  Group,
+  Alert,
+  SegmentedControl,
+  Tooltip,
+  Button,
+  Card as MantineCard,
+  Title,
+  Text,
   RingProgress,
   Badge as MantineBadge,
   ScrollArea,
-  Stack
+  Stack,
+  Skeleton
 } from '@mantine/core';
-import { IconLoader, IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
 import { BadgeDelta } from '@tremor/react';
 import { useForecasts } from '@/hooks/useForecasts';
 import type { ForecastHorizon } from '@/types/forecast';
 import { ensureArray, safeGet } from '@/lib/safe';
 import { ForecastDetailDrawer } from '@/components/forecasts/ForecastDetailDrawer';
 import { useNavigate } from 'react-router-dom';
+import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
 import styles from './ForecastCardsWidget.module.css';
 
 type Props = {
@@ -133,15 +133,27 @@ export function ForecastCardsWidget({
     URL.revokeObjectURL(url);
   };
 
+  const hasItems = ensureArray(items).length > 0;
+  const showSkeletons = isLoading && !error;
+
   return (
-    <MantineCard padding="lg" className={styles.forecastContainer}>
-      <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
-        <Group justify="space-between" align="center" wrap="wrap" gap="sm">
-          <div>
+    <MantineCard
+      padding="lg"
+      radius="xl"
+      className={`${sharedStyles.glassCard} ${styles.widgetCard}`}
+    >
+      <Stack gap="md" style={{ flex: 1, minHeight: 0 }} className={styles.contentStack}>
+        <div className={styles.header}>
+          <div className={styles.titleGroup}>
             <Title order={4}>{title}</Title>
-            <Text c="dimmed" size="sm" mt={4}>Classement par score et confiance • Horizon: {hz}</Text>
+            <Text c="dimmed" size="sm">
+              Classement par score et confiance • Horizon{' '}
+              <Text span fw={600}>
+                {hz}
+              </Text>
+            </Text>
           </div>
-          <Group gap="xs" wrap="wrap">
+          <div className={styles.controls}>
             <SegmentedControl
               value={hz}
               onChange={(v) => setHz(v as ForecastHorizon)}
@@ -152,86 +164,91 @@ export function ForecastCardsWidget({
               ]}
               size="sm"
             />
-            <Button 
-              variant="light" 
-              size="sm" 
+            <Button
+              variant="light"
+              size="sm"
               onClick={exportCsv}
               aria-label="Exporter les prévisions en CSV"
+              className={styles.primaryButton}
             >
               Exporter CSV
             </Button>
-            <Button 
-              size="sm" 
-              onClick={() => refetch()} 
+            <Button
+              size="sm"
+              onClick={() => refetch()}
               loading={isFetching}
               aria-label="Rafraîchir les prévisions"
+              className={styles.primaryButton}
             >
               Rafraîchir
             </Button>
-          </Group>
-        </Group>
+          </div>
+        </div>
 
-      {isLoading && (
-        <Alert 
-          title="Chargement" 
-          color="blue" 
-          icon={<IconLoader size={20} />}
-        >
-          <Text size="sm">Récupération des prévisions en cours…</Text>
-        </Alert>
-      )}
-      {error && (
-        <Alert 
-          title="Erreur" 
-          color="red"
-          icon={<IconAlertCircle size={20} />}
-          action={
-            <Button 
-              size="xs" 
-              variant="light" 
-              onClick={() => refetch()}
-              aria-label="Réessayer de charger les prévisions"
-            >
-              Réessayer
-            </Button>
-          }
-        >
-          <Text size="sm">Impossible de récupérer les prévisions</Text>
-          <Text size="xs" c="dimmed" mt="xs">{String(error)}</Text>
-        </Alert>
-      )}
-      {!isLoading && !error && ensureArray(items).length === 0 && (
-        <Alert 
-          color="yellow"
-          icon={<IconInfoCircle size={20} />}
-          action={
-            <Button 
-              size="xs" 
-              variant="light" 
-              onClick={() => refetch()}
-              aria-label="Réessayer de charger les prévisions"
-            >
+        {showSkeletons && (
+          <div className={styles.skeletonGrid} aria-live="polite">
+            {Array.from({ length: Math.min(6, Math.max(3, Math.ceil(limit / 2))) }).map((_, idx) => (
+              <div key={`forecast-skeleton-${idx}`} className={styles.skeletonCard}>
+                <Stack gap="sm">
+                  <Skeleton height={12} width="40%" radius="xl" />
+                  <Skeleton height={10} width="25%" radius="xl" />
+                  <Skeleton height={48} radius="md" />
+                  <Skeleton height={10} width="60%" radius="xl" />
+                  <Skeleton height={10} width="45%" radius="xl" />
+                </Stack>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <Alert
+            title="Erreur"
+            color="red"
+            icon={<IconAlertCircle size={20} />}
+            action={
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => refetch()}
+                aria-label="Réessayer de charger les prévisions"
+              >
+                Réessayer
+              </Button>
+            }
+          >
+            <Text size="sm">Impossible de récupérer les prévisions</Text>
+            <Text size="xs" c="dimmed" mt="xs">
+              {String(error)}
+            </Text>
+          </Alert>
+        )}
+
+        {!isLoading && !error && !hasItems && (
+          <div className={styles.emptyState}>
+            <Group justify="center" gap="xs">
+              <IconInfoCircle size={18} />
+              <Text fw={600}>Aucune prévision disponible</Text>
+            </Group>
+            <Text size="sm" c="dimmed" mt={6}>
+              Le moteur calcule de nouveaux signaux. Revenez dans quelques instants ou forcez un rafraîchissement.
+            </Text>
+            <Button size="xs" mt="sm" variant="light" onClick={() => refetch()}>
               Actualiser
             </Button>
-          }
-        >
-          <Text size="sm">Aucune prévision disponible pour l'univers sélectionné.</Text>
-          <Text size="xs" c="dimmed" mt="xs">
-            Le système calcule les prévisions en arrière-plan. Réessayez dans quelques instants.
-          </Text>
-        </Alert>
-      )}
+          </div>
+        )}
 
-        {!isLoading && !error && ensureArray(items).length > 0 && (
+        {!isLoading && !error && hasItems && (
           <ScrollArea className={styles.scrollArea} type="auto">
             <div className={styles.forecastGrid}>
               {ensureArray(items).map((f) => {
                 const trend = (f.direction || 'neutral').toLowerCase();
                 return (
-                  <MantineCard 
+                  <MantineCard
                     key={`${f.ticker ?? f.symbol}-${f.horizon}`}
-                    withBorder 
-                    shadow="sm" 
+                    withBorder
+                    shadow="sm"
                     padding="sm"
                     className={styles.forecastCard}
                     data-trend={trend}
@@ -239,8 +256,8 @@ export function ForecastCardsWidget({
                     <Stack gap="xs" style={{ flex: 1 }}>
                       <Group className={styles.cardHeader}>
                         <Group className={styles.tickerGroup}>
-                          <Title 
-                            order={6} 
+                          <Title
+                            order={6}
                             className={styles.tickerTitle}
                             onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
                             title="Ouvrir la page du ticker"
@@ -286,17 +303,17 @@ export function ForecastCardsWidget({
                       </Group>
 
                       <Group className={styles.cardFooter}>
-                        <MantineBadge 
-                          color={dirToBadge(f.direction).color} 
+                        <MantineBadge
+                          color={dirToBadge(f.direction).color}
                           size="sm"
                           variant="light"
                           className={styles.directionBadge}
                         >
                           {dirToBadge(f.direction).label}
                         </MantineBadge>
-                        <Button 
-                          size="xs" 
-                          variant="light" 
+                        <Button
+                          size="xs"
+                          variant="light"
                           compact
                           className={styles.openButton}
                           onClick={() => handleOpenDetails(f)}
@@ -318,8 +335,7 @@ export function ForecastCardsWidget({
           </ScrollArea>
         )}
       </Stack>
-      
-      {/* Forecast Detail Drawer */}
+
       <ForecastDetailDrawer
         opened={drawerOpened}
         onClose={handleCloseDrawer}

@@ -160,6 +160,7 @@ export function MacroWidget() {
             onClick={() => refetch()} 
             loading={isLoading}
             aria-label="Rafraîchir les données macro"
+            className={sharedStyles.actionIcon}
           >
             <IconRefresh size={16} />
           </ActionIcon>

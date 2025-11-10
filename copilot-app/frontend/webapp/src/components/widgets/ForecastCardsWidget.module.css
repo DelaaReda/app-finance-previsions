@@ -309,3 +309,68 @@
   }
 }
 
+/* ============================================
+   11. Widget shell enhancements
+   ============================================ */
+.widgetCard {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.contentStack {
+  flex: 1;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.primaryButton {
+  min-width: 120px;
+}
+
+.skeletonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.skeletonCard {
+  border-radius: 18px;
+  padding: 1rem;
+  background: var(--metric-bg);
+  border: 1px solid var(--metric-border);
+}
+
+.emptyState {
+  border-radius: 18px;
+  padding: 1.25rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--metric-border);
+}
+
+@media (max-width: 768px) {
+  .controls {
+    justify-content: flex-start;
+  }
+}

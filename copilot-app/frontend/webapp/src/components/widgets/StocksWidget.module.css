@@ -1,0 +1,76 @@
+.widgetCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.subtitle {
+  color: var(--mantine-color-dimmed);
+  font-size: 0.85rem;
+}
+
+.tableWrapper {
+  border-radius: 20px;
+  border: 1px solid var(--metric-border);
+  background: var(--metric-bg);
+  padding: 0.25rem;
+}
+
+.table {
+  min-width: 640px;
+}
+
+.tickerCell {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.price {
+  font-variant-numeric: tabular-nums;
+}
+
+.changePositive {
+  color: #16a34a;
+}
+
+.changeNegative {
+  color: #dc2626;
+}
+
+.marketCap,
+.name {
+  color: var(--mantine-color-dimmed);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid var(--metric-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.skeletonTable {
+  padding: 0.5rem 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .table {
+    min-width: 520px;
+  }
+}
