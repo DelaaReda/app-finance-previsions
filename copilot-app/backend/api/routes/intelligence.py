@@ -30,13 +30,39 @@ async def get_intelligence_snapshot():
     Response structure matches frontend useIntelligence hook expectations.
     """
     try:
-        from services.intelligence_service import IntelligenceService
+        from services.intelligence_service import get_market_intelligence_snapshot
 
-        service = IntelligenceService()
-        snapshot = await service.get_snapshot()
+        # Use the function-based service (not class-based)
+        snapshot = get_market_intelligence_snapshot(use_cache=True, persist=True)
+        
+        # Ensure snapshot has the expected structure
+        if not isinstance(snapshot, dict):
+            logger.warning(f"Intelligence snapshot is not a dict: {type(snapshot)}")
+            snapshot = {}
 
         return ok(snapshot)
 
+    except ImportError as e:
+        logger.error(f"Intelligence service import error: {str(e)}", exc_info=True)
+        # Return graceful fallback
+        return ok({
+            "insights": {
+                "summary": "Intelligence service temporarily unavailable. System is gathering market data.",
+                "market_regime": {
+                    "current": "NORMAL",
+                    "explanation": "Market analysis in progress"
+                },
+                "opportunities": [],
+                "risks": []
+            },
+            "data_freshness": {
+                "forecasts_age": "unknown",
+                "macro_age": "unknown",
+                "news_age": "unknown"
+            },
+            "timestamp": None,
+            "status": "fallback"
+        })
     except Exception as e:
         logger.error(f"Intelligence snapshot error: {str(e)}", exc_info=True)
 
@@ -59,3 +85,6 @@ async def get_intelligence_snapshot():
             "timestamp": None,
             "status": "fallback"
         })
+
+# Export router with expected name for main.py registration
+intelligence_router = router
