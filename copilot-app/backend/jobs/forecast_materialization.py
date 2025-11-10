@@ -21,7 +21,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from storage.io import load_json, save_json
-from core.data_quality import validate_forecasts_structure
+
+
+def _is_valid_forecast_rows(rows) -> bool:
+    if not isinstance(rows, list):
+        return False
+    return all(isinstance(row, dict) and row.get("ticker") for row in rows)
 
 def materialize_daily_forecasts() -> Dict[str, Any]:
     """
@@ -41,7 +46,7 @@ def materialize_daily_forecasts() -> Dict[str, Any]:
         forecast_rows = raw_forecasts.get("rows", raw_forecasts.get("data", []))
         
         # Validate structure before proceeding
-        if not validate_forecasts_structure(forecast_rows):
+        if not _is_valid_forecast_rows(forecast_rows):
             logger.warning("Forecast data structure validation failed, using empty fallback")
             forecast_rows = []
         
@@ -53,9 +58,9 @@ def materialize_daily_forecasts() -> Dict[str, Any]:
             "materialized_at": datetime.now().isoformat(),
             "source": ["materialization_job", "validated_forecasts"],
             "metrics": {
-                "total_symbols": len(list(set(f.get("ticker", f.get("symbol", "")) for f in forecast_rows if f.get("ticker") or f.get("symbol"))),
-                "horizons_covered": list(set(f.get("horizon", "") for f in forecast_rows if f.get("horizon"))),
-                "model_coverage": list(set(f.get("model", "default") for f in forecast_rows))
+                "total_symbols": len({f.get("ticker") or f.get("symbol") for f in forecast_rows if f.get("ticker") or f.get("symbol")}),
+                "horizons_covered": list({f.get("horizon") for f in forecast_rows if f.get("horizon")}),
+                "model_coverage": list({f.get("model", "default") for f in forecast_rows})
             }
         }
         
@@ -68,7 +73,10 @@ def materialize_daily_forecasts() -> Dict[str, Any]:
         output_file = forecast_dir / "forecasts.parquet"
         if forecast_rows:
             df = pd.DataFrame(forecast_rows)
-            df.to_parquet(output_file, engine='pyarrow')
+            try:
+                df.to_parquet(output_file, engine='pyarrow')
+            except Exception as parquet_err:
+                logger.warning("Parquet export skipped (%s). Continuing with JSON snapshot only.", parquet_err)
         
         # Also create the JSON backup format used by our system
         json_output_file = forecast_dir / "forecasts.json"

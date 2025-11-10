@@ -6,10 +6,20 @@ from fastapi import APIRouter, Query
 from typing import Dict, Any, Optional, List
 import json
 from datetime import datetime
+import sys
+from pathlib import Path
+
+# Add backend root to sys.path for proper imports
+backend_root = Path(__file__).resolve().parents[2]  # Go from backend/api/routes/forecasts.py to backend/
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
 
 from core.response import ok, err
 from storage.io import load_json
 import logging
+
+# Import cache service for performance optimization
+from backend.src.services.cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +38,21 @@ def get_filtered_forecasts(
     """
     Dashboard forecasts endpoint with filtering capabilities.
     Returns forecast data with proper structure for dashboard UI components.
+    Implements memory caching for performance (BE-007).
     """
-    logger.info(f"📥 GET /api/forecasts - Request received", extra={
+    # Create cache key based on all parameters to ensure proper caching
+    cache_params = {
+        "horizon": horizon,
+        "asset_type": asset_type,
+        "sort_by": sort_by,
+        "limit": limit,
+        "tickers": tickers,
+        "themes": themes,
+        "min_confidence": min_confidence
+    }
+    
+    cache_key = cache_service.get_cache_key("/api/forecasts", cache_params)
+    logger.info(f"📥 GET /api/forecasts - Request received (cache key: {cache_key})", extra={
         "horizon": horizon,
         "asset_type": asset_type,
         "sort_by": sort_by,
@@ -39,8 +62,21 @@ def get_filtered_forecasts(
         "min_confidence": min_confidence
     })
     
+    # First, try to get from cache
+    cached_result = cache_service.get("/api/forecasts", cache_params)
+    if cached_result is not None:
+        logger.info(f"💾 Cache HIT for /api/forecasts with {len(cached_result.get('rows', []))} rows", extra={
+            "cache_key": cache_key
+        })
+        return ok({
+            **cached_result,
+            "cache_hit": True,
+            "freshness": "cached"
+        })
+    
+    # If not in cache, compute fresh results
     try:
-        logger.debug(f"📂 Loading forecasts from storage...")
+        logger.debug(f"📂 Loading forecasts from storage (cache miss)...")
         # Load forecasts from persistent storage (following never-empty pattern)
         forecasts_data = load_json("forecasts")
         
@@ -184,8 +220,25 @@ def get_filtered_forecasts(
             "source": forecasts_data.get("source", ["forecast_pipeline"])
         }
         
-        logger.info(f"✅ Returning {len(filtered_rows)} forecasts to client")
-        return ok(response_data)
+        # Cache the response for future requests (BE-007 - Memory caching)
+        cache_params = {
+            "horizon": horizon,
+            "asset_type": asset_type,
+            "sort_by": sort_by,
+            "limit": limit,
+            "tickers": tickers,
+            "themes": themes,
+            "min_confidence": min_confidence
+        }
+        cache_service.set("/api/forecasts", response_data, cache_params, ttl_seconds=300)  # 5 min cache
+        
+        logger.info(f"✅ Returning {len(filtered_rows)} forecasts to client (cached for 300s)")
+        return ok({
+            **response_data,
+            "cache_hit": False,
+            "freshness": "fresh",
+            "cache_age": "0s"
+        })
         
     except Exception as e:
         logger.error(f"❌ Error in forecasts endpoint: {str(e)}", exc_info=True, extra={
@@ -197,7 +250,7 @@ def get_filtered_forecasts(
             }
         })
         # Return structured response even on error to maintain never-empty contract
-        return ok({
+        error_response = {
             "rows": [],
             "count": 0,
             "filtered_params": {
@@ -212,6 +265,24 @@ def get_filtered_forecasts(
             "message": "Forecasts temporarily unavailable - showing fallback data",
             "generated_at": datetime.utcnow().isoformat(),
             "source": ["fallback", "error_handling"]
+        }
+        
+        # Even in error cases, we can cache the error response to avoid repeated computations
+        cache_params = {
+            "horizon": horizon,
+            "asset_type": asset_type,
+            "sort_by": sort_by,
+            "limit": limit,
+            "tickers": tickers,
+            "themes": themes,
+            "min_confidence": min_confidence
+        }
+        cache_service.set("/api/forecasts", error_response, cache_params, ttl_seconds=60)  # 1 min cache for errors
+        
+        return ok({
+            **error_response,
+            "cache_hit": False,
+            "freshness": "error_fallback"
         })
 
 # Export router with expected name for main.py

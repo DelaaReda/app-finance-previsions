@@ -16,7 +16,7 @@
  */
 
 import { Drawer, Stack, Group, Text, Badge, Button, ActionIcon, Divider, Card, Timeline, Alert, Loader } from '@mantine/core';
-import { Line Chart as MiniLineChart } from '@/components/charts/MiniLineChart';
+import MiniLineChart from '@/components/charts/MiniLineChart';
 import { IconX, IconPinFilled, IconPin, IconExternalLink, IconTrendingUp, IconTrendingDown, IconClock, IconInfoCircle } from '@tabler/icons-react';
 import { useNewsCompat } from '@/hooks/useNewsCompat';
 import type { ForecastItem } from '@/types/forecast';
@@ -67,7 +67,7 @@ export function ForecastDetailDrawer({
   const [isPinned, setIsPinned] = useState(false);
 
   const ticker = forecast?.ticker ?? forecast?.symbol ?? '';
-  const newsQ = useNewsCompat({ tickers: ticker ? [ticker] : [] });
+  const newsQ = useNewsCompat(ticker ? [ticker] : []);
 
   const handlePin = () => {
     if (ticker && onPinToDashboard) {

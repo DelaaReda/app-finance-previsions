@@ -81,7 +81,23 @@ def get_filtered_macro_series(
         
         # Extract macro series data
         data_payload = macro_data.get("data", macro_data.get("payload", macro_data))
-        all_series = data_payload.get("series", data_payload if isinstance(data_payload, list) else [])
+        raw_series = data_payload.get("series") if isinstance(data_payload, dict) else None
+        if isinstance(raw_series, dict):
+            all_series = []
+            for series_id, entry in raw_series.items():
+                if not isinstance(entry, dict):
+                    continue
+                normalized = dict(entry)
+                normalized.setdefault("series_id", series_id)
+                normalized.setdefault("id", series_id)
+                observations = normalized.pop("observations", None)
+                if observations and "data" not in normalized:
+                    normalized["data"] = observations
+                all_series.append(normalized)
+        elif isinstance(raw_series, list):
+            all_series = raw_series
+        else:
+            all_series = data_payload if isinstance(data_payload, list) else []
         
         # Apply filtering (extracted to helper function for cache reuse)
         filtered_response = _apply_macro_filters(data_payload, ids, limit, window, format_resp, all_series)
@@ -133,7 +149,23 @@ def _apply_macro_filters(
     Used both for cached and fresh data.
     """
     if all_series is None:
-        all_series = data_payload.get("series", data_payload if isinstance(data_payload, list) else [])
+        raw_series = data_payload.get("series") if isinstance(data_payload, dict) else None
+        if isinstance(raw_series, dict):
+            all_series = []
+            for series_id, entry in raw_series.items():
+                if not isinstance(entry, dict):
+                    continue
+                normalized = dict(entry)
+                normalized.setdefault("series_id", series_id)
+                normalized.setdefault("id", series_id)
+                observations = normalized.pop("observations", None)
+                if observations and "data" not in normalized:
+                    normalized["data"] = observations
+                all_series.append(normalized)
+        elif isinstance(raw_series, list):
+            all_series = raw_series
+        else:
+            all_series = data_payload if isinstance(data_payload, list) else []
     
     # Apply filtering
     filtered_series = all_series

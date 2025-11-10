@@ -1,0 +1,2 @@
+{"endpoint": "/api/health", "status": "PASS", "raw_response": "validated_struct"}
+{"endpoint": "/api/forecasts", "status": "FAIL", "reason": "Error response: Not Found", "raw_response": "{"detail":"Not Found"}"}

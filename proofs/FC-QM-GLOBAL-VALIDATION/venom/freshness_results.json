@@ -1,0 +1,5 @@
+{"endpoint": "/api/health", "freshness": "2025-11-10T02:28:06.160297Z"}
+{"endpoint": "/api/forecasts", "freshness": "unknown"}
+{"endpoint": "/api/news/feed", "freshness": "unknown"}
+{"endpoint": "/api/brief/weekly", "freshness": "N/A"}
+{"endpoint": "/api/backtests", "freshness": "N/A"}

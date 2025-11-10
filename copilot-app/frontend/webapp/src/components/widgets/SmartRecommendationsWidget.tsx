@@ -1,4 +1,4 @@
-import { Stack, Text, Group, ActionIcon, Alert, Badge, Skeleton, Card } from '@mantine/core';
+import { Stack, Text, Group, ActionIcon, Alert, Badge, Skeleton, Card, Button } from '@mantine/core';
 import { IconRefresh, IconAlertCircle, IconSparkles, IconLoader, IconArrowUpRight, IconShieldCheck } from '@tabler/icons-react';
 import { useRecommendations } from '../../hooks/useRecommendations';
 import { RecommendationCard } from '../recommendations/RecommendationCard';
@@ -78,7 +78,12 @@ export function SmartRecommendationsWidget({
         color="red"
         variant="light"
         action={
-          <Button size="xs" variant="light" onClick={() => refetch()}>
+          <Button 
+            size="xs" 
+            variant="light" 
+            onClick={() => refetch()}
+            aria-label="Réessayer de charger les recommandations"
+          >
             Réessayer
           </Button>
         }
@@ -104,7 +109,12 @@ export function SmartRecommendationsWidget({
         color="yellow"
         variant="light"
         action={
-          <Button size="xs" variant="light" onClick={() => refetch()}>
+          <Button 
+            size="xs" 
+            variant="light" 
+            onClick={() => refetch()}
+            aria-label="Actualiser les recommandations"
+          >
             Actualiser
           </Button>
         }
@@ -130,7 +140,7 @@ export function SmartRecommendationsWidget({
             <div className={sharedStyles.sparkIcon}>
               <IconSparkles size={18} />
             </div>
-          <Text size="lg" fw={700}>Today's Smart Picks</Text>
+          <Text size="lg" fw={700}>Sélections du Jour</Text>
           <Badge variant="light" color="blue">
             {data.recommendations.length} {data.recommendations.length === 1 ? 'pick' : 'picks'}
           </Badge>
@@ -140,7 +150,7 @@ export function SmartRecommendationsWidget({
           variant="light"
           onClick={() => refetch()}
           loading={isFetching}
-          aria-label="Refresh recommendations"
+          aria-label="Actualiser les recommandations"
           className={sharedStyles.actionIcon}
         >
           {isFetching ? <IconLoader size={18} /> : <IconRefresh size={18} />}

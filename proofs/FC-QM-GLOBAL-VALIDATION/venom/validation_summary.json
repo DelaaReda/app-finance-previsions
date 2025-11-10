@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-11-10T02:28:06Z",
+  "summary": {
+    "total_tests": 18,
+    "passed_tests": 11,
+    "failed_tests": 1,
+    "success_rate": 61.11,
+    "overall_status": "RED"
+  },
+  "details": {
+    "endpoints_tested": [
+      "/api/health",
+      "/api/forecasts", 
+      "/api/news/feed",
+      "/api/brief/weekly",
+      "/api/backtests",
+      "/api/macro/series",
+      "/api/stocks/prices"
+    ],
+    "quality_checks": [
+      "never-empty compliance",
+      "proper structure {ok, data}",
+      "expected data fields present"
+    ]
+  },
+  "freshness": {
+    "tested": true,
+    "report_path": "proofs/FC-QM-GLOBAL-VALIDATION/venom/freshness_results.json"
+  }
+}

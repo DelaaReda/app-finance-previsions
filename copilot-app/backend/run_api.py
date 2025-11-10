@@ -5,7 +5,30 @@ Usage: python run_api.py
 """
 import errno
 import sys
+import os
 from pathlib import Path
+
+# Load .env file if present (copilot-app/.env)
+try:
+    from dotenv import load_dotenv
+    backend_dir = Path(__file__).resolve().parent
+    project_root = backend_dir.parent  # copilot-app/
+    # Try to load from copilot-app/.env first (project root)
+    env_file = project_root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file, override=False)
+        print(f"✅ Loaded .env from: {env_file}")
+    else:
+        # Fallback to backend/.env
+        env_file = backend_dir / ".env"
+        if env_file.exists():
+            load_dotenv(env_file, override=False)
+            print(f"✅ Loaded .env from: {env_file}")
+        else:
+            # Try current directory
+            load_dotenv(override=False)
+except ImportError:
+    pass  # dotenv not available, use system env vars
 
 # Ajouter le répertoire backend racine et src au path pour permettre les imports corrects
 backend_dir = Path(__file__).resolve().parent

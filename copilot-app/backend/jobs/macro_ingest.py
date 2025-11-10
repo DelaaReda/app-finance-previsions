@@ -15,10 +15,19 @@ backend_root = Path(__file__).resolve().parent.parent
 if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
+# Ensure .env is loaded before accessing environment variables
+try:
+    from core.env_loader import ensure_env_loaded, get_env
+    ensure_env_loaded()
+except ImportError:
+    # Fallback if env_loader not available
+    def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
+        return os.getenv(name, default)
+
 from backend.storage.io import save_json, load_json
 
 # FRED API details
-FRED_API_KEY = os.getenv("FRED_API_KEY", "cd46b26e7a08a4bd5ffc6bed7a7ca02f")  # Public demo key
+FRED_API_KEY = get_env("FRED_API_KEY", "cd46b26e7a08a4bd5ffc6bed7a7ca02f")  # Public demo key
 FRED_BASE_URL = "https://api.stlouisfed.org/fred"
 
 class MacroIngestionService:

@@ -17,10 +17,10 @@ if str(backend_root) not in sys.path:
 logger = logging.getLogger(__name__)
 
 try:
-    from storage.io import load_json
+    from backend.storage.io import load_json
 except ImportError:
     try:
-        from storage.base import load_json
+        from backend.storage.base import load_json
     except ImportError:
         logger.warning("storage modules not available")
         def load_json(key):

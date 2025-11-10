@@ -7,9 +7,24 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import json
 import random
+import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
+
+# Add backend to path for secure import
+backend_root = Path(__file__).resolve().parent.parent
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
+
+try:
+    from storage.io import load_json, save_json
+except ImportError:
+    try:
+        from backend.storage.io import load_json, save_json
+    except ImportError:
+        # If all imports fail, raise with clear message
+        raise ImportError("Could not import load_json/save_json from storage modules. Check backend structure.")
 
 
 class BacktestService:
@@ -18,8 +33,13 @@ class BacktestService:
     """
     
     def __init__(self):
-        # Use the same data directory as other modules
-        self.data_dir = Path(__file__).resolve().parents[3] / "data"
+        # Use secure path resolution rather than relative paths
+        try:
+            from backend.src.core.path_resolver import get_data_directory
+            self.data_dir = get_data_directory()
+        except ImportError:
+            # Fallback: use relative path approach
+            self.data_dir = Path(__file__).resolve().parents[3] / "data"
         self.data_dir.mkdir(exist_ok=True)
     
     def run_custom_backtest(self, 

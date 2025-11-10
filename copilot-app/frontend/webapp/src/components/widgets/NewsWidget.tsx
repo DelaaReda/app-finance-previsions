@@ -3,7 +3,7 @@
  * Displays latest financial news articles with improved UI
  */
 
-import { Card, Stack, Title, Text, Badge, Group, ActionIcon, Alert, Skeleton } from '@mantine/core';
+import { Card, Stack, Title, Text, Badge, Group, ActionIcon, Alert, Skeleton, Anchor, Button } from '@mantine/core';
 import { IconNews, IconExternalLink, IconRefresh } from '@tabler/icons-react';
 import { useApi } from '@/hooks/useApi';
 import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
@@ -45,7 +45,7 @@ export function NewsWidget() {
             <div className={`${sharedStyles.sparkIcon} ${styles.newsIcon}`}>
               <IconNews size={18} />
             </div>
-            <Title order={4}>Market News</Title>
+            <Title order={4}>Actualités de marché</Title>
           </Group>
           <ActionIcon 
             size="sm" 
@@ -54,6 +54,7 @@ export function NewsWidget() {
             onClick={() => refetch()} 
             loading={isLoading}
             className={sharedStyles.actionIcon}
+            aria-label="Actualiser les actualités"
           >
             <IconRefresh size={16} />
           </ActionIcon>
@@ -72,8 +73,22 @@ export function NewsWidget() {
         )}
 
         {error && (
-          <Alert color="red" variant="light" title="Data Error">
-            <Text size="sm">Failed to load news: {error}</Text>
+          <Alert 
+            color="red" 
+            variant="light" 
+            title="Erreur de chargement"
+            action={
+              <Button 
+                size="xs" 
+                variant="light" 
+                onClick={() => refetch()}
+                aria-label="Réessayer de charger les actualités"
+              >
+                Réessayer
+              </Button>
+            }
+          >
+            <Text size="sm">Impossible de charger les actualités: {String(error)}</Text>
           </Alert>
         )}
 
@@ -91,14 +106,48 @@ export function NewsWidget() {
               
               return (
                 <div key={id} className={`${sharedStyles.flatCard} ${styles.newsCard}`}>
-                  <Group justify="space-between" align="flex-start">
-                    <Stack gap={4} className={styles.newsBody}>
-                      <Text fw={600} size="sm" lineClamp={2}>
-                        {title}
-                      </Text>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap">
+                    <Stack gap={4} className={styles.newsBody} style={{ flex: 1, minWidth: 0 }}>
+                      <Anchor
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                        style={{ 
+                          textDecoration: 'none',
+                          color: 'inherit'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.textDecoration = 'underline';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.textDecoration = 'none';
+                        }}
+                      >
+                        <Text 
+                          fw={600} 
+                          size="sm" 
+                          lineClamp={2}
+                          style={{ 
+                            cursor: 'pointer',
+                            transition: 'color 0.2s'
+                          }}
+                        >
+                          {title}
+                        </Text>
+                      </Anchor>
                       <Group gap="xs" wrap="wrap">
                         {source && (
-                          <Badge size="xs" variant="light" color="blue">
+                          <Badge 
+                            size="xs" 
+                            variant="light" 
+                            color="blue"
+                            component="a"
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ cursor: 'pointer' }}
+                          >
                             {source.toUpperCase()}
                           </Badge>
                         )}
@@ -115,13 +164,22 @@ export function NewsWidget() {
                       )}
                       {pubDate && (
                         <Text size="xs" c="dimmed">
-                          {new Date(pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(pubDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {new Date(pubDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
                         </Text>
                       )}
                     </Stack>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className={styles.newsLink}>
+                    <ActionIcon
+                      component="a"
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="light"
+                      color="blue"
+                      size="sm"
+                      title="Ouvrir l'article"
+                    >
                       <IconExternalLink size={16} />
-                    </a>
+                    </ActionIcon>
                   </Group>
                 </div>
               );
@@ -130,9 +188,21 @@ export function NewsWidget() {
         )}
 
         {!isLoading && !error && articles.length === 0 && (
-          <Text size="sm" c="dimmed" ta="center">
-            No recent news available
-          </Text>
+          <Alert 
+            color="blue" 
+            variant="light"
+            title="Aucune actualité récente"
+            action={
+              <Button size="xs" variant="light" onClick={() => refetch()}>
+                Actualiser
+              </Button>
+            }
+          >
+            <Text size="sm">Aucune actualité disponible pour le moment.</Text>
+            <Text size="xs" c="dimmed" mt="xs">
+              Le système récupère les actualités en arrière-plan. Réessayez dans quelques instants.
+            </Text>
+          </Alert>
         )}
       </Stack>
     </Card>

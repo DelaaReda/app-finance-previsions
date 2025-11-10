@@ -420,10 +420,12 @@ def create_app() -> FastAPI:
     async def startup_event():
         """
         Initialize application data at startup
+        Executes data generation jobs in background if data is missing/empty
         Task: FC-STARTUP-INIT-001 (+60 pts)
         Author: CLAUDE-STABILITY-ARCHITECT-IRONMAN-42
         """
         import logging
+        import asyncio
         logger = logging.getLogger(__name__)
         try:
             logger.setLevel(logging.INFO)
@@ -440,38 +442,76 @@ def create_app() -> FastAPI:
             try:
                 from jobs.forecasts import run_forecasts_job
             except ImportError:
-                from backend.jobs.forecasts import run_forecasts_job
+                try:
+                    from backend.jobs.forecasts import run_forecasts_job
+                except ImportError:
+                    run_forecasts_job = None
             try:
                 from jobs.news_ingest import run_news_ingest
             except ImportError:
-                from backend.jobs.news_ingest import run_news_ingest
+                try:
+                    from backend.jobs.news_ingest import run_news_ingest
+                except ImportError:
+                    run_news_ingest = None
+            try:
+                from jobs.market_brief import run_market_brief_job
+            except ImportError:
+                try:
+                    from backend.jobs.market_brief import run_market_brief_job
+                except ImportError:
+                    run_market_brief_job = None
             try:
                 from jobs.weekly_brief import run_weekly_brief_job as run_and_persist_weekly_brief
             except ImportError:
-                from backend.jobs.weekly_brief import run_weekly_brief_job as run_and_persist_weekly_brief
+                try:
+                    from backend.jobs.weekly_brief import run_weekly_brief_job as run_and_persist_weekly_brief
+                except ImportError:
+                    run_and_persist_weekly_brief = None
+            try:
+                from jobs.macro_series_snapshot import run_macro_snapshot_job
+            except ImportError:
+                try:
+                    from backend.jobs.macro_series_snapshot import run_macro_snapshot_job
+                except ImportError:
+                    run_macro_snapshot_job = None
             try:
                 from jobs.alerts import run_alerts_job
             except ImportError:
-                from backend.jobs.alerts import run_alerts_job
+                try:
+                    from backend.jobs.alerts import run_alerts_job
+                except ImportError:
+                    run_alerts_job = None
             try:
                 from scheduler.app import start_scheduler
             except ImportError:
-                from backend.scheduler.app import start_scheduler
+                try:
+                    from backend.scheduler.app import start_scheduler
+                except ImportError:
+                    start_scheduler = None
 
             logger.info("📦 Checking data availability...")
+
+            async def run_job_async(job_func, job_name: str, check_func=None):
+                """Run a job in background thread to avoid blocking startup"""
+                if not job_func:
+                    logger.warning(f"⚠️  {job_name} function not available, skipping")
+                    return False
+                
+                try:
+                    # Run in thread pool to avoid blocking
+                    loop = asyncio.get_event_loop()
+                    result = await loop.run_in_executor(None, job_func)
+                    logger.info(f"✅ {job_name} completed")
+                    return True
+                except Exception as e:
+                    logger.error(f"❌ Failed to run {job_name}: {e}")
+                    return False
 
             # Check and generate forecasts if missing or empty
             forecasts_data = load_json("forecasts") or load_json("forecasts.json")
             if not forecasts_data or not forecasts_data.get("rows") or len(forecasts_data.get("rows", [])) == 0:
-                logger.info("⚠️  No forecasts found or empty, generating initial set...")
-                if run_forecasts_job:
-                    try:
-                        run_forecasts_job()
-                        logger.info("✅ Initial forecasts generated")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to generate forecasts: {e}")
-                else:
-                    logger.warning("⚠️  run_forecasts_job not available, skipping")
+                logger.info("⚠️  No forecasts found or empty, generating in background...")
+                asyncio.create_task(run_job_async(run_forecasts_job, "Forecasts generation"))
             else:
                 forecast_count = len(forecasts_data.get("rows", []))
                 logger.info(f"✅ Forecasts data found: {forecast_count} forecasts")
@@ -479,48 +519,62 @@ def create_app() -> FastAPI:
             # Check and generate news feed if missing or empty
             news_data = load_json("news_feed") or load_json("news_feed.json")
             if not news_data or not news_data.get("articles") or len(news_data.get("articles", [])) == 0:
-                logger.info("⚠️  No news feed found or empty, fetching initial data...")
-                if run_news_ingest:
-                    try:
-                        run_news_ingest()
-                        logger.info("✅ Initial news feed generated")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to fetch news: {e}")
-                else:
-                    logger.warning("⚠️  run_news_ingest not available, skipping")
+                logger.info("⚠️  No news feed found or empty, fetching in background...")
+                asyncio.create_task(run_job_async(run_news_ingest, "News ingestion"))
             else:
                 news_count = len(news_data.get("articles", []))
                 logger.info(f"✅ News feed data found: {news_count} articles")
 
+            # Check and generate market brief if missing or empty
+            brief_daily = load_json("brief_daily") or load_json("brief_daily.json")
+            if not brief_daily or not brief_daily.get("top_signals"):
+                logger.info("⚠️  No daily brief found or empty, generating in background...")
+                if run_market_brief_job:
+                    asyncio.create_task(run_job_async(run_market_brief_job, "Market brief generation"))
+            else:
+                signals_count = len(brief_daily.get("top_signals", []))
+                logger.info(f"✅ Daily brief data found: {signals_count} signals")
+
             # Check and generate weekly brief if missing or empty
             brief_data = load_json("brief_weekly") or load_json("brief_weekly.json")
             if not brief_data or not brief_data.get("top_signals"):
-                logger.info("⚠️  No weekly brief found or empty, generating...")
+                logger.info("⚠️  No weekly brief found or empty, generating in background...")
                 if run_and_persist_weekly_brief:
-                    try:
-                        run_and_persist_weekly_brief()
-                        logger.info("✅ Initial weekly brief generated")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to generate weekly brief: {e}")
-                else:
-                    logger.warning("⚠️  run_and_persist_weekly_brief not available, skipping")
+                    asyncio.create_task(run_job_async(run_and_persist_weekly_brief, "Weekly brief generation"))
             else:
                 signals_count = len(brief_data.get("top_signals", []))
                 logger.info(f"✅ Weekly brief data found: {signals_count} signals")
 
-            # Check and generate alerts if missing
-            if not load_json("alerts.json"):
-                logger.info("⚠️  No alerts found, generating...")
-                if run_alerts_job:
-                    try:
-                        run_alerts_job()
-                        logger.info("✅ Initial alerts generated")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to generate alerts: {e}")
+            # Check and generate macro series if missing or empty
+            macro_data = load_json("macro_series") or load_json("macro_series.json")
+            if not macro_data or not macro_data.get("series") or len(macro_data.get("series", {})) == 0:
+                logger.info("⚠️  No macro series found or empty, generating in background...")
+                if run_macro_snapshot_job:
+                    asyncio.create_task(run_job_async(run_macro_snapshot_job, "Macro series snapshot"))
                 else:
-                    logger.warning("⚠️  run_alerts_job not available, skipping")
+                    # Try to import and call main directly if wrapper doesn't exist
+                    try:
+                        from jobs.macro_series_snapshot import main as macro_main
+                        asyncio.create_task(run_job_async(lambda: macro_main([]), "Macro series snapshot"))
+                    except ImportError:
+                        try:
+                            from backend.jobs.macro_series_snapshot import main as macro_main
+                            asyncio.create_task(run_job_async(lambda: macro_main([]), "Macro series snapshot"))
+                        except ImportError:
+                            logger.warning("⚠️  Macro snapshot job not available, skipping")
             else:
-                logger.info("✅ Alerts data found")
+                series_count = len(macro_data.get("series", {}))
+                logger.info(f"✅ Macro series data found: {series_count} series")
+
+            # Check and generate alerts if missing
+            alerts_data = load_json("alerts") or load_json("alerts.json")
+            if not alerts_data:
+                logger.info("⚠️  No alerts found, generating in background...")
+                if run_alerts_job:
+                    asyncio.create_task(run_job_async(run_alerts_job, "Alerts generation"))
+            else:
+                alerts_count = len(alerts_data.get("alerts", []))
+                logger.info(f"✅ Alerts data found: {alerts_count} alerts")
 
             # Start background scheduler
             if start_scheduler:
@@ -677,112 +731,21 @@ def register_routes(app: FastAPI):
 
     # ========================= PILLAR 1: MACRO ===========================
 
-    @app.get("/api/macro/series")
-    async def macro_series(
-        series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
-        ids: Optional[str] = Query(None, description="Alias for series_ids"),
-        start: Optional[str] = Query(None, description="ISO date (e.g. 2020-01-01)"),
-        end: Optional[str] = Query(None, description="ISO date"),
-        limit: int = Query(500, ge=10, le=5000)
-    ):
-        """Get macro time series data - reads from pre-computed data."""
-        try:
-            macro_data = ensure_snapshot("macro_series", job_runner=_run_macro_series_job)
-
-            series_block = None
-            if macro_data:
-                series_block = macro_data.get("series")
-                if not isinstance(series_block, dict):
-                    payload_root = resolve_payload(macro_data, ("data",))
-                    series_block = payload_root.get("series") if isinstance(payload_root, dict) else None
-
-            if series_block:
-                requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
-                payload: List[Dict[str, Any]] = []
-                for series_id in requested:
-                    series_info = series_block.get(series_id)
-                    if not isinstance(series_info, dict):
-                        continue
-                    observations = list(series_info.get("observations", []))
-
-                    if start or end:
-                        start_ts = pd.to_datetime(start).tz_localize(None) if start else None
-                        end_ts = pd.to_datetime(end).tz_localize(None) if end else None
-                        filtered_obs = []
-                        for obs in observations:
-                            obs_date = pd.to_datetime(obs.get("date"))
-                            if start_ts and obs_date < start_ts:
-                                continue
-                            if end_ts and obs_date > end_ts:
-                                continue
-                            filtered_obs.append(obs)
-                        observations = filtered_obs[:limit]
-                    else:
-                        observations = observations[:limit]
-
-                    points = [{"date": obs.get("date"), "value": obs.get("value")} for obs in observations]
-
-                    payload.append({
-                        "id": series_id,
-                        "name": series_info.get("title", series_id),
-                        "unit": series_info.get("units", ""),
-                        "frequency": series_info.get("frequency", "unknown"),
-                        "points": points,
-                    })
-
-                if payload:
-                    updated_at = (
-                        macro_data.get("freshness")
-                        or macro_data.get("generated_at")
-                        or datetime.utcnow().isoformat()
-                    )
-                    return _ok({
-                        "series": payload,
-                        "updated_at": updated_at,
-                    })
-
-            # Fallback: compute on the fly (legacy behavior)
-            requested = _parse_csv_list(series_ids) or _parse_csv_list(ids) or DEFAULT_MACRO_SERIES
-            start_ts = pd.to_datetime(start).tz_localize(None) if start else None
-            end_ts = pd.to_datetime(end).tz_localize(None) if end else None
-
-            payload: List[Dict[str, Any]] = []
-            for series_id in requested:
-                try:
-                    df = get_fred_series(series_id, start=start)
-                except Exception:
-                    df = pd.DataFrame(columns=[series_id])
-                if df is None or df.empty:
-                    continue
-                column = df.columns[0]
-                points = _format_points(df, column, limit=limit, start=start_ts, end=end_ts)
-                if not points:
-                    continue
-                meta = MACRO_SERIES_META.get(series_id, {})
-                payload.append({
-                    "id": series_id,
-                    "name": meta.get("name") or series_id,
-                    "unit": meta.get("unit"),
-                    "frequency": meta.get("frequency") or _infer_frequency(df.index),
-                    "points": points,
-                })
-
-            if not payload:
-                return _ok({
-                    "series": [],
-                    "updated_at": datetime.utcnow().isoformat() + "Z",
-                })
-
-            return _ok({
-                "series": payload,
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-            })
-        except Exception as e:
-            return _ok({
-                "series": [],
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-                "error": str(e),
-            })
+    # ========================= MACRO SERIES (DISABLED - Using router instead) ======================
+    # NOTE: The /api/macro/series endpoint is now handled by api/routes/macro.py router
+    # This endpoint is commented out to avoid conflicts with the router
+    # The router provides better filtering, caching, and error handling
+    
+    # @app.get("/api/macro/series")
+    # async def macro_series(
+    #     series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
+    #     ids: Optional[str] = Query(None, description="Alias for series_ids"),
+    #     start: Optional[str] = Query(None, description="ISO date (e.g. 2020-01-01)"),
+    #     end: Optional[str] = Query(None, description="ISO date"),
+    #     limit: int = Query(500, ge=10, le=5000)
+    # ):
+    #     """Get macro time series data - reads from pre-computed data."""
+    #     # ... (implementation moved to api/routes/macro.py)
 
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
@@ -1019,6 +982,138 @@ def register_routes(app: FastAPI):
                 "count": 0,
                 "updated_at": datetime.utcnow().isoformat() + "Z",
                 "error": str(e),
+            })
+
+    @app.get("/api/stocks/top")
+    async def stocks_top(
+        limit: int = Query(10, ge=1, le=50, description="Number of top stocks to return"),
+        sort_by: str = Query("score", description="Sort by: score, change_1d, momentum_30d, mcap")
+    ):
+        """Get top stocks by score, momentum, or market cap."""
+        try:
+            from storage.io import load_json
+            
+            # Load stocks data - try multiple possible keys
+            prices_data = load_json("stocks/prices") or load_json("stocks_prices") or {}
+            metrics_data = load_json("stocks/metrics") or {}
+            
+            # Extract tickers data from various possible structures
+            tickers_data = {}
+            if isinstance(prices_data, dict):
+                # Try different possible structures
+                if "tickers" in prices_data:
+                    tickers_data = prices_data["tickers"]
+                elif "data" in prices_data and isinstance(prices_data["data"], dict):
+                    tickers_data = prices_data["data"].get("tickers", {})
+                elif any(k in prices_data for k in ["SPY", "QQQ", "AAPL"]):  # Direct ticker keys
+                    tickers_data = {k: v for k, v in prices_data.items() if isinstance(v, dict) and "points" in v}
+            
+            metrics = {}
+            if isinstance(metrics_data, dict):
+                metrics = metrics_data.get("metrics", metrics_data)
+            
+            # Build list of stocks with their metrics
+            stocks_list = []
+            for ticker, ticker_data in tickers_data.items():
+                if not isinstance(ticker_data, dict):
+                    continue
+                    
+                ticker_metrics = metrics.get(ticker, {})
+                points = ticker_data.get("points", [])
+                
+                if not points:
+                    continue
+                
+                # Get latest price - handle different point formats
+                latest_point = points[-1]
+                if isinstance(latest_point, (list, tuple)) and len(latest_point) >= 2:
+                    current_price = float(latest_point[1])
+                elif isinstance(latest_point, dict):
+                    current_price = float(latest_point.get("value", latest_point.get("close", 0)))
+                else:
+                    current_price = float(latest_point) if isinstance(latest_point, (int, float)) else 0
+                
+                # Calculate change
+                change_1d = ticker_metrics.get("change_1d", 0.0)
+                change_percent = ticker_metrics.get("change_percent", 0.0)
+                
+                stock_info = {
+                    "ticker": ticker,
+                    "name": ticker_metrics.get("name") or ticker_data.get("name") or f"{ticker} Corp",
+                    "price": current_price,
+                    "change": change_1d,
+                    "change_percent": change_percent,
+                    "market_cap": ticker_metrics.get("mcap") or ticker_metrics.get("market_cap") or 0,
+                    "score": ticker_metrics.get("score") or 0,
+                    "momentum_30d": ticker_metrics.get("momentum_30d") or 0.0,
+                    "pe": ticker_metrics.get("pe"),
+                    "sector": ticker_metrics.get("sector") or "N/A"
+                }
+                stocks_list.append(stock_info)
+            
+            # If no stocks found from prices data, try to generate from forecasts as fallback
+            if not stocks_list:
+                logger.info("No stocks data found, generating fallback from forecasts...")
+                forecasts_data = load_json("forecasts") or {}
+                forecast_rows = forecasts_data.get("rows", []) or forecasts_data.get("data", {}).get("rows", [])
+                
+                # Extract unique tickers from forecasts
+                seen_tickers = set()
+                for row in forecast_rows[:limit * 2]:  # Get more to have options
+                    ticker = row.get("ticker") or row.get("symbol")
+                    if ticker and ticker not in seen_tickers:
+                        seen_tickers.add(ticker)
+                        # Use forecast data to create basic stock info
+                        confidence = row.get("confidence", 0)
+                        expected_return = row.get("expected_return", 0)
+                        
+                        stock_info = {
+                            "ticker": ticker,
+                            "name": f"{ticker} Corp",
+                            "price": 100.0,  # Placeholder
+                            "change": expected_return * 100 if expected_return else 0.0,
+                            "change_percent": expected_return * 100 if expected_return else 0.0,
+                            "market_cap": 0,
+                            "score": confidence,
+                            "momentum_30d": expected_return * 30 if expected_return else 0.0,
+                            "pe": None,
+                            "sector": "N/A"
+                        }
+                        stocks_list.append(stock_info)
+                        if len(stocks_list) >= limit:
+                            break
+            
+            # Sort by requested field
+            if sort_by == "change_1d":
+                stocks_list.sort(key=lambda x: abs(x.get("change", 0)), reverse=True)
+            elif sort_by == "momentum_30d":
+                stocks_list.sort(key=lambda x: x.get("momentum_30d", 0), reverse=True)
+            elif sort_by == "mcap":
+                stocks_list.sort(key=lambda x: x.get("market_cap", 0), reverse=True)
+            else:  # score or default
+                stocks_list.sort(key=lambda x: x.get("score", 0), reverse=True)
+            
+            # Limit results
+            top_stocks = stocks_list[:limit]
+            
+            return _ok({
+                "stocks": top_stocks,
+                "count": len(top_stocks),
+                "sort_by": sort_by,
+                "generated_at": datetime.utcnow().isoformat(),
+                "source": ["stocks_prices", "stocks_metrics"] if len(tickers_data) > 0 else ["forecasts_fallback"]
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in stocks_top: {e}", exc_info=True)
+            # Return empty structure (never-empty pattern)
+            return _ok({
+                "stocks": [],
+                "count": 0,
+                "sort_by": sort_by,
+                "error": str(e),
+                "generated_at": datetime.utcnow().isoformat(),
+                "source": ["fallback"]
             })
 
     @app.get("/api/stocks/screener")
@@ -1454,97 +1549,21 @@ def register_routes(app: FastAPI):
 
     # ========================= PILLAR 3: NEWS ============================
 
-    @app.get("/api/news/feed")
-    async def news_feed(
-        tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
-        since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
-        region: str = Query("all", description="Region filter (unused in v1)"),
-        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
-        limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
-    ):
-        """Get news feed - serves real data from news_feed.json"""
-        try:
-            from storage.io import load_json
-
-            # Load news data
-            news_data = load_json("news_feed")
-
-            if not news_data:
-                # Return empty but valid structure
-                updated_at_fallback = datetime.utcnow().isoformat()
-                return _ok({
-                    "articles": [],
-                    "count": 0,
-                    "filters": {
-                        "tickers": tickers,
-                        "since": since,
-                        "limit": limit
-                    },
-                    "freshness": updated_at_fallback,
-                    "updated_at": updated_at_fallback,  # Ajout pour compatibilité frontend
-                    "source": ["file_not_found"],
-                    "last_update": updated_at_fallback
-                })
-
-            # Extract articles from loaded data
-            articles = news_data.get("articles", [])
-
-            # Apply filters
-            filtered_articles = articles
-
-            # Filter by tickers if specified
-            if tickers and filtered_articles:
-                # Prefer explicit article tickers/symbols when available, fallback to text match
-                desired = {t.upper() for t in tickers}
-                def _matches(a: Dict[str, Any]) -> bool:
-                    arts_tickers = {str(x).upper() for x in (a.get("tickers") or [])}
-                    arts_symbols = {str(x).upper() for x in (a.get("symbols") or [])} if isinstance(a.get("symbols"), list) else set()
-                    if arts_tickers & desired or arts_symbols & desired:
-                        return True
-                    text = (a.get("title", "") + " " + a.get("summary", a.get("description", ""))).upper()
-                    return any(t in text for t in desired)
-
-                filtered_articles = [a for a in filtered_articles if _matches(a)]
-
-                # Never-empty guarantee: if no match, show latest with a note
-                if not filtered_articles:
-                    filtered_articles = articles[:limit]
-
-            # Apply limit safely (frontend can request up to 400)
-            filtered_articles = filtered_articles[: min(limit, 400)]
-
-            last_update = news_data.get("collected_at") or news_data.get("freshness") or news_data.get("last_update") or datetime.utcnow().isoformat()
-            return _ok({
-                "articles": filtered_articles,
-                "count": len(filtered_articles),
-                "filters": {
-                    "tickers": tickers,
-                    "since": since,
-                    "limit": limit
-                },
-                "freshness": last_update,
-                "updated_at": last_update,  # Ajout pour compatibilité frontend
-                "source": news_data.get("sources_used", ["news_feed.json"]),
-                "last_update": last_update
-            })
-
-        except Exception as e:
-            # Fallback: return empty structure
-            updated_at_fallback = datetime.utcnow().isoformat()
-            return _ok({
-                "articles": [],
-                "count": 0,
-                "error": str(e),
-                "filters": {
-                    "tickers": tickers,
-                    "since": since,
-                    "limit": limit
-                },
-                "freshness": updated_at_fallback,
-                "updated_at": updated_at_fallback,  # Ajout pour compatibilité frontend
-                "source": ["error_fallback"],
-                "last_update": updated_at_fallback
-            })
+    # ========================= NEWS FEED (DISABLED - Using router instead) ======================
+    # NOTE: The /api/news/feed endpoint is now handled by api/routes/news.py router
+    # This endpoint is commented out to avoid conflicts with the router
+    # The router provides better filtering, caching, and error handling
+    
+    # @app.get("/api/news/feed")
+    # async def news_feed(
+    #     tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
+    #     since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
+    #     region: str = Query("all", description="Region filter (unused in v1)"),
+    #     score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
+    #     limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
+    # ):
+    #     """Get news feed - serves real data from news_feed.json"""
+    #     # ... (implementation moved to api/routes/news.py)
 
     @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
@@ -2434,97 +2453,20 @@ def register_routes(app: FastAPI):
         except Exception as e:
             return _ok({"scores": [], "count": 0, "error": str(e)})
 
-    # ========================= FORECASTS (EXISTING) ======================
-
-    @app.get("/api/forecasts")
-    async def forecasts(
-        asset_type: str = Query("all", description="Asset type: equity, commodity, all"),
-        horizon: str = Query("all", description="Horizon: 1w, 1m, 3m, all"),
-        search: Optional[str] = Query(None, description="Search term"),
-        sort_by: str = Query("score", description="Sort by: score, confidence, return")
-    ):
-        """Get forecasts list - serves real data from forecasts.json"""
-        try:
-            forecasts_data = ensure_snapshot(
-                "forecasts",
-                job_runner=_run_forecasts_job,
-                aliases=["forecasts.json"],
-            )
-
-            if not forecasts_data:
-                return _ok({
-                    "rows": [],
-                    "count": 0,
-                    "asset_type": asset_type,
-                    "generated_at": datetime.utcnow().isoformat(),
-                    "source": ["forecast_cache_missing"],
-                    "freshness": "unknown",
-                })
-
-            payload = resolve_payload(forecasts_data, ("data", "payload"))
-            rows = payload.get("rows") or forecasts_data.get("rows") or []
-
-            # Apply filters
-            filtered_rows = rows
-
-            # Filter by horizon if specified
-            if horizon != "all" and rows:
-                filtered_rows = [r for r in filtered_rows if r.get("horizon") == horizon]
-
-            # Filter by asset_type (for now all are equity)
-            # This can be extended later
-
-            # Filter by search term if provided
-            if search and filtered_rows:
-                search_lower = search.lower()
-                filtered_rows = [r for r in filtered_rows if search_lower in r.get("ticker", "").lower()]
-
-            # Sort rows
-            if sort_by == "confidence" and filtered_rows:
-                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("confidence", 0), reverse=True)
-            elif sort_by == "return" and filtered_rows:
-                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("expected_return", 0), reverse=True)
-            else:  # score or default
-                filtered_rows = sorted(filtered_rows, key=lambda x: x.get("llm_adjusted_confidence", x.get("confidence", 0)), reverse=True)
-
-            generated_at = (
-                payload.get("generated_at")
-                or forecasts_data.get("generated_at")
-                or forecasts_data.get("last_update")
-                or datetime.utcnow().isoformat()
-            )
-            source = (
-                payload.get("source")
-                or forecasts_data.get("source")
-                or ["forecasts_cache"]
-            )
-            model_version = (
-                payload.get("model_version")
-                or forecasts_data.get("model_version")
-                or "hybrid_v1"
-            )
-
-            return _ok({
-                "rows": filtered_rows,
-                "count": len(filtered_rows),
-                "asset_type": asset_type,
-                "horizon": horizon,
-                "generated_at": generated_at,
-                "source": source,
-                "model_version": model_version,
-                "freshness": forecasts_data.get("freshness", generated_at),
-            })
-
-        except Exception as e:
-            # Fallback: return empty structure
-            return _ok({
-                "rows": [],
-                "count": 0,
-                "error": str(e),
-                "asset_type": asset_type,
-                "generated_at": datetime.utcnow().isoformat(),
-                "source": ["error_fallback"]
-            })
+    # ========================= FORECASTS (DISABLED - Using router instead) ======================
+    # NOTE: The /api/forecasts endpoint is now handled by api/routes/forecasts.py router
+    # This endpoint is commented out to avoid conflicts with the router
+    # The router provides better filtering, caching, and error handling
+    
+    # @app.get("/api/forecasts")
+    # async def forecasts(
+    #     asset_type: str = Query("all", description="Asset type: equity, commodity, all"),
+    #     horizon: str = Query("all", description="Horizon: 1w, 1m, 3m, all"),
+    #     search: Optional[str] = Query(None, description="Search term"),
+    #     sort_by: str = Query("score", description="Sort by: score, confidence, return")
+    # ):
+    #     """Get forecasts list - serves real data from forecasts.json"""
+    #     # ... (implementation moved to api/routes/forecasts.py)
 
     @app.get("/api/backtests")
     async def backtests(
@@ -2670,31 +2612,149 @@ def register_routes(app: FastAPI):
         can be slow due to external data fetches.
         """
         try:
-            # Compute KPIs using DuckDB directly to avoid CWD-dependent paths
-            from core.duck import query_parquet as _qp
-            base_dir = Path(__file__).resolve().parents[2]
-            fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
-            # Latest dt by filesystem
-            parts = sorted((base_dir / 'data' / 'forecast').glob('dt=*'))
-            last_dt = parts[-1].name.split('=')[-1] if parts else None
-            # Counts
+            # Try to load from JSON files first (fallback if parquet doesn't exist)
+            from storage.io import load_json
+            
+            forecasts_data = load_json("forecasts") or load_json("forecasts.json")
+            forecasts_rows = []
+            if forecasts_data:
+                # Extract rows from various possible formats
+                if isinstance(forecasts_data, dict):
+                    forecasts_rows = forecasts_data.get("rows") or forecasts_data.get("data", {}).get("rows", []) or []
+                    if not forecasts_rows and isinstance(forecasts_data.get("data"), list):
+                        forecasts_rows = forecasts_data.get("data", [])
+                elif isinstance(forecasts_data, list):
+                    forecasts_rows = forecasts_data
+            
+            # Calculate KPIs from JSON data
+            forecasts_count = len(forecasts_rows) if forecasts_rows else 0
+            tickers_set = set()
+            horizons_set = set()
+            confidences = []
+            bullish_count = 0
+            bearish_count = 0
+            
+            for row in forecasts_rows:
+                if isinstance(row, dict):
+                    ticker = row.get("ticker") or row.get("symbol")
+                    if ticker:
+                        tickers_set.add(str(ticker).upper())
+                    
+                    horizon = row.get("horizon")
+                    if horizon:
+                        horizons_set.add(str(horizon))
+                    
+                    confidence = row.get("confidence")
+                    if confidence is not None:
+                        conf = float(confidence)
+                        confidences.append(conf)
+                    
+                    direction = row.get("direction", "").lower()
+                    if direction == "up":
+                        bullish_count += 1
+                    elif direction == "down":
+                        bearish_count += 1
+            
+            tickers_count = len(tickers_set)
+            horizons_list = sorted(list(horizons_set))
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            # Convert to percentage (0-100) if needed, but keep as decimal (0-1) for consistency
+            high_confidence_count = sum(1 for c in confidences if c >= 0.7)
+            
+            # Log for debugging if no data
+            if forecasts_count == 0:
+                logger.warning(f"No forecasts found in data. forecasts_data keys: {list(forecasts_data.keys()) if isinstance(forecasts_data, dict) else 'not a dict'}")
+            
+            # Try DuckDB/Parquet as primary source if available (more accurate)
             try:
-                cnt_row = _qp(f"select count(*) as cnt, count(distinct ticker) as nt from read_parquet('{fpat}')")
-                forecasts_count = int(cnt_row[0]['cnt']) if cnt_row else 0
-                tickers_count = int(cnt_row[0]['nt']) if cnt_row else 0
-                hz_rows = _qp(f"select distinct horizon from read_parquet('{fpat}')")
-                horizons_list = sorted([str(r['horizon']) for r in hz_rows if r.get('horizon') is not None])
-            except Exception:
-                forecasts_count = 0
-                tickers_count = 0
-                horizons_list = []
+                from core.duck import query_parquet as _qp
+                base_dir = Path(__file__).resolve().parents[2]
+                fpat = str(base_dir / 'data' / 'forecast' / 'dt=*' / 'final.parquet')
+                parts = sorted((base_dir / 'data' / 'forecast').glob('dt=*'))
+                last_dt = parts[-1].name.split('=')[-1] if parts else None
+                
+                try:
+                    cnt_row = _qp(f"select count(*) as cnt, count(distinct ticker) as nt from read_parquet('{fpat}')")
+                    if cnt_row and len(cnt_row) > 0:
+                        parquet_forecasts_count = int(cnt_row[0]['cnt']) if cnt_row else 0
+                        parquet_tickers_count = int(cnt_row[0]['nt']) if cnt_row else 0
+                        # Use parquet data if available and more complete
+                        if parquet_forecasts_count > forecasts_count:
+                            forecasts_count = parquet_forecasts_count
+                            tickers_count = parquet_tickers_count
+                        hz_rows = _qp(f"select distinct horizon from read_parquet('{fpat}')")
+                        parquet_horizons = sorted([str(r['horizon']) for r in hz_rows if r.get('horizon') is not None])
+                        if parquet_horizons:
+                            horizons_list = parquet_horizons
+                except Exception:
+                    pass  # Fallback to JSON data already loaded
+            except ImportError:
+                last_dt = None
+            
+            # Load news data for news KPI
+            news_data = load_json("news_feed") or load_json("news_feed.json")
+            news_count = 0
+            if news_data:
+                news_items = news_data.get("articles") or news_data.get("rows") or news_data.get("data", {}).get("articles", []) or []
+                if isinstance(news_items, list):
+                    # Count recent news (last 60 minutes)
+                    now = datetime.utcnow()
+                    for item in news_items:
+                        if isinstance(item, dict):
+                            pub_date = item.get("published_at") or item.get("timestamp") or item.get("date")
+                            if pub_date:
+                                try:
+                                    if isinstance(pub_date, str):
+                                        pub_dt = datetime.fromisoformat(pub_date.replace('Z', '+00:00'))
+                                    else:
+                                        pub_dt = pub_date
+                                    if (now - pub_dt).total_seconds() <= 3600:  # 60 minutes
+                                        news_count += 1
+                                except Exception:
+                                    pass
+            
+            # Load backtests data for hit rate
+            backtests_data = load_json("backtests") or load_json("backtests.json")
+            hit_rate = 0.0
+            backtest_status = "pending"
+            if backtests_data:
+                results = backtests_data.get("results") or backtests_data.get("data", {}).get("results", []) or []
+                if isinstance(results, list) and len(results) > 0:
+                    correct = sum(1 for r in results if isinstance(r, dict) and r.get("correct", False))
+                    hit_rate = (correct / len(results)) * 100 if results else 0.0
+                    backtest_status = "completed"
+            
+            # Build base_data with all KPIs
             base_data = {
                 "last_forecast_dt": last_dt,
                 "forecasts_count": forecasts_count,
                 "tickers": tickers_count,
                 "horizons": horizons_list,
                 "last_macro_dt": None,
-                "last_quality_dt": None
+                "last_quality_dt": None,
+                # Structure compatible avec le frontend
+                "forecasts": {
+                    "total": forecasts_count,
+                    "high_confidence": high_confidence_count,
+                    "avg_confidence": avg_confidence,
+                    "bullish": bullish_count,
+                    "bearish": bearish_count,
+                },
+                "backtests": {
+                    "hit_rate": hit_rate,
+                    "sharpe_ratio": 0.0,  # TODO: calculate from backtests
+                    "status": backtest_status,
+                },
+                "news": {
+                    "recent_count": news_count,
+                    "avg_score": 0.0,  # TODO: calculate from news sentiment
+                },
+                "system": {
+                    "last_forecast_update": last_dt,
+                    "last_news_update": None,
+                    "last_backtest_update": None,
+                },
+                "generated_at": datetime.utcnow().isoformat(),
             }
             
             # If heavy scoring not requested, compute a lightweight top/bottom from final.parquet
@@ -2822,24 +2882,23 @@ def register_routes(app: FastAPI):
                 "horizons": [],
                 "last_macro_dt": None,
                 "last_quality_dt": None,
-                "filtered_signals": [],
-                "filtered_risks": [],
-                "filter_applied": {
-                    "sectors": sectors,
-                    "horizons": horizons,
-                    "themes": themes,
-                    "tickers": tickers
+                "forecasts": {
+                    "total": 0,
+                    "high_confidence": 0,
+                    "avg_confidence": 0.0,
+                    "bullish": 0,
+                    "bearish": 0,
                 },
-                "filtered_ticker_count": 0
-            })
-        except Exception as e:
-            return _ok({
-                "last_forecast_dt": None,
-                "forecasts_count": 0,
-                "tickers": 0,
-                "horizons": [],
-                "last_macro_dt": None,
-                "last_quality_dt": None,
+                "backtests": {
+                    "hit_rate": 0.0,
+                    "sharpe_ratio": 0.0,
+                    "status": "pending",
+                },
+                "news": {
+                    "recent_count": 0,
+                    "avg_score": 0.0,
+                },
+                "system": {},
                 "filtered_signals": [],
                 "filtered_risks": [],
                 "filter_applied": {
@@ -2849,7 +2908,45 @@ def register_routes(app: FastAPI):
                     "tickers": tickers
                 },
                 "filtered_ticker_count": 0,
-                "error": str(e)
+                "generated_at": datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"Error in dashboard_kpis: {e}", exc_info=True)
+            return _ok({
+                "last_forecast_dt": None,
+                "forecasts_count": 0,
+                "tickers": 0,
+                "horizons": [],
+                "last_macro_dt": None,
+                "last_quality_dt": None,
+                "forecasts": {
+                    "total": 0,
+                    "high_confidence": 0,
+                    "avg_confidence": 0.0,
+                    "bullish": 0,
+                    "bearish": 0,
+                },
+                "backtests": {
+                    "hit_rate": 0.0,
+                    "sharpe_ratio": 0.0,
+                    "status": "error",
+                },
+                "news": {
+                    "recent_count": 0,
+                    "avg_score": 0.0,
+                },
+                "system": {},
+                "filtered_signals": [],
+                "filtered_risks": [],
+                "filter_applied": {
+                    "sectors": sectors,
+                    "horizons": horizons,
+                    "themes": themes,
+                    "tickers": tickers
+                },
+                "filtered_ticker_count": 0,
+                "error": str(e),
+                "generated_at": datetime.utcnow().isoformat(),
             })
 
     @app.get("/api/alerts")

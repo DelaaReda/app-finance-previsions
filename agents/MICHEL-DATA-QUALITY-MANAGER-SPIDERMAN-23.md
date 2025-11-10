@@ -84,6 +84,33 @@
 - [x] Coordination des corrections suite à changements de directive (MUI vs Mantine+Tremor)
 - [x] Suivi de la stabilité système post-implémentation
 - [x] Vérification que le système est fonctionnel et prêt pour développement continu
+- [x] Création de la documentation complète FRONTEND_DATA_DEBUG.md pour dépannage des données
+- [x] Publication des commandes spécifiques pour tester chaque endpoint backend directement
+- [x] Documentation des patterns never-empty et safe access helpers à utiliser partout
+- [x] Procédure de dépannage spécifique pour les pages bloquées (Macro, Stocks, Brief, News)
+- [x] Identification et documentation des anti-patterns frontend à éviter immédiatement
+- [x] Établissement des tests frontend à exécuter avant validation des pages
+- [x] Coordination avec les équipes pour résoudre les chargements infinis
+- [x] Vérification du flow de données Backend→Frontend et points de contrôle
+- [x] Communication des exigences spécifiques pour chaque page bloquée
+- [x] Création et distribution de la procédure CLI pour déboguer les problèmes de données UI
+- [x] Coordination de la mise en œuvre systématique des corrections frontend
+- [x] Supervision de l'application des patterns never-empty dans le code frontend
+- [x] Création du système de validation qualité des données (scripts/quality/data_validation.sh)
+- [x] Détection automatique des endpoints problématiques (ex: /api/forecasts → "Not Found")
+- [x] Génération de rapports détaillés sur l'état des endpoints (proofs/FC-DQM-DATA-VALIDATION/)
+- [x] Document de plan d'amélioration qualité créé (DATA_QUALITY_IMPROVEMENT_PLAN.md)
+- [x] Identification des tâches critiques à créer pour fixer les endpoints non fonctionnels
+- [x] Création de la feuille de route complète pour résolution des problèmes de données
+- [x] Mise en place d'un système de validation continue pour garantir la qualité des données
+- [x] Déploiement des outils de test qualité pour vérifier données réelles vs mocks
+- [x] Établissement des critères de succès pour validation des endpoints (structure, fraîcheur, contenu)
+- [x] Coordination avec les équipes pour résolution prioritaire des endpoints bloquants
+- [x] Communication des résultats de validation à l'ensemble de l'équipe
+- [x] Documentation des processus de vérification et validation qualité des données
+- [x] Mise en place d'un système de reporting automatisé des problèmes de données
+- [x] Création des tâches spécifiques FC-EP-FIX-* pour correction des endpoints critiques
+- [x] Établissement du plan complet de pipeline de données pour alimenter tous les endpoints
 - [x] Création des tâches FC-ALIGN-* pour vérification complète de l'alignement architecture
 - [x] Attribution de vérifications spécifiques à chaque agent (API, Backend, Finance, ML, News, Tests)
 - [x] Exigence de preuves de fonctionnement avec données réelles pour chaque endpoint

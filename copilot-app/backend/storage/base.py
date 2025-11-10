@@ -14,8 +14,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define storage directory
-STORAGE_DIR = Path(__file__).parent.parent / "data"
+# Import path resolver to ensure consistent path resolution regardless of working directory
+try:
+    from src.core.path_resolver import get_data_directory
+    STORAGE_DIR = get_data_directory()  # Use consistent path resolution
+except ImportError:
+    # Fallback: Compute path relative to this file
+    STORAGE_DIR = Path(__file__).parent.parent / "data"
 STORAGE_DIR.mkdir(exist_ok=True)
 
 

@@ -4,20 +4,33 @@
   padding: clamp(20px, 4vw, 60px) clamp(16px, 5vw, 72px) 80px;
   background: radial-gradient(circle at 20% 20%, rgba(64, 107, 255, 0.18), transparent 45%),
     radial-gradient(circle at 80% 0%, rgba(255, 176, 115, 0.15), transparent 40%),
-    linear-gradient(160deg, #050912 0%, #0b1426 40%, #050912 100%);
+    linear-gradient(160deg, var(--dashboard-bg-start) 0%, var(--dashboard-bg-mid) 40%, var(--dashboard-bg-end) 100%);
   overflow: hidden;
   position: relative;
+  transition: background 400ms ease;
+}
+
+/* Light mode dashboard background */
+[data-mantine-color-scheme="light"] .dashboardRoot {
+  background: radial-gradient(circle at 20% 20%, rgba(76, 110, 245, 0.08), transparent 45%),
+    radial-gradient(circle at 80% 0%, rgba(20, 184, 166, 0.06), transparent 40%),
+    linear-gradient(160deg, var(--dashboard-bg-start) 0%, var(--dashboard-bg-mid) 40%, var(--dashboard-bg-end) 100%);
 }
 
 .gridOverlay {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-image: linear-gradient(var(--dashboard-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dashboard-grid) 1px, transparent 1px);
   background-size: 140px 140px;
   opacity: 0.4;
   pointer-events: none;
   animation: gridDrift 60s linear infinite;
+  transition: opacity 300ms ease;
+}
+
+[data-mantine-color-scheme="light"] .gridOverlay {
+  opacity: 0.3;
 }
 
 .ambientOrbs {
@@ -42,6 +55,7 @@
   top: 15%;
   left: 5%;
   background: radial-gradient(circle, rgba(82, 151, 255, 0.45), rgba(82, 151, 255, 0));
+  transition: opacity 400ms ease;
 }
 
 .orbTwo {
@@ -51,6 +65,7 @@
   right: 8%;
   animation-delay: 4s;
   background: radial-gradient(circle, rgba(255, 168, 124, 0.4), rgba(255, 168, 124, 0));
+  transition: opacity 400ms ease;
 }
 
 .orbThree {
@@ -60,6 +75,23 @@
   right: 30%;
   animation-delay: 9s;
   background: radial-gradient(circle, rgba(146, 255, 206, 0.5), rgba(146, 255, 206, 0));
+  transition: opacity 400ms ease;
+}
+
+/* Light mode orbs - more subtle */
+[data-mantine-color-scheme="light"] .orbOne {
+  background: radial-gradient(circle, rgba(76, 110, 245, 0.15), rgba(76, 110, 245, 0));
+  opacity: 0.6;
+}
+
+[data-mantine-color-scheme="light"] .orbTwo {
+  background: radial-gradient(circle, rgba(20, 184, 166, 0.12), rgba(20, 184, 166, 0));
+  opacity: 0.5;
+}
+
+[data-mantine-color-scheme="light"] .orbThree {
+  background: radial-gradient(circle, rgba(76, 110, 245, 0.1), rgba(76, 110, 245, 0));
+  opacity: 0.4;
 }
 
 .inner {
@@ -74,11 +106,17 @@
   position: relative;
   border-radius: 28px;
   padding: clamp(20px, 3vw, 40px);
-  background: rgba(13, 19, 36, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 30px 70px rgba(3, 5, 12, 0.65);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 30px 70px var(--glass-shadow);
   overflow: hidden;
   animation: heroPulse 18s ease-in-out infinite alternate;
+  transition: background 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+
+[data-mantine-color-scheme="light"] .hero {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .hero::after {
@@ -117,6 +155,13 @@
   color: #9bd8ff;
   letter-spacing: 0.05em;
   animation: badgePulse 3.6s ease-in-out infinite;
+  transition: background 300ms ease, border-color 300ms ease, color 300ms ease;
+}
+
+[data-mantine-color-scheme="light"] .liveBadge {
+  background: rgba(76, 110, 245, 0.15);
+  border: 1px solid rgba(76, 110, 245, 0.3);
+  color: #4c6ef5;
 }
 
 .alertGlass {
@@ -129,11 +174,17 @@
 .widgetSection {
   border-radius: 24px;
   padding: clamp(20px, 3vw, 32px);
-  background: rgba(9, 14, 28, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 25px 55px rgba(4, 6, 15, 0.55);
-  transition: transform 320ms ease, box-shadow 320ms ease;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 25px 55px var(--glass-shadow);
+  transition: transform 320ms ease, box-shadow 320ms ease, background 300ms ease, border-color 300ms ease;
   position: relative;
+}
+
+[data-mantine-color-scheme="light"] .sectionCard,
+[data-mantine-color-scheme="light"] .widgetSection {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .sectionCard::after,
@@ -161,12 +212,17 @@
 .metricCard {
   border-radius: 18px;
   padding: 16px 18px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  background: var(--metric-bg);
+  border: 1px solid var(--metric-border);
+  box-shadow: inset 0 0 0 1px var(--metric-border);
   min-height: 102px;
   position: relative;
   overflow: hidden;
+  transition: background 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+
+[data-mantine-color-scheme="light"] .metricCard {
+  box-shadow: inset 0 0 0 1px var(--metric-border), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .metricCard::after {
@@ -188,8 +244,9 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: var(--metric-icon-bg);
+  box-shadow: inset 0 0 0 1px var(--metric-border);
+  transition: background 300ms ease, box-shadow 300ms ease;
 }
 
 .metricLabel {
@@ -197,7 +254,8 @@
 }
 
 .metricValue {
-  color: #f5f7ff;
+  color: var(--text);
+  transition: color 300ms ease;
 }
 
 .metricProgress {
@@ -247,7 +305,8 @@
 }
 
 .metricValue {
-  color: #f5f7ff;
+  color: var(--text);
+  transition: color 300ms ease;
 }
 
 .metricAccentBlue::after {
@@ -269,7 +328,12 @@
 .sectionCard:hover,
 .widgetSection:hover {
   transform: translateY(-6px);
-  box-shadow: 0 35px 65px rgba(3, 5, 12, 0.65);
+  box-shadow: 0 35px 65px var(--glass-shadow);
+}
+
+[data-mantine-color-scheme="light"] .sectionCard:hover,
+[data-mantine-color-scheme="light"] .widgetSection:hover {
+  box-shadow: 0 35px 65px rgba(0, 0, 0, 0.15);
 }
 
 .sectionCard:hover::after,

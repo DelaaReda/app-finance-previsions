@@ -3,7 +3,7 @@
  * Displays real macro economic indicators
  */
 
-import { Card, Stack, Title, Text, SimpleGrid, Badge, Group, Skeleton, Alert } from '@mantine/core';
+import { Card, Stack, Title, Text, SimpleGrid, Badge, Group, Skeleton, Alert, Button } from '@mantine/core';
 import { IconChartLine, IconInfoCircle, IconTrendingUp, IconTrendingDown } from '@tabler/icons-react';
 import { RingProgress } from '@mantine/core';
 import { useApi } from '@/hooks/useApi';
@@ -11,7 +11,7 @@ import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
 import styles from './MacroWidget.module.css';
 
 export function MacroWidget() {
-  const { data, isLoading, error } = useApi<any>('/api/macro/series');
+  const { data, isLoading, error, refetch } = useApi<any>('/api/macro/series');
 
   // Process the macro data from series format
   // API returns: { ok: true, data: { series: [{ id, name, unit, frequency, points: [{date, value}] }] } }
@@ -159,8 +159,20 @@ export function MacroWidget() {
         )}
 
         {error && (
-          <Alert color="red" variant="light" title="Data Error">
-            <Text size="sm">Failed to load macro data: {error}</Text>
+          <Alert 
+            color="red" 
+            variant="light" 
+            title="Erreur de données"
+            action={
+              <Button size="xs" variant="light" onClick={() => window.location.reload()}>
+                Réessayer
+              </Button>
+            }
+          >
+            <Text size="sm">Échec du chargement des données macro: {error}</Text>
+            <Text size="xs" c="dimmed" mt="xs">
+              Les données macroéconomiques sont temporairement indisponibles. Veuillez réessayer dans quelques instants.
+            </Text>
           </Alert>
         )}
 
@@ -225,9 +237,29 @@ export function MacroWidget() {
         )}
 
         {!isLoading && !error && indicators.length === 0 && (
-          <Text size="sm" c="dimmed" ta="center">
-            No macro data available
-          </Text>
+          <Alert 
+            color="yellow" 
+            variant="light" 
+            title="Aucune donnée macro disponible"
+            icon={<IconInfoCircle size={20} />}
+            action={
+              <Button 
+                size="xs" 
+                variant="light" 
+                onClick={() => refetch()}
+                aria-label="Actualiser les données macroéconomiques"
+              >
+                Actualiser
+              </Button>
+            }
+          >
+            <Text size="sm">
+              Les données macroéconomiques ne sont pas encore disponibles. Le système récupère les données depuis FRED en arrière-plan.
+            </Text>
+            <Text size="xs" c="dimmed" mt="xs">
+              Les indicateurs macro (CPI, Unemployment, Treasury Yields) seront affichés une fois les données chargées.
+            </Text>
+          </Alert>
         )}
       </Stack>
     </Card>

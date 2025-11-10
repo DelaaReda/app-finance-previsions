@@ -12,13 +12,22 @@ from pathlib import Path
 # Add src to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Ensure .env is loaded before accessing environment variables
+try:
+    from core.env_loader import ensure_env_loaded, get_env
+    ensure_env_loaded()
+except ImportError:
+    # Fallback if env_loader not available
+    def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
+        return os.getenv(name, default)
+
 def get_llm_client():
     """Retourne client LLM configuré ou None (OpenAI ou G4F)."""
     # 1) OpenAI
     try:
         import openai  # type: ignore
-        api_key = os.getenv("OPENAI_API_KEY")
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        api_key = get_env("OPENAI_API_KEY")
+        base_url = get_env("OPENAI_BASE_URL", "https://api.openai.com/v1")
         if api_key:
             return ("openai", openai.OpenAI(api_key=api_key, base_url=base_url))
     except Exception:

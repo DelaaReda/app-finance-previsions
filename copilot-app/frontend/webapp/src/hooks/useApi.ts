@@ -35,7 +35,24 @@ export function useApi<T>(url: string): ApiResult<T> {
         setData(jsonData);
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred while fetching data');
+      // Format user-friendly error messages
+      let errorMessage = 'Une erreur est survenue lors du chargement des données';
+      
+      if (err.message) {
+        if (err.message.includes('404')) {
+          errorMessage = 'Ressource non trouvée. Le service peut être temporairement indisponible.';
+        } else if (err.message.includes('500')) {
+          errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
+        } else if (err.message.includes('timeout') || err.message.includes('Failed to fetch')) {
+          errorMessage = 'Connexion au serveur impossible. Vérifiez votre connexion réseau.';
+        } else if (err.message.includes('HTTP error')) {
+          errorMessage = `Erreur de communication avec le serveur (${err.message.match(/\d+/)?.[0] || 'inconnue'})`;
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
       console.error('API error:', err);
     } finally {
       setIsLoading(false);

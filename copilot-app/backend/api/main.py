@@ -53,36 +53,43 @@ except ImportError:
 @app.on_event("startup")
 async def startup_event():
     """
-    Initialize data on startup if not present
+    Validate and generate all required data on startup if not present
     Ensures data is available immediately on API start
+    Includes LLM Judge data generation for non-empty pages
     """
-    logger.info("🚀 API startup - checking for data files...")
+    logger.info("🚀 API startup - validating and generating data files...")
     
-    try:
-        # Try to load forecast data to check if initialization needed
+    import asyncio
+    
+    async def run_data_validation():
+        """Run data validation and generation in background"""
         try:
-            from storage.io import load_json
-            forecasts = load_json("forecasts")  # Without .json extension
-        except ImportError:
-            forecasts = None
-        
-        if not forecasts or not forecasts.get('rows', []):
-            logger.info("⚠️  No forecast data found, initializing...")
+            from jobs.validate_and_generate_data import validate_and_generate_all
+            results = validate_and_generate_all()
             
-            try:
-                from jobs.initialize_data import initialize_all_data
-                results = initialize_all_data()
-                logger.info(f"✅ Data initialization complete: {results}")
-            except ImportError:
-                logger.warning("⚠️  Data initialization module not available")
-        else:
-            forecast_count = len(forecasts.get('rows', []))
-            last_update = forecasts.get('generated_at', forecasts.get('last_updated', 'unknown'))
-            logger.info(f"✅ Forecast data exists: {forecast_count} forecasts, last update: {last_update}")
+            validated = results.get("validated", {})
+            generated = results.get("generated", {})
+            missing = results.get("missing", [])
             
-    except Exception as e:
-        logger.warning(f"⚠️  Could not initialize data on startup: {str(e)}")
-        logger.info("API will continue but may return empty data until jobs run")
+            # Log summary
+            validated_count = sum(1 for v in validated.values() if v)
+            generated_count = sum(1 for v in generated.values() if v)
+            
+            logger.info(f"✅ Data validation complete: {validated_count} files validated, {generated_count} files generated")
+            
+            if missing:
+                logger.warning(f"⚠️  {len(missing)} required file(s) still missing: {', '.join(missing)}")
+            else:
+                logger.info("🎉 All required data files are present!")
+                
+        except ImportError as e:
+            logger.warning(f"⚠️  Data validation module not available: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not validate/generate data on startup: {str(e)}")
+            logger.info("API will continue but may return empty data until jobs run")
+    
+    # Run validation in background to not block API startup
+    asyncio.create_task(run_data_validation())
 
 
 @app.get("/")

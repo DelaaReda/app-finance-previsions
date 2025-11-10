@@ -26,10 +26,14 @@ import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
 function DashboardContent() {
   const { data: kpis, isLoading: kpiLoading } = useDashboardKPIs();
 
-  const totalForecasts = kpis?.forecasts?.total ?? kpis?.total_forecasts ?? 0;
+  // Extract KPIs with proper fallbacks
+  const totalForecasts = kpis?.forecasts?.total ?? kpis?.forecasts_count ?? kpis?.total_forecasts ?? 0;
   const highConv = kpis?.forecasts?.high_confidence ?? 0;
   const newsCount = kpis?.news?.recent_count ?? 0;
-  const hitRate = kpis?.backtests?.hit_rate ?? 0;
+  // Handle hit_rate - can be 0-1 or 0-100
+  const rawHitRate = kpis?.backtests?.hit_rate ?? 0;
+  const hitRate = rawHitRate > 1 ? rawHitRate / 100 : rawHitRate;
+  const tickersTracked = kpis?.tickers ?? kpis?.tickers_tracked ?? 0;
 
   const safePercent = (value: number) => {
     if (!Number.isFinite(value)) return 0;
@@ -40,7 +44,7 @@ function DashboardContent() {
     {
       label: 'Prévisions actives',
       value: totalForecasts.toLocaleString(),
-      detail: `${kpis?.tickers_tracked ?? 0} tickers suivis`,
+      detail: `${tickersTracked} tickers suivis`,
       accent: classes.metricAccentBlue,
       icon: <IconRadar2 size={18} />,
       progress: safePercent(totalForecasts / 500),

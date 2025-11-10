@@ -23,7 +23,16 @@ backend_root = Path(__file__).resolve().parent.parent
 if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
-from storage.io import load_json, save_json
+# Import using the secure storage layer for consistent path resolution
+try:
+    from backend.storage.io import load_json, save_json
+except ImportError:
+    # Fallback to relative import if absolute import fails
+    try:
+        from ..storage.io import load_json, save_json
+    except ImportError:
+        # Final fallback - try importing directly
+        from storage.io import load_json, save_json
 
 
 class CacheLayerService:

@@ -121,19 +121,27 @@ def run_weekly_brief_job():
     
     try:
         from storage.base import load_forecasts, load_news_feed, save_weekly_brief
-        
+
+        def _extract_rows(snapshot: dict, rows_key: str) -> list:
+            if not snapshot:
+                return []
+            payload = snapshot.get('data')
+            if isinstance(payload, dict) and rows_key in payload:
+                return payload.get(rows_key, [])
+            if rows_key in snapshot:
+                return snapshot.get(rows_key, [])
+            if isinstance(payload, list):
+                return payload
+            return []
+
         # Load forecasts
         forecasts_data = load_forecasts()
-        forecasts = []
-        if forecasts_data and forecasts_data.get('data'):
-            forecasts = forecasts_data['data'].get('rows', [])
+        forecasts = _extract_rows(forecasts_data, 'rows')
         logger.info(f"Loaded {len(forecasts)} forecasts")
-        
+
         # Load news
         news_data = load_news_feed()
-        articles = []
-        if news_data and news_data.get('data'):
-            articles = news_data['data'].get('articles', [])
+        articles = _extract_rows(news_data, 'articles')
         logger.info(f"Loaded {len(articles)} news articles")
         
         # Generate signals (bullish opportunities)

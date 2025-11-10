@@ -20,10 +20,13 @@ import {
   ScrollArea,
   Stack
 } from '@mantine/core';
+import { IconLoader, IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
 import { BadgeDelta } from '@tremor/react';
 import { useForecasts } from '@/hooks/useForecasts';
 import type { ForecastHorizon } from '@/types/forecast';
 import { ensureArray, safeGet } from '@/lib/safe';
+import { ForecastDetailDrawer } from '@/components/forecasts/ForecastDetailDrawer';
+import { useNavigate } from 'react-router-dom';
 
 type Props = {
   universe: string[];
@@ -60,7 +63,34 @@ export function ForecastCardsWidget({
   onOpenDetails,
 }: Props) {
   const [hz, setHz] = useState<ForecastHorizon>(initialHorizon);
-  const { data, isLoading, error, refetch, isFetching } = useForecasts({ horizon: hz, universe });
+  const [drawerOpened, setDrawerOpened] = useState(false);
+  const [selectedForecast, setSelectedForecast] = useState<any>(null);
+  const navigate = useNavigate();
+  const forecastFilters = {
+    horizon: hz,
+    tickers: universe && universe.length > 0 ? universe : undefined,
+    limit,
+  };
+  const { data, isLoading, error, refetch, isFetching } = useForecasts(forecastFilters);
+  
+  const handleOpenDetails = (forecast: any) => {
+    setSelectedForecast(forecast);
+    setDrawerOpened(true);
+  };
+  
+  const handleCloseDrawer = () => {
+    setDrawerOpened(false);
+    setSelectedForecast(null);
+  };
+  
+  const handleNavigateToTicker = (ticker: string) => {
+    if (onSelectTicker) {
+      onSelectTicker(ticker);
+    } else {
+      navigate(`/stocks/${ticker}`);
+    }
+    handleCloseDrawer();
+  };
 
   const items = useMemo(() => {
     const arr = ensureArray(safeGet(data, 'rows', [])).slice();
@@ -121,20 +151,75 @@ export function ForecastCardsWidget({
               ]}
               size="sm"
             />
-            <Button variant="light" size="sm" onClick={exportCsv}>Exporter CSV</Button>
-            <Button size="sm" onClick={() => refetch()} loading={isFetching}>Rafraîchir</Button>
+            <Button 
+              variant="light" 
+              size="sm" 
+              onClick={exportCsv}
+              aria-label="Exporter les prévisions en CSV"
+            >
+              Exporter CSV
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => refetch()} 
+              loading={isFetching}
+              aria-label="Rafraîchir les prévisions"
+            >
+              Rafraîchir
+            </Button>
           </Group>
         </Group>
 
-        {isLoading && (
-          <Alert title="Chargement" color="blue">Récupération des prévisions…</Alert>
-        )}
-        {error && (
-          <Alert title="Erreur" color="red">Impossible de récupérer les prévisions ({String(error)})</Alert>
-        )}
-        {!isLoading && !error && ensureArray(items).length === 0 && (
-          <Alert>Aucune prévision pour l'univers sélectionné.</Alert>
-        )}
+      {isLoading && (
+        <Alert 
+          title="Chargement" 
+          color="blue" 
+          icon={<IconLoader size={20} />}
+        >
+          <Text size="sm">Récupération des prévisions en cours…</Text>
+        </Alert>
+      )}
+      {error && (
+        <Alert 
+          title="Erreur" 
+          color="red"
+          icon={<IconAlertCircle size={20} />}
+          action={
+            <Button 
+              size="xs" 
+              variant="light" 
+              onClick={() => refetch()}
+              aria-label="Réessayer de charger les prévisions"
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          <Text size="sm">Impossible de récupérer les prévisions</Text>
+          <Text size="xs" c="dimmed" mt="xs">{String(error)}</Text>
+        </Alert>
+      )}
+      {!isLoading && !error && ensureArray(items).length === 0 && (
+        <Alert 
+          color="yellow"
+          icon={<IconInfoCircle size={20} />}
+          action={
+            <Button 
+              size="xs" 
+              variant="light" 
+              onClick={() => refetch()}
+              aria-label="Réessayer de charger les prévisions"
+            >
+              Actualiser
+            </Button>
+          }
+        >
+          <Text size="sm">Aucune prévision disponible pour l'univers sélectionné.</Text>
+          <Text size="xs" c="dimmed" mt="xs">
+            Le système calcule les prévisions en arrière-plan. Réessayez dans quelques instants.
+          </Text>
+        </Alert>
+      )}
 
         {!isLoading && !error && ensureArray(items).length > 0 && (
           <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
@@ -204,7 +289,7 @@ export function ForecastCardsWidget({
                             size="xs" 
                             variant="light" 
                             compact
-                            onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
+                            onClick={() => handleOpenDetails(f)}
                           >
                             Ouvrir
                           </Button>
@@ -224,6 +309,14 @@ export function ForecastCardsWidget({
         </ScrollArea>
         )}
       </Stack>
+      
+      {/* Forecast Detail Drawer */}
+      <ForecastDetailDrawer
+        opened={drawerOpened}
+        onClose={handleCloseDrawer}
+        forecast={selectedForecast}
+        onNavigateToTicker={handleNavigateToTicker}
+      />
     </MantineCard>
   );
 }

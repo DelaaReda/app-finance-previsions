@@ -17,16 +17,19 @@ interface StockData {
 }
 
 export function StocksWidget() {
-  const { data, isLoading, error, refetch } = useApi<any>('/api/stocks/SPY/sheet');
+  const { data, isLoading, error, refetch } = useApi<any>('/api/stocks/top?limit=10');
 
-  // Process the stock data - with sheet endpoint, we get a single stock's data
-  let topStocks = [];
-  if (data && data.data) {
-    // With sheet endpoint, we get one stock's data in data.data
-    topStocks = [data.data]; // Wrap single stock in array
-  } else if (data && data.ticker) {
-    // Direct response format
-    topStocks = [data];
+  // Process the stock data - with top endpoint, we get a list of stocks
+  let topStocks: StockData[] = [];
+  if (data && data.data && data.data.stocks) {
+    // New format: { ok: true, data: { stocks: [...] } }
+    topStocks = data.data.stocks;
+  } else if (data && data.stocks) {
+    // Direct format: { stocks: [...] }
+    topStocks = data.stocks;
+  } else if (data && Array.isArray(data)) {
+    // Array format
+    topStocks = data;
   }
 
   return (
@@ -40,6 +43,7 @@ export function StocksWidget() {
             color="blue" 
             onClick={() => refetch()} 
             loading={isLoading}
+            aria-label="Actualiser les données des actions"
           >
             <IconRefresh size={16} />
           </ActionIcon>
@@ -80,33 +84,41 @@ export function StocksWidget() {
             </Table.Thead>
             <Table.Tbody>
               {topStocks.map((stock: any, index: number) => {
-                // Extract data from the sheet response structure
+                // Extract data from the top stocks response structure
                 const ticker = stock.ticker || stock.symbol || stock.id || `STK${index+1}`;
-                const name = stock.company_name || (stock.fundamentals && stock.fundamentals.name) || ticker;
-                const price = stock.current_price || (stock.fundamentals && stock.fundamentals.price) || stock.price || 0;
-                const priceChange = stock.price_change || (stock.fundamentals && stock.fundamentals.price_change) || 0;
+                const name = stock.name || stock.company_name || ticker;
+                const price = stock.price || stock.current_price || 0;
+                const change = stock.change || stock.price_change || 0;
+                const changePercent = stock.change_percent || stock.price_change_pct || 0;
+                const marketCap = stock.market_cap || stock.mcap || 0;
                 
-                // Calculate percentage change from the raw price data
-                let changePercent = 0;
-                if (price && (stock.fundamentals?.price || price)) {
-                  // Estimate percentage change based on price and change values
-                  if (priceChange !== undefined && priceChange !== null && price && price !== priceChange) {
-                    changePercent = (priceChange / (price - priceChange)) * 100;
+                // Format price with proper decimal places
+                const formattedPrice = typeof price === 'number' && price > 0 ? `$${price.toFixed(2)}` : '—';
+                
+                // Format change properly - avoid NaN
+                let formattedChange = '—';
+                if (typeof changePercent === 'number' && !isNaN(changePercent) && isFinite(changePercent)) {
+                  formattedChange = `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+                } else if (typeof change === 'number' && !isNaN(change) && isFinite(change) && price > 0) {
+                  const calculatedPercent = (change / price) * 100;
+                  if (!isNaN(calculatedPercent) && isFinite(calculatedPercent)) {
+                    formattedChange = `${calculatedPercent > 0 ? '+' : ''}${calculatedPercent.toFixed(2)}%`;
                   }
                 }
                 
-                // Format price with proper decimal places
-                const formattedPrice = typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A';
-                
-                // Format change properly
-                const formattedChange = typeof changePercent === 'number' ? 
-                  `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%` : 'N/A';
-                
-                const marketCap = stock.fundamentals?.market_cap;
-                const formattedMarketCap = marketCap ? 
-                  marketCap > 1e9 ? `$${(marketCap / 1e9).toFixed(2)}B` : 
-                  marketCap > 1e6 ? `$${(marketCap / 1e6).toFixed(2)}M` : 
-                  `$${marketCap}` : 'N/A';
+                // Format market cap
+                let formattedMarketCap = '—';
+                if (typeof marketCap === 'number' && marketCap > 0) {
+                  if (marketCap >= 1e9) {
+                    formattedMarketCap = `$${(marketCap / 1e9).toFixed(2)}B`;
+                  } else if (marketCap >= 1e6) {
+                    formattedMarketCap = `$${(marketCap / 1e6).toFixed(2)}M`;
+                  } else if (marketCap >= 1e3) {
+                    formattedMarketCap = `$${(marketCap / 1e3).toFixed(2)}K`;
+                  } else {
+                    formattedMarketCap = `$${marketCap.toFixed(0)}`;
+                  }
+                }
 
                 return (
                   <Table.Tr key={ticker}>
@@ -123,19 +135,22 @@ export function StocksWidget() {
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="left">
-                        {changePercent !== 0 && priceChange !== 0 && (
+                        {formattedChange !== '—' && (
                           <>
-                            {changePercent > 0 || priceChange > 0 ? (
+                            {(changePercent > 0 || change > 0) ? (
                               <IconTrendingUp size={14} color="green" />
-                            ) : (
+                            ) : (changePercent < 0 || change < 0) ? (
                               <IconTrendingDown size={14} color="red" />
-                            )}
+                            ) : null}
                           </>
                         )}
                         <Badge 
                           size="sm"
-                          color={changePercent > 0 || priceChange > 0 ? 'green' : 
-                                changePercent < 0 || priceChange < 0 ? 'red' : 'gray'} 
+                          color={
+                            formattedChange === '—' ? 'gray' :
+                            (changePercent > 0 || change > 0) ? 'green' : 
+                            (changePercent < 0 || change < 0) ? 'red' : 'gray'
+                          } 
                           variant="light"
                         >
                           {formattedChange}

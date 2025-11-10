@@ -1,4 +1,4 @@
-import { Stack, Group, Alert, Text } from '@mantine/core';
+import { Stack, Group, Alert, Text, Button } from '@mantine/core';
 import { IconAlertCircle, IconLoader } from '@tabler/icons-react';
 import { useIntelligence } from '../../hooks/useIntelligence';
 import { useMarketContext } from '../../hooks/useMarketContext';
@@ -67,21 +67,26 @@ export function IntelligenceDashboardWidget() {
     return (
       <Alert
         icon={<IconAlertCircle size={20} />}
-        title="Failed to Load Intelligence Data"
+        title="Échec du chargement des données d'intelligence"
         color="red"
         variant="light"
+        action={
+          <Button size="xs" variant="light" onClick={() => window.location.reload()}>
+            Réessayer
+          </Button>
+        }
       >
         <Text size="sm">
-          Unable to fetch market intelligence. Please try again later.
+          Impossible de récupérer l'intelligence de marché. Veuillez réessayer plus tard.
         </Text>
         {errorIntel && (
           <Text size="xs" c="dimmed" mt="xs">
-            Intelligence Error: {errorIntel.message}
+            Erreur Intelligence: {errorIntel.message}
           </Text>
         )}
         {errorContext && (
           <Text size="xs" c="dimmed" mt="xs">
-            Context Error: {errorContext.message}
+            Erreur Contexte: {errorContext.message}
           </Text>
         )}
       </Alert>
@@ -93,13 +98,17 @@ export function IntelligenceDashboardWidget() {
     return (
       <Alert
         icon={<IconAlertCircle size={20} />}
-        title="No Intelligence Data Available"
+        title="Aucune donnée d'intelligence disponible"
         color="yellow"
         variant="light"
+        action={
+          <Button size="xs" variant="light" onClick={() => window.location.reload()}>
+            Actualiser
+          </Button>
+        }
       >
         <Text size="sm">
-          Intelligence data is not yet available. The system is still analyzing market
-          conditions.
+          Les données d'intelligence ne sont pas encore disponibles. Le système analyse encore les conditions de marché.
         </Text>
       </Alert>
     );

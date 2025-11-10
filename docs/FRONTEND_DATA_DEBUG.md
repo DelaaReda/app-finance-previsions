@@ -1,296 +1,166 @@
-# FRONTEND DATA DEBUG PROTOCOL
+# 🛠️ DOCS FRONTEND DATA DEBUGGING - Procédure CLI pour débloquer les pages
 
-Documentation for troubleshooting frontend data issues and transitioning from mock to real data.
+## 🎯 Objectif
+Débloquer les pages UI bloquées par des données manquantes ou des chargements infinis en vérifiant les endpoints et en s'assurant qu'elles reçoivent des données réelles, pas des mocks.
 
-## 🔧 CLI Protocol for Unlocking Pages
+## 📋 Checklist de Dépannage Frontend (à exécuter avant de déclarer une page "fonctionnelle")
 
-### Check Current Data Status
+### 1. Vérification Endpoint Directe
 ```bash
-# Check if API endpoints are returning real data
-curl -s http://localhost:8050/api/forecasts | jq '{ok, count: (.data.rows | length), source}'
-curl -s http://localhost:8050/api/news/feed | jq '{ok, count: (.data.articles | length), source}'  
-curl -s http://localhost:8050/api/macro/series | jq '{ok, count: ((.data.series // .data).CPIAUCSL.observations // []).length, source}'
+# Test les endpoints backend pour voir les données brutes
+curl -sS http://localhost:8050/api/health | jq '{ok: .ok, status: .data?.status, updates: .data?.last_updates}'
+curl -sS http://localhost:8050/api/forecasts | jq '{count: .data?.rows | length, first: .data?.rows[0]}'
+curl -sS http://localhost:8050/api/news/feed | jq '{count: .data?.articles | length, first: .data?.articles[0]}'
+curl -sS http://localhost:8050/api/brief/daily | head -c 200  # Vérifie la structure
+curl -sS http://localhost:8050/api/backtests | head -c 200   # Vérifie la structure
+curl -sS http://localhost:8050/api/macro/series | head -c 200 # Vérifie la structure
+curl -sS http://localhost:8050/api/stocks/prices | head -c 200 # Vérifie la structure
 ```
 
-### Verify Endpoints Are Not Returning Mocks
-```bash
-# Check for mock indicators in responses
-curl -s http://localhost:8050/api/forecasts | jq 'if .data | has("is_mock") then .data.is_mock else "no_mock_indicator" end'
-curl -s http://localhost:8050/api/news/feed | jq 'if .data | has("mock_data") then .data.mock_data else "no_mock_indicator" end'
-```
+### 2. Vérification des Formats de Données
+Pour chaque endpoint, assurez-vous que le format est correct:
+- Structure `{ok: true, data: {...}}` obligatoire
+- Collections (`articles`, `rows`, etc.) jamais `null`, toujours `[]` (même si vide)
+- Données avec métadonnées de fraîcheur: `freshness`, `last_update`, `timestamp`
+- Aucun champ obligatoire manquant
 
-## 🚦 Troubleshooting Page Loading Issues
+### 3. Vérification Never-Empty
+Tout accès aux données doit être "sure":
+```ts
+// ❌ MAUVAIS (cause des crashes)
+const articles = data.articles.map(...) // Si data.articles est null → crash
+const count = data.rows.length         // Si data.rows est null → crash
 
-### Common Frontend Loading Problems
-1. **Loading Indefinitely (Spinner)**: Usually means API call is failing or taking too long
-2. **Empty States**: Data returned but no items to display
-3. **Error States**: Explicit error messages from the API
-4. **Never-Empty Contract Violations**: Unexpected null/undefined values causing crashes
+// ✅ BON (never-empty pattern)
+import { ensureArray } from '@/ui'  // ou '@/lib/safe' si disponible
 
-### Debug Steps for Each Issue Type
+const articles = ensureArray(data?.data?.articles || [])  // Retourne toujours []
+const rows = ensureArray(data?.data?.rows || [])         // Protège les accès imbriqués
 
-#### Loading Indefinitely
-```bash
-# 1. Check if backend is running
-curl -I http://localhost:8050/health
-
-# 2. Test specific endpoint
-time curl -s http://localhost:8050/api/forecasts | jq '.data | length'
-
-# 3. Check network tab equivalent via CLI
-curl -w "@curl-format.txt" -s -o /dev/null http://localhost:8050/api/forecasts
-```
-
-#### Empty States
-```bash
-# Check if data exists but isn't being displayed properly
-curl -s http://localhost:8050/api/forecasts | jq '{ 
-  ok, 
-  count: .data.rows | length, 
-  has_rows: (.data.rows | length) > 0,
-  first_row: .data.rows[0] // "no_rows"
-}'
-
-# Verify data filtering isn't removing all items
-curl -s "http://localhost:8050/api/forecasts" | jq '.data.rows | map(select(.ticker)) | length'
-```
-
-#### Error States
-```bash
-# Check for error details in API response
-curl -s http://localhost:8050/api/forecasts | jq '{ 
-  ok, 
-  error: .data.error // .error // "no_error_field", 
-  message: .data.message // .message // "no_message_field" 
-}'
-```
-
-## 🚫 Banning Mocks: Transition Protocol
-
-### Identifying Mock Data Patterns
-Mock data typically has these characteristics:
-- Same timestamp for all records
-- Predictable values (round numbers, sequential IDs)
-- `is_mock: true` or `source: "mock"` field
-- Limited variety in content
-
-### Verification Commands
-```bash
-# Check for mock indicators in various APIs
-curl -s http://localhost:8050/api/forecasts | jq '
-  .data.rows[0] | 
-  . as $first | 
-  {
-    has_mock_indicator: (.is_mock // .source // .data_source) | contains("mock"),
-    timestamp_variety: ([.data.rows[].calculation_timestamp] | unique | length) > 1,
-    ticker_variety: ([.data.rows[].ticker] | unique | length) > 3,
-    is_real_data: ([$first.direction, $first.confidence, $first.expected_return] | map(. != null and . != "")) | all
-  }
-'
-
-# Validate news data is real
-curl -s http://localhost:8050/api/news/feed | jq '
-  .data.articles[0] as $first |
-  {
-    has_real_content: ($first.title // $first.headline) | length > 10,
-    has_valid_timestamp: ($first.pubDate // $first.timestamp) | test("\\d{4}-\\d{2}-\\d{2}"),
-    source_variety: ([.data.articles[].source] | unique | length) > 2,
-    has_actual_links: [$first.link] | all(. != "javascript:void(0)")
-  }
-'
-```
-
-## 🐛 Debugging Specific Pages
-
-## ⚡ Snapshot-Powered Endpoints (Macro, Forecasts, Brief)
-
-The heaviest APIs now load straight from cached JSON snapshots so the UI never waits on live scrapers:
-
-| Endpoint | Snapshot file | Refresh job |
-| --- | --- | --- |
-| `/api/macro/series` | `copilot-app/backend/data/macro_series.json` | `python jobs/macro_series_snapshot.py` |
-| `/api/forecasts` | `copilot-app/backend/data/forecasts.json` | `python jobs/forecasts.py` |
-| `/api/brief/weekly` + `/api/brief/daily` | `copilot-app/backend/data/brief_weekly.json` (daily falls back here) | `python jobs/weekly_brief.py` |
-
-### CLI loop to validate cache → API alignment
-```bash
-cd copilot-app/backend
-
-# 1. Inspect the snapshot (should exist + contain rows)
-jq '.data.rows | length' data/forecasts.json
-
-# 2. Hit the endpoint (should match the file count)
-curl -s http://localhost:8050/api/forecasts | jq '{count: (.data.rows | length), source: .data.source}'
-
-# 3. Regenerate if empty; API will serve it instantly afterwards
-python jobs/forecasts.py && curl -s http://localhost:8050/api/forecasts | jq '.data.count'
-```
-
-When a snapshot is missing, the API now triggers the corresponding job **once** then falls back to the cached file, so cold-start debugging is simply:
-
-```bash
-cd copilot-app/backend
-python jobs/macro_series_snapshot.py && python jobs/weekly_brief.py && python jobs/forecasts.py
-```
-
-If the job fails, check `/tmp/macro_series_snapshot.log` or the job's stdout (each job already logs tickers/series processed).
-
-### Forecasts Page Debug
-```bash
-# Test forecasts endpoint with various filters
-curl -s "http://localhost:8050/api/forecasts" | jq '
-{
-  status: .ok,
-  count: .data.rows | length,
-  tickers_present: ([.data.rows[].ticker] | unique) | length,
-  has_confidence: ([.data.rows[].confidence] | all(. > 0 and . <= 1)),
-  has_valid_returns: ([.data.rows[].expected_return] | any(. != null))
+if (!rows.length) {
+  return <EmptyState title="Aucune prévision disponible" hint="Le modèle calcule en arrière-plan..." />
 }
-'
 ```
 
-### News Page Debug
+### 4. Vérification des Routes API Coté Frontend
+- S'assurer que le client API utilise le bon proxy: `VITE_API_BASE_URL=http://localhost:8050`
+- Vérifier que les routes côté frontend correspondent aux endpoints backend
+- Confirmer que le proxy Vite est correctement configuré pour rediriger `/api/*` vers le backend
+
+### 5. Vérification des Hooks de Données
+- Regarder les fichiers `src/hooks/use*.ts` pour voir comment les données sont récupérées
+- Vérifier que les hooks gèrent correctement les états: loading, error, empty, success
+- S'assurer que les helpers de sécurité sont utilisés (safe access)
+
+## 🔧 Dépannage des Pages Bloquées
+
+### Page Macro Bloquée (chargement infini)?
 ```bash
-# Test news endpoint for real data
-curl -s "http://localhost:8050/api/news/feed" | jq '
-{
-  status: .ok,
-  count: .data.articles | length,
-  has_real_titles: ([.data.articles[].title] | map(length > 10) | all),
-  has_valid_dates: ([.data.articles[].pubDate] | all(test("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"))?,
-  sources_count: ([.data.articles[].source] | unique | length)
-}
-'
+# Vérifier le format des données macro
+curl -sS http://localhost:8050/api/macro/series | jq '.'
+
+# Doit retourner une structure avec séries temporelles, pas une seule valeur
+# Si le backend retourne un seul point au lieu d'une série historique → backend à corriger
 ```
 
-### Macro Page Debug
+### Page Stocks Bloquée (chargement infini)?
 ```bash
-# Test macro endpoint for real data
-curl -s "http://localhost:8050/api/macro/series" | jq '
-{
-  status: .ok,
-  series_count: [."CPIAUCSL", ."UNRATE", .data.CPIAUCSL, .data.UNRATE] | map(select(. != null)) | length,
-  has_observations: (.data.CPIAUCSL.observations // .CPIAUCSL.observations // []).length > 0,
-  dates_recent: ((.data.CPIAUCSL.observations // .CPIAUCSL.observations // [])[-1].date // "") > "2025-01-01"
-}
-'
+# Vérifier que l'endpoint renvoie des données de prix
+curl -sS http://localhost:8050/api/stocks/prices | jq '{has_data: .data != null, ok: .ok}'
+
+# Si "detail": "No price data" → ingestion de données côté backend à corriger
 ```
 
-### Recommendations Widget Debug
+### Page Brief Bloquée (chargement infini)?
 ```bash
-# Refresh supporting data then generate fresh recommendations snapshot
-cd copilot-app/backend
-source .venv/bin/activate
-python jobs/forecasts.py
-python - <<'PY'
-import asyncio, sys
-sys.path.append('copilot-app/backend')
-from services.recommendations_service import RecommendationsService
+# Vérifier le format des données de brief
+curl -sS http://localhost:8050/api/brief/daily | jq '.'
+curl -sS http://localhost:8050/api/brief/weekly | jq '.'
 
-async def main():
-    svc = RecommendationsService()
-    data = await svc.generate_daily_recommendations(limit=3)
-    print(f"Generated {len(data.get('recommendations', []))} recommendations")
-asyncio.run(main())
-PY
-
-# API response now serves the cached snapshot instantly
-curl -s http://localhost:8050/api/recommendations/daily | jq '.data.recommendations'
+# Doit retourner des structures avec top_signaux, top_risks, etc.
 ```
 
-## 🧪 Testing Never-Empty Contract
+## 🚨 Anti-Patterns Frontend à Réparer
 
-### Safe Access Validation
+1. **Accès direct à des propriétés potentiellement undefined**
+   ```ts
+   // ❌ Ne jamais faire
+   data.items.map(...)  // Si data.items est undefined → error
+   data.rows.length     // Si data.rows est undefined → error
+   ```
+
+2. **Réponses vides ou null dans les collections**
+   ```ts
+   // ❌ Ne jamais retourner
+   { articles: null }   // Doit être { articles: [] }
+   { rows: undefined }  // Doit être { rows: [] }
+   ```
+
+3. **Dates mal formatées**
+   ```ts
+   // ✅ Toujours gérer les deux formats: ISO string et Unix timestamp
+   const formatDate = (date: string | number) => {
+     if (typeof date === 'number') {
+       return new Date(date * 1000).toISOString()  // Secondes → millisecondes
+     }
+     return new Date(date).toISOString()
+   }
+   ```
+
+## 🧪 Tests Frontend à Exécuter
+
+### 1. Tests Manuels
+- Page chargée mais reste en "loading..." → problème d'endpoint ou format de données
+- Page affiche "Cannot read property 'map' of undefined" → accès non sécurisé aux données
+- Page vide sans message d'état → manque de gestion de l'état "empty"
+
+### 2. Tests API via Frontend
 ```bash
-# Test that APIs return proper structure even without data
-curl -s "http://localhost:8050/api/forecasts" | jq '
-{
-  has_data_field: has("data"),
-  has_rows_if_ok: if .ok then (.data | has("rows") or has("articles") or has("series")) else true end,
-  is_never_empty: (.data | has("rows") or has("articles") or has("series")) or (.data == {})
-}
-'
+# Simuler les appels que le frontend fait
+curl -sS "http://localhost:5173/api/health" | jq '.'         # Si proxy fonctionne
+curl -sS "http://localhost:5173/api/forecasts" | jq '.'      # Si proxy fonctionne
 ```
 
-### Edge Case Testing
+### 3. Vérification du Proxy Vite
 ```bash
-# Test with restrictive filters to ensure structure remains
-curl -s "http://localhost:8050/api/forecasts?ticker=NONSENSE" | jq '
-{
-  status: .ok,
-  structure_intact: (.data | has("rows") or has("articles") or has("count") or has("message")),
-  no_crashes: (.data | type) | in("object", "array")
-}
-'
+# Vérifier la configuration dans vite.config.ts
+# Doit rediriger /api/* vers http://localhost:8050
 ```
 
-## 🧰 Debugging Tools & Scripts
+## 📦 Data Flow Vérification
 
-### Quick Health Check Script
-```bash
-#!/bin/bash
-# frontend-health-check.sh
+### Backend → Frontend
+1. Backend génère des données réelles dans `data/*.json` (ou parquet)
+2. Endpoints API servent ces snapshots avec métadonnées
+3. Frontend appelle les endpoints via proxy Vite
+4. Hooks sécurisent les appels et protègent contre `undefined`
+5. UI affiche les données ou un état vide propre
 
-echo "=== Frontend Data Health Check ==="
+### Points de Contrôle
+- [ ] Dossiers `data/` contiennent des fichiers avec des données réelles
+- [ ] Endpoints `/api/*` retournent des réponses structurées avec `{ok: true, data: {...}}`
+- [ ] Frontend reçoit bien les réponses via le proxy
+- [ ] Hooks gèrent les erreurs et états vides correctement
+- [ ] UI affiche des états propres sans crash
 
-echo "Testing /api/forecasts..."
-fc_resp=$(curl -s http://localhost:8050/api/forecasts)
-fc_ok=$(echo $fc_resp | jq -r '.ok')
-fc_count=$(echo $fc_resp | jq -r '.data.rows | length // 0')
-echo "  Status: $fc_ok, Count: $fc_count"
+## 🧠 Résumé des Actions
 
-echo "Testing /api/news/feed..."
-news_resp=$(curl -s http://localhost:8050/api/news/feed)
-news_ok=$(echo $news_resp | jq -r '.ok')
-news_count=$(echo $news_resp | jq -r '.data.articles | length // 0')
-echo "  Status: $news_ok, Count: $news_count"
+**Avant de déclarer une page "fonctionnelle", chaque agent doit:**
+1. Vérifier l'endpoint correspondant renvoie des données réelles (via curl)
+2. S'assurer que les formats sont corrects et les données jamais nulles
+3. Confirmer que les hooks de données gèrent les 4 états: loading, empty, error, success
+4. Protéger tous les accès aux données avec les helpers never-empty
+5. Tester la page dans des conditions réalistes (endpoint vide/erreur/mal formaté)
 
-echo "Testing /api/macro/series..."
-macro_resp=$(curl -s http://localhost:8050/api/macro/series)
-macro_ok=$(echo $macro_resp | jq -r '.ok // "N/A"')
-echo "  Status: $macro_ok"
+**Pour débloquer les pages bloquées actuellement:**
+- Page News: [EN COURS] - Problème de parsing timestamp en cours de résolution
+- Page Macro: [BLOQUÉE] - Backend renvoie snapshot au lieu de série temporelle
+- Page Stocks: [BLOQUÉE] - Backend renvoie "No price data" 
+- Page Brief: [À VÉRIFIER] - Besoin de valider format de données
+- Page Forecasts: [FONCTIONNELLE] - Données affichées correctement
 
-echo "=== Data Validation Complete ==="
-```
-
-### Mock Detection Script
-```bash
-#!/bin/bash
-# detect-mocks.sh
-
-detect_mocks_in_response() {
-  local endpoint=$1
-  local response=$(curl -s "http://localhost:8050$endpoint")
-  
-  local has_mock_indicators=$(echo $response | jq 'select(.data | has("is_mock") or has("source") or has("mock_data")) | .data.is_mock // .data.source // .data.mock_data')
-  local has_pattern_indicators=$(echo $response | jq 'select(.data.rows // .data.articles | length > 0) | .data.rows // .data.articles | .[0:2] | map(.timestamp // .pubDate) | unique | length < 2')
-  
-  echo "Endpoint: $endpoint"
-  echo "  Has Mock Indicators: $has_mock_indicators"
-  echo "  Has Pattern Indicators: $has_pattern_indicators"
-}
-
-# Test all major endpoints
-detect_mocks_in_response "/api/forecasts"
-detect_mocks_in_response "/api/news/feed" 
-detect_mocks_in_response "/api/macro/series"
-```
-
-## 📋 Troubleshooting Checklist
-
-### Before Reporting an Issue:
-- [ ] Confirm backend is running (`curl -I http://localhost:8050/health`)
-- [ ] Test the specific API endpoint directly with `curl`
-- [ ] Verify response structure matches API documentation
-- [ ] Check for mock indicators in the response
-- [ ] Test without filters to ensure base functionality
-- [ ] Check if it's a frontend render issue or data availability issue
-
-### Common Solutions:
-1. **Restart backend** to refresh data feeds
-2. **Run data generation jobs** if endpoints return empty
-3. **Check .env variables** for any mocking toggles
-4. **Clear browser cache** and reload
-5. **Verify CORS settings** if calling from different origin
-
-This protocol ensures smooth transition from mock to real data and helps troubleshoot frontend data loading issues systematically.
+**Prochaines étapes:**
+1. Débloquer données backend pour Macro et Stocks
+2. Mettre à jour les hooks avec formats corrects
+3. Corriger les mappings de données dans les composants
+4. Exécuter les tests de vérification pour chaque page

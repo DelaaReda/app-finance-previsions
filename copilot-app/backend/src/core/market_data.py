@@ -20,6 +20,10 @@ import io
 import pandas as pd
 import requests
 
+# Ensure .env is loaded before accessing environment variables
+from .env_loader import ensure_env_loaded
+ensure_env_loaded()
+
 
 def _env(name: str) -> Optional[str]:
     v = os.getenv(name)

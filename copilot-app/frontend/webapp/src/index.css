@@ -5,6 +5,7 @@
 
 /* Global design tokens and base resets */
 :root {
+	/* Dark mode (default) */
 	--bg: #0b1220; /* deep navy */
 	--surface: #0f1724; /* slightly lighter */
 	--muted: #9aa4b2;
@@ -13,6 +14,53 @@
 	--accent-2: #14b8a6; /* teal */
 	--card-bg: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
 	--radius: 12px;
+	
+	/* Glass effect colors (dark mode) */
+	--glass-bg: rgba(9, 14, 28, 0.86);
+	--glass-border: rgba(255, 255, 255, 0.08);
+	--glass-shadow: rgba(2, 6, 20, 0.55);
+	--glass-overlay-start: rgba(88, 169, 255, 0.18);
+	--glass-overlay-end: rgba(255, 160, 142, 0.15);
+	
+	/* Dashboard background (dark mode) */
+	--dashboard-bg-start: #050912;
+	--dashboard-bg-mid: #0b1426;
+	--dashboard-bg-end: #050912;
+	--dashboard-grid: rgba(255, 255, 255, 0.02);
+	
+	/* Metric cards (dark mode) */
+	--metric-bg: rgba(255, 255, 255, 0.02);
+	--metric-border: rgba(255, 255, 255, 0.05);
+	--metric-icon-bg: rgba(255, 255, 255, 0.06);
+}
+
+/* Light mode overrides */
+[data-mantine-color-scheme="light"] {
+	--bg: #f8fafc; /* light gray */
+	--surface: #ffffff; /* white */
+	--muted: #64748b;
+	--text: #0f172a; /* dark slate */
+	--accent: #4c6ef5; /* indigo (same) */
+	--accent-2: #14b8a6; /* teal (same) */
+	--card-bg: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9));
+	
+	/* Glass effect colors (light mode) */
+	--glass-bg: rgba(255, 255, 255, 0.92);
+	--glass-border: rgba(0, 0, 0, 0.08);
+	--glass-shadow: rgba(0, 0, 0, 0.12);
+	--glass-overlay-start: rgba(76, 110, 245, 0.08);
+	--glass-overlay-end: rgba(20, 184, 166, 0.06);
+	
+	/* Dashboard background (light mode) */
+	--dashboard-bg-start: #f1f5f9;
+	--dashboard-bg-mid: #e2e8f0;
+	--dashboard-bg-end: #f8fafc;
+	--dashboard-grid: rgba(0, 0, 0, 0.02);
+	
+	/* Metric cards (light mode) */
+	--metric-bg: rgba(255, 255, 255, 0.8);
+	--metric-border: rgba(0, 0, 0, 0.06);
+	--metric-icon-bg: rgba(76, 110, 245, 0.1);
 }
 
 /* Base element styles */
@@ -40,10 +88,15 @@ a:hover {
 /* Card utility: consistent surface treatment */
 .card {
 	background: var(--card-bg);
-	border: 1px solid rgba(255,255,255,0.04);
+	border: 1px solid var(--glass-border);
 	border-radius: var(--radius);
 	padding: 16px;
-	box-shadow: 0 6px 18px rgba(2,6,23,0.6);
+	box-shadow: 0 6px 18px var(--glass-shadow);
+	transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+
+[data-mantine-color-scheme="light"] .card {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* Primary button */

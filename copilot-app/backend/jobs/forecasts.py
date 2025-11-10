@@ -43,13 +43,21 @@ def run_forecasts_job(tickers: List[str] = None) -> Dict[str, Any]:
         # Generate forecasts using ML + LLM hybrid system
         forecasts = forecast_system.run_forecast_job(tickers)
         
-        # Save to persistent storage using correct format: key, payload
+        # Save to persistent storage using correct format: key, payload, source, version
         logger.info("Saving forecasts to storage...")
         save_json("forecasts", forecasts, source=["job:forecasts", "ml_model", "g4f_llm"])
         
         # Return summary
+        # Extract count depending on the structure of forecasts
+        if "data" in forecasts and "rows" in forecasts["data"]:
+            forecast_count = len(forecasts["data"]["rows"])
+        elif "rows" in forecasts:
+            forecast_count = len(forecasts["rows"])
+        else:
+            forecast_count = 0
+        
         result = {
-            "forecast_count": len(forecasts.get('data', {}).get('rows', [])) if 'data' in forecasts else len(forecasts.get('rows', [])),
+            "forecast_count": forecast_count,
             "models_used": ["ml_model_v1", "g4f_hybrid"],
             "tickers_processed": tickers,
             "timestamp": datetime.utcnow().isoformat() + "Z",

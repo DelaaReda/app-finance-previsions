@@ -13,7 +13,7 @@ import pandas as pd
 from core.market_data import get_fred_series
 
 try:
-    from storage.io import load_json  # type: ignore
+    from backend.storage.io import load_json  # type: ignore
 except ImportError:  # pragma: no cover - fallback path setup when src/ is root
     import sys
     from pathlib import Path
@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover - fallback path setup when src/ is root
             sys.path.insert(0, path_str)  # Use insert(0) to prioritize these paths
 
     try:
-        from storage.io import load_json  # type: ignore
+        from backend.storage.io import load_json  # type: ignore
     except ImportError:
         # Last resort: try direct import with absolute path
         import importlib.util
