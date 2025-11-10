@@ -713,6 +713,7 @@ Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
        asset_type?: string;
        min_confidence?: number;
      }) {
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
        return useQuery({
          queryKey: ['forecasts', filters],
          queryFn: async () => {
@@ -3692,9 +3693,11 @@ Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ---
 
-## FC-API-027 — Stock Correlation Heatmap
+## FC-API-027 — Stock Correlation Heatmap - CLAIMED
 
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 **But**: Endpoint `/api/stocks/heatmap` pour la matrice de corrélation entre actifs facilitant l'analyse multi-actifs.
 
@@ -4137,9 +4140,11 @@ Ces tâches adressent les problèmes critiques où les endpoints manquent de don
 
 ---
 
-## FC-REAL-DATA-001 — Data Path & Storage Fix
+## FC-REAL-DATA-001 — Data Path & Storage Fix - CLAIMED
 
-**Status**: AVAILABLE to claim
+**Status**: CLAIMED
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 
 **But**: Corriger les chemins de lecture des données pour que le backend trouve les fichiers de données réelles dans le bon répertoire.
 
@@ -5215,6 +5220,121 @@ Suite à l'analyse architecture complète reçue, voici les tâches prioritaires
 
 ---
 
+## 🎨 TÂCHES UI/UX - AMÉLIORATION DASHBOARD (Rapport ATLAS)
+
+### FE-UX-001: Hiérarchie visuelle et lisibilité
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +150  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Le dashboard manque de hiérarchie visuelle claire. Les éléments sont en concurrence visuelle sans distinction de taille, couleur ou espacement. Les codes couleur ne sont pas cohérents.
+
+**Steps**
+1. Introduire une hiérarchie typographique stricte (h1/h2/h3 avec tailles distinctes)
+2. Créer un système de couleurs cohérent :
+   - Vert = haussier/positif
+   - Rouge = baissier/négatif
+   - Gris = neutre
+   - Bleu = information
+3. Uniformiser les cards de prévision avec ombre légère et contraste marqué
+4. Styliser différemment les boutons techniques (Refresh, Export CSV) pour les distinguer des actions d'analyse
+5. Améliorer les espacements entre sections (gap cohérent)
+
+**DoD**
+* Hiérarchie typographique claire (h1 > h2 > h3 > body)
+* Code couleur cohérent appliqué partout
+* Cards avec ombre et contraste uniforme
+* Boutons techniques visuellement distincts
+* Espacements harmonisés (gap: md, lg, xl selon niveau)
+* Preuve: Screenshot avant/après avec annotations
+
+---
+
+### FE-UX-002: Cohérence d'interface et internationalisation
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +120  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Mélange d'anglais et français, icônes incohérentes, sections qui se chevauchent fonctionnellement.
+
+**Steps**
+1. Choisir une langue unique (FR recommandé) et harmoniser tous les textes
+2. Créer un système de design tokens (marges, tailles, icônes, couleurs)
+3. Grouper les blocs de même nature dans un cadre visuel commun
+4. Ajouter un indicateur visuel pour le mode Auto/Manual (switch + couleur d'état)
+5. Harmoniser les icônes (taille, style, espacement)
+
+**DoD**
+* Tous les textes en français (ou anglais si choix différent)
+* Design tokens définis dans un fichier central
+* Groupement visuel des sections similaires
+* Switch Auto/Manual avec indicateur visuel clair
+* Icônes harmonisées (même taille, style, espacement)
+* Preuve: Liste des changements de langue + screenshot
+
+---
+
+### FE-UX-003: États de chargement, erreur et vide
+**Priorité**: P0  
+**Statut**: IN_PROGRESS  
+**Points**: +140  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Messages d'erreur bruts, états de chargement peu explicites, messages vides sans call-to-action, DEV DEBUG visible en production.
+
+**Steps**
+1. Masquer DEV DEBUG en production (déjà fait - vérifier)
+2. Ajouter des états de chargement explicites (skeletons, spinners, placeholders)
+3. Créer des messages d'erreur/vide humanisés avec call-to-action
+4. Ajouter des animations subtiles lors des mises à jour de données
+5. Expliquer les valeurs 0% ou N/A (état normal vs erreur)
+
+**DoD**
+* DEV DEBUG masqué en production (vérifié)
+* Skeletons/spinners sur tous les widgets
+* Messages d'erreur avec bouton "Réessayer"
+* Messages vides avec bouton "Actualiser" et explication
+* Animations de transition lors des updates
+* Explications pour valeurs 0% (état normal vs erreur)
+* Preuve: Screenshots des différents états
+
+---
+
+### FE-UX-004: Architecture de l'information et navigation
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +130  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Navigation peu claire, widgets répétés, relations entre sections floues.
+
+**Steps**
+1. Améliorer la navigation (sidebar fixe ou topbar avec icônes claires)
+2. Revoir la structure des blocs par niveaux :
+   - Niveau 1 : Régime & résumé du marché
+   - Niveau 2 : Opportunités / Risques
+   - Niveau 3 : Prévisions détaillées
+   - Niveau 4 : Actualités & Backtests
+3. Éliminer les redondances (widgets répétés)
+4. Ajouter des micro-descriptions sous chaque section
+5. Clarifier le flux logique entre sections
+
+**DoD**
+* Navigation améliorée avec icônes et labels clairs
+* Structure hiérarchique des blocs respectée
+* Redondances éliminées
+* Micro-descriptions ajoutées
+* Flux logique clarifié
+* Preuve: Wireframe ou screenshot annoté
+
+---
+
 ## 🎯 Priorité d'exécution
 
 1. **FC-ARCH-ERRORS-002** (gestion d'erreurs) — pour éviter les plantages silencieux
@@ -5224,3 +5344,48 @@ Suite à l'analyse architecture complète reçue, voici les tâches prioritaires
 5. **FC-ARCH-ENDPOINTS-004** (optimisation) — pour performance
 
 Ces tâches sont critiques pour la qualité, la performance et la maintenabilité du système.
+---
+
+### FC-QM-GLOBAL-VALIDATION — Validation qualité globale du système
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Effectuer une validation complète de la qualité du système pour s'assurer que toutes les corrections sont fonctionnelles et que les standards qualité sont maintenus.
+
+**Fichiers**
+* `scripts/quality/global_validation.sh` (à créer)
+* `docs/quality/validation_report.md` (à créer)
+* `backend/tests/quality_tests.py` (à créer)
+* `frontend/tests/quality_tests.ts` (à créer)
+* `proofs/FC-QM-GLOBAL-VALIDATION/validation_report.json` (à créer)
+
+**Étapes**
+1. **Audit des endpoints**:
+   - Vérifier que tous les endpoints retournent des données réelles, pas vides
+   - S'assurer que les contrats never-empty sont respectés partout
+   - Tester les états loading/error/empty/freshness
+
+2. **Validation de la fraîcheur des données**:
+   - Vérifier que tous les endpoints exposent un champ freshness/last_update
+   - S'assurer que les timestamps sont cohérents et récents
+   - Confirmer que le cache fonctionne correctement
+
+3. **Tests de robustesse**:
+   - Vérifier que l'UI ne crash jamais (même avec données manquantes)
+   - Tester les ErrorBoundaries et states sécurisés
+   - Valider les patterns de sécurité (ensureArray, safeMap, safeLength)
+
+4. **Génération de rapport**:
+   - Créer un rapport de validation qualité global
+   - Inclure captures d'écran des pages fonctionnelles
+   - Compiler les métriques de performance
+
+**DoD**
+* Tous les endpoints critiques retournent des données structurées et non vides
+* Système respecte les contrats never-empty partout
+* UI protégée contre tous les types d'erreurs (sans crash)
+* Rapport de validation complet disponible
+* Tests de qualité passent avec succès
+* Preuve: captures, logs, résultats de tests dans `proofs/FC-QM-GLOBAL-VALIDATION/`
+
+---

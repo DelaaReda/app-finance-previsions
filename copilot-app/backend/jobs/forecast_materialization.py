@@ -1,180 +1,123 @@
 """
-Forecast Materialization Job
-Task: FC-DATA-004 - Daily cache pre-generation for instant forecasts
-Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
+Forecasts Materialization Job - FC-DATA-004
+Author: ALEX-API-ARCHITECT-SUPERMAN-7
+
+Task: Create daily forecasts cache with materialized data for instant serving.
 """
-import json
-import sys
-from datetime import datetime
+import os
+import logging
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List
+import json
+import pandas as pd
+from typing import Dict, Any, Optional
 
-# Import pandas for parquet support
-try:
-    import pandas as pd
-    PANDAS_AVAILABLE = True
-except ImportError:
-    PANDAS_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
-# Add backend to path for imports
-backend_root = Path(__file__).resolve().parents[1]  # Go to backend/
-if str(backend_root) not in sys.path:
-    sys.path.insert(0, str(backend_root))
+# Import necessary modules
+import sys
+import os
+# Add the backend root to sys.path to allow imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def generate_forecast_snapshot() -> Dict[str, Any]:
+from storage.io import load_json, save_json
+from core.data_quality import validate_forecasts_structure
+
+def materialize_daily_forecasts() -> Dict[str, Any]:
     """
-    Generate a forecast snapshot using ML models and save to persistent storage.
-    This creates the pre-computed forecasts that can be served instantly.
+    Generate daily materialized forecasts and save to cache for fast serving.
+    
+    **Process**:
+    - Load latest forecasts from active models
+    - Apply validation and quality checks
+    - Save to dated directory with symlinks
+    - Preserve metadata for freshness tracking
     """
     try:
-        # Import the forecasting model components
-        from models.performance_tracker import ModelPerformanceTracker
-        from storage.io import save_json
+        logger.info("Starting daily forecasts materialization...")
         
-        print("Starting forecast materialization job...")
+        # Load current forecasts from the system (from existing storage)
+        raw_forecasts = load_json("forecasts") or {}
+        forecast_rows = raw_forecasts.get("rows", raw_forecasts.get("data", []))
         
-        # This would normally call the actual forecast model
-        # For now, creating a realistic dummy forecast based on patterns
-        mock_forecasts = []
+        # Validate structure before proceeding
+        if not validate_forecasts_structure(forecast_rows):
+            logger.warning("Forecast data structure validation failed, using empty fallback")
+            forecast_rows = []
         
-        # In a real implementation, this would use the actual ML models
-        tickers = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "NFLX"]
-        horizons = ["1d", "1w", "1m", "3m"]
-        
-        for ticker in tickers:
-            for horizon in horizons:
-                # Generate realistic-looking forecast data
-                import random
-                direction = random.choice(["up", "down", "flat"])
-                confidence = round(random.uniform(0.3, 1.0), 3)
-                expected_return = round(random.uniform(-0.05, 0.08), 4) if direction != "flat" else round(random.uniform(-0.02, 0.02), 4)
-                
-                mock_forecasts.append({
-                    "ticker": ticker,
-                    "horizon": horizon,
-                    "direction": direction,
-                    "confidence": confidence,
-                    "expected_return": expected_return,
-                    "model_version": "v1.2-hybrid-ml-llm",
-                    "model_source": "technical+sentiment+macro",
-                    "calculation_timestamp": datetime.utcnow().isoformat() + "Z",
-                    "features_used": ["rsi", "macd", "sma_20", "sma_50", "volatility", "news_sentiment", "macro_regime"]
-                })
-        
-        forecast_data = {
-            "rows": mock_forecasts,
-            "count": len(mock_forecasts),
+        # Add metadata about the materialization
+        materialized_data = {
+            "rows": forecast_rows,
+            "count": len(forecast_rows),
             "generated_at": datetime.utcnow().isoformat() + "Z",
-            "model_version": "v1.2-hybrid",
-            "last_update": datetime.utcnow().timestamp(),
-            "freshness": "fresh",
-            "source": [
-                "ml_model_technical",
-                "sentiment_analysis",
-                "macro_regime_detector",
-                "hybrid_scoring_v1"
-            ],
-            "metadata": {
-                "last_run": datetime.utcnow().isoformat() + "Z",
-                "data_points": len(mock_forecasts),
-                "assets_covered": tickers,
-                "horizons_evaluated": horizons,
-                "model_accuracy_recent": 0.62,  # Would come from performance tracker
-                "confidence_avg": round(sum(f['confidence'] for f in mock_forecasts) / len(mock_forecasts), 3) if mock_forecasts else 0.0
+            "materialized_at": datetime.now().isoformat(),
+            "source": ["materialization_job", "validated_forecasts"],
+            "metrics": {
+                "total_symbols": len(list(set(f.get("ticker", f.get("symbol", "")) for f in forecast_rows if f.get("ticker") or f.get("symbol"))),
+                "horizons_covered": list(set(f.get("horizon", "") for f in forecast_rows if f.get("horizon"))),
+                "model_coverage": list(set(f.get("model", "default") for f in forecast_rows))
             }
         }
         
-        # Save to persistent storage using our storage system
-        from storage.io import save_json
-        save_json("forecasts", forecast_data, 
-                  source=["forecast_materialization_job", "ml_model_v1", "fc-data-004"])
+        # Save to dated directory
+        today = datetime.now().strftime("%Y%m%d")
+        forecast_dir = Path("data/forecast") / f"dt={today}"
+        forecast_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create parquet directory structure and save parquet as well
-        if PANDAS_AVAILABLE:
-            try:
-                from pathlib import Path
-                from datetime import datetime as dt_module
-                
-                # Create parquet directory structure
-                parquet_dir = Path(__file__).resolve().parents[2] / "data" / "forecast" / f"dt={dt_module.now().strftime('%Y%m%d')}"
-                parquet_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Convert forecast data to DataFrame for parquet
-                df = pd.DataFrame(forecast_data["rows"])
-                
-                # Save parquet files
-                forecasts_parquet_path = parquet_dir / "forecasts.parquet"
-                final_parquet_path = parquet_dir / "final.parquet"
-                
-                df.to_parquet(forecasts_parquet_path, index=False)
-                df.to_parquet(final_parquet_path, index=False)  # For now same data, could be processed differently
-                
-                # Create symlink to latest for fast access
-                latest_symlink = Path(__file__).resolve().parents[2] / "data" / "forecast" / "latest"
-                if latest_symlink.is_symlink():
-                    latest_symlink.unlink()
-                latest_symlink.symlink_to(parquet_dir)
-                
-                print(f"Parquet files saved to: {parquet_dir}")
-                print(f"Latest symlink created: {latest_symlink}")
-                
-            except Exception as e:
-                print(f"Error during parquet generation: {str(e)}")
-                # Continue with just JSON which is already saved
-        else:
-            print("Pandas not available, skipping parquet generation")
-            # Continue with just JSON which is already saved
+        # Write the materialized forecasts
+        output_file = forecast_dir / "forecasts.parquet"
+        if forecast_rows:
+            df = pd.DataFrame(forecast_rows)
+            df.to_parquet(output_file, engine='pyarrow')
         
-        save_path = str(Path(__file__).resolve().parents[2] / "data" / "forecasts.json")
+        # Also create the JSON backup format used by our system
+        json_output_file = forecast_dir / "forecasts.json"
+        json_output_file.write_text(json.dumps(materialized_data, indent=2, ensure_ascii=False))
         
-        print(f"Forecast materialization completed successfully. Generated {len(mock_forecasts)} forecasts")
-        print(f"Data saved to: {save_path}")
+        # Create/update symlink to latest
+        latest_symlink = Path("data/forecast/latest")
+        if latest_symlink.exists() and latest_symlink.is_symlink():
+            latest_symlink.unlink()
         
-        return forecast_data
+        latest_symlink.symlink_to(forecast_dir)
+        
+        # Also store in the main forecasts.json for compatibility with existing endpoints
+        save_json("forecasts", materialized_data, source=["materialization_job", "daily_cache"])
+        
+        logger.info(f"Daily forecasts materialized successfully: {len(forecast_rows)} forecasts for {today}")
+        return materialized_data
         
     except Exception as e:
-        print(f"Error during forecast materialization: {str(e)}")
-        
-        # Return fallback structure to maintain never-empty contract
-        fallback_data = {
+        logger.error(f"Error in forecasts materialization: {str(e)}", exc_info=True)
+        # Return safe fallback structure
+        return {
             "rows": [],
             "count": 0,
             "generated_at": datetime.utcnow().isoformat() + "Z",
-            "model_version": "unknown",
-            "last_update": datetime.utcnow().timestamp(),
-            "freshness": "error",
-            "source": ["forecast_materialization_job", "error_fallback", "fc-data-004"],
+            "materialized_at": datetime.now().isoformat(),
+            "source": ["materialization_job", "fallback"],
             "error": str(e),
-            "message": "Forecast materialization failed, but fallback empty data returned to maintain never-empty contract"
+            "metrics": {
+                "total_symbols": 0,
+                "horizons_covered": [],
+                "model_coverage": []
+            }
         }
-        
-        # Still save the fallback data to ensure the endpoint has something to serve
-        from storage.io import save_json
-        save_json("forecasts", fallback_data, source=["forecast_materialization_job", "error_fallback", "fc-data-004"])
-        
-        return fallback_data
 
 
 def run_forecast_materialization_job():
     """
     Main entry point for the forecast materialization job.
-    This job should run daily to pre-generate forecast snapshots.
+    Designed to be run daily via scheduler.
     """
-    result = generate_forecast_snapshot()
+    logger.info("Running forecast materialization job...")
+    result = materialize_daily_forecasts()
+    logger.info(f"Forecast materialization job completed. Generated {result.get('count', 0)} forecasts.")
     return result
 
 
 if __name__ == "__main__":
-    print("Starting forecast materialization job...")
-    print("Task: FC-DATA-004 - Daily forecast cache pre-generation")
-    print(f"Started: {datetime.now().isoformat()}")
-    print("-" * 60)
-    
+    # When run as script, execute the materialization
+    print("Running forecast materialization job...")
     result = run_forecast_materialization_job()
-    
-    print("-" * 60)
-    print("Forecast materialization job completed successfully!")
-    print(f"Generated {result['count']} forecast rows")
-    print(f"Assets covered: {len(result['metadata']['assets_covered']) if 'metadata' in result else 0}")
-    print(f"Model version: {result.get('model_version', 'unknown')}")
-    print(f"Freshness: {result.get('freshness', 'unknown')}")
+    print(f"Materialization complete: {result.get('count', 0)} forecasts for {datetime.now().strftime('%Y-%m-%d')}")

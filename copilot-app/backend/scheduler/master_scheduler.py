@@ -23,6 +23,7 @@ from pathlib import Path
 import os
 
 from jobs.forecasts import run_forecasts_job
+from jobs.forecast_materialization import run_forecast_materialization_job
 from jobs.leads import run_leads_job  
 from jobs.news_sentiment import run_news_sentiment_analysis
 from jobs.market_brief import run_market_brief_job
@@ -84,6 +85,17 @@ class MasterScheduler:
             replace_existing=True
         )
         self.logger.info("Registered forecast job: Daily at 2:00 AM UTC")
+    
+    def register_forecast_materialization_job(self):
+        """Register the forecast materialization job with the scheduler - FC-DATA-004"""
+        self.scheduler.add_job(
+            func=self._run_forecast_materialization_wrapper,
+            trigger=CronTrigger(hour=3, minute=0),  # Daily at 3 AM (after forecast generation)
+            id='forecast_materialization_job',
+            name='Materialize Daily Forecasts for Fast Serving',
+            replace_existing=True
+        )
+        self.logger.info("Registered forecast materialization job: Daily at 3:00 AM UTC")
     
     def register_leads_job(self):
         """Register the leads generation job with the scheduler"""
@@ -172,6 +184,29 @@ class MasterScheduler:
         except Exception as e:
             self.logger.error(f"Forecast job failed: {e}", exc_info=True)
             self.job_results['forecast_last_run'] = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "error",
+                "error": str(e)
+            }
+    
+    async def _run_forecast_materialization_wrapper(self):
+        """Wrapper for forecast materialization job with error handling - FC-DATA-004"""
+        try:
+            self.logger.info("Starting forecast materialization job execution")
+            result = await asyncio.get_event_loop().run_in_executor(None, run_forecast_materialization_job)
+            self.job_results['forecast_materialization_last_run'] = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "success",
+                "result": result
+            }
+            self.logger.info(f"Forecast materialization job completed: {len(result.get('rows', []))} forecasts materialized")
+            
+            # Save results for monitoring
+            await self.save_job_results('forecast_materialization', result)
+            
+        except Exception as e:
+            self.logger.error(f"Forecast materialization job failed: {e}", exc_info=True)
+            self.job_results['forecast_materialization_last_run'] = {
                 "timestamp": datetime.now().isoformat(),
                 "status": "error",
                 "error": str(e)
@@ -353,6 +388,7 @@ class MasterScheduler:
         
         # Register all jobs
         self.register_forecast_job()
+        self.register_forecast_materialization_job()  # Added for FC-DATA-004
         self.register_leads_job()
         self.register_news_sentiment_job()
         self.register_market_brief_job()
