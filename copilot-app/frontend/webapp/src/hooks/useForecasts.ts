@@ -15,9 +15,19 @@ export function useForecasts(filters: {
   sort_by?: string,
   min_confidence?: number
 } = {}) {
+  const isDev = import.meta.env.DEV;
+  
+  if (isDev) {
+    console.log(`[Hook] 📊 useForecasts called`, { filters });
+  }
+  
   return useQuery({
     queryKey: ['forecasts', filters],
     queryFn: async () => {
+      if (isDev) {
+        console.log(`[Hook] 🔄 useForecasts - Fetching data...`, { filters });
+      }
+      
       // Build query parameters
       const params: Record<string, any> = {};
       
@@ -45,19 +55,39 @@ export function useForecasts(filters: {
         params.min_confidence = filters.min_confidence;
       }
       
+      const startTime = performance.now();
       const response = await apiGet<any>('/api/forecasts', params);
+      const elapsed = performance.now() - startTime;
+      
+      if (isDev) {
+        console.log(`[Hook] ⏱️ useForecasts - Response received in ${elapsed.toFixed(0)}ms`, {
+          ok: response.ok,
+          hasData: !!response.data,
+          rowsCount: response.data?.rows?.length || 0
+        });
+      }
       
       // Handle the response according to the backend's {ok, data} format
       if (response.ok && response.data) {
         // If the data has rows field, return it (standard format)
         if (response.data.rows !== undefined) {
-          return {
+          const result = {
             rows: ensureArray(response.data.rows),
             freshness: response.data.freshness || response.data.last_update,
             source: response.data.source || [],
             generated_at: response.data.generated_at,
             count: response.data.count || ensureArray(response.data.rows).length
           };
+          
+          if (isDev) {
+            console.log(`[Hook] ✅ useForecasts - Success`, {
+              rowsCount: result.rows.length,
+              count: result.count,
+              freshness: result.freshness
+            });
+          }
+          
+          return result;
         } 
         // If the data has items field, return it (alternative format)
         else if (response.data.items !== undefined) {

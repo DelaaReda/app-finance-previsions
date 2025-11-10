@@ -46,13 +46,47 @@ export interface IntelligenceSnapshot {
  * ```
  */
 export function useIntelligence() {
+  const isDev = import.meta.env.DEV;
+  
+  if (isDev) {
+    console.log(`[Hook] 🧠 useIntelligence called`);
+  }
+  
   return useQuery<IntelligenceSnapshot>({
     queryKey: ['intelligence', 'snapshot'],
     queryFn: async () => {
+      if (isDev) {
+        console.log(`[Hook] 🔄 useIntelligence - Fetching snapshot...`);
+      }
+      
+      const startTime = performance.now();
       const response = await apiGet<IntelligenceSnapshot>('/api/intelligence/snapshot');
+      const elapsed = performance.now() - startTime;
+      
+      if (isDev) {
+        console.log(`[Hook] ⏱️ useIntelligence - Response received in ${elapsed.toFixed(0)}ms`, {
+          ok: response.ok,
+          hasData: !!response.data
+        });
+      }
+      
       if (!response.ok || !response.data) {
+        if (isDev) {
+          console.error(`[Hook] ❌ useIntelligence - Failed`, { error: response.error });
+        }
         throw new Error(response.error ?? 'Unable to load intelligence snapshot');
       }
+      
+      if (isDev) {
+        const insights = response.data.insights;
+        console.log(`[Hook] ✅ useIntelligence - Success`, {
+          regime: insights.market_regime?.current,
+          opportunitiesCount: insights.opportunities?.length || 0,
+          risksCount: insights.risks?.length || 0,
+          summary: insights.summary?.substring(0, 100)
+        });
+      }
+      
       return response.data;
     },
     staleTime: 5 * 60_000, // 5 minutes
