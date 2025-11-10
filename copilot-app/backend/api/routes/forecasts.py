@@ -9,6 +9,9 @@ from datetime import datetime
 
 from core.response import ok, err
 from storage.io import load_json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -26,11 +29,29 @@ def get_filtered_forecasts(
     Dashboard forecasts endpoint with filtering capabilities.
     Returns forecast data with proper structure for dashboard UI components.
     """
+    logger.info(f"📥 GET /api/forecasts - Request received", extra={
+        "horizon": horizon,
+        "asset_type": asset_type,
+        "sort_by": sort_by,
+        "limit": limit,
+        "tickers": tickers,
+        "themes": themes,
+        "min_confidence": min_confidence
+    })
+    
     try:
+        logger.debug(f"📂 Loading forecasts from storage...")
         # Load forecasts from persistent storage (following never-empty pattern)
         forecasts_data = load_json("forecasts")
         
         if not forecasts_data:
+            logger.warning(f"⚠️ No forecasts data found in storage", extra={
+                "filters": {
+                    "horizon": horizon,
+                    "asset_type": asset_type,
+                    "limit": limit
+                }
+            })
             # Return empty structure with metadata but never fail
             return ok({
                 "rows": [],
@@ -54,16 +75,48 @@ def get_filtered_forecasts(
         data_payload = forecasts_data.get("data", forecasts_data.get("payload", forecasts_data))
         all_rows = data_payload.get("rows", data_payload if isinstance(data_payload, list) else [])
         
+        logger.info(f"📊 Loaded {len(all_rows)} forecast rows from storage", extra={
+            "total_rows": len(all_rows),
+            "data_structure": "data.rows" if "data" in forecasts_data else "direct"
+        })
+        
         # Apply filtering
         filtered_rows = all_rows
+        initial_count = len(filtered_rows)
         
         if asset_type != "all":
+            before_count = len(filtered_rows)
             filtered_rows = [row for row in filtered_rows if row.get("asset_type", row.get("type", "equity")).lower() == asset_type.lower()]
+            logger.debug(f"🔍 Filtered by asset_type={asset_type}: {before_count} → {len(filtered_rows)} rows")
         
         if horizon != "all":
-            filtered_rows = [row for row in filtered_rows if row.get("horizon", "all") == horizon]
+            before_count = len(filtered_rows)
+            # Map frontend horizon values to backend values
+            # If data doesn't have horizon field, default to "short" for compatibility
+            horizon_mapping = {
+                "short": ["1d", "5d", "1w", "short"],
+                "medium": ["1mo", "3mo", "medium"],
+                "long": ["6mo", "1y", "2y", "long"]
+            }
+            # If horizon filter is specified, match against mapped values or exact match
+            if horizon in horizon_mapping:
+                allowed_horizons = horizon_mapping[horizon]
+                filtered_rows = [
+                    row for row in filtered_rows
+                    # If row has no horizon, include it for "short" (default)
+                    if (row.get("horizon") is None and horizon == "short") or
+                       (row.get("horizon") in allowed_horizons) or row.get("horizon") == horizon
+                ]
+            else:
+                # Exact match for other horizon values, or include if no horizon and filtering for "short"
+                filtered_rows = [
+                    row for row in filtered_rows
+                    if (row.get("horizon") is None and horizon == "short") or row.get("horizon", "short") == horizon
+                ]
+            logger.debug(f"🔍 Filtered by horizon={horizon}: {before_count} → {len(filtered_rows)} rows")
         
         if tickers:
+            before_count = len(filtered_rows)
             filtered_rows = [row for row in filtered_rows if row.get("ticker") in tickers or row.get("symbol") in tickers]
         
         if themes:
@@ -75,8 +128,10 @@ def get_filtered_forecasts(
                 row for row in filtered_rows
                 if row.get("confidence", 0) >= min_confidence
             ]
+            logger.debug(f"🔍 Filtered by min_confidence={min_confidence}: {before_count} → {len(filtered_rows)} rows")
         
         # Sort results
+        logger.debug(f"🔀 Sorting by {sort_by}...")
         if sort_by == "confidence":
             filtered_rows = sorted(filtered_rows, key=lambda x: x.get("confidence", 0), reverse=True)
         elif sort_by == "expected_return":
@@ -87,8 +142,22 @@ def get_filtered_forecasts(
             filtered_rows = sorted(filtered_rows, key=lambda x: x.get("confidence", 0), reverse=True)
         
         # Apply limit
+        before_limit = len(filtered_rows)
         if limit and limit > 0:
             filtered_rows = filtered_rows[:limit]
+            logger.debug(f"✂️ Applied limit={limit}: {before_limit} → {len(filtered_rows)} rows")
+        
+        logger.info(f"✅ Forecasts filtered successfully", extra={
+            "initial_count": initial_count,
+            "final_count": len(filtered_rows),
+            "filters_applied": {
+                "asset_type": asset_type != "all",
+                "horizon": horizon != "all",
+                "tickers": tickers is not None,
+                "themes": themes is not None,
+                "min_confidence": min_confidence > 0 if min_confidence else False
+            }
+        })
         
         # Prepare response data
         response_data = {
@@ -107,9 +176,18 @@ def get_filtered_forecasts(
             "source": forecasts_data.get("source", ["forecast_pipeline"])
         }
         
+        logger.info(f"✅ Returning {len(filtered_rows)} forecasts to client")
         return ok(response_data)
         
     except Exception as e:
+        logger.error(f"❌ Error in forecasts endpoint: {str(e)}", exc_info=True, extra={
+            "error_type": type(e).__name__,
+            "filters": {
+                "horizon": horizon,
+                "asset_type": asset_type,
+                "limit": limit
+            }
+        })
         # Return structured response even on error to maintain never-empty contract
         return ok({
             "rows": [],
@@ -127,3 +205,6 @@ def get_filtered_forecasts(
             "generated_at": datetime.utcnow().isoformat(),
             "source": ["fallback", "error_handling"]
         })
+
+# Export router with expected name for main.py
+forecasts_router = router
