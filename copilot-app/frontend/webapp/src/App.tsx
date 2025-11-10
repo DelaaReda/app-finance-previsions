@@ -33,12 +33,13 @@ import TestSimple from './pages/TestSimple'
 // AppContent wrapper with Command Palette
 function AppContent() {
   const { opened, close } = useCommandPalette();
+  const isDev = import.meta.env.DEV;
   
   return (
     <>
       <CommandPalette opened={opened} close={close} />
       <Outlet />
-      <DevDebugPanel />
+      {isDev && <DevDebugPanel />}
     </>
   );
 }

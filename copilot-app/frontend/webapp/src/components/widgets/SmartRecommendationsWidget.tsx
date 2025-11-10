@@ -49,7 +49,7 @@ export function SmartRecommendationsWidget({
         <Group justify="space-between">
           <Group gap="xs">
             <IconSparkles size={24} />
-            <Text size="lg" fw={700}>Today's Smart Picks</Text>
+            <Text size="lg" fw={700}>Sélections du Jour</Text>
           </Group>
         </Group>
         <Stack gap="md">
@@ -74,16 +74,21 @@ export function SmartRecommendationsWidget({
     return glassWrapper(
       <Alert
         icon={<IconAlertCircle size={20} />}
-        title="Failed to Load Recommendations"
+        title="Échec du chargement des recommandations"
         color="red"
         variant="light"
+        action={
+          <Button size="xs" variant="light" onClick={() => refetch()}>
+            Réessayer
+          </Button>
+        }
       >
         <Text size="sm">
-          Unable to fetch daily recommendations. Please try again later.
+          Impossible de récupérer les recommandations quotidiennes. Veuillez réessayer plus tard.
         </Text>
         {error && (
           <Text size="xs" c="dimmed" mt="xs">
-            Error: {error.message}
+            Erreur: {error.message}
           </Text>
         )}
       </Alert>
@@ -95,9 +100,14 @@ export function SmartRecommendationsWidget({
     return glassWrapper(
       <Alert
         icon={<IconAlertCircle size={20} />}
-        title="No Recommendations Available"
+        title="Aucune recommandation disponible"
         color="yellow"
         variant="light"
+        action={
+          <Button size="xs" variant="light" onClick={() => refetch()}>
+            Actualiser
+          </Button>
+        }
       >
         <Text size="sm">
           No recommendations for today. The system is analyzing market conditions.

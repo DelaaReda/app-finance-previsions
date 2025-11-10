@@ -15,17 +15,65 @@ export function MacroWidget() {
 
   // Process the macro data from series format
   // API returns: { ok: true, data: { series: [{ id, name, unit, frequency, points: [{date, value}] }] } }
+  // OR: { data: { series: [...] } } (direct format)
+  // OR: { series: [...] } (flat format)
   let macroValues: Record<string, number> = {};
   if (data) {
-    const actualData = data.data || data;
-    const series = actualData.series || [];
+    // Handle different response formats
+    let actualData: any = data;
+    
+    // If data has a 'data' property, use it
+    if (data.data && typeof data.data === 'object') {
+      actualData = data.data;
+    }
+    
+    // Extract series array - handle multiple possible formats
+    let series: any[] = [];
+    
+    if (Array.isArray(actualData)) {
+      // If actualData is directly an array, use it
+      series = actualData;
+    } else if (actualData && typeof actualData === 'object') {
+      // Try different possible keys for series
+      if (Array.isArray(actualData.series)) {
+        series = actualData.series;
+      } else if (Array.isArray(actualData.data)) {
+        series = actualData.data;
+      } else if (Array.isArray(actualData.payload)) {
+        series = actualData.payload;
+      }
+    }
+    
+    // Ensure series is an array before iterating
+    if (!Array.isArray(series)) {
+      console.warn('[MacroWidget] series is not an array:', series, 'data:', data);
+      series = [];
+    }
 
     // Extract latest value from each series
     series.forEach((s: any) => {
-      if (s.points && s.points.length > 0) {
-        // Get the last point (most recent)
-        const lastPoint = s.points[s.points.length - 1];
-        macroValues[s.id] = lastPoint.value;
+      if (s && typeof s === 'object') {
+        // Handle different point formats
+        let points: any[] = [];
+        
+        if (Array.isArray(s.points)) {
+          points = s.points;
+        } else if (Array.isArray(s.data)) {
+          points = s.data;
+        }
+        
+        if (points.length > 0) {
+          // Get the last point (most recent)
+          const lastPoint = points[points.length - 1];
+          
+          // Extract value from different possible formats
+          const value = lastPoint?.value ?? lastPoint?.[1] ?? lastPoint?.level ?? lastPoint?.close ?? null;
+          const seriesId = s.id ?? s.series_id ?? s.name ?? null;
+          
+          if (seriesId && value !== null && value !== undefined) {
+            macroValues[seriesId] = value;
+          }
+        }
       }
     });
   }

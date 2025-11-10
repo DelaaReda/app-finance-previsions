@@ -38,33 +38,33 @@ function DashboardContent() {
 
   const metrics = [
     {
-      label: 'Forecasts online',
+      label: 'Prévisions actives',
       value: totalForecasts.toLocaleString(),
-      detail: `${kpis?.tickers_tracked ?? 0} tickers tracked`,
+      detail: `${kpis?.tickers_tracked ?? 0} tickers suivis`,
       accent: classes.metricAccentBlue,
       icon: <IconRadar2 size={18} />,
       progress: safePercent(totalForecasts / 500),
     },
     {
-      label: 'High-confidence',
+      label: 'Haute confiance',
       value: `${Math.round((highConv / Math.max(totalForecasts || 1, 1)) * 100) || 0}%`,
-      detail: `${highConv.toLocaleString()} signals`,
+      detail: `${highConv.toLocaleString()} signaux`,
       accent: classes.metricAccentGreen,
       icon: <IconTrendingUp size={18} />,
       progress: safePercent(highConv / Math.max(totalForecasts || 1, 1)),
     },
     {
-      label: 'Fresh news',
+      label: 'Actualités récentes',
       value: newsCount.toLocaleString(),
-      detail: 'Last 60 min',
+      detail: 'Dernières 60 min',
       accent: classes.metricAccentPurple,
       icon: <IconNews size={18} />,
       progress: safePercent(newsCount / 80),
     },
     {
-      label: 'Backtest hit rate',
+      label: 'Taux de réussite',
       value: `${Math.round((hitRate > 1 ? hitRate : hitRate * 100) || 0)}%`,
-      detail: kpis?.backtests?.status ?? 'Live monitor',
+      detail: kpis?.backtests?.status ?? 'Surveillance en direct',
       accent: classes.metricAccentOrange,
       icon: <IconActivity size={18} />,
       progress: safePercent(hitRate > 1 ? hitRate / 100 : hitRate),
@@ -89,16 +89,16 @@ function DashboardContent() {
                   <div className={classes.sparkleBadge}>
                     <IconSparkles size={20} />
                   </div>
-                  <Title order={2}>Adaptive Dashboard</Title>
+                  <Title order={1} size="h2">Tableau de Bord Adaptatif</Title>
                 </Group>
                 <Text c="gray.3" size="sm" mt={4}>
-                  Intelligent layout that adapts to market conditions in real-time
+                  Mise en page intelligente qui s'adapte aux conditions de marché en temps réel
                 </Text>
               </div>
 
               <Stack gap={6} align="flex-end">
-                <Badge className={classes.liveBadge} radius="xl" size="lg">
-                  Live data stream
+                <Badge className={classes.liveBadge} radius="xl" size="lg" variant="light" color="green">
+                  Données en direct
                 </Badge>
                 <Group gap="md" align="center">
                   <RegimeBadgeAdaptive />
@@ -114,10 +114,13 @@ function DashboardContent() {
               icon={<IconInfoCircle size={20} />}
               classNames={{ root: classes.alertGlass }}
             >
-              <Text size="sm">
-                <strong>Adaptive Mode Active:</strong> Dashboard layout automatically adjusts based on detected market regime.
-                Switch to Manual mode to lock the current layout.
-              </Text>
+              <Group gap="xs" align="center">
+                <Badge size="sm" color="blue" variant="dot">Mode Adaptatif Actif</Badge>
+                <Text size="sm" c="dimmed">
+                  La mise en page s'ajuste automatiquement selon le régime de marché détecté. 
+                  Passez en mode Manuel pour verrouiller la mise en page actuelle.
+                </Text>
+              </Group>
             </Alert>
 
             <div className={classes.metricRow}>
@@ -166,11 +169,11 @@ function DashboardContent() {
         {/* Dynamic Widget Grid - Adapts to market context */}
         <div className={classes.widgetSection}>
           <div className={classes.widgetSectionHeader}>
-            <Text fw={600} size="sm" c="gray.3">
-              Adaptive layout
-            </Text>
-            <Text size="xs" c="gray.5">
-              Widgets reorder automatically based on market regime confidence
+            <Title order={3} size="h4" fw={600} c="gray.1">
+              Mise en page adaptative
+            </Title>
+            <Text size="sm" c="gray.5" mt={4}>
+              Les widgets se réorganisent automatiquement selon la confiance du régime de marché
             </Text>
           </div>
           <DynamicWidgetGrid />

@@ -5,7 +5,7 @@ Provides filtered news data for the dashboard with never-empty guarantee
 from fastapi import APIRouter, Query
 from typing import Dict, Any, Optional, List
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from core.response import ok, err
 from storage.io import load_json
@@ -103,11 +103,11 @@ def get_filtered_news(
                 try:
                     num = int(since[:-1])
                     hours_back = num * time_multiplier[since[-1]]
-                    cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+                    cutoff_utc = datetime.now(timezone.utc) - timedelta(hours=hours_back)
                     
                     filtered_articles = [
                         article for article in filtered_articles
-                        if article.get("pubDate") and _safe_parse_date(article["pubDate"]) and _safe_parse_date(article["pubDate"]) > cutoff_time
+                        if article.get("pubDate") and _safe_parse_date(article["pubDate"]) and _safe_parse_date(article["pubDate"]) > cutoff_utc
                     ]
                 except ValueError:
                     # If parsing fails, skip date filtering
@@ -302,11 +302,19 @@ def _safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
     try:
         # Try ISO format first
         if "T" in date_str or "Z" in date_str:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            parsed_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            # Make sure it's timezone-aware
+            if parsed_date.tzinfo is None:
+                parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+            return parsed_date
         # Try other common formats
         for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y"]:
             try:
-                return datetime.strptime(date_str, fmt)
+                parsed_date = datetime.strptime(date_str, fmt)
+                # Make it timezone-aware
+                if parsed_date.tzinfo is None:
+                    parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+                return parsed_date
             except ValueError:
                 continue
         return None

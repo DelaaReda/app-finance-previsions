@@ -195,12 +195,14 @@ function WidgetRow({
   };
 
   return (
-    <Grid gutter="md">
+    <Grid gutter="md" style={{ alignItems: 'stretch' }}>
       {widgets.map((widgetId, index) => {
         const span = getColSpan(index, widgets.length);
         return (
-          <Grid.Col key={widgetId} span={span}>
-            <WidgetWrapper widgetId={widgetId} filters={filters} />
+          <Grid.Col key={widgetId} span={span} style={{ display: 'flex' }}>
+            <div style={{ width: '100%', minHeight: 0 }}>
+              <WidgetWrapper widgetId={widgetId} filters={filters} />
+            </div>
           </Grid.Col>
         );
       })}

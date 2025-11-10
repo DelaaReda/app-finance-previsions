@@ -84,13 +84,15 @@ def get_filtered_forecasts(
         filtered_rows = all_rows
         initial_count = len(filtered_rows)
         
+        # Track initial count for logging purposes
+        current_count = initial_count
+        
         if asset_type != "all":
-            before_count = len(filtered_rows)
             filtered_rows = [row for row in filtered_rows if row.get("asset_type", row.get("type", "equity")).lower() == asset_type.lower()]
-            logger.debug(f"🔍 Filtered by asset_type={asset_type}: {before_count} → {len(filtered_rows)} rows")
+            logger.debug(f"🔍 Filtered by asset_type={asset_type}: {current_count} → {len(filtered_rows)} rows")
+            current_count = len(filtered_rows)
         
         if horizon != "all":
-            before_count = len(filtered_rows)
             # Map frontend horizon values to backend values
             # If data doesn't have horizon field, default to "short" for compatibility
             horizon_mapping = {
@@ -113,22 +115,27 @@ def get_filtered_forecasts(
                     row for row in filtered_rows
                     if (row.get("horizon") is None and horizon == "short") or row.get("horizon", "short") == horizon
                 ]
-            logger.debug(f"🔍 Filtered by horizon={horizon}: {before_count} → {len(filtered_rows)} rows")
+            logger.debug(f"🔍 Filtered by horizon={horizon}: {current_count} → {len(filtered_rows)} rows")
+            current_count = len(filtered_rows)
         
         if tickers:
-            before_count = len(filtered_rows)
+            before_tickers = len(filtered_rows)
             filtered_rows = [row for row in filtered_rows if row.get("ticker") in tickers or row.get("symbol") in tickers]
+            logger.debug(f"🔍 Filtered by tickers: {before_tickers} → {len(filtered_rows)} rows")
         
         if themes:
+            before_themes = len(filtered_rows)
             filtered_rows = [row for row in filtered_rows if row.get("theme") in themes or row.get("category") in themes]
+            logger.debug(f"🔍 Filtered by themes: {before_themes} → {len(filtered_rows)} rows")
         
         # Filter by minimum confidence (Sprint 5 - Tâche 5.1)
         if min_confidence and min_confidence > 0:
+            before_confidence = len(filtered_rows)
             filtered_rows = [
                 row for row in filtered_rows
                 if row.get("confidence", 0) >= min_confidence
             ]
-            logger.debug(f"🔍 Filtered by min_confidence={min_confidence}: {before_count} → {len(filtered_rows)} rows")
+            logger.debug(f"🔍 Filtered by min_confidence={min_confidence}: {before_confidence} → {len(filtered_rows)} rows")
         
         # Sort results
         logger.debug(f"🔀 Sorting by {sort_by}...")
@@ -137,15 +144,16 @@ def get_filtered_forecasts(
         elif sort_by == "expected_return":
             filtered_rows = sorted(filtered_rows, key=lambda x: x.get("expected_return", 0), reverse=True)
         elif sort_by == "ticker":
-            filtered_rows = sorted(filtered_rows, key=lambda x: x.get("ticker", x.get("symbol", "")))
-        else:  # Default sort
+            filtered_rows = sorted(filtered_rows, key=lambda x: x.get("ticker", x.get("symbol", "")), reverse=True)
+        else:  # Default sort by confidence
             filtered_rows = sorted(filtered_rows, key=lambda x: x.get("confidence", 0), reverse=True)
         
         # Apply limit
         before_limit = len(filtered_rows)
         if limit and limit > 0:
-            filtered_rows = filtered_rows[:limit]
-            logger.debug(f"✂️ Applied limit={limit}: {before_limit} → {len(filtered_rows)} rows")
+            limit_val = min(limit, 200)  # Cap limit to 200
+            filtered_rows = filtered_rows[:limit_val]
+            logger.debug(f"✂️ Applied limit={limit_val}: {before_limit} → {len(filtered_rows)} rows")
         
         logger.info(f"✅ Forecasts filtered successfully", extra={
             "initial_count": initial_count,
