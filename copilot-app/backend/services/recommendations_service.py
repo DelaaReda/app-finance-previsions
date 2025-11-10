@@ -37,7 +37,13 @@ except ImportError:
 
 # Storage
 try:
-    from backend.storage.base import load_forecasts
+    from storage.io import load_json
+    def load_forecasts():
+        """Load forecasts from storage"""
+        data = load_json("forecasts")
+        if data and "data" in data:
+            return data
+        return None
 except ImportError:
     load_forecasts = None
 
@@ -95,69 +101,181 @@ class RecommendationsService:
         Returns:
             Dict with recommendations and market context
         """
+        import time
+        start_time = time.time()
+        
+        self.logger.info(f"💡 generate_daily_recommendations called", extra={
+            "universe": universe,
+            "universe_count": len(universe) if universe else 0,
+            "limit": limit
+        })
+        
         try:
             # Check cache (24h validity)
             cache_key = f"recommendations_daily_{universe}_{limit}" if universe else f"recommendations_daily_default_{limit}"
+            self.logger.debug(f"🔍 Checking cache: {cache_key}")
             cached = self._load_cache(cache_key)
             if cached:
-                self.logger.info(f"Returning cached recommendations (key: {cache_key})")
+                self.logger.info(f"✅ Returning cached recommendations", extra={
+                    "cache_key": cache_key,
+                    "recommendations_count": len(cached.get("recommendations", []))
+                })
                 return cached
+            self.logger.debug(f"⚠️ No cache found, generating new recommendations")
             
             # Default universe
             if not universe:
                 universe = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'AMZN', 'TSLA', 'SPY', 'QQQ', 'TLT', 'GLD', 'JNJ', 'PG']
+                self.logger.debug(f"📋 Using default universe: {len(universe)} tickers")
+            else:
+                self.logger.debug(f"📋 Using provided universe: {len(universe)} tickers")
             
             # Aggregate data
+            self.logger.debug(f"🔄 Aggregating data for {len(universe)} tickers...")
             data = await self._aggregate_data(universe)
+            self.logger.debug(f"✅ Data aggregated", extra={
+                "tickers_with_data": len([k for k in data.keys() if k != 'market_context']),
+                "has_market_context": 'market_context' in data
+            })
             
             # Calculate ML scores
+            self.logger.debug(f"🧮 Calculating ML scores...")
             candidates = []
             for ticker in universe:
                 try:
                     score = self._calculate_ml_score(ticker, data)
-                    if score > 0.5:  # Threshold
-                        candidates.append({
-                            'ticker': ticker,
-                            'score': score,
-                            'data': data.get(ticker, {})
-                        })
+                    candidates.append({
+                        'ticker': ticker,
+                        'score': score,
+                        'data': data.get(ticker, {})
+                    })
                 except Exception as e:
-                    self.logger.warning(f"Failed to score {ticker}: {e}")
+                    self.logger.warning(f"⚠️ Failed to score {ticker}: {e}", extra={
+                        "ticker": ticker,
+                        "error": str(e)
+                    })
             
-            # Sort by score
+            self.logger.info(f"📊 ML scores calculated", extra={
+                "candidates_count": len(candidates),
+                "top_scores": sorted([c['score'] for c in candidates], reverse=True)[:5] if candidates else []
+            })
+
+            # Sort by score and keep the most relevant ones
+            self.logger.debug(f"🔀 Sorting candidates by score...")
             candidates = sorted(candidates, key=lambda x: x['score'], reverse=True)
             
-            # LLM validation (top candidates)
+            # Lower threshold if no high-scoring candidates
+            filtered = [c for c in candidates if c['score'] >= 0.35]
+            if not filtered and candidates:
+                self.logger.debug(f"⚠️ No candidates with score >= 0.35, lowering threshold to 0.20")
+                # Lower threshold to 0.20 if no high-scoring candidates
+                filtered = [c for c in candidates if c['score'] >= 0.20]
+            if not filtered and candidates:
+                self.logger.debug(f"⚠️ No candidates with score >= 0.20, lowering threshold to 0.10")
+                # Even lower threshold to 0.10 if still no candidates
+                filtered = [c for c in candidates if c['score'] >= 0.10]
+            if not filtered and candidates:
+                self.logger.debug(f"⚠️ No candidates with score >= 0.10, taking top {max(1, limit)} candidates")
+                # Take top candidates regardless of score if we have any
+                filtered = candidates[:max(1, limit)]
+            
+            if filtered:
+                candidates = filtered
+                self.logger.debug(f"✅ Filtered to {len(candidates)} candidates")
+            elif candidates:
+                candidates = candidates[: max(1, limit)]
+                self.logger.debug(f"✅ Using top {len(candidates)} candidates")
+
+            # LLM validation (top candidates) - but skip if no candidates
+            self.logger.debug(f"🤖 Starting LLM validation for top {min(len(candidates), limit * 2)} candidates...")
             validated = []
-            for candidate in candidates[:limit * 2]:  # Over-select for validation
-                validation = await self._validate_with_llm(
-                    candidate['ticker'],
-                    candidate['score'],
-                    data
+            if candidates:
+                for i, candidate in enumerate(candidates[:limit * 2]):  # Over-select for validation
+                    self.logger.debug(f"🤖 Validating candidate {i+1}/{min(len(candidates), limit * 2)}: {candidate['ticker']} (score: {candidate['score']:.3f})")
+                    try:
+                        validation = await self._validate_with_llm(
+                            candidate['ticker'],
+                            candidate['score'],
+                            data
+                        )
+                        
+                        # Accept if approved OR if LLM validation fails (fallback to ML score)
+                        if validation.get('decision') == 'APPROVE' or not validation.get('decision'):
+                            self.logger.debug(f"✅ {candidate['ticker']} approved by LLM")
+                            validated.append({
+                                **candidate,
+                                **validation
+                            })
+                        else:
+                            self.logger.debug(f"❌ {candidate['ticker']} rejected by LLM: {validation.get('decision')}")
+                    except Exception as e:
+                        # If LLM validation fails, still include the candidate based on ML score
+                        self.logger.warning(f"⚠️ LLM validation failed for {candidate['ticker']}: {e}, using ML score", extra={
+                            "ticker": candidate['ticker'],
+                            "error": str(e)
+                        })
+                        validated.append({
+                            **candidate,
+                            'decision': 'APPROVE',
+                            'reasoning': f"ML score: {candidate['score']:.2f}",
+                            'confidence': candidate['score']
+                        })
+                    
+                    if len(validated) >= limit:
+                        self.logger.debug(f"✅ Reached limit of {limit} validated recommendations")
+                        break
+            
+            self.logger.info(f"✅ LLM validation complete", extra={
+                "validated_count": len(validated),
+                "requested_limit": limit
+            })
+            
+            # Format output - use validated or fallback to candidates if no validated
+            if validated:
+                self.logger.debug(f"📝 Formatting {len(validated[:limit])} validated recommendations...")
+                result = self._format_recommendations(
+                    validated[:limit],
+                    data.get('market_context', {})
                 )
-                
-                if validation.get('decision') == 'APPROVE':
-                    validated.append({
-                        **candidate,
-                        **validation
-                    })
-                
-                if len(validated) >= limit:
-                    break
+            elif candidates:
+                self.logger.debug(f"📝 Formatting {len(candidates[:limit])} candidates (no LLM validation)...")
+                # Format candidates even without LLM validation
+                result = self._format_recommendations(
+                    candidates[:limit],
+                    data.get('market_context', {})
+                )
+            else:
+                self.logger.warning(f"⚠️ No candidates found, using fallback recommendations")
+                # No candidates at all - use fallback
+                result = self._fallback_recommendations()
             
-            # Format output
-            result = self._format_recommendations(
-                validated[:limit],
-                data.get('market_context', {})
-            )
+            import time
+            elapsed = time.time() - start_time if 'start_time' in locals() else 0
             
-            # Save to cache
-            self._save_cache(cache_key, result)
+            # Save to cache only if we have recommendations
+            if result.get('recommendations'):
+                self.logger.debug(f"💾 Saving to cache: {cache_key}")
+                self._save_cache(cache_key, result)
+                self.logger.debug(f"✅ Recommendations cached")
+            
+            self.logger.info(f"✅ Recommendations generated successfully", extra={
+                "elapsed_seconds": round(elapsed, 3),
+                "recommendations_count": len(result.get('recommendations', [])),
+                "market_regime": result.get('market_context', {}).get('regime', 'N/A'),
+                "used_llm_validation": len(validated) > 0 if 'validated' in locals() else False
+            })
             
             return result
             
         except Exception as e:
-            self.logger.error(f"Failed to generate recommendations: {e}", exc_info=True)
+            import time
+            elapsed = time.time() - start_time if 'start_time' in locals() else 0
+            self.logger.error(f"❌ Failed to generate recommendations: {e}", exc_info=True, extra={
+                "error_type": type(e).__name__,
+                "elapsed_seconds": round(elapsed, 3),
+                "universe": universe,
+                "limit": limit
+            })
             return self._fallback_recommendations()
     
     async def _aggregate_data(self, universe: List[str]) -> Dict[str, Any]:
@@ -199,9 +317,9 @@ class RecommendationsService:
                 'forecast': data['forecasts'].get(ticker, {}),
                 'ticker': ticker
             }
-        
+
         return data
-    
+
     def _calculate_ml_score(
         self,
         ticker: str,
@@ -209,7 +327,7 @@ class RecommendationsService:
     ) -> float:
         """
         Calculate ML ranking score (5 factors)
-        
+
         Score = (
             forecast_confidence * 0.35 +
             momentum_strength * 0.25 +
@@ -222,43 +340,68 @@ class RecommendationsService:
             ticker_data = data.get(ticker, {})
             forecast = ticker_data.get('forecast', {})
             market_context = data.get('market_context', {})
-            
+
             # 1. Forecast confidence (0.35)
-            forecast_conf = float(forecast.get('confidence', 0.5))
-            
+            forecast_conf = float(forecast.get('confidence', 0.5) or 0.5)
+
+            # Expected return normalized (-5% to +5% window)
+            expected_return = float(forecast.get('expected_return', 0.0) or 0.0)
+            exp_score = self._normalize(expected_return, -0.05, 0.05)
+
             # 2. Momentum strength (0.25)
-            # Simplified: use forecast direction as proxy
-            momentum = 0.7 if forecast.get('direction') == 'up' else 0.3
-            
+            direction = (forecast.get('direction') or '').lower()
+            if direction == 'up':
+                momentum = 0.8
+            elif direction == 'down':
+                momentum = 0.2
+            else:
+                momentum = 0.5
+
             # 3. News sentiment (0.20)
-            # Simplified: neutral default
-            news_score = 0.5
-            
+            ctx = forecast.get('market_context', {})
+            news_sentiment = self._normalize(ctx.get('news_sentiment'), -0.6, 0.6)
+            news_volume = self._normalize(ctx.get('news_volume_zscore'), -3, 3)
+            news_score = (news_sentiment * 0.7) + (news_volume * 0.3)
+
             # 4. Macro alignment (0.15)
             alignment = self._calculate_macro_alignment(
                 ticker,
                 forecast.get('direction', 'flat'),
                 market_context.get('regime', 'NORMAL')
             )
-            
+
             # 5. Risk-reward ratio (0.05)
-            # Simplified: use confidence as proxy
-            risk_reward = forecast_conf * 0.8
-            
+            risk_reward = self._normalize(abs(expected_return), 0, 0.08)
+
             # Weighted sum
             score = (
-                forecast_conf * 0.35 +
-                momentum * 0.25 +
-                news_score * 0.20 +
-                alignment * 0.15 +
+                forecast_conf * 0.30 +
+                exp_score * 0.20 +
+                momentum * 0.20 +
+                news_score * 0.15 +
+                alignment * 0.10 +
                 risk_reward * 0.05
             )
-            
+
             return min(1.0, max(0.0, score))
-            
+
         except Exception as e:
             self.logger.warning(f"ML scoring failed for {ticker}: {e}")
             return 0.5
+
+    @staticmethod
+    def _normalize(value: Optional[Any], lower: float, upper: float, default: float = 0.5) -> float:
+        """Map value into [0,1] range with clipping."""
+        if value is None:
+            return default
+        try:
+            val = float(value)
+        except (TypeError, ValueError):
+            return default
+        if upper == lower:
+            return default
+        val = max(lower, min(upper, val))
+        return (val - lower) / (upper - lower)
     
     def _calculate_macro_alignment(
         self,
@@ -396,8 +539,8 @@ Output ONLY valid JSON with this structure:
         direction = forecast.get('direction', 'flat')
         conf = forecast.get('confidence', 0.5)
         
-        # Approve if score > 0.6
-        if score < 0.6:
+        # Approve if score reasonably high
+        if score < 0.5:
             return {
                 'decision': 'REJECT',
                 'reasoning': f"ML score ({score:.2f}) below threshold",
@@ -461,17 +604,49 @@ Output ONLY valid JSON with this structure:
         }
     
     def _fallback_recommendations(self) -> Dict[str, Any]:
-        """Fallback recommendations if all else fails"""
+        """Generate basic recommendations even when data is limited"""
+        # Default universe for fallback
+        default_tickers = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'NVDA']
+        
+        # Try to get basic market context
+        try:
+            from services.intelligence_service import get_market_intelligence_snapshot
+            intel = get_market_intelligence_snapshot(use_cache=True, persist=False)
+            regime = intel.get('insights', {}).get('market_regime', {}).get('current', 'NORMAL')
+            summary = intel.get('insights', {}).get('summary', 'Market analysis in progress')
+        except Exception:
+            regime = 'NORMAL'
+            summary = 'Market analysis in progress'
+        
+        # Generate basic recommendations based on default tickers
+        recommendations = []
+        for ticker in default_tickers[:3]:
+            recommendations.append({
+                'ticker': ticker,
+                'action': 'HOLD',
+                'score': 0.5,
+                'reasoning': f'{ticker} - Market analysis in progress. Monitor for entry signals.',
+                'confidence': 0.5,
+                'risk_level': 'MEDIUM',
+                'catalysts': ['Market data collection ongoing'],
+                'supporting_data': {
+                    'forecast_confidence': 0.5,
+                    'momentum_strength': 0.5,
+                    'news_sentiment': 0.0,
+                    'macro_alignment': 0.5
+                }
+            })
+        
         return {
-            'recommendations': [],
+            'recommendations': recommendations,
             'market_context': {
-                'regime': 'UNKNOWN',
-                'summary': 'Unable to generate recommendations',
-                'key_drivers': []
+                'regime': regime,
+                'summary': summary,
+                'key_drivers': ['Data collection in progress']
             },
             'generated_at': datetime.utcnow().isoformat(),
-            'valid_until': (datetime.utcnow() + timedelta(hours=1)).isoformat(),
-            'error': 'Failed to generate recommendations'
+            'valid_until': (datetime.utcnow() + timedelta(hours=24)).isoformat(),
+            'status': 'fallback'
         }
     
     def _load_cache(self, key: str) -> Optional[Dict[str, Any]]:
@@ -488,6 +663,10 @@ Output ONLY valid JSON with this structure:
             if datetime.utcnow() - generated_at > timedelta(hours=24):
                 self.logger.info(f"Cache expired for {key}")
                 return None
+
+            if not data.get('recommendations'):
+                # Don't reuse empty caches – force recompute
+                return None
             
             return data
             
@@ -498,6 +677,8 @@ Output ONLY valid JSON with this structure:
     def _save_cache(self, key: str, data: Dict[str, Any]):
         """Save to cache"""
         try:
+            if not data.get('recommendations'):
+                return
             cache_file = self.data_dir / f"{key}.json"
             cache_file.write_text(json.dumps(data, indent=2))
             self.logger.info(f"Saved cache for {key}")
