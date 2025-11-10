@@ -434,5 +434,138 @@ def get_stock_sheet(ticker: str) -> Dict[str, Any]:
 
 
 # Export router with expected name for main.py registration
+@router.get("/stocks/top")
+def get_top_stocks(
+    limit: int = Query(10, ge=1, le=50, description="Number of top stocks to return"),
+    sort_by: str = Query("score", description="Sort by: score, change_1d, momentum_30d, mcap")
+) -> Dict[str, Any]:
+    """
+    Get top stocks by score, momentum, or market cap.
+    Returns stocks with their metrics sorted by the requested field.
+    """
+    try:
+        # Load stocks data - try multiple possible keys
+        prices_data = load_json("stocks/prices") or load_json("stocks_prices") or {}
+        metrics_data = load_json("stocks/metrics") or {}
+        
+        # Extract tickers data from various possible structures
+        tickers_data = {}
+        if isinstance(prices_data, dict):
+            # Try different possible structures
+            if "tickers" in prices_data:
+                tickers_data = prices_data["tickers"]
+            elif "data" in prices_data and isinstance(prices_data["data"], dict):
+                tickers_data = prices_data["data"].get("tickers", {})
+            elif any(k in prices_data for k in ["SPY", "QQQ", "AAPL"]):  # Direct ticker keys
+                tickers_data = {k: v for k, v in prices_data.items() if isinstance(v, dict) and "points" in v}
+        
+        metrics = {}
+        if isinstance(metrics_data, dict):
+            metrics = metrics_data.get("metrics", metrics_data)
+        
+        # Build list of stocks with their metrics
+        stocks_list = []
+        for ticker, ticker_data in tickers_data.items():
+            if not isinstance(ticker_data, dict):
+                continue
+                
+            ticker_metrics = metrics.get(ticker, {})
+            points = ticker_data.get("points", [])
+            
+            if not points:
+                continue
+            
+            # Get latest price - handle different point formats
+            latest_point = points[-1]
+            if isinstance(latest_point, (list, tuple)) and len(latest_point) >= 2:
+                current_price = float(latest_point[1])
+            elif isinstance(latest_point, dict):
+                current_price = float(latest_point.get("value", latest_point.get("close", 0)))
+            else:
+                current_price = float(latest_point) if isinstance(latest_point, (int, float)) else 0
+            
+            # Calculate change
+            change_1d = ticker_metrics.get("change_1d", 0.0)
+            change_percent = ticker_metrics.get("change_percent", 0.0)
+            
+            stock_info = {
+                "ticker": ticker,
+                "name": ticker_metrics.get("name") or ticker_data.get("name") or f"{ticker} Corp",
+                "price": current_price,
+                "change": change_1d,
+                "change_percent": change_percent,
+                "market_cap": ticker_metrics.get("mcap") or ticker_metrics.get("market_cap") or 0,
+                "score": ticker_metrics.get("score") or 0,
+                "momentum_30d": ticker_metrics.get("momentum_30d") or 0.0,
+                "pe": ticker_metrics.get("pe"),
+                "sector": ticker_metrics.get("sector") or "N/A"
+            }
+            stocks_list.append(stock_info)
+        
+        # If no stocks found from prices data, try to generate from forecasts as fallback
+        if not stocks_list:
+            logger.info("No stocks data found, generating fallback from forecasts...")
+            forecasts_data = load_json("forecasts") or {}
+            forecast_rows = forecasts_data.get("rows", []) or forecasts_data.get("data", {}).get("rows", [])
+            
+            # Extract unique tickers from forecasts
+            seen_tickers = set()
+            for row in forecast_rows[:limit * 2]:  # Get more to have options
+                ticker = row.get("ticker") or row.get("symbol")
+                if ticker and ticker not in seen_tickers:
+                    seen_tickers.add(ticker)
+                    # Use forecast data to create basic stock info
+                    confidence = row.get("confidence", 0)
+                    expected_return = row.get("expected_return", 0)
+                    
+                    stock_info = {
+                        "ticker": ticker,
+                        "name": f"{ticker} Corp",
+                        "price": 100.0,  # Placeholder
+                        "change": expected_return * 100 if expected_return else 0.0,
+                        "change_percent": expected_return * 100 if expected_return else 0.0,
+                        "market_cap": 0,
+                        "score": confidence,
+                        "momentum_30d": expected_return * 30 if expected_return else 0.0,
+                        "pe": None,
+                        "sector": "N/A"
+                    }
+                    stocks_list.append(stock_info)
+                    if len(stocks_list) >= limit:
+                        break
+        
+        # Sort by requested field
+        if sort_by == "change_1d":
+            stocks_list.sort(key=lambda x: abs(x.get("change", 0)), reverse=True)
+        elif sort_by == "momentum_30d":
+            stocks_list.sort(key=lambda x: x.get("momentum_30d", 0), reverse=True)
+        elif sort_by == "mcap":
+            stocks_list.sort(key=lambda x: x.get("market_cap", 0), reverse=True)
+        else:  # score or default
+            stocks_list.sort(key=lambda x: x.get("score", 0), reverse=True)
+        
+        # Limit results
+        top_stocks = stocks_list[:limit]
+        
+        return ok({
+            "stocks": top_stocks,
+            "count": len(top_stocks),
+            "sort_by": sort_by,
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["stocks_prices", "stocks_metrics"] if len(tickers_data) > 0 else ["forecasts_fallback"]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in stocks_top: {e}", exc_info=True)
+        # Return empty structure (never-empty pattern)
+        return ok({
+            "stocks": [],
+            "count": 0,
+            "sort_by": sort_by,
+            "error": str(e),
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["fallback"]
+        })
+
 stocks_router = router
 

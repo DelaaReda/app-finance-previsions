@@ -220,6 +220,9 @@ def get_dashboard_kpis(
     total_forecasts = len(forecast_rows)
     high_conf_forecasts = sum(1 for row in forecast_rows if (row.get("confidence") or 0) >= HIGH_CONF_THRESHOLD)
     avg_confidence = _avg([row.get("confidence") or 0 for row in forecast_rows])
+    
+    # Calculate high confidence percentage (for frontend display)
+    high_confidence_pct = (high_conf_forecasts / total_forecasts * 100) if total_forecasts > 0 else 0.0
     bullish_signals = sum(
         1 for row in forecast_rows if (row.get("direction") or "").lower() in {"up", "bullish", "buy"}
     )
@@ -278,6 +281,7 @@ def get_dashboard_kpis(
         "forecasts": {
             "total": total_forecasts,
             "high_confidence": high_conf_forecasts,
+            "high_confidence_pct": round(high_confidence_pct, 2),  # Percentage for frontend
             "avg_confidence": round(avg_confidence, 4),
             "bullish": bullish_signals,
             "bearish": bearish_signals,

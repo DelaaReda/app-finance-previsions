@@ -428,7 +428,8 @@ def create_app():
         ("portfolios", "api.routes.portfolios", "portfolios_router"),
         ("dashboard", "api.routes.dashboard", "dashboard_router"),
         ("stocks", "api.routes.stocks", "stocks_router"),
-        ("stocks-extra", "api.routes.stocks_extra", "stocks_extra_router")  # New correlation heatmap endpoints
+        ("stocks-extra", "api.routes.stocks_extra", "stocks_extra_router"),  # New correlation heatmap endpoints
+        ("judge", "api.routes.judge", "judge_router"),  # LLM Judge verdicts
     ]
     
     for route_name, module_path, router_name in route_configs:
