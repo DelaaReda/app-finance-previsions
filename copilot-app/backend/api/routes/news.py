@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 
 from core.response import ok, err
 from storage.io import load_json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -104,7 +107,7 @@ def get_filtered_news(
                     
                     filtered_articles = [
                         article for article in filtered_articles
-                        if article.get("pubDate") and datetime.fromisoformat(article["pubDate"].replace("Z", "+00:00")) > cutoff_time
+                        if article.get("pubDate") and _safe_parse_date(article["pubDate"]) and _safe_parse_date(article["pubDate"]) > cutoff_time
                     ]
                 except ValueError:
                     # If parsing fails, skip date filtering
@@ -113,7 +116,7 @@ def get_filtered_news(
         # Sort by publication date (most recent first)
         filtered_articles = sorted(
             filtered_articles,
-            key=lambda x: datetime.fromisoformat(x.get("pubDate", "").replace("Z", "+00:00")) if x.get("pubDate", "") else datetime.min,
+            key=lambda x: _safe_parse_date(x.get("pubDate", "")) or datetime.min,
             reverse=True
         )
         
@@ -190,6 +193,30 @@ def get_filtered_news(
         response_data["articles"] = enhanced_articles
         
         return ok(response_data)
+    
+    except Exception as e:
+        # Return structured response even on error to maintain never-empty contract
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in news feed endpoint: {str(e)}", exc_info=True)
+        return ok({
+            "articles": [],
+            "count": 0,
+            "filtered_params": {
+                "tickers": tickers,
+                "limit": limit,
+                "page": page,
+                "since": since,
+                "sentiment_min": sentiment_min,
+                "sentiment_max": sentiment_max,
+                "sources": sources,
+                "q": q
+            },
+            "error": str(e),
+            "message": "News temporarily unavailable - showing fallback data",
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["fallback", "error_handling"]
+        })
 
 
 def _get_sentiment_label(sentiment_score: float) -> str:
@@ -266,24 +293,26 @@ def _estimate_read_time(content: str) -> int:
     word_count = len(content.split())
     minutes = max(1, round(word_count / words_per_minute))
     return minutes
-        
-    except Exception as e:
-        # Return structured response even on error to maintain never-empty contract
-        return ok({
-            "articles": [],
-            "count": 0,
-            "filtered_params": {
-                "tickers": tickers,
-                "limit": limit,
-                "page": page,
-                "since": since,
-                "sentiment_min": sentiment_min,
-                "sentiment_max": sentiment_max,
-                "sources": sources,
-                "q": q
-            },
-            "error": str(e),
-            "message": "News temporarily unavailable - showing fallback data",
-            "generated_at": datetime.utcnow().isoformat(),
-            "source": ["fallback", "error_handling"]
-        })
+
+
+def _safe_parse_date(date_str: Optional[str]) -> Optional[datetime]:
+    """Safely parse date string, return None if parsing fails"""
+    if not date_str:
+        return None
+    try:
+        # Try ISO format first
+        if "T" in date_str or "Z" in date_str:
+            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        # Try other common formats
+        for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y"]:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+        return None
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+# Export router
+news_router = router
