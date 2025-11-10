@@ -51,6 +51,7 @@
 - [x] HOTFIX Structure: Backend package architecture and import fixes (system stability)
 - [x] FC-P0-009: Vite proxy + .env configuration (devx improvement) - Proper proxy and env setup
 - [x] FC-API-030: News Impact Analysis - Detailed news impact scoring with sentiment correlation and market movement analysis
+- [x] FC-STYLING-CARD-OVERFLOW-001: Forecast Card CSS overflow fix - Corrected height constraints and overflow issues for proper content display
 - [x] FC-P0-007: ErrorBoundary global (frontend) - Global error handling for stable UX
 - [x] FC-P0-010: Pre-push smoke hook infrastructure (quality gate) - Quality gates with automatic testing
 - [x] FC-NEW-021: Robustness Scoring & PDF Export - Complete scoring system for forecasts and backtests (Enhanced metrics)
@@ -62,7 +63,7 @@
 - [x] FC-API-027: Stock Correlation Heatmap - Correlation matrix endpoint with frontend-compatible formatting (Pearson coefficients, heatmap data structure)
 
 ## 📈 Points Gagnés
-- **Total**: 1370 points
+- **Total**: 1410 points
 - **Dernière mise à jour**: 2025-11-04
 
 ## 🔄 Tâches Planifiées

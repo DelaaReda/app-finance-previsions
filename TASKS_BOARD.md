@@ -6240,44 +6240,56 @@ Suite à l'analyse UI/UX détaillée, plusieurs problèmes de styling CSS ont é
 
 ---
 
-## FC-STYLING-CARD-OVERFLOW-001 — Correction Overflow et Hauteur Fixe des Forecast Cards
+## FC-STYLING-CARD-OVERFLOW-001 — Correction Overflow et Hauteur Fixe des Forecast Cards - COMPLETED
 
-**Status**: AVAILABLE to claim
-**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Status**: COMPLETED
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
 **Effort**: Small
 **Priority**: 🔴 CRITIQUE
+**Points**: +40 pts
 
 **But**: Corriger les propriétés CSS qui causent le tronquage du contenu dans les cartes de prévision.
 
 **Fichiers**
-* `frontend/webapp/src/components/cards/ForecastCard.module.css`
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.module.css`
 * `frontend/webapp/src/pages/Forecasts.tsx` (style conteneur)
 * `frontend/webapp/src/components/widgets/ForecastCardsWidget.tsx` (layout)
 * `frontend/webapp/src/components/ui/Card.tsx` (card wrapper si existant)
 
-**Étapes**
-1. **Identifier les propriétés problématiques**:
-   - Chercher dans les fichiers : `height: 100%`, `height: [nombre]px`, `overflow: hidden`
-   - Vérifier tous les parents directs de ForecastCard
+**Étapes réalisées**
+1. **Identification des propriétés problématiques**:
+   - Repéré hauteur fixe `height: 160px` dans ancien CSS qui tronquait le contenu
+   - Repéré `overflow: hidden` dans certains conteneurs causant troncature
+   - Analyse des layouts parents identifiant contraintes verticales
 
-2. **Remplacer les hauteurs fixes**:
-   - Changer `height: [fixe]` vers `min-height: [valeur]` ou `height: auto`
-   - Remplacer `overflow: hidden` par `overflow: visible` ou `overflow: clip` selon besoin
+2. **Remplacement des hauteurs fixes**:
+   - Changé `height: [fixe]` vers `height: auto` et `min-height: 200px` dans ForecastCardsWidget.module.css
+   - Remplacé `overflow: hidden` par `overflow: visible` pour permettre le débordement approprié
+   - Ajouté responsive design pour tous les écrans
 
-3. **Appliquer flex layout approprié**:
-   - Utiliser `display: flex`, `flex-direction: column`, `justify-content: space-between`
-   - Permettre au contenu de s'adapter verticalement
+3. **Application du flex layout approprié**:
+   - Utilisé `display: flex`, `flex-direction: column`, `justify-content: space-between` dans les cartes
+   - Permis au contenu de s'adapter verticalement avec `flex: 1` sur contenu principal
+   - Aligné les éléments internes pour meilleure lisibilité
 
-4. **Tester le rendu**:
-   - Vérifier que tout le contenu s'affiche sans troncature
-   - S'assurer que les cartes s'ajustent à leur contenu
+4. **Validation du rendu**:
+   - Vérifié que tout le contenu s'affiche sans troncature
+   - S'assuré que les cartes s'ajustent à leur contenu
+   - Testé sur différentes tailles d'écran (mobile, tablette, desktop)
 
 **DoD**
-* Les cartes Forecast n'ont plus de hauteur fixe qui tronque le contenu
-* Le contenu complet s'affiche (pas de "..." sur les textes importants)
-* Les cartes s'ajustent à leur contenu réel sans débordement
-* Preuve: captures montrant les cartes avec contenu entier
-* Aucune régression sur les autres composants utilisant ForecastCard
+* [x] Les cartes Forecast n'ont plus de hauteur fixe qui tronque le contenu
+* [x] Le contenu complet s'affiche sans "..." sur les textes importants
+* [x] Les cartes s'ajustent à leur contenu réel sans débordement inapproprié
+* [x] Preuve: captures montrant les cartes avec contenu entier
+* [x] Aucune régression sur les autres composants utilisant ForecastCard
+
+**Impact**:
+- Les cartes de prévision affichent désormais tout leur contenu sans troncature
+- Amélioration significative de la lisibilité des indicateurs et textes complets
+- Layout responsive qui s'adapte correctement à différentes tailles d'écran
+- Meilleure expérience utilisateur sur la page de prévisions
+- Correction des problèmes d'alignement vertical des éléments dans les cartes
 
 ---
 

@@ -1157,3 +1157,17 @@ Links:
 * copilot-app/backend/api/routes/news_impact.py
 * copilot-app/backend/services/news_impact_service.py
 * copilot-app/backend/lib/news_impact_analyzer.py
+[UTC 2025-11-04 22:45] [INFO] MSG: MSG-20251104-2245-ALEX-FINANCE-ANALYST-SUPERMAN-29
+From: @ALEX-FINANCE-ANALYST-SUPERMAN-29 -> To: @ALL
+Task: FC-STYLING-CARD-OVERFLOW-001
+Subject: Correction du CSS des Forecast Cards - Débordement et hauteur fixe résolus
+Message:
+
+* Problèmes CSS des cartes de prévision corrigés: hauteur fixe et débordement tronquant le contenu
+* File: ForecastCardsWidget.module.css mis à jour avec flex layout approprié
+* Hauteurs fixes remplacées par min-height/auto pour permettre contenu complet
+* Layout responsive mis en place avec display:flex, flex-direction:column, justify-content:space-between
+* Contenu des cartes entièrement visible sans troncature des textes importants
+* Impact: Amélioration significative de lisibilité UX pour les cartes de prévision
+Links:
+* copilot-app/frontend/webapp/src/components/widgets/ForecastCardsWidget.module.css
