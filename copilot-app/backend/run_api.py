@@ -12,21 +12,21 @@ backend_dir = Path(__file__).resolve().parent
 project_root = backend_dir.parent
 src_path = backend_dir / "src"
 
-for path in [project_root, src_path, backend_dir]:
+for path in [project_root, backend_dir, src_path]:
     path_str = str(path)
     if path_str in sys.path:
         sys.path.remove(path_str)
 
-for path in reversed([project_root, src_path, backend_dir]):
+for path in reversed([project_root, backend_dir, src_path]):
     sys.path.insert(0, str(path))
 
 # Définir explicitement PYTHONPATH pour que tous les imports fonctionnent correctement
 import os
 os.environ['PYTHONPATH'] = ":".join(
     [
-        str(project_root),
-        str(src_path),
         str(backend_dir),
+        str(src_path),
+        str(project_root),
     ]
 )
 

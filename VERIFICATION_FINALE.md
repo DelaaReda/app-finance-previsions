@@ -52,5 +52,5 @@ python3 scripts/test_endpoints.py
 ## ⚠️ Si les Tests Échouent
 
 1. Vérifier les logs: `tail -f copilot-app/backend/api.log`
-2. Vérifier que le backend est démarré: `lsof -i :8050`
+2. Vérifier que le backend est démarré: `./finance-copilot.sh status` (le script contrôle automatiquement les ports)
 3. Régénérer les données: `python3 scripts/generate_data.py`

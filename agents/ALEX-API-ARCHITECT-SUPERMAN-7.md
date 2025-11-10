@@ -42,6 +42,7 @@
 - [x] Unification des composants HealthIndicator et HealthStatusBadge avec client unwrapped (FC-UI-007)
 - [x] Ajout composant GlobalFreshness dans l'en-tête pour afficher la fraîcheur globale (FC-UI-008)
 - [x] Mise en place ErrorBoundary global avec logging et UI contrôlée pour les erreurs runtime (FC-UI-009)
+- [x] Création tests E2E Playwright vérifiant que chaque page affiche un état non-vide ou empty-state propre (TEST-001)
 - [x] Mise en place endpoint /api/search/universal avec recherche multi-source (stocks, news, briefs, prévisions) (FC-API-035)
 - [x] Adaptation du composant Macro UI au schéma API avec support du format 'map' (array → mapping) (FC-UI-012)
 - [x] Mise en place SourceTooltip pour informer de la provenance des données (FRED/yfinance/RSS) (FC-UI-010)

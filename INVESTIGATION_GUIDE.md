@@ -1,5 +1,9 @@
 # 🔍 Guide d'Investigation Avancé - Finance Copilot
 
+> ⚠️ **Document archivé** — Les commandes système directes (`lsof`, `kill -9`, etc.) mentionnées plus bas
+> ne doivent plus être utilisées. Préférez toujours `./finance-copilot.sh stop|start|status`
+> qui gère automatiquement les ports 8050/5173.
+
 **Guide complet pour diagnostiquer et résoudre les problèmes dans Finance Copilot**  
 **Version**: 2.0 - Enrichie avec techniques avancées  
 **Dernière mise à jour**: 2025-01-27
@@ -71,7 +75,9 @@
 
 #### Diagnostic Avancé des Ports
 
-Si le script ne fonctionne pas, diagnostic manuel (en dernier recours) :
+> 🛑 **Obsolète** — Ces commandes sont conservées uniquement pour historique.
+> Préférez `./finance-copilot.sh stop|start|status`.  
+> N'utilisez le bloc ci-dessous **que pour lecture**.
 
 ```bash
 # Vérifier quel processus utilise le port 5173 (frontend)

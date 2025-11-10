@@ -10,11 +10,10 @@ Le backend n'est pas accessible sur le port 8050.
 ps aux | grep uvicorn | grep -v grep
 ```
 
-### 2. Vérifier le port
+### 2. Vérifier le port / statut via le script
 ```bash
-lsof -i :8050
-# ou
-netstat -tuln | grep 8050
+./finance-copilot.sh status
+# Ce script vérifie automatiquement que 8050/5173 sont libres ou relancés.
 ```
 
 ### 3. Vérifier les logs
@@ -37,9 +36,8 @@ Si le backend ne démarre pas, vérifier:
 
 ### Si le port est déjà utilisé
 ```bash
-lsof -i :8050
-kill -9 <PID>
-./finance-copilot.sh start
+./finance-copilot.sh stop
+./finance-copilot.sh start  # Le script nettoie lui-même les ports (pas de lsof/kill manuels)
 ```
 
 ### Si erreurs d'import

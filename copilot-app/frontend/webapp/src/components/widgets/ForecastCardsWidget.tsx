@@ -16,7 +16,9 @@ import {
   Title, 
   Text, 
   RingProgress,
-  Badge as MantineBadge
+  Badge as MantineBadge,
+  ScrollArea,
+  Stack
 } from '@mantine/core';
 import { BadgeDelta } from '@tremor/react';
 import { useForecasts } from '@/hooks/useForecasts';
@@ -101,109 +103,127 @@ export function ForecastCardsWidget({
   };
 
   return (
-    <MantineCard padding="lg">
-      <Group justify="space-between" align="center" mb="xs">
-        <div>
-          <Title order={4}>{title}</Title>
-          <Text c="dimmed" mt={4}>Classement par score et confiance • Horizon: {hz}</Text>
-        </div>
-        <Group gap="xs">
-          <SegmentedControl
-            value={hz}
-            onChange={(v) => setHz(v as ForecastHorizon)}
-            data={[
-              { label: 'Court', value: 'short' },
-              { label: 'Moyen', value: 'medium' },
-              { label: 'Long', value: 'long' },
-            ]}
-          />
-          <Button variant="light" onClick={exportCsv}>Exporter CSV</Button>
-          <Button onClick={() => refetch()} loading={isFetching}>Rafraîchir</Button>
+    <MantineCard padding="lg" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
+        <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+          <div>
+            <Title order={4}>{title}</Title>
+            <Text c="dimmed" size="sm" mt={4}>Classement par score et confiance • Horizon: {hz}</Text>
+          </div>
+          <Group gap="xs" wrap="wrap">
+            <SegmentedControl
+              value={hz}
+              onChange={(v) => setHz(v as ForecastHorizon)}
+              data={[
+                { label: 'Court', value: 'short' },
+                { label: 'Moyen', value: 'medium' },
+                { label: 'Long', value: 'long' },
+              ]}
+              size="sm"
+            />
+            <Button variant="light" size="sm" onClick={exportCsv}>Exporter CSV</Button>
+            <Button size="sm" onClick={() => refetch()} loading={isFetching}>Rafraîchir</Button>
+          </Group>
         </Group>
-      </Group>
 
-      {isLoading && (
-        <Alert title="Chargement" color="blue">Récupération des prévisions…</Alert>
-      )}
-      {error && (
-        <Alert title="Erreur" color="red">Impossible de récupérer les prévisions ({String(error)})</Alert>
-      )}
-      {!isLoading && !error && ensureArray(items).length === 0 && (
-        <Alert>Aucune prévision pour l’univers sélectionné.</Alert>
-      )}
+        {isLoading && (
+          <Alert title="Chargement" color="blue">Récupération des prévisions…</Alert>
+        )}
+        {error && (
+          <Alert title="Erreur" color="red">Impossible de récupérer les prévisions ({String(error)})</Alert>
+        )}
+        {!isLoading && !error && ensureArray(items).length === 0 && (
+          <Alert>Aucune prévision pour l'univers sélectionné.</Alert>
+        )}
 
-      <Grid gutter="md" mt="sm">
-        {ensureArray(items).map((f) => (
-          <Grid.Col key={`${f.ticker ?? f.symbol}-${f.horizon}`} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
-            <MantineCard withBorder shadow="sm" padding="md">
-              <Group justify="space-between" mb="xs">
-                <Group gap={8} wrap="nowrap">
-                  <Title order={5} style={{ cursor: onSelectTicker ? 'pointer' : 'default' }}
-                    onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
-                    title="Ouvrir la page du ticker"
-                  >
-                    {f.ticker ?? f.symbol}
-                  </Title>
-                  <BadgeDelta deltaType={dirToDelta(f.direction)} />
-                  <MantineBadge color={dirToBadge(f.direction).color}>{dirToBadge(f.direction).label}</MantineBadge>
-                </Group>
-                <MantineBadge variant="light">{f.horizon}</MantineBadge>
-              </Group>
+        {!isLoading && !error && ensureArray(items).length > 0 && (
+          <ScrollArea style={{ flex: 1, minHeight: 0 }} type="auto">
+            <Grid gutter="md">
+              {ensureArray(items).map((f) => (
+                <Grid.Col key={`${f.ticker ?? f.symbol}-${f.horizon}`} span={{ base: 12, sm: 6, md: 4, lg: 3, xl: 2 }}>
+                  <MantineCard withBorder shadow="sm" padding="sm" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <Stack gap="xs" style={{ flex: 1 }}>
+                      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
+                        <Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                          <Title 
+                            order={6} 
+                            style={{ 
+                              cursor: onSelectTicker ? 'pointer' : 'default',
+                              fontSize: '0.9rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                            onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
+                            title="Ouvrir la page du ticker"
+                          >
+                            {f.ticker ?? f.symbol}
+                          </Title>
+                          <BadgeDelta deltaType={dirToDelta(f.direction)} size="xs" />
+                        </Group>
+                        <MantineBadge variant="light" size="xs">{f.horizon}</MantineBadge>
+                      </Group>
 
-              <Text c="dimmed" size="sm" lineClamp={1} mb="sm">
-                {/* optional name not present in ForecastItem; leave space for stocks meta enhancement */}
-              </Text>
+                      <Group align="center" justify="space-between" gap="xs" style={{ flex: 1 }}>
+                        <RingProgress
+                          size={60}
+                          thickness={8}
+                          sections={[
+                            { value: f.score ?? 0, color: (f.score ?? 0) >= 66 ? 'green' : (f.score ?? 0) >= 33 ? 'yellow' : 'red' },
+                          ]}
+                          label={
+                            <Tooltip label={`Score ${f.score ?? 0}/100`}>
+                              <Text ta="center" fw={700} size="xs" style={{ cursor: 'help' }}>
+                                {f.score ?? 0}
+                              </Text>
+                            </Tooltip>
+                          }
+                        />
+                        <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+                          <div>
+                            <Text size="xs" c="dimmed" lineClamp={1}>Confiance</Text>
+                            <Text fw={600} size="sm">{Math.round((f.confidence ?? 0) * 100)}%</Text>
+                          </div>
+                          <div>
+                            <Text size="xs" c="dimmed" lineClamp={1}>ER attendu</Text>
+                            <Text fw={600} size="sm">{fmtPct((f.expected_return_pct ?? f.expectedReturnPct ?? 0) / 100)}</Text>
+                          </div>
+                        </Stack>
+                      </Group>
 
-              <Group align="center" justify="space-between" mb="sm">
-                <RingProgress
-                  size={80}
-                  thickness={10}
-                  sections={[
-                    { value: f.score, color: f.score >= 66 ? 'green' : f.score >= 33 ? 'yellow' : 'red' },
-                  ]}
-                  label={
-                    <Tooltip label={`Score ${f.score}/100`}>
-                      <Text ta="center" fw={700} style={{ cursor: 'help' }}>
-                        {f.score}
-                      </Text>
-                    </Tooltip>
-                  }
-                />
-                <div style={{ lineHeight: 1.2 }}>
-                  <Text size="sm" c="dimmed">Confiance</Text>
-                  <Text fw={600}>{Math.round((f.confidence ?? 0) * 100)}%</Text>
-                  <Text size="sm" c="dimmed" mt={8}>ER attendu</Text>
-                  <Text fw={600}>{fmtPct((f.expected_return_pct ?? f.expectedReturnPct ?? 0) / 100)}</Text>
-                </div>
-              </Group>
+                      <Group justify="space-between" gap="xs" wrap="nowrap">
+                        <MantineBadge 
+                          color={dirToBadge(f.direction).color} 
+                          size="sm"
+                          variant="light"
+                        >
+                          {dirToBadge(f.direction).label}
+                        </MantineBadge>
+                        <Group gap={4}>
+                          <Button 
+                            size="xs" 
+                            variant="light" 
+                            compact
+                            onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}
+                          >
+                            Ouvrir
+                          </Button>
+                        </Group>
+                      </Group>
 
-              <Group justify="space-between">
-                <ActionIcon
-                  variant="light"
-                  title="Voir détails de la prévision"
-                  onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}
-                >
-                  ⓘ
-                </ActionIcon>
-                <Group gap="xs">
-                  <Button size="xs" variant="light" onClick={() => onSelectTicker?.(f.ticker ?? f.symbol ?? '')}>
-                    Ouvrir
-                  </Button>
-                  <Button size="xs" onClick={() => onOpenDetails?.(f.ticker ?? f.symbol ?? '')}>
-                    Détails
-                  </Button>
-                </Group>
-              </Group>
-
-              {(f.forecasted_at ?? f.updatedAt) && (
-                <Text c="dimmed" size="xs" mt="xs">
-                  MAJ {new Date(f.forecasted_at ?? f.updatedAt ?? '').toLocaleString()}
-                </Text>
-              )}
-            </MantineCard>
-          </Grid.Col>
-        ))}
-      </Grid>
+                      {(f.forecasted_at ?? f.updatedAt) && (
+                        <Text c="dimmed" size="xs" lineClamp={1} title={new Date(f.forecasted_at ?? f.updatedAt ?? '').toLocaleString()}>
+                          MAJ {new Date(f.forecasted_at ?? f.updatedAt ?? '').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+                        </Text>
+                      )}
+                    </Stack>
+                  </MantineCard>
+              </Grid.Col>
+            ))}
+          </Grid>
+        </ScrollArea>
+        )}
+      </Stack>
     </MantineCard>
   );
 }

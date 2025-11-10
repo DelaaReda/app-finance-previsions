@@ -2852,10 +2852,11 @@ Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ### TEST-001 — Tests E2E Playwright pour endpoints critiques *(Effort M)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE  
 **Points**: +80 pts  
 **Priorité**: 🟡 ÉLEVÉE
 
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 - **Why**: Le script `smoke.sh` vérifie les endpoints mais ne teste pas que les réponses ne sont pas vides. Il faut des tests E2E Playwright pour vérifier que l'UI affiche réellement des données.
 
 - **Prérequis**:
@@ -3440,6 +3441,7 @@ Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 **Owner**: Frontend team
 
 **But**: Créer les cartes de prévisions avec BarList Tremor et donut directionnel.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 **Fichiers**
 * `frontend/webapp/src/components/forecasts/ForecastTop5.tsx`

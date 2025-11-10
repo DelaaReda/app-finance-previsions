@@ -12,8 +12,8 @@ BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend/webapp"
 ENV_FILE="$PROJECT_DIR/.env"
 
-# Ensure backend src on PYTHONPATH for standalone jobs
-export PYTHONPATH="$BACKEND_DIR/src:$PYTHONPATH"
+# Ensure backend root + src on PYTHONPATH for standalone jobs
+export PYTHONPATH="$BACKEND_DIR:$BACKEND_DIR/src:$PYTHONPATH"
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
@@ -77,11 +77,32 @@ check_dependencies() {
     # Vérifier que le virtualenv existe
     if [ ! -d "$BACKEND_DIR/.venv" ]; then
         log_warning "Virtual environment non trouvé, création en cours..."
-        python3 -m venv "$BACKEND_DIR/.venv"
+        if ! python3 -m venv "$BACKEND_DIR/.venv" 2>/dev/null; then
+            log_error "Échec de la création du venv avec python3 -m venv"
+            log_warning "Tentative avec python3 -m virtualenv..."
+            if ! python3 -m virtualenv "$BACKEND_DIR/.venv" 2>/dev/null; then
+                log_error "Impossible de créer le venv. Installation de python3-venv requise."
+                log_error "Sur macOS: brew install python3"
+                log_error "Sur Debian/Ubuntu: sudo apt install python3-venv"
+                exit 1
+            fi
+        fi
+        log_success "Virtual environment créé"
     fi
     
     # Activer le virtualenv
-    source "$BACKEND_DIR/.venv/bin/activate"
+    if [ -f "$BACKEND_DIR/.venv/bin/activate" ]; then
+        source "$BACKEND_DIR/.venv/bin/activate"
+    else
+        log_error "Le fichier d'activation du venv n'existe pas: $BACKEND_DIR/.venv/bin/activate"
+        log_error "Le venv semble corrompu. Suppression et recréation..."
+        rm -rf "$BACKEND_DIR/.venv"
+        python3 -m venv "$BACKEND_DIR/.venv" || python3 -m virtualenv "$BACKEND_DIR/.venv" || {
+            log_error "Impossible de recréer le venv"
+            exit 1
+        }
+        source "$BACKEND_DIR/.venv/bin/activate"
+    fi
     
     # Installer les dépendances Python si requirements disponibles
     
@@ -171,6 +192,19 @@ start_backend() {
     # Propager l'environnement (.env à la racine de copilot-app)
     if [ -f "$ENV_FILE" ]; then
         cp -f "$ENV_FILE" "$BACKEND_DIR/.env"
+    fi
+    
+    # Vérifier et activer le venv
+    if [ ! -f "$BACKEND_DIR/.venv/bin/activate" ]; then
+        log_error "Le venv n'existe pas ou est corrompu. Création en cours..."
+        rm -rf "$BACKEND_DIR/.venv"
+        if ! python3 -m venv "$BACKEND_DIR/.venv" 2>/dev/null; then
+            if ! python3 -m virtualenv "$BACKEND_DIR/.venv" 2>/dev/null; then
+                log_error "Impossible de créer le venv"
+                exit 1
+            fi
+        fi
+        log_success "Venv recréé"
     fi
     source "$BACKEND_DIR/.venv/bin/activate"
     

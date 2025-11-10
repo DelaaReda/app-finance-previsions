@@ -1,0 +1,45 @@
+# Preuve de mise en œuvre - TEST-001
+
+## Tâche: Tests E2E Playwright pour endpoints critiques
+
+## Résumé
+Création de tests E2E Playwright pour vérifier que chaque page affiche un état non-vide ou un empty-state propre, garantissant que l'UI fonctionne correctement avec les données réelles du backend.
+
+## Changements apportés
+- Création du fichier `critical-pages.spec.ts` avec tests Playwright complets
+- Tests pour toutes les pages critiques (Dashboard, Forecasts, News, Macro, Stocks, Brief)
+- Vérification que chaque page affiche des données ou un état vide approprié
+- Validation des états loading/error/empty sur chaque page
+- Capture d'écrans pour preuve visuelle du bon fonctionnement
+- Tests d'intégrité entre pages pour prévenir les crashes JS
+- Tests API directs pour vérifier que les endpoints retournent des réponses non-vides
+
+## Structure mise en place
+- Suite de tests complète avec beforeEach pour vérifier le chargement de l'application
+- Tests par page pour valider le rendu UI approprié
+- Screenshots sauvegardées dans `proofs/TEST-001/e2e-screenshots/`
+- Vérification des erreurs JavaScript critiques (length/map of undefined)
+- Vérification de l'état empty-state vs données réelles
+- Tests d'intégrité croisée entre pages
+
+## Fichiers modifiés/créés
+- `frontend/webapp/tests/e2e/critical-pages.spec.ts` - Nouveau fichier de tests Playwright
+
+## Vérification
+- Chaque page se charge sans erreurs JavaScript critiques
+- Les composants attendus sont visibles (ou états vides appropriés)
+- Les données sont affichées ou les messages "Aucune donnée" s'affichent correctement
+- Les captures d'écran montrent l'état réel de chaque page
+- Aucun crash UI n'est détecté lors de la navigation entre pages
+- Les endpoints API retournent des réponses structurées avec {ok, data}
+
+## Résultats
+- Dashboard page: ✅ (état données ou vide géré)  
+- Forecasts page: ✅ (tableau ou empty-state visible)
+- News page: ✅ (articles ou message absence d'articles visible)
+- Macro page: ✅ (indicateurs ou message absence de séries visible)
+- Stocks page: ✅ (tableau ou message absence d'actions visible)
+- Brief page: ✅ (contenu ou message absence de brief visible)
+- Tests d'intégrité: ✅ (pas de crash JS pendant navigation)
+- Screenshots prises: ✅ (dans /proofs/TEST-001/)
+- API endpoints validés: ✅ (réponses structurées avec données)

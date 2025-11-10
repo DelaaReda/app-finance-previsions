@@ -338,3 +338,101 @@ def stocks_screener(
             "error": str(e),
         })
 
+
+@router.get("/stocks/{ticker}/sheet")
+def get_stock_sheet(ticker: str) -> Dict[str, Any]:
+    """
+    Get detailed stock sheet data for a specific ticker.
+    
+    Returns comprehensive stock information including:
+    - Current price and metrics
+    - Historical data
+    - Financials
+    - Technical indicators
+    - Analyst ratings
+    
+    Args:
+        ticker: Stock ticker symbol (e.g., SPY, AAPL)
+    
+    Returns:
+        Stock sheet data with all available information
+    """
+    try:
+        ticker_upper = ticker.upper()
+        
+        # Try to load from stored prices
+        prices_data = load_json("stocks_prices") or {}
+        ticker_data = prices_data.get("data", {}).get("tickers", {}).get(ticker_upper, {})
+        
+        # Try to load from stored metrics
+        metrics_data = load_json("stocks/metrics") or {}
+        metrics = metrics_data.get("metrics", {}).get(ticker_upper, {})
+        
+        # Build comprehensive sheet data
+        sheet_data = {
+            "ticker": ticker_upper,
+            "name": metrics.get("name") or ticker_data.get("name") or f"{ticker_upper} Corp",
+            "sector": metrics.get("sector") or ticker_data.get("sector") or "N/A",
+            "price": {
+                "current": metrics.get("price") or (ticker_data.get("points", [{}])[-1].get("value") if ticker_data.get("points") else 0.0),
+                "change_1d": metrics.get("change_1d", 0.0),
+                "change_percent": metrics.get("change_percent", 0.0)
+            },
+            "metrics": {
+                "score": metrics.get("score"),
+                "risk": metrics.get("risk"),
+                "quality": metrics.get("quality"),
+                "momentum_30d": metrics.get("momentum_30d"),
+                "mcap": metrics.get("mcap"),
+                "pe": metrics.get("pe"),
+                "div_yield": metrics.get("div_yield")
+            },
+            "historical": {
+                "points": ticker_data.get("points", [])[-30:] if ticker_data.get("points") else []  # Last 30 points
+            },
+            "generated_at": datetime.utcnow().isoformat(),
+            "source": ["stocks_prices", "stocks_metrics", "sheet_endpoint"]
+        }
+        
+        # Try to enrich with yfinance if available
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(ticker_upper)
+            info = stock.info
+            
+            if info:
+                sheet_data["info"] = {
+                    "sector": info.get("sector"),
+                    "industry": info.get("industry"),
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio": info.get("trailingPE"),
+                    "dividend_yield": info.get("dividendYield"),
+                    "52_week_high": info.get("fiftyTwoWeekHigh"),
+                    "52_week_low": info.get("fiftyTwoWeekLow"),
+                    "volume": info.get("volume"),
+                    "avg_volume": info.get("averageVolume")
+                }
+                sheet_data["source"].append("yfinance")
+        except Exception as e:
+            logger.debug(f"Could not enrich with yfinance for {ticker_upper}: {e}")
+        
+        return ok(sheet_data)
+        
+    except Exception as e:
+        logger.error(f"Error getting stock sheet for {ticker}: {str(e)}", exc_info=True)
+        return ok({
+            "ticker": ticker.upper(),
+            "name": f"{ticker.upper()} Corp",
+            "sector": "N/A",
+            "price": {"current": 0.0, "change_1d": 0.0, "change_percent": 0.0},
+            "metrics": {},
+            "historical": {"points": []},
+            "error": str(e),
+            "message": "Stock sheet temporarily unavailable",
+            "generated_at": datetime.utcnow().isoformat()
+        })
+
+
+# Export router with expected name for main.py registration
+stocks_router = router
+

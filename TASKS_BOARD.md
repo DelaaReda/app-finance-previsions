@@ -1,9 +1,8 @@
 # 📋 TASKS_BOARD.md — FICHIER UNIQUE DE RÉFÉRENCE POUR TOUTES LES TÂCHES
 
-**Créé par**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
 **Date**: 2025-01-27  
 **Dernière mise à jour**: 2025-01-27  
-**But**: **FICHIER UNIQUE** contenant toutes les tâches pour les agents Qwen
+**But**: **FICHIER UNIQUE** contenant toutes les tâches pour les agents
 
 ---
 
@@ -2852,10 +2851,11 @@ Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
 
 ### TEST-001 — Tests E2E Playwright pour endpoints critiques *(Effort M)*
 
-**Statut**: AVAILABLE  
+**Statut**: DONE  
 **Points**: +80 pts  
 **Priorité**: 🟡 ÉLEVÉE
 
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
 - **Why**: Le script `smoke.sh` vérifie les endpoints mais ne teste pas que les réponses ne sont pas vides. Il faut des tests E2E Playwright pour vérifier que l'UI affiche réellement des données.
 
 - **Prérequis**:

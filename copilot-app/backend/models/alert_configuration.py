@@ -3,19 +3,11 @@ Alert Configuration Model
 Task: FC-API-034 - Alert Rules Configuration
 Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any, Optional, Union
 from enum import Enum
 import sys
 from pathlib import Path
-
-# Add backend to path for imports
-backend_root = Path(__file__).resolve().parent.parent
-if str(backend_root) not in sys.path:
-    sys.path.insert(0, str(backend_root))
-
-from storage.io import load_json, save_json
-from services.cache_layer import load_or_compute
 
 
 class AlertType(Enum):
@@ -42,18 +34,18 @@ class AlertCondition:
     def __init__(self, 
                  field: str, 
                  operator: str, 
-                 value: Union[float, str, int],
+                 value: Union[float, str, int, List],
                  threshold_type: str = "absolute"):
         self.field = field
-        self.operator = operator  # gt, lt, eq, gte, lte, in_range, crosses_above, crosses_below
+        self.operator = operator  # gt, lt, gte, lte, eq, ne, in_range, out_of_range, crosses_above, crosses_below
         self.value = value
-        self.threshold_type = threshold_type
+        self.threshold_type = threshold_type  # absolute, percentage, technical
         self.created_at = datetime.utcnow().isoformat() + "Z"
 
 
 class AlertRule:
     """
-    Model representing a single alert rule
+    Model representing a single alert rule configuration
     """
     
     def __init__(self, 
@@ -124,13 +116,10 @@ class AlertRule:
         """
         try:
             # Get the field value from asset data
-            current_value = None
             if self.condition.field in asset_data:
                 current_value = asset_data[self.condition.field]
             elif f"current_{self.condition.field}" in asset_data:
-                current_value = asset_data[f"current_{self.condition.field}"]
-            elif self.condition.field.replace("_change", "_percent_change") in asset_data:
-                current_value = asset_data.get(self.condition.field, 0)
+                current_value = asset_data.get(f"current_{self.condition.field}")
             else:
                 # Try to get from nested structures (common in financial data)
                 current_value = self._get_nested_value(asset_data, self.condition.field)
@@ -155,30 +144,43 @@ class AlertRule:
             elif self.condition.operator == "crosses_above":
                 # Used for technical indicators like RSI crossing above threshold
                 prev_value = asset_data.get(f"prev_{self.condition.field}", current_value)
-                return prev_value <= self.condition.value and current_value > self.condition.value
+                try:
+                    return float(prev_value) <= float(self.condition.value) and float(current_value) > float(self.condition.value)
+                except (TypeError, ValueError):
+                    return False
             elif self.condition.operator == "crosses_below":
                 # Used for technical indicators like RSI crossing below threshold
                 prev_value = asset_data.get(f"prev_{self.condition.field}", current_value)
-                return prev_value >= self.condition.value and current_value < self.condition.value
+                try:
+                    return float(prev_value) >= float(self.condition.value) and float(current_value) < float(self.condition.value)
+                except (TypeError, ValueError):
+                    return False
             elif self.condition.operator == "out_of_range":
                 # For values that should stay within a range
                 if isinstance(self.condition.value, (list, tuple)) and len(self.condition.value) == 2:
-                    return current_value < self.condition.value[0] or current_value > self.condition.value[1]
+                    try:
+                        val = float(current_value)
+                        return val < float(self.condition.value[0]) or val > float(self.condition.value[1])
+                    except (TypeError, ValueError):
+                        return False
                 else:
                     return False  # Invalid range
             elif self.condition.operator == "in_range":
                 # For values that should stay within a range
                 if isinstance(self.condition.value, (list, tuple)) and len(self.condition.value) == 2:
-                    return self.condition.value[0] <= current_value <= self.condition.value[1]
+                    try:
+                        val = float(current_value)
+                        return float(self.condition.value[0]) <= val <= float(self.condition.value[1])
+                    except (TypeError, ValueError):
+                        return False
                 else:
                     return False  # Invalid range
             else:
                 # For unknown operators, don't trigger alert
                 return False
                 
-        except Exception as e:
-            print(f"Error evaluating condition for alert {self.id}: {str(e)}")
-            # Don't trigger alert if evaluation fails (safety default)
+        except (TypeError, ValueError, AttributeError):
+            # If any error in evaluation, don't trigger alert (safety default)
             return False
     
     def _get_nested_value(self, data: Dict, field_path: str) -> Any:
@@ -209,34 +211,27 @@ class AlertRule:
 
 class AlertConfigurationModel:
     """
-    Model for managing alert configurations and rules
+    Model for managing alert rule configurations
     """
     
-    def __init__(self, user_id: str = "default_user"):
-        self.user_id = user_id
+    def __init__(self):
         self.rules = {}
-        self.data_dir = Path(__file__).resolve().parent / "data" / "alerts"
+        self.data_dir = Path(__file__).resolve().parent.parent / "data" / "alerts"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load existing rules from storage
-        self._load_existing_rules()
-    
-    def _load_existing_rules(self):
-        """
-        Load existing alert rules from persistent storage
-        """
+        # Load existing rules from storage if available
         try:
-            rules_data = load_json(f"alerts/rules_{self.user_id}") or {}
-            saved_rules = rules_data.get("rules", [])
+            from backend.storage.io import load_json
+            saved_rules = load_json("alerts/rules") or {}
+            rules_list = saved_rules.get("rules", [])
             
-            for rule_dict in saved_rules:
-                rule = self._dict_to_rule(rule_dict)
+            for rule_data in rules_list:
+                rule = self._dict_to_rule(rule_data)
                 if rule:
                     self.rules[rule.id] = rule
-                    
-        except Exception as e:
-            print(f"Error loading alert rules from storage: {str(e)}")
-            # Continue with empty rules if loading fails
+        except:
+            # If loading fails, start with empty rules
+            print("No existing alert rules found, starting with empty configuration")
     
     def _dict_to_rule(self, rule_dict: Dict[str, Any]) -> Optional[AlertRule]:
         """
@@ -254,16 +249,16 @@ class AlertConfigurationModel:
             
             # Convert alert type string back to enum
             try:
-                alert_type = AlertType(rule_dict["alert_type"])
+                alert_type_enum = AlertType(rule_dict["alert_type"])
             except ValueError:
                 # If invalid enum, use default
-                alert_type = AlertType.PRICE_CHANGE
+                alert_type_enum = AlertType.PRICE_CHANGE
             
             rule = AlertRule(
                 id=rule_dict["id"],
                 name=rule_dict["name"],
                 description=rule_dict["description"],
-                alert_type=alert_type,
+                alert_type=alert_type_enum,
                 tickers=rule_dict["tickers"],
                 condition=condition,
                 enabled=rule_dict.get("enabled", True),
@@ -284,6 +279,48 @@ class AlertConfigurationModel:
         except Exception as e:
             print(f"Error converting dict to rule: {str(e)}")
             return None
+    
+    def validate_alert_parameters(self, 
+                                 alert_type: str, 
+                                 tickers: List[str], 
+                                 condition_field: str,
+                                 condition_operator: str, 
+                                 condition_value: Union[float, str, int]) -> List[str]:
+        """
+        Validate alert rule parameters and return errors
+        
+        Args:
+            alert_type: Type of alert
+            tickers: List of tickers to monitor
+            condition_field: Field to monitor
+            condition_operator: Operator for comparison
+            condition_value: Threshold value
+            
+        Returns:
+            List of validation errors
+        """
+        errors = []
+        
+        # Validate alert type
+        try:
+            AlertType(alert_type)
+        except ValueError:
+            errors.append(f"Invalid alert_type: {alert_type}")
+        
+        # Validate tickers
+        if not tickers or len(tickers) == 0:
+            errors.append("At least one ticker must be specified")
+        else:
+            for ticker in tickers:
+                if not isinstance(ticker, str) or len(ticker.strip()) == 0 or len(ticker) > 10:
+                    errors.append(f"Invalid ticker format: {ticker}")
+        
+        # Validate condition operator
+        valid_operators = ["gt", "lt", "gte", "lte", "eq", "ne", "crosses_above", "crosses_below", "in_range", "out_of_range"]
+        if condition_operator not in valid_operators:
+            errors.append(f"Invalid condition_operator: {condition_operator}. Must be one of: {valid_operators}")
+        
+        return errors
     
     def create_alert_rule(self, 
                          name: str, 
@@ -346,7 +383,8 @@ class AlertConfigurationModel:
             )
             
             # Create unique ID
-            rule_id = f"alert_{self.user_id}_{int(datetime.utcnow().timestamp())}_{len(self.rules) + 1}"
+            import time
+            rule_id = f"alert_rule_{int(time.time() * 1000)}_{len(self.rules) + 1}"
             
             # Create rule
             rule = AlertRule(
@@ -490,13 +528,14 @@ class AlertConfigurationModel:
         Save all rules to persistent storage
         """
         try:
+            from backend.storage.io import save_json
+            
             # Convert rules to serializable format
             rules_list = [rule.to_dict() for rule in self.rules.values()]
             
-            save_json(f"alerts/rules_{self.user_id}", {
+            save_json("alerts/rules", {
                 "rules": rules_list,
                 "count": len(rules_list),
-                "user_id": self.user_id,
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "source": ["alert_configuration_model", "rules_persistence", "fc-api-034"]
             }, source=["alert_rules_model", "persistence", "fc-api-034"])
@@ -512,12 +551,16 @@ class AlertConfigurationModel:
         defaults = []
         
         try:
+            # Create default rules that make sense for any user
+            import time
+            timestamp = int(time.time() * 1000)
+            
             # RSI Oversold Rule
             rsi_oversold_condition = AlertCondition("rsi", "lte", 30, "technical")
             rsi_oversold_rule = AlertRule(
-                id=f"default_rsi_oversold_{self.user_id}",
+                id=f"default_rsi_oversold_{timestamp}_1",
                 name="RSI Oversold Alert",
-                description="Triggered when RSI drops below 30 (indicating oversold condition)",
+                description="Triggers when RSI falls below 30 (oversold condition)",
                 alert_type=AlertType.RSI_OVERSOLD_OVERBOUGHT,
                 tickers=["SPY", "QQQ", "NVDA"],
                 condition=rsi_oversold_condition,
@@ -531,9 +574,9 @@ class AlertConfigurationModel:
             # RSI Overbought Rule
             rsi_overbought_condition = AlertCondition("rsi", "gte", 70, "technical")
             rsi_overbought_rule = AlertRule(
-                id=f"default_rsi_overbought_{self.user_id}",
-                name="RSI Overbought Alert", 
-                description="Triggered when RSI rises above 70 (indicating overbought condition)",
+                id=f"default_rsi_overbought_{int(time.time() * 1000)}_2",
+                name="RSI Overbought Alert",
+                description="Triggers when RSI rises above 70 (overbought condition)",
                 alert_type=AlertType.RSI_OVERSOLD_OVERBOUGHT,
                 tickers=["SPY", "QQQ", "NVDA"],
                 condition=rsi_overbought_condition,
@@ -544,30 +587,14 @@ class AlertConfigurationModel:
             )
             defaults.append(rsi_overbought_rule)
             
-            # High volatility Rule
-            vol_condition = AlertCondition("volatility", "gte", 0.03, "percentage")  # 3% daily volatility
-            vol_rule = AlertRule(
-                id=f"default_high_vol_{self.user_id}",
-                name="High Volatility Alert",
-                description="Triggered when volatility exceeds 3% daily",
-                alert_type=AlertType.VOLATILITY_SPIKE,
-                tickers=["SPY", "QQQ", "AAPL", "MSFT", "NVDA"],
-                condition=vol_condition,
-                priority="high",
-                delivery_methods=["email", "push"],
-                frequency="realtime",
-                cooldown_minutes=5
-            )
-            defaults.append(vol_rule)
-            
-            # Price change Rule (significant movement)
-            price_condition = AlertCondition("price_change_pct", "gte", 0.05)  # 5% move
+            # Price Change Rule (significant movement)
+            price_condition = AlertCondition("price_change_pct", "gte", 0.05, "percentage")  # 5% move
             price_rule = AlertRule(
-                id=f"default_price_move_{self.user_id}",
+                id=f"default_price_move_{int(time.time() * 1000)}_3",
                 name="Significant Price Movement Alert",
-                description="Triggered when price moves more than 5%",
+                description="Triggers when price moves more than 5%",
                 alert_type=AlertType.PRICE_CHANGE,
-                tickers=["SPY", "QQQ", "NVDA", "TSLA"],
+                tickers=["SPY", "QQQ", "AAPL", "MSFT", "NVDA"],
                 condition=price_condition,
                 priority="medium",
                 delivery_methods=["email", "push"],
@@ -576,16 +603,32 @@ class AlertConfigurationModel:
             )
             defaults.append(price_rule)
             
+            # High volatility Rule
+            vol_condition = AlertCondition("volatility", "gte", 0.03, "percentage")  # 3% daily volatility
+            vol_rule = AlertRule(
+                id=f"default_high_vol_{int(time.time() * 1000)}_4",
+                name="High Volatility Alert",
+                description="Triggers when volatility exceeds 3% daily",
+                alert_type=AlertType.VOLATILITY_SPIKE,
+                tickers=["SPY", "QQQ", "TSLA", "NVDA"],
+                condition=vol_condition,
+                priority="high",
+                delivery_methods=["email", "push"],
+                frequency="realtime",
+                cooldown_minutes=15
+            )
+            defaults.append(vol_rule)
+            
         except Exception as e:
             print(f"Error creating default rules: {str(e)}")
-            # Return minimal defaults if creation fails
+            # Return empty list if creation fails
             return []
         
         return defaults
 
 
-# Global instance with default user
-alert_config_model = AlertConfigurationModel()
+# Global instance
+alert_configuration_model = AlertConfigurationModel()
 
 
 # Convenience functions
@@ -596,7 +639,7 @@ def create_alert_rule(name: str, description: str, alert_type: AlertType, ticker
     """
     Create a new alert rule
     """
-    return alert_config_model.create_alert_rule(
+    return alert_configuration_model.create_alert_rule(
         name, description, alert_type, tickers, condition_field, 
         condition_operator, condition_value, threshold_type, enabled, 
         priority, delivery_methods, frequency, cooldown_minutes
@@ -606,28 +649,28 @@ def get_alert_rule(rule_id: str):
     """
     Get a specific alert rule
     """
-    return alert_config_model.get_alert_rule(rule_id)
+    return alert_configuration_model.get_alert_rule(rule_id)
 
 def get_all_alert_rules(ticker_filter: Optional[str] = None, type_filter: Optional[AlertType] = None, enabled_only: bool = True):
     """
     Get all alert rules with optional filters
     """
-    return alert_config_model.get_all_alert_rules(ticker_filter, type_filter, enabled_only)
+    return alert_configuration_model.get_all_alert_rules(ticker_filter, type_filter, enabled_only)
 
 def update_alert_rule(rule_id: str, updates: Dict[str, Any]):
     """
     Update an existing alert rule
     """
-    return alert_config_model.update_alert_rule(rule_id, updates)
+    return alert_configuration_model.update_alert_rule(rule_id, updates)
 
 def delete_alert_rule(rule_id: str):
     """
     Delete an alert rule
     """
-    return alert_config_model.delete_alert_rule(rule_id)
+    return alert_configuration_model.delete_alert_rule(rule_id)
 
 def get_default_alert_rules():
     """
     Get default alert rules for new users
     """
-    return alert_config_model.get_default_rules()
+    return alert_configuration_model.get_default_rules()

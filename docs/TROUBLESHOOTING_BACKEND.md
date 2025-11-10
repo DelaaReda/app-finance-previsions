@@ -63,7 +63,7 @@ tail -f copilot-app/backend/api.log
 Si le backend ne démarre pas, vérifier :
 - **Imports manquants** : `pip install -r requirements.txt`
 - **Chemins incorrects** : Vérifier que `PYTHONPATH` est correct
-- **Port déjà utilisé** : `lsof -i :8050` (Linux/Mac) ou `netstat -ano | findstr :8050` (Windows)
+- **Port déjà utilisé** : relance complète via `./finance-copilot.sh stop && ./finance-copilot.sh start` (le script nettoie les ports automatiquement, pas de `lsof` ou `kill -9`)
 
 ---
 
@@ -167,4 +167,3 @@ curl http://localhost:5173/api/forecasts?limit=5
 
 - `copilot-app/frontend/webapp/src/api/client.ts` : Timeouts adaptatifs ajoutés
 - `copilot-app/frontend/webapp/src/components/widgets/ForecastsProBoard.tsx` : Messages d'erreur améliorés
-

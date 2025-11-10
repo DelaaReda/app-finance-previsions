@@ -48,7 +48,7 @@ Attendre 10-15 secondes que le backend démarre complètement.
 ps aux | grep uvicorn | grep -v grep
 
 # Vérifier le port
-lsof -i :8050
+./finance-copilot.sh status  # vérifie les ports 8050/5173 sans commandes manuelles
 
 # Tester health endpoint
 curl http://localhost:8050/api/health
@@ -144,4 +144,3 @@ python3 scripts/test_endpoints.py
 - Les données sont générées automatiquement au startup si absentes
 - Les endpoints retournent toujours une structure valide (never-empty contract)
 - Les fallbacks sont en place pour garantir des réponses même avec données limitées
-

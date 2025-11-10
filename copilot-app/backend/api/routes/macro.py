@@ -300,3 +300,7 @@ def get_macro_latest(
             "generated_at": datetime.utcnow().isoformat(),
             "source": ["error_fallback"]
         })
+
+
+# Export router with expected name for main.py registration
+macro_router = router
