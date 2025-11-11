@@ -380,6 +380,13 @@ def create_app() -> FastAPI:
     # Routes
     register_routes(app)
 
+    # Include dashboard routes
+    try:
+        from api.routes.dashboard import dashboard_router
+        app.include_router(dashboard_router, prefix="/api/dashboard")
+    except ImportError as e:
+        print(f"⚠️  Failed to include dashboard routes: {e}")
+
     # Include brief routes
     try:
         from api.routes.brief_routes import router as brief_router
@@ -411,14 +418,14 @@ def create_app() -> FastAPI:
     # Include forecasts routes
     try:
         from api.routes.forecasts import forecasts_router
-        app.include_router(forecasts_router)
+        app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
     # Include forecasts routes
     try:
         from api.routes.forecasts import forecasts_router
-        app.include_router(forecasts_router)
+        app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
@@ -446,7 +453,7 @@ def create_app() -> FastAPI:
     # Include forecasts routes
     try:
         from api.routes.forecasts import forecasts_router
-        app.include_router(forecasts_router)
+        app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
@@ -704,7 +711,7 @@ DEFAULT_JUDGE_TICKERS = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", 
 def register_routes(app: FastAPI):
     """Register all API routes."""
 
-    @app.get("/health")
+    @app.get("/api/health")
     async def health_check():
         """Health check endpoint with enriched status information."""
         # Use relative import based on the project structure
@@ -767,7 +774,7 @@ def register_routes(app: FastAPI):
             }
         })
 
-    @app.get("/freshness")
+    @app.get("/api/freshness")
     async def data_freshness():
         """Check freshness of all data sources."""
         # Placeholder implementation - not yet available in core.data_access
@@ -785,7 +792,7 @@ def register_routes(app: FastAPI):
     # This endpoint is commented out to avoid conflicts with the router
     # The router provides better filtering, caching, and error handling
     
-    # @app.get("/macro/series")
+    # @app.get("/api/macro/series")
     # async def macro_series(
     #     series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
     #     ids: Optional[str] = Query(None, description="Alias for series_ids"),
@@ -796,7 +803,7 @@ def register_routes(app: FastAPI):
     #     """Get macro time series data - reads from pre-computed data."""
     #     # ... (implementation moved to api/routes/macro.py)
 
-    @app.get("/macro/snapshot")
+    @app.get("/api/macro/snapshot")
     async def macro_snapshot():
         """Get current macro snapshot (latest values) - reads from pre-computed data."""
         try:
@@ -835,7 +842,7 @@ def register_routes(app: FastAPI):
                 "freshness": datetime.utcnow().isoformat(),
             })
 
-    @app.get("/macro/indicators")
+    @app.get("/api/macro/indicators")
     async def macro_indicators():
         """Get macro indicators with trend analysis."""
         # TODO: Implement trend analysis (YoY, MoM, etc.)
@@ -848,7 +855,7 @@ def register_routes(app: FastAPI):
 
     # ========================= PILLAR 2: STOCKS ==========================
 
-    @app.get("/stocks/prices")
+    @app.get("/api/stocks/prices")
     async def stock_prices(
         ticker: Optional[str] = Query(None, description="Stock ticker symbol (single ticker)"),
         tickers: Optional[List[str]] = Query(None, description="Stock ticker symbols (multiple tickers)"),
@@ -969,7 +976,7 @@ def register_routes(app: FastAPI):
                 "error": str(e)
             })
 
-    @app.get("/stocks/universe")
+    @app.get("/api/stocks/universe")
     async def stock_universe():
         """Get list of tracked tickers."""
         return _ok({
@@ -978,7 +985,7 @@ def register_routes(app: FastAPI):
             "updated_at": datetime.utcnow().isoformat() + "Z",
         })
 
-    @app.get("/stocks/meta")
+    @app.get("/api/stocks/meta")
     async def stocks_meta(tickers: Optional[str] = Query(None, description="Comma-separated tickers")):
         """Get stocks metadata - reads from pre-computed data."""
         try:
@@ -1165,7 +1172,7 @@ def register_routes(app: FastAPI):
                 "source": ["fallback"]
             })
 
-    @app.get("/stocks/screener")
+    @app.get("/api/stocks/screener")
     async def stocks_screener(
         universe: Optional[str] = Query(None, description="Comma-separated universe tickers"),
         sectors: Optional[str] = Query(None, description="Comma-separated sectors"),
@@ -1278,7 +1285,7 @@ def register_routes(app: FastAPI):
                 "error": str(e),
             })
 
-    @app.get("/stocks/{ticker}")
+    @app.get("/api/stocks/{ticker}")
     async def stock_detail(ticker: str):
         """Get detailed ticker sheet (prix + indicators + news + fundamentals)."""
         try:
@@ -1425,7 +1432,7 @@ def register_routes(app: FastAPI):
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"Error retrieving data for {ticker}: {str(e)}")
 
-    @app.get("/stocks/{ticker}/sheet")
+    @app.get("/api/stocks/{ticker}/sheet")
     async def ticker_sheet(ticker: str):
         """Get detailed ticker sheet (Fiches Ticker) with comprehensive analysis."""
         try:
@@ -1603,7 +1610,7 @@ def register_routes(app: FastAPI):
     # This endpoint is commented out to avoid conflicts with the router
     # The router provides better filtering, caching, and error handling
     
-    # @app.get("/news/feed")
+    # @app.get("/api/news/feed")
     # async def news_feed(
     #     tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
     #     since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
@@ -1614,7 +1621,7 @@ def register_routes(app: FastAPI):
     #     """Get news feed - serves real data from news_feed.json"""
     #     # ... (implementation moved to api/routes/news.py)
 
-    @app.get("/news/sentiment")
+    @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
         """Get aggregated sentiment by ticker (v1 minimal)."""
         result = await lakehouse_news_sentiment(limit=limit)
@@ -1622,7 +1629,7 @@ def register_routes(app: FastAPI):
             return _ok(result)
         return _ok({"sentiment": [], "count": 0})
 
-    @app.get("/news/events")
+    @app.get("/api/news/events")
     async def news_events(
         tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
         event_types: Optional[List[str]] = Query(None, description="Filter by event types"),
@@ -1642,7 +1649,7 @@ def register_routes(app: FastAPI):
             return _ok(result)
         return _ok({"events": [], "count": 0})
 
-    @app.get("/news/features/daily")
+    @app.get("/api/news/features/daily")
     async def news_features_daily(
         ticker: Optional[str] = Query(None, description="Ticker filter"),
         start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -1670,7 +1677,7 @@ def register_routes(app: FastAPI):
 
     # ======================== PILLAR 4: LLM COPILOT ======================
 
-    @app.post("/copilot/ask")
+    @app.post("/api/copilot/ask")
     async def copilot_ask(req: CopilotAskRequest):
         """Ask LLM with RAG (5 years context). Uses LLM for intelligent responses with citations."""
         try:
@@ -1745,7 +1752,7 @@ def register_routes(app: FastAPI):
                 "quality_status": "error"
             })
 
-    @app.get("/copilot/history")
+    @app.get("/api/copilot/history")
     async def copilot_history(limit: int = Query(20, ge=1, le=100)):
         """Get conversation history."""
         # For now, return a mock history (in a real implementation, this would read from storage)
@@ -1768,7 +1775,7 @@ def register_routes(app: FastAPI):
 
     # ======================== LLM JUDGE =========================
 
-    @app.post("/llm/judge/run")
+    @app.post("/api/llm/judge/run")
     async def llm_judge_run(request: LLMJudgeRequest):
         """Run LLM-based market judgment with scoring and analysis."""
         import logging
@@ -2200,7 +2207,7 @@ def register_routes(app: FastAPI):
 
     # ------------------------------ LLM Providers (Debug) ------------------ #
 
-    @app.get("/llm/providers/working")
+    @app.get("/api/llm/providers/working")
     async def llm_providers_working(limit: int = Query(20, ge=1, le=100)):
         """Return the ranked list of G4F working models (by pass_rate desc, latency asc),
         including family classification and the top-3 distinct-family selection used by Judge.
@@ -2266,7 +2273,7 @@ def register_routes(app: FastAPI):
             **({"error": error} if error else {}),
         })
 
-    @app.post("/llm/providers/refresh")
+    @app.post("/api/llm/providers/refresh")
     async def llm_providers_refresh(
         limit: int = Body(8, embed=True),
         refresh_verified: bool = Body(True, embed=True),
@@ -2352,7 +2359,7 @@ def register_routes(app: FastAPI):
 
     # ====================== PILLAR 5: MARKET BRIEF =======================
 
-    @app.get("/brief/weekly")
+    @app.get("/api/brief/weekly")
     async def brief_weekly():
         """Get weekly market brief with <200ms response time using pre-computed data."""
         try:
@@ -2396,7 +2403,7 @@ def register_routes(app: FastAPI):
                 "message": "Brief generation failed, showing placeholder data"
             })
 
-    @app.get("/brief/daily")
+    @app.get("/api/brief/daily")
     async def brief_daily():
         """Get daily market brief with cache-first, instant response (never-empty)."""
         try:
@@ -2462,7 +2469,7 @@ def register_routes(app: FastAPI):
 
     # =========================== SIGNALS =================================
 
-    @app.get("/signals/top")
+    @app.get("/api/signals/top")
     async def signals_top():
         """Get Top 3 signals + Top 3 risks using 40/40/20 composite scoring."""
         try:
@@ -2483,7 +2490,7 @@ def register_routes(app: FastAPI):
                 "error": str(e)
             })
 
-    @app.get("/signals/composite")
+    @app.get("/api/signals/composite")
     async def signals_composite(ticker: Optional[str] = Query(None)):
         """Get composite scores (macro 40% + tech 40% + news 20%)."""
         try:
@@ -2507,7 +2514,7 @@ def register_routes(app: FastAPI):
     # This endpoint is commented out to avoid conflicts with the router
     # The router provides better filtering, caching, and error handling
     
-    # @app.get("/forecasts")
+    # @app.get("/api/forecasts")
     # async def forecasts(
     #     asset_type: str = Query("all", description="Asset type: equity, commodity, all"),
     #     horizon: str = Query("all", description="Horizon: 1w, 1m, 3m, all"),
@@ -2517,7 +2524,7 @@ def register_routes(app: FastAPI):
     #     """Get forecasts list - serves real data from forecasts.json"""
     #     # ... (implementation moved to api/routes/forecasts.py)
 
-    @app.get("/backtests")
+    @app.get("/api/backtests")
     async def backtests(
         horizon: str = Query("1m", description="Backtest horizon: 1w, 1m, 1y"),
         top_n: int = Query(5, ge=1, le=20, description="Top-N basket size"),
@@ -2626,7 +2633,7 @@ def register_routes(app: FastAPI):
                 "cache_status": "error"
             })
 
-    @app.get("/intelligence/snapshot")
+    @app.get("/api/intelligence/snapshot")
     async def intelligence_snapshot():
         """Return unified market intelligence snapshot (opportunities + risks + data freshness)."""
         try:
@@ -2636,7 +2643,7 @@ def register_routes(app: FastAPI):
             logger.exception("market_intelligence.snapshot_failed", exc_info=exc)
             return _ok(_fallback_intelligence_snapshot("Market intelligence service temporarily unavailable."))
 
-    @app.get("/context/current")
+    @app.get("/api/context/current")
     async def market_context_current():
         """Return the current market regime/context."""
         try:
@@ -2998,7 +3005,7 @@ def register_routes(app: FastAPI):
                 "generated_at": datetime.utcnow().isoformat(),
             })
 
-    @app.get("/alerts")
+    @app.get("/api/alerts")
     async def alerts(
         tickers: List[str] = Query([], description="List of tickers to get alerts for"),
         limit: int = Query(50, ge=1, le=200, description="Max alerts to return")
@@ -3066,7 +3073,7 @@ def register_routes(app: FastAPI):
 
     # ====================== VERSIONED NOTES (V1 requirement) =======================
 
-    @app.post("/notes")
+    @app.post("/api/notes")
     async def create_note(
         title: str = Body(..., embed=True),
         content: str = Body(..., embed=True),
@@ -3113,7 +3120,7 @@ def register_routes(app: FastAPI):
                 "message": "Failed to create note"
             })
 
-    @app.put("/notes/{note_id}")
+    @app.put("/api/notes/{note_id}")
     async def update_note(
         note_id: str,
         content: str = Body(..., embed=True),
@@ -3153,7 +3160,7 @@ def register_routes(app: FastAPI):
                 "message": "Failed to update note"
             })
 
-    @app.get("/notes/{note_id}")
+    @app.get("/api/notes/{note_id}")
     async def get_note(
         note_id: str,
         version: Optional[int] = Query(None, description="Specific version to retrieve")
@@ -3175,7 +3182,7 @@ def register_routes(app: FastAPI):
                 "message": "Failed to retrieve note"
             })
 
-    @app.get("/notes")
+    @app.get("/api/notes")
     async def get_notes(
         note_type: Optional[str] = Query(None, description="Filter by note type"),
         ticker: Optional[str] = Query(None, description="Filter by ticker"),
@@ -3237,7 +3244,7 @@ def register_routes(app: FastAPI):
                 "count": 0
             })
 
-    @app.get("/notes/{note_id}/history")
+    @app.get("/api/notes/{note_id}/history")
     async def get_note_history(note_id: str):
         """Get the version history of a note."""
         try:
@@ -3260,7 +3267,7 @@ def register_routes(app: FastAPI):
                 "message": "Failed to retrieve note history"
             })
 
-    @app.get("/notes/{note_id}/compare")
+    @app.get("/api/notes/{note_id}/compare")
     async def compare_note_versions(
         note_id: str,
         v1: int = Query(..., description="First version number"),
@@ -3283,7 +3290,7 @@ def register_routes(app: FastAPI):
                 "message": "Failed to compare versions"
             })
 
-    @app.post("/rag/seed")
+    @app.post("/api/rag/seed")
     async def seed_rag_store(
         seed_macro: bool = Query(True, description="Seed macro series (5 years)"),
         seed_prices: bool = Query(True, description="Seed prices (5 years)"),
@@ -3388,7 +3395,7 @@ def register_routes(app: FastAPI):
 
     # ====================== CORRELATIONS =======================
     
-    @app.get("/correlations/matrix")
+    @app.get("/api/correlations/matrix")
     async def correlations_matrix():
         """Get correlation matrix for tickers."""
         try:
@@ -3406,7 +3413,7 @@ def register_routes(app: FastAPI):
                 "error": str(e),
             })
     
-    @app.get("/correlations/network")
+    @app.get("/api/correlations/network")
     async def correlations_network(threshold: float = Query(0.5, ge=0.0, le=1.0, description="Correlation threshold")):
         """Get correlation network (nodes + links) for visualization."""
         try:
@@ -3426,7 +3433,7 @@ def register_routes(app: FastAPI):
     
     # ====================== SECTORS =======================
     
-    @app.get("/stocks/sectors")
+    @app.get("/api/stocks/sectors")
     async def stocks_sectors():
         """Get sector allocation data for SectorWheel/TreemapChart."""
         try:
@@ -3467,7 +3474,7 @@ def register_routes(app: FastAPI):
     
     # ====================== EFFICIENT FRONTIER =======================
     
-    @app.get("/backtests/efficient_frontier")
+    @app.get("/api/backtests/efficient_frontier")
     async def efficient_frontier():
         """Get efficient frontier data for portfolio optimization."""
         try:
@@ -3508,7 +3515,7 @@ def register_routes(app: FastAPI):
     
     # ====================== CAPITAL FLOWS =======================
     
-    @app.get("/flows/capital")
+    @app.get("/api/flows/capital")
     async def capital_flows():
         """Get capital flows data for SankeyDiagram."""
         try:
@@ -3528,7 +3535,7 @@ def register_routes(app: FastAPI):
     
     # ====================== ORDERBOOK =======================
     
-    @app.get("/orderbook")
+    @app.get("/api/orderbook")
     async def orderbook(ticker: str = Query(..., description="Stock ticker symbol")):
         """Get orderbook data (bids/asks) for a ticker."""
         try:
@@ -3553,7 +3560,7 @@ def register_routes(app: FastAPI):
                 "error": str(e),
             })
     
-    @app.get("/rag/stats")
+    @app.get("/api/rag/stats")
     async def rag_stats():
         """Get RAG store statistics."""
         try:

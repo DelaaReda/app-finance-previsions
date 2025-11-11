@@ -13,9 +13,21 @@ from pathlib import Path
 backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_root))
 
-from services.forecasts import forecasts_service
+# Try to import services, but fallback if not available
+try:
+    from services.forecasts import forecasts_service
+except ImportError:
+    forecasts_service = None
+
 from storage.io import load_json
-from services.cache_layer import load_or_compute
+
+# Try to import cache_layer, but fallback if not available
+try:
+    from services.cache_layer import load_or_compute
+except ImportError:
+    def load_or_compute(key, compute_fn):
+        """Fallback cache function"""
+        return compute_fn()
 
 
 # Create router instance without global '/api' to avoid double prefix when included

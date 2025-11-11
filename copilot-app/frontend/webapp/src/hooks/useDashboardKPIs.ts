@@ -68,8 +68,8 @@ export function useDashboardKPIs() {
   return useQuery({
     queryKey: ['dashboard', 'kpis'],
     queryFn: async () => {
-      // Fixed: Backend routing uses /api/api/dashboard/kpis due to register_routes() in src/api/main.py
-      const response = await apiGet<any>('/api/api/dashboard/kpis');
+      // Dashboard KPIs endpoint
+      const response = await apiGet<any>('/api/dashboard/kpis');
       
       // Handle the response according to the backend's {ok, data} format
       if (response && typeof response === 'object') {
