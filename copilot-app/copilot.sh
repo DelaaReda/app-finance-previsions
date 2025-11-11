@@ -54,14 +54,22 @@ stop_services() {
 # Générer les données initiales
 generate_initial_data() {
     log "Génération des données initiales..."
-    
     cd "$BACKEND_DIR"
-    source .venv/bin/activate
-    
-    # Lancer le job de validation et génération de données en arrière-plan
-    python jobs/validate_and_generate_data.py > /tmp/data_generation.log 2>&1 &
+    # Choisir l'interpréteur Python le plus fiable (éviter venv corrompue)
+    PY=""
+    if [ -x ".venv/bin/python3" ]; then
+        PY=".venv/bin/python3"
+    elif command -v python3 >/dev/null 2>&1; then
+        PY="$(command -v python3)"
+    elif command -v python >/dev/null 2>&1; then
+        PY="$(command -v python)"
+    else
+        log_error "Python introuvable (python3/python). Installez Python 3."
+        exit 1
+    fi
+    # Lancer le job en arrière-plan
+    nohup "$PY" jobs/validate_and_generate_data.py > /tmp/data_generation.log 2>&1 &
     DATA_GEN_PID=$!
-    
     log_success "Job de génération lancé (PID: $DATA_GEN_PID)"
     log "Les données seront disponibles progressivement (voir /tmp/data_generation.log)"
 }
@@ -70,21 +78,25 @@ generate_initial_data() {
 start_backend() {
     log "Démarrage du backend..."
     
-    # Vérifier venv
-    if [ ! -f "$BACKEND_DIR/.venv/bin/activate" ]; then
-        log_error "Virtual environment non trouvé"
-        exit 1
-    fi
-    
     cd "$BACKEND_DIR"
-    source .venv/bin/activate
-    
     # Désactiver reload pour éviter segfault sur ARM64
     export FINANCE_COPILOT_RELOAD=0
     export PYTHONPATH="$BACKEND_DIR:$BACKEND_DIR/src"
+    # Choisir l'interpréteur Python (éviter venv si corrompue)
+    PY=""
+    if [ -x ".venv/bin/python3" ]; then
+        PY=".venv/bin/python3"
+    elif command -v python3 >/dev/null 2>&1; then
+        PY="$(command -v python3)"
+    elif command -v python >/dev/null 2>&1; then
+        PY="$(command -v python)"
+    else
+        log_error "Python introuvable (python3/python). Installez Python 3."
+        exit 1
+    fi
     
     # Démarrer en arrière-plan
-    nohup python run_api.py > api.log 2>&1 &
+    nohup "$PY" run_api.py > api.log 2>&1 &
     BACKEND_PID=$!
     echo $BACKEND_PID > /tmp/finance_copilot_backend.pid
     
@@ -249,4 +261,3 @@ main() {
 }
 
 main "$@"
-

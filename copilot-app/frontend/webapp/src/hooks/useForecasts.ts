@@ -131,6 +131,12 @@ export function useForecasts(filters: {
         throw new Error(response.error || "Failed to fetch forecasts");
       }
     },
+    // Desktop responsiveness and fewer backend sockets:
+    // - Avoid refetching on window focus (prevents bursts of proxy connections)
+    // - Keep data fresh enough for UI without hammering the API
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchInterval: false,
     staleTime: 300000, // 5 minutes
     cacheTime: 600000, // 10 minutes
     retry: 2,
