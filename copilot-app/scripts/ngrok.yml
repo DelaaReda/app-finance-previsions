@@ -1,0 +1,11 @@
+version: "2"
+
+# Define two tunnels: one for backend API (8050) and one for frontend (5173)
+tunnels:
+  backend:
+    addr: 8050
+    proto: http
+  frontend:
+    addr: 5173
+    proto: http
+

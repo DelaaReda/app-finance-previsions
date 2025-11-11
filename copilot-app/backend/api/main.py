@@ -11,6 +11,7 @@ Quality improvements:
 - Better import isolation
 """
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import logging
@@ -446,7 +447,7 @@ def create_app():
         })
 
     @new_app.get("/api/news/features/daily")
-    async def _news_features_daily_alias(ticker: str | None = None, start: str | None = None, end: str | None = None, limit: int = 365):
+    async def _news_features_daily_alias(ticker: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, limit: int = 365):
         return _ok([])
 
     try:
@@ -480,6 +481,18 @@ def create_app():
             "sources_count": 0,
             "quality_status": "insufficient_sources",
         })
+
+    # Mount static frontend (Vite build) at root so a single public URL serves UI + API
+    try:
+        frontend_dist = (backend_root.parent / "frontend" / "webapp" / "dist").resolve()
+        if frontend_dist.exists():
+            # Important: include routers first so /api/* takes precedence, then mount '/'
+            new_app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+            logger.info(f"Mounted frontend dist at '/': {frontend_dist}")
+        else:
+            logger.info(f"Frontend dist directory not found: {frontend_dist}")
+    except Exception as _e:
+        logger.warning(f"Could not mount frontend static files: {_e}")
 
     # Debug: list registered paths
     try:
