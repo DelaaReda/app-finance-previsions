@@ -1,7 +1,18 @@
 import type { ApiResponse } from '@/types/common.types';
 
 const RAW_API_BASE = ((import.meta.env as any).VITE_API_BASE_URL ?? '/api').trim();
-const API_BASE = RAW_API_BASE;
+const API_BASE = (() => {
+  const raw = RAW_API_BASE;
+  // Local static-serve fallback: if running on 5173 and base is relative, use backend 8050
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const isDevStatic = /localhost:5173|127\.0\.0\.1:5173|0\.0\.0\.0:5173/.test(origin);
+    if ((!raw || !/^https?:\/\//i.test(raw)) && isDevStatic) {
+      return 'http://localhost:8050';
+    }
+  } catch {}
+  return raw;
+})();
 const DEBUG_EVENT = 'finance-debug:event';
 const DEBUG_ENABLED = ((import.meta.env as any).VITE_APP_DEBUG ?? '0').toString() !== '0';
 
