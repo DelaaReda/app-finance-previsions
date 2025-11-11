@@ -1,0 +1,303 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Finance Copilot
+            - paragraph [ref=e9]: Systèmes d'intelligence de marché
+          - generic [ref=e10]:
+            - generic [ref=e14]: Healthy
+            - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+              - img [ref=e17]
+      - navigation [ref=e20]:
+        - generic [ref=e24]:
+          - generic [ref=e26] [cursor=pointer]:
+            - img [ref=e28]
+            - paragraph [ref=e33]: dashboard
+          - generic [ref=e35] [cursor=pointer]:
+            - img [ref=e37]
+            - paragraph [ref=e39]: brief
+          - generic [ref=e41] [cursor=pointer]:
+            - img [ref=e43]
+            - paragraph [ref=e45]: macro
+          - generic [ref=e47] [cursor=pointer]:
+            - img [ref=e49]
+            - paragraph [ref=e52]: stocks
+          - generic [ref=e54] [cursor=pointer]:
+            - img [ref=e56]
+            - paragraph [ref=e58]: news
+          - generic [ref=e60] [cursor=pointer]:
+            - img [ref=e62]
+            - paragraph [ref=e65]: copilot
+          - generic [ref=e67] [cursor=pointer]:
+            - img [ref=e69]
+            - paragraph [ref=e77]: forecasts
+          - generic [ref=e79] [cursor=pointer]:
+            - img [ref=e81]
+            - paragraph [ref=e84]: backtests
+          - generic [ref=e86] [cursor=pointer]:
+            - img [ref=e88]
+            - paragraph [ref=e93]: compare
+          - generic [ref=e95] [cursor=pointer]:
+            - img [ref=e97]
+            - paragraph [ref=e100]: judge
+      - main [ref=e101]:
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e106]:
+              - img [ref=e108]
+              - generic [ref=e112]:
+                - generic [ref=e113]:
+                  - heading "Indicateurs Macroéconomiques" [level=2] [ref=e114]
+                  - generic [ref=e116]: Live
+                - paragraph [ref=e117]: Données FRED (CPI, VIX, Yield Curve, Employment) avec visualisations interactives
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - generic [ref=e120]:
+                  - generic [ref=e121]:
+                    - generic [ref=e122]:
+                      - heading "📊 Macro Board" [level=4] [ref=e123]
+                      - img [ref=e125]
+                    - paragraph [ref=e128]: Sélectionne tes séries FRED, ajuste l'horizon, compare Niveau / MoM / YoY, normalise Base 100.
+                  - generic [ref=e129]:
+                    - generic [ref=e132]:
+                      - img [ref=e133]
+                      - generic [ref=e135]:
+                        - paragraph [ref=e136]: il y a 1 heure
+                        - paragraph [ref=e137]: Anciennes • 82 min
+                    - generic [ref=e139]:
+                      - generic [ref=e141]:
+                        - generic [ref=e142]:
+                          - generic [ref=e143]: CPI (CPIAUCSL)
+                          - button [ref=e144] [cursor=pointer]:
+                            - img
+                        - generic [ref=e145]:
+                          - generic [ref=e146]: VIX (VIXCLS)
+                          - button [ref=e147] [cursor=pointer]:
+                            - img
+                        - generic [ref=e148]:
+                          - generic [ref=e149]: Yield 10Y-2Y (T10Y2Y)
+                          - button [ref=e150] [cursor=pointer]:
+                            - img
+                        - generic [ref=e151]:
+                          - generic [ref=e152]: Unemployment (UNRATE)
+                          - button [ref=e153] [cursor=pointer]:
+                            - img
+                        - textbox "Séries" [ref=e154]:
+                          - /placeholder: Ajouter des séries
+                      - generic:
+                        - img
+                    - radiogroup "Horizon" [ref=e155]:
+                      - generic [ref=e157]:
+                        - radio "1Y"
+                        - generic [ref=e158] [cursor=pointer]: 1Y
+                      - generic [ref=e159]:
+                        - radio "3Y" [checked]
+                        - generic [ref=e160] [cursor=pointer]: 3Y
+                      - generic [ref=e161]:
+                        - radio "5Y"
+                        - generic [ref=e162] [cursor=pointer]: 5Y
+                      - generic [ref=e163]:
+                        - radio "Max"
+                        - generic [ref=e164] [cursor=pointer]: Max
+                    - generic [ref=e166]:
+                      - textbox "Fréquence" [ref=e167] [cursor=pointer]: Monthly
+                      - generic:
+                        - img
+                    - radiogroup "Vue" [ref=e168]:
+                      - generic [ref=e170]:
+                        - radio "Niveau" [checked]
+                        - generic [ref=e171] [cursor=pointer]: Niveau
+                      - generic [ref=e172]:
+                        - radio "MoM %"
+                        - generic [ref=e173] [cursor=pointer]: MoM %
+                      - generic [ref=e174]:
+                        - radio "YoY %"
+                        - generic [ref=e175] [cursor=pointer]: YoY %
+                    - generic [ref=e177]:
+                      - switch "Base 100"
+                      - generic [ref=e182]: Base 100
+                    - generic [ref=e184]:
+                      - textbox "Type de graphique" [ref=e185] [cursor=pointer]: Area
+                      - generic:
+                        - img
+                    - button "Rafraîchir" [ref=e186] [cursor=pointer]:
+                      - generic [ref=e187]:
+                        - img [ref=e189]
+                        - generic [ref=e192]: Rafraîchir
+                    - button "Export CSV" [ref=e193] [cursor=pointer]:
+                      - generic [ref=e194]:
+                        - img [ref=e196]
+                        - generic [ref=e199]: Export CSV
+                - generic [ref=e200]:
+                  - generic [ref=e201]:
+                    - generic [ref=e203]:
+                      - generic [ref=e204]:
+                        - generic [ref=e206]: CPIAUCSL
+                        - img [ref=e208]
+                      - paragraph [ref=e211]: CPIAUCSL
+                    - paragraph [ref=e212]: "119.0"
+                    - paragraph [ref=e213]: +0.42% vs prev
+                  - generic [ref=e214]:
+                    - generic [ref=e216]:
+                      - generic [ref=e217]:
+                        - generic [ref=e219]: VIXCLS
+                        - img [ref=e221]
+                      - paragraph [ref=e224]: VIXCLS
+                    - paragraph [ref=e225]: "19.6"
+                    - paragraph [ref=e226]: "-4.81% vs prev"
+                  - generic [ref=e227]:
+                    - generic [ref=e229]:
+                      - generic [ref=e230]:
+                        - generic [ref=e232]: UNRATE
+                        - img [ref=e234]
+                      - paragraph [ref=e237]: UNRATE
+                    - paragraph [ref=e238]: "5.20"
+                    - paragraph [ref=e239]: +0.00% vs prev
+                - generic [ref=e240]:
+                  - separator [ref=e241]:
+                    - generic [ref=e242]: Visualisations
+                  - generic [ref=e246]:
+                    - img [ref=e247]:
+                      - generic [ref=e252]:
+                        - generic [ref=e254]: 1985-09-01
+                        - generic [ref=e256]: 2021-05-17
+                        - generic [ref=e258]: 2021-09-03
+                        - generic [ref=e260]: 2021-12-23
+                        - generic [ref=e262]: 2022-04-13
+                        - generic [ref=e264]: 2022-08-02
+                        - generic [ref=e266]: 2022-11-21
+                      - generic [ref=e268]:
+                        - generic [ref=e270]: "0"
+                        - generic [ref=e272]: "30"
+                        - generic [ref=e274]: "60"
+                        - generic [ref=e276]: "90"
+                        - generic [ref=e278]: "120"
+                    - list [ref=e293]:
+                      - generic [ref=e294]:
+                        - listitem [ref=e295]:
+                          - img [ref=e296]
+                          - paragraph [ref=e298]: CPIAUCSL
+                        - listitem [ref=e299]:
+                          - img [ref=e300]
+                          - paragraph [ref=e302]: VIXCLS
+                        - listitem [ref=e303]:
+                          - img [ref=e304]
+                          - paragraph [ref=e306]: UNRATE
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]:
+                    - heading "🧭 Macro Drilldown" [level=4] [ref=e310]
+                    - paragraph [ref=e311]: Compare des séries macro, ajuste plage & fréquence, normalise (Index=100) pour comparer les tendances.
+                  - generic [ref=e312]:
+                    - generic [ref=e314]:
+                      - generic [ref=e316]:
+                        - generic [ref=e317]:
+                          - generic [ref=e318]: CPI (CPIAUCSL)
+                          - button [ref=e319] [cursor=pointer]:
+                            - img
+                        - generic [ref=e320]:
+                          - generic [ref=e321]: VIX (VIXCLS)
+                          - button [ref=e322] [cursor=pointer]:
+                            - img
+                        - generic [ref=e323]:
+                          - generic [ref=e324]: 10Y-2Y (T10Y2Y)
+                          - button [ref=e325] [cursor=pointer]:
+                            - img
+                        - textbox "Séries macro" [ref=e326]:
+                          - /placeholder: Ajouter des séries (FRED IDs)
+                      - generic:
+                        - img
+                    - radiogroup "Plage" [ref=e327]:
+                      - generic [ref=e329]:
+                        - radio "1Y"
+                        - generic [ref=e330] [cursor=pointer]: 1Y
+                      - generic [ref=e331]:
+                        - radio "3Y"
+                        - generic [ref=e332] [cursor=pointer]: 3Y
+                      - generic [ref=e333]:
+                        - radio "5Y" [checked]
+                        - generic [ref=e334] [cursor=pointer]: 5Y
+                      - generic [ref=e335]:
+                        - radio "10Y"
+                        - generic [ref=e336] [cursor=pointer]: 10Y
+                      - generic [ref=e337]:
+                        - radio "MAX"
+                        - generic [ref=e338] [cursor=pointer]: MAX
+                    - radiogroup "Fréquence" [ref=e339]:
+                      - generic [ref=e341]:
+                        - radio "Monthly" [checked]
+                        - generic [ref=e342] [cursor=pointer]: Monthly
+                      - generic [ref=e343]:
+                        - radio "Weekly"
+                        - generic [ref=e344] [cursor=pointer]: Weekly
+                      - generic [ref=e345]:
+                        - radio "Daily"
+                        - generic [ref=e346] [cursor=pointer]: Daily
+                      - generic [ref=e347]:
+                        - radio "Quarterly"
+                        - generic [ref=e348] [cursor=pointer]: Quarterly
+                    - generic [ref=e350]:
+                      - switch "Normaliser Index 100"
+                      - generic [ref=e355]: Index=100
+                    - button "Rafraîchir" [ref=e356] [cursor=pointer]:
+                      - generic [ref=e358]: Rafraîchir
+                    - button "Export CSV" [ref=e359] [cursor=pointer]:
+                      - generic [ref=e360]:
+                        - img [ref=e362]
+                        - generic [ref=e365]: Export CSV
+                    - generic [ref=e368]:
+                      - img [ref=e369]
+                      - generic [ref=e371]:
+                        - paragraph [ref=e372]: il y a 1 heure
+                        - paragraph [ref=e373]: Anciennes • 82 min
+                - generic [ref=e377]:
+                  - img [ref=e378]:
+                    - generic [ref=e383]:
+                      - generic [ref=e385]: 1947-01-01
+                      - generic [ref=e387]: 1957-09-01
+                      - generic [ref=e389]: 1968-05-01
+                      - generic [ref=e391]: 1979-01-01
+                      - generic [ref=e393]: 2021-04-20
+                      - generic [ref=e395]: 2021-10-15
+                      - generic [ref=e397]: 2022-04-13
+                      - generic [ref=e399]: 2022-10-10
+                    - generic [ref=e401]:
+                      - generic [ref=e403]: "0.00"
+                      - generic [ref=e405]: "30.00"
+                      - generic [ref=e407]: "60.00"
+                      - generic [ref=e409]: "90.00"
+                      - generic [ref=e411]: "120.00"
+                  - list [ref=e418]:
+                    - generic [ref=e419]:
+                      - listitem [ref=e420]:
+                        - img [ref=e421]
+                        - paragraph [ref=e423]: CPIAUCSL
+                      - listitem [ref=e424]:
+                        - img [ref=e425]
+                        - paragraph [ref=e427]: VIXCLS
+          - generic [ref=e429]:
+            - generic [ref=e430]:
+              - generic [ref=e431]:
+                - generic [ref=e433]: DEV DEBUG
+                - generic [ref=e435]: idle
+              - paragraph [ref=e436]: No errors captured yet
+            - generic [ref=e437]:
+              - button "Clear" [ref=e438] [cursor=pointer]:
+                - generic [ref=e440]: Clear
+              - button "Details" [ref=e441] [cursor=pointer]:
+                - generic [ref=e443]: Details
+    - generic [ref=e444]:
+      - img [ref=e446]
+      - button "Open Tanstack query devtools" [ref=e514] [cursor=pointer]:
+        - img [ref=e515]
+    - generic [ref=e583]:
+      - img [ref=e585]
+      - button "Open Tanstack query devtools" [ref=e653] [cursor=pointer]:
+        - img [ref=e654]
+  - generic [ref=e722]: "0.00"
+```

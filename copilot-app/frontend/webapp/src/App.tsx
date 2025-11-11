@@ -1,124 +1,101 @@
-import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet, Link } from 'react-router-dom'
+import { RouterProvider, createBrowserRouter, createRoutesFromElements, Route, Outlet } from 'react-router-dom'
 import { AppProviders } from './app/providers'
+import GlobalErrorBoundary from './components/system/GlobalErrorBoundary'; // Global error boundary for stability
+import AppShell from './layout/AppShell'; // Using the new MUI-based layout
+import { DrillDownProvider } from './contexts/DrillDownContext'; // FC-INT-027: Intelligent drill-down navigation
+import { CommandPalette } from './components/system/CommandPalette'; // FC-UX-001: Command Palette (Ctrl+K)
+import { useCommandPalette } from './hooks/useCommandPalette'; // FC-UX-001: Command Palette hook
+import DevDebugPanel from './debug/DevDebugPanel';
 
 // Pages existantes
 import Dashboard from './pages/Dashboard'
 import Forecasts from './pages/Forecasts'
 import LLMJudge from './pages/LLMJudge'
 import Backtests from './pages/Backtests'
+import CompareStrategies from './pages/CompareStrategies'
+import DashboardsPage from './pages/Dashboards'
 
 // Nouvelles pages selon VISION
 import Macro from './pages/Macro'
 import Stocks from './pages/Stocks'
 import News from './pages/News'
+import NewsSignalRadar from './pages/NewsSignalRadar' // FC-UX-002: News Signal Radar (Treemap visualization)
 import Copilot from './pages/Copilot'
-import TickerSheet from './pages/TickerSheet'
+import TickerDetail from './pages/TickerDetail' // FC-INT-027: Replaces TickerSheet with intelligent drill-down
 import MarketBrief from './pages/MarketBrief'
+import Portfolios from './pages/Portfolios' // API-PORTFOLIO-002: Portfolio/Watchlist management
+import HealthPage from './pages/Health' // FC-PHASE1-002: Health & Freshness Overview
+import Diagnostics from './pages/Diagnostics' // Correlation analysis
+import Analytics from './pages/Analytics' // Capital flows analysis
+import Trading from './pages/Trading' // OrderBook visualization
+import TestSimple from './pages/TestSimple'
 
-// Layout avec navigation pour l'application
-function AppLayout() {
+// AppContent wrapper with Command Palette
+function AppContent() {
+  const { opened, close } = useCommandPalette();
+  const isDev = import.meta.env.DEV;
+  
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Sidebar Navigation */}
-      <nav style={{
-        width: 240,
-        background: '#1a1a1a',
-        padding: 20,
-        color: 'white',
-        position: 'fixed',
-        height: '100vh',
-        overflowY: 'auto'
-      }}>
-        <h1 style={{ fontSize: 20, marginBottom: 24, fontWeight: 600 }}>
-          💼 Finance Copilot
-        </h1>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <NavSection title="📊 Vue d'ensemble">
-            <NavLink to="/">Dashboard</NavLink>
-            <NavLink to="/brief">Market Brief</NavLink>
-          </NavSection>
-          
-          <NavSection title="🔬 5 Piliers">
-            <NavLink to="/macro">1. Macro</NavLink>
-            <NavLink to="/stocks">2. Stocks</NavLink>
-            <NavLink to="/news">3. News</NavLink>
-            <NavLink to="/copilot">4. Copilot LLM</NavLink>
-          </NavSection>
-          
-          <NavSection title="📈 Analyse">
-            <NavLink to="/forecasts">Prévisions</NavLink>
-            <NavLink to="/backtests">Backtests</NavLink>
-          </NavSection>
-          
-          <NavSection title="🛠️ Outils">
-            <NavLink to="/judge">LLM Judge</NavLink>
-          </NavSection>
-        </div>
-      </nav>
-
-      {/* Main Content - contenu des routes */}
-      <main style={{ marginLeft: 240, flex: 1, padding: 32, background: '#f5f5f5' }}>
-        <Outlet />
-      </main>
-    </div>
+    <>
+      <CommandPalette opened={opened} close={close} />
+      <Outlet />
+      {isDev && <DevDebugPanel />}
+    </>
   );
 }
 
-// Create router
-const router = createBrowserRouter(createRoutesFromElements(
-  <Route element={<AppLayout />}>
+// Create router with error boundary wrapper, drill-down context, and command palette
+const router = createBrowserRouter(
+  createRoutesFromElements(
+  <Route element={
+    <GlobalErrorBoundary>
+      <DrillDownProvider>
+        <AppShell>
+          <AppContent />
+        </AppShell>
+      </DrillDownProvider>
+    </GlobalErrorBoundary>
+  }>
     <Route index element={<Dashboard />} />
     <Route path="/brief" element={<MarketBrief />} />
     <Route path="/macro" element={<Macro />} />
     <Route path="/stocks" element={<Stocks />} />
     <Route path="/news" element={<News />} />
+    <Route path="/news/radar" element={<NewsSignalRadar />} /> {/* FC-UX-002: News Signal Radar */}
     <Route path="/copilot" element={<Copilot />} />
-    <Route path="/ticker/:symbol" element={<TickerSheet />} />
+    <Route path="/portfolios" element={<Portfolios />} /> {/* API-PORTFOLIO-002: Portfolio management */}
+    <Route path="/health" element={<HealthPage />} /> {/* FC-PHASE1-002: Health & Freshness Overview */}
+    <Route path="/diagnostics" element={<Diagnostics />} /> {/* Correlation analysis */}
+    <Route path="/analytics" element={<Analytics />} /> {/* Capital flows analysis */}
+    <Route path="/trading" element={<Trading />} /> {/* OrderBook visualization */}
+    <Route path="/ticker/:ticker" element={<TickerDetail />} /> {/* FC-INT-027: Intelligent drill-down */}
     <Route path="/forecasts" element={<Forecasts />} />
+    <Route path="/test" element={<TestSimple />} />
     <Route path="/backtests" element={<Backtests />} />
+    <Route path="/compare" element={<CompareStrategies />} />
+    <Route path="/dashboards/:slug?" element={<DashboardsPage />} />
     <Route path="/judge" element={<LLMJudge />} />
-  </Route>
-));
+  </Route>,
+),
+{
+  future: {
+    v7_normalizeFormMethod: true,
+    v7_partialHydration: true,
+    v7_relativeSplatPath: true,
+    v7_skipActionErrorRevalidation: true,
+    v7_startTransition: true,
+  },
+});
 
 export default function App() {
   return (
     <AppProviders>
-      <RouterProvider router={router} />
+      <RouterProvider
+        router={router}
+        future={{
+          v7_startTransition: true,
+        }}
+      />
     </AppProviders>
-  )
-}
-
-// Helper Components
-function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', opacity: 0.6, marginBottom: 8, fontWeight: 600 }}>
-        {title}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
-  return (
-    <Link
-      to={to}
-      style={{
-        padding: '8px 12px',
-        borderRadius: 6,
-        textDecoration: 'none',
-        color: 'white',
-        fontSize: 14,
-        transition: 'all 0.2s',
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.background = '#333'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-    >
-      {children}
-    </Link>
   )
 }

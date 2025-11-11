@@ -1,0 +1,343 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - paragraph [ref=e8]: Finance Copilot
+          - paragraph [ref=e9]: Systèmes d'intelligence de marché
+        - generic [ref=e10]:
+          - generic [ref=e14]: Healthy
+          - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+            - img [ref=e17]
+    - navigation [ref=e20]:
+      - generic [ref=e24]:
+        - generic [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - paragraph [ref=e33]: dashboard
+        - generic [ref=e35] [cursor=pointer]:
+          - img [ref=e37]
+          - paragraph [ref=e39]: brief
+        - generic [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+          - paragraph [ref=e45]: macro
+        - generic [ref=e47] [cursor=pointer]:
+          - img [ref=e49]
+          - paragraph [ref=e52]: stocks
+        - generic [ref=e54] [cursor=pointer]:
+          - img [ref=e56]
+          - paragraph [ref=e58]: news
+        - generic [ref=e60] [cursor=pointer]:
+          - img [ref=e62]
+          - paragraph [ref=e65]: copilot
+        - generic [ref=e67] [cursor=pointer]:
+          - img [ref=e69]
+          - paragraph [ref=e77]: forecasts
+        - generic [ref=e79] [cursor=pointer]:
+          - img [ref=e81]
+          - paragraph [ref=e84]: backtests
+        - generic [ref=e86] [cursor=pointer]:
+          - img [ref=e88]
+          - paragraph [ref=e93]: compare
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e97]
+          - paragraph [ref=e100]: judge
+    - main [ref=e101]:
+      - generic [ref=e102]:
+        - generic [ref=e104]:
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]:
+                  - img [ref=e111]
+                  - heading "Adaptive Dashboard" [level=2] [ref=e113]
+                - paragraph [ref=e114]: Intelligent layout that adapts to market conditions in real-time
+              - generic [ref=e115]:
+                - generic [ref=e117]: Live data stream
+                - generic [ref=e118]:
+                  - generic [ref=e121] [cursor=pointer]:
+                    - paragraph [ref=e122]: 🚀
+                    - paragraph [ref=e123]: RISK ON
+                    - img [ref=e125]
+                  - generic [ref=e128]:
+                    - button "Auto" [ref=e129] [cursor=pointer]:
+                      - generic [ref=e130]:
+                        - img [ref=e132]
+                        - paragraph [ref=e137]: Auto
+                    - button "Refresh" [ref=e138] [cursor=pointer]:
+                      - generic [ref=e139]:
+                        - img [ref=e141]
+                        - paragraph [ref=e145]: Refresh
+            - alert [ref=e146]:
+              - generic [ref=e147]:
+                - img [ref=e149]
+                - paragraph [ref=e154]:
+                  - strong [ref=e155]: "Adaptive Mode Active:"
+                  - text: Dashboard layout automatically adjusts based on detected market regime. Switch to Manual mode to lock the current layout.
+            - generic [ref=e156]:
+              - generic [ref=e157]:
+                - generic [ref=e158]:
+                  - img [ref=e160]
+                  - paragraph [ref=e164]: Forecasts online
+                - paragraph [ref=e166]: "0"
+                - paragraph [ref=e168]: 0 tickers tracked
+              - generic [ref=e169]:
+                - generic [ref=e170]:
+                  - img [ref=e172]
+                  - paragraph [ref=e175]: High-confidence
+                - paragraph [ref=e177]: 0%
+                - paragraph [ref=e179]: 0 signals
+              - generic [ref=e180]:
+                - generic [ref=e181]:
+                  - img [ref=e183]
+                  - paragraph [ref=e185]: Fresh news
+                - paragraph [ref=e187]: "0"
+                - paragraph [ref=e189]: Last 60 min
+              - generic [ref=e190]:
+                - generic [ref=e191]:
+                  - img [ref=e193]
+                  - paragraph [ref=e195]: Backtest hit rate
+                - paragraph [ref=e197]: 0%
+                - paragraph [ref=e199]: Live monitor
+          - generic [ref=e202]:
+            - generic [ref=e204]: forecasts
+            - generic [ref=e206]: news
+            - generic [ref=e208]: brief_weekly
+            - generic [ref=e210]: backtests
+          - generic [ref=e211]:
+            - generic [ref=e212]:
+              - paragraph [ref=e213]: Adaptive layout
+              - paragraph [ref=e214]: Widgets reorder automatically based on market regime confidence
+            - generic [ref=e215]:
+              - generic [ref=e217]:
+                - alert [ref=e219]:
+                  - generic [ref=e220]:
+                    - img [ref=e222]
+                    - paragraph [ref=e227]: Widget "opportunities" coming soon
+                - alert "No Recommendations Available" [ref=e230]:
+                  - generic [ref=e231]:
+                    - img [ref=e233]
+                    - generic [ref=e235]:
+                      - generic [ref=e237]: No Recommendations Available
+                      - paragraph [ref=e239]: No recommendations for today. The system is analyzing market conditions.
+                - generic [ref=e241]:
+                  - generic [ref=e242]:
+                    - generic [ref=e244]: Risk On • 100% confidence
+                    - generic [ref=e245]:
+                      - generic [ref=e246]:
+                        - checkbox "AI & Tech"
+                        - generic [ref=e248]: AI & Tech
+                      - generic [ref=e249]:
+                        - checkbox "Fed & Rates"
+                        - generic [ref=e251]: Fed & Rates
+                      - generic [ref=e252]:
+                        - checkbox "Consumer"
+                        - generic [ref=e254]: Consumer
+                  - generic [ref=e256]:
+                    - paragraph [ref=e257]: 📊 Market Intelligence
+                    - paragraph [ref=e258]: Bearish tone with opportunities led by META, GOOGL, NVDA. Focus on top bullish setups while monitoring downside alerts.
+                    - separator [ref=e259]
+                    - generic [ref=e260]:
+                      - paragraph [ref=e261]: Market Regime Analysis
+                      - paragraph [ref=e262]: Bullish pressure +0.01 vs bearish +0.00. Net skew +0.01 (100% confidence).
+                  - generic [ref=e263]:
+                    - generic [ref=e264]:
+                      - paragraph [ref=e265]: 🚀 Top Opportunities
+                      - generic [ref=e267]:
+                        - generic [ref=e270]:
+                          - generic [ref=e271]:
+                            - button "META" [ref=e272] [cursor=pointer]
+                            - generic [ref=e273]:
+                              - img [ref=e274]
+                              - paragraph [ref=e278]: 39%
+                          - paragraph [ref=e279]: META short horizon expects +0.65% (UP) with 39% confidence.
+                          - generic [ref=e280]:
+                            - generic: Low Confidence
+                        - generic [ref=e283]:
+                          - generic [ref=e284]:
+                            - button "GOOGL" [ref=e285] [cursor=pointer]
+                            - generic [ref=e286]:
+                              - img [ref=e287]
+                              - paragraph [ref=e291]: 37%
+                          - paragraph [ref=e292]: GOOGL short horizon expects +0.60% (UP) with 37% confidence.
+                          - generic [ref=e293]:
+                            - generic: Low Confidence
+                        - generic [ref=e296]:
+                          - generic [ref=e297]:
+                            - button "NVDA" [ref=e298] [cursor=pointer]
+                            - generic [ref=e299]:
+                              - img [ref=e300]
+                              - paragraph [ref=e304]: 35%
+                          - paragraph [ref=e305]: NVDA short horizon expects +0.55% (UP) with 35% confidence.
+                          - generic [ref=e306]:
+                            - generic: Low Confidence
+                    - generic [ref=e307]:
+                      - paragraph [ref=e308]: ⚠️ Key Risks
+                      - paragraph [ref=e309]: No major risks detected at this time.
+                  - alert [ref=e310]:
+                    - paragraph [ref=e314]: "Last updated: 11/9/2025, 7:16:22 PM | Data freshness: Forecasts (unknown), Macro (4d ago), News (4d ago)"
+              - separator [ref=e315]
+              - generic [ref=e317]:
+                - generic [ref=e319]:
+                  - generic [ref=e320]:
+                    - generic [ref=e321]:
+                      - heading "Prévisions (cartes)" [level=4] [ref=e322]
+                      - paragraph [ref=e323]: "Classement par score et confiance • Horizon: short"
+                    - generic [ref=e324]:
+                      - radiogroup [ref=e325]:
+                        - generic [ref=e327]:
+                          - radio "Court" [checked]
+                          - generic [ref=e328] [cursor=pointer]: Court
+                        - generic [ref=e329]:
+                          - radio "Moyen"
+                          - generic [ref=e330] [cursor=pointer]: Moyen
+                        - generic [ref=e331]:
+                          - radio "Long"
+                          - generic [ref=e332] [cursor=pointer]: Long
+                      - button "Exporter CSV" [ref=e333] [cursor=pointer]:
+                        - generic [ref=e335]: Exporter CSV
+                      - button "Rafraîchir" [ref=e336] [cursor=pointer]:
+                        - generic [ref=e338]: Rafraîchir
+                  - alert [ref=e339]:
+                    - generic [ref=e342]: Aucune prévision pour l’univers sélectionné.
+                - generic [ref=e345]:
+                  - generic [ref=e346]:
+                    - heading "Top Stocks" [level=4] [ref=e347]
+                    - button [ref=e348] [cursor=pointer]:
+                      - img [ref=e350]
+                  - table [ref=e353]:
+                    - rowgroup [ref=e354]:
+                      - row "Ticker Name Price Change Market Cap" [ref=e355]:
+                        - cell "Ticker" [ref=e356]
+                        - cell "Name" [ref=e357]
+                        - cell "Price" [ref=e358]
+                        - cell "Change" [ref=e359]
+                        - cell "Market Cap" [ref=e360]
+                    - rowgroup [ref=e361]:
+                      - row "SPY SPY $670.97 +0.01% $615.80B" [ref=e362]:
+                        - cell "SPY" [ref=e363]:
+                          - paragraph [ref=e364]: SPY
+                        - cell "SPY" [ref=e365]:
+                          - paragraph [ref=e366]: SPY
+                        - cell "$670.97" [ref=e367]:
+                          - paragraph [ref=e368]: $670.97
+                        - cell "+0.01%" [ref=e369]:
+                          - generic [ref=e370]:
+                            - img [ref=e371]
+                            - generic [ref=e375]: +0.01%
+                        - cell "$615.80B" [ref=e376]:
+                          - paragraph [ref=e377]: $615.80B
+                - alert [ref=e379]:
+                  - generic [ref=e380]:
+                    - img [ref=e382]
+                    - paragraph [ref=e387]: Widget "performance" coming soon
+              - separator [ref=e388]
+              - generic [ref=e390]:
+                - generic [ref=e393]:
+                  - generic [ref=e394]:
+                    - generic [ref=e395]:
+                      - img [ref=e397]
+                      - heading "Market News" [level=4] [ref=e399]
+                    - button [ref=e400] [cursor=pointer]:
+                      - img [ref=e402]
+                  - generic [ref=e405]:
+                    - generic [ref=e407]:
+                      - generic [ref=e408]:
+                        - paragraph [ref=e409]: McDonald's sales rise, but CEO expects low-income diners to spend less into next year
+                        - generic [ref=e412]: CNBC_MARKETS
+                        - paragraph [ref=e413]: McDonald's stock has risen just 3% this year, as investor concerns about the restaurant industry and the broader economy have weighed on shares.
+                        - paragraph [ref=e414]: 08:53 AM
+                      - link [ref=e415]:
+                        - /url: https://www.cnbc.com/2025/11/05/mcdonalds-mcd-q3-2025-earnings.html
+                        - img [ref=e416]
+                    - generic [ref=e421]:
+                      - generic [ref=e422]:
+                        - paragraph [ref=e423]: US Companies Added 42,000 jobs in October, Per ADP Data
+                        - generic [ref=e426]: BLOOMBERG
+                        - paragraph [ref=e427]: "Employment at US companies increased in October as private-sector payrolls grew by 42,000 after a revised 29,000 decline a month earlier, according to ADP Research data released Wednesday. Michael McKee reports. (Source: Bloomberg)"
+                        - paragraph [ref=e428]: 08:52 AM
+                      - link [ref=e429]:
+                        - /url: https://www.bloomberg.com/news/videos/2025-11-05/us-companies-added-42-000-jobs-in-october-adp-video
+                        - img [ref=e430]
+                    - generic [ref=e435]:
+                      - generic [ref=e436]:
+                        - paragraph [ref=e437]: UPS cargo plane crash near Louisville airport kills at least 9
+                        - generic [ref=e440]: CNBC_MARKETS
+                        - paragraph [ref=e441]: A UPS flight with three crewmembers crashed near Louisville, but the cause and extent of injuries were unclear.
+                        - paragraph [ref=e442]: 08:51 AM
+                      - link [ref=e443]:
+                        - /url: https://www.cnbc.com/2025/11/04/ups-plane-louisville.html
+                        - img [ref=e444]
+                    - generic [ref=e449]:
+                      - generic [ref=e450]:
+                        - paragraph [ref=e451]: How Mamdani Won Over New York City
+                        - generic [ref=e454]: BLOOMBERG
+                        - paragraph [ref=e455]: "New York City’s workforce is changing &mdash; and Mamdani’s campaign tapped into their concerns. Bloomberg Opinion columnist and economist Allison Schrager explains the data. (Source: Bloomberg)"
+                        - paragraph [ref=e456]: 08:47 AM
+                      - link [ref=e457]:
+                        - /url: https://www.bloomberg.com/news/videos/2025-11-05/opinion-how-mamdani-won-over-new-york-city-video
+                        - img [ref=e458]
+                    - generic [ref=e463]:
+                      - generic [ref=e464]:
+                        - paragraph [ref=e465]: McDonald’s customers are spending more per visit as sales top expectations again
+                        - generic [ref=e468]: MARKET_WATCH
+                        - paragraph [ref=e469]: McDonald’s comparable sales beat Wall Street’s expectations for the second straight quarter,
+                        - paragraph [ref=e470]: 08:45 AM
+                      - link [ref=e471]:
+                        - /url: https://www.marketwatch.com/story/mcdonalds-customers-are-spending-more-per-visit-as-sales-top-expectations-again-64865bac?mod=mw_rss_topstories
+                        - img [ref=e472]
+                - generic [ref=e478]:
+                  - generic [ref=e479]:
+                    - img [ref=e480]
+                    - heading "Macro Indicators" [level=4] [ref=e482]
+                  - generic [ref=e483]:
+                    - generic [ref=e485]:
+                      - paragraph [ref=e486]: CPI
+                      - generic [ref=e487]:
+                        - img [ref=e488]
+                        - paragraph [ref=e492]: 119.0index
+                      - generic [ref=e495]: low
+                      - paragraph [ref=e496]: Consumer Price Index
+                    - generic [ref=e498]:
+                      - paragraph [ref=e499]: Unemployment
+                      - generic [ref=e500]:
+                        - img [ref=e501]
+                        - paragraph [ref=e505]: 5.20%
+                      - generic [ref=e508]: high
+                      - paragraph [ref=e509]: Unemployment Rate
+                    - generic [ref=e511]:
+                      - paragraph [ref=e512]: 10Y Treasury
+                      - generic [ref=e513]:
+                        - img [ref=e514]
+                        - paragraph [ref=e518]: 4.08%
+                      - generic [ref=e521]: moderate
+                      - paragraph [ref=e522]: 10-Year Treasury Yield
+                    - generic [ref=e524]:
+                      - paragraph [ref=e525]: 2Y Treasury
+                      - generic [ref=e526]:
+                        - img [ref=e527]
+                        - paragraph [ref=e531]: 4.89%
+                      - generic [ref=e534]: moderate
+                      - paragraph [ref=e535]: 2-Year Treasury Yield
+        - generic [ref=e537]:
+          - generic [ref=e538]:
+            - generic [ref=e539]:
+              - generic [ref=e541]: DEV DEBUG
+              - generic [ref=e543]: 2 issues
+            - paragraph [ref=e544]: "[HTTP ERR] GET http://localhost:5173/api/recommendations/daily?limit=3"
+          - generic [ref=e545]:
+            - button "Clear" [ref=e546] [cursor=pointer]:
+              - generic [ref=e548]: Clear
+            - button "Details" [ref=e549] [cursor=pointer]:
+              - generic [ref=e551]: Details
+  - generic [ref=e552]:
+    - img [ref=e554]
+    - button "Open Tanstack query devtools" [ref=e622] [cursor=pointer]:
+      - img [ref=e623]
+  - generic [ref=e691]:
+    - img [ref=e693]
+    - button "Open Tanstack query devtools" [ref=e761] [cursor=pointer]:
+      - img [ref=e762]
+```

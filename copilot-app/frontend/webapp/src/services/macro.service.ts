@@ -6,9 +6,10 @@ export const macroService = {
   /**
    * Get macro time series data
    */
-  getSeries: async (seriesIds?: string, limit = 200) => {
+  getSeries: async (seriesIds?: string, limit = 200, format?: 'array' | 'map') => {
     const params: Record<string, string> = { limit: String(limit) }
     if (seriesIds) params.series_ids = seriesIds
+    if (format) params.format_resp = format  // Use format_resp parameter for map response
     return apiGet<MacroSeries[]>('/macro/series', params)
   },
 
@@ -30,9 +31,7 @@ export const macroService = {
 /**
  * Fetch macro series data (alias for use in components)
  */
-export const fetchMacroSeries = async (seriesIds: string[], start?: string) => {
+export const fetchMacroSeries = async (seriesIds: string[], start?: string, format?: 'array' | 'map') => {
   const seriesIdsParam = seriesIds.join(',')
-  const params: Record<string, string> = { series_ids: seriesIdsParam }
-  if (start) params.start = start
-  return macroService.getSeries(seriesIdsParam)
+  return macroService.getSeries(seriesIdsParam, 200, format)
 }

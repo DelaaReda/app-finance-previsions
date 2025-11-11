@@ -252,11 +252,9 @@ pip install -r requirements-api-v2.txt
 
 **Port déjà utilisé**
 ```bash
-# Trouver processus
-lsof -ti:8050
-
-# Tuer processus
-kill -9 $(lsof -ti:8050)
+# Utiliser uniquement le script global (libère automatiquement 8050/5173)
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh stop
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh start
 ```
 
 **Tests échouent**

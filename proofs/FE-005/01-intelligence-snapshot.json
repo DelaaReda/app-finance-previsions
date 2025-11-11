@@ -1,0 +1,27 @@
+{
+  "insights": {
+    "summary": "Market tone remains bearish; awaiting stronger directional signals.",
+    "market_regime": {
+      "current": "NORMAL",
+      "explanation": "Bullish pressure +0.00 vs bearish +0.00. Net skew +0.00 (0% confidence)."
+    },
+    "opportunities": [],
+    "risks": []
+  },
+  "data_freshness": {
+    "forecasts_age": "unknown",
+    "macro_age": "4d ago",
+    "news_age": "4d ago"
+  },
+  "timestamp": "2025-11-09T22:44:47.939963+00:00",
+  "drivers": [
+    "AI & Tech",
+    "Fed & Rates",
+    "Consumer"
+  ],
+  "sources": {
+    "forecasts": false,
+    "brief": true,
+    "news": true
+  }
+}

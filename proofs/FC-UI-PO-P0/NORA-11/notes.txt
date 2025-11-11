@@ -1,0 +1,1 @@
+Typecheck known issue: MiniLineChart.tsx TS1005 unrelated to this change; app running OK via status script.

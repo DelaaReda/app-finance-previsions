@@ -1,6 +1,8 @@
 """
-Client LLM générique (OpenAI-compatible).
-Supporte OpenAI, Anthropic, local (Ollama), etc.
+Client LLM générique avec priorités:
+- OpenAI si OPENAI_API_KEY configurée
+- Sinon G4F (no‑auth) avec retry et modèles fallback
+- Sinon fallback textuel déterministe
 """
 import os
 from typing import List, Dict, Any, Optional
@@ -10,21 +12,31 @@ from pathlib import Path
 # Add src to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Ensure .env is loaded before accessing environment variables
+try:
+    from core.env_loader import ensure_env_loaded, get_env
+    ensure_env_loaded()
+except ImportError:
+    # Fallback if env_loader not available
+    def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
+        return os.getenv(name, default)
+
 def get_llm_client():
-    """Retourne client configuré selon env."""
-    # Check if openai is available
+    """Retourne client LLM configuré ou None (OpenAI ou G4F)."""
+    # 1) OpenAI
     try:
-        import openai
-        api_key = os.getenv("OPENAI_API_KEY")
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        
+        import openai  # type: ignore
+        api_key = get_env("OPENAI_API_KEY")
+        base_url = get_env("OPENAI_BASE_URL", "https://api.openai.com/v1")
         if api_key:
-            return openai.OpenAI(api_key=api_key, base_url=base_url)
-        else:
-            # Return None if no API key is set
-            return None
-    except ImportError:
-        # Return None if openai is not available
+            return ("openai", openai.OpenAI(api_key=api_key, base_url=base_url))
+    except Exception:
+        pass
+    # 2) G4F (no‑auth)
+    try:
+        from g4f.client import Client as G4FClient  # type: ignore
+        return ("g4f", G4FClient())
+    except Exception:
         return None
 
 
@@ -78,71 +90,73 @@ Question: {question}
 Réponse (avec citations [1], [2], etc.):"""
     
     # Try to use LLM if available
-    client = get_llm_client()
-    
-    if client is not None:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3
-            )
-            
-            answer = response.choices[0].message.content
-            tokens = response.usage.total_tokens if response.usage else 0
-            
-            # Extract citations (numbers between [])
-            import re
-            cited_indices = set(int(m.group(1)) - 1 for m in re.finditer(r'\[(\d+)\]', answer))
-            
-            citations = [
-                {
-                    "index": i + 1,
-                    "type": context_chunks[i]["meta"]["type"],
-                    "url": context_chunks[i]["meta"].get("url", ""),
-                    "date": context_chunks[i]["meta"].get("date", ""),
-                    "excerpt": context_chunks[i]["text"][:200] + "..."
+    client_info = get_llm_client()
+    if client_info is not None:
+        kind, client = client_info
+        # Prepare messages once
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        # Prefer provided model; define sensible fallbacks for g4f
+        fallbacks = [
+            model,
+            "gpt-4o-mini",
+            os.getenv("G4F_DEFAULT_MODEL", "deepseek-ai/DeepSeek-R1-0528"),
+        ]
+        last_err = None
+        for m in [m for m in fallbacks if m]:
+            try:
+                response = client.chat.completions.create(
+                    model=m,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                )
+                answer = getattr(response.choices[0].message, "content", "")
+                tokens = getattr(getattr(response, "usage", None), "total_tokens", 0) or 0
+                # Treat empty/near-empty answers as failure and try next model
+                if not (answer or "").strip():
+                    raise RuntimeError(f"empty response content for model {m}")
+                # Extract citations (numbers between [])
+                import re
+                cited_indices = set(int(g.group(1)) - 1 for g in re.finditer(r"\[(\d+)\]", answer or ""))
+                citations = [
+                    {
+                        "index": i + 1,
+                        "type": context_chunks[i]["meta"].get("type", "context"),
+                        "url": context_chunks[i]["meta"].get("url", ""),
+                        "date": context_chunks[i]["meta"].get("date", ""),
+                        "excerpt": (context_chunks[i]["text"] or "")[:200] + "...",
+                    }
+                    for i in cited_indices
+                    if 0 <= i < len(context_chunks)
+                ]
+                return {
+                    "answer": (answer or "").strip(),
+                    "citations": citations,
+                    "model": m,
+                    "tokens": tokens,
                 }
-                for i in cited_indices
-                if i < len(context_chunks)
-            ]
-            
-            return {
-                "answer": answer,
-                "citations": citations,
-                "model": model,
-                "tokens": tokens
-            }
-        
-        except Exception as e:
-            # Fallback: heuristic summary
-            fallback_answer = f"⚠️ LLM indisponible. Voici un résumé des sources:\n\n"
-            for i, chunk in enumerate(context_chunks[:5]):
-                fallback_answer += f"[{i+1}] {chunk['text'][:150]}...\n"
-            
-            return {
-                "answer": fallback_answer,
-                "citations": [],
-                "model": "fallback",
-                "tokens": 0,
-                "error": str(e)
-            }
-    else:
-        # Fallback response when no LLM client is available
-        fallback_answer = f"ℹ️ LLM non configuré (pas de clé API). Voici les sources trouvées:\n\n"
-        for i, chunk in enumerate(context_chunks[:10]):
-            source_info = chunk['meta'].get('url', 'N/A')
-            date_info = chunk['meta'].get('date', 'N/A')
-            fallback_answer += f"[{i+1}] {chunk['text'][:150]}... (Source: {source_info}, Date: {date_info})\n"
-        
-        return {
-            "answer": fallback_answer,
-            "citations": [],
-            "model": "unconfigured",
-            "tokens": 0,
-            "warning": "LLM non configuré - utilisez OPENAI_API_KEY"
-        }
+            except Exception as e:  # try next model
+                last_err = e
+                continue
+        # All providers/models failed → fallback summary
+        fb = "⚠️ LLM indisponible. Résumé des sources:\n\n"
+        for i, chunk in enumerate(context_chunks[:5]):
+            fb += f"[{i+1}] {chunk.get('text','')[:150]}...\n"
+        return {"answer": fb, "citations": [], "model": "fallback", "tokens": 0, "error": str(last_err or "llm_failed")}
+
+    # No client available → unconfigured fallback
+    fallback_answer = "ℹ️ LLM non configuré (OpenAI/G4F indisponibles).\n\n"
+    for i, chunk in enumerate(context_chunks[:8]):
+        source_info = chunk['meta'].get('url', 'N/A')
+        date_info = chunk['meta'].get('date', 'N/A')
+        fallback_answer += f"[{i+1}] {chunk.get('text','')[:150]}... (Source: {source_info}, Date: {date_info})\n"
+    return {
+        "answer": fallback_answer,
+        "citations": [],
+        "model": "unconfigured",
+        "tokens": 0,
+        "warning": "LLM non configuré (ni OpenAI ni G4F)",
+    }

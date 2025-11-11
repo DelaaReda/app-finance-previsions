@@ -1,0 +1,256 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - paragraph [ref=e8]: Finance Copilot
+          - paragraph [ref=e9]: Systèmes d'intelligence de marché
+        - generic [ref=e10]:
+          - generic [ref=e14]: Healthy
+          - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+            - img [ref=e17]
+    - navigation [ref=e20]:
+      - generic [ref=e24]:
+        - generic [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - paragraph [ref=e33]: dashboard
+        - generic [ref=e35] [cursor=pointer]:
+          - img [ref=e37]
+          - paragraph [ref=e39]: brief
+        - generic [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+          - paragraph [ref=e45]: macro
+        - generic [ref=e47] [cursor=pointer]:
+          - img [ref=e49]
+          - paragraph [ref=e52]: stocks
+        - generic [ref=e54] [cursor=pointer]:
+          - img [ref=e56]
+          - paragraph [ref=e58]: news
+        - generic [ref=e60] [cursor=pointer]:
+          - img [ref=e62]
+          - paragraph [ref=e65]: copilot
+        - generic [ref=e67] [cursor=pointer]:
+          - img [ref=e69]
+          - paragraph [ref=e77]: forecasts
+        - generic [ref=e79] [cursor=pointer]:
+          - img [ref=e81]
+          - paragraph [ref=e84]: backtests
+        - generic [ref=e86] [cursor=pointer]:
+          - img [ref=e88]
+          - paragraph [ref=e93]: compare
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e97]
+          - paragraph [ref=e100]: judge
+    - main [ref=e101]:
+      - generic [ref=e102]:
+        - generic [ref=e104]:
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]:
+                  - img [ref=e111]
+                  - heading "Adaptive Dashboard" [level=2] [ref=e113]
+                - paragraph [ref=e114]: Intelligent layout that adapts to market conditions in real-time
+              - generic [ref=e115]:
+                - generic [ref=e117]: Live data stream
+                - generic [ref=e118]:
+                  - generic [ref=e121] [cursor=pointer]:
+                    - paragraph [ref=e122]: 🚀
+                    - paragraph [ref=e123]: RISK ON
+                    - img [ref=e125]
+                  - generic [ref=e128]:
+                    - button "Auto" [ref=e129] [cursor=pointer]:
+                      - generic [ref=e130]:
+                        - img [ref=e132]
+                        - paragraph [ref=e137]: Auto
+                    - button "Refresh" [ref=e138] [cursor=pointer]:
+                      - generic [ref=e139]:
+                        - img [ref=e141]
+                        - paragraph [ref=e145]: Refresh
+            - alert [ref=e146]:
+              - generic [ref=e147]:
+                - img [ref=e149]
+                - paragraph [ref=e154]:
+                  - strong [ref=e155]: "Adaptive Mode Active:"
+                  - text: Dashboard layout automatically adjusts based on detected market regime. Switch to Manual mode to lock the current layout.
+            - generic [ref=e156]:
+              - generic [ref=e157]:
+                - generic [ref=e158]:
+                  - img [ref=e160]
+                  - paragraph [ref=e164]: Forecasts online
+                - paragraph [ref=e166]: "0"
+                - paragraph [ref=e168]: 0 tickers tracked
+              - generic [ref=e169]:
+                - generic [ref=e170]:
+                  - img [ref=e172]
+                  - paragraph [ref=e175]: High-confidence
+                - paragraph [ref=e177]: 0%
+                - paragraph [ref=e179]: 0 signals
+              - generic [ref=e180]:
+                - generic [ref=e181]:
+                  - img [ref=e183]
+                  - paragraph [ref=e185]: Fresh news
+                - paragraph [ref=e187]: "0"
+                - paragraph [ref=e189]: Last 60 min
+              - generic [ref=e190]:
+                - generic [ref=e191]:
+                  - img [ref=e193]
+                  - paragraph [ref=e195]: Backtest hit rate
+                - paragraph [ref=e197]: 0%
+                - paragraph [ref=e199]: Live monitor
+          - generic [ref=e202]:
+            - generic [ref=e204]: forecasts
+            - generic [ref=e206]: news
+            - generic [ref=e208]: brief_weekly
+            - generic [ref=e210]: backtests
+          - generic [ref=e211]:
+            - generic [ref=e212]:
+              - paragraph [ref=e213]: Adaptive layout
+              - paragraph [ref=e214]: Widgets reorder automatically based on market regime confidence
+            - generic [ref=e215]:
+              - generic [ref=e217]:
+                - alert [ref=e219]:
+                  - generic [ref=e220]:
+                    - img [ref=e222]
+                    - paragraph [ref=e227]: Widget "opportunities" coming soon
+                - alert "No Recommendations Available" [ref=e230]:
+                  - generic [ref=e231]:
+                    - img [ref=e233]
+                    - generic [ref=e235]:
+                      - generic [ref=e237]: No Recommendations Available
+                      - paragraph [ref=e239]: No recommendations for today. The system is analyzing market conditions.
+                - alert "Loading Market Intelligence..." [ref=e241]:
+                  - generic [ref=e242]:
+                    - img [ref=e244]
+                    - generic [ref=e249]:
+                      - generic [ref=e251]: Loading Market Intelligence...
+                      - paragraph [ref=e253]: Fetching latest market data and insights...
+              - separator [ref=e254]
+              - generic [ref=e256]:
+                - generic [ref=e258]:
+                  - generic [ref=e259]:
+                    - generic [ref=e260]:
+                      - heading "Prévisions (cartes)" [level=4] [ref=e261]
+                      - paragraph [ref=e262]: "Classement par score et confiance • Horizon: short"
+                    - generic [ref=e263]:
+                      - radiogroup [ref=e264]:
+                        - generic [ref=e266]:
+                          - radio "Court" [checked]
+                          - generic [ref=e267] [cursor=pointer]: Court
+                        - generic [ref=e268]:
+                          - radio "Moyen"
+                          - generic [ref=e269] [cursor=pointer]: Moyen
+                        - generic [ref=e270]:
+                          - radio "Long"
+                          - generic [ref=e271] [cursor=pointer]: Long
+                      - button "Exporter CSV" [ref=e272] [cursor=pointer]:
+                        - generic [ref=e274]: Exporter CSV
+                      - button "Rafraîchir" [ref=e275] [cursor=pointer]:
+                        - generic [ref=e277]: Rafraîchir
+                  - alert [ref=e278]:
+                    - generic [ref=e281]: Aucune prévision pour l’univers sélectionné.
+                - generic [ref=e284]:
+                  - generic [ref=e285]:
+                    - heading "Top Stocks" [level=4] [ref=e286]
+                    - button [disabled] [ref=e287]:
+                      - img [ref=e291]
+                  - table [ref=e294]:
+                    - rowgroup [ref=e295]:
+                      - row [ref=e296]:
+                        - cell [ref=e297]
+                        - cell [ref=e299]
+                        - cell [ref=e301]
+                        - cell [ref=e303]
+                        - cell [ref=e305]
+                      - row [ref=e307]:
+                        - cell [ref=e308]
+                        - cell [ref=e310]
+                        - cell [ref=e312]
+                        - cell [ref=e314]
+                        - cell [ref=e316]
+                      - row [ref=e318]:
+                        - cell [ref=e319]
+                        - cell [ref=e321]
+                        - cell [ref=e323]
+                        - cell [ref=e325]
+                        - cell [ref=e327]
+                      - row [ref=e329]:
+                        - cell [ref=e330]
+                        - cell [ref=e332]
+                        - cell [ref=e334]
+                        - cell [ref=e336]
+                        - cell [ref=e338]
+                      - row [ref=e340]:
+                        - cell [ref=e341]
+                        - cell [ref=e343]
+                        - cell [ref=e345]
+                        - cell [ref=e347]
+                        - cell [ref=e349]
+                - alert [ref=e352]:
+                  - generic [ref=e353]:
+                    - img [ref=e355]
+                    - paragraph [ref=e360]: Widget "performance" coming soon
+              - separator [ref=e361]
+              - generic [ref=e363]:
+                - generic [ref=e367]:
+                  - generic [ref=e368]:
+                    - img [ref=e370]
+                    - heading "Market News" [level=4] [ref=e372]
+                  - button [disabled] [ref=e373]:
+                    - img [ref=e377]
+                - generic [ref=e395]:
+                  - generic [ref=e396]:
+                    - img [ref=e397]
+                    - heading "Macro Indicators" [level=4] [ref=e399]
+                  - generic [ref=e400]:
+                    - generic [ref=e402]:
+                      - paragraph [ref=e403]: CPI
+                      - generic [ref=e404]:
+                        - img [ref=e405]
+                        - paragraph [ref=e409]: 119.0index
+                      - generic [ref=e412]: low
+                      - paragraph [ref=e413]: Consumer Price Index
+                    - generic [ref=e415]:
+                      - paragraph [ref=e416]: Unemployment
+                      - generic [ref=e417]:
+                        - img [ref=e418]
+                        - paragraph [ref=e422]: 5.20%
+                      - generic [ref=e425]: high
+                      - paragraph [ref=e426]: Unemployment Rate
+                    - generic [ref=e428]:
+                      - paragraph [ref=e429]: 10Y Treasury
+                      - generic [ref=e430]:
+                        - img [ref=e431]
+                        - paragraph [ref=e435]: 4.08%
+                      - generic [ref=e438]: moderate
+                      - paragraph [ref=e439]: 10-Year Treasury Yield
+                    - generic [ref=e441]:
+                      - paragraph [ref=e442]: 2Y Treasury
+                      - generic [ref=e443]:
+                        - img [ref=e444]
+                        - paragraph [ref=e448]: 4.89%
+                      - generic [ref=e451]: moderate
+                      - paragraph [ref=e452]: 2-Year Treasury Yield
+        - generic [ref=e454]:
+          - generic [ref=e455]:
+            - generic [ref=e456]:
+              - generic [ref=e458]: DEV DEBUG
+              - generic [ref=e460]: 2 issues
+            - paragraph [ref=e461]: "[HTTP ERR] GET http://localhost:5173/api/recommendations/daily?limit=3"
+          - generic [ref=e462]:
+            - button "Clear" [ref=e463] [cursor=pointer]:
+              - generic [ref=e465]: Clear
+            - button "Details" [ref=e466] [cursor=pointer]:
+              - generic [ref=e468]: Details
+  - generic [ref=e469]:
+    - img [ref=e471]
+    - button "Open Tanstack query devtools" [ref=e539] [cursor=pointer]:
+      - img [ref=e540]
+  - generic [ref=e608]:
+    - img [ref=e610]
+    - button "Open Tanstack query devtools" [ref=e678] [cursor=pointer]:
+      - img [ref=e679]
+```

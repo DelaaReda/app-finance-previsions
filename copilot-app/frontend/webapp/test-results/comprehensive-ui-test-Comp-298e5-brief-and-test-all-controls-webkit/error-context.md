@@ -1,0 +1,235 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]:
+          - paragraph [ref=e8]: Finance Copilot
+          - paragraph [ref=e9]: Systèmes d'intelligence de marché
+        - generic [ref=e10]:
+          - generic [ref=e14]: Healthy
+          - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+            - img [ref=e17]
+    - navigation [ref=e20]:
+      - generic [ref=e24]:
+        - generic [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - paragraph [ref=e33]: dashboard
+        - generic [ref=e35] [cursor=pointer]:
+          - img [ref=e37]
+          - paragraph [ref=e39]: brief
+        - generic [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+          - paragraph [ref=e45]: macro
+        - generic [ref=e47] [cursor=pointer]:
+          - img [ref=e49]
+          - paragraph [ref=e52]: stocks
+        - generic [ref=e54] [cursor=pointer]:
+          - img [ref=e56]
+          - paragraph [ref=e58]: news
+        - generic [ref=e60] [cursor=pointer]:
+          - img [ref=e62]
+          - paragraph [ref=e65]: copilot
+        - generic [ref=e67] [cursor=pointer]:
+          - img [ref=e69]
+          - paragraph [ref=e77]: forecasts
+        - generic [ref=e79] [cursor=pointer]:
+          - img [ref=e81]
+          - paragraph [ref=e84]: backtests
+        - generic [ref=e86] [cursor=pointer]:
+          - img [ref=e88]
+          - paragraph [ref=e93]: compare
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e97]
+          - paragraph [ref=e100]: judge
+    - main [ref=e101]:
+      - generic [ref=e102]:
+        - generic [ref=e103]:
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - img [ref=e108]
+              - generic [ref=e111]:
+                - generic [ref=e112]:
+                  - heading "Market Brief" [level=2] [ref=e113]
+                  - generic [ref=e115]: Live
+                - paragraph [ref=e116]: Brief quotidien avec top signaux et risques
+            - generic [ref=e117]:
+              - generic [ref=e118]:
+                - generic [ref=e119]:
+                  - paragraph [ref=e120]: Signaux
+                  - paragraph [ref=e121]: "3"
+                - generic [ref=e122]:
+                  - paragraph [ref=e123]: Risques
+                  - paragraph [ref=e124]: "3"
+              - button [ref=e125] [cursor=pointer]:
+                - img [ref=e127]
+              - generic [ref=e130]:
+                - generic [ref=e133]:
+                  - img [ref=e134]
+                  - generic [ref=e136]:
+                    - paragraph [ref=e137]: il y a 5 jours
+                    - paragraph [ref=e138]: Périmées • 6914 min
+                - radiogroup [ref=e139]:
+                  - generic [ref=e141]:
+                    - radio "Quotidien" [checked]
+                    - generic [ref=e142] [cursor=pointer]: Quotidien
+                  - generic [ref=e143]:
+                    - radio "Hebdomadaire"
+                    - generic [ref=e144] [cursor=pointer]: Hebdomadaire
+                - generic [ref=e145]:
+                  - generic [ref=e146]: Univers
+                  - generic [ref=e147]:
+                    - textbox "Univers" [ref=e148] [cursor=pointer]:
+                      - /placeholder: Sélectionner
+                      - text: SPY,QQQ (Défaut)
+                    - generic:
+                      - img
+          - generic [ref=e149]:
+            - generic [ref=e151]:
+              - generic [ref=e152]:
+                - generic [ref=e153]:
+                  - heading "Market Brief Journalier" [level=3] [ref=e154]
+                  - paragraph [ref=e155]: mercredi 5 novembre 2025 à 00:34
+                - generic [ref=e157]: AAPL, MSFT, NVDA, SPY
+              - paragraph [ref=e158]: "Analyse générée pour l'univers: AAPL, MSFT, NVDA, SPY"
+            - generic [ref=e159]:
+              - generic [ref=e160]:
+                - heading "Top 3 Signaux" [level=3] [ref=e162]
+                - generic [ref=e164]:
+                  - generic [ref=e165]:
+                    - generic [ref=e166]:
+                      - generic [ref=e167]: "#1"
+                      - generic [ref=e168]: AAPL
+                      - generic [ref=e169]: 82/100
+                    - paragraph [ref=e170]: Signal composite
+                    - generic [ref=e171]:
+                      - generic [ref=e172]:
+                        - text: "Macro:"
+                        - strong [ref=e173]: 50/100
+                      - generic [ref=e174]:
+                        - text: "Technique:"
+                        - strong [ref=e175]: 50/100
+                      - generic [ref=e176]:
+                        - text: "News:"
+                        - strong [ref=e177]: 50/100
+                    - generic [ref=e179]: "Forces dominantes: Macro (50/100)"
+                  - generic [ref=e180]:
+                    - generic [ref=e181]:
+                      - generic [ref=e182]: "#2"
+                      - generic [ref=e183]: NVDA
+                      - generic [ref=e184]: 81/100
+                    - paragraph [ref=e185]: Signal composite
+                    - generic [ref=e186]:
+                      - generic [ref=e187]:
+                        - text: "Macro:"
+                        - strong [ref=e188]: 50/100
+                      - generic [ref=e189]:
+                        - text: "Technique:"
+                        - strong [ref=e190]: 50/100
+                      - generic [ref=e191]:
+                        - text: "News:"
+                        - strong [ref=e192]: 50/100
+                    - generic [ref=e194]: "Forces dominantes: Macro (50/100)"
+                  - generic [ref=e195]:
+                    - generic [ref=e196]:
+                      - generic [ref=e197]: "#3"
+                      - generic [ref=e198]: SPY
+                      - generic [ref=e199]: 80/100
+                    - paragraph [ref=e200]: Signal composite
+                    - generic [ref=e201]:
+                      - generic [ref=e202]:
+                        - text: "Macro:"
+                        - strong [ref=e203]: 50/100
+                      - generic [ref=e204]:
+                        - text: "Technique:"
+                        - strong [ref=e205]: 50/100
+                      - generic [ref=e206]:
+                        - text: "News:"
+                        - strong [ref=e207]: 50/100
+                    - generic [ref=e209]: "Forces dominantes: Macro (50/100)"
+              - generic [ref=e210]:
+                - heading "Top 3 Risques" [level=3] [ref=e212]
+                - generic [ref=e214]:
+                  - generic [ref=e215]:
+                    - generic [ref=e216]:
+                      - generic [ref=e217]: "#1"
+                      - generic [ref=e218]: ⚠️
+                      - generic [ref=e219]: Critique
+                      - generic [ref=e220]: 22/100
+                    - heading "MSFT" [level=4] [ref=e221]
+                    - paragraph [ref=e222]: Risk composite
+                    - generic [ref=e223]:
+                      - generic [ref=e224]:
+                        - text: "Macro:"
+                        - strong [ref=e225]: 50/100
+                      - generic [ref=e226]:
+                        - text: "Technique:"
+                        - strong [ref=e227]: 50/100
+                      - generic [ref=e228]:
+                        - text: "News:"
+                        - strong [ref=e229]: 50/100
+                    - generic [ref=e231]: "Faiblesse principale: Macro (50/100)"
+                  - generic [ref=e232]:
+                    - generic [ref=e233]:
+                      - generic [ref=e234]: "#2"
+                      - generic [ref=e235]: ⚠️
+                      - generic [ref=e236]: Critique
+                      - generic [ref=e237]: 28/100
+                    - heading "SPY" [level=4] [ref=e238]
+                    - paragraph [ref=e239]: Risk composite
+                    - generic [ref=e240]:
+                      - generic [ref=e241]:
+                        - text: "Macro:"
+                        - strong [ref=e242]: 50/100
+                      - generic [ref=e243]:
+                        - text: "Technique:"
+                        - strong [ref=e244]: 50/100
+                      - generic [ref=e245]:
+                        - text: "News:"
+                        - strong [ref=e246]: 50/100
+                    - generic [ref=e248]: "Faiblesse principale: Macro (50/100)"
+                  - generic [ref=e249]:
+                    - generic [ref=e250]:
+                      - generic [ref=e251]: "#3"
+                      - generic [ref=e252]: ⚠️
+                      - generic [ref=e253]: Critique
+                      - generic [ref=e254]: 29/100
+                    - heading "MSFT" [level=4] [ref=e255]
+                    - paragraph [ref=e256]: Risk composite
+                    - generic [ref=e257]:
+                      - generic [ref=e258]:
+                        - text: "Macro:"
+                        - strong [ref=e259]: 50/100
+                      - generic [ref=e260]:
+                        - text: "Technique:"
+                        - strong [ref=e261]: 50/100
+                      - generic [ref=e262]:
+                        - text: "News:"
+                        - strong [ref=e263]: 50/100
+                    - generic [ref=e265]: "Faiblesse principale: Macro (50/100)"
+            - generic [ref=e267]:
+              - heading "📚 Sources" [level=4] [ref=e268]
+              - generic [ref=e271]: "N/A: N/A"
+            - paragraph [ref=e272]: "Généré le 11/5/2025, 12:34:50 AM • Période: daily"
+        - generic [ref=e274]:
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - generic [ref=e278]: DEV DEBUG
+              - generic [ref=e280]: idle
+            - paragraph [ref=e281]: No errors captured yet
+          - generic [ref=e282]:
+            - button "Clear" [ref=e283] [cursor=pointer]:
+              - generic [ref=e285]: Clear
+            - button "Details" [ref=e286] [cursor=pointer]:
+              - generic [ref=e288]: Details
+  - generic [ref=e289]:
+    - img [ref=e291]
+    - button "Open Tanstack query devtools" [ref=e359] [cursor=pointer]:
+      - img [ref=e360]
+  - generic [ref=e428]:
+    - img [ref=e430]
+    - button "Open Tanstack query devtools" [ref=e498] [cursor=pointer]:
+      - img [ref=e499]
+```

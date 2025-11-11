@@ -5,28 +5,13 @@ import Header from './Header'
 
 export default function MainLayout({ children }: PropsWithChildren) {
   return (
-    <div style={styles.container}>
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}>
       <Header />
-      <main style={styles.main}>
-        <div style={styles.content}>
+      <main className="py-6 px-6">
+        <div className="container mx-auto">
           {children}
         </div>
       </main>
     </div>
   )
-}
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    backgroundColor: '#0a0a0a',
-    color: '#e0e0e0',
-  } as React.CSSProperties,
-  main: {
-    padding: '24px',
-  } as React.CSSProperties,
-  content: {
-    maxWidth: 1400,
-    margin: '0 auto',
-  } as React.CSSProperties,
 }

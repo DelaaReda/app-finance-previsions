@@ -3,26 +3,85 @@
 Script de lancement de l'API FastAPI.
 Usage: python run_api.py
 """
+import errno
 import sys
+import os
 from pathlib import Path
 
-# Ajouter src au path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Load .env file if present (copilot-app/.env)
+try:
+    from dotenv import load_dotenv
+    backend_dir = Path(__file__).resolve().parent
+    project_root = backend_dir.parent  # copilot-app/
+    # Try to load from copilot-app/.env first (project root)
+    env_file = project_root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file, override=False)
+        print(f"✅ Loaded .env from: {env_file}")
+    else:
+        # Fallback to backend/.env
+        env_file = backend_dir / ".env"
+        if env_file.exists():
+            load_dotenv(env_file, override=False)
+            print(f"✅ Loaded .env from: {env_file}")
+        else:
+            # Try current directory
+            load_dotenv(override=False)
+except ImportError:
+    pass  # dotenv not available, use system env vars
 
-if __name__ == "__main__":
+# Ajouter le répertoire backend racine et src au path pour permettre les imports corrects
+backend_dir = Path(__file__).resolve().parent
+project_root = backend_dir.parent
+src_path = backend_dir / "src"
+
+for path in [project_root, backend_dir, src_path]:
+    path_str = str(path)
+    if path_str in sys.path:
+        sys.path.remove(path_str)
+
+for path in reversed([project_root, backend_dir, src_path]):
+    sys.path.insert(0, str(path))
+
+# Définir explicitement PYTHONPATH pour que tous les imports fonctionnent correctement
+import os
+os.environ['PYTHONPATH'] = ":".join(
+    [
+        str(backend_dir),
+        str(src_path),
+        str(project_root),
+    ]
+)
+
+def _run_uvicorn(reload_enabled: bool = True) -> None:
     import uvicorn
-    
-    print("🚀 Lancement de l'API Finance Copilot...")
-    print("📍 URL: http://127.0.0.1:8050")
-    print("📖 Docs: http://127.0.0.1:8050/docs")
-    print()
-    
-    # Utiliser l'approche avec import string pour éviter les problèmes de reload
+
+    # Use the stable app path to ensure router registration from api/routes/*
     uvicorn.run(
         "api.main:create_app",
         host="127.0.0.1",
         port=8050,
-        reload=True,
+        reload=reload_enabled,
         factory=True,
-        log_level="info"
+        log_level="info",
     )
+
+
+if __name__ == "__main__":
+    print("🚀 Lancement de l'API Finance Copilot...")
+    print("📍 URL: http://127.0.0.1:8050")
+    print("📖 Docs: http://127.0.0.1:8050/docs")
+    print()
+
+    reload_env = os.getenv("FINANCE_COPILOT_RELOAD", "1").strip().lower()
+    reload_enabled = reload_env not in {"0", "false", "no"}
+
+    try:
+        _run_uvicorn(reload_enabled=reload_enabled)
+    except (PermissionError, OSError) as exc:
+        err_no = getattr(exc, "errno", None)
+        if reload_enabled and err_no in {errno.EPERM, 1}:
+            print("⚠️  Reload watcher non autorisé sur cet environnement. Redémarrage sans reload…")
+            _run_uvicorn(reload_enabled=False)
+        else:
+            raise

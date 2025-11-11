@@ -41,11 +41,20 @@ HTTP_TIMEOUT = (8, 20)
 # Finnhub helper
 # ------------------------------------------------------------------------------
 # Load Finnhub API key: prefer environment, fall back to local secrets file for dev
+# Ensure .env is loaded first
+try:
+    from core.env_loader import ensure_env_loaded, get_env
+    ensure_env_loaded()
+except ImportError:
+    # Fallback if env_loader not available
+    def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
+        return os.getenv(name, default)
+
 try:
     from src.secrets_local import get_key  # type: ignore
     _FINNHUB_KEY = get_key("FINNHUB_API_KEY") or get_key("FINNHUB_KEY") or None
 except Exception:
-    _FINNHUB_KEY = os.getenv("FINNHUB_API_KEY") or os.getenv("FINNHUB_KEY") or None
+    _FINNHUB_KEY = get_env("FINNHUB_API_KEY") or get_env("FINNHUB_KEY") or None
 
 def _load_finnhub_key() -> str:
     """Return the Finnhub API key from env or local secrets fallback."""

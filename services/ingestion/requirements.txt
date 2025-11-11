@@ -1,0 +1,7 @@
+requests>=2.31.0
+yfinance>=0.2.18
+pandas>=2.0.0
+redis>=5.0.0
+schedule>=1.2.0
+feedparser>=6.0.0
+python-dotenv>=1.0.0

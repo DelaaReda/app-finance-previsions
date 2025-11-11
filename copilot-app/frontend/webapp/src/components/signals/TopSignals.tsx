@@ -1,39 +1,99 @@
 // Composant pour afficher les Top 3 Signaux
 
-import { Signal } from '@/types/common.types'
 import Card from '@/components/common/Card'
+import { CompositeSignal } from '@/types/common.types'
+import { safeMap, safeLength } from '@/lib/safe'
+import { formatScore as formatScore100 } from '@/utils/score'
 
 type TopSignalsProps = {
-  signals: Signal[]
+  signals: CompositeSignal[]
   title?: string
+  emptyMessage?: string
 }
 
-export default function TopSignals({ signals, title = 'Top 3 Signaux' }: TopSignalsProps) {
-  const topSignals = signals.slice(0, 3)
+const getCompositeScore = (signal: CompositeSignal) =>
+  signal.composite_score ?? signal.final_score ?? signal.score
+
+const getComponentScores = (signal: CompositeSignal) => {
+  const macro = signal.components?.macro?.macro_score ?? signal.macro_score
+  const technical = signal.components?.technical?.technical_score ?? signal.technical_score
+  const news = signal.components?.news?.news_score ?? signal.news_score
+
+  return [
+    { key: 'macro', label: 'Macro', score: macro },
+    { key: 'technical', label: 'Technique', score: technical },
+    { key: 'news', label: 'News', score: news }
+  ].filter((item): item is { key: string; label: string; score: number } =>
+    item.score !== undefined && item.score !== null
+  )
+}
+
+const buildStrengthSummary = (signal: CompositeSignal) => {
+  const components = getComponentScores(signal)
+  if (safeLength(components) === 0) return undefined
+  const strongest = components.reduce((best, current) =>
+    current.score > best.score ? current : best
+  )
+  return `Forces dominantes: ${strongest.label} (${formatScore100(strongest.score)})`
+}
+
+const formatTimestamp = (timestamp?: string) => {
+  if (!timestamp) return undefined
+  const dt = new Date(timestamp)
+  if (Number.isNaN(dt.getTime())) return undefined
+  return dt.toLocaleString('fr-FR')
+}
+
+export default function TopSignals({
+  signals,
+  title = 'Top 3 Signaux',
+  emptyMessage = 'Aucun signal disponible pour le moment.'
+}: TopSignalsProps) {
+  const topSignals = signals.filter(Boolean).slice(0, 3)
 
   return (
     <Card title={title}>
       <div style={styles.container}>
-        {topSignals.map((signal, index) => (
-          <div key={index} style={styles.signalCard}>
-            <div style={styles.header}>
-              <span style={styles.rank}>#{index + 1}</span>
-              {signal.composite_score !== undefined ? (
-                <span style={styles.score}>{signal.composite_score.toFixed(0)}</span>
-              ) : (
-                <span style={styles.score}>{signal.score?.toFixed(0) || 'N/A'}</span>
-              )}
-            </div>
-            <h4 style={styles.title}>{signal.ticker}</h4>
-            <p style={styles.description}>{signal.reason || signal.description || 'Aucune raison fournie'}</p>
-            <div style={styles.footer}>
-              {signal.confidence !== undefined && (
-                <span style={styles.horizon}>Conf: {(signal.confidence * 100).toFixed(0)}%</span>
-              )}
-              <span style={styles.sources}>Score: {signal.composite_score?.toFixed(1) || signal.score?.toFixed(1) || 'N/A'}</span>
-            </div>
-          </div>
-        ))}
+        {safeLength(topSignals) === 0 ? (
+          <div style={styles.empty}>{emptyMessage}</div>
+        ) : (
+          safeMap<CompositeSignal, JSX.Element>(topSignals, (signal, index) => {
+            const compositeScore = getCompositeScore(signal)
+            const components = getComponentScores(signal)
+            const strengthSummary = buildStrengthSummary(signal)
+            const generatedAt = formatTimestamp(signal.timestamp)
+            const description = signal.reason || signal.description || strengthSummary || 'Analyse détaillée non disponible.'
+
+            return (
+              <div key={`${signal.ticker}-${index}`} style={styles.signalCard}>
+                <div style={styles.header}>
+                  <span style={styles.rank}>#{index + 1}</span>
+                  <span style={styles.ticker}>{signal.ticker}</span>
+                  {compositeScore !== undefined && (
+                    <span style={styles.scoreBadge}>{formatScore100(compositeScore)}</span>
+                  )}
+                </div>
+
+                <p style={styles.description}>{description}</p>
+
+                <div style={styles.metrics}>
+                  {safeMap<{ key: string; label: string; score: number }, JSX.Element>(components, component => (
+                    <span key={component.key} style={styles.metric}>
+                      {component.label}: <strong>{formatScore100(component.score)}</strong>
+                    </span>
+                  ))}
+                </div>
+
+                {(strengthSummary || generatedAt) && (
+                  <div style={styles.footerRow}>
+                    {strengthSummary && <span style={styles.subtle}>{strengthSummary}</span>}
+                    {generatedAt && <span style={styles.timestamp}>Maj: {generatedAt}</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
     </Card>
   )
@@ -43,62 +103,84 @@ const styles = {
   container: {
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: 16,
+    gap: 16
+  },
+  empty: {
+    padding: '16px 12px',
+    borderRadius: 6,
+    backgroundColor: '#1c1c1c',
+    border: '1px dashed #333',
+    color: '#888',
+    fontSize: 13,
+    textAlign: 'center' as const
   },
   signalCard: {
-    backgroundColor: '#222',
-    borderRadius: 6,
+    backgroundColor: '#1d262f',
+    borderRadius: 8,
     padding: 16,
-    border: '1px solid #333',
+    border: '1px solid #25394b',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 12
   },
   header: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12
   },
   rank: {
-    backgroundColor: '#333',
-    borderRadius: 4,
-    padding: '2px 8px',
+    backgroundColor: '#24313d',
+    borderRadius: 6,
+    padding: '4px 10px',
     fontSize: 12,
     fontWeight: 600,
+    color: '#8bc4ff'
   },
-  score: {
+  ticker: {
+    fontSize: 16,
+    fontWeight: 600,
+    letterSpacing: 0.5
+  },
+  scoreBadge: {
     marginLeft: 'auto',
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#4caf50',
-  },
-  title: {
-    margin: 0,
-    fontSize: 15,
-    fontWeight: 600,
-    marginBottom: 6,
+    backgroundColor: '#1f3a2b',
+    color: '#6be592',
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 600
   },
   description: {
     margin: 0,
     fontSize: 13,
-    color: '#aaa',
-    lineHeight: 1.5,
+    color: '#cfd8dc',
+    lineHeight: 1.5
   },
-  footer: {
+  metrics: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: '1px solid #333',
+    flexWrap: 'wrap' as const,
+    gap: 8
   },
-  horizon: {
+  metric: {
+    backgroundColor: '#25394b',
+    borderRadius: 999,
+    padding: '4px 10px',
     fontSize: 12,
-    padding: '2px 8px',
-    backgroundColor: '#1a3a52',
-    borderRadius: 4,
-    color: '#64b5f6',
+    color: '#b0bec5'
   },
-  sources: {
+  footerRow: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    alignItems: 'center'
+  },
+  subtle: {
+    fontSize: 12,
+    color: '#90a4ae'
+  },
+  timestamp: {
     fontSize: 11,
-    color: '#666',
-  },
+    color: '#607d8b',
+    marginLeft: 'auto'
+  }
 }

@@ -1,0 +1,103 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - button [ref=e7] [cursor=pointer]
+          - generic [ref=e9]:
+            - paragraph [ref=e10]: Finance Copilot
+            - paragraph [ref=e11]: Systèmes d'intelligence de marché
+        - button "Basculer en mode clair" [ref=e15] [cursor=pointer]:
+          - img [ref=e17]
+    - navigation [ref=e20]:
+      - generic [ref=e24]:
+        - generic [ref=e26] [cursor=pointer]:
+          - img [ref=e28]
+          - paragraph [ref=e33]: dashboard
+        - generic [ref=e35] [cursor=pointer]:
+          - img [ref=e37]
+          - paragraph [ref=e39]: brief
+        - generic [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+          - paragraph [ref=e45]: macro
+        - generic [ref=e47] [cursor=pointer]:
+          - img [ref=e49]
+          - paragraph [ref=e52]: stocks
+        - generic [ref=e54] [cursor=pointer]:
+          - img [ref=e56]
+          - paragraph [ref=e58]: news
+        - generic [ref=e60] [cursor=pointer]:
+          - img [ref=e62]
+          - paragraph [ref=e65]: copilot
+        - generic [ref=e67] [cursor=pointer]:
+          - img [ref=e69]
+          - paragraph [ref=e77]: forecasts
+        - generic [ref=e79] [cursor=pointer]:
+          - img [ref=e81]
+          - paragraph [ref=e84]: backtests
+        - generic [ref=e86] [cursor=pointer]:
+          - img [ref=e88]
+          - paragraph [ref=e93]: compare
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e97]
+          - paragraph [ref=e100]: judge
+    - main [ref=e101]:
+      - generic [ref=e102]:
+        - generic [ref=e104]:
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]:
+                  - img [ref=e111]
+                  - heading "Adaptive Dashboard" [level=2] [ref=e113]
+                - paragraph [ref=e114]: Intelligent layout that adapts to market conditions in real-time
+              - generic [ref=e115]:
+                - generic [ref=e117]: Live data stream
+                - generic [ref=e118]:
+                  - generic [ref=e121] [cursor=pointer]:
+                    - paragraph [ref=e122]: 📊
+                    - paragraph [ref=e123]: NORMAL
+                    - img [ref=e125]
+                  - generic [ref=e128]:
+                    - button "Auto" [ref=e129] [cursor=pointer]:
+                      - generic [ref=e130]:
+                        - img [ref=e132]
+                        - paragraph [ref=e137]: Auto
+                    - button "Refresh" [ref=e138] [cursor=pointer]:
+                      - generic [ref=e139]:
+                        - img [ref=e141]
+                        - paragraph [ref=e145]: Refresh
+            - alert [ref=e146]:
+              - generic [ref=e147]:
+                - img [ref=e149]
+                - paragraph [ref=e154]:
+                  - strong [ref=e155]: "Adaptive Mode Active:"
+                  - text: Dashboard layout automatically adjusts based on detected market regime. Switch to Manual mode to lock the current layout.
+          - generic [ref=e183]:
+            - generic [ref=e184]:
+              - paragraph [ref=e185]: Adaptive layout
+              - paragraph [ref=e186]: Widgets reorder automatically based on market regime confidence
+            - paragraph [ref=e188]: Loading adaptive layout...
+        - generic [ref=e190]:
+          - generic [ref=e191]:
+            - generic [ref=e192]:
+              - generic [ref=e194]: DEV DEBUG
+              - generic [ref=e196]: idle
+            - paragraph [ref=e197]: No errors captured yet
+          - generic [ref=e198]:
+            - button "Clear" [ref=e199] [cursor=pointer]:
+              - generic [ref=e201]: Clear
+            - button "Details" [ref=e202] [cursor=pointer]:
+              - generic [ref=e204]: Details
+  - generic [ref=e205]:
+    - img [ref=e207]
+    - button "Open Tanstack query devtools" [ref=e255] [cursor=pointer]:
+      - img [ref=e256]
+  - generic [ref=e304]:
+    - img [ref=e306]
+    - button "Open Tanstack query devtools" [ref=e354] [cursor=pointer]:
+      - img [ref=e355]
+```

@@ -155,11 +155,10 @@ analyse-financiere/
 
 ### Vérification des services:
 ```bash
-# Vérifier les ports
-lsof -i :8050  # Backend
-lsof -i :5173  # Frontend
+# Vérifier rapidement l'état complet (ports & endpoints)
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh status
 
-# Tester les endpoints
+# Tester manuellement les endpoints
 curl -s http://localhost:8050/api/health
 curl -s http://localhost:8050/api/brief/daily
 curl -s http://localhost:8050/api/brief/weekly
@@ -170,14 +169,14 @@ curl -s http://localhost:5173/
 
 ### Gestion des processus:
 ```bash
-# Arrêter les services
-./stop.sh
+# Arrêter les services proprement (libère aussi les ports)
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh stop
 
 # Redémarrer les services
-./start.sh
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh start
 
-# Vérifier l'état
-ps aux | grep -E "(python|node|vite)"
+# Redémarrage direct
+/Users/venom/Documents/analyse-financiere/finance-copilot.sh restart
 ```
 
 ### Logs et debugging:
@@ -209,10 +208,10 @@ tail -f copilot-app/frontend/webapp/frontend.log
 ## 🆘 PROCÉDURE DE SECOURS
 
 ### Si les services ne répondent pas:
-1. Arrêter tous les services: `./stop.sh`
-2. Vérifier que les ports sont libres: `lsof -i :8050` et `lsof -i :5173`
-3. Redémarrer les services: `./start.sh`
-4. Vérifier les logs: `tail -f api.log` et `tail -f copilot-app/frontend/webapp/frontend.log`
+1. Arrêter tous les services: `./finance-copilot.sh stop`
+2. Redémarrer proprement (le script gère les ports): `./finance-copilot.sh start`
+3. Vérifier les logs: `tail -f api.log` et `tail -f copilot-app/frontend/webapp/frontend.log`
+4. Utiliser `./finance-copilot.sh status` pour confirmer que tout est reparti
 
 ### Si des erreurs persistent:
 1. Vérifier les dépendances: `pip list` et `npm list`

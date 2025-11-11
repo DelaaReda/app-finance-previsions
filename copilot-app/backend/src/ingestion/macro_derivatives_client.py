@@ -134,11 +134,20 @@ def _diff(a: Optional[float], b: Optional[float]) -> Optional[float]:
 # FRED ENDPOINTS
 # ==============
 FRED_API = "https://api.stlouisfed.org/fred"
+# Ensure .env is loaded first
+try:
+    from core.env_loader import ensure_env_loaded, get_env
+    ensure_env_loaded()
+except ImportError:
+    # Fallback if env_loader not available
+    def get_env(name: str, default: str = "") -> str:
+        return os.getenv(name, default)
+
 try:
     from src.secrets_local import get_key  # type: ignore
     FRED_KEY = (get_key("FRED_API_KEY") or "").strip() or None
 except Exception:
-    FRED_KEY = os.getenv("FRED_API_KEY", "").strip() or None
+    FRED_KEY = (get_env("FRED_API_KEY") or "").strip() or None
 
 def fred_series(series_ids: List[str], start: Optional[str] = None, end: Optional[str] = None,
                 use_cache=True) -> Dict[str, List[Dict[str, Any]]]:

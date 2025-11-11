@@ -1,0 +1,6510 @@
+# 📋 TASKS_BOARD.md — FICHIER UNIQUE DE RÉFÉRENCE POUR TOUTES LES TÂCHES
+
+**Date**: 2025-01-27  
+**Dernière mise à jour**: 2025-01-27  
+**But**: **FICHIER UNIQUE** contenant toutes les tâches pour les agents
+
+---
+
+## ⚠️ IMPORTANT - LISEZ-MOI D'ABORD
+
+**Ce fichier (`TASKS_BOARD.md`) est le SEUL fichier de tâches à utiliser.**
+
+- ✅ **Utilisez ce fichier** : `TASKS_BOARD.md`
+- ❌ **Ignorez** : `TASKS_FOR_OTHER_AGENTS.md` (vide/obsolète)
+
+**⚠️ ATTENTION - Sections Obsolètes** :
+- Les sections avec format `FC-XXX` (ex: `FC-DASH-001`, `FC-API-031`) sont dans l'ancien format
+- **Utilisez les tâches BE-XXX, FE-XXX, FS-XXX en haut du document** pour les tâches actuelles
+- Les références à **MUI, Dash, Streamlit** sont obsolètes → Stack actuelle: **Mantine v7 + Tremor v3**
+- Les références à `dash_app/api.py` sont obsolètes (Dash/Streamlit legacy)
+
+**Avant de commencer, lisez** :
+1. `MESSAGE_AGENTS.md` - Message d'accueil et instructions complètes
+2. `AGENTS.md` - Guide de déploiement et règles fondamentales
+3. `AGENTS_GAMEPLAY.md` - Système de points et gamification
+
+---
+
+## 🎯 COMMENT UTILISER CE FICHIER
+
+1. **Choisir une tâche** : Cherchez une tâche avec statut **AVAILABLE** ou sans statut
+2. **Marquer comme CLAIMED** : Changez le statut et ajoutez votre nom dans la section de la tâche
+3. **Suivre les étapes** : Chaque tâche a des instructions détaillées (Why, Steps, DoD)
+4. **Mettre à jour le score** : Après complétion, mettez à jour `SCORE_AGENTS.md`
+
+### 📍 Navigation Rapide
+
+- **P0 (CRITIQUE)** : Tâches bloquantes - Brancher données réelles, fix bugs critiques
+- **P1 (ÉLEVÉE)** : Améliorations importantes - Performance, architecture, nouvelles features
+- **P2 (MOYENNE)** : Nice-to-have - Hardening, toggles, optimisations mineures
+- **P3 (Sprint V2)** : ML/Data avancées - Modèles, backtests, intelligence
+
+### 🚀 Quick Start pour Nouveaux Agents
+
+1. **Lire** : `MESSAGE_AGENTS.md` → `AGENTS.md` → `AGENTS_GAMEPLAY.md`
+2. **Choisir** : Une tâche **AVAILABLE** dans P0 ou P1 (voir section "Tâches Recommandées")
+3. **Tester** : `./finance-copilot.sh start` pour démarrer le projet
+4. **Claimer** : Marquer la tâche comme **CLAIMED** avec votre nom
+5. **Coder** : Suivre les steps détaillés de la tâche
+6. **Preuve** : Créer `proofs/<TASK-ID>/` avec screenshot/log
+7. **Commit** : Format Conventional Commits avec votre nom et points
+8. **Score** : Mettre à jour `SCORE_AGENTS.md`
+
+---
+
+## 📣 MESSAGE AUX AGENTS
+
+Équipe, bienvenue dans **Finance Copilot**.
+
+Ici on livre **du vrai**: zéro mock, zéro "quick fix" qui masque les problèmes.
+Votre mission: **rendre l'app stable, rapide et alimentée par de la vraie data**.
+
+### 🎨 Stack Technique Actuelle (2025)
+
+**Frontend** :
+- **UI Library** : **Mantine v7.13.5** (pas MUI - Material UI est obsolète)
+- **Charts** : **Tremor v3.18.7** (AreaChart, LineChart, BarChart, DonutChart, BarList)
+- **Icons** : **@tabler/icons-react** (pas @mui/icons-material)
+- **State Management** : TanStack Query (React Query)
+- **Routing** : React Router v6
+
+**Backend** :
+- **Framework** : FastAPI (Python)
+- **Data Sources** : yfinance, FRED API, RSS feeds
+- **Storage** : JSON files + Parquet (DuckDB optionnel)
+- **Scheduler** : APScheduler
+
+**⚠️ IMPORTANT** : Toutes les références à MUI, Dash, ou Streamlit dans ce board sont **obsolètes** et doivent être ignorées ou supprimées. Le projet utilise **Mantine + Tremor** uniquement.
+
+### 🎯 Chantiers Actuels (Priorités)
+
+Les fonctionnalités principales à développer/maintenir :
+
+1. **Market Intelligence** : Forecasts (prévisions ML+LLM), Backtests (performance historique)
+2. **News & Sentiment** : Flux RSS, scoring sentiment, filtres avancés
+3. **Macro Data** : Séries FRED (CPI, VIX, Yield Curve), visualisations Tremor
+4. **Stocks Analysis** : Recherche, screener, indicateurs techniques, scores composites
+5. **Copilot LLM** : Q&A avec contexte, streaming SSE, RAG
+
+**Règles d'or** :
+- ❌ **Pas de mocks** - Toujours utiliser de vraies données
+- ❌ **Pas de réponse vide** - Les endpoints doivent toujours retourner une structure valide
+- ✅ **Toujours tester** avant commit
+- ✅ **Toujours preuve** avec commit (screenshot/log dans `proofs/<TASK-ID>/`)
+- ✅ **Mettre à jour score** dans `SCORE_AGENTS.md` après chaque tâche
+
+**Documentation** :
+- [➡️ Sprint V2 (plan détaillé prêt à l'emploi)](docs/product/SPRINT_V2_TASKS.md)
+- [📚 Dashboard templates (Mantine + Tremor) — Guide d'utilisation](docs/DASHBOARD_TEMPLATES.md)
+
+---
+
+## 🔥 PRIORITY BOARD — Toutes les Tâches
+
+### ⚠️ Format des Tâches
+
+**Format actuel (à utiliser)** :
+- **BE-XXX** : Backend (API, routes, services, cache, logging, validations)
+- **FE-XXX** : Frontend (composants, pages, hooks, UI, animations, thèmes)
+- **FS-XXX** : Fullstack (intégrations backend+frontend, exports, notifications)
+- **TEST-XXX** : Tests (E2E, unitaires, intégration)
+- **DOC-XXX** : Documentation
+- **PERF-XXX** : Performance (optimisations, métriques)
+- **OPS-XXX** : Operations/Monitoring
+- **SEC-XXX** : Sécurité
+- **DATA-XXX** : Data/ML
+- **UI-XXX** : UI/UX
+
+**Format legacy (à éviter)** :
+- **FC-XXX** : Ancien format (ex: `FC-DASH-001`, `FC-API-031`)
+  - Certaines sont DONE (historique)
+  - Certaines sont obsolètes (références MUI/Dash)
+  - **Consultez les tâches BE/FE/FS en haut du document pour les tâches actuelles**
+
+### Legend
+- **Effort**: S (≤0.5j) • M (1–2j) • L (3–5j)
+- **Priorité**: 🔴 CRITIQUE • 🟡 ÉLEVÉE • 🟢 MOYENNE
+- **Statut**: AVAILABLE • CLAIMED • IN_PROGRESS • DONE
+- Tous les lots ⇒ **never-empty + preuves (curl/log + screenshot) dans `proofs/<TASK-ID>`**
+
+---
+
+## P0 — Brancher la donnée réelle (immédiat)
+
+#### FE-001 — Corriger les chemins API côté front *(Effort S)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +60 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Les hooks `useLegacyHealth`, `useHealth`, `useStocksScreener`, `stocksService.getPrices` appellent `/health` ou `/stocks/*` sans préfixe `/api`, entraînant des 404 malgré un backend prêt. Cela casse Dashboard (HealthBar), Stocks Screener et monitoring.
+
+- **Steps détaillés**:
+
+  1. **Identifier tous les fichiers concernés**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les appels API sans /api
+     grep -r "fetch.*['\"]/health" src/
+     grep -r "fetch.*['\"]/stocks" src/
+     grep -r "apiGet.*['\"]/health" src/
+     grep -r "apiGet.*['\"]/stocks" src/
+     ```
+     - Notez tous les fichiers trouvés
+     - Vérifiez que le backend expose bien ces endpoints avec `/api/` préfixe
+
+  2. **Créer/modifier le helper `pathWithApiPrefix()`**
+     - Fichier: `src/api/client.ts`
+     - Ajouter la fonction :
+     ```typescript
+     /**
+      * Ajoute le préfixe /api si nécessaire
+      * @param path - Chemin de l'endpoint (ex: "/health" ou "/api/health")
+      * @returns Chemin avec préfixe /api (ex: "/api/health")
+      */
+     export function pathWithApiPrefix(path: string): string {
+       const apiBase = (import.meta.env as any).VITE_API_BASE_URL || '/api';
+       // Si le chemin commence déjà par /api, ne pas dupliquer
+       if (path.startsWith('/api')) {
+         return path;
+       }
+       // Si le chemin commence par /, enlever le / initial
+       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+       return `${apiBase}/${cleanPath}`;
+     }
+     ```
+     - **Vérification**: Testez la fonction avec différents chemins :
+       ```typescript
+       pathWithApiPrefix('/health') // → '/api/health'
+       pathWithApiPrefix('/api/health') // → '/api/health'
+       pathWithApiPrefix('stocks/search') // → '/api/stocks/search'
+       ```
+
+  3. **Mettre à jour `useHealth` hook**
+     - Fichier: `src/hooks/useHealth.ts` (ou similaire)
+     - Remplacer :
+     ```typescript
+     // AVANT
+     const response = await fetch('/health');
+     
+     // APRÈS
+     import { pathWithApiPrefix } from '@/api/client';
+     const response = await fetch(pathWithApiPrefix('/health'));
+     ```
+     - **Vérification**: Vérifiez que l'appel fonctionne avec `curl http://localhost:5173/api/health`
+
+  4. **Mettre à jour `useStocksScreener` hook**
+     - Fichier: `src/hooks/useStocksScreener.ts` (ou similaire)
+     - Remplacer tous les appels `/stocks/*` par `pathWithApiPrefix('/stocks/*')`
+     - **Vérification**: Testez la page Stocks dans le navigateur, vérifiez la console (pas d'erreur 404)
+
+  5. **Mettre à jour `stocksService.getPrices`**
+     - Fichier: `src/services/stocks.service.ts`
+     - Remplacer les appels directs par `pathWithApiPrefix()`
+     - **Vérification**: Testez la recherche de stocks dans l'UI
+
+  6. **Mettre à jour `useLegacyHealth` si existe**
+     - Chercher le fichier avec `grep -r "useLegacyHealth" src/`
+     - Appliquer le même pattern
+     - **Vérification**: Vérifiez que le Dashboard affiche correctement les badges de santé
+
+  7. **Ajouter tests unitaires pour `pathWithApiPrefix`**
+     - Fichier: `src/api/__tests__/client.test.ts` (créer si n'existe pas)
+     ```typescript
+     import { pathWithApiPrefix } from '../client';
+     
+     describe('pathWithApiPrefix', () => {
+       it('should add /api prefix to paths without it', () => {
+         expect(pathWithApiPrefix('/health')).toBe('/api/health');
+         expect(pathWithApiPrefix('stocks/search')).toBe('/api/stocks/search');
+       });
+       
+       it('should not duplicate /api prefix', () => {
+         expect(pathWithApiPrefix('/api/health')).toBe('/api/health');
+       });
+     });
+     ```
+     - **Vérification**: `pnpm test` doit passer
+
+  8. **Documenter la règle**
+     - Fichier: `copilot-app/docs/frontend/integration.md` (créer si n'existe pas)
+     - Ajouter section :
+     ```markdown
+     ## Règle: Préfixe /api pour toutes les routes FastAPI
+     
+     Tous les appels API doivent utiliser le préfixe `/api`.
+     Utilisez `pathWithApiPrefix()` du helper `@/api/client` pour garantir la cohérence.
+     
+     ❌ Incorrect: `fetch('/health')`
+     ✅ Correct: `fetch(pathWithApiPrefix('/health'))`
+     ```
+
+  9. **Vérification finale**
+     - Démarrer le projet: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173
+     - Vérifier la console du navigateur (F12) : **AUCUNE erreur 404**
+     - Vérifier que le Dashboard affiche les badges de santé
+     - Vérifier que la page Stocks fonctionne sans erreur
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les appels API utilisent `pathWithApiPrefix()` ou `/api/` directement
+  - [ ] `grep -r "fetch.*['\"]/[^a]" src/` ne trouve plus d'appels sans `/api/` (sauf pour les assets statiques)
+  - [ ] `curl http://localhost:5173/api/health` via proxy retourne 200 OK
+  - [ ] Dashboard affiche badges sans erreur console
+  - [ ] Page Stocks fonctionne sans erreur 404
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Tests unitaires pour `pathWithApiPrefix` passent
+  - [ ] Documentation ajoutée dans `docs/frontend/integration.md`
+  - [ ] Capture Dashboard + log curl déposés dans `proofs/FE-001/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas modifier les appels vers les assets statiques (`/assets/`, `/images/`, etc.)
+  - ⚠️ Vérifier que le backend expose bien les endpoints avec `/api/` préfixe
+  - ⚠️ Tester avec différents environnements (dev, staging) si `VITE_API_BASE_URL` est défini
+
+
+#### FE-002 — Retirer props deprecated (refs & creatable) *(Effort S)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Mantine v7 rejette `creatable`, `getCreateLabel` et refs sur composants fonctionnels (`Tooltip` + `ActionIcon` wrapper), générant warnings persistants et risque de régression lors des upgrades.
+
+- **Prérequis**:
+  - [ ] Projet démarré (`./finance-copilot.sh start`)
+  - [ ] Console du navigateur ouverte (F12) pour voir les warnings
+  - [ ] Connaissance de Mantine v7 API
+
+- **Steps détaillés**:
+
+  1. **Identifier tous les usages de `creatable`**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher tous les usages de creatable
+     grep -r "creatable" src/ --include="*.tsx" --include="*.ts"
+     grep -r "getCreateLabel" src/ --include="*.tsx" --include="*.ts"
+     ```
+     - Notez tous les fichiers trouvés (probablement `StocksScreenerWidget.tsx` et autres)
+     - **Vérification**: Liste tous les fichiers à modifier
+
+  2. **Corriger `ActionIcon` avec `forwardRef`**
+     - Fichier: `src/ui/index.tsx` (ou `src/components/ui/ActionIcon.tsx`)
+     - **AVANT**:
+     ```typescript
+     export const ActionIcon = ({ children, ...props }) => {
+       return <MantineActionIcon {...props}>{children}</MantineActionIcon>;
+     };
+     ```
+     - **APRÈS**:
+     ```typescript
+     import { forwardRef } from 'react';
+     import { ActionIcon as MantineActionIcon } from '@mantine/core';
+     
+     export const ActionIcon = forwardRef<HTMLButtonElement, any>(
+       ({ children, ...props }, ref) => {
+         return (
+           <MantineActionIcon ref={ref} {...props}>
+             {children}
+           </MantineActionIcon>
+         );
+       }
+     );
+     ActionIcon.displayName = 'ActionIcon';
+     ```
+     - **Vérification**: `pnpm run typecheck` ne doit plus avoir d'erreur sur ActionIcon
+
+  3. **Corriger `ThemeToggle` si nécessaire**
+     - Fichier: Chercher avec `grep -r "ThemeToggle" src/`
+     - Si `ThemeToggle` utilise `ActionIcon`, vérifier qu'il passe le ref correctement
+     - **Vérification**: Pas de warning dans la console
+
+  4. **Migrer `MultiSelect` avec `creatable` vers API v7**
+     - Fichier: `src/components/widgets/StocksScreenerWidget.tsx` (ou similaire)
+     - **AVANT** (Mantine v6):
+     ```typescript
+     <MultiSelect
+       creatable
+       getCreateLabel={(query) => `+ Create ${query}`}
+       onCreate={(query) => {
+         // Créer nouvelle option
+         return { value: query, label: query };
+       }}
+     />
+     ```
+     - **APRÈS** (Mantine v7):
+     ```typescript
+     import { useCombobox } from '@mantine/core';
+     
+     const combobox = useCombobox({
+       onDropdownClose: () => combobox.resetSelectedOption(),
+     });
+     
+     <Combobox
+       store={combobox}
+       withinPortal={false}
+       onOptionSubmit={(val) => {
+         // Gérer sélection
+         combobox.closeDropdown();
+       }}
+     >
+       <Combobox.Target>
+         <TextInput
+           placeholder="Search or create..."
+           value={search}
+           onChange={(event) => {
+             combobox.openDropdown();
+             setSearch(event.currentTarget.value);
+           }}
+           onClick={() => combobox.openDropdown()}
+         />
+       </Combobox.Target>
+       <Combobox.Dropdown>
+         <Combobox.Options>
+           {filteredOptions.map((item) => (
+             <Combobox.Option key={item.value} value={item.value}>
+               {item.label}
+             </Combobox.Option>
+           ))}
+           {!filteredOptions.some((item) => item.value === search) && search && (
+             <Combobox.Option value={search}>
+               + Create {search}
+             </Combobox.Option>
+           )}
+         </Combobox.Options>
+       </Combobox.Dropdown>
+     </Combobox>
+     ```
+     - **Vérification**: Le composant fonctionne toujours, pas d'erreur console
+
+  5. **Vérifier tous les autres usages**
+     - Pour chaque fichier trouvé à l'étape 1, appliquer la même migration
+     - **Vérification**: `grep -r "creatable" src/` ne doit plus rien trouver
+
+  6. **Corriger les refs sur composants fonctionnels**
+     - Chercher: `grep -r "ref=" src/ --include="*.tsx" | grep -v "forwardRef"`
+     - Pour chaque composant fonctionnel avec ref, utiliser `forwardRef`
+     - **Vérification**: Pas de warning "Function components cannot be given refs"
+
+  7. **Tester avec Playwright**
+     - Fichier: `tests/ui/stocks.spec.ts` (créer si n'existe pas)
+     ```typescript
+     import { test, expect } from '@playwright/test';
+     
+     test('Stocks page should not show Mantine warnings', async ({ page }) => {
+       await page.goto('http://localhost:5173/stocks');
+       
+       // Vérifier qu'il n'y a pas de toast d'erreur
+       const errorToast = page.locator('[role="alert"]').filter({ hasText: /error|warning/i });
+       await expect(errorToast).toHaveCount(0);
+       
+       // Vérifier que la page se charge correctement
+       await expect(page.locator('h1, h2')).toContainText(/stocks|actions/i);
+     });
+     ```
+     - **Vérification**: `pnpm test:e2e` ou `npx playwright test` passe
+
+  8. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUN warning Mantine dans la console**
+     - Naviguer vers la page Stocks
+     - **Vérifier**: Pas de toast d'erreur, tout fonctionne normalement
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les usages de `creatable` migrés vers API v7
+  - [ ] Tous les composants fonctionnels avec ref utilisent `forwardRef`
+  - [ ] `grep -r "creatable" src/` ne retourne rien
+  - [ ] `grep -r "getCreateLabel" src/` ne retourne rien
+  - [ ] Console Vite sans warning Mantine
+  - [ ] Console navigateur sans warning React/Mantine
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Test Playwright passe (si ajouté)
+  - [ ] Page Stocks fonctionne sans erreur
+  - [ ] Diff validé et commit avec preuve dans `proofs/FE-002/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas supprimer la fonctionnalité "créer nouvelle option", juste migrer l'API
+  - ⚠️ Tester que les options créées sont bien sauvegardées/utilisées
+  - ⚠️ Vérifier la compatibilité avec les autres composants Mantine v7
+  - ✅ Consulter la doc Mantine v7: https://mantine.dev/guides/combobox/
+  - ✅ Tester sur plusieurs pages si `ActionIcon` est utilisé partout
+
+
+#### FE-003 — Débrancher mocks & 404 screener *(Effort M)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +70 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `useStocksScreener` tape `/stocks/screener` (inexistant) et `stocksService.search` renvoie un tableau mocké, brisant la promesse « no mocks » et empêchant la page Stocks de montrer les scores réels.
+- **Note**: `stocksService.search` utilisait déjà `/api/stocks/search` (pas de mock). L'endpoint screener a été ajouté dans `api/routes/stocks.py` pour cohérence avec le router.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/stocks/search` existe: `curl http://localhost:8050/api/stocks/search?q=AAPL`
+  - [ ] Vérifier que `/api/stocks/screener` existe (ou identifier l'endpoint équivalent)
+  - [ ] Page Stocks accessible sur http://localhost:5173/stocks
+
+- **Steps détaillés**:
+
+  1. **Vérifier les endpoints backend disponibles**
+     ```bash
+     # Vérifier l'endpoint de recherche
+     curl http://localhost:8050/api/stocks/search?q=AAPL
+     
+     # Vérifier l'endpoint screener (peut ne pas exister)
+     curl http://localhost:8050/api/stocks/screener
+     
+     # Vérifier la documentation API
+     curl http://localhost:8050/docs
+     ```
+     - Notez la structure de réponse de chaque endpoint
+     - **Vérification**: Les endpoints retournent du JSON valide (pas d'erreur 404)
+
+  2. **Identifier les fichiers avec mocks**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les mocks dans stocksService
+     grep -r "mockResults\|mock.*stock" src/ --include="*.ts" --include="*.tsx"
+     # Chercher useStocksScreener
+     grep -r "useStocksScreener" src/
+     # Chercher stocksService.search
+     grep -r "stocksService\.search" src/
+     ```
+     - Fichiers probables: `src/services/stocks.service.ts`, `src/hooks/useStocksScreener.ts`
+     - **Vérification**: Liste tous les fichiers à modifier
+
+  3. **Vérifier/créer l'endpoint `/api/stocks/search` côté backend**
+     - Si l'endpoint n'existe pas, voir tâche BE-004 (Recherche actions sans mock)
+     - Si l'endpoint existe, noter la structure de réponse attendue
+     - **Vérification**: `curl http://localhost:8050/api/stocks/search?q=AAPL` retourne des résultats
+
+  4. **Remplacer le mock dans `stocksService.search`**
+     - Fichier: `src/services/stocks.service.ts`
+     - **AVANT** (mock):
+     ```typescript
+     search: async (query: string) => {
+       // Mock data
+       const mockResults = [
+         { ticker: 'AAPL', name: 'Apple Inc.', price: 150.0 },
+         { ticker: 'MSFT', name: 'Microsoft Corp.', price: 300.0 },
+       ];
+       return { ok: true, data: mockResults };
+     }
+     ```
+     - **APRÈS** (vraie API):
+     ```typescript
+     import { apiGet } from '@/api/client';
+     
+     search: async (query: string) => {
+       try {
+         const response = await apiGet<{ results: StockSearchResult[] }>(
+           '/api/stocks/search',
+           { q: query, limit: 10 }
+         );
+         return response;
+       } catch (error) {
+         console.error('Error searching stocks:', error);
+         return { ok: false, error: 'Failed to search stocks' };
+       }
+     }
+     ```
+     - **Vérification**: Testez la recherche dans l'UI, vérifiez la console réseau (F12 → Network)
+
+  5. **Créer/modifier le hook `useStocksScreener`**
+     - Fichier: `src/hooks/useStocksScreener.ts` (créer si n'existe pas)
+     - **AVANT** (404):
+     ```typescript
+     const { data } = useQuery({
+       queryKey: ['stocks-screener'],
+       queryFn: () => fetch('/stocks/screener').then(r => r.json()), // ❌ 404
+     });
+     ```
+     - **APRÈS** (vraie API):
+     ```typescript
+     import { useQuery } from '@tanstack/react-query';
+     import { apiGet } from '@/api/client';
+     
+     export function useStocksScreener(filters?: ScreenerFilters) {
+       return useQuery({
+         queryKey: ['stocks-screener', filters],
+         queryFn: async () => {
+           // Utiliser l'endpoint existant ou créer un nouveau
+           // Option 1: Utiliser /api/stocks/search avec filtres
+           // Option 2: Créer /api/stocks/screener côté backend
+           const response = await apiGet('/api/stocks/search', {
+             // Ajouter filtres si endpoint le supporte
+           });
+           return response.data;
+         },
+         staleTime: 5 * 60 * 1000, // Cache 5 minutes
+       });
+     }
+     ```
+     - **Vérification**: Le hook ne génère plus d'erreur 404
+
+  6. **Ajouter les états Loading/Empty/Error**
+     - Fichier: `src/pages/Stocks.tsx` ou composant utilisant `useStocksScreener`
+     - **Code**:
+     ```typescript
+     const { data, isLoading, error } = useStocksScreener(filters);
+     
+     if (isLoading) {
+       return <Skeleton height={400} />;
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           Impossible de charger les données. {error.message}
+         </Alert>
+       );
+     }
+     
+     if (!data || data.length === 0) {
+       return <EmptyState message="Aucun résultat trouvé" />;
+     }
+     
+     return <StocksTable data={data} />;
+     ```
+     - **Vérification**: Tous les états sont gérés (loading, error, empty, success)
+
+  7. **Tester avec curl et screenshot**
+     ```bash
+     # Test de l'endpoint
+     curl http://localhost:8050/api/stocks/search?q=AAPL > proof_search.json
+     
+     # Test via proxy frontend
+     curl http://localhost:5173/api/stocks/search?q=AAPL > proof_proxy.json
+     ```
+     - Prendre un screenshot de la page Stocks avec des résultats réels
+     - **Vérification**: Les données affichées correspondent aux données de l'API
+
+  8. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/stocks
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUNE erreur 404**, **AUCUN mock utilisé**
+     - Tester la recherche: taper "AAPL" dans le champ de recherche
+     - **Vérifier**: Des résultats réels s'affichent (pas de données hardcodées)
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "mockResults\|mock.*stock" src/` ne trouve plus de mocks dans stocksService
+  - [ ] `useStocksScreener` n'appelle plus `/stocks/screener` (404)
+  - [ ] `stocksService.search` appelle `/api/stocks/search` (vraie API)
+  - [ ] Page `/stocks` affiche des données réelles (vérifiable via Network tab)
+  - [ ] États Loading/Empty/Error sont gérés et affichés
+  - [ ] `curl http://localhost:8050/api/stocks/search?q=AAPL` retourne des résultats
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshot de la page Stocks avec résultats réels
+  - [ ] Log curl de l'endpoint déposé dans `proofs/FE-003/`
+
+- **Points d'attention**:
+  - ⚠️ Si `/api/stocks/screener` n'existe pas, utiliser `/api/stocks/search` avec filtres ou créer l'endpoint (voir BE-004)
+  - ⚠️ Ne pas supprimer la fonctionnalité de recherche, juste remplacer les mocks
+  - ⚠️ Vérifier que les filtres du screener sont bien transmis à l'API
+  - ⚠️ Tester avec différents tickers (AAPL, MSFT, NVDA, etc.)
+  - ✅ Consulter `docs/INTEGRATION_PLAN.md` pour le contrat API attendu
+  - ✅ Si l'endpoint backend n'existe pas, coordonner avec l'agent backend (BE-004)
+
+
+#### BE-001 — Forecasts branchés backend *(Effort M)*
+
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Remplacer les mocks par les vraies prévisions pour `/forecasts` (liste + détail). Actuellement, la page Forecasts affiche "Aucune prévision" car elle n'est pas connectée au backend.
+- **Note**: Route `/forecasts` mise à jour pour utiliser `Forecasts.tsx` qui utilise `ForecastsProBoard` → `useForecasts` → `/api/forecasts`. `ForecastsSimple.tsx` supprimé (mocks non utilisés).
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/forecasts` existe: `curl http://localhost:8050/api/forecasts`
+  - [ ] Vérifier la structure de réponse de l'endpoint
+  - [ ] Page Forecasts accessible sur http://localhost:5173/forecasts
+
+- **Steps détaillés**:
+
+  1. **Vérifier l'endpoint backend `/api/forecasts`**
+     ```bash
+     # Tester l'endpoint
+     curl http://localhost:8050/api/forecasts
+     
+     # Vérifier la structure de réponse
+     curl http://localhost:8050/api/forecasts | jq .
+     ```
+     - Notez la structure de réponse attendue (probablement `{ok: true, data: {rows: [...]}}`)
+     - **Vérification**: L'endpoint retourne du JSON valide
+
+  2. **Créer le service `forecasts.service.ts`**
+     - Fichier: `src/services/forecasts.service.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { apiGet } from '@/api/client';
+     
+     export interface Forecast {
+       ticker: string;
+       horizon: string;
+       direction: 'up' | 'down' | 'flat';
+       confidence: number;
+       expected_return: number;
+       timestamp: string;
+     }
+     
+     export interface ForecastsResponse {
+       rows: Forecast[];
+       count: number;
+       freshness?: string;
+     }
+     
+     export const forecastsService = {
+       getAll: async (filters?: {
+         horizon?: string;
+         asset_type?: string;
+         min_confidence?: number;
+       }): Promise<{ ok: boolean; data?: ForecastsResponse; error?: string }> => {
+         try {
+           const params = new URLSearchParams();
+           if (filters?.horizon) params.append('horizon', filters.horizon);
+           if (filters?.asset_type) params.append('asset_type', filters.asset_type);
+           if (filters?.min_confidence !== undefined) {
+             params.append('min_confidence', String(filters.min_confidence));
+           }
+           
+           const response = await apiGet<ForecastsResponse>(
+             `/api/forecasts?${params.toString()}`
+           );
+           return response;
+         } catch (error) {
+           console.error('Error fetching forecasts:', error);
+           return { ok: false, error: 'Failed to fetch forecasts' };
+         }
+       },
+       
+       getById: async (id: string): Promise<{ ok: boolean; data?: Forecast; error?: string }> => {
+         try {
+           const response = await apiGet<Forecast>(`/api/forecasts/${id}`);
+           return response;
+         } catch (error) {
+           console.error('Error fetching forecast:', error);
+           return { ok: false, error: 'Failed to fetch forecast' };
+         }
+       },
+     };
+     ```
+     - **Vérification**: `pnpm run typecheck` passe sans erreur
+
+  3. **Créer le hook `useForecasts.ts`**
+     - Fichier: `src/hooks/useForecasts.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { useQuery } from '@tanstack/react-query';
+     import { forecastsService, ForecastsResponse } from '@/services/forecasts.service';
+     
+     export function useForecasts(filters?: {
+       horizon?: string;
+       asset_type?: string;
+       min_confidence?: number;
+     }) {
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+       return useQuery({
+         queryKey: ['forecasts', filters],
+         queryFn: async () => {
+           const response = await forecastsService.getAll(filters);
+           if (!response.ok || !response.data) {
+             throw new Error(response.error || 'Failed to fetch forecasts');
+           }
+           return response.data;
+         },
+         staleTime: 5 * 60 * 1000, // Cache 5 minutes
+         retry: 2,
+       });
+     }
+     ```
+     - **Vérification**: Le hook peut être importé sans erreur
+
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+  4. **Modifier `Forecasts.tsx` pour utiliser le hook**
+     - Fichier: `src/pages/Forecasts.tsx`
+     - Remplacer les mocks par l'utilisation du hook `useForecasts()`
+     - Ajouter les états Loading/Error/Empty
+     - Ajouter le bouton "Rafraîchir" avec `refetch()`
+     - Ajouter le badge Freshness avec `data.freshness`
+     - **Vérification**: La page affiche des données réelles (ou un état vide propre)
+
+  5. **Tester avec curl et screenshot**
+     ```bash
+     curl http://localhost:8050/api/forecasts > proof_forecasts.json
+     ```
+     - Prendre un screenshot de la page Forecasts avec des données réelles
+     - **Vérification**: Les données affichées correspondent aux données de l'API
+
+  6. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/forecasts
+     - **Vérifier**: Des données s'affichent (ou état vide propre), pas d'erreur console
+
+- **DoD (Definition of Done)**:
+  - [ ] Service `forecastsService` créé avec méthodes `getAll` et `getById`
+  - [ ] Hook `useForecasts` créé avec TanStack Query
+  - [ ] Page `Forecasts.tsx` utilise le hook (plus de mock)
+  - [ ] Page affiche ≥1 ligne si des données existent
+  - [ ] État vide propre affiché si aucune donnée
+  - [ ] États Loading/Error gérés et affichés
+  - [ ] Bouton "Rafraîchir" fonctionne (refetch)
+  - [ ] Badge Freshness affiche la date de dernière mise à jour
+  - [ ] `curl http://localhost:8050/api/forecasts` retourne des données
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshot de la page Forecasts avec données réelles
+  - [ ] Log curl de l'endpoint déposé dans `proofs/BE-001/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que l'endpoint `/api/forecasts` retourne bien `{ok: true, data: {rows: [...]}}`
+  - ⚠️ Si l'endpoint retourne une structure différente, adapter le service
+  - ⚠️ Ne pas supprimer les filtres existants, juste les connecter à l'API
+  - ⚠️ Tester avec différents filtres (horizon, asset_type, min_confidence)
+  - ✅ Suivre le pattern "never-empty" : toujours afficher quelque chose (données ou état vide)
+  - ✅ Utiliser le cache React Query pour éviter les appels inutiles
+
+#### BE-002 — Macro séries FRED/VIX *(Effort M)* - DONE
+
+**Statut**: COMPLETED  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+- **Why**: Les graphs macro doivent refléter CPI, VIX, 10Y-2Y, chômage réels. Les hooks et services existent déjà (`useMacroSeries`, `macroService`), mais il faut vérifier que les widgets (`MacroBoardWidget`, `MacroDrilldownWidget`) utilisent bien les données réelles du backend et affichent correctement les graphiques Tremor.
+
+**Steps réalisées**:
+1. **Endpoint `/api/macro/series` amélioré**:
+   - Données formatées pour Tremor charts (dates, valeurs)
+   - Prise en charge des formats spécifiques requis par les graphiques frontend
+   - Filtrage avancé par séries (CPI, VIX, 10Y-2Y, etc.)
+
+2. **Format pour Tremor Charts**:
+   - Structuration des données en `[{date: string, value: number}]` pour AreaChart
+   - Gestion des champs supplémentaires (timestamps, noms, etc.)
+   - Conversion automatique des formats hétérogènes vers format standard
+
+3. **Endpoint supplémentaire `/api/macro/latest`**:
+   - Nouvel endpoint pour les valeurs macro récentes
+   - Accès rapide aux dernières valeurs pour dashboards dynamiques
+   - Support des IDs spécifiques (CPIAUCSL, VIXCLS, etc.)
+
+4. **Caching et Performance**:
+   - Maintien des systèmes de cache existants
+   - Amélioration de la structure des réponses
+   - Patterns never-empty garantis
+
+5. **Intégration Dashboard**:
+   - Prêt pour widgets MacroBoardWidget et MacroDrilldownWidget
+   - Format compatible avec graphiques Tremor (AreaChart, LineChart)
+   - Support des filtres complexes (IDs multiples, fenêtres temporelles)
+
+**DoD (Definition of Done)**:
+- [x] Endpoint `/api/macro/series` retourne données formatées pour Tremor
+- [x] Format `{date, value}` conforme aux besoins des graphiques frontend  
+- [x] Endpoint `/api/macro/latest` disponible pour valeurs récentes
+- [x] Support des séries FRED spécifiques (CPI, VIX, etc.)
+- [x] Données prêtes pour MacroBoardWidget et graphiques Tremor
+- [x] Never-empty pattern maintenu avec fallbacks
+
+**Files created/updated**:
+- `backend/api/routes/macro.py` - Amélioration des endpoints macro avec formatage Tremor-compatible
+
+- **Steps détaillés**:
+
+  1. **Vérifier que le backend retourne des données**
+     ```bash
+     cd /mnt/utm
+     curl http://localhost:8050/api/macro/series?ids=CPIAUCSL,VIXCLS&limit=50
+     ```
+     - Vérifier que la réponse contient `{"ok": true, "data": {"series": [...]}}`
+     - **Vérification**: Backend retourne des données valides
+
+  2. **Vérifier que `MacroBoardWidget` utilise les données réelles**
+     - Fichier: `copilot-app/frontend/webapp/src/components/widgets/MacroBoardWidget.tsx`
+     - Vérifier que le widget utilise `useMacroSeries` ou `useMacroData`
+     - Vérifier que les graphiques Tremor (`AreaChart`, `LineChart`, `BarChart`) reçoivent les données transformées
+     - **Code attendu**:
+     ```typescript
+     const { data, isLoading, error } = useMacroSeries({ ids: selectedIds, ... });
+     // Transformer les données pour Tremor
+     const chartData = useMemo(() => {
+       if (!data?.series) return [];
+       // Transformation des points en format Tremor
+     }, [data]);
+     ```
+     - **Vérification**: Widget utilise les données du hook
+
+  3. **Vérifier que `MacroDrilldownWidget` utilise les données réelles**
+     - Fichier: `copilot-app/frontend/webapp/src/components/widgets/MacroDrilldownWidget.tsx`
+     - Même vérification que pour `MacroBoardWidget`
+     - **Vérification**: Widget utilise les données du hook
+
+  4. **Ajouter Badge Freshness et états vides/erreur**
+     - Ajouter `<FreshnessBadge freshness={data?.freshness} />` dans les widgets
+     - Ajouter `<EmptyState />` si `data?.series?.length === 0`
+     - Ajouter `<Alert color="red">` si `error`
+     - **Vérification**: États vides et erreurs gérés
+
+  5. **Tester avec différentes périodes (YTD/1Y/5Y)**
+     - Vérifier que le sélecteur de période fonctionne
+     - Vérifier que les données sont filtrées selon la période sélectionnée
+     - **Vérification**: Sélecteur fonctionne correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] Backend `/api/macro/series` retourne des données valides
+  - [ ] `MacroBoardWidget` affiche des graphiques Tremor avec données réelles
+  - [ ] `MacroDrilldownWidget` affiche des graphiques Tremor avec données réelles
+  - [ ] Badge Freshness affiché
+  - [ ] États vides et erreurs gérés (EmptyState, Alert)
+  - [ ] Sélecteur de période fonctionne (YTD/1Y/5Y)
+  - [ ] Aucune valeur en dur dans les composants
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Screenshot de la page Macro avec données réelles dans `proofs/BE-002/`
+  - [ ] Log curl de `/api/macro/series` dans `proofs/BE-002/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ⚠️ Les graphiques Tremor doivent recevoir des données au format `[{date: string, value: number}]`
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ✅ Note: Les hooks `useMacroSeries` et `useMacroData` existent déjà, vérifier leur utilisation
+
+#### BE-003 — Flux news + sentiment *(Effort M)* - COMPLETED
+
+**Statut**: COMPLETED  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+- **Why**: Fournir le flux agrégé backend (tickers, since, score) sans crash. Les hooks existent déjà (`useNews`, `useNewsCompat`, `useNewsRadar`), mais il faut vérifier que `NewsFeed.tsx` utilise correctement ces hooks et affiche les articles avec sentiment, timeago, et filtres actifs.
+
+**Steps réalisées**:
+1. **Endpoint `/api/news/feed` amélioré**:
+   - Prise en charge avancée des filtres: tickers, dates, sentiments, sources, recherche
+   - Calcul du score de sentiment par article
+   - Intégration avec les systèmes de cache existants
+   - Gestion des erreurs avec patterns never-empty
+
+2. **Format compatible Frontend**:
+   - Structure des données optimisée pour NewsFeed.tsx
+   - Support du format pour TimeAgo components
+   - Intégration avec les hooks existants (useNews, useNewsRadar, etc.)
+   - Données enrichies avec scores de confiance et métadonnées
+
+3. **Système de sentiment**:
+   - Calcul des scores de sentiment par article
+   - Filtrage par seuil de sentiment (min/max)
+   - Intégration avec le système de scoring global
+
+4. **Endpoint Heatmap corrélations**:
+   - `POST /api/stocks/heatmap` pour matrice de corrélation (créé dans stocks_extra.py)
+   - Données formatées pour Tremor Heatmap avec support de timeago
+   - Métriques avancées: hit_rate, CAGR, maxDD, sharpe_ratio, profit_factor, win_rate
+
+5. **Service de calcul de corrélation**:
+   - `CorrelationService` avec calcul de coefficients Pearson/Spearman/Kendall
+   - `CorrelationMatrixModel` avec validations et formatage pour Tremor
+   - `PresetTunerPanel` avec interface pour tester variantes de corrélation
+   - `ExportReportButton` pour export PDF des résultats
+
+6. **Intégration complète**:
+   - Page `/backtests` intégrant les composants de scoring robustesse
+   - Support des filtres complexes (horizons, univers, seuils de confiance)
+   - Compatibilité avec les patterns never-empty et safe access
+
+**DoD (Definition of Done)**:
+* `/api/news/feed?tickers=SPY,QQQ&sentiment_min=-0.5` retourne articles avec scores sentiments
+* Données structurées pour intégration facile dans NewsFeed et Tremor charts
+* Métriques de corrélation disponibles via `/api/stocks/heatmap`
+* Système de scoring robustesse opérationnel sur la page Backtests
+* Never-empty pattern respecté avec fallbacks robustes
+
+**Fichiers créés/mis à jour**:
+- `backend/api/routes/news.py` - Endpoint news avec filtrage avancé et scoring sentiment (amélioré)
+- `backend/api/routes/stocks_extra.py` - Endpoint heatmap pour corrélations (nouveau)
+- `backend/services/correlation_calculator.py` - Calculateur de matrices de corrélation (nouveau)
+- `backend/models/correlation_matrix.py` - Modèle de données pour matrices de corrélation (nouveau)
+- `backend/hooks/useBacktests.ts` - Hooks React Query pour backtests (nouveau)
+- `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx` - Carte de score robustesse (nouveau)
+- `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx` - Panneau de réglage des paramètres (nouveau)
+- `frontend/webapp/src/components/report/ExportReportButton.tsx` - Bouton d'export de rapport (nouveau)
+- `frontend/webapp/src/utils/exportPdf.ts` - Outils d'export PDF (nouveau)
+- `frontend/webapp/src/pages/Backtests.tsx` - Page backtests complète avec tous les composants (amélioré)
+- `backend/services/backtest.service.ts` - Service de backtesting avec nouvelles méthodes (nouveau)
+- `backend/api/routes/backtests.py` - Route pour backtest interactif (amélioré)
+
+**Steps réalisées**:
+1. **Endpoint `/api/news/feed` amélioré**:
+   - Structure des articles optimisée pour NewsFeed.tsx
+   - Ajout des champs frontend-requis: timeago, sentiment.label, category, thumbnail
+   - Support complet des filtres: tickers, dates, sentiment, sources, mots-clés
+
+2. **Sentiment Analysis Enhanced**:
+   - Labels de sentiment (very-positive à very-negative) basés sur le score
+   - Magnitude du sentiment pour intensité des émotions
+   - Intégration avec les filtres de score min/max
+
+3. **Temps relatifs (timeago)**:
+   - Calcul dynamique des durées (5m ago, 2h ago, 1d ago, etc.)
+   - Gestion des erreurs pour dates invalides
+   - Formatage adapté pour affichage frontend
+
+4. **Catégorisation intelligente**:
+   - Inférence automatique des catégories (earnings, mergers, ipos, policy, crypto, technology, general)
+   - Analyse du contenu et titres pour classification
+   - Support des thèmes/tags existants
+
+5. **Format Ready for Frontend**:
+   - Structure compatible avec hooks `useNews`, `useNewsCompat`, `useNewsRadar`
+   - Données prêtes pour composants `NewsFeed.tsx` avec filtres actifs
+   - Support de la pagination, tri, recherche full-text
+
+6. **Performance et Robustesse**:
+   - Calcul estimation du temps de lecture
+   - Gestion des erreurs avec fallbacks never-empty
+   - Cache et performance optimisés
+
+**DoD (Definition of Done)**:
+- [x] Endpoint `/api/news/feed` retourne données formatées pour NewsFeed.tsx
+- [x] Labels de sentiment disponibles (positive, negative, etc.)
+- [x] Temps relatifs (timeago) calculés et disponibles
+- [x] Catégorisation automatique des articles
+- [x] Support des filtres (tickers, dates, sentiment, etc.)
+- [x] Format compatible avec hooks frontend existants
+- [x] Never-empty pattern maintenu avec fallbacks
+
+**Files created/updated**:
+- `backend/api/routes/news.py` - Endpoint news amélioré avec sentiment analysis, timeago, catégorisation
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier que `/api/news/feed` retourne des données: `curl http://localhost:8050/api/news/feed?limit=5`
+  - [ ] Lire les fichiers existants: `src/hooks/useNewsCompat.ts`, `src/components/news/NewsFeed.tsx`
+
+- **Steps détaillés**:
+
+  1. **Vérifier que le backend retourne des données**
+     ```bash
+     cd /mnt/utm
+     curl http://localhost:8050/api/news/feed?limit=5
+     ```
+     - Vérifier que la réponse contient `{"ok": true, "data": {"articles": [...]}}`
+     - **Vérification**: Backend retourne des articles valides
+
+  2. **Vérifier que `NewsFeed.tsx` utilise `useNewsCompat` correctement**
+     - Fichier: `copilot-app/frontend/webapp/src/components/news/NewsFeed.tsx`
+     - Vérifier que le composant utilise `useNewsCompat()` ou `useNewsRadar()`
+     - Vérifier que les données sont correctement mappées vers les cartes
+     - **Code attendu**:
+     ```typescript
+     const { items, filters, setFilters, loading, error, hasMore, loadMore } = useNewsCompat();
+     // items doit être un tableau d'articles
+     ```
+     - **Vérification**: Composant utilise le hook correctement
+
+  3. **Vérifier l'affichage des cartes avec sentiment**
+     - Vérifier que chaque carte affiche:
+       - Titre de l'article
+       - Source (chip/badge)
+       - Sentiment (chip coloré: vert=positif, rouge=négatif, gris=neutre)
+       - Timeago (ex: "il y a 2h")
+       - Tickers mentionnés (badges)
+     - **Vérification**: Cartes affichent toutes les informations
+
+  4. **Vérifier les filtres actifs**
+     - Vérifier que les filtres (tickers, since, sentiment_min) fonctionnent
+     - Vérifier que `setFilters` met à jour les filtres et recharge les données
+     - **Vérification**: Filtres fonctionnent correctement
+
+  5. **Ajouter bouton "Charger plus" si pagination disponible**
+     - Vérifier que `hasMore` est utilisé pour afficher/masquer le bouton
+     - Vérifier que `loadMore()` charge la page suivante
+     - **Vérification**: Pagination fonctionne
+
+  6. **Gérer les états vides et erreurs**
+     - Ajouter `<EmptyState />` si `items.length === 0 && !loading`
+     - Ajouter `<Alert color="red">` si `error`
+     - **Vérification**: États vides et erreurs gérés
+
+- **DoD (Definition of Done)**:
+  - [ ] Backend `/api/news/feed` retourne des articles valides
+  - [ ] `NewsFeed.tsx` utilise `useNewsCompat` ou `useNewsRadar` correctement
+  - [ ] Cartes affichent: titre, source, sentiment (chip coloré), timeago, tickers
+  - [ ] Filtres fonctionnent (tickers, since, sentiment_min)
+  - [ ] Bouton "Charger plus" fonctionne si `hasMore === true`
+  - [ ] États vides et erreurs gérés (EmptyState, Alert)
+  - [ ] Aucun crash sur `items.length` ou `items.map()`
+  - [ ] `/news` affiche ≥5 articles réels
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Screenshot de la page News avec articles réels dans `proofs/BE-003/`
+  - [ ] Log curl de `/api/news/feed` dans `proofs/BE-003/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ⚠️ S'assurer que `items` est toujours un tableau (jamais `undefined`)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+  - ✅ Note: Les hooks `useNewsCompat` et `useNewsRadar` existent déjà, vérifier leur utilisation
+
+#### FE-004 — NewsFeed branché au hook TanStack *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `NewsFeed.tsx` destructure `useNews()` comme un store custom (`items`, `filters`, `loadMore`…), ce qui casse le runtime et `pnpm run typecheck`. Le hook `useNews` retourne un `UseQueryResult` de TanStack Query, pas un objet custom.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/news/feed` fonctionne: `curl http://localhost:8050/api/news/feed?limit=5`
+  - [ ] Page News accessible sur http://localhost:5173/news
+  - [ ] Vérifier les erreurs TypeScript actuelles: `pnpm run typecheck`
+
+- **Steps détaillés**:
+
+  1. **Identifier le problème dans `NewsFeed.tsx`**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les erreurs TypeScript
+     pnpm run typecheck 2>&1 | grep -i "NewsFeed\|useNews"
+     
+     # Lire le fichier NewsFeed.tsx
+     cat src/components/news/NewsFeed.tsx | head -50
+     ```
+     - Notez les erreurs TypeScript (probablement 9 erreurs mentionnées)
+     - **Vérification**: Liste des erreurs identifiées
+
+  2. **Vérifier la signature du hook `useNews`**
+     - Fichier: `src/hooks/useNews.ts` (ou similaire)
+     - Vérifier que le hook retourne un `UseQueryResult` de TanStack Query
+     - **Code attendu**:
+     ```typescript
+     export function useNews(filters?: NewsFilters) {
+       return useQuery({
+         queryKey: ['news-feed', filters],
+         queryFn: async () => { ... },
+       });
+     }
+     ```
+     - **Vérification**: Le hook retourne bien un `UseQueryResult`
+
+  3. **Corriger `NewsFeed.tsx` pour utiliser `UseQueryResult`**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - **AVANT** (incorrect):
+     ```typescript
+     const { items, filters, loadMore } = useNews(); // ❌ Erreur: useNews ne retourne pas ça
+     ```
+     - **APRÈS** (correct):
+     ```typescript
+     import { useNews } from '@/hooks/useNews';
+     import { useState } from 'react';
+     
+     export default function NewsFeed() {
+       // Gérer les filtres localement
+       const [filters, setFilters] = useState({
+         tickers: '',
+         since: '7d',
+         sentiment_min: -1,
+         sentiment_max: 1,
+       });
+       
+       // Utiliser le hook correctement
+       const { data, isLoading, error, refetch } = useNews(filters);
+       
+       // Extraire les articles depuis data
+       const articles = data?.articles || [];
+       
+       // Fonction pour charger plus (si pagination)
+       const loadMore = () => {
+         // Implémenter la pagination si nécessaire
+         refetch();
+       };
+       
+       // Reste du composant...
+     }
+     ```
+     - **Vérification**: `pnpm run typecheck` ne montre plus d'erreurs sur NewsFeed
+
+  4. **Déplacer la gestion des filtres dans le composant**
+     - Utiliser `useState` pour gérer les filtres localement
+     - Quand les filtres changent, déclencher un `refetch()` avec les nouveaux filtres
+     - **Code**:
+     ```typescript
+     const [filters, setFilters] = useState<NewsFilters>({
+       tickers: [],
+       since: '7d',
+       sentiment_min: -1,
+       sentiment_max: 1,
+     });
+     
+     const { data, isLoading, error, refetch } = useNews(filters);
+     
+     // Quand les filtres changent, refetch automatiquement
+     useEffect(() => {
+       refetch();
+     }, [filters, refetch]);
+     ```
+     - **Vérification**: Changer les filtres met à jour la liste d'articles
+
+  5. **Alimenter les cartes depuis `data?.articles`**
+     - Remplacer `items` par `data?.articles || []`
+     - **Code**:
+     ```typescript
+     const articles = data?.articles || [];
+     
+     return (
+       <Stack>
+         {articles.map((article) => (
+           <NewsCard key={article.id} article={article} />
+         ))}
+       </Stack>
+     );
+     ```
+     - **Vérification**: Les articles s'affichent correctement
+
+  6. **Gérer les états Loading/Error/Empty/Freshness**
+     - **Code**:
+     ```typescript
+     if (isLoading) {
+       return <Skeleton height={400} />;
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           {error.message}
+         </Alert>
+       );
+     }
+     
+     const articles = data?.articles || [];
+     
+     if (articles.length === 0) {
+       return <EmptyState message="Aucune actualité disponible" />;
+     }
+     
+     return (
+       <Stack>
+         {data?.freshness && <FreshnessBadge freshness={data.freshness} />}
+         {articles.map((article) => (
+           <NewsCard key={article.id} article={article} />
+         ))}
+       </Stack>
+     );
+     ```
+     - **Vérification**: Tous les états sont gérés et affichés
+
+  7. **Vérifier que `pnpm run typecheck` passe**
+     ```bash
+     pnpm run typecheck
+     ```
+     - **Vérification**: **AUCUNE erreur** liée à NewsFeed ou useNews
+
+  8. **Tester dans le navigateur**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/news
+     - Ouvrir la console (F12)
+     - **Vérifier**: **AUCUNE erreur console**, les articles s'affichent
+     - Tester les filtres
+     - **Vérifier**: Les filtres fonctionnent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] `NewsFeed.tsx` utilise correctement `useNews()` comme `UseQueryResult`
+  - [ ] Plus de destructuring incorrect (`items`, `filters`, `loadMore` depuis `useNews`)
+  - [ ] Gestion des filtres déplacée dans le composant avec `useState`
+  - [ ] Articles extraits depuis `data?.articles` (pas depuis un store custom)
+  - [ ] États Loading/Error/Empty/Freshness gérés et affichés
+  - [ ] `pnpm run typecheck` ne montre plus les 9 erreurs NewsFeed
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Page `/news` fonctionne sans erreur console
+  - [ ] Filtres fonctionnent correctement
+  - [ ] Screenshot de la page News avec articles + filtres actifs
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FE-004/`
+
+- **Points d'attention**:
+  - ⚠️ `useNews` retourne un `UseQueryResult`, pas un objet custom
+  - ⚠️ Utiliser `data?.articles` au lieu de `items`
+  - ⚠️ Utiliser `isLoading`, `error`, `refetch` depuis le `UseQueryResult`
+  - ⚠️ Gérer les filtres localement avec `useState`, pas depuis le hook
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Consulter la doc TanStack Query pour comprendre `UseQueryResult`
+  - ✅ Tester que les filtres déclenchent bien un nouveau fetch
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FE-005 — Supprimer le vestige MUI (`SourceTooltip`) *(Effort S)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +40 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `src/components/ui/SourceTooltip.tsx` importe `@mui/*`, interdit (cf. `UI_PROCESS_IMPROVEMENTS`) et casse tsc faute de types. Le projet utilise Mantine, pas MUI.
+
+- **Prérequis**:
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier les erreurs TypeScript: `pnpm run typecheck`
+  - [ ] Vérifier les usages de SourceTooltip: `grep -r "SourceTooltip" src/`
+
+- **Steps détaillés**:
+
+  1. **Identifier tous les usages de MUI**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher tous les imports MUI
+     grep -r "@mui/" src/ --include="*.ts" --include="*.tsx"
+     
+     # Chercher SourceTooltip
+     grep -r "SourceTooltip" src/
+     
+     # Lire le fichier SourceTooltip.tsx
+     cat src/components/ui/SourceTooltip.tsx
+     ```
+     - Notez tous les fichiers qui importent MUI
+     - **Vérification**: Liste des fichiers concernés
+
+  2. **Vérifier si SourceTooltip est utilisé**
+     ```bash
+     # Chercher les usages
+     grep -r "SourceTooltip\|from.*SourceTooltip" src/ --include="*.tsx"
+     ```
+     - Si utilisé, noter où (pages news/brief probablement)
+     - Si non utilisé, on peut le supprimer directement
+     - **Vérification**: Liste des fichiers qui utilisent SourceTooltip
+
+  3. **Réécrire SourceTooltip avec Mantine Tooltip**
+     - Fichier: `src/components/ui/SourceTooltip.tsx`
+     - **AVANT** (MUI):
+     ```typescript
+     import { Tooltip } from '@mui/material';
+     
+     export const SourceTooltip = ({ children, source }) => {
+       return (
+         <Tooltip title={source}>
+           {children}
+         </Tooltip>
+       );
+     };
+     ```
+     - **APRÈS** (Mantine):
+     ```typescript
+     import { Tooltip } from '@mantine/core';
+     
+     interface SourceTooltipProps {
+       children: React.ReactNode;
+       source: string;
+     }
+     
+     export const SourceTooltip: React.FC<SourceTooltipProps> = ({ children, source }) => {
+       return (
+         <Tooltip label={source} withArrow>
+           {children}
+         </Tooltip>
+       );
+     };
+     ```
+     - **Vérification**: `pnpm run typecheck` ne montre plus d'erreur sur SourceTooltip
+
+  4. **Si SourceTooltip n'est pas utilisé, le supprimer**
+     ```bash
+     # Supprimer le fichier
+     rm src/components/ui/SourceTooltip.tsx
+     
+     # Vérifier qu'il n'est plus importé nulle part
+     grep -r "SourceTooltip" src/
+     ```
+     - **Vérification**: Aucun import de SourceTooltip restant
+
+  5. **Retirer `@mui/*` des dépendances**
+     - Fichier: `package.json`
+     - **Chercher**:
+     ```bash
+     grep -i "@mui" package.json
+     ```
+     - **Supprimer** toutes les dépendances `@mui/*`:
+     ```json
+     // AVANT
+     {
+       "dependencies": {
+         "@mui/material": "^5.0.0",
+         "@mui/icons-material": "^5.0.0"
+       }
+     }
+     
+     // APRÈS
+     {
+       "dependencies": {
+         // @mui/* supprimé
+       }
+     }
+     ```
+     - Exécuter: `pnpm install` pour mettre à jour le lockfile
+     - **Vérification**: `grep -i "@mui" package.json` ne trouve plus rien
+
+  6. **Ajouter règle ESLint `no-restricted-imports`**
+     - Fichier: `.eslintrc.json` ou `.eslintrc.js` (créer si n'existe pas)
+     - **Code**:
+     ```json
+     {
+       "rules": {
+         "no-restricted-imports": [
+           "error",
+           {
+             "paths": [
+               {
+                 "name": "@mui/material",
+                 "message": "MUI is deprecated. Use Mantine components instead."
+               },
+               {
+                 "name": "@mui/icons-material",
+                 "message": "MUI is deprecated. Use @tabler/icons-react instead."
+               }
+             ],
+             "patterns": [
+               {
+                 "group": ["@mui/*"],
+                 "message": "MUI is deprecated. Use Mantine instead."
+               }
+             ]
+           }
+         ]
+       }
+     }
+     ```
+     - **Vérification**: `pnpm run lint` bloque les imports MUI
+
+  7. **Vérifier que les pages utilisent le nouveau composant**
+     - Fichiers probables: `src/pages/News.tsx`, `src/pages/Brief.tsx`
+     - Vérifier que SourceTooltip fonctionne correctement (ou supprimer si non utilisé)
+     - **Vérification**: Les pages se chargent sans erreur
+
+  8. **Vérification finale**
+     ```bash
+     # Vérifier qu'il n'y a plus d'imports MUI
+     grep -r "@mui/" src/ --include="*.ts" --include="*.tsx"
+     
+     # Vérifier TypeScript
+     pnpm run typecheck
+     
+     # Vérifier ESLint
+     pnpm run lint
+     ```
+     - **Vérification**: **AUCUN import MUI**, **AUCUNE erreur TypeScript**, **ESLint passe**
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "@mui/" src/` ne trouve plus d'imports MUI
+  - [ ] `SourceTooltip.tsx` utilise Mantine Tooltip (ou est supprimé)
+  - [ ] `@mui/*` supprimé de `package.json` et `pnpm-lock.yaml`
+  - [ ] Règle ESLint `no-restricted-imports` ajoutée pour bloquer MUI
+  - [ ] Pages news/brief fonctionnent avec le nouveau composant (ou sans)
+  - [ ] `pnpm run typecheck` passe sans erreur liée à MUI
+  - [ ] `pnpm run lint` bloque les imports MUI (test avec un import test)
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FE-005/`
+  - [ ] Diff ESLint déposé dans `proofs/FE-005/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que SourceTooltip est bien utilisé avant de le réécrire (ou supprimer si inutilisé)
+  - ⚠️ Mantine Tooltip utilise `label` au lieu de `title` (comme MUI)
+  - ⚠️ Vérifier que les pages qui utilisent SourceTooltip fonctionnent toujours
+  - ⚠️ Ne pas supprimer la fonctionnalité, juste remplacer MUI par Mantine
+  - ✅ Consulter la doc Mantine Tooltip: https://mantine.dev/core/tooltip/
+  - ✅ Tester que le tooltip s'affiche correctement dans les pages
+
+#### FS-001 — Déclarations `import.meta.env` fiables *(Effort S)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `src/config/env.ts` déclenche 3 erreurs TS (`ImportMetaEnv` incomplet), bloquant CI. TypeScript ne connaît pas les variables d'environnement Vite (`VITE_*`).
+
+- **Prérequis**:
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier les erreurs TypeScript: `pnpm run typecheck`
+  - [ ] Vérifier les variables d'environnement utilisées: `grep -r "import.meta.env" src/`
+
+- **Steps détaillés**:
+
+  1. **Identifier les erreurs TypeScript actuelles**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Vérifier les erreurs
+     pnpm run typecheck 2>&1 | grep -i "ImportMetaEnv\|import.meta.env"
+     
+     # Chercher les usages de import.meta.env
+     grep -r "import.meta.env" src/ --include="*.ts" --include="*.tsx"
+     ```
+     - Notez les erreurs TypeScript (probablement 3 erreurs)
+     - Notez toutes les variables d'environnement utilisées
+     - **Vérification**: Liste des erreurs et variables identifiées
+
+  2. **Vérifier si `vite-env.d.ts` existe**
+     ```bash
+     # Chercher les fichiers de déclaration TypeScript
+     find src/ -name "*.d.ts" -o -name "vite-env.d.ts"
+     ls -la src/vite-env.d.ts 2>/dev/null || echo "Fichier n'existe pas"
+     ```
+     - Si le fichier existe, le lire pour voir ce qui est déjà déclaré
+     - **Vérification**: État actuel du fichier (existe ou non)
+
+  3. **Créer/modifier `src/vite-env.d.ts`**
+     - Fichier: `src/vite-env.d.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     /// <reference types="vite/client" />
+
+     interface ImportMetaEnv {
+       readonly VITE_API_BASE_URL?: string;
+       readonly VITE_USE_MOCKS?: string;
+       readonly VITE_ENABLE_SSE?: string;
+       readonly VITE_APP_DEBUG?: string;
+       // Ajouter d'autres variables VITE_* utilisées dans le projet
+     }
+
+     interface ImportMeta {
+       readonly env: ImportMetaEnv;
+     }
+     ```
+     - **Vérification**: Le fichier est créé/modifié correctement
+
+  4. **Vérifier toutes les variables utilisées dans le projet**
+     ```bash
+     # Extraire toutes les variables VITE_* utilisées
+     grep -roh "VITE_[A-Z_]*" src/ | sort -u
+     ```
+     - Ajouter toutes les variables trouvées dans `ImportMetaEnv`
+     - **Vérification**: Toutes les variables sont déclarées
+
+  5. **Vérifier que `pnpm run typecheck` passe**
+     ```bash
+     pnpm run typecheck
+     ```
+     - **Vérification**: **AUCUNE erreur** liée à `ImportMetaEnv` ou `import.meta.env`
+
+  6. **Documenter la convention**
+     - Fichier: `docs/dev/ui_migration_mantine.md` (créer si n'existe pas)
+     - Ajouter section :
+     ```markdown
+     ## Variables d'environnement
+
+     Toutes les variables d'environnement doivent être préfixées par `VITE_` pour être accessibles côté client.
+
+     Variables disponibles :
+     - `VITE_API_BASE_URL` : URL de base de l'API backend (défaut: `/api`)
+     - `VITE_USE_MOCKS` : Activer les mocks pour le développement (défaut: `0`)
+     - `VITE_ENABLE_SSE` : Activer Server-Sent Events (défaut: `0`)
+     - `VITE_APP_DEBUG` : Activer le mode debug (défaut: `0`)
+
+     Pour ajouter une nouvelle variable :
+     1. Ajouter la variable dans `.env` avec le préfixe `VITE_`
+     2. Déclarer la variable dans `src/vite-env.d.ts` dans l'interface `ImportMetaEnv`
+     3. Utiliser la variable avec `import.meta.env.VITE_*`
+     ```
+     - **Vérification**: La documentation est à jour
+
+  7. **Vérification finale**
+     ```bash
+     # Vérifier TypeScript
+     pnpm run typecheck
+     
+     # Vérifier que les variables sont bien typées
+     # Créer un fichier test temporaire
+     cat > /tmp/test-env.ts << 'EOF'
+     const apiUrl = import.meta.env.VITE_API_BASE_URL;
+     const useMocks = import.meta.env.VITE_USE_MOCKS;
+     EOF
+     npx tsc --noEmit /tmp/test-env.ts
+     rm /tmp/test-env.ts
+     ```
+     - **Vérification**: **AUCUNE erreur TypeScript**, les variables sont bien typées
+
+- **DoD (Definition of Done)**:
+  - [ ] Fichier `src/vite-env.d.ts` créé/modifié avec interface `ImportMetaEnv` complète
+  - [ ] Toutes les variables `VITE_*` utilisées dans le projet sont déclarées
+  - [ ] `pnpm run typecheck` ne montre plus d'erreurs liées à `ImportMetaEnv`
+  - [ ] Documentation ajoutée dans `docs/dev/ui_migration_mantine.md`
+  - [ ] Les 3 erreurs TypeScript initiales sont résolues
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Log typecheck (avant/après) déposé dans `proofs/FS-001/`
+  - [ ] Snippet de documentation déposé dans `proofs/FS-001/`
+
+- **Points d'attention**:
+  - ⚠️ Toutes les variables doivent être préfixées par `VITE_` pour être accessibles côté client
+  - ⚠️ Les variables sont toujours des `string | undefined` (même si on attend un booléen)
+  - ⚠️ Utiliser `readonly` pour éviter les modifications accidentelles
+  - ⚠️ Ajouter `/// <reference types="vite/client" />` en haut du fichier
+  - ✅ Consulter la doc Vite: https://vitejs.dev/guide/env-and-mode.html
+  - ✅ Tester que les variables sont bien accessibles dans le code
+
+#### BE-004 — Recherche actions sans mock *(Effort M)*
+
+**Statut**: DONE by AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `stocksService.search` renvoie une liste mockée (AAPL/MSFT hardcodés), contraire à la règle « no mocks » et génère des signaux erronés.
+- **Note**: Vérifié - `stocksService.search` utilise déjà `/api/stocks/search` (pas de mock). L'endpoint backend existe et fonctionne correctement.
+
+- **Prérequis**:
+  - [ ] Backend démarré (`./finance-copilot.sh start`)
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Aucune erreur dans les logs
+
+- **Steps détaillés**:
+
+  1. Exposer un endpoint backend (`GET /stocks/search?q=`) ou, à défaut, réutiliser `/stocks/universe` + filtrage réel (aucun tableau mock).
+  2. Supprimer le tableau `mockResults`, gérer le cas 0 résultat avec `EmptyState` + CTA “élargir la requête”.
+  3. Couvrir par un test (unit/service + Playwright) montrant qu’un ticker réellement suivi (ex: `NVDA`) est proposé.
+- **DoD**: `rg "mockResults"` → 0; page Stocks affiche résultats backend + état vide propre; curl `/api/stocks/search?q=AAPL` figure dans les preuves.
+- **Proof**: log tests + screenshot recherche + captures curl.
+
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FE-006 — Refonte Market Brief Mantine/Tremor *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: `MarketBrief.tsx` utilise encore layout legacy (inline styles, boutons custom, `<select>` brut) en contradiction avec la vision Mantine. Le composant doit être refait avec Mantine pour la cohérence UI.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/brief/daily` et `/api/brief/weekly` fonctionnent
+  - [ ] Page Brief accessible sur http://localhost:5173/brief
+  - [ ] Lire le fichier actuel: `cat src/pages/MarketBrief.tsx` ou `src/components/MarketBrief.tsx`
+
+- **Steps détaillés**:
+
+  1. **Analyser le code actuel de MarketBrief**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Trouver le fichier
+     find src/ -name "*MarketBrief*" -o -name "*Brief*"
+     
+     # Lire le fichier
+     cat src/pages/MarketBrief.tsx | head -100
+     
+     # Chercher les styles inline
+     grep -n "style=" src/pages/MarketBrief.tsx
+     grep -n "backgroundColor" src/pages/MarketBrief.tsx
+     ```
+     - Notez tous les styles inline, `<select>` bruts, boutons custom
+     - **Vérification**: Liste des éléments à remplacer
+
+  2. **Remplacer les styles inline par composants Mantine**
+     - Fichier: `src/pages/MarketBrief.tsx` ou `src/components/MarketBrief.tsx`
+     - **AVANT** (legacy):
+     ```typescript
+     <div style={{ backgroundColor: '#f0f0f0', padding: '16px' }}>
+       <select onChange={...}>
+         <option>Quotidien</option>
+         <option>Hebdomadaire</option>
+       </select>
+       <button onClick={...}>Custom Button</button>
+     </div>
+     ```
+     - **APRÈS** (Mantine):
+     ```typescript
+     import { Stack, Card, SegmentedControl, Button, Alert } from '@mantine/core';
+     
+     <Card p="md" radius="md">
+       <Stack gap="md">
+         <SegmentedControl
+           value={briefType}
+           onChange={setBriefType}
+           data={[
+             { value: 'daily', label: 'Quotidien' },
+             { value: 'weekly', label: 'Hebdomadaire' },
+           ]}
+         />
+         <Button onClick={handleRefresh}>Rafraîchir</Button>
+       </Stack>
+     </Card>
+     ```
+     - **Vérification**: Plus de styles inline, tout utilise Mantine
+
+  3. **Remplacer `<select>` par `SegmentedControl` ou `Select` Mantine**
+     - Utiliser `SegmentedControl` pour toggle quotidien/hebdomadaire
+     - Utiliser `Select` pour sélection d'univers si nécessaire
+     - **Vérification**: Plus de `<select>` HTML brut
+
+  4. **Normaliser Loading/Empty/Error avec composants Mantine**
+     - **Code**:
+     ```typescript
+     import { Skeleton, Alert, Stack } from '@mantine/core';
+     
+     if (isLoading) {
+       return (
+         <Stack>
+           <Skeleton height={200} radius="md" />
+           <Skeleton height={100} radius="md" />
+         </Stack>
+       );
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           Impossible de charger le brief. {error.message}
+         </Alert>
+       );
+     }
+     
+     if (!data || data.length === 0) {
+       return (
+         <Alert color="gray" title="Aucun brief disponible">
+           Aucun brief disponible pour le moment.
+         </Alert>
+       );
+     }
+     ```
+     - **Vérification**: Tous les états utilisent des composants Mantine
+
+  5. **Ajouter `FreshnessBadge` partagé**
+     - Utiliser le composant `FreshnessBadge` existant
+     - Passer `data.freshness` du backend
+     - **Vérification**: Le badge s'affiche correctement
+
+  6. **Brancher la sélection d'univers sur un refetch réel**
+     - Quand l'utilisateur change l'univers, déclencher un `refetch()` avec les nouveaux paramètres
+     - **Code**:
+     ```typescript
+     const [universe, setUniverse] = useState<string[]>([]);
+     
+     const { data, refetch } = useBrief({
+       type: briefType,
+       universe: universe,
+     });
+     
+     const handleUniverseChange = (newUniverse: string[]) => {
+       setUniverse(newUniverse);
+       // Refetch avec nouveau paramètre
+       refetch();
+     };
+     ```
+     - Logger si le backend ignore le paramètre (console.warn)
+     - **Vérification**: Changer l'univers déclenche un nouveau fetch
+
+  7. **Vérifier qu'il n'y a plus de styles inline**
+     ```bash
+     # Vérifier qu'il n'y a plus de backgroundColor inline
+     grep -n "backgroundColor" src/pages/MarketBrief.tsx
+     
+     # Vérifier qu'il n'y a plus de style= inline
+     grep -n 'style=' src/pages/MarketBrief.tsx
+     ```
+     - **Vérification**: **AUCUN style inline**, **AUCUN backgroundColor**
+
+  8. **Tester avec Playwright**
+     - Fichier: `tests/ui/brief.spec.ts` (créer si n'existe pas)
+     - **Test**:
+     ```typescript
+     import { test, expect } from '@playwright/test';
+     
+     test('Market Brief page should load', async ({ page }) => {
+       await page.goto('http://localhost:5173/brief');
+       
+       // Vérifier que la page se charge
+       await expect(page.locator('h1, h2')).toContainText(/brief|marché/i);
+       
+       // Vérifier que le SegmentedControl est présent
+       await expect(page.locator('[role="radiogroup"]')).toBeVisible();
+       
+       // Tester le toggle quotidien/hebdomadaire
+       await page.click('text=Hebdomadaire');
+       await page.waitForTimeout(500);
+       
+       // Vérifier qu'il n'y a pas d'erreur
+       const errors = await page.locator('[role="alert"]').count();
+       expect(errors).toBe(0);
+     });
+     ```
+     - **Vérification**: `npx playwright test tests/ui/brief.spec.ts` passe
+
+  9. **Vérification finale**
+     - Démarrer: `./finance-copilot.sh start`
+     - Ouvrir http://localhost:5173/brief
+     - Prendre un screenshot AVANT (si possible) et APRÈS
+     - Tester le toggle quotidien/hebdomadaire
+     - Vérifier la console réseau (F12 → Network) pour voir les refetch
+     - **Vérification**: Page fonctionne, pas d'erreur, refetch fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] `grep -r "backgroundColor" src/pages/MarketBrief.tsx` ne trouve plus rien
+  - [ ] `grep -r 'style=' src/pages/MarketBrief.tsx` ne trouve plus de styles inline
+  - [ ] Plus de `<select>` HTML brut, remplacé par `SegmentedControl` ou `Select` Mantine
+  - [ ] Plus de boutons custom, remplacés par `Button` Mantine
+  - [ ] Layout utilise `Stack`, `Card`, `Group` Mantine
+  - [ ] États Loading/Empty/Error utilisent `Skeleton`, `Alert` Mantine
+  - [ ] `FreshnessBadge` affiché correctement
+  - [ ] Sélection d'univers déclenche un refetch réel
+  - [ ] Test Playwright `/brief` passe
+  - [ ] `pnpm run typecheck` passe sans erreur
+  - [ ] `pnpm run build` passe sans erreur
+  - [ ] Screenshots avant/après déposés dans `proofs/FE-006/`
+  - [ ] Log réseau (refetch) déposé dans `proofs/FE-006/`
+  - [ ] Diff du code déposé dans `proofs/FE-006/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas supprimer la fonctionnalité, juste remplacer l'UI legacy par Mantine
+  - ⚠️ Vérifier que tous les styles inline sont remplacés (pas seulement backgroundColor)
+  - ⚠️ Utiliser le thème Mantine pour les couleurs (pas de couleurs hardcodées)
+  - ⚠️ Tester que le toggle quotidien/hebdomadaire fonctionne toujours
+  - ⚠️ Si le backend ignore le paramètre univers, logger un warning
+  - ✅ Consulter la doc Mantine: https://mantine.dev/
+  - ✅ Utiliser `SegmentedControl` pour les toggles, `Select` pour les dropdowns
+
+---
+
+## P1 — Copilot & Backtests (48–72h)
+
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-002 — Copilot streaming avec contexte *(Effort M)* - CLAIMED
+
+**Statut**: CLAIMED  
+**Points**: +90 pts  
+**Priorité**: 🔴 CRITIQUE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+- **Why**: Offrir un copilote LLM contextualisé (prévision sélectionnée, filtres actifs) avec streaming pour une meilleure UX. Actuellement, `Copilot.tsx` utilise `useCopilotQuery` qui fait un appel POST normal (pas de streaming). Le service `askCopilotStream` existe déjà dans `src/services/copilot.ts` mais n'est pas utilisé. Il faut migrer la page vers le streaming et ajouter la gestion du contexte.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/copilot/ask` existe: `curl -X POST http://localhost:8050/api/copilot/ask -H "Content-Type: application/json" -d '{"question": "test"}'`
+  - [ ] Page Copilot accessible sur http://localhost:5173/copilot
+  - [ ] Lire les fichiers existants: `src/services/copilot.ts`, `src/pages/Copilot.tsx`, `src/hooks/useCopilot.ts`
+
+- **Steps détaillés**:
+
+  1. **Vérifier le service streaming existant**
+     - Fichier: `src/services/copilot.ts`
+     - Vérifier que `askCopilotStream` existe et fonctionne
+     - Tester avec un appel simple:
+     ```typescript
+     import { askCopilotStream } from '@/services/copilot';
+     
+     askCopilotStream(
+       { prompt: "test", context: {} },
+       (delta) => console.log("Delta:", delta),
+       { onDone: () => console.log("Done"), onError: (e) => console.error(e) }
+     );
+     ```
+     - **Vérification**: Le service fonctionne
+
+  2. **Créer le hook `useCopilotStream`**
+     - Fichier: `src/hooks/useCopilotStream.ts` (créer)
+     - **Code**:
+     ```typescript
+     import { useState, useCallback, useRef } from 'react';
+     import { askCopilotStream } from '@/services/copilot';
+     
+     export function useCopilotStream() {
+       const [isStreaming, setIsStreaming] = useState(false);
+       const [currentResponse, setCurrentResponse] = useState('');
+       const [error, setError] = useState<Error | null>(null);
+       const abortControllerRef = useRef<AbortController | null>(null);
+       
+       const ask = useCallback(async (prompt: string, context?: any) => {
+         setIsStreaming(true);
+         setCurrentResponse('');
+         setError(null);
+         
+         const controller = new AbortController();
+         abortControllerRef.current = controller;
+         
+         try {
+           await askCopilotStream(
+             { prompt, context },
+             (delta) => {
+               setCurrentResponse(prev => prev + delta);
+             },
+             {
+               signal: controller.signal,
+               onDone: () => {
+                 setIsStreaming(false);
+                 abortControllerRef.current = null;
+               },
+               onError: (err) => {
+                 setError(err);
+                 setIsStreaming(false);
+                 abortControllerRef.current = null;
+               },
+             }
+           );
+         } catch (err) {
+           if (err instanceof Error && err.name !== 'AbortError') {
+             setError(err);
+           }
+           setIsStreaming(false);
+           abortControllerRef.current = null;
+         }
+       }, []);
+       
+       const abort = useCallback(() => {
+         if (abortControllerRef.current) {
+           abortControllerRef.current.abort();
+           setIsStreaming(false);
+         }
+       }, []);
+       
+       const reset = useCallback(() => {
+         setCurrentResponse('');
+         setError(null);
+         abort();
+       }, [abort]);
+       
+       return {
+         ask,
+         abort,
+         reset,
+         isStreaming,
+         currentResponse,
+         error,
+       };
+     }
+     ```
+     - **Vérification**: Hook créé, `pnpm run typecheck` passe
+
+  3. **Modifier `Copilot.tsx` pour utiliser le streaming**
+     - Fichier: `src/pages/Copilot.tsx`
+     - Remplacer `useCopilotQuery` par `useCopilotStream`
+     - **Code**:
+     ```typescript
+     import { useCopilotStream } from '@/hooks/useCopilotStream';
+     import { useEffect } from 'react';
+     
+     const { ask, isStreaming, currentResponse, error, abort, reset } = useCopilotStream();
+     const [conversation, setConversation] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+     
+     const handleSubmit = async () => {
+       if (!question.trim()) return;
+       
+       const userMessage = question.trim();
+       setQuestion('');
+       setConversation(prev => [...prev, { role: 'user', content: userMessage }]);
+       
+       // Ajouter un message assistant vide qui sera mis à jour en streaming
+       setConversation(prev => [...prev, { role: 'assistant', content: '' }]);
+       
+       // Démarrer le streaming
+       await ask(userMessage, { /* contexte optionnel */ });
+     };
+     
+     // Mettre à jour le dernier message assistant avec currentResponse
+     useEffect(() => {
+       if (currentResponse) {
+         setConversation(prev => {
+           const newConv = [...prev];
+           const lastMsg = newConv[newConv.length - 1];
+           if (lastMsg && lastMsg.role === 'assistant') {
+             lastMsg.content = currentResponse;
+           }
+           return newConv;
+         });
+       }
+     }, [currentResponse]);
+     ```
+     - **Vérification**: Streaming fonctionne, texte apparaît progressivement
+
+  4. **Ajouter boutons rapides ("Explique la prévision", "Risques & invalidation")**
+     - Ajouter des boutons pré-remplis dans l'UI
+     - **Code**:
+     ```typescript
+     <Group gap="xs" mb="md">
+       <Button
+         variant="light"
+         size="sm"
+         onClick={() => {
+           setQuestion("Explique-moi cette prévision en détail");
+           handleSubmit();
+         }}
+       >
+         Explique la prévision
+       </Button>
+       <Button
+         variant="light"
+         size="sm"
+         onClick={() => {
+           setQuestion("Quels sont les risques et facteurs d'invalidation de cette prévision?");
+           handleSubmit();
+         }}
+       >
+         Risques & invalidation
+       </Button>
+     </Group>
+     ```
+     - **Vérification**: Boutons fonctionnent
+
+  5. **Ajouter la gestion du contexte (prévision sélectionnée)**
+     - Si l'utilisateur vient de la page Forecasts avec une prévision sélectionnée, passer le contexte
+     - **Code**:
+     ```typescript
+     // Récupérer le contexte depuis l'URL ou le state
+     const [selectedForecast, setSelectedForecast] = useState<any>(null);
+     
+     const handleSubmit = async () => {
+       // ...
+       await ask(userMessage, {
+         forecast: selectedForecast, // Contexte optionnel
+         filters: { /* filtres actifs */ },
+       });
+     };
+     ```
+     - **Vérification**: Contexte transmis au backend
+
+  6. **Ajouter bouton "Arrêter" pendant le streaming**
+     - Afficher un bouton "Arrêter" quand `isStreaming === true`
+     - **Code**:
+     ```typescript
+     {isStreaming && (
+       <Button variant="light" color="red" onClick={abort}>
+         Arrêter
+       </Button>
+     )}
+     ```
+     - **Vérification**: Bouton arrête le streaming
+
+  7. **Gestion erreurs/réessai**
+     - Afficher l'erreur et ajouter un bouton "Réessayer"
+     - **Code**:
+     ```typescript
+     {error && (
+       <Alert color="red" title="Erreur" mb="md">
+         {error.message}
+         <Button mt="xs" size="xs" onClick={() => {
+           reset();
+           handleSubmit(); // Réessayer la dernière question
+         }}>
+           Réessayer
+         </Button>
+       </Alert>
+     )}
+     ```
+     - **Vérification**: Réessai fonctionne
+
+  8. **Sauvegarder le transcript (optionnel pour preuve)**
+     - Fonction pour sauvegarder dans `proofs/FS-002/`
+     - **Code**:
+     ```typescript
+     const saveTranscript = () => {
+       const transcript = {
+         timestamp: new Date().toISOString(),
+         conversation,
+       };
+       // Sauvegarder (ex: download JSON)
+       const blob = new Blob([JSON.stringify(transcript, null, 2)], { type: 'application/json' });
+       const url = URL.createObjectURL(blob);
+       const a = document.createElement('a');
+       a.href = url;
+       a.download = `copilot-transcript-${Date.now()}.json`;
+       a.click();
+     };
+     ```
+     - **Vérification**: Transcript peut être sauvegardé
+
+- **DoD (Definition of Done)**:
+  - [ ] Hook `useCopilotStream` créé avec gestion abort
+  - [ ] Page `Copilot.tsx` utilise le streaming (texte apparaît progressivement)
+  - [ ] Boutons rapides fonctionnent ("Explique la prévision", "Risques & invalidation")
+  - [ ] Contexte (prévision sélectionnée) peut être transmis (optionnel)
+  - [ ] Bouton "Arrêter" fonctionne pendant le streaming
+  - [ ] Gestion erreurs/réessai implémentée
+  - [ ] Transcript peut être sauvegardé (optionnel)
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Vidéo/GIF du streaming déposé dans `proofs/FS-002/`
+
+- **Points d'attention**:
+  - ⚠️ Le service `askCopilotStream` existe déjà dans `src/services/copilot.ts`, ne pas le recréer
+  - ⚠️ Gérer l'abort correctement (ne pas laisser de requêtes en cours)
+  - ⚠️ Le contexte doit être optionnel (ne pas casser si pas de prévision sélectionnée)
+  - ⚠️ Tester avec différentes longueurs de réponse (courtes et longues)
+  - ✅ Note: Le backend doit supporter le streaming (vérifier avec curl d'abord)
+  - ✅ Améliorer l'UX: afficher un indicateur de streaming (typing indicator)
+
+#### FS-003 — Résumé & equity curve *(Effort M)* - COMPLETED
+
+**Statut**: COMPLETED  
+**Points**: +80 pts  
+**Priorité**: 🔴 CRITIQUE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+- **Why**: Montrer performance réelle (CAGR, maxDD, win rate, equity) pour les backtests. Actuellement, la page Backtests n'affiche pas ces métriques importantes. Il faut créer les services/hooks frontend et afficher les données avec des graphiques Tremor.
+
+**Steps réalisées**:
+1. **Endpoint `/api/backtests` amélioré**:
+   - Données formatées pour composants Tremor (LineChart pour equity curve)
+   - Calcul des métriques avancées: CAGR, maxDD, Sharpe, profit factor, hit_rate, win_rate
+   - Support des filtres: strategy, horizon, min_confidence, benchmark
+
+2. **Services backend renforcés**:
+   - `BacktestService` avec calcul de métriques de performance détaillées
+   - Équity curve générée à partir de l'historique des rendements
+   - Support des stratégies multiples (momentum, mean-reversion, etc.)
+
+3. **Intégration frontend**:
+   - Hooks `useBacktests`, `useBacktestForTicker`, `useBacktestMetrics` créés
+   - Composants Tremor LineChart pour la courbe de performance
+   - Cartes KPI pour les métriques principales (CAGR, maxDD, win_rate, total_return)
+
+4. **Page `/backtests` améliorée**:
+   - Affichage des métriques de performance avec graphiques Tremor
+   - Courbe equity interactive avec zoom et tooltips
+   - Filtres avancés pour stratégie, univers, horizon
+   - États loading/error/empty gérés
+
+5. **Robustesse & Qualité**:
+   - Never-empty patterns maintenus avec fallbacks
+   - Gestion des erreurs complète
+   - Formats compatibles avec les composants Tremor
+
+**DoD (Definition of Done)**:
+- [x] Endpoint `/api/backtests` retourne métriques complètes (CAGR, maxDD, win_rate, etc.)
+- [x] Courbe equity disponible dans format compatible Tremor LineChart
+- [x] Services frontend `backtestService` avec méthodes pour métriques
+- [x] Hooks `useBacktests`, `useBacktestMetrics` fonctionnels
+- [x] Page Backtests affiche KPI et graphiques Tremor
+- [x] États loading/error/empty correctement gérés
+- [x] Filtres fonctionnels avec données réelles
+
+**Files created/updated**:
+- `backend/api/routes/backtests.py` - Endpoint backtests amélioré avec métriques
+- `backend/services/backtest.service.ts` - Service de calcul des métriques de backtest
+- `backend/hooks/useBacktests.ts` - Hooks React Query pour backtests
+- `frontend/webapp/src/pages/Backtests.tsx` - Page backtests avec graphiques Tremor
+- `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx` - Affichage du score de robustesse
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/backtests` existe: `curl http://localhost:8050/api/backtests`
+  - [ ] Page Backtests accessible sur http://localhost:5173/backtests
+  - [ ] Lire le fichier actuel: `src/pages/Backtests.tsx`
+
+- **Steps détaillés**:
+
+  1. **Vérifier l'endpoint backend `/api/backtests`**
+     ```bash
+     cd /mnt/utm
+     curl http://localhost:8050/api/backtests
+     ```
+     - Noter la structure de réponse JSON
+     - Vérifier si les métriques (CAGR, maxDD, win_rate, equity_curve) sont présentes
+     - **Vérification**: Structure de réponse comprise
+
+  2. **Créer les types TypeScript pour les backtests**
+     - Fichier: `src/types/backtest.types.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     export interface BacktestMetrics {
+       cagr: number;  // Compound Annual Growth Rate (%)
+       max_drawdown: number;  // Maximum drawdown (%)
+       win_rate: number;  // Win rate (0-1)
+       total_return: number;  // Total return (%)
+       sharpe_ratio?: number;
+       equity_curve: Array<{ date: string; equity: number }>;  // Equity over time
+     }
+     
+     export interface BacktestResponse {
+       ok: boolean;
+       data: {
+         metrics: BacktestMetrics;
+         trades?: Array<any>;
+         summary?: string;
+       };
+     }
+     ```
+     - **Vérification**: Types créés, `pnpm run typecheck` passe
+
+  3. **Créer le service `backtest.service.ts`**
+     - Fichier: `src/services/backtest.service.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { apiGet } from '@/api/client';
+     import type { BacktestResponse } from '@/types/backtest.types';
+     
+     export const backtestService = {
+       getBacktests: async (params?: { ticker?: string; horizon?: string }) => {
+         return apiGet<BacktestResponse>('/api/backtests', params);
+       },
+     };
+     ```
+     - **Vérification**: Service créé, `pnpm run typecheck` passe
+
+  4. **Créer le hook `useBacktest.ts`**
+     - Fichier: `src/hooks/useBacktest.ts` (créer si n'existe pas)
+     - **Code**:
+     ```typescript
+     import { useQuery } from '@tanstack/react-query';
+     import { backtestService } from '@/services/backtest.service';
+     import type { BacktestMetrics } from '@/types/backtest.types';
+     
+     export function useBacktest(params?: { ticker?: string; horizon?: string }) {
+       return useQuery({
+         queryKey: ['backtests', params],
+         queryFn: async () => {
+           const response = await backtestService.getBacktests(params);
+           if (response.ok && response.data) {
+             return response.data.metrics as BacktestMetrics;
+           }
+           return null;
+         },
+         staleTime: 5 * 60 * 1000, // 5 minutes
+       });
+     }
+     ```
+     - **Vérification**: Hook créé, `pnpm run typecheck` passe
+
+  5. **Modifier `Backtests.tsx` pour afficher les KPI**
+     - Fichier: `src/pages/Backtests.tsx`
+     - Ajouter des cartes KPI avec Mantine `Card`:
+     ```typescript
+     import { SimpleGrid, Card, Text, Stack, Skeleton, Alert } from '@mantine/core';
+     import { useBacktest } from '@/hooks/useBacktest';
+     
+     const { data: metrics, isLoading, error } = useBacktest();
+     
+     // Cartes KPI
+     <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
+       <Card>
+         <Text size="sm" c="dimmed">CAGR</Text>
+         <Text size="xl" fw={700}>{metrics?.cagr?.toFixed(2)}%</Text>
+       </Card>
+       <Card>
+         <Text size="sm" c="dimmed">Max Drawdown</Text>
+         <Text size="xl" fw={700} c="red">{metrics?.max_drawdown?.toFixed(2)}%</Text>
+       </Card>
+       <Card>
+         <Text size="sm" c="dimmed">Win Rate</Text>
+         <Text size="xl" fw={700}>{(metrics?.win_rate * 100)?.toFixed(1)}%</Text>
+       </Card>
+       <Card>
+         <Text size="sm" c="dimmed">Total Return</Text>
+         <Text size="xl" fw={700} c={metrics?.total_return >= 0 ? "green" : "red"}>
+           {metrics?.total_return?.toFixed(2)}%
+         </Text>
+       </Card>
+     </SimpleGrid>
+     ```
+     - **Vérification**: Cartes KPI affichées
+
+  6. **Ajouter la courbe equity avec Tremor LineChart**
+     - Lazy load Tremor LineChart (voir PERF-005)
+     - **Code**:
+     ```typescript
+     import { lazy, Suspense } from 'react';
+     const LineChart = lazy(() => import('@tremor/react').then(m => ({ default: m.LineChart })));
+     
+     // Transformer equity_curve pour Tremor
+     const chartData = useMemo(() => {
+       if (!metrics?.equity_curve) return [];
+       return metrics.equity_curve.map(point => ({
+         date: point.date,
+         Equity: point.equity,
+       }));
+     }, [metrics]);
+     
+     <Suspense fallback={<Skeleton height={400} />}>
+       <LineChart
+         className="h-96"
+         data={chartData}
+         index="date"
+         categories={["Equity"]}
+         yAxisWidth={56}
+       />
+     </Suspense>
+     ```
+     - **Vérification**: Courbe equity affichée
+
+  7. **Gérer les états Loading/Error/Empty**
+     - **Code**:
+     ```typescript
+     if (isLoading) {
+       return <Skeleton height={400} />;
+     }
+     
+     if (error) {
+       return (
+         <Alert color="red" title="Erreur">
+           Impossible de charger les backtests. {error.message}
+         </Alert>
+       );
+     }
+     
+     if (!metrics) {
+       return (
+         <Alert color="gray" title="Aucun backtest disponible">
+           Aucun backtest disponible pour le moment.
+         </Alert>
+       );
+     }
+     ```
+     - **Vérification**: États gérés
+
+  8. **Ajouter le bouton "Recalculer"**
+     - Utiliser `refetch()` du hook
+     - **Code**:
+     ```typescript
+     const { data: metrics, isLoading, error, refetch } = useBacktest();
+     
+     <Button onClick={() => refetch()} loading={isLoading}>
+       Recalculer
+     </Button>
+     ```
+     - **Vérification**: Bouton fonctionne
+
+  9. **Sauvegarder le JSON brut (optionnel pour preuve)**
+     - Fonction pour sauvegarder dans `proofs/FS-003/`
+     - **Vérification**: JSON peut être sauvegardé
+
+- **DoD (Definition of Done)**:
+  - [ ] Types TypeScript créés (`BacktestMetrics`, `BacktestResponse`)
+  - [ ] Service `backtestService` créé
+  - [ ] Hook `useBacktest` créé avec TanStack Query
+  - [ ] Page affiche les 4 KPI (CAGR, maxDD, win rate, total return) dans des cartes
+  - [ ] Courbe equity affichée avec Tremor LineChart (lazy loaded)
+  - [ ] États Loading/Error/Empty gérés (Skeleton, Alert)
+  - [ ] Bouton "Recalculer" fonctionne (refetch)
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Screenshot de la page avec KPI et courbe déposé dans `proofs/FS-003/`
+  - [ ] Log curl de `/api/backtests` déposé dans `proofs/FS-003/`
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que l'endpoint retourne bien les métriques et la courbe equity
+  - ⚠️ Formater les pourcentages correctement (CAGR, maxDD, total return en %)
+  - ⚠️ Win rate peut être 0-1 ou 0-100, vérifier le format backend
+  - ⚠️ Si l'endpoint ne retourne pas equity_curve, adapter le code
+  - ✅ Consulter la doc Tremor pour LineChart: https://www.tremor.so/docs/components/line-chart
+  - ✅ Note: Si les données ne sont pas disponibles, afficher un message clair (never-empty)
+
+---
+
+## P1 — Optimisations Performance (basées sur analyse ChatGPT)
+
+#### PERF-001 — Code splitting routes App.tsx (lazy loading) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Toutes les pages sont importées statiquement dans `App.tsx`, ce qui alourdit le bundle initial. Le lazy loading au niveau routing réduirait significativement le Time to First Byte.
+
+- **Prérequis**:
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier le bundle actuel: `pnpm run build` et noter la taille
+  - [ ] Lire `App.tsx` pour comprendre la structure actuelle
+
+- **Steps détaillés**:
+
+  1. **Analyser le bundle actuel**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     pnpm run build
+     # Noter la taille du bundle principal
+     ```
+     - **Vérification**: Taille du bundle initial notée
+
+  2. **Convertir les imports statiques en React.lazy**
+     - Fichier: `src/App.tsx`
+     - **AVANT**:
+     ```typescript
+     import Dashboard from './pages/Dashboard'
+     import ForecastsMinimal from './pages/ForecastsMinimal'
+     // ... tous les autres imports statiques
+     ```
+     - **APRÈS**:
+     ```typescript
+     import { lazy, Suspense } from 'react'
+     import { Skeleton } from '@mantine/core'
+     
+     const Dashboard = lazy(() => import('./pages/Dashboard'))
+     const ForecastsMinimal = lazy(() => import('./pages/ForecastsMinimal'))
+     // ... tous les autres en lazy
+     ```
+     - **Vérification**: `pnpm run typecheck` passe
+
+  3. **Ajouter Suspense boundaries pour chaque route**
+     - Créer un composant `PageSkeleton` pour le fallback
+     - Wrapper chaque route avec `<Suspense fallback={<PageSkeleton />}>`
+     - **Vérification**: Les pages se chargent avec skeleton
+
+  4. **Vérifier le bundle après**
+     ```bash
+     pnpm run build
+     # Comparer la taille du bundle initial (devrait être réduite)
+     ```
+     - **Vérification**: Bundle initial réduit de 30-50%
+
+  5. **Tester la navigation**
+     - Naviguer entre toutes les pages
+     - Vérifier que le lazy loading fonctionne (Network tab)
+     - **Vérification**: Pages chargées à la demande
+
+- **DoD (Definition of Done)**:
+  - [ ] Toutes les pages converties en `React.lazy()`
+  - [ ] Suspense boundaries ajoutées avec fallback approprié
+  - [ ] Bundle initial réduit (vérifié avec `pnpm run build`)
+  - [ ] Navigation fonctionne sans erreur
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+  - [ ] Screenshot Network tab (avant/après) déposé dans `proofs/PERF-001/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas lazy load les composants critiques (ErrorBoundary, AppProviders)
+  - ⚠️ Utiliser un skeleton approprié pour chaque type de page
+  - ✅ Tester que les routes fonctionnent toujours après conversion
+
+---
+
+#### PERF-002 — Redis cache layer pour endpoints fréquents *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +90 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Le cache actuel est file-based seulement (TTLCache, Cache class). Un cache Redis permettrait un cache distribué et de meilleures performances sous charge pour les endpoints fréquents (macro, news, dashboard KPIs).
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible
+  - [ ] Redis installé ou accessible (ou Docker Redis)
+  - [ ] Vérifier les endpoints fréquents: `/api/macro/series`, `/api/news/feed`, `/api/dashboard/kpis`
+
+- **Steps détaillés**:
+
+  1. **Installer/Configurer Redis**
+     ```bash
+     # Option 1: Docker
+     docker run -d -p 6379:6379 redis:7-alpine
+     
+     # Option 2: Local
+     # sudo apt install redis-server (ou équivalent)
+     ```
+     - **Vérification**: Redis accessible sur `localhost:6379`
+
+  2. **Installer redis-py**
+     - Fichier: `copilot-app/backend/requirements.txt`
+     - Ajouter: `redis>=5.0.0`
+     - Exécuter: `pip install redis`
+     - **Vérification**: `python -c "import redis; print('OK')"`
+
+  3. **Créer le service Redis cache**
+     - Fichier: `copilot-app/backend/services/redis_cache.py`
+     - Implémenter classe `RedisCache` avec get/set/delete
+     - **Vérification**: Le service peut être importé
+
+  4. **Intégrer Redis dans les endpoints fréquents**
+     - Fichier: `copilot-app/backend/api/routes/macro.py` (TTL 15 min)
+     - Fichier: `copilot-app/backend/api/routes/news.py` (TTL 5 min)
+     - Fichier: `copilot-app/backend/api/routes/dashboard.py` (TTL 10 min)
+     - **Vérification**: Les endpoints utilisent Redis
+
+  5. **Fallback si Redis indisponible**
+     - Si Redis down, utiliser le cache file-based existant
+     - Logger un warning mais continuer à fonctionner
+     - **Vérification**: L'app fonctionne même si Redis est down
+
+  6. **Tester les performances**
+     ```bash
+     # Premier appel (cache miss)
+     time curl http://localhost:8050/api/macro/series?ids=CPIAUCSL
+     
+     # Deuxième appel (cache hit)
+     time curl http://localhost:8050/api/macro/series?ids=CPIAUCSL
+     ```
+     - **Vérification**: Cache hit 5-10x plus rapide
+
+- **DoD (Definition of Done)**:
+  - [ ] Redis installé et accessible
+  - [ ] Service `redis_cache.py` créé
+  - [ ] Endpoints macro/news/dashboard utilisent Redis
+  - [ ] Fallback file-based si Redis down
+  - [ ] Tests de performance montrent amélioration
+  - [ ] Logs de cache hit/miss fonctionnent
+  - [ ] Preuve de performance (avant/après) déposée dans `proofs/PERF-002/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser le cache file-based existant (fallback)
+  - ⚠️ Gérer les erreurs Redis gracieusement
+  - ⚠️ TTL appropriés selon le type de données (macro: 15min, news: 5min)
+  - ✅ Tester avec Redis down pour vérifier le fallback
+
+---
+
+#### PERF-003 — Virtualisation listes longues (react-window) *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +70 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Les listes longues (stocks universe, news feed avec 1000+ items) peuvent dégrader les performances. La virtualisation ne render que les éléments visibles.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] Identifier les listes longues (>100 items)
+  - [ ] Vérifier si react-window est déjà installé
+
+- **Steps détaillés**:
+
+  1. **Identifier les listes longues**
+     ```bash
+     cd /mnt/utm/copilot-app/frontend/webapp
+     # Chercher les .map() sur de grandes listes
+     grep -r "\.map(" src/pages/ src/components/ | grep -v "node_modules"
+     ```
+     - Cibles probables: Stocks universe, News feed, Forecasts table
+     - **Vérification**: Listes identifiées
+
+  2. **Installer react-window**
+     ```bash
+     pnpm add react-window @types/react-window
+     ```
+     - **Vérification**: Package installé
+
+  3. **Virtualiser Stocks universe**
+     - Fichier: `src/pages/Stocks.tsx` ou composant liste
+     - Remplacer `.map()` par `FixedSizeList` ou `VariableSizeList`
+     - **Vérification**: Liste virtualisée fonctionne
+
+  4. **Virtualiser News feed**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - Virtualiser la liste d'articles
+     - **Vérification**: News feed virtualisé
+
+  5. **Tester les performances**
+     - Charger 1000+ items
+     - Vérifier le scroll fluide
+     - **Vérification**: Performance améliorée
+
+- **DoD (Definition of Done)**:
+  - [ ] react-window installé
+  - [ ] Au moins 2 listes longues virtualisées
+  - [ ] Scroll fluide avec 1000+ items
+  - [ ] Tests de performance montrent amélioration
+  - [ ] Preuve (screenshot/vidéo) déposée dans `proofs/PERF-003/`
+
+- **Points d'attention**:
+  - ⚠️ Ne virtualiser que les listes vraiment longues (>100 items)
+  - ⚠️ Gérer la hauteur dynamique si items de taille variable
+  - ✅ Tester avec différentes tailles d'écran
+
+---
+
+#### PERF-004 — Audit et amélioration memoization *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Memoization partielle actuellement. Audit et amélioration sur composants critiques pour éviter re-renders inutiles.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] React DevTools installé (pour profiler)
+  - [ ] Identifier les composants qui re-rendent souvent
+
+- **Steps détaillés**:
+
+  1. **Profiler avec React DevTools**
+     - Ouvrir React DevTools → Profiler
+     - Enregistrer une session (navigation, filtres, etc.)
+     - Identifier les composants qui re-rendent souvent
+     - **Vérification**: Composants problématiques identifiés
+
+  2. **Ajouter React.memo sur composants purs**
+     - Wrapper les composants qui reçoivent les mêmes props
+     - **Vérification**: Re-renders réduits
+
+  3. **Utiliser useMemo pour calculs coûteux**
+     - Liste triée/filtrée
+     - Transformations de données
+     - **Vérification**: Calculs optimisés
+
+  4. **Utiliser useCallback pour fonctions passées en props**
+     - Handlers passés à des composants enfants
+     - **Vérification**: Props stables
+
+  5. **Vérifier l'amélioration**
+     - Re-profiler après optimisations
+     - **Vérification**: Re-renders réduits de 30-50%
+
+- **DoD (Definition of Done)**:
+  - [ ] Audit profiler effectué
+  - [ ] Au moins 5 composants optimisés avec memo/useMemo/useCallback
+  - [ ] Re-renders réduits (mesuré avec profiler)
+  - [ ] Fonctionnalité maintenue
+  - [ ] Preuve profiler (avant/après) déposée dans `proofs/PERF-004/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas over-memoizer (peut ralentir si mal fait)
+  - ⚠️ Tester que les optimisations ne cassent pas la fonctionnalité
+  - ✅ Focus sur les composants critiques (Dashboard, Forecasts, Stocks)
+
+---
+
+#### BE-006 — POST /api/backtests/run endpoint *(Effort M)* - DONE
+
+**Statut**: COMPLETED  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+- **Why**: Actuellement seulement GET `/api/backtests` existe. Pas de POST pour lancer un backtest interactif avec paramètres depuis l'UI. Cette fonctionnalité est mentionnée dans l'analyse ChatGPT.
+
+- **Prérequis**:
+  - [x] Backend démarré
+  - [x] Vérifié que GET `/api/backtests` existe
+  - [x] Compris la structure des backtests existants
+
+**Steps réalisées**:
+1. **Modèle Pydantic créé**
+   - `BacktestRunRequest` avec paramètres: tickers, dates, strategy, horizon, min_confidence
+   - Validations et valeurs par défaut implémentés
+
+2. **Endpoint POST implémenté**
+   - `POST /api/backtests/run` avec validation des paramètres
+   - Gestion des erreurs et never-empty patterns
+   - Retour des résultats au format cohérent
+
+3. **Service de backtest développé**
+   - `BacktestService` avec méthode `run_custom_backtest`
+   - Logique de backtesting avec filtres, calculs et métriques
+   - Intégration avec le système de persistence existant
+
+4. **Endpoints complémentaires**
+   - `GET /api/backtests/status/{job_id}` pour suivre les jobs asynchrones
+   - Gestion de la persistence des résultats
+
+5. **Intégration et tests**
+   - Endpoint fonctionnel avec réponse structurée
+   - Tests de charge et erreurs implémentés
+   - Métriques de performance (hit_rate, CAGR, maxDD, Sharpe, profit factor)
+
+**DoD (Definition of Done)**:
+- [x] Modèle Pydantic `BacktestRunRequest` créé
+- [x] Endpoint POST `/api/backtests/run` implémenté  
+- [x] Backtest calculé avec paramètres fournis
+- [x] Résultats retournés dans format cohérent
+- [x] Gestion erreurs (never-empty pattern)
+- [x] Service `backtest_service` avec logique de calcul
+- [x] Métriques avancées (CAGR, maxDD, Sharpe, Profit Factor, Win Rate)
+- [x] Intégration avec système de persistence existant
+
+**Fichiers créés/mis à jour**:
+- `backend/services/backtest_service.py` - Service complet de backtesting
+- `backend/api/routes/backtests.py` - Endpoint POST et status
+- `backend/models/backtest_request.py` - Modèle Pydantic (inclus dans routes)
+
+- **Steps détaillés**:
+
+  1. **Analyser l'endpoint GET existant**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     - Comprendre la structure de données
+     - **Vérification**: Structure comprise
+
+  2. **Créer le modèle Pydantic pour la requête**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     ```python
+     from pydantic import BaseModel
+     from typing import Optional, List
+     
+     class BacktestRunRequest(BaseModel):
+         tickers: Optional[List[str]] = None
+         start_date: Optional[str] = None
+         end_date: Optional[str] = None
+         strategy: Optional[str] = "momentum"
+         horizon: Optional[str] = "1m"
+         min_confidence: Optional[float] = 0.5
+     ```
+     - **Vérification**: Modèle créé
+
+  3. **Implémenter l'endpoint POST**
+     - Fichier: `copilot-app/backend/api/routes/backtests.py`
+     ```python
+     @router.post("/backtests/run")
+     def run_backtest(request: BacktestRunRequest):
+         """Run a backtest with specified parameters."""
+         # Queue asynchrone ou calcul direct selon complexité
+         # Retourner job_id ou résultats selon stratégie
+     ```
+     - **Vérification**: Endpoint créé
+
+  4. **Intégrer avec le job existant**
+     - Utiliser `jobs/backtests.py` si existe
+     - Ou créer la logique de calcul
+     - **Vérification**: Backtest calculé
+
+  5. **Gérer la queue asynchrone (optionnel)**
+     - Si calcul long, retourner job_id
+     - Endpoint GET `/api/backtests/status/{job_id}` pour poller
+     - **Vérification**: Queue fonctionne
+
+  6. **Tester l'endpoint**
+     ```bash
+     curl -X POST http://localhost:8050/api/backtests/run \
+       -H "Content-Type: application/json" \
+       -d '{"tickers": ["AAPL", "MSFT"], "strategy": "momentum"}'
+     ```
+     - **Vérification**: Endpoint fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Modèle Pydantic `BacktestRunRequest` créé
+  - [ ] Endpoint POST `/api/backtests/run` implémenté
+  - [ ] Backtest calculé avec paramètres fournis
+  - [ ] Résultats retournés dans format cohérent
+  - [ ] Gestion erreurs (never-empty pattern)
+  - [ ] Tests curl passent
+  - [ ] Preuve (log curl + résultat) déposée dans `proofs/BE-006/`
+
+- **Points d'attention**:
+  - ⚠️ Si calcul long, utiliser queue asynchrone
+  - ⚠️ Respecter le pattern never-empty (structure valide même en erreur)
+  - ⚠️ Valider les paramètres (dates, tickers, etc.)
+  - ✅ Tester avec différents paramètres
+
+---
+
+#### FS-006 — Export PDF/Markdown briefs *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +80 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Permettre l'export des briefs en PDF/Markdown pour partage. Fonctionnalité mentionnée dans l'analyse ChatGPT comme amélioration future.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Endpoints `/api/brief/daily` et `/api/brief/weekly` fonctionnent
+  - [ ] Vérifier si bibliothèques PDF existent
+
+- **Steps détaillés**:
+
+  1. **Installer bibliothèques d'export**
+     - Backend: `pip install weasyprint` ou `reportlab` (PDF)
+     - Markdown: Utiliser template Jinja2
+     - **Vérification**: Bibliothèques installées
+
+  2. **Créer endpoint export PDF**
+     - Fichier: `copilot-app/backend/api/routes/brief.py` (ou créer)
+     - Endpoint: `GET /api/brief/{daily|weekly}/export?format=pdf`
+     - Générer PDF depuis le brief JSON
+     - **Vérification**: PDF généré
+
+  3. **Créer endpoint export Markdown**
+     - Endpoint: `GET /api/brief/{daily|weekly}/export?format=markdown`
+     - Générer Markdown depuis le brief JSON
+     - **Vérification**: Markdown généré
+
+  4. **Ajouter boutons export frontend**
+     - Fichier: `src/pages/MarketBrief.tsx`
+     - Boutons "Télécharger PDF" et "Copier Markdown"
+     - **Vérification**: Boutons fonctionnent
+
+  5. **Tester les exports**
+     - Télécharger PDF et vérifier le contenu
+     - Copier Markdown et vérifier le format
+     - **Vérification**: Exports fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] Endpoints export PDF et Markdown créés
+  - [ ] Boutons export ajoutés dans MarketBrief.tsx
+  - [ ] PDF contient le brief complet
+  - [ ] Markdown formaté correctement
+  - [ ] Tests manuels passent
+  - [ ] Preuve (PDF + Markdown exemple) déposée dans `proofs/FS-006/`
+
+- **Points d'attention**:
+  - ⚠️ Génération PDF peut être lente → faire en background si nécessaire
+  - ⚠️ Gérer les erreurs gracieusement
+  - ✅ Tester avec briefs vides (never-empty)
+
+---
+
+#### FS-007 — WebSocket/SSE news temps réel *(Effort L)*
+
+**Statut**: AVAILABLE  
+**Points**: +120 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Permettre la mise à jour temps réel des news sans refresh manuel. Feature additionnelle mentionnée dans l'analyse ChatGPT.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Endpoint `/api/news/feed` fonctionne
+  - [ ] Comprendre le job news_ingest
+
+- **Steps détaillés**:
+
+  1. **Choisir technologie (WebSocket vs SSE)**
+     - SSE plus simple pour unidirectionnel
+     - WebSocket pour bidirectionnel
+     - **Recommandation**: SSE pour news (unidirectionnel)
+     - **Vérification**: Choix fait
+
+  2. **Implémenter endpoint SSE backend**
+     - Fichier: `copilot-app/backend/api/routes/news.py`
+     - Endpoint: `GET /api/news/stream`
+     - Streamer nouvelles news via SSE
+     - **Vérification**: Endpoint SSE fonctionne
+
+  3. **Créer hook frontend `useNewsStream`**
+     - Fichier: `src/hooks/useNewsStream.ts`
+     - Connexion EventSource pour SSE
+     - Mise à jour automatique de la liste
+     - **Vérification**: Hook fonctionne
+
+  4. **Intégrer dans NewsFeed**
+     - Fichier: `src/components/news/NewsFeed.tsx`
+     - Utiliser `useNewsStream` en plus de `useNewsCompat`
+     - Ajouter nouvelles news en temps réel
+     - **Vérification**: News mises à jour automatiquement
+
+  5. **Gérer reconnexion**
+     - Auto-reconnect si connexion perdue
+     - **Vérification**: Reconnexion fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Endpoint SSE `/api/news/stream` créé
+  - [ ] Hook `useNewsStream` créé
+  - [ ] NewsFeed utilise le stream
+  - [ ] Nouvelles news apparaissent automatiquement
+  - [ ] Reconnexion automatique fonctionne
+  - [ ] Preuve (vidéo du stream) déposée dans `proofs/FS-007/`
+
+- **Points d'attention**:
+  - ⚠️ Ne pas surcharger le backend avec trop de connexions
+  - ⚠️ Gérer la déconnexion proprement
+  - ⚠️ Optionnel: Limiter le nombre de clients simultanés
+  - ✅ Tester avec plusieurs onglets ouverts
+
+---
+
+## P1 — Qualité & Hygiène (48–72h)
+
+### OPS-001 — Améliorer convention de commits (Conventional Commits) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les commits actuels utilisent `done: <TASK-ID> (+points)` qui est peu traçable et casse l'historique. Il faut adopter Conventional Commits pour une meilleure traçabilité et intégration CI/CD.
+
+- **Prérequis**:
+  - [ ] Vérifier le format actuel: `cat .gitmessage.txt`
+  - [ ] Vérifier les hooks git: `ls -la .git/hooks/`
+
+- **Steps détaillés**:
+
+  1. **Analyser les commits récents**
+     ```bash
+     git log --oneline -20
+     git log --format="%s" -20
+     ```
+     - Notez les formats de commits actuels
+     - **Vérification**: Liste des formats identifiés
+
+  2. **Créer/modifier `.gitmessage.txt` avec Conventional Commits**
+     - Fichier: `.gitmessage.txt`
+     - **Nouveau format**:
+     ```
+     <type>(<scope>): <subject> @<agent-name> (+<points>)
+
+     <body>
+
+     **Changes**:
+     - File X: did Y
+     - File Z: did W
+
+     **Impact**: One line impact
+
+     Task: <TASK-ID>
+     Agent: @<handle>
+     Domain: <backend|frontend|infra>/<zone>
+     Proofs: proofs/<TASK-ID>/<handle>/
+     TimeSpent: <H>h<M>
+     ```
+     - Types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`
+     - **Vérification**: Le template est créé
+
+  3. **Mettre à jour le hook `commit-msg`**
+     - Fichier: `.git/hooks/commit-msg` (créer si n'existe pas)
+     - **Code**:
+     ```bash
+     #!/bin/bash
+     # Vérifier le format Conventional Commits
+     commit_msg=$(cat "$1")
+     
+     # Vérifier le type
+     if ! echo "$commit_msg" | grep -qE "^(feat|fix|chore|refactor|docs|test|perf)\([^)]+\):"; then
+       echo "❌ Commit message must follow Conventional Commits format"
+       echo "Format: <type>(<scope>): <subject>"
+       echo "Types: feat, fix, chore, refactor, docs, test, perf"
+       exit 1
+     fi
+     
+     # Vérifier la présence de Task trailer
+     if ! echo "$commit_msg" | grep -q "Task:"; then
+       echo "⚠️  Warning: No Task trailer found"
+     fi
+     ```
+     - Rendre exécutable: `chmod +x .git/hooks/commit-msg`
+     - **Vérification**: Le hook valide le format
+
+  4. **Mettre à jour la documentation**
+     - Fichier: `docs/dev/COMMIT_CONVENTION.md` (créer)
+     - Documenter le nouveau format avec exemples
+     - **Vérification**: La documentation est à jour
+
+  5. **Tester le nouveau format**
+     ```bash
+     # Test commit
+     git commit --allow-empty -m "feat(api): add new endpoint @TEST (+50pts)
+
+     Added /api/test endpoint for validation.
+
+     Task: TEST-001
+     Agent: @TEST
+     "
+     ```
+     - **Vérification**: Le commit passe avec le nouveau format
+
+- **DoD (Definition of Done)**:
+  - [ ] `.gitmessage.txt` mis à jour avec Conventional Commits
+  - [ ] Hook `commit-msg` valide le format
+  - [ ] Documentation créée dans `docs/dev/COMMIT_CONVENTION.md`
+  - [ ] Test commit réussi avec nouveau format
+  - [ ] Exemples de commits dans la documentation
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser les commits existants, juste améliorer le format
+  - ⚠️ Garder la compatibilité avec les trailers (Task, Agent, Proofs)
+  - ✅ Consulter: https://www.conventionalcommits.org/
+
+### TEST-001 — Tests E2E Playwright pour endpoints critiques *(Effort M)*
+
+**Statut**: DONE  
+**Points**: +80 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
+- **Why**: Le script `smoke.sh` vérifie les endpoints mais ne teste pas que les réponses ne sont pas vides. Il faut des tests E2E Playwright pour vérifier que l'UI affiche réellement des données.
+
+- **Prérequis**:
+  - [ ] Playwright installé: `pnpm add -D @playwright/test`
+  - [ ] Backend et frontend démarrés
+  - [ ] Lire `scripts/smoke.sh` pour comprendre les checks actuels
+
+- **Steps détaillés**:
+
+  1. **Analyser les checks actuels dans `smoke.sh`**
+     - Lire le script pour voir ce qui est vérifié
+     - **Vérification**: Compréhension des checks actuels
+
+  2. **Créer les tests Playwright**
+     - Fichier: `tests/e2e/critical-pages.spec.ts`
+     - Tester que les pages affichent des données (pas juste que l'endpoint répond)
+     - **Vérification**: Les tests sont créés
+
+  3. **Ajouter vérification endpoints vides dans CI**
+     - Créer script `scripts/verify_endpoints.sh`
+     - Vérifier que les endpoints ne retournent pas de structures vides
+     - **Vérification**: Le script échoue si endpoints vides
+
+  4. **Intégrer dans CI/CD**
+     - Ajouter les tests dans le workflow CI
+     - **Vérification**: Les tests s'exécutent en CI
+
+- **DoD (Definition of Done)**:
+  - [ ] Tests Playwright créés pour pages critiques
+  - [ ] Script `verify_endpoints.sh` créé
+  - [ ] Tests intégrés dans CI
+  - [ ] Tests passent localement et en CI
+
+- **Points d'attention**:
+  - ⚠️ Les tests doivent vérifier que des données s'affichent, pas juste que la page charge
+  - ⚠️ Gérer les cas où les données peuvent être vides (mais avec fallback UX)
+
+### OPS-002 — Provider registry déclaratif pour LLM *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +90 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les modèles G4F sont codés en dur dans plusieurs fichiers (`econ_llm_agent.py`, etc.). Il faut un registry déclaratif (YAML/JSON) pour faciliter la gestion et éviter la duplication.
+
+- **Prérequis**:
+  - [ ] Identifier tous les fichiers avec modèles en dur: `grep -r "POWER_NOAUTH_MODELS\|g4f.*model" backend/`
+  - [ ] Lire `copilot-app/backend/src/analytics/econ_llm_agent.py`
+
+- **Steps détaillés**:
+
+  1. **Créer le fichier de config YAML**
+     - Fichier: `copilot-app/backend/config/llm_providers.yaml`
+     - Structure avec nom, base_url, modèle, coût, timeout, p95, ToS risk, statut
+     - **Vérification**: Le fichier est créé
+
+  2. **Créer le loader de config**
+     - Fichier: `copilot-app/backend/src/config/llm_registry.py`
+     - Charger et parser le YAML
+     - **Vérification**: Le loader fonctionne
+
+  3. **Remplacer les listes en dur**
+     - Modifier `econ_llm_agent.py` et autres fichiers
+     - Utiliser le registry au lieu de listes hardcodées
+     - **Vérification**: Plus de modèles en dur
+
+  4. **Ajouter health checks programmés**
+     - Vérifier périodiquement que les providers fonctionnent
+     - Désactiver automatiquement si taux d'erreurs élevé
+     - **Vérification**: Health checks fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] Fichier `llm_providers.yaml` créé
+  - [ ] Loader de config créé
+  - [ ] Tous les modèles en dur remplacés
+  - [ ] Health checks programmés fonctionnent
+  - [ ] Documentation mise à jour
+
+- **Points d'attention**:
+  - ⚠️ Garder la compatibilité avec le code existant
+  - ⚠️ Permettre le fallback si le fichier de config n'existe pas
+  - ✅ Format YAML facile à maintenir
+
+### OPS-003 — Circuit breaker et retry contextuel pour LLM *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Actuellement, le système peut essayer 10+ modèles en chaîne sans borne, ce qui peut dégrader les performances. Il faut un circuit breaker et un retry contextuel.
+
+- **Prérequis**:
+  - [ ] Comprendre le système LLM actuel
+  - [ ] Identifier où les retries sont faits
+
+- **Steps détaillés**:
+
+  1. **Implémenter circuit breaker**
+     - Pattern circuit breaker pour désactiver temporairement les providers défaillants
+     - **Vérification**: Circuit breaker fonctionne
+
+  2. **Ajouter retry contextuel**
+     - Limiter le nombre de retries
+     - Stratégie de backoff
+     - **Vérification**: Retries sont limités
+
+  3. **Ajouter logging structuré**
+     - Logger provider, modèle, tokens, latence, statut
+     - **Vérification**: Logs sont structurés
+
+- **DoD (Definition of Done)**:
+  - [ ] Circuit breaker implémenté
+  - [ ] Retry contextuel avec limites
+  - [ ] Logging structuré ajouté
+  - [ ] Tests passent
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser le fonctionnement actuel
+  - ⚠️ Permettre le bypass en cas d'urgence
+  - ✅ Documenter le comportement
+
+### SEC-001 — Politique de données et secret management *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Utiliser G4F et multiples fournisseurs sans politique de données claire (PII, logs prompts/réponses), ni secret management standardisé pose des risques de sécurité.
+
+- **Prérequis**:
+  - [ ] Identifier où les secrets sont utilisés
+  - [ ] Vérifier s'il y a des logs de prompts/réponses
+
+- **Steps détaillés**:
+
+  1. **Créer politique de données**
+     - Documenter le masquage PII
+     - Retention des logs
+     - Régions de stockage
+     - **Vérification**: Politique créée
+
+  2. **Standardiser secret management**
+     - Utiliser `.env.example` pour template
+     - Jamais de secrets en clair dans le code
+     - **Vérification**: Secrets gérés proprement
+
+  3. **Masquer PII dans les logs**
+     - Fonction pour masquer les données sensibles
+     - **Vérification**: PII masquée
+
+- **DoD (Definition of Done)**:
+  - [ ] Politique de données créée
+  - [ ] Secret management standardisé
+  - [ ] PII masquée dans les logs
+  - [ ] Documentation mise à jour
+
+- **Points d'attention**:
+  - ⚠️ Ne pas exposer de données sensibles
+  - ⚠️ Respecter les réglementations (RGPD, etc.)
+  - ✅ Documenter clairement
+
+---
+
+## P2 — Hardening & Toggles (72–96h)
+
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+#### FS-004 — Fallback mocks via env *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Ne jamais casser l'UI si backend HS; dev rapide. Permettre de basculer entre données réelles et mocks via variable d'environnement.
+
+- **Prérequis**:
+  - [ ] Frontend accessible sur http://localhost:5173
+  - [ ] Vérifier si `VITE_USE_MOCKS` est déjà utilisé
+  - [ ] Vérifier si MSW est installé
+
+- **Steps détaillés**:
+
+  1. **Vérifier l'état actuel des mocks**
+     - Chercher les usages de `VITE_USE_MOCKS`
+     - Chercher les mocks existants
+     - **Vérification**: État actuel identifié
+
+  2. **Installer MSW si nécessaire**
+     - `pnpm add -D msw`
+     - **Vérification**: MSW est installé
+
+  3. **Créer les handlers MSW**
+     - Fichier: `src/mocks/handlers.ts`
+     - Handlers pour `/api/forecasts`, `/api/macro/series`, etc.
+     - **Vérification**: Les handlers sont créés
+
+  4. **Créer le setup MSW**
+     - Fichier: `src/mocks/browser.ts`
+     - **Vérification**: Le worker est créé
+
+  5. **Modifier les services pour router vers mocks**
+     - Détecter `VITE_USE_MOCKS=true`
+     - **Vérification**: La détection fonctionne
+
+  6. **Initialiser MSW dans `main.tsx`**
+     - Démarrer MSW si mocks activés
+     - **Vérification**: MSW démarre correctement
+
+  7. **Documenter dans `docs/dev/ui_migration_mantine.md`**
+     - Section "Mocks & SSE"
+     - **Vérification**: Documentation à jour
+
+  8. **Tester le mode mock et réel**
+     - Tester avec `VITE_USE_MOCKS=1` et `VITE_USE_MOCKS=0`
+     - **Vérification**: Les deux modes fonctionnent
+
+- **DoD (Definition of Done)**:
+  - [ ] MSW installé et configuré
+  - [ ] Handlers MSW créés pour endpoints principaux
+  - [ ] `shouldUseMocks()` détecte `VITE_USE_MOCKS`
+  - [ ] Mode mock ON sert des données locales
+  - [ ] Mode mock OFF utilise le backend réel
+  - [ ] Documentation ajoutée
+  - [ ] Capture mode mock déposée dans `proofs/FS-004/`
+
+- **Points d'attention**:
+  - ⚠️ Les mocks ne doivent être utilisés QUE en développement
+  - ⚠️ Les mocks doivent retourner la même structure que le backend
+  - ✅ Consulter la doc MSW
+
+#### FS-005 — Harmoniser badges Freshness *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +40 pts  
+**Priorité**: 🔴 CRITIQUE
+
+- **Why**: Garantir cohérence freshness (forecasts, macro, news, backtests). Actuellement, les badges Freshness peuvent avoir des formats différents.
+
+- **Prérequis**:
+  - [ ] Backend démarré et accessible sur http://localhost:8050
+  - [ ] Vérifier que `/api/health` expose `last_updates`
+  - [ ] Vérifier les usages de FreshnessBadge
+
+- **Steps détaillés**:
+
+  1. **Identifier tous les usages de FreshnessBadge**
+     - Chercher `FreshnessBadge` et `freshness` dans le code
+     - **Vérification**: Liste des fichiers concernés
+
+  2. **Vérifier le composant FreshnessBadge actuel**
+     - Lire le composant pour voir son format
+     - **Vérification**: Format actuel identifié
+
+  3. **Uniformiser FreshnessBadge avec format standard**
+     - Format: "Il y a X min" avec couleur selon l'âge
+     - Tooltip avec date complète
+     - **Vérification**: Le composant est uniformisé
+
+  4. **Vérifier que `/api/health` expose `last_updates`**
+     - Tester avec `curl`
+     - **Vérification**: Les timestamps sont disponibles
+
+  5. **Remplacer tous les usages par le composant uniformisé**
+     - Pour chaque fichier, utiliser le même composant
+     - **Vérification**: Tous les usages sont uniformisés
+
+  6. **Vérifier la cohérence sur toutes les pages**
+     - Pages: Forecasts, Macro, News, Backtests, Brief
+     - **Vérification**: Format cohérent partout
+
+  7. **Tester avec différents âges de données**
+     - Fraîches (< 5 min) → vert
+     - Récentes (5-30 min) → jaune
+     - Anciennes (> 60 min) → rouge
+     - **Vérification**: Les couleurs changent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] Composant `FreshnessBadge` uniformisé
+  - [ ] Tous les usages utilisent le même composant
+  - [ ] Badge affiche "Il y a X min" avec couleur
+  - [ ] Tooltip affiche la date complète
+  - [ ] Format cohérent sur toutes les pages
+  - [ ] Capture de toutes les pages avec badges déposée dans `proofs/FS-005/`
+
+- **Points d'attention**:
+  - ⚠️ Format cohérent partout (minutes, pas heures/jours)
+  - ⚠️ Couleurs reflètent la fraîcheur
+  - ⚠️ Gérer les cas où `freshness` est invalide
+  - ✅ Utiliser `date-fns` pour le formatage
+
+---
+
+## P3 — Sprint V2 (ML / Data)
+
+- **V2-ML-001 — Probabilistic Forecasts (Quantiles + Calibration)** *(L)*
+- **V2-ML-002 — Regime & Drift Detection** *(M)*
+- **V2-DATA-001 — Filings & Transcripts** *(L)*
+- **V2-DATA-002 — Alt-Data (Options Flow, Short Interest)** *(L)*
+- **V2-API-001 — Live Updates (SSE/WebSocket)** *(M)*
+- **V2-OPS-001 — OpenTelemetry + SLOs** *(M)*
+
+*Referencing docs/product/SPRINT_V2_TASKS.md pour détails ML/OPS.*
+
+---
+
+### Rappels DoD globaux
+- Tests: `pnpm run typecheck` + `pnpm run build`.
+- Smoke Playwright: `/`, `/forecasts`, `/macro`, `/news` (au moins composant clé rendu).
+- Preuves à déposer dans `proofs/<TASK>/` (curl/log + screenshots ou GIF streaming).
+- Documenter tout toggle/env dans `docs/dev/ui_migration_mantine.md` (ajouter section "Mocks & SSE").
+- **Commits**: Utiliser Conventional Commits (`feat(scope): description @NOM (+pts)`) - voir OPS-001.
+- **Endpoints**: Jamais de réponse vide - toujours structure valide (never-empty pattern).
+- **Tests E2E**: Vérifier que l'UI affiche des données, pas juste que la page charge (voir TEST-001).
+## FC-NEW-021 — Robustness Scoring & PDF Export (Frontend) - DONE
+
+**But**: Implémenter le système de scoring robustesse avec export PDF et panel de tuning comme spécifié dans la spécification détaillée du 2025-11-05.
+
+**Fichiers**
+
+* `frontend/webapp/src/lib/robustScore.ts`
+* `frontend/webapp/src/ui/Ring.tsx` 
+* `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx`
+* `frontend/webapp/src/utils/exportPdf.ts`
+* `frontend/webapp/src/components/report/ExportReportButton.tsx`
+* `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx`
+* `frontend/webapp/src/services/backtest.service.ts`
+* `frontend/webapp/src/hooks/useBacktests.ts`
+* `frontend/webapp/src/pages/Backtests.tsx` (intégration)
+
+**Étapes**
+
+1. **Implémentation du scoring robustesse**:
+   - Créé `robustScore.ts` avec les fonctions de scoring CAGR, Drawdown, WinRate, Trades
+   - Calcul du score total et notation (S, A, B, C, D, E)
+
+2. **Composant graphique Ring**:
+   - Créé composant Ring avec visualisation circulaire du score de robustesse
+   - Intégré avec la lib de scoring robustesse
+
+3. **Carte de score Robustness**:
+   - Créé composant RobustnessScoreCard qui affiche le ring + détails
+   - Utilise les couleurs appropriées selon le score
+
+4. **Export PDF**:
+   - Ajouté dépendances: `jspdf html2canvas`
+   - Créé utilitaire `exportPdf.ts` avec html2canvas + jsPDF
+   - Bouton export pour cibler n'importe quelle section
+
+5. **Panel de Tuning**:
+   - Créé PresetTunerPanel avec interface pour tester variantes backtests
+   - Intégré avec API backtests
+   - Affichage des résultats avec les scores de robustesse
+
+6. **Intégration**:
+   - Intégré les composants dans la page Backtests.tsx
+   - Appliqué les patterns never-empty pour garantir stabilité UI
+
+**DoD**
+
+* Système de scoring robustesse opérationnel sur la page Backtests
+* Bouton d'export PDF fonctionnel pour exporter n'importe quelle section
+* Panel de tuning permettant d'explorer plusieurs variantes de paramètres
+* 4 composants UI (Card, Ring, ExportButton, TunerPanel) prêts à être réutilisés
+* Protection contre crashes avec helpers never-empty (ensureArray, etc.)
+* UI fully responsive et accessible
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created/updated**:
+- `frontend/webapp/src/lib/robustScore.ts` - Library for robustness scoring calculations
+- `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx` - Score visualization component
+- `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx` - Parameter tuning panel
+- `frontend/webapp/src/components/report/ExportReportButton.tsx` - PDF export functionality
+- `frontend/webapp/src/utils/exportPdf.ts` - PDF export utilities
+- `frontend/webapp/src/services/backtest.service.ts` - Backtest API service layer
+- `frontend/webapp/src/hooks/useBacktests.ts` - React Query hooks for backtests
+- `frontend/webapp/src/pages/Backtests.tsx` - Integrated backtest page with new components
+
+**Fichiers**
+
+* `frontend/webapp/src/lib/robustScore.ts`
+* `frontend/webapp/src/ui/Ring.tsx` 
+* `frontend/webapp/src/components/metrics/RobustnessScoreCard.tsx`
+* `frontend/webapp/src/utils/exportPdf.ts`
+* `frontend/webapp/src/components/report/ExportReportButton.tsx`
+* `frontend/webapp/src/components/tuner/PresetTunerPanel.tsx`
+* `frontend/webapp/src/api/backtests.ts`
+* `frontend/webapp/src/pages/Backtests.tsx` (intégration)
+
+**Étapes**
+
+1. **Implémentation du scoring robustesse**:
+   - Créer `robustScore.ts` avec les fonctions de scoring CAGR, Drawdown, WinRate, Trades
+   - Calculer le score total et la notation (S, A, B, C, D, E)
+
+2. **Composant graphique Ring**:
+   - Créer wrapper Mantine pour RingProgress avec style cohérent
+   - Intégration avec la lib de scoring robustesse
+
+3. **Carte de score Robustness**:
+   - Créer composant RobustnessScoreCard qui affiche le ring + détails
+   - Utiliser les couleurs appropriées selon le score
+
+4. **Export PDF**:
+   - Ajouter dépendances: `jspdf html2canvas`
+   - Créer utilitaire `exportPdf.ts` avec html2canvas + jsPDF
+   - Bouton export pour cibler n'importe quelle section
+
+5. **Panel de Tuning**:
+   - Créer PresetTunerPanel avec interface pour tester variantes backtests
+   - Intégration avec API backtests
+   - Affichage des résultats avec les scores de robustesse
+
+6. **Intégration**:
+   - Intégrer les composants dans la page Backtests.tsx
+   - S'assurer que les patterns never-empty sont respectés
+
+**DoD**
+
+* Système de scoring robustesse opérationnel sur la page Backtests
+* Bouton d'export PDF fonctionnel pour exporter n'importe quelle section
+* Panel de tuning permettant d'explorer plusieurs variantes de paramètres
+* 4 composants UI (Card, Ring, ExportButton, TunerPanel) prêts à être réutilisés
+* Protection contre crashes avec helpers never-empty (ensureArray, etc.)
+* UI fully responsive et accessible# 📊 DASHBOARD INTEGRATION PLAN - Tasks Division
+
+This document outlines the tasks required to implement the new Dashboard with:
+- Complete filters (Horizon, Universe, Themes)
+- Macro sparklines (CPI & VIX AreaChart)
+- Forecast cards (Top 5 + directional donut)
+- News section
+- Freshness system
+- Never-empty protections
+
+---
+
+---
+
+## ⚠️ SECTIONS LEGACY (Format FC-XXX) - À CONSULTER AVEC PRÉCAUTION
+
+Les sections suivantes utilisent l'ancien format de nommage `FC-XXX` et peuvent contenir des références obsolètes. **Consultez les tâches BE/FE/FS en haut du document pour les tâches actuelles.**
+
+**⚠️ IMPORTANT** :
+- Les tâches `FC-DASH-*` font référence à l'ancienne migration MUI → Mantine (maintenant complétée)
+- Les références à `dash_app/api.py` sont obsolètes (Dash/Streamlit legacy)
+- Utilisez les tâches **BE-XXX, FE-XXX, FS-XXX** en haut du document pour les tâches actuelles
+
+### FC-DASH-001 — Dashboard Component Implementation (MUI version - OBSOLETE) ❌
+
+**⚠️ CETTE TÂCHE EST OBSOLÈTE - NE PAS UTILISER**
+
+Cette section fait référence à l'ancienne implémentation avec MUI qui a été remplacée par Mantine + Tremor. Le Dashboard actuel utilise **Mantine v7 + Tremor v3** uniquement.
+
+**Statut**: REMPLACÉ - Dashboard actuel utilise Mantine + Tremor (voir BE-001, FE-001 pour les tâches actuelles)
+
+---
+
+### FC-DASH-002 — Dashboard Mantine+Tremor (Nouvelle implémentation)
+**Status**: DONE by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Implémenter le Dashboard avec Mantine + Tremor, filtres et layout comme spécifié dans la directive UI du 2025-11-05.
+
+**Fichiers**
+* `frontend/webapp/src/pages/Dashboard.tsx` (nouvelle implémentation avec Mantine/Tremor)
+* `frontend/webapp/src/components/ui/FreshnessBadge.tsx` (intégration requise)
+* `frontend/webapp/src/lib/safe.ts` (helpers never-empty)
+* `frontend/webapp/src/hooks/useForecasts.ts` (intégration avec filtres)
+* `frontend/webapp/src/hooks/useMacroSeries.ts` (intégration avec sparklines)
+* `frontend/webapp/src/hooks/useNews.ts` (intégration avec actualités)
+
+**Étapes**
+1. Création de la structure Dashboard avec Mantine + Tremor:
+   - Grid Mantine pour layout responsive
+   - Components Tremor: BarList, DonutChart, AreaChart
+   - Intégration avec `@/ui` wrappers
+
+2. Implémentation des filtres avancés:
+   - SegmentedControl pour Horizon (court/moyen/long)
+   - MultiSelect pour Univers (tickers multiples)
+   - Thèmes (ex: growth, value, momentum)
+
+3. Intégration macro sparklines:
+   - AreaChart Tremor pour CPI et VIX
+   - Système de badge fraîcheur
+   - Données historiques formatées pour Tremor
+
+4. Sections prévisions et news:
+   - BarList Tremor pour Top 5 prévisions
+   - Donut Chart pour répartition directionnelle
+   - Section news avec sentiments
+   - Protection never-empty (skeletons, empty states)
+
+**DoD**
+* Dashboard.tsx fonctionnel avec Mantine + Tremor
+* Filtres interactifs propagés aux hooks de données
+* Macro sparklines fonctionnelles (AreaChart Tremor)
+* Prévisions affichées via BarList et DonutChart Tremor
+* News section avec sentiment scoring
+* Layout responsive avec Mantine Grid
+* Tous les composants UI sécurisés (never-empty patterns)
+* Aucun crash si données manquantes (safe access helpers)
+
+---
+
+## FC-DASH-003 — Hooks Data & API Integration
+**Status**: CLAIMED
+**Owner**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**But**: Créer les hooks React et les endpoints API pour alimenter le Dashboard.
+
+**Fichiers**
+* `frontend/webapp/src/hooks/useForecasts.ts`
+* `frontend/webapp/src/hooks/useMacroSeries.ts`
+* `frontend/webapp/src/hooks/useNews.ts`
+* `backend/api/routes/forecasts.py`
+* `backend/api/routes/macro.py`
+* `backend/api/routes/news.py`
+
+**Claimed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Étapes**
+1. **Frontend Hooks**:
+   - Créer `useForecasts(options: { horizon, universe, themes })`
+   - Créer `useMacroSeries(ids: string[])` pour CPI, VIX
+   - Créer `useNews(options: { universe, limit })` avec sentiment si dispo
+   - Utiliser `ensureArray`, `nn` pour never-empty
+
+2. **API Endpoints**:
+   - `/api/forecasts?horizon=short|medium|long&universe=SPY,QQQ&themes=growth,value,etc.`
+   - `/api/macro/series?ids=CPIAUCSL,VIXCLS`
+   - `/api/news?universe=SPY,QQQ&limit=6`
+
+**DoD**
+* Hooks utilisent les patterns never-empty (skeletons, fallbacks)
+* Endpoints retournent structures conformes avec {ok, data} 
+* Filtres du Dashboard propagent correctement aux appels API
+* Aucun crash UI si hooks échouent
+
+---
+
+## FC-DASH-004 — Macro Sparklines (AreaChart Tremor)
+**Status**: DONE to claim
+**Owner**: Frontend team
+
+Completed by: ALEX-API-ARCHITECT-SUPERMAN-7
+**But**: Implémenter les graphiques macro avec AreaChart Tremor et badges de fraîcheur.
+
+**Fichiers**
+* `frontend/webapp/src/components/charts/MacroAreaChart.tsx`
+* `frontend/webapp/src/components/ui/FreshnessBadge.tsx`
+* `frontend/webapp/src/pages/Dashboard.tsx`
+
+**Étapes**
+1. Créer composant `MacroAreaChart` avec Tremor AreaChart:
+   - Supporte CPI, VIX, et autres séries macro
+   - Responsive design
+   - Tooltips et interactions
+   - Gestion de loading/error/empty states
+
+2. Intégrer FreshnessBadge pour chaque série:
+   - Affiche dernière mise à jour
+   - Couleur selon fraîcheur (green/fresh, yellow/stale, red/old)
+   - Position dans le coin du chart
+
+3. Connecter aux données réelles via useMacroSeries
+
+**DoD**
+* AreaCharts fonctionnels pour CPI et VIX (ou autres)
+* Badges de fraîcheur visibles et correctement colorés
+* Charts stylés avec Tremor + Mantine
+* Aucun crash si données macro manquantes
+
+---
+
+## FC-DASH-005 — Forecast Cards (Top 5 + Directional Donut)
+**Status**: CLAIMED to claim
+**Owner**: Frontend team
+
+**But**: Créer les cartes de prévisions avec BarList Tremor et donut directionnel.
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+
+**Fichiers**
+* `frontend/webapp/src/components/forecasts/ForecastTop5.tsx`
+* `frontend/webapp/src/components/forecasts/DirectionalDonut.tsx`
+* `frontend/webapp/src/components/forecasts/ForecastCard.tsx`
+
+**Étapes**
+1. **Top 5 Prévisions**: 
+   - BarList Tremor avec ticker, horizons, scores de prévision
+   - Tri configurable (par confiance, retour attendu, etc.)
+   - Couleurs selon direction (vert pour up, rouge pour down)
+
+2. **Donut Directionnel**:
+   - PieChart Tremor montrant répartition Up/Down/Flat
+   - Calculé à partir des directions des prévisions
+   - Légende claire avec pourcentages
+
+3. **Carte de Prévision**:
+   - Card Mantine avec ticker, horizon, direction, confidence
+   - Couleur de bordure selon confiance
+   - Niveau de détail configurable
+
+4. Connecter aux données via useForecasts
+
+**DoD**
+* Top 5 affiché dans BarList responsive
+* Donut directionnel montrant répartition Up/Down/Flat
+* Cartes de prévision avec toutes les métadonnées
+* Safe access pour éviter les crashes sur données incomplètes
+
+---
+
+## FC-DASH-006 — News Section & Sentiment Display
+**Status**: AVAILABLE to claim
+**Owner**: Frontend team
+
+**But**: Créer la section News avec affichage de sentiment et badges.
+
+**Fichiers**
+* `frontend/webapp/src/components/news/NewsSection.tsx`
+* `frontend/webapp/src/components/news/NewsCard.tsx`
+* `frontend/webapp/src/components/ui/NewsSentimentBadge.tsx`
+
+**Étapes**
+1. **News Section**:
+   - Layout grid/list pour les articles
+   - Affichage titre, résumé, source, date
+   - Sentiment score si disponible (0-1, rouge/vert pour négatif/positif)
+   - Filtrage par univers si disponible
+
+2. **News Cards**:
+   - Card Mantine avec données structurées
+   - Badges pour tickers mentionnés
+   - Indicateur de sentiment (couleur ou icône)
+   - Lien cliquable vers article original
+
+3. **Sentiment Badge**:
+   - Badge coloré selon sentiment (rouge/négatif, vert/positif, gris/neutre)
+   - Valeur numérique si disponible
+   - Intégration dans la structure de NewsCard
+
+4. Connecter aux données via useNews
+
+**DoD**
+* Section News affichant articles avec sentiments
+* Badges de sentiment clairement visibles
+* News Cards stylées avec Mantine
+* Never-empty: affichage propre même si pas d'articles
+
+---
+
+## FC-DASH-007 — System Refresh & Freshness Management
+**Status**: AVAILABLE to claim
+**Owner**: Frontend team (coordination Backend si needed)
+
+**But**: Implémenter les badges de fraîcheur centralisée et le bouton Refresh All.
+
+**Fichiers**
+* `frontend/webapp/src/contexts/RefreshContext.tsx`
+* `frontend/webapp/src/components/system/FreshnessTracker.tsx`
+* `frontend/webapp/src/components/system/RefreshAllButton.tsx`
+* `frontend/webapp/src/pages/Dashboard.tsx`
+
+**Étapes**
+1. **Contexte Refresh**:
+   - Créer RefreshContext avec état global pour timestamps de fraîcheur
+   - Système de propagation des événements de refresh
+
+2. **Tracked de Fraîcheur**:
+   - Composant centralisé qui stocke les dernières dates de mise à jour
+   - Synchronisé avec les réponses API (last_update, freshness fields)
+   - Mise à jour des badges de fraîcheur en conséquence
+
+3. **Bouton Refresh All**:
+   - Déclenche le refresh de toutes les données simultanément
+   - Indicateur de chargement global
+   - Retour visuel sur l'état du refresh
+
+4. Intégration avec tous les composants du Dashboard
+
+**DoD**
+* Badges de fraîcheur visibles sur toutes les sections
+* Bouton Refresh All fonctionnel
+* Contexte de refresh propagé correctement à tous les composants
+* Système never-empty: fallback si refresh échoue
+
+---
+
+## Coordination required between:
+- ALEX-API-ARCHITECT: Endpoints API pour les nouveaux filtres
+- ALEX-FINANCE-ANALYST: Logique de tri des prévisions selon filtres
+- MAXIMILIAN: Modèles ML pour les prédictions basées sur filtres
+- ALEX-BACKEND: Pipeline d'ingestion pour données macro
+- LENA: Integration des données dans le nouveau format
+
+---
+
+## FC-INT-022 — Intelligence Dashboard Integration Plan
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Intégration avancée des widgets existants avec les capacités LLM G4F pour créer une UI intelligente et complète qui analyse, recommande, s'adapte et explique les données.
+
+**Fichiers**
+* `backend/services/intelligence_service.py`
+* `backend/services/context_service.py`
+* `backend/api/routes/intelligence.py`
+* `frontend/webapp/src/components/intelligence/IntelligenceDashboardWidget.tsx`
+* `frontend/webapp/src/components/intelligence/SmartRecommendationsWidget.tsx`
+* `frontend/webapp/src/components/intelligence/AdaptiveLayout.tsx`
+* `frontend/webapp/src/hooks/useIntelligence.ts`
+* `frontend/webapp/src/lib/llm_analyzer.py` (Python backend)
+
+**Étapes**
+1. **Intelligence Service**:
+   - Agrège toutes les données disponibles (forecasts, macro, news, stocks)
+   - Utilise LLM G4F pour analyse intelligente et insights
+   - Endpoint: `/api/intelligence/snapshot` qui renvoie {insights, recommendations, market_regime, correlations}
+
+2. **Context Service**:
+   - Identifie le régime de marché (Bull, Bear, Sideways, Volatile, etc.)
+   - Détermine les drivers dominants (macro vs tech vs news)
+   - Recommende le layout/widget optimal à afficher selon le contexte
+
+3. **Smart Recommendations**:
+   - Génère "Top 3 actions à surveiller aujourd'hui"
+   - Basé sur ML scoring + LLM ranking
+   - Avec explications contextuelles
+
+4. **Adaptive UI**:
+   - Layout qui s'adapte selon le régime marché identifié
+   - Widget placement dynamique (ex: Macro en avant en période volatile)
+   - Priorisation automatique selon conditions actuelles
+
+5. **Correlation Intelligence**:
+   - Analyse des corrélations entre news→forecasts, macro→stocks, etc.
+   - LLM explique pourquoi les actifs se comportent ensemble
+   - Détecte les changements de corrélation
+
+**DoD**
+* IntelligenceDashboardWidget fonctionnel qui combine tous les widgets avec insights LLM
+* Smart Recommendations avec explications contextuelles
+* UI Adaptive qui change selon le régime marché
+* Correlation Intelligence avec explications LLM
+* Tous les services backend (intelligence/context) opérationnels
+* Never-empty patterns respectés avec fallbacks intelligents
+* Interface utilisateur intelligente qui "pense" et recommande
+---
+
+## FC-ROUTE-023 — Correction proxy Vite (Routing Frontend)
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Corriger le fichier vite.config.ts qui redirige les routes frontend vers le backend à tort, causant des erreurs "Not Found" sur les pages critiques.
+
+**Fichiers**
+* `copilot-app/frontend/webapp/vite.config.ts`
+* `copilot-app/frontend/webapp/src/router.tsx` (potentiellement à vérifier)
+* `docs/routing-best-practices.md`
+
+**Étapes**
+1. **Identification du problème**:
+   - Le fichier `vite.config.ts` a des règles de proxy incorrectes aux lignes 44-78
+   - Routes comme `/forecasts`, `/brief`, `/macro`, `/stocks`, `/news`, `/copilot` sont redirigées vers le backend
+   - Ces routes sont des routes frontend gérées par React Router, pas des endpoints backend
+   - Le backend retourne `{"detail":"Not Found"}` car ces endpoints n'existent pas côté backend
+
+2. **Correction du proxy**:
+   - Retirer les règles de proxy pour les routes purement frontend: `/forecasts`, `/brief`, `/macro`, `/stocks`, `/news`, `/copilot`
+   - Conserver uniquement les proxy pour les endpoints API réels: `/api/*`, `/health`
+   - S'assurer que React Router gère correctement les routes frontend
+
+3. **Validation de la correction**:
+   - Tester la navigation entre toutes les pages: Dashboard, Forecasts, News, Brief, Macro, Stocks, etc.
+   - Vérifier que les appels API continuent à fonctionner via le proxy `/api`
+   - Confirmer que les routes frontend ne causent plus le message "Not Found"
+
+**DoD**
+* Fichier `vite.config.ts` corrigé: seuls `/api/*` et `/health` sont redirigés au backend
+* Navigation frontend fonctionnelle sur toutes les routes (forecasts, brief, macro, news, etc.)
+* Appels API backend toujours fonctionnels via le proxy
+* Aucune erreur "Not Found" due à mauvaise redirection de routes
+* Tests de navigation passent
+* Preuve de fonctionnement: captures d'écran des pages après correction
+
+**Impact critique**: 
+* Cette correction résoudra les problèmes de navigation sur les pages spécifiques 
+* Permettra aux utilisateurs d'accéder correctement aux différentes sections de l'application
+* Éliminera les erreurs de type "Not Found" non justifiées
+
+---
+
+## FC-API-026 — Stocks Screener (filtrage avancé)
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoint `/api/stocks/screener` pour filtrage avancé de stocks avec multiples critères (secteur, capitalisation, ratios financiers, etc.).
+
+**Fichiers**
+* `backend/api/routes/stocks_extra.py`
+* `backend/services/stock_screener.py` 
+* `backend/models/stock_filters.py`
+* `backend/storage/base.py` (système de filtrage sur les données de stock existantes)
+
+**Étapes**
+1. **Modèle de filtres**:
+   - Créer modèles pour les critères de filtrage (sector, marketCap, PE, PB, Dividend Yield, etc.)
+   - Valider les paramètres d'entrée (min/max ranges valides)
+   - Système de tri paramétrable (par performance, volatilité, valeur, etc.)
+
+2. **Service de screening**:
+   - Charger les données de stock existantes
+   - Appliquer les filtres sélectionnés
+   - Retourner liste de stocks filtrée avec métadonnées
+   - Inclure des métriques de performance et de risque
+
+3. **Endpoint API**:
+   - GET `/api/stocks/screener` avec query params
+   - Paramètres: sector, minMarketCap, maxPE, dividendYieldMin, etc.
+   - Pagination et tri intégrés
+
+**DoD**
+* `/api/stocks/screener?sector=Technology&minMarketCap=1000000000` retourne stocks filtrés
+* Tous les filtres fonctionnent correctement
+* Never-empty - retourne tableau même si pas de résultats (pas de null)
+* Performance acceptable - < 500ms pour requête complète
+* Données enrichies avec indicateurs techniques et fondamentaux
+
+**Preuve**: Système complet de stock screener implémenté avec filtres avancés (secteur, capitalisation boursière, ratios P/E et P/B, rendement dividendes, prix, volume, volatilité, beta, ROE, croissance EPS), validation de paramètres, tri configurable, pagination, recherche full-text, intégration avec le système de cache pour garantir never-empty, et endpoints exposés via `/api/stocks/screener`.
+
+---
+
+## FC-API-027 — Stock Correlation Heatmap - COMPLETED
+
+**Status**: COMPLETED
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**But**: Endpoint `/api/stocks/heatmap` pour la matrice de corrélation entre actifs facilitant l'analyse multi-actifs.
+
+**Steps réalisées**:
+1. **Calcul de corrélation**:
+   - Calcul des coefficients de corrélation (Pearson) entre paires d'actifs
+   - Historique configurable (7j, 30j, 90j, 1a)
+   - Sauvegarde dans `data/stocks/correlations.json`
+
+2. **Service heatmap**:
+   - Chargement matrice de corrélation avec filtres par univers de tickers
+   - Format adapté pour visualisation Tremor (Heatmap)
+
+3. **Endpoint API**:
+   - GET `/api/stocks/heatmap` avec paramètres de période et univers
+   - Retourne structure matricielle avec coefficients de corrélation
+
+4. **Endpoint supplémentaire**:
+   - GET `/api/stocks/correlations` pour les corrélations d'un ticker spécifique vs autres
+
+5. **Intégration avec Tremor**:
+   - Formatage des données pour HeatMap Tremor: `[{symbol: string, ticker1: number, ticker2: number, ...}]`
+   - Support des formats requis par les composants frontend
+
+6. **Robustesse**:
+   - Never-empty patterns maintenus avec fallbacks
+   - Gestion des erreurs avec réponses structurées
+   - Validation des paramètres d'entrée
+
+**DoD (Definition of Done)**:
+- [x] `/api/stocks/heatmap?tickers=SPY&tickers=QQQ&window=30d` retourne matrice de corrélation
+- [x] Données structurées pour intégration facile dans Tremor Heatmap
+- [x] Méta-données sur la période et la fraîcheur des données
+- [x] Never-empty pattern respecté avec fallbacks robustes
+- [x] Service de calcul de corrélation intégré (Pearson, Spearman, Kendall)
+- [x] Format compatible avec composants frontend (HeatMap, AreaChart)
+- [x] Endpoints disponibles et documentés
+
+**Fichiers créés/mis à jour**:
+- `backend/api/routes/stocks_extra.py` - Endpoint heatmap avec paramètres avancés
+- `backend/services/correlation_calculator.py` - Service de calcul de matrices de corrélation
+- `backend/models/correlation_matrix.py` - Modèle pour les matrices de corrélation
+- `backend/api/main.py` - Inclusion du routeur dans l'application principale
+
+**Fichiers**
+* `backend/api/routes/stocks_extra.py`
+* `backend/services/correlation_calculator.py`
+* `backend/models/correlation_matrix.py`
+* `backend/jobs/correlation_calculator.py`
+
+**Étapes**
+1. **Calcul de corrélation**:
+   - Calculer les coefficients de corrélation (Pearson) entre paires d'actifs
+   - Historique configurable (7j, 30j, 90j, 1a)
+   - Sauvegarder dans `data/stocks/correlations.json`
+
+2. **Service heatmap**:
+   - Charger matrice de corrélation
+   - Filtre par univers de tickers (si spécifié)
+   - Format adapté pour visualisation (tremor Heatmap)
+
+3. **Endpoint API**:
+   - GET `/api/stocks/heatmap` avec paramètres de période et univers
+   - Retourne structure matricielle avec coeff. de corrélation
+
+**DoD**
+* `/api/stocks/heatmap?ticker=SPY&ticker=QQQ&window=30d` retourne matrice de corrélation
+* Données structurées pour intégration facile dans tremor Heatmap
+* Méta-données sur la période et la fraîcheur des données
+* Never-empty pattern respecté
+
+---
+
+## FC-API-028 — Multi-Asset Performance Table
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoint `/api/stocks/performance` pour comparer les performances des différents actifs avec benchmarks.
+
+**Fichiers**
+* `backend/api/routes/stocks_extra.py`
+* `backend/services/performance_calculator.py`
+* `backend/models/performance_metrics.py`
+
+**Étapes**
+1. **Calcul de performance**:
+   - Calculer returns (1d, 1w, 1m, 3m, 6m, 1y) pour chaque actif
+   - Comparer à benchmarks (SPY, QQQ, etc.)
+   - Calculer alpha, beta, sharpe ratio
+
+2. **Service de performance**:
+   - Prendre liste de tickers en entrée
+   - Générer tableau de performance comparée
+   - Sauvegarder snapshot pour never-empty
+
+3. **Endpoint API**:
+   - GET `/api/stocks/performance` avec paramètres de benchmark et période
+   - Retourne tableau structuré pour DataGrid
+
+**DoD**
+* `/api/stocks/performance?benchmark=SPY&tickers=AAPL&tickers=MSFT` retourne tableau performance
+* Toutes les mesures de performance sont présentes (returns, alpha, beta, sharpe)
+* Format compatible avec DataGrid Mantine pour affichage UI
+* Never-empty - retourne structure même si pas de données
+
+**Preuve**: Système complet de multi-asset performance implémenté avec calculateur de métriques avancées (annual return, volatility, Sharpe ratio, Beta, Alpha, maximum drawdown, Calmar ratio, information ratio), service de calcul de performance avec intégration de benchmarks, endpoint API `/api/stocks/performance` avec support de paramètres multiples (tickers, benchmark, risques, périodes), intégration avec le système de cache pour garantir never-empty, et format compatible DataGrid Mantine prêt pour l'intégration UI.
+
+---
+
+## FC-API-029 — Economic Calendar
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoint `/api/macro/calendar` pour le calendrier des événements économiques à venir.
+
+**Fichiers**
+* `backend/models/economic_calendar.py`
+* `backend/jobs/calendar_ingest.py`
+* `backend/routes/macro_extra.py`
+
+**Étapes**
+1. **Ingestion de calendrier**:
+   - Sources: FRED, Investing.com, etc.
+   - Récupérer événements à venir (nom, date, importance, consensus, réel)
+   - Sauvegarder dans `data/macro/calendar.json`
+
+2. **Service de calendrier**:
+   - Filtrer par date de début/fin
+   - Niveau d'importance configurable
+   - Groupe par catégorie (emploi, inflation, Fed, etc.)
+
+3. **Endpoint API**:
+   - GET `/api/macro/calendar` avec filtres de période et importance
+   - Retourne événements ordonnés chronologiquement
+   - Inclure impact anticipé sur les marchés
+
+**DoD**
+* `/api/macro/calendar?start=2025-11-05&end=2025-11-12` retourne événements à venir
+* Données incluent: titre, date/heure, importance (high/medium/low), consensus, devise
+* Fraîcheur et sources dans la réponse
+* Never-empty - même si pas d'événements cette semaine
+
+**Preuve**: Calendrier économique complet implémenté avec système de récupération d'événements économiques à venir (FOMC, NFP, CPI, ECB meetings, etc.), intégration avec prédictions d'impact ML, sauvegarde persistante des données dans le système de cache, endpoint API fonctionnel avec filtres par période et importance, et garantie never-empty maintenue même en cas d'absence d'événements.
+
+---
+
+## FC-API-030 — News Impact Analysis - COMPLETED
+
+**Status**: COMPLETED  
+**Points**: +80 pts  
+**Priority**: 🔴 CRITIQUE
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**But**: Endpoint `/api/news/analysis` pour l'analyse détaillée des impacts des news sur les actifs.
+
+**Steps réalisées**:
+1. **Endpoint `/api/news/analysis` implémenté**:
+   - Analyse d'impact détaillée pour chaque article (scores d'impact, corrélation, etc.)
+   - Support des filtres avancés (tickers, période, seuil d'impact, sentiment, catégories)
+   - Pagination et limites pour performance
+
+2. **Calcul d'impact de news**:
+   - Score d'impact combinant sentiment, corrélation et pertinence
+   - Catégorisation des types d'impact (earnings, M&A, IPO, policy, market events)
+   - Estimation de l'impact sur le prix et facteur de volatilité
+
+3. **Métriques avancées**:
+   - Distribution d'impact (faible/moyen/fort)
+   - Répartition par sentiment (positif/négatif/neutre)
+   - Statistiques de résumé (avg, median, min, max impact score)
+   - Analyse temporelle des impacts
+
+4. **Format pour frontend**:
+   - Structure optimisée pour composants frontend (NewsFeed, NewsImpactWidget)
+   - Données prêtes pour visualisation Tremor (Heatmap, AreaChart)
+   - Prise en charge du format pour les cartes d'article (titre, aperçu, sources, etc.)
+
+5. **Intégration avec never-empty**:
+   - Système de fallback robuste avec données vides structurées
+   - Gestion des erreurs complète avec rétroaction à l'utilisateur
+   - Protection contre les crashes liés aux données manquantes
+
+**DoD (Definition of Done)**:
+- [x] `/api/news/analysis?tickers=AAPL&since=7d&impact_threshold=0.1` retourne données impactées
+- [x] Données structurées pour intégration facile dans NewsFeed et Tremor charts
+- [x] Métriques d'impact (score, sentiment, corrélation, pertinence) calculées
+- [x] Catégorisation des impacts (earnings, M&A, politiques, etc.) implémentée
+- [x] Never-empty pattern respecté avec fallbacks robustes
+
+**Fichiers créés/mis à jour**:
+- `backend/api/routes/news_impact.py` - Endpoint d'analyse d'impact news avec filtres avancés
+- `backend/services/news_impact_service.py` - Service d'analyse d'impact
+- `backend/lib/news_impact_analyzer.py` - Bibliothèque de calcul d'impact
+- `frontend/webapp/src/hooks/useNewsImpact.ts` - Hook React Query pour impact news (à créer)
+- `frontend/webapp/src/components/news/NewsImpactWidget.tsx` - Widget d'analyse d'impact (à créer)
+
+**Fichiers**
+* `backend/api/routes/news_extra.py`
+* `backend/services/news_analyzer.py`
+* `backend/models/news_impact.py`
+* `analytics/news_impact.py`
+
+**Étapes**
+1. **Analyse d'impact**:
+   - Corrélation entre news publication et mouvement prix
+   - Analyse de sentiment lié à tickers spécifiques
+   - Calcul de l'impact présumé sur les actifs mentionnés
+
+2. **Service d'analyse**:
+   - Charger news et données de prix historiques
+   - Calculer les corrélations et impacts
+   - Sauvegarder dans `data/news/impact_analysis.json`
+
+3. **Endpoint API**:
+   - GET `/api/news/analysis` avec filtres par ticker et période
+   - Retourne scores d'impact et corrélations
+
+**DoD**
+* `/api/news/analysis?ticker=NVDA&window=7d` retourne impact analysis
+* Données incluent: impact_score, sentiment_change, price_correlation, relevance_score
+* Compatible avec affichage dans UI pour news sentiment analysis
+* Never-empty - retourne structure même si pas d'impacts significatifs
+
+---
+
+## FC-API-031 — Risk Analytics Dashboard
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoint `/api/analytics/risks` pour l'analyse des risques de portefeuille (VaR, Beta, Corrélation).
+
+**Fichiers**
+* `backend/api/routes/analytics.py`
+* `backend/services/risk_calculator.py`
+* `backend/models/risk_metrics.py`
+* `analytics/risk_analytics.py`
+
+**Étapes**
+1. **Calcul de risque**:
+   - Value at Risk (VaR) historique et paramétrique
+   - Beta par rapport au marché (SPY)
+   - Corrélations entre actifs
+   - Volatilité implicite/explicite
+
+2. **Service de risque**:
+   - Calculer métriques pour portefeuille ou actifs spécifiés
+   - Sauvegarder snapshots dans `data/analytics/risks.json`
+   - Gestion de la fraîcheur des données
+
+3. **Endpoint API**:
+   - GET `/api/analytics/risks` avec paramètres de portefeuille
+   - Retourne ensemble complet de métriques de risque
+
+**DoD**
+* `/api/analytics/risks?ticker=SPY&ticker=QQQ` retourne métriques de risque
+* Données incluent: VaR, Beta, Sharpe, Volatilité, Corrélations
+* Format prêt pour intégration UI dans dashboard de risque
+* Never-empty - même si données limitées
+
+**Preuve**: Système complet d'analyse de risque implémenté avec calculateur de VaR (historique et paramétrique), calculateur de Beta, matrice de corrélation entre actifs, volatilité annuelle, ratios de diversification, endpoint API `/api/analytics/risks` avec support de pondérations de portefeuille, endpoint `/api/analytics/var` pour calcul VaR individuel, intégration avec le système de cache pour garantir never-empty, et format adapté à l'intégration UI dans dashboard de risque.
+
+---
+
+## FC-API-032 — Prediction Accuracy Analytics - CLAIMED
+
+**Status**: CLAIMED
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**But**: Endpoint `/api/analytics/predictions` pour les statistiques de performance des prédictions (accuracy, hit-rate).
+
+**Fichiers**
+* `backend/api/routes/analytics.py`
+* `backend/services/prediction_analyzer.py`
+* `backend/models/accuracy_metrics.py`
+* `analytics/prediction_accuracy.py`
+
+**Étapes**
+1. **Analyse de précision**:
+   - Comparer prédictions passées avec réalisations
+   - Calculer hit-rate, MAE, RMSE, précision directionnelle
+   - Analyse par horizon (1d, 1w, 1m) et type d'actif
+
+2. **Service d'analyse**:
+   - Charger prévisions historiques et données de réalisation
+   - Calculer les métriques de performance
+   - Sauvegarder dans `data/analytics/prediction_accuracy.json`
+
+3. **Endpoint API**:
+   - GET `/api/analytics/predictions` avec filtres par horizon et actif
+   - Retourne métriques de précision des modèles ML/LLM
+
+**DoD**
+* `/api/analytics/predictions?horizon=1w` retourne statistiques de précision
+* Données incluent: hit_rate, avg_confidence, avg_return_if_correct, success_rate
+* Utile pour évaluer la qualité des modèles de prévision
+* Never-empty - même si peu d'historique pour évaluation
+
+---
+
+## FC-API-033 — User Preferences
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoints `/api/user/preferences` pour gérer les préférences utilisateur (thèmes favoris, univers, seuils).
+
+**Fichiers**
+* `backend/routes/user.py`
+* `backend/services/user_prefs.py`
+* `backend/models/user_preferences.py`
+* `data/users/preferences.json` (stockage local pour MVP)
+
+**Étapes**
+1. **Modèle préférences**:
+   - Tickers favoris, secteurs d'intérêt
+   - Seuils d'alerte (volatilité, sentiment, etc.)
+   - Préférences UI (theme, layout, etc.)
+
+2. **Service de préférences**:
+   - Chargement/sauvegarde des préférences
+   - Gestion de la persistance locale
+   - Intégration avec l'authentification (si présente)
+
+3. **Endpoints API**:
+   - GET `/api/user/preferences` pour récupérer
+   - PUT `/api/user/preferences` pour sauvegarder
+   - POST `/api/user/preferences/reset` pour reset
+
+**DoD**
+* `/api/user/preferences` retourne les préférences utilisateur
+* Système de sauvegarde/restauration fonctionnel
+* Compatible avec intégration UI pour stockage des préférences
+* Never-empty - retourne valeurs par défaut si pas de préférences
+
+**Preuve**: Système complet de gestion des préférences utilisateur implémenté avec modèle de préférences avancées (thème, univers, disposition tableau de bord, seuils d'alerte, tolérance au risque, filtres d'actualités, filtres de prévisions, rafraîchissement des données, paramètres de vie privée), service de gestion des préférences avec validation et fallbacks, endpoint API `/api/user/preferences` avec méthodes GET/PUT/POST pour lecture/mise à jour/réinitialisation des préférences, endpoint `/api/user/preferences/options` pour les options de configuration UI, et intégration avec le système de cache pour garantir never-empty avec valeurs par défaut intelligentes.
+
+---
+
+## FC-API-034 — Alert Rules Configuration
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Endpoint `/api/alerts/rules` pour la configuration des règles d'alerte (paramètres de seuil).
+
+**Fichiers**
+* `backend/api/routes/alerts.py`
+* `backend/services/alert_rules.py`
+* `backend/models/alert_configuration.py`
+* `data/alerts/rules.json`
+
+**Étapes**
+1. **Modèle de règles**:
+   - Types d'alertes: RSI oversold/overbought, news sentiment, price breakouts
+   - Paramètres: seuils, fréquence, actifs concernés
+   - Système de priorité et de regroupement
+
+2. **Service de règles**:
+   - Gestion des configurations d'alerte
+   - Validation des seuils et paramètres
+   - Sauvegarde des règles dans système persistant
+
+3. **Endpoint API**:
+   - GET `/api/alerts/rules` pour liste des règles actives
+   - PUT `/api/alerts/rules` pour mise à jour de configuration
+   - DELETE `/api/alerts/rules/{rule_id}` pour suppression
+
+**DoD**
+* `/api/alerts/rules` retourne liste des règles configurées
+* Système de CRUD pour gestion des règles d'alerte
+* Validation des seuils et paramètres pour prévenir erreurs
+* Never-empty - même si pas de règles configurées
+
+**Preuve**: Système complet de configuration des règles d'alerte implémenté avec modèle de règles avancées (types multiples d'alertes: price_change, volatility_spike, technical_breakout, news_sentiment, rsi_oversold_overbought, moving_average_cross, earnings_surprise, macro_impact, volume_spike, beta_adjustment), service de gestion des règles avec validation et persistance, endpoint API `/api/alerts/rules` avec méthodes GET/POST/PUT/DELETE pour le CRUD complet de règles d'alerte, endpoint `/api/alerts/types` pour les options de configuration, intégration avec le système de cache pour garantir never-empty, et format compatible avec l'intégration UI pour la personnalisation des préférences d'alerte.
+
+---
+
+## FC-API-035 — Universal Search
+
+**Status**: CLAIMED to claim
+
+**But**: Endpoint `/api/search/universal` pour recherche globale (stocks, news, briefs, prévisions).
+
+Claimed by: ALEX-API-ARCHITECT-SUPERMAN-7
+**Fichiers**
+* `backend/api/routes/search.py`
+* `backend/services/universal_search.py`
+* `backend/models/search_result.py`
+* `search/search_engine.py`
+
+**Étapes**
+1. **Moteur de recherche**:
+   - Indexation de documents de différents domaines
+   - Recherche multi-critères (contenu, dates, sources, tickers)
+   - Ranking par pertinence et fraîcheur
+
+2. **Service de recherche**:
+   - Intégration avec différentes sources (news, forecasts, briefs, etc.)
+   - Filtres par type, date, importance
+   - Pagination et tri
+
+3. **Endpoint API**:
+   - POST `/api/search/universal` avec body de requête
+   - Retourne résultats de différents domaines avec scoring
+
+**DoD**
+* `/api/search/universal?q=NVDA&type=stocks&type=news` retourne résultats multi-domaines
+* Système de ranking par pertinence et fraîcheur
+* Performance acceptable pour recherche temps-réel (< 300ms)
+* Never-empty - même si pas de résultats correspondants
+---
+
+---
+
+## 📊 CHANTIERS ACTUELS - Market Intelligence
+
+Les fonctionnalités principales en développement :
+
+### 🎯 Forecasts (Prévisions ML+LLM)
+- Endpoint: `/api/forecasts` - Prévisions multi-horizons avec scores de confiance
+- Page: `/forecasts` - Visualisation avec filtres (horizon, asset_type, min_confidence)
+- Tâches: BE-001 (✅ DONE), FS-003 (AVAILABLE)
+
+### 📰 News & Sentiment
+- Endpoint: `/api/news/feed` - Flux RSS avec scoring sentiment, pagination, filtres
+- Page: `/news` - Feed avec lazy loading, filtres avancés
+- Tâches: BE-003 (AVAILABLE), FE-004 (AVAILABLE)
+
+### 📈 Macro Data
+- Endpoint: `/api/macro/series` - Séries FRED (CPI, VIX, Yield Curve) avec cache
+- Page: `/macro` - Graphiques Tremor (AreaChart, LineChart, BarChart)
+- Tâches: BE-002 (AVAILABLE)
+
+### 📊 Stocks Analysis
+- Endpoints: `/api/stocks/search`, `/api/stocks/{ticker}`, `/api/stocks/screener`
+- Page: `/stocks` - Recherche, screener, analyse technique
+- Tâches: BE-004 (✅ DONE), FE-003 (✅ DONE)
+
+### 🧪 Backtests
+- Endpoint: `/api/backtests` - Performance historique, métriques (CAGR, maxDD, win rate)
+- Page: `/backtests` - Visualisation avec equity curve
+- Tâches: FS-003 (AVAILABLE), BE-006 (AVAILABLE)
+
+### 🤖 Copilot LLM
+- Endpoint: `/api/copilot/ask` - Q&A avec contexte, streaming SSE
+- Page: `/copilot` - Interface conversationnelle
+- Tâches: FS-002 (AVAILABLE)
+
+---
+
+## 🚨 CRITICAL TASKS - NO-MOCKS DATA INTEGRATION
+
+Ces tâches adressent les problèmes critiques où les endpoints manquent de données réelles.
+
+**⚠️ Note**: Les règles "no mocks" sont toujours valides. Ces tâches visent à s'assurer que les pipelines d'ingestion produisent des données réelles.
+
+---
+
+## FC-REAL-SEED-001 — Data Snapshot Seeding with Real Data
+
+**Status**: AVAILABLE to claim
+
+**But**: Assurer que les fichiers snapshots dans `/backend/data/` contiennent des données réelles, pas des valeurs par défaut ou des structures vides.
+
+**Fichiers**
+* `backend/data/forecasts.json`
+* `backend/data/news_feed.json` 
+* `backend/data/brief_weekly.json`
+* `backend/jobs/data_seeder.py`
+* `backend/storage/json_storage.py`
+
+**Étapes**
+1. **Verify current snapshot content**:
+   - Vérifier que `forecasts.json` contient une structure `{"rows": [...]}` avec des données réelles
+   - Vérifier que `news_feed.json` contient une structure `{"articles": [...]}` avec articles réels
+   - Vérifier que les autres snapshots (`brief_*.json`) contiennent des données valorisées
+
+2. **Fix data pipeline**:
+   - Exécuter les jobs d'ingestion pour générer des snapshots avec données réelles
+   - Corriger les chemins de stockage si le backend ne lit pas au bon endroit
+   - S'assurer que les fichiers sont lus depuis `copilot-app/backend/data/` (pas un autre chemin)
+
+3. **Real data validation**:
+   - Les données doivent provenir de sources réelles (yfinance, RSS, FRED)
+   - Ne pas utiliser de mocks ou de données de test
+
+**DoD**
+* `curl /api/forecasts` renvoie `{ok:true, data:{rows:[{...},{...}], count:n, ...}}` avec n > 0
+* `curl /api/news/feed` renvoie `{ok:true, data:{articles:[{...},{...}], count:n, ...}}` avec n > 0
+* Tous les snapshots dans `/backend/data/` contiennent des données réelles, pas vides
+* Chemins de lecture corrects (relatifs à backend CWD)
+* Never-empty pattern fonctionnel avec données réelles
+
+---
+
+## FC-REAL-PIPE-001 — Real Data Ingestion Pipeline
+
+**Status**: AVAILABLE to claim
+
+**But**: Mettre en place des pipelines d'ingestion réelle (Yahoo, RSS, FRED) qui alimentent les snapshots avec données de production.
+
+**Fichiers**
+* `backend/jobs/forecast_generator.py`
+* `backend/jobs/news_ingest.py` 
+* `backend/services/forecast_pipeline.py`
+* `backend/services/news_pipeline.py`
+* `backend/scheduler/app.py`
+
+**Étapes**
+1. **Forecast pipeline**:
+   - Lancer le job de génération de prévisions ML réelles
+   - Sauvegarder le résultat dans `data/forecasts.json`
+   - Utiliser des données de marché réelles (prix historiques, indicateurs techniques, etc.)
+
+2. **News pipeline**:
+   - Lancer le job d'ingestion de news réelles (RSS feeds)
+   - Sauvegarder le résultat dans `data/news_feed.json`
+   - Appliquer le filtrage et scoring sur données réelles
+
+3. **Scheduler integration**:
+   - Intégrer ces jobs dans le scheduler pour rafraîchissement automatique
+   - Fréquences appropriées: forecasts quotidien, news toutes les 15 min
+
+**DoD**
+* Jobs d'ingestion produisent des snapshots avec données réelles
+* `forecasts.json` contient des prévisions basées sur ML + données réelles
+* `news_feed.json` contient des articles réels provenant de sources RSS
+* Scheduler exécute les jobs pour maintenir fraîcheur des données
+* Les endpoints `/api/forecasts` et `/api/news/feed` renvoient maintenant des données réelles
+
+---
+
+## FC-REAL-DATA-001 — Data Path & Storage Fix - CLAIMED
+
+**Status**: CLAIMED
+
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**But**: Corriger les chemins de lecture des données pour que le backend trouve les fichiers de données réelles dans le bon répertoire.
+
+**Fichiers**
+* `backend/storage/base.py` (ou `json_storage.py`)
+* `backend/services/cache_layer.py` 
+* `backend/api/routes/forecasts.py`
+* `backend/api/routes/news.py`
+* `backend/api/main.py`
+
+**Étapes**
+1. **Verify CWD**:
+   - Le backend doit toujours lire à partir de `copilot-app/backend/data/` relativement à son répertoire
+   - Forcer des chemins absolus si nécessaire pour éviter les problèmes de CWD
+
+2. **Fix storage paths**:
+   - S'assurer que `load_json()` lit depuis le bon répertoire
+   - Corriger les imports pour utiliser les bons modules de storage
+   - Vérifier que `storage.base` est utilisé pour les chemins robustes
+
+3. **Test with absolute paths**:
+   - Si uvicorn change le CWD, utiliser des chemins absolus déterministes
+   - Exécuter des tests pour confirmer que les fichiers sont lus depuis le bon emplacement
+
+**DoD**
+* Backend lit correctement les fichiers de données depuis `backend/data/`
+* Aucune référence à `file_not_found` dans les réponses
+* Les endpoints renvoient les données présentes dans les fichiers snapshots
+* Chemins de lecture déterministes qui fonctionnent quel que soit le CWD du serveur
+
+---
+
+## FC-REAL-TEST-001 — "No-Mocks" Integration Testing
+
+**Status**: AVAILABLE to claim
+
+**But**: Mettre en place et exécuter des tests d'intégration qui vérifient que les endpoints servent des données réelles, pas des mocks.
+
+**Fichiers**
+* `tests/ui/integration-data.spec.ts` (existant - à corriger)
+* `tests/api/no_mock_tests.py`
+* `docs/no-mocks-testing.md`
+
+**Étapes**
+1. **Fix current tests**:
+   - Ajuster les tests Playwright pour ne pas utiliser de filtres stricts qui causent des retours vides
+   - Corriger les tests pour vérifier la présence de données réelles, pas des structures vides
+
+2. **Create seeding step**:
+   - Ajouter une étape de pré-test qui s'assure que les données réelles sont présentes
+   - Lancer les pipelines d'ingestion avant les tests si nécessaire
+
+3. **Add robust assertions**:
+   - Vérifier que les endpoints renvoient des comptages > 0 
+   - Ne pas échouer si des filtres spécifiques retournent zéro résultats
+   - Tester sans filtres pour vérifier la disponibilité de données
+
+**DoD**
+* Tests Playwright passent avec données réelles (pas de mocks)
+* curl /api/forecasts renvoie count > 0
+* curl /api/news/feed renvoie count > 0 (sans filtres stricts)
+* Tests valident que le système est alimenté par des données réelles
+
+---
+
+## 🎯 Priorité d'exécution
+
+1. **FC-REAL-DATA-001**: Fix des chemins de données (base pour les autres)
+2. **FC-REAL-PIPE-001**: Pipeline d'ingestion (génère les données)
+3. **FC-REAL-SEED-001**: Seeding des snapshots (alimente les endpoints)
+4. **FC-REAL-TEST-001**: Tests d'intégration (validation finale)
+---
+
+## 🧪 CODE QUALITY TASKS - Codacy Integration & Analysis
+
+Suite à la mise en place de la directive qualité, voici les tâches spécifiques pour intégrer Codacy dans le workflow de développement.
+
+---
+
+## FC-QM-CODACY-001 — Codacy Analysis Setup & Integration - DONE
+
+**But**: Intégrer l'analyse Codacy dans le workflow de développement pour améliorer la qualité du code et détecter les problèmes automatiquement.
+
+**Fichiers**
+* `scripts/quality/codacy-analyze.sh` (script d'analyse)
+* `docs/quality/codacy-integration.md` (documentation)
+
+**Étapes**
+1. **Setup Codacy-CLI**:
+   - Script bash automatisé avec options de format (JSON/SARIF/TEXT)
+   - Gestion des chemins projet et outils spécifiques
+   - Exécution sur backend/frontend selon besoin
+
+2. **Configuration outils**:
+   - Integration avec ESLint et autres outils de qualité
+   - Paramètres de format SARIF conforme aux standards
+   - Support des outils spécifiques (pylint, eslint, etc.)
+
+3. **Workflow intégration**:
+   - Scripts prêts pour intégration dans hooks git
+   - Support de l'analyse ciblée par composant (backend, frontend)
+   - Génération de rapports SARIF pour intégration continue
+
+4. **Documentation**:
+   - Guide complet d'utilisation pour les agents
+   - Exemples d'utilisation et standards qualité
+   - Processus d'intégration dans le workflow de développement
+
+**DoD**
+* `codacy-cli analyze` fonctionne pour analyse complète du code
+* `codacy-cli analyze --tool eslint` fonctionne pour analyse spécifique
+* Résultats générés au format SARIF: `codacy-cli analyze --tool eslint --format sarif -o results.sarif`
+* Scripts d'analyse intégrés dans le workflow de développement
+* Documentation mise en place pour l'équipe
+
+**Completed by**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+**Files created**:
+- `scripts/quality/codacy-analyze.sh` - Complete automated analysis script
+- `docs/quality/codacy-integration.md` - Comprehensive usage documentation
+
+---
+
+## FC-QM-CODACY-002 — Analyse qualité backend + corrections
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Exécuter l'analyse Codacy sur le backend et corriger les problèmes identifiés pour améliorer la qualité du code.
+
+**Fichiers**
+* backend/api/main.py
+* backend/api/routes/*.py
+* backend/services/*.py
+* backend/jobs/*.py
+* backend/storage/*.py
+* backend/models/*.py
+* backend/src/core/data_loader.py
+* backend/services/performance_calculator.py
+* backend/services/news_analyzer.py
+* backend/services/alert_rules.py
+* backend/models/accuracy_metrics.py
+* backend/models/correlation_matrix.py
+* backend/models/news_impact.py
+* backend/storage/io.py
+
+**Étapes**
+1. **Analyse complète du backend**:
+   - Inspection des patterns de sécurité (path traversal, injection)
+   - Vérification des contrats never-empty sur tous les endpoints
+   - Revue des imports et dépendances (circular imports, etc.)
+   - Validation des erreurs d'accessibilité et sécurité
+
+2. **Corrections prioritaires**:
+   - Problèmes de sécurité (SQL injection, XSS, path traversal) → FIXED dans storage/io.py
+   - Problèmes d'accessibilité → FIXED dans patterns d'erreur robustes
+   - Problèmes de performance → FIXED dans optimisation des imports/services
+   - Problèmes de style et maintenabilité → FIXED dans tous les modules nouvellement créés
+
+3. **Améliorations spécifiques**:
+   - Cohérence des contrats API ({ok, data}) → IMPLÉMENTÉ partout
+   - Fallbacks en cas d'erreur → INTÉGRÉ dans tous les services
+   - Optimisation des composants critiques → FAIT dans performance_calculator.py
+
+4. **Tests et validation**:
+   - Vérification que les corrections n'affectent pas la fonctionnalité → VALIDÉ
+   - Test spécifiques des cas d'erreur et empty-states → VALIDÉ
+
+**DoD**
+* Analyse Codacy complète exécutée sur backend
+* Problèmes critiques identifiés et corrigés
+* Fonctionnalité des composants critiques maintenue ou améliorée
+* Rapport SARIF sauvegardé avec preuves des corrections
+
+**Preuve**: Système complet d'analyse et correction qualité implémenté avec: (1) sécurité renforcée dans storage/io.py (nettoyage de chemins, validation d'entrées, prévention path traversal), (2) never-empty contracts garantis dans tous les endpoints et services récemment créés, (3) gestion d'erreurs robuste avec fallbacks et ErrorBoundaries, (4) optimisation des performances avec cache layer et pré-calcul, (5) validation de structure des données et patterns d'accès sécurisés, (6) amélioration de la qualité du code dans tous les modules avec documentation, tests unitaires intégrés, et meilleures pratiques de programmation.
+
+---
+
+## FC-QM-CODACY-003 — Analyse qualité frontend + corrections
+
+**Status**: AVAILABLE to claim
+
+**But**: Exécuter l'analyse Codacy sur le frontend et corriger les problèmes identifiés pour améliorer la qualité du code UI.
+
+**Fichiers**
+* Tous les fichiers TypeScript/JSX dans `frontend/webapp/src/`
+* `frontend/webapp/src/components/*.tsx`
+* `frontend/webapp/src/pages/*.tsx`
+* `frontend/webapp/src/api/client.ts`
+* `frontend/webapp/src/ui/*.tsx`
+* `frontend/webapp/src/lib/safe.ts`
+
+**Étapes**
+1. **Analyse spécifique ESLint**:
+   - Exécuter: `codacy-cli analyze --tool eslint frontend/webapp/src/`
+   - Sauvegarder: `codacy-cli analyze --tool eslint frontend/webapp/src/ --format sarif -o frontend-quality.sarif`
+   - Identifier les problèmes de sécurité, accessibilité, performance
+
+2. **Corrections critiques**:
+   - Problèmes de gestion d'erreurs UI (erreurs jamais affichées directement)
+   - Problèmes de sécurité XSS
+   - Problèmes d'accessibilité (roles, aria-labels, focus management)
+   - Problèmes de never-empty (gardiens manquants)
+
+3. **Optimisation**:
+   - Améliorer la performance des composants UI
+   - Optimiser les imports et dépendances
+   - Vérifier les patterns de sécurité (safe access helpers)
+
+4. **Validation UI**:
+   - Confirmer que toutes les pages continuent à charger
+   - Tester les 4 états UI (loading, empty, error, fresh data)
+   - Vérifier que les data-testid sont corrects
+
+**DoD**
+* Analyse Codacy + ESLint exécutée sur frontend
+* Problèmes critiques identifiés et corrigés
+* UI continues à fonctionner avec améliorations qualité
+* Rapport SARIF sauvegardé avec preuves des corrections
+* Protection never-empty renforcée
+
+---
+
+## FC-QM-CODACY-004 — Analyse fichier spécifique + corrections ciblées
+
+**Status**: IN-PROGRESS by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Exécuter l'analyse Codacy sur des fichiers spécifiques identifiés comme problématiques et corriger les points critiques.
+
+**Fichiers**
+* `backend/src/api/main.py` (fichier central avec imports critiques)
+* `frontend/webapp/src/api/client.ts` (communication API, sécurité)
+* `frontend/webapp/src/components/ErrorBoundary.tsx` (gestion des erreurs)
+* `backend/storage/io.py` (sécurité I/O, never-empty)
+* `backend/services/cache_layer.py` (gestion du cache, fallbacks)
+
+**Étapes**
+1. **Analyse fichier par fichier**:
+   - `codacy-cli analyze --tool eslint backend/src/api/main.py`
+   - `codacy-cli analyze --tool eslint frontend/webapp/src/api/client.ts`
+   - `codacy-cli analyze --tool eslint frontend/webapp/src/components/ErrorBoundary.tsx`
+   - etc.
+
+2. **Corrections ciblées**:
+   - Corriger les problèmes d'imports (ModuleNotFoundError)
+   - Corriger les problèmes de sécurité (injection, etc.)
+   - Corriger les problèmes de gestion d'erreurs
+   - Renforcer les patterns never-empty
+
+3. **Améliorations spécifiques**:
+   - Assurer la cohérence des contrats API ({ok, data})
+   - Vérifier les fallbacks en cas d'erreur
+   - Optimiser les performances des composants critiques
+
+4. **Tests unitaires**:
+   - Vérifier que les corrections n'affectent pas la fonctionnalité
+   - Tester spécifiquement les cas d'erreur et empty-states
+
+**DoD**
+* Fichiers critiques analysés un par un avec Codacy
+* Problèmes identifiés et corrigés dans chaque fichier
+* Fonctionnalité des composants critiques maintenue ou améliorée
+* Rapports SARIF générés par fichier avec preuves des corrections
+
+**Progress**: 
+- Phase 1: Amélioration qualité fichier backend/api/main.py (corrections imports dupliqués, gestion erreurs améliorée, structure réponses standardisée, fallbacks never-empty renforcés).
+- Phase 2: Amélioration qualité fichier backend/services/cache_layer.py (renforcement sécurité cache keys, ajout TTL optionnel, amélioration fallbacks, ajout stats cache, isolation erreurs renforcée).
+- Phase 3: Amélioration sécurité fichier backend/storage/io.py (prévention traversal chemins, nettoyage clés, validation entrées, protection évasion répertoire, gestion erreurs améliorée).
+- Phase 4: En cours - Analyse de frontend API client et ErrorBoundary components.
+
+---
+
+## 📊 RÉSUMÉ ET STATISTIQUES
+
+### Tâches par Catégorie
+
+- **BE (Backend)** : 17 tâches - API, routes, services, cache, logging, validations (ajout: BE-006)
+- **FE (Frontend)** : 30 tâches - Composants, pages, hooks, UI, animations, thèmes
+- **FS (Fullstack)** : 27 tâches - Intégrations backend+frontend, exports, notifications, webhooks (ajout: FS-006, FS-007)
+- **TEST (Tests)** : 2 tâches - Tests E2E, tests unitaires
+- **DOC (Documentation)** : 1 tâche - Documentation des patterns
+- **PERF (Performance)** : 8 tâches - Optimisations, métriques de performance (ajout: PERF-001 à PERF-004)
+- **OPS (Operations)** : 1 tâche - Monitoring, observability
+- **SEC (Sécurité)** : 1 tâche - Quotas, limites utilisateur
+- **DATA (Data/ML)** : 2 tâches - Versioning modèles ML, validation prévisions
+- **UI (UI/UX)** : 2 tâches - A/B testing, templates rapports
+
+**Total** : **85 tâches** disponibles pour les agents (ajout de 7 nouvelles tâches basées sur analyse ChatGPT)
+
+### Système de Nommage
+
+Les tâches sont maintenant organisées par **catégorie** avec des codes clairs :
+- `BE-XXX` : Backend (API, services, cache, etc.)
+- `FE-XXX` : Frontend (composants, pages, hooks, etc.)
+- `FS-XXX` : Fullstack (intégrations complètes)
+- `TEST-XXX` : Tests (E2E, unitaires, intégration)
+- `DOC-XXX` : Documentation
+- `PERF-XXX` : Performance
+- `OPS-XXX` : Operations/Monitoring
+- `SEC-XXX` : Sécurité
+- `DATA-XXX` : Data/ML
+- `UI-XXX` : UI/UX
+
+### Points Disponibles
+
+- **BE** : ~1,400+ pts
+- **FE** : ~1,800+ pts
+- **FS** : ~1,400+ pts
+- **TEST** : ~100 pts
+- **DOC** : ~40 pts
+- **PERF** : ~120 pts
+- **OPS** : ~200+ pts
+- **SEC** : ~60 pts
+- **DATA** : ~200+ pts
+- **UI** : ~80 pts
+- **Total estimé** : **5,400+ pts disponibles**
+
+---
+
+## ✅ CHECKLIST POUR CHAQUE AGENT
+
+Avant de commencer:
+- [ ] Lu `MESSAGE_AGENTS.md` (message d'accueil)
+- [ ] Lu `AGENTS.md` (guide de déploiement)
+- [ ] Lu `AGENTS_GAMEPLAY.md` (système de points)
+- [ ] Vérifié qu'aucun autre agent ne travaille sur la tâche (statut AVAILABLE)
+- [ ] Vérifié que mon fichier agent existe dans `agents/`
+- [ ] Testé `./finance-copilot.sh start` localement
+- [ ] Marqué la tâche comme **CLAIMED** avec mon nom dans ce fichier
+
+Pendant le travail:
+- [ ] Suivi les étapes détaillées de la tâche (Why, Steps, DoD)
+- [ ] Testé régulièrement (backend + frontend)
+- [ ] Respecté les patterns (never-empty, lazy loading, caching)
+- [ ] Mis à jour mon fichier agent dans `agents/` si tâche longue
+
+Après complétion:
+- [ ] Tous les DoD vérifiés (checklist complète)
+- [ ] Preuve créée (screenshot/log/vidéo) dans `proofs/<TASK-ID>/`
+- [ ] Tests passent (`pnpm run typecheck`, `pnpm run build`)
+- [ ] Commit avec format Conventional Commits : `feat(scope): description @NOM (+XXpts)`
+- [ ] Score mis à jour dans `SCORE_AGENTS.md`
+- [ ] Statut de la tâche changé à **DONE** dans ce fichier
+
+---
+
+## 📞 SUPPORT ET QUESTIONS
+
+Si vous avez des questions ou besoin d'aide :
+1. Consultez `MESSAGE_AGENTS.md` pour les instructions générales
+2. Consultez `AGENTS.md` pour les règles du projet
+3. Vérifiez les exemples dans les autres fichiers agents dans `agents/`
+4. Regardez les preuves dans `proofs/` pour voir comment d'autres agents ont résolu des tâches similaires
+
+---
+
+## 🎯 TÂCHES RECOMMANDÉES POUR DÉBUTER
+
+### Pour les nouveaux agents (faciles et rapides)
+
+1. **FS-001** (+50 pts) - Déclarations `import.meta.env` (30min-1h)
+   - Fix TypeScript errors, pas de logique complexe
+   - Fichier: `src/config/env.ts`
+
+2. **FE-005** (+40 pts) - Supprimer vestige MUI (1h)
+   - Supprimer un import MUI, simple et rapide
+   - Fichier: `src/components/ui/SourceTooltip.tsx`
+
+3. **FS-005** (+40 pts) - Harmoniser badges Freshness (1h)
+   - Uniformiser l'affichage des badges, pas de logique complexe
+   - Plusieurs fichiers à modifier
+
+4. **FS-004** (+50 pts) - Fallback mocks via env (1h)
+   - Ajouter support `VITE_USE_MOCKS`, simple condition
+
+### Pour les agents expérimentés (impact élevé)
+
+1. **BE-002** (+80 pts) - Macro séries FRED/VIX (2-3h)
+   - Brancher les graphiques macro avec données réelles
+   - Impact: Page Macro fonctionnelle
+
+2. **BE-003** (+80 pts) - Flux news + sentiment (2-3h)
+   - Brancher le flux news avec sentiment et filtres
+   - Impact: Page News fonctionnelle
+
+3. **FE-004** (+60 pts) - NewsFeed branché au hook TanStack (2h)
+   - Fix TypeScript errors dans NewsFeed
+   - Impact: Page News sans erreurs
+
+Ces tâches sont **bien documentées** avec steps détaillés et vous permettront de comprendre le projet rapidement.
+
+---
+
+**Bonne chance, agents !** 🚀
+
+**Rappelez-vous** : Ce fichier (`TASKS_BOARD.md`) est le **SEUL** fichier de tâches à utiliser.
+
+# 📋 Tâches Détaillées pour Autres Agents Qwen
+
+**Créé par**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77  
+**Date**: 2025-01-27  
+**But**: Fournir des tâches très détaillées et claires pour les agents Qwen moins expérimentés
+
+---
+
+## 🎯 Instructions Générales
+
+### Avant de commencer
+1. **Lire** `AGENTS.md` pour comprendre les règles du projet
+2. **Vérifier** qu'aucun autre agent ne travaille sur la même tâche
+3. **Tester** localement avec `./finance-copilot.sh start`
+4. **Commit** avec votre nom et preuve de fonctionnement
+5. **Mettre à jour** `SCORE_AGENTS.md` avec vos points
+
+### Format de commit (Conventional Commits)
+
+**Format obligatoire** :
+```
+<type>(<scope>): <subject> @<agent-name> (+<points>)
+
+<body détaillant les changements>
+
+Task: <TASK-ID>
+Agent: @<handle>
+Domain: <backend|frontend|infra>/<zone>
+Proofs: proofs/<TASK-ID>/<handle>/
+TimeSpent: <H>h<M>
+```
+
+**Types** : `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `perf`
+
+**Exemple** :
+```
+feat(api): add /api/stocks/search endpoint @ALEX-BACKEND (+70pts)
+
+Added new endpoint for stock search with fuzzy matching and real-time prices.
+
+**Changes**:
+- Created /api/routes/stocks.py with search endpoint
+- Integrated yfinance for real-time prices
+- Added fuzzy matching logic
+
+**Impact**: Stocks page can now search real stocks instead of mocks
+
+Task: BE-004
+Agent: @ALEX-BACKEND
+Domain: backend/api
+Proofs: proofs/BE-004/ALEX-BACKEND/
+TimeSpent: 2h30
+```
+
+### Preuve requise
+- Screenshot de la fonctionnalité
+- Log curl de l'endpoint (si API)
+- Test passant (si applicable)
+
+---
+
+## 🔥 PRIORITÉ P0 - Tâches Critiques
+
+### BE-005 — Vérifier et compléter l'endpoint `/api/copilot/ask`
+
+**Agent recommandé**: Agent backend Python  
+**Points**: +80 pts  
+**Effort estimé**: 2-3h  
+**Priorité**: 🔴 CRITIQUE
+
+
+- **Points d'attention**:
+  - ⚠️ Vérifier que les changements ne cassent pas les fonctionnalités existantes
+  - ⚠️ Tester avec différents cas (succès, erreur, données vides)
+  - ✅ Suivre les patterns du projet (never-empty, lazy loading, caching)
+
+---
+
+## 📊 TÂCHES D'AMÉLIORATION ARCHITECTURE (Basées sur analyse détaillée)
+
+### OPS-004 — Centraliser les appels LLM (g4f utils) *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +100 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les appels LLM (g4f) sont dispersés dans plusieurs agents (`llm_forecast_agent.py`, `llm_context_builder_agent.py`, `econ_llm_agent.py`, etc.) avec des implémentations similaires mais dupliquées. Centraliser dans `core/llm_utils.py` permettra d'uniformiser retries, timeouts, fallbacks et facilitera la maintenance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Identifier tous les fichiers utilisant g4f: `grep -r "g4f\|G4FClient" copilot-app/backend/src`
+  - [ ] Comprendre les patterns actuels (retries, timeouts, fallbacks)
+
+- **Steps détaillés**:
+
+  1. **Créer le module centralisé `core/llm_utils.py`**
+     - Fichier: `copilot-app/backend/src/core/llm_utils.py`
+     - **Code**:
+     ```python
+     """
+     Centralized LLM utilities for g4f and other providers.
+     Provides unified interface for all LLM calls with retries, fallbacks, and error handling.
+     """
+     from typing import List, Dict, Optional, Any
+     import logging
+     import time
+     import os
+     
+     logger = logging.getLogger(__name__)
+     
+     class LLMUtils:
+         def __init__(self):
+             self.default_model = os.getenv("G4F_DEFAULT_MODEL", "deepseek-ai/DeepSeek-R1-0528")
+             self.fallback_models = os.getenv("G4F_FALLBACK_MODELS", "").split(",") if os.getenv("G4F_FALLBACK_MODELS") else []
+             self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
+             self.timeout = int(os.getenv("LLM_TIMEOUT", "45"))
+             
+         def call_llm(
+             self,
+             messages: List[Dict[str, str]],
+             model: Optional[str] = None,
+             temperature: float = 0.2,
+             max_tokens: int = 1200,
+             json_mode: bool = False
+         ) -> Dict[str, Any]:
+             """
+             Unified LLM call with retries and fallbacks.
+             Returns: {"ok": bool, "content": str, "model": str, "latency_ms": int, "error": Optional[str]}
+             """
+             # Implementation avec retries et fallbacks
+     ```
+     - **Vérification**: Module créé avec interface claire
+
+  2. **Migrer les agents existants vers le module centralisé**
+     - Fichiers à modifier:
+       - `src/agents/llm/llm_forecast_agent.py`
+       - `src/agents/llm/llm_context_builder_agent.py`
+       - `src/analytics/econ_llm_agent.py`
+       - `src/research/llm_client.py`
+     - Remplacer les appels directs à `G4FClient()` par `LLMUtils().call_llm()`
+     - **Vérification**: Tous les agents utilisent le module centralisé
+
+  3. **Ajouter logging structuré**
+     - Logger chaque appel avec: provider, model, latency, success/failure
+     - **Vérification**: Logs visibles dans les fichiers de log
+
+  4. **Tester avec différents modèles**
+     - Tester avec le modèle par défaut
+     - Tester avec fallbacks si le premier échoue
+     - **Vérification**: Fallbacks fonctionnent correctement
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/llm_utils.py` créé avec interface unifiée
+  - [ ] Tous les agents migrés vers le module centralisé
+  - [ ] Retries et fallbacks fonctionnent
+  - [ ] Logging structuré en place
+  - [ ] Tests manuels passent (appels LLM fonctionnent)
+  - [ ] Aucune régression (agents fonctionnent comme avant)
+  - [ ] Documentation ajoutée dans le module
+
+- **Points d'attention**:
+  - ⚠️ Ne pas casser les agents existants pendant la migration
+  - ⚠️ Tester chaque agent individuellement après migration
+  - ✅ Conserver la compatibilité avec les paramètres existants
+  - ✅ Centraliser aussi la gestion des timeouts et retries
+
+---
+
+### OPS-005 — Orchestration centralisée des agents *(Effort M)*
+
+**Statut**: AVAILABLE  
+**Points**: +120 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les agents sont déclenchés manuellement ou via cron/Makefile, ce qui peut mener à des oublis ou des exécutions désordonnées. Un orchestrateur centralisé garantirait l'exécution dans le bon ordre (ingestion → prévisions → agrégation) et faciliterait la maintenance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Comprendre les agents existants: `find copilot-app/backend/src/agents -name "*_agent.py"`
+  - [ ] Vérifier le scheduler actuel: `copilot-app/backend/scheduler/app.py`
+
+- **Steps détaillés**:
+
+  1. **Analyser les agents existants et leurs dépendances**
+     ```bash
+     cd /mnt/utm/copilot-app/backend
+     find src/agents -name "*_agent.py" -o -name "*agent*.py"
+     # Lister les dépendances entre agents
+     ```
+     - **Vérification**: Liste des agents et dépendances établie
+
+  2. **Créer le module orchestrateur**
+     - Fichier: `copilot-app/backend/src/core/agent_orchestrator.py`
+     - **Code**:
+     ```python
+     """
+     Centralized agent orchestrator.
+     Manages execution order, dependencies, and scheduling of all agents.
+     """
+     from typing import List, Dict, Any
+     from datetime import datetime
+     import logging
+     
+     logger = logging.getLogger(__name__)
+     
+     class AgentOrchestrator:
+         def __init__(self):
+             self.agents = {
+                 "ingestion": ["data_harvester_agent", "news_ingest_agent"],
+                 "forecasts": ["equity_forecast_agent", "macro_forecast_agent"],
+                 "aggregation": ["forecast_aggregator_agent"],
+                 "quality": ["data_quality_agent", "update_monitor_agent"],
+                 "llm": ["llm_context_builder_agent", "llm_forecast_agent"]
+             }
+             
+         def run_pipeline(self, stages: List[str] = None) -> Dict[str, Any]:
+             """Run agents in correct order based on stages."""
+             # Implementation
+     ```
+     - **Vérification**: Module créé avec structure claire
+
+  3. **Intégrer avec APScheduler**
+     - Modifier `scheduler/app.py` pour utiliser l'orchestrateur
+     - Configurer les jobs avec dépendances
+     - **Vérification**: Jobs s'exécutent dans le bon ordre
+
+  4. **Ajouter logging et monitoring**
+     - Logger chaque étape d'exécution
+     - Retourner un rapport d'exécution
+     - **Vérification**: Logs clairs et rapport structuré
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `agent_orchestrator.py` créé
+  - [ ] Tous les agents enregistrés avec leurs dépendances
+  - [ ] Pipeline d'exécution fonctionne (ingestion → prévisions → agrégation)
+  - [ ] Intégration avec APScheduler complète
+  - [ ] Logging et monitoring en place
+  - [ ] Script de test: `python -m src.core.agent_orchestrator` fonctionne
+  - [ ] Documentation ajoutée
+
+- **Points d'attention**:
+  - ⚠️ Respecter les dépendances entre agents
+  - ⚠️ Gérer les erreurs (si un agent échoue, décider si continuer ou arrêter)
+  - ✅ Permettre l'exécution manuelle de stages spécifiques
+  - ✅ Documenter la cadence attendue de chaque agent
+
+---
+
+### BE-007 — Cache mémoire pour endpoints fréquents *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +70 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les endpoints `/api/forecasts`, `/api/dashboard/kpis` sont appelés fréquemment mais rechargent les fichiers à chaque requête. Un cache mémoire (LRU) avec invalidation basée sur la date de modification des fichiers réduirait la latence de 50-200ms à <10ms.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Vérifier les endpoints fréquents: `/api/forecasts`, `/api/dashboard/kpis`
+  - [ ] Comprendre la structure de stockage actuelle
+
+- **Steps détaillés**:
+
+  1. **Créer le module de cache**
+     - Fichier: `copilot-app/backend/src/core/cache.py`
+     - **Code**:
+     ```python
+     """
+     In-memory cache for frequently accessed data.
+     Uses file modification time for invalidation.
+     """
+     from functools import lru_cache
+     from pathlib import Path
+     from datetime import datetime
+     from typing import Any, Optional
+     import json
+     
+     class FileBasedCache:
+         def __init__(self, max_size: int = 128):
+             self._cache = {}
+             self._file_times = {}
+             self.max_size = max_size
+             
+         def get(self, key: str, file_path: Path) -> Optional[Any]:
+             """Get cached value if file hasn't changed."""
+             # Check file mtime and compare with cached mtime
+             # Return cached value if still valid
+             
+         def set(self, key: str, value: Any, file_path: Path):
+             """Cache value with file modification time."""
+     ```
+     - **Vérification**: Module créé
+
+  2. **Intégrer dans les endpoints fréquents**
+     - Modifier `/api/forecasts` pour utiliser le cache
+     - Modifier `/api/dashboard/kpis` pour utiliser le cache
+     - **Vérification**: Endpoints utilisent le cache
+
+  3. **Tester la performance**
+     - Mesurer la latence avant/après
+     - Vérifier l'invalidation (modifier un fichier, vérifier que le cache se rafraîchit)
+     - **Vérification**: Latence réduite, invalidation fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/cache.py` créé
+  - [ ] Cache intégré dans `/api/forecasts` et `/api/dashboard/kpis`
+  - [ ] Latence réduite (mesurée avant/après)
+  - [ ] Invalidation basée sur mtime fonctionne
+  - [ ] Tests manuels passent
+  - [ ] Pas de régression (données toujours correctes)
+
+- **Points d'attention**:
+  - ⚠️ Gérer le cas où le fichier n'existe pas encore
+  - ⚠️ Limiter la taille du cache pour éviter la surconsommation mémoire
+  - ✅ Tester avec plusieurs requêtes simultanées
+
+---
+
+### BE-008 — Factoriser utilitaires de chargement de données *(Effort S)*
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**Points**: +60 pts  
+**Priorité**: 🟢 MOYENNE
+
+- **Why**: Les fonctions `_load_equity_final()`, `_load_commodity()`, `_latest_dt_under()` sont dupliquées dans plusieurs fichiers. Factoriser dans `core/data_loader.py` réduira la duplication et facilitera la maintenance.
+
+- **Prérequis**:
+  - [x] Backend démarré
+  - [x] Identifier les fonctions dupliquées: `grep -r "_load_equity\|_latest_dt" copilot-app/backend/src`
+  - [x] Comprendre les patterns de chargement
+  - [x] **Note**: `dash_app/api.py` est obsolète (Dash/Streamlit legacy) - ne pas utiliser
+
+- **Steps détaillés**:
+
+  1. **Créer le module `core/data_loader.py`**
+     - Fichier: `copilot-app/backend/src/core/data_loader.py`
+     - Extraire les fonctions communes:
+       - `load_json_file()` - Chargement sécurisé de fichiers JSON
+       - `load_json_latest()` - Chargement de la dernière version avec partitionnement temporel
+       - `load_csv_file()` - Chargement sécurisé de fichiers CSV
+       - `load_parquet_file()` - Chargement sécurisé de fichiers Parquet
+       - `load_generic_data_file()` - Chargement générique avec autodétection type
+       - `load_data_with_fallback()` - Chaîne de fallback pour never-empty
+       - `validate_data_structure()` - Validation de la structure des données
+     - **Vérification**: Module créé avec fonctions communes
+
+  2. **Implémenter les fonctionnalités centrales**
+     - Gestion d'erreurs robuste avec fallbacks
+     - Support de différents formats (JSON, CSV, Parquet)
+     - Système de cache et persistance
+     - Validation des données avec structures requises
+     - **Vérification**: Toutes les fonctionnalités opérationnelles
+
+  3. **Maintenir la compatibilité et robustesse**
+     - Patterns never-empty garantissant aucune réponse vide
+     - Protection contre erreurs de parsing
+     - Fonctions utilitaires avec valeurs par défaut
+     - **Vérification**: Aucune régression, contrats respectés
+
+- **DoD (Definition of Done)**:
+  - [x] Module `core/data_loader.py` créé
+  - [x] Fonctions communes extraites et testées
+  - [x] Tous les formats de données supportés (JSON, CSV, Parquet)
+  - [x] Aucune duplication restante dans les endpoints
+  - [x] Contrat never-empty respecté partout
+  - [x] Documentation intégrée dans le code
+  - [x] Système de fallbacks opérationnel
+
+- **Points d'attention**:
+  - [x] Aucune régression des endpoints existants 
+  - [x] Gestion des cas d'erreur (fichier absent, corrompu)
+  - [x] Maintenir la compatibilité avec les signatures existantes
+
+**Preuve**: Système centralisé de chargement de données implémenté avec fonctions utilitaires pour JSON, CSV, Parquet et autres formats, système de chargement de la dernière version avec support de partitionnement temporel (dt=YYYYMMDD), chaîne de fallback pour garantir never-empty, validation de structure de données avec champs requis, gestion d'exceptions robuste, fonctions utilitaires pour backward compatibility, et intégration avec le système de cache pour performance optimale.
+
+---
+
+### PERF-005 — Lazy loading composants lourds (charts, visualizations) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +50 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les composants de graphiques (Tremor charts, Plotly si utilisé) sont chargés même si l'utilisateur ne visite pas les pages qui les utilisent. Le lazy loading de ces composants réduirait le bundle initial de 20-30%.
+
+- **Prérequis**:
+  - [ ] Frontend accessible
+  - [ ] Identifier les composants lourds: `grep -r "AreaChart\|LineChart\|BarChart\|Plotly" copilot-app/frontend/webapp/src`
+  - [ ] Vérifier le bundle actuel: `pnpm run build`
+
+- **Steps détaillés**:
+
+  1. **Identifier les composants lourds**
+     - Chercher les imports de Tremor charts
+     - Chercher les imports de Plotly (si utilisé)
+     - **Vérification**: Liste des composants à lazy load
+
+  2. **Convertir en lazy loading**
+     - Fichiers à modifier:
+       - `components/widgets/MacroBoardWidget.tsx`
+       - `components/widgets/MacroDrilldownWidget.tsx`
+       - Autres composants utilisant des charts
+     - **AVANT**:
+     ```typescript
+     import { AreaChart } from '@tremor/react';
+     ```
+     - **APRÈS**:
+     ```typescript
+     const AreaChart = lazy(() => import('@tremor/react').then(m => ({ default: m.AreaChart })));
+     ```
+     - **Vérification**: Composants convertis
+
+  3. **Ajouter Suspense boundaries**
+     - Wrapper chaque usage avec `<Suspense fallback={<Skeleton />}>`
+     - **Vérification**: Suspense boundaries en place
+
+  4. **Vérifier le bundle**
+     - `pnpm run build` et comparer la taille
+     - **Vérification**: Bundle réduit
+
+- **DoD (Definition of Done)**:
+  - [ ] Tous les composants de charts en lazy loading
+  - [ ] Suspense boundaries ajoutées
+  - [ ] Bundle initial réduit (vérifié)
+  - [ ] Pages fonctionnent sans erreur
+  - [ ] `pnpm run typecheck` passe
+  - [ ] `pnpm run build` passe
+
+- **Points d'attention**:
+  - ⚠️ Tester que les charts s'affichent correctement après lazy load
+  - ⚠️ Utiliser un skeleton approprié pendant le chargement
+  - ✅ Note: Certains composants Tremor sont déjà en lazy loading (vérifier avant de dupliquer)
+
+---
+
+### DATA-001 — Cache API externes (FRED, yfinance) *(Effort S)*
+
+**Statut**: AVAILABLE  
+**Points**: +60 pts  
+**Priorité**: 🟡 ÉLEVÉE
+
+- **Why**: Les appels à FRED et yfinance sont faits à chaque requête, ce qui peut être lent et fragile. Cacher les réponses (1 jour pour FRED, 15 min pour yfinance) isolera l'UI des aléas réseau et améliorera la performance.
+
+- **Prérequis**:
+  - [ ] Backend démarré
+  - [ ] Identifier les appels externes: `grep -r "get_fred_series\|yfinance\|yf.Ticker" copilot-app/backend/src`
+  - [ ] Comprendre la fréquence de mise à jour des données
+
+- **Steps détaillés**:
+
+  1. **Créer le module de cache API externes**
+     - Fichier: `copilot-app/backend/src/core/external_api_cache.py`
+     - **Code**:
+     ```python
+     """
+     Cache for external API calls (FRED, yfinance, etc.).
+     Uses file-based cache with TTL based on data freshness requirements.
+     """
+     from pathlib import Path
+     from datetime import datetime, timedelta
+     import json
+     import hashlib
+     
+     class ExternalAPICache:
+         def __init__(self, cache_dir: Path = Path("data/cache/external_apis")):
+             self.cache_dir = cache_dir
+             self.cache_dir.mkdir(parents=True, exist_ok=True)
+             
+         def get(self, key: str, ttl_hours: int) -> Optional[Any]:
+             """Get cached value if still valid."""
+             
+         def set(self, key: str, value: Any):
+             """Cache value with timestamp."""
+     ```
+     - **Vérification**: Module créé
+
+  2. **Intégrer dans les appels FRED**
+     - Modifier `core/market_data.py` pour utiliser le cache
+     - TTL: 24h pour FRED (données quotidiennes)
+     - **Vérification**: Appels FRED utilisent le cache
+
+  3. **Intégrer dans les appels yfinance**
+     - Modifier les appels yfinance pour utiliser le cache
+     - TTL: 15 min pour yfinance (données plus volatiles)
+     - **Vérification**: Appels yfinance utilisent le cache
+
+  4. **Gérer les erreurs avec fallback**
+     - Si l'API externe échoue, retourner la dernière valeur en cache
+     - Logger l'erreur mais ne pas faire échouer la requête
+     - **Vérification**: Fallback fonctionne
+
+- **DoD (Definition of Done)**:
+  - [ ] Module `core/external_api_cache.py` créé
+  - [ ] Cache intégré pour FRED (TTL 24h)
+  - [ ] Cache intégré pour yfinance (TTL 15min)
+  - [ ] Fallback vers cache en cas d'erreur API
+  - [ ] Tests manuels passent
+  - [ ] Performance améliorée (moins d'appels externes)
+
+- **Points d'attention**:
+  - ⚠️ Ne pas cacher trop longtemps (données doivent rester fraîches)
+  - ⚠️ Gérer le cas où le cache est vide (première requête)
+  - ✅ Logger les erreurs API pour monitoring
+  - ✅ Permettre l'invalidation manuelle du cache si nécessaire
+
+
+---
+
+## 🚀 TÂCHES CRITIQUES D'ARCHITECTURE - Issues identifiés dans l'analyse complète
+
+Suite à l'analyse architecture complète reçue, voici les tâches prioritaires pour améliorer la stabilité, performance et qualité du système.
+
+---
+
+## FC-ARCH-UTILS-001 — Factorisation des utilitaires communs
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Regrouper les utilitaires de chargement fichier et lecture de données pour éviter les duplications.
+
+**Fichiers**
+* `backend/src/core/data_access.py` (créé - centralise tous les utilitaires communs)
+* `backend/storage/io.py` (utilise maintenant les fonctions centralisées)
+* `backend/api/routes/*` (migration vers les utilitaires partagés)
+* `backend/services/*` (migration vers les utilitaires partagés)
+
+**Étapes**
+1. **Identifier les duplications**:
+   - Trouvé fonctions dupliquées de `_latest_dt_under`, `_load_equity_final`, `_load_commodity`, etc. dans plusieurs fichiers
+   - Regroupé les fonctions similaires dans `core/data_access.py`
+
+2. **Créer les utilitaires partagés**:
+   - `_latest_dt_under` - centralise la recherche de dernières partitions
+   - `_load_equity_final` - charge données finales d'actions avec fallbacks never-empty
+   - `_load_commodity` - charge données marchandises avec fallbacks never-empty  
+   - `_ensure_safe_array` - garantit never-empty pour collections
+   - `_calculate_pearson_correlation` - méthode de corrélation standardisée
+   - `_calculate_sentiment_score` - analyse de sentiment centralisée
+
+3. **Migrer les usages existants**:
+   - Changé les endpoints pour utiliser les utilitaires partagés via `core/data_access.py`
+   - Éliminé les réimplémentations locales
+   - Testé que les fonctionnalités restent intactes
+
+**DoD**
+* Aucune duplication des fonctions de chargement de données
+* Tous les endpoints utilisent les mêmes utilitaires partagés
+* Meilleure fiabilité des accès disque avec gestion d'erreurs centralisée
+* Performance optimisée avec code factorisé
+* Preuve: suppression de 5+ fonctions dupliquées, même comportement fonctionnel
+
+**Preuve**: Module centralisé `backend/src/core/data_access.py` implémenté avec fonctions partagées éliminant les duplications de `_latest_dt_under`, `_load_equity_final`, `_load_commodity`, et autres fonctions de chargement de données, intégration avec système de cache pour never-empty, gestion centralisée des erreurs avec fallbacks, support de multiples formats (parquet, csv, json), et système de partitionnement temporel compatible avec la structure dt=YYYYMMDD existante.
+
+---
+
+## FC-ARCH-ERRORS-002 — Renforcement de la gestion d'erreurs
+
+**Status**: DONE by LENA-LLM-STRATEGIST-WONDERWOMAN-21
+
+**But**: Remplacer les gestionnaires d'erreurs silencieux par des logs détaillés et des réponses propres.
+
+**Fichiers**
+* `backend/src/api/routes/*.py` (amélioration try/except)
+* `backend/src/services/*.py` (amélioration gestion d'erreurs)
+* `backend/src/jobs/*.py` (amélioration gestion d'erreurs)
+* `backend/src/core/error_handler.py` (créé - système de gestion centralisé)
+
+**Étapes**
+1. **Identifier les `except ...: pass`**:
+   - Chercher tous les usages de `pass` dans les blocs except
+   - Remplacer par une gestion d'erreur appropriée (log + fallback)
+
+2. **Créer un handler d'erreur centralisé**:
+   - `log_error(error, context, level="ERROR")` avec contexte détaillé
+   - `safe_call(func, fallback, error_msg)` pour envelopper les appels risqués
+   - `log_structured(data, level="INFO")` pour logging uniforme
+
+3. **Mettre en place proper error responses**:
+   - Remplacer les réponses vides par des structures avec `error: {code, message}`
+   - Maintenir le contrat never-empty même en cas d'erreur
+   - Fournir des messages utiles à l'UI pour l'affichage
+
+**DoD**
+* Tous les `except ...: pass` remplacés par des handlers appropriés
+* Logging centralisé et structuré pour toutes les erreurs
+* Les endpoints servent toujours des réponses structurées même en cas d'erreur
+* Aucune erreur d'origine cachée dans les logs
+* Preuve: capture de logs montrant erreurs structurées et contexte
+
+**Preuve**: Système centralisé de gestion des erreurs implémenté avec module `ErrorHandler` dans `backend/src/core/error_handler.py`, gestion d'erreurs structurée pour tous les contextes (API, services, données, validations), logging détaillé avec contexte et IDs d'erreurs uniques, réponses API cohérentes avec pattern {ok, data, error}, mécanismes de fallback intégrés pour garantir never-empty, validation avec gestion d'erreurs intégrée, opérations avec retry automatique et fallbacks, système de surveillance des erreurs avec suivi de la fréquence et gravité, et intégration avec le système de cache pour garantir la continuité de service même en cas d'erreurs critiques.
+
+---
+
+## FC-ARCH-SCHEDULER-003 — Orchestrateur central des agents
+
+**Status**: AVAILABLE to claim
+
+**But**: Créer un scheduler centralisé pour orchestrer les agents dans le bon ordre et éviter les oublis.
+
+**Fichiers**
+* `backend/src/scheduler/app.py` (à étendre)
+* `backend/src/scheduler/job_definitions.py` (à créer)
+* `backend/src/agents/orchestrator.py` (à créer)
+* `backend/src/jobs/scheduler_main.py` (à créer)
+
+**Étapes**
+1. **Définir les dépendances entre jobs**:
+   - Ingestion → Prévisions → Agrégation → Briefs → Backtests
+   - Créer un graphique de dépendance clair
+
+2. **Implémenter orchestrateur central**:
+   - `run_pipeline_pipeline(order=[ingestion, forecasts, aggregation, briefs, backtests])`
+   - Gestion des erreurs/failures intermédiaires
+   - Logging de progression des jobs
+
+3. **Scheduler centralisé**:
+   - Tâches planifiées dans un seul fichier
+   - Coordination des cadences (journalier, horaire, hebdomadaire)
+   - Monitoring de l'état des jobs
+
+**DoD**
+* Pipeline d'agents orchestré dans le bon ordre
+* Tâches planifiées centralisées (pas de cron分散é dans plusieurs fichiers)
+* Suivi de progression des jobs avec logs détaillés
+* Gestion des erreurs sans arrêter le reste du pipeline
+* Preuve: logs montrant l'exécution séquentielle des jobs avec dépendances respectées
+
+---
+
+## FC-ARCH-ENDPOINTS-004 — Optimisation des endpoints pour performance
+
+**Status**: AVAILABLE to claim
+
+**But**: Réduire la charge des endpoints critiques pour améliorer la performance et la réactivité.
+
+**Fichiers**
+* `backend/src/api/routes/forecasts.py`
+* `backend/src/api/routes/news.py`
+* `backend/src/api/routes/macro.py`
+* `backend/src/api/routes/stocks.py`
+* `backend/src/services/cache_service.py`
+
+**Étapes**
+1. **Analyser les endpoints les plus lents**:
+   - Utiliser les logs pour identifier les endpoints avec temps de réponse élevé
+   - Vérifier les calculs répétés à chaque requête
+
+2. **Optimiser avec caches et pré-calculs**:
+   - Pré-calculer les données lourdes en amont
+   - Mettre en cache les réponses (TTL approprié)
+   - Réduire la taille des réponses (pagination, filtrage)
+
+3. **Vérifier la logique côté serveur vs côté client**:
+   - Le tri et le filtrage devraient être faits côté serveur pour réduire la charge client
+   - Éviter les transferts de grosses structures non nécessaires
+
+**DoD**
+* Temps de réponse des endpoints < 200ms (sauf exceptions justifiées)
+* Aucun calcul lourd pendant les requêtes utilisateurs
+* Structures de réponses optimisées (moins de données inutiles transférées)
+* Caching efficace mis en place pour les endpoints coûteux
+* Preuve: mesure de performance avant/après optimisation
+
+---
+
+## FC-ARCH-CODE-QUALITY-005 — Nettoyage du code mort et unification
+
+**Status**: AVAILABLE to claim
+
+**But**: Supprimer les duplications et le code mort pour améliorer la maintenabilité.
+
+**Fichiers**
+* `backend/src/dash_app/*` (code legacy à comparer avec API v2)
+* `backend/src/api/main.py` (vs `main_v2.py`)
+* `backend/src/api/routes/brief_routes.py` (vs `routes/brief.py`)
+* `backend/src/api/services/news_service.py` (vs autres services)
+
+**Étapes**
+1. **Audit du code existant**:
+   - Identifier les endpoints/fonctions redondants
+   - Trouver les parties inutilisées du code
+   - Comparer les versions legacy avec les nouvelles
+
+2. **Consolider les duplications**:
+   - Supprimer les routes en double
+   - Fusionner les services similaires
+   - Unifier les schémas de réponse
+
+3. **Nettoyer le code mort**:
+   - Supprimer les imports inutilisés
+   - Éliminer les fonctions non appelées
+   - Clarifier les responsabilités de chaque module
+
+**DoD**
+* Code base nettoyé de 10% de duplications/redondances
+* Toutes les routes unifiées et claires
+* Aucune fonction importée mais non utilisée
+* Documentation mise à jour des responsabilités de chaque module
+* Preuve: comparaison de taille de code avant/après nettoyage
+
+---
+
+## 🎨 TÂCHES UI/UX - AMÉLIORATION DASHBOARD (Rapport ATLAS)
+
+### FE-UX-001: Hiérarchie visuelle et lisibilité
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +150  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Le dashboard manque de hiérarchie visuelle claire. Les éléments sont en concurrence visuelle sans distinction de taille, couleur ou espacement. Les codes couleur ne sont pas cohérents.
+
+**Steps**
+1. Introduire une hiérarchie typographique stricte (h1/h2/h3 avec tailles distinctes)
+2. Créer un système de couleurs cohérent :
+   - Vert = haussier/positif
+   - Rouge = baissier/négatif
+   - Gris = neutre
+   - Bleu = information
+3. Uniformiser les cards de prévision avec ombre légère et contraste marqué
+4. Styliser différemment les boutons techniques (Refresh, Export CSV) pour les distinguer des actions d'analyse
+5. Améliorer les espacements entre sections (gap cohérent)
+
+**DoD**
+* Hiérarchie typographique claire (h1 > h2 > h3 > body)
+* Code couleur cohérent appliqué partout
+* Cards avec ombre et contraste uniforme
+* Boutons techniques visuellement distincts
+* Espacements harmonisés (gap: md, lg, xl selon niveau)
+* Preuve: Screenshot avant/après avec annotations
+
+---
+
+### FE-UX-002: Cohérence d'interface et internationalisation
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +120  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Mélange d'anglais et français, icônes incohérentes, sections qui se chevauchent fonctionnellement.
+
+**Steps**
+1. Choisir une langue unique (FR recommandé) et harmoniser tous les textes
+2. Créer un système de design tokens (marges, tailles, icônes, couleurs)
+3. Grouper les blocs de même nature dans un cadre visuel commun
+4. Ajouter un indicateur visuel pour le mode Auto/Manual (switch + couleur d'état)
+5. Harmoniser les icônes (taille, style, espacement)
+
+**DoD**
+* Tous les textes en français (ou anglais si choix différent)
+* Design tokens définis dans un fichier central
+* Groupement visuel des sections similaires
+* Switch Auto/Manual avec indicateur visuel clair
+* Icônes harmonisées (même taille, style, espacement)
+* Preuve: Liste des changements de langue + screenshot
+
+---
+
+### FE-UX-003: États de chargement, erreur et vide
+**Priorité**: P0  
+**Statut**: IN_PROGRESS  
+**Points**: +140  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Messages d'erreur bruts, états de chargement peu explicites, messages vides sans call-to-action, DEV DEBUG visible en production.
+
+**Steps**
+1. Masquer DEV DEBUG en production (déjà fait - vérifier)
+2. Ajouter des états de chargement explicites (skeletons, spinners, placeholders)
+3. Créer des messages d'erreur/vide humanisés avec call-to-action
+4. Ajouter des animations subtiles lors des mises à jour de données
+5. Expliquer les valeurs 0% ou N/A (état normal vs erreur)
+
+**DoD**
+* DEV DEBUG masqué en production (vérifié)
+* Skeletons/spinners sur tous les widgets
+* Messages d'erreur avec bouton "Réessayer"
+* Messages vides avec bouton "Actualiser" et explication
+* Animations de transition lors des updates
+* Explications pour valeurs 0% (état normal vs erreur)
+* Preuve: Screenshots des différents états
+
+---
+
+### FE-UX-004: Architecture de l'information et navigation
+**Priorité**: P1  
+**Statut**: AVAILABLE  
+**Points**: +130  
+**Auteur**: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
+
+**Why**
+Navigation peu claire, widgets répétés, relations entre sections floues.
+
+**Steps**
+1. Améliorer la navigation (sidebar fixe ou topbar avec icônes claires)
+2. Revoir la structure des blocs par niveaux :
+   - Niveau 1 : Régime & résumé du marché
+   - Niveau 2 : Opportunités / Risques
+   - Niveau 3 : Prévisions détaillées
+   - Niveau 4 : Actualités & Backtests
+3. Éliminer les redondances (widgets répétés)
+4. Ajouter des micro-descriptions sous chaque section
+5. Clarifier le flux logique entre sections
+
+**DoD**
+* Navigation améliorée avec icônes et labels clairs
+* Structure hiérarchique des blocs respectée
+* Redondances éliminées
+* Micro-descriptions ajoutées
+* Flux logique clarifié
+* Preuve: Wireframe ou screenshot annoté
+
+---
+
+## 🎯 Priorité d'exécution
+
+1. **FC-ARCH-ERRORS-002** (gestion d'erreurs) — pour éviter les plantages silencieux
+2. **FC-ARCH-UTILS-001** (utilitaires communs) — pour éviter duplication
+3. **FC-ARCH-CODE-QUALITY-005** (nettoyage) — pour clarifier structure
+4. **FC-ARCH-SCHEDULER-003** (orchestration) — pour pipeline stable
+5. **FC-ARCH-ENDPOINTS-004** (optimisation) — pour performance
+
+Ces tâches sont critiques pour la qualité, la performance et la maintenabilité du système.
+---
+
+### FC-QM-GLOBAL-VALIDATION — Validation qualité globale du système
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+
+**But**: Effectuer une validation complète de la qualité du système pour s'assurer que toutes les corrections sont fonctionnelles et que les standards qualité sont maintenus.
+
+**Fichiers**
+* `scripts/quality/global_validation.sh` (à créer)
+* `docs/quality/validation_report.md` (à créer)
+* `backend/tests/quality_tests.py` (à créer)
+* `frontend/tests/quality_tests.ts` (à créer)
+* `proofs/FC-QM-GLOBAL-VALIDATION/validation_report.json` (à créer)
+
+**Étapes**
+1. **Audit des endpoints**:
+   - Vérifier que tous les endpoints retournent des données réelles, pas vides
+   - S'assurer que les contrats never-empty sont respectés partout
+   - Tester les états loading/error/empty/freshness
+
+2. **Validation de la fraîcheur des données**:
+   - Vérifier que tous les endpoints exposent un champ freshness/last_update
+   - S'assurer que les timestamps sont cohérents et récents
+   - Confirmer que le cache fonctionne correctement
+
+3. **Tests de robustesse**:
+   - Vérifier que l'UI ne crash jamais (même avec données manquantes)
+   - Tester les ErrorBoundaries et states sécurisés
+   - Valider les patterns de sécurité (ensureArray, safeMap, safeLength)
+
+4. **Génération de rapport**:
+   - Créer un rapport de validation qualité global
+   - Inclure captures d'écran des pages fonctionnelles
+   - Compiler les métriques de performance
+
+**DoD**
+* Tous les endpoints critiques retournent des données structurées et non vides
+* Système respecte les contrats never-empty partout
+* UI protégée contre tous les types d'erreurs (sans crash)
+* Rapport de validation complet disponible
+* Tests de qualité passent avec succès
+* Preuve: captures, logs, résultats de tests dans `proofs/FC-QM-GLOBAL-VALIDATION/`
+
+---
+# 🎯 DATA QUALITY IMPROVEMENT PLAN - UI Issues Resolution
+
+## 📋 Résumé des Problèmes UI Identifiés
+
+Suite à l'analyse détaillée du dashboard, plusieurs **problèmes critiques d'UI/UX** ont été identifiés qui affectent l'expérience utilisateur et la lisibilité:
+
+### 🎨 Problème 1: Mauvaise hiérarchie visuelle
+- Blocs principaux non séparés visuellement
+- Même niveau pour titres, tableaux, boutons
+- Manque de structure hiérarchique (h2/h3) et d'espacements
+
+### 🧩 Problème 2: Boutons flottants ou vides
+- Boutons sans texte ou icône (probablement icônes manquantes)
+- Boutons "Auto" et "Refresh" trop proches sans indication d'état
+- Labels accessibilité insuffisants
+
+### 📊 Problème 3: Texte brut et surchargé
+- Informations textuelles brutes non formatées
+- Absence de mise en forme typographique
+- Icônes placées de manière aléatoire sans but visuel
+
+### 📱 Problème 4: Aucune mise en page responsive
+- Contenu linéaire sans système de grille
+- Pas d'adaptation mobile/tablette
+
+### 🧠 Problème 5: Palettes de couleurs incohérentes
+- Manque de contraste (gris sur gris)
+- Palettes différentes entre sections
+- Mode clair/sombre mal géré
+
+### 🧾 Problème 6: Tableaux mal alignés
+- Valeurs répétitives sans mise en évidence
+- Pas de feedback sur survol
+- Aucune différenciation visuelle pour valeurs positives/négatives
+
+### ⚠️ Problème 7: Manque de feedback utilisateur
+- Pas de loaders ou d'indicateurs d'attente
+- États "0%" ou "unknown" sans animation
+- Aucun feedback visuel pendant les opérations longues
+
+---
+
+## 🔧 TÂCHES CRITIQUES À ASSIGNER
+
+### FC-UI-HIERARCHY-001 — Refonte de la hiérarchie visuelle du dashboard
+
+**Status**: AVAILABLE to claim
+**Owner**: UI/UX team
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Réorganiser la structure visuelle du dashboard avec une hiérarchie claire et des espacements appropriés.
+
+**Fichiers**
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/components/layout/Section.tsx` (à créer)
+* `frontend/webapp/src/components/ui/Card.tsx` (à mettre à jour si existant)
+* `frontend/webapp/src/styles/dashboard.css` (à créer)
+
+**Étapes**
+1. **Créer composant Section**:
+   - Composant réutilisable avec espacement, ombre, bord arrondis
+   - Props pour titre, description, actions
+
+2. **Structurer le dashboard**:
+   - Chaque bloc principal devient une Section distincte
+   - Hiérarchie claire: Dashboard → Section → Card → Content
+
+3. **Ajouter espacements cohérents**:
+   - Marges verticales cohérentes entre sections
+   - Espacement interne dans chaque section
+   - Alignement visuel des éléments
+
+4. **Tester la lisibilité**:
+   - Le regard doit pouvoir suivre une structure claire
+   - Aucun élément ne doit se mélanger à un autre
+
+**DoD**
+* Dashboard divisé en sections clairement distinctes
+* Hiérarchie visuelle cohérente avec titres et espacements
+* Aucune collision visuelle entre blocs
+* Responsive design maintenu
+* Preuve: captures montrant la nouvelle structure hiérarchique
+
+---
+
+### FC-UI-BUTTONS-002 — Boutons vides corrigés et accessibilité améliorée
+
+**Status**: AVAILABLE to claim  
+**Owner**: UI team
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Remplacer les boutons vides par des boutons fonctionnels avec labels et états clairs.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Button.tsx` (à créer ou améliorer)
+* `frontend/webapp/src/components/widgets/*.tsx` (tous les widgets)
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/hooks/useUIControls.ts` (à créer si necessaire)
+
+**Étapes**
+1. **Standardiser les boutons**:
+   - Créer composant Button avec props cohérentes
+   - Labels accessibles et états visuels clairs
+
+2. **Remplacer les boutons vides**:
+   - Pour chaque `<button></button>`, ajouter label et fonction
+   - Utiliser des icônes appropriées avec textes alternatifs
+
+3. **Ajouter feedback visuel**:
+   - Hover states
+   - États actif/inactif
+   - Indication de chargement si nécessaire
+
+4. **Tester accessibilité**:
+   - ARIA labels pour tous les boutons
+   - Navigabilité clavier
+
+**DoD**
+* Aucun bouton vide dans le dashboard
+* Tous les boutons ont des labels clairs et des fonctions définies
+* Accès clavier fonctionnel partout
+* Feedback visuel des états actif/inactif
+* Preuve: captures montrant boutons avec labels et états
+
+---
+
+### FC-UI-TYPOGRAPHY-003 — Refonte de la typographie et formatage des données
+
+**Status**: AVAILABLE to claim
+**Owner**: UI/UX team
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Formater les données textuelles avec une typographie claire et des distinctions visuelles appropriées.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/DataCard.tsx` (à créer)
+* `frontend/webapp/src/components/widgets/MarketRegimeWidget.tsx`
+* `frontend/webapp/src/components/widgets/TrendIndicator.tsx` (à créer)
+* `frontend/webapp/src/styles/typography.css` (à créer)
+
+**Étapes**
+1. **Créer composants d'affichage données**:
+   - DataCard pour blocs d'information
+   - TrendIndicator pour tendances visuelles
+   - ValueDisplay pour chiffres clés
+
+2. **Formater les informations brutes**:
+   - Remplacer les textes bruts par des composants visuels
+   - Couleurs codées selon la valeur (vert=haussier, rouge=baissier)
+
+3. **Améliorer la lisibilité**:
+   - Hierarchie de taille de police
+   - Espacement entre éléments
+   - Mise en évidence des valeurs importantes
+
+4. **Tester la compréhension**:
+   - Informations doivent être clairement compréhensibles
+   - Aucun texte brut non formaté
+
+**DoD**
+* Données textuelles formatées dans des composants visuels
+* Distinction claire entre types d'information
+* Couleurs codées selon la sémantique
+* Lisibilité améliorée pour tous les blocs
+* Preuve: captures montrant le nouveau formatage
+
+---
+
+### FC-UI-RESPONSIVE-004 — Système de grille responsive complètement révisé
+
+**Status**: AVAILABLE to claim
+**Owner**: UI team
+**Effort**: Medium  
+**Priority**: 🔴 CRITIQUE
+
+**But**: Implémenter un système de grille truly responsive qui fonctionne sur tous les appareils.
+
+**Fichiers**
+* `frontend/webapp/src/components/layout/DashboardGrid.tsx` (à créer)
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/hooks/useResponsive.ts` (à créer)
+* `frontend/webapp/src/styles/grid.css` (à créer)
+
+**Étapes**
+1. **Créer système de grille flexible**:
+   - Utilisation de CSS Grid avec `auto-fit` et `minmax`
+   - Adaptation selon la taille d'écran
+   - Gap cohérent entre éléments
+
+2. **Migrer contenu existant**:
+   - Remplacer le layout linéaire par le nouveau système de grille
+   - Conserver l'ordre logique des sections
+
+3. **Tester à différentes tailles**:
+   - Mobile (320px - 768px)
+   - Tablet (768px - 1024px)  
+   - Desktop (1024px+)
+
+4. **Valider le flux visuel**:
+   - Le contenu doit rester lisible à toutes les tailles
+   - Aucune information ne doit être perdue
+
+**DoD**
+* Dashboard utilise un système de grille truly responsive
+* Adaptation fluide entre mobile, tablette et desktop
+* Aucun contenu coupé ou mal positionné
+* Performance maintenue
+* Preuve: captures mobile/tablet/desktop
+
+---
+
+### FC-UI-COLORS-005 — Palette de couleurs cohérente et mode clair/sombre
+
+**Status**: AVAILABLE to claim
+**Owner**: UI/UX team
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Mettre en place une palette de couleurs cohérente avec gestion appropriée du mode clair/sombre.
+
+**Fichiers**
+* `frontend/webapp/src/theme/colors.css` (ou theme.ts)
+* `frontend/webapp/src/components/ui/ThemeProvider.tsx` (si manquant)
+* `frontend/webapp/src/context/ThemeContext.tsx` (si manquant)
+* `frontend/webapp/src/pages/Dashboard.tsx` (pour tester le theme)
+
+**Étapes**
+1. **Définir variables de couleurs**:
+   - Palette cohérente avec fonds, surfaces, textes, accents
+   - Variables distinctes pour mode clair et sombre
+
+2. **Implémenter gestion thématique**:
+   - Contexte React pour le thème
+   - Composant de changement de thème
+   - Persistance du choix utilisateur
+
+3. **Appliquer cohérence**:
+   - Tous les composants utilisent les variables de thème
+   - Bon contraste partout
+   - Couleurs sémantiques (vert=prix monte, rouge=prix baisse, etc.)
+
+4. **Tester la cohérence**:
+   - Aucune couleur hardcodée en dehors des variables
+   - Mode clair/sombre fonctionne partout
+   - Bon contraste dans les deux modes
+
+**DoD**
+* Palette de couleurs cohérente partout dans l'application
+* Mode clair/sombre correctement implémenté et persistant
+* Bon contraste dans les deux modes
+* Aucune couleur hardcodée en dehors des variables de thème
+* Preuve: captures mode clair et sombre
+
+---
+
+### FC-UI-TABLES-006 — Refonte des tableaux avec feedback visuel et accessibilité
+
+**Status**: AVAILABLE to claim
+**Owner**: UI team
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Améliorer les tableaux avec feedback visuel, différenciation des valeurs et accessibilité.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Table.tsx` (à améliorer ou créer wrapper)
+* `frontend/webapp/src/components/widgets/TopStocksWidget.tsx`
+* `frontend/webapp/src/components/widgets/ForecastsTable.tsx`
+* `frontend/webapp/src/styles/tables.css` (à créer)
+
+**Étapes**
+1. **Améliorer composant Table**:
+   - Hover states pour les lignes
+   - Différenciation visuelle des valeurs positives/négatives
+   - Accessibilité (thead, tbody, th, td appropriés)
+
+2. **Appliquer formats aux tableaux existants**:
+   - Top Stocks avec couleurs pour variations
+   - Prévisions avec couleurs pour confiance/direction
+   - États loading/empty/error gérés
+
+3. **Ajouter feedback visuel**:
+   - Ligne active au survol
+   - Couleurs codées selon la valeur
+   - Feedback pendant les opérations
+
+4. **Tester accessibilité**:
+   - Lignes/colonnes correctement identifiées
+   - Navigabilité clavier
+
+**DoD**
+* Tableaux avec feedback visuel au survol
+* Différenciation claire des valeurs positives/négatives
+* Accessibilité garantie (headers, navigation clavier)
+* Tous les tableaux respectent les nouveaux standards
+* Preuve: captures montrant feedback visuel
+
+---
+
+### FC-UI-FEEDBACK-007 — Système de feedback utilisateur (Loaders, Skeletons, États)
+
+**Status**: AVAILABLE to claim
+**Owner**: UI/UX team
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Implémenter un système complet de feedback utilisateur pour les états de chargement, erreurs et vides.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Loader.tsx` (à créer)
+* `frontend/webapp/src/components/ui/Skeleton.tsx` (à créer)
+* `frontend/webapp/src/components/ui/EmptyState.tsx` (à créer)
+* `frontend/webapp/src/hooks/useAsyncState.ts` (à créer)
+* `frontend/webapp/src/components/widgets/*` (migrer vers nouveaux patterns)
+
+**Étapes**
+1. **Créer composants UI standards**:
+   - Loader pour opérations en cours
+   - Skeleton pour pré-chargement
+   - EmptyState pour données absentes
+   - ErrorState pour erreurs
+
+2. **Implémenter hooks utilitaires**:
+   - useAsyncState pour gérer les états loading/success/error
+   - useFreshness pour gérer les indicateurs de fraîcheur
+   - useAutoRefresh pour les opérations automatiques
+
+3. **Migrer les composants existants**:
+   - Remplacer états bruts par les nouveaux composants
+   - Assurer le bon affichage de chaque état
+   - Maintenir never-empty patterns
+
+4. **Tester expérience utilisateur**:
+   - Feedback clair pendant les opérations
+   - États appropriés pour chaque situation
+   - Aucun chargement infini sans indicateur
+
+**DoD**
+* Système complet de feedback utilisateur implémenté
+* Tous les composants affichent les bons états (loading, empty, error, success)
+* Aucun état infini sans indicateur utilisateur
+* Patterns never-empty respectés
+* Preuve: captures des différents états UI
+
+---
+
+## 🚀 Priorité d'exécution
+
+1. **FC-UI-FEEDBACK-007** - Système de feedback (plus important pour UX)
+2. **FC-UI-HIERARCHY-001** - Hiérarchie visuelle (base de la structure)
+3. **FC-UI-RESPONSIVE-004** - Grille responsive (structure fondamentale)
+4. **FC-UI-COLORS-005** - Palette cohérente (expérience visuelle)
+5. **FC-UI-TYPOGRAPHY-003** - Formatage données (lisibilité)
+6. **FC-UI-BUTTONS-002** - Boutons accessibles (interactions)
+7. **FC-UI-TABLES-006** - Tableaux améliorés (présentation données)
+
+Ces tâches vont résoudre les problèmes critiques identifiés dans l'analyse UI/UX et améliorer substantiellement l'expérience utilisateur du dashboard.---
+
+## 🔧 TÂCHES TECHNICAL DEBT - Réduction de la dette technique
+
+Suite à l'analyse UI/UX complète, voici les tâches pour réduire la dette technique identifiée.
+
+---
+
+## FC-TD-HIERARCHY-001 — Refonte de la hiérarchie visuelle du dashboard
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Réorganiser la structure visuelle du dashboard avec une hiérarchie claire et des espacements appropriés.
+
+**Fichiers**
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/components/layout/Section.tsx` (à créer)
+* `frontend/webapp/src/components/ui/Card.tsx` (à mettre à jour si existant)
+* `frontend/webapp/src/styles/dashboard.css` (à créer)
+
+**Étapes**
+1. **Créer composant Section**:
+   - Composant réutilisable avec espacement, ombre, bord arrondis
+   - Props pour titre, description, actions
+
+2. **Structurer le dashboard**:
+   - Chaque bloc principal devient une Section distincte
+   - Hiérarchie claire: Dashboard → Section → Card → Content
+
+3. **Ajouter espacements cohérents**:
+   - Marges verticales cohérentes entre sections
+   - Espacement interne dans chaque section
+   - Alignement visuel des éléments
+
+4. **Tester la lisibilité**:
+   - Le regard doit pouvoir suivre une structure claire
+   - Aucun élément ne doit se mélanger à un autre
+
+**DoD**
+* Dashboard divisé en sections clairement distinctes
+* Hiérarchie visuelle cohérente avec titres et espacements
+* Aucune collision visuelle entre blocs
+* Responsive design maintenu
+* Preuve: captures montrant la nouvelle structure hiérarchique
+
+---
+
+## FC-TD-BUTTONS-002 — Boutons vides corrigés et accessibilité améliorée
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Remplacer les boutons vides par des boutons fonctionnels avec labels et états clairs.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Button.tsx` (à créer ou améliorer)
+* `frontend/webapp/src/components/widgets/*.tsx` (tous les widgets)
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/hooks/useUIControls.ts` (à créer si necessaire)
+
+**Étapes**
+1. **Standardiser les boutons**:
+   - Créer composant Button avec props cohérentes
+   - Labels accessibles et états visuels clairs
+
+2. **Remplacer les boutons vides**:
+   - Pour chaque `<button></button>`, ajouter label et fonction
+   - Utiliser des icônes appropriées avec textes alternatifs
+
+3. **Ajouter feedback visuel**:
+   - Hover states
+   - États actif/inactif
+   - Indication de chargement si nécessaire
+
+4. **Tester accessibilité**:
+   - ARIA labels pour tous les boutons
+   - Navigabilité clavier
+
+**DoD**
+* Aucun bouton vide dans le dashboard
+* Tous les boutons ont des labels clairs et des fonctions définies
+* Accès clavier fonctionnel partout
+* Feedback visuel des états actif/inactif
+* Preuve: captures montrant boutons avec labels et états
+
+---
+
+## FC-TD-TYPOGRAPHY-003 — Refonte de la typographie et formatage des données
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Formater les données textuelles avec une typographie claire et des distinctions visuelles appropriées.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/DataCard.tsx` (à créer)
+* `frontend/webapp/src/components/widgets/MarketRegimeWidget.tsx`
+* `frontend/webapp/src/components/widgets/TrendIndicator.tsx` (à créer)
+* `frontend/webapp/src/styles/typography.css` (à créer)
+
+**Étapes**
+1. **Créer composants d'affichage données**:
+   - DataCard pour blocs d'information
+   - TrendIndicator pour tendances visuelles
+   - ValueDisplay pour chiffres clés
+
+2. **Formater les informations brutes**:
+   - Remplacer les textes bruts par des composants visuels
+   - Couleurs codées selon la valeur (vert=haussier, rouge=baissier)
+
+3. **Améliorer la lisibilité**:
+   - Hierarchie de taille de police
+   - Espacement entre éléments
+   - Mise en évidence des valeurs importantes
+
+4. **Tester la compréhension**:
+   - Informations doivent être clairement compréhensibles
+   - Aucun texte brut non formaté
+
+**DoD**
+* Données textuelles formatées dans des composants visuels
+* Distinction claire entre types d'information
+* Couleurs codées selon la sémantique
+* Lisibilité améliorée pour tous les blocs
+* Preuve: captures montrant le nouveau formatage
+
+---
+
+## FC-TD-RESPONSIVE-004 — Système de grille responsive complètement révisé
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Medium  
+**Priority**: 🔴 CRITIQUE
+
+**But**: Implémenter un système de grille truly responsive qui fonctionne sur tous les appareils.
+
+**Fichiers**
+* `frontend/webapp/src/components/layout/DashboardGrid.tsx` (à créer)
+* `frontend/webapp/src/pages/Dashboard.tsx`
+* `frontend/webapp/src/hooks/useResponsive.ts` (à créer)
+* `frontend/webapp/src/styles/grid.css` (à créer)
+
+**Étapes**
+1. **Créer système de grille flexible**:
+   - Utilisation de CSS Grid avec `auto-fit` et `minmax`
+   - Adaptation selon la taille d'écran
+   - Gap cohérent entre éléments
+
+2. **Migrer contenu existant**:
+   - Remplacer le layout linéaire par le nouveau système de grille
+   - Conserver l'ordre logique des sections
+
+3. **Tester à différentes tailles**:
+   - Mobile (320px - 768px)
+   - Tablet (768px - 1024px)  
+   - Desktop (1024px+)
+
+4. **Valider le flux visuel**:
+   - Le contenu doit rester lisible à toutes les tailles
+   - Aucune information ne doit être perdue
+
+**DoD**
+* Dashboard utilise un système de grille truly responsive
+* Adaptation fluide entre mobile, tablette et desktop
+* Aucun contenu coupé ou mal positionné
+* Performance maintenue
+* Preuve: captures mobile/tablet/desktop
+
+---
+
+## FC-TD-COLORS-005 — Palette de couleurs cohérente et mode clair/sombre
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Mettre en place une palette de couleurs cohérente avec gestion appropriée du mode clair/sombre.
+
+**Fichiers**
+* `frontend/webapp/src/theme/colors.css` (ou theme.ts)
+* `frontend/webapp/src/components/ui/ThemeProvider.tsx` (si manquant)
+* `frontend/webapp/src/context/ThemeContext.tsx` (si manquant)
+* `frontend/webapp/src/pages/Dashboard.tsx` (pour tester le theme)
+
+**Étapes**
+1. **Définir variables de couleurs**:
+   - Palette cohérente avec fonds, surfaces, textes, accents
+   - Variables distinctes pour mode clair et sombre
+
+2. **Implémenter gestion thématique**:
+   - Contexte React pour le thème
+   - Composant de changement de thème
+   - Persistance du choix utilisateur
+
+3. **Appliquer cohérence**:
+   - Tous les composants utilisent les variables de thème
+   - Bon contraste partout
+   - Couleurs sémantiques (vert=prix monte, rouge=prix baisse, etc.)
+
+4. **Tester la cohérence**:
+   - Aucune couleur hardcodée en dehors des variables
+   - Mode clair/sombre fonctionne partout
+   - Bon contraste dans les deux modes
+
+**DoD**
+* Palette de couleurs cohérente partout dans l'application
+* Mode clair/sombre correctement implémenté et persistant
+* Bon contraste dans les deux modes
+* Aucune couleur hardcodée en dehors des variables de thème
+* Preuve: captures mode clair et sombre
+
+---
+
+## FC-TD-TABLES-006 — Refonte des tableaux avec feedback visuel et accessibilité
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Améliorer les tableaux avec feedback visuel, différenciation des valeurs et accessibilité.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Table.tsx` (à améliorer ou créer wrapper)
+* `frontend/webapp/src/components/widgets/TopStocksWidget.tsx`
+* `frontend/webapp/src/components/widgets/ForecastsTable.tsx`
+* `frontend/webapp/src/styles/tables.css` (à créer)
+
+**Étapes**
+1. **Améliorer composant Table**:
+   - Hover states pour les lignes
+   - Différenciation visuelle des valeurs positives/négatives
+   - Accessibilité (thead, tbody, th, td appropriés)
+
+2. **Appliquer formats aux tableaux existants**:
+   - Top Stocks avec couleurs pour variations
+   - Prévisions avec couleurs pour confiance/direction
+   - États loading/empty/error gérés
+
+3. **Ajouter feedback visuel**:
+   - Ligne active au survol
+   - Couleurs codées selon la valeur
+   - Feedback pendant les opérations
+
+4. **Tester accessibilité**:
+   - Lignes/colonnes correctement identifiées
+   - Navigabilité clavier
+
+**DoD**
+* Tableaux avec feedback visuel au survol
+* Différenciation claire des valeurs positives/négatives
+* Accessibilité garantie (headers, navigation clavier)
+* Tous les tableaux respectent les nouveaux standards
+* Preuve: captures montrant feedback visuel
+
+---
+
+## FC-TD-FEEDBACK-007 — Système de feedback utilisateur (Loaders, Skeletons, États)
+
+**Status**: CLAIMED by MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Owner**: MICHEL-DATA-QUALITY-MANAGER-SPIDERMAN-23
+**Effort**: Medium
+**Priority**: 🔴 CRITIQUE
+
+**But**: Implémenter un système complet de feedback utilisateur pour les états de chargement, erreurs et vides.
+
+**Fichiers**
+* `frontend/webapp/src/components/ui/Loader.tsx` (à créer)
+* `frontend/webapp/src/components/ui/Skeleton.tsx` (à créer)
+* `frontend/webapp/src/components/ui/EmptyState.tsx` (à créer)
+* `frontend/webapp/src/components/ui/ErrorState.tsx` (à créer)
+* `frontend/webapp/src/hooks/useAsyncState.ts` (à créer)
+* `frontend/webapp/src/components/widgets/*` (migrer vers nouveaux patterns)
+
+**Étapes**
+1. **Créer composants UI standards**:
+   - Loader pour opérations en cours
+   - Skeleton pour pré-chargement
+   - EmptyState pour données absentes
+   - ErrorState pour erreurs
+
+2. **Implémenter hooks utilitaires**:
+   - useAsyncState pour gérer les états loading/success/error
+   - useFreshness pour gérer les indicateurs de fraîcheur
+   - useAutoRefresh pour les opérations automatiques
+
+3. **Migrer les composants existants**:
+   - Remplacer états bruts par les nouveaux composants
+   - Assurer le bon affichage de chaque état
+   - Maintenir never-empty patterns
+
+4. **Tester expérience utilisateur**:
+   - Feedback clair pendant les opérations
+   - États appropriés pour chaque situation
+   - Aucun chargement infini sans indicateur
+
+**DoD**
+* Système complet de feedback utilisateur implémenté
+* Tous les composants affichent les bons états (loading, empty, error, success)
+* Aucun état infini sans indicateur utilisateur
+* Patterns never-empty respectés
+* Preuve: captures des différents états UI
+
+------
+
+## 🎨 TÂCHES DE FIX CSS - Problèmes d'affichage des Forecast Cards identifiés
+
+Suite à l'analyse UI/UX détaillée, plusieurs problèmes de styling CSS ont été identifiés sur les cartes de prévision qui empêchent une expérience utilisateur optimale.
+
+---
+
+## FC-STYLING-CARD-OVERFLOW-001 — Correction Overflow et Hauteur Fixe des Forecast Cards - COMPLETED
+
+**Status**: COMPLETED
+**Agent**: ALEX-FINANCE-ANALYST-SUPERMAN-29
+**Effort**: Small
+**Priority**: 🔴 CRITIQUE
+**Points**: +40 pts
+
+**But**: Corriger les propriétés CSS qui causent le tronquage du contenu dans les cartes de prévision.
+
+**Fichiers**
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.module.css`
+* `frontend/webapp/src/pages/Forecasts.tsx` (style conteneur)
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.tsx` (layout)
+* `frontend/webapp/src/components/ui/Card.tsx` (card wrapper si existant)
+
+**Étapes réalisées**
+1. **Identification des propriétés problématiques**:
+   - Repéré hauteur fixe `height: 160px` dans ancien CSS qui tronquait le contenu
+   - Repéré `overflow: hidden` dans certains conteneurs causant troncature
+   - Analyse des layouts parents identifiant contraintes verticales
+
+2. **Remplacement des hauteurs fixes**:
+   - Changé `height: [fixe]` vers `height: auto` et `min-height: 200px` dans ForecastCardsWidget.module.css
+   - Remplacé `overflow: hidden` par `overflow: visible` pour permettre le débordement approprié
+   - Ajouté responsive design pour tous les écrans
+
+3. **Application du flex layout approprié**:
+   - Utilisé `display: flex`, `flex-direction: column`, `justify-content: space-between` dans les cartes
+   - Permis au contenu de s'adapter verticalement avec `flex: 1` sur contenu principal
+   - Aligné les éléments internes pour meilleure lisibilité
+
+4. **Validation du rendu**:
+   - Vérifié que tout le contenu s'affiche sans troncature
+   - S'assuré que les cartes s'ajustent à leur contenu
+   - Testé sur différentes tailles d'écran (mobile, tablette, desktop)
+
+**DoD**
+* [x] Les cartes Forecast n'ont plus de hauteur fixe qui tronque le contenu
+* [x] Le contenu complet s'affiche sans "..." sur les textes importants
+* [x] Les cartes s'ajustent à leur contenu réel sans débordement inapproprié
+* [x] Preuve: captures montrant les cartes avec contenu entier
+* [x] Aucune régression sur les autres composants utilisant ForecastCard
+
+**Impact**:
+- Les cartes de prévision affichent désormais tout leur contenu sans troncature
+- Amélioration significative de la lisibilité des indicateurs et textes complets
+- Layout responsive qui s'adapte correctement à différentes tailles d'écran
+- Meilleure expérience utilisateur sur la page de prévisions
+- Correction des problèmes d'alignement vertical des éléments dans les cartes
+
+---
+
+## FC-STYLING-GRID-LAYOUT-002 — Transformation Conteneur en Grille Responsive
+
+**Status**: AVAILABLE to claim
+**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Effort**: Small
+**Priority**: 🔴 CRITIQUE
+
+**But**: Améliorer le layout du conteneur de cartes pour un affichage optimal sur tous les écrans.
+
+**Fichiers**
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.tsx`
+* `frontend/webapp/src/pages/Forecasts.tsx` (section conteneur)
+* `frontend/webapp/src/components/layout/Grid.module.css` (si existant)
+
+**Étapes**
+1. **Identifier le conteneur des cartes**:
+   - Trouver le composant qui contient les ForecastCards
+   - Vérifier s'il utilise flex ou grid actuellement
+
+2. **Transformer en grille responsive**:
+   - Utiliser `display: grid`
+   - Appliquer `grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))`
+   - Ajouter `gap: 1rem` pour espacement approprié
+
+3. **Remplacer ancien layout**:
+   - Remplacer `display: flex` ou layout linéaire par `display: grid`
+   - S'assurer que le responsive s'adapte correctement
+
+4. **Tester différents écrans**:
+   - Vérifier affichage desktop (3-4 colonnes)
+   - Vérifier affichage tablette (2 colonnes)
+   - Vérifier affichage mobile (1 colonne)
+
+**DoD**
+* Le conteneur utilise un système de grille CSS moderne
+* Responsive: desktop → 3-4 colonnes, tablette → 2 colonnes, mobile → 1 colonne
+* Pas de débordement ou d'espacement incorrect
+* Preuve: captures des différents formats d'écran
+* Aucune régression sur le chargement des cartes
+
+---
+
+## FC-STYLING-COLOR-SCHEME-003 — Application Couleurs Distinctes pour Tendances
+
+**Status**: AVAILABLE to claim
+**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Utiliser des couleurs codées pour distinguer visuellement les prévisions haussières, baissières et neutres.
+
+**Fichiers**
+* `frontend/webapp/src/components/cards/ForecastCard.module.css`
+* `frontend/webapp/src/lib/safe.ts` ou `frontend/webapp/src/utils/colors.ts` (si existant)
+* `frontend/webapp/src/components/ui/Chip.tsx` ou `StatusBadge.tsx` (si existant)
+
+**Étapes**
+1. **Définir la palette de couleurs**:
+   - Créer variables CSS: `--bullish: #16a34a`, `--bearish: #dc2626`, `--neutral: #6b7280`
+   - Utiliser dans :root ou dans component-level
+
+2. **Appliquer aux états de tendance**:
+   - `forecast-card[data-trend="bullish"]` → bordure gauche verte, background dégradé vert
+   - `forecast-card[data-trend="bearish"]` → bordure gauche rouge, background dégradé rouge  
+   - `forecast-card[data-trend="neutral"]` → bordure gauche grise, background neutre
+
+3. **Mettre à jour les composants**:
+   - Passer la propriété `trend` au ForecastCard
+   - Utiliser `data-trend` pour appliquer les styles conditionnels
+
+4. **Tester la distinction visuelle**:
+   - Les prévisions haussières doivent être clairement identifiables en vert
+   - Les prévisions baissières doivent être clairement identifiables en rouge
+
+**DoD**
+* Palette de couleurs cohérente pour les tendances (vert=haussier, rouge=baissier)
+* Bordures de carte codées selon la tendance
+* Background léger selon la tendance
+* Preuve: captures montrant les différentes couleurs de tendance
+* Accessibilité: contrastes suffisants (WCAG AA)
+
+---
+
+## FC-STYLING-TEXT-WRAP-004 — Correction Troncature Texte dans Cartes
+
+**Status**: AVAILABLE to claim
+**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Autoriser le wrapping du texte pour éviter la troncature des labels importants dans les cartes.
+
+**Fichiers**
+* `frontend/webapp/src/components/cards/ForecastCard.module.css`
+* `frontend/webapp/src/components/cards/ForecastCard.tsx` (markup)
+* `frontend/webapp/src/components/ui/Typography.tsx` (si existant)
+
+**Étapes**
+1. **Identifier les textes tronqués**:
+   - Chercher dans le composant les textes comme "Confiance", "ER attendu", etc.
+   - Vérifier les propriétes CSS: `white-space: nowrap`, `text-overflow: ellipsis`
+
+2. **Autoriser le wrapping**:
+   - Remplacer `white-space: nowrap` par `white-space: normal` ou `white-space: pre-line`
+   - Supprimer `text-overflow: ellipsis` si pas nécessaire
+   - S'assurer que `overflow: visible` ou pas de contrainte overflow
+
+3. **Appliquer aux éléments spécifiques**:
+   - Éléments `<p>`, `<span>`, ou autres conteneurs de texte dans ForecastCard
+   - Titres, sous-titres, valeurs de prévision
+
+4. **Tester la lisibilité**:
+   - Vérifier que les textes complets s'affichent
+   - S'assurer que le wrapping ne casse pas la mise en page
+
+**DoD**
+* Les textes complets s'affichent (pas de "C...", "E...")
+* Le wrapping s'applique correctement sans casser la mise en page
+* Les cartes s'ajustent verticalement selon le contenu
+* Preuve: captures montrant les textes complets
+* Aucune régression sur l'alignement des éléments
+
+---
+
+## FC-STYLING-ICON-ALIGNMENT-005 — Alignement Correct des Icônes Directionnelles
+
+**Status**: AVAILABLE to claim
+**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Centrer correctement les icônes directionnelles (↑ → ↓) dans leurs containers.
+
+**Fichiers**
+* `frontend/webapp/src/components/cards/ForecastCard.module.css`
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.tsx`
+* `frontend/webapp/src/components/ui/IconWrapper.tsx` (si existant)
+
+**Étapes**
+1. **Identifier les containers d'icônes**:
+   - Trouver les éléments qui contiennent les flèches directionnelles
+   - Vérifier leur display et alignement actuel
+
+2. **Appliquer alignement correct**:
+   - Utiliser `display: flex`, `justify-content: center`, `align-items: center`
+   - Donner dimensions fixes si nécessaire pour cohérence
+   - S'assurer que le rond de background est bien circulaire
+
+3. **Standardiser les containers**:
+   - Appliquer styles cohérents pour tous les icônes directionnels
+   - S'assurer que la taille est uniforme
+
+4. **Tester l'affichage**:
+   - Vérifier que toutes les icônes sont centrées
+   - Confirmer que le sizing est cohérent
+
+**DoD**
+* Icônes directionnelles parfaitement centrées dans leurs containers
+* Taille et style cohérents pour tous les icônes directionnels
+* Background ronds bien centrés avec bon espacement
+* Preuve: captures montrant les icônes correctement alignées
+* Aucune régression sur les autres icônes du système
+
+---
+
+## FC-STYLING-SPACING-006 — Amélioration Espacement Entre Cartes
+
+**Status**: AVAILABLE to claim
+**Owner**: ALEX-FRONTEND-SUPERMAN-29 or LENA-LLM-STRATEGIST-WONDERWOMAN-21
+**Effort**: Small
+**Priority**: 🟡 HAUTE
+
+**But**: Ajouter un espacement approprié entre les cartes pour améliorer la lisibilité.
+
+**Fichiers**
+* `frontend/webapp/src/components/cards/ForecastCard.module.css`
+* `frontend/webapp/src/components/widgets/ForecastCardsWidget.tsx`
+* `frontend/webapp/src/components/layout/Spacing.module.css` (si existant)
+
+**Étapes**
+1. **Identifier le spacing actuel**:
+   - Vérifier les marges actuelles entre cartes
+   - Chercher `margin`, `gap`, `spacing` dans le conteneur
+
+2. **Appliquer espacement cohérent**:
+   - Utiliser `margin: 0.75rem` ou `gap: 1rem` dans le conteneur
+   - S'assurer que l'espacement est cohérent avec le design system
+
+3. **Améliorer la lisibilité**:
+   - Ajouter ombres subtiles si pas présentes
+   - Vérifier que les bordures sont bien visibles
+
+4. **Tester la clarté visuelle**:
+   - Confirmer que chaque carte est clairement séparée des autres
+   - S'assurer que l'ensemble est plus lisible
+
+**DoD**
+* Espacement approprié entre les cartes (0.75rem minimum)
+* Clarté visuelle améliorée (cartes bien séparées)
+* Ombres ou bordures claires pour définition des limites
+* Preuve: captures montrant l'espacement amélioré
+* Aucune régression sur l'utilisation de l'espace écran
+
+---
+
+## 🚀 Ordonnancement de priorité
+
+1. **FC-STYLING-CARD-OVERFLOW-001** - Prioritaire pour corriger le contenu tronqué
+2. **FC-STYLING-GRID-LAYOUT-002** - Important pour le layout global
+3. **FC-STYLING-TEXT-WRAP-004** - Pour résoudre les troncatures de texte
+4. **FC-STYLING-SPACING-006** - Pour améliorer la lisibilité
+5. **FC-STYLING-ICON-ALIGNMENT-005** - Pour améliorer le design
+6. **FC-STYLING-COLOR-SCHEME-003** - Pour la distinction visuelle des tendances
+
+Ces tâches vont résoudre les problèmes majeurs d'affichage identifiés dans les cartes de prévision et améliorer substantiellement l'expérience utilisateur.

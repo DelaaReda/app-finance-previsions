@@ -1,0 +1,10 @@
+done: <TASK-ID> — <résumé> (+<points>)
+
+<3–6 puces utiles sur ce qui change>
+
+Task: <TASK-ID>
+Agent: @<handle>
+Domain: <backend|frontend|infra>/<zone>
+Proofs: proofs/<TASK-ID>/<handle>/
+TimeSpent: <H>h<M>
+Co-authored-by: <Nom> <email>   # optionnel

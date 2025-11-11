@@ -17,10 +17,43 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 
 WORKING_PATH = Path("data/llm/models/working.json")
+DEFAULT_REMOTE_URL = os.getenv(
+    "G4F_WORKING_URL",
+    "https://raw.githubusercontent.com/maruf009sultan/g4f-working/main/working/working_results.txt",
+)
+SUPPORTED_MODEL_PATTERNS = (
+    "deepseek",
+    "qwen",
+    "glm",
+    "llama",
+    "meta-llama",
+    "gpt-oss",
+    "openai/gpt-oss",
+    "zai-org",
+)
+BLOCKED_MODEL_PATTERNS = (
+    "claude",
+    "gemini",
+    "command",
+    "comet",
+    "sonnet",
+    "cowboy",
+    "puter",
+    "anthropic",
+)
+MAX_STORED_MODELS = int(os.getenv("G4F_WORKING_MAX_STORED", "64"))
+ALLOWED_SHORT_PREFIXES = (
+    "gpt-oss",
+    "glm-",
+    "glm4",
+    "qwq",
+    "qwen2",
+    "qwen-",
+)
 
 
 def _now_iso() -> str:
@@ -42,6 +75,32 @@ def _ensure_dir(p: Path):
     p.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _is_supported_model(name: Optional[str]) -> bool:
+    if not name:
+        return False
+    slug = name.strip().lower()
+    if not slug:
+        return False
+    if any(block in slug for block in BLOCKED_MODEL_PATTERNS):
+        return False
+    if "/" not in slug and not any(slug.startswith(pref) for pref in ALLOWED_SHORT_PREFIXES):
+        return False
+    return any(pat in slug for pat in SUPPORTED_MODEL_PATTERNS)
+
+
+def _filter_supported_probes(objs: Iterable[ModelProbe]) -> List[ModelProbe]:
+    return [o for o in objs if _is_supported_model(o.model)]
+
+
+def _rank_probe_for_storage(probe: ModelProbe) -> tuple:
+    return (
+        not probe.ok,
+        probe.latency_s if probe.latency_s is not None else 9999.0,
+        -(probe.pass_rate or 0.0),
+        (probe.model or "").lower(),
+    )
+
+
 def _load_working() -> Dict[str, Any]:
     try:
         return json.loads(WORKING_PATH.read_text(encoding="utf-8"))
@@ -50,9 +109,19 @@ def _load_working() -> Dict[str, Any]:
 
 
 def _save_working(objs: List[ModelProbe]) -> Path:
+    filtered = _filter_supported_probes(objs)
+    if not filtered:
+        # fallback: keep at least static power list so callers always get something usable
+        filtered = [
+            ModelProbe(model=m, ok=False, provider=None, latency_s=None)
+            for m in _static_candidates() or []
+        ]
+    filtered.sort(key=_rank_probe_for_storage)
+    if MAX_STORED_MODELS and len(filtered) > MAX_STORED_MODELS:
+        filtered = filtered[:MAX_STORED_MODELS]
     payload = {
         "asof": _now_iso(),
-        "models": [asdict(x) for x in objs],
+        "models": [asdict(x) for x in filtered],
     }
     _ensure_dir(WORKING_PATH)
     WORKING_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -72,7 +141,8 @@ def _verified_candidates(limit: int = 12, refresh: bool = True) -> List[Dict[str
     # import lazy to avoid hard dependency when network is blocked
     try:
         from runners.sanity_runner_ia_chat import select_verified_models
-        return select_verified_models(caps_need=("text",), min_pass=0.30, only_sota=True, limit=limit, refresh=refresh)
+        items = select_verified_models(caps_need=("text",), min_pass=0.30, only_sota=True, limit=limit, refresh=refresh)
+        return [it for it in items if _is_supported_model(it.get("model"))]
     except Exception:
         # degrade gracefully
         return [{"model": m, "pass_rate": None, "hint": None} for m in _static_candidates()[:limit]]
@@ -134,7 +204,8 @@ def _official_candidates(limit: int = 50) -> List[Dict[str, Any]]:
         m = it.get('model')
         if m and m not in seen:
             seen.add(m); uniq.append(it)
-    return uniq[:limit]
+    filtered = [it for it in uniq if _is_supported_model(it.get("model"))]
+    return filtered[:limit]
 
 
 def _probe_model(model_name: str, system: Optional[str] = None, prompt: Optional[str] = None,
@@ -173,6 +244,8 @@ def refresh(limit: int = 8, refresh_verified: bool = True) -> Path:
     out: List[ModelProbe] = []
     for c in merged:
         m = c.get("model") if isinstance(c, dict) else str(c)
+        if not _is_supported_model(m):
+            continue
         pr = ModelProbe(model=m, ok=False, provider=None, latency_s=None, pass_rate=c.get("pass_rate") if isinstance(c, dict) else None)
         try:
             probe = _probe_model(m)
@@ -199,9 +272,11 @@ def load_working_models(max_age_hours: int = 24) -> List[str]:
     except Exception:
         pass
     rows = obj.get("models") or []
+    rows = [r for r in rows if _is_supported_model(r.get("model"))]
     # Sort by ok desc, pass_rate desc, latency asc
-    rows.sort(key=lambda r: (not bool(r.get("ok")), -(r.get("pass_rate") or 0.0), (r.get("latency_s") or 9999.0)))
-    return [r.get("model") for r in rows if r.get("ok")]
+    rows.sort(key=lambda r: (not bool(r.get("ok")), (r.get("latency_s") or 9999.0), -(r.get("pass_rate") or 0.0), (r.get("model") or "").lower()))
+    models = [r.get("model") for r in rows if r.get("ok")]
+    return models[:MAX_STORED_MODELS or len(models)]
 
 
 def merge_from_working_txt(txt_path: Path) -> Path:
@@ -222,6 +297,8 @@ def merge_from_working_txt(txt_path: Path) -> Path:
                 parts = line.split('|')
                 if len(parts) >= 2:
                     provider, model = parts[0].strip(), parts[1].strip()
+                    if not _is_supported_model(model):
+                        continue
                     models.append(ModelProbe(model=model, ok=True, provider=provider, latency_s=None, pass_rate=None))
     except Exception:
         pass
@@ -244,14 +321,142 @@ def merge_from_working_txt(txt_path: Path) -> Path:
     return _save_working(merged)
 
 
+def merge_from_remote(url: Optional[str] = None) -> Path:
+    """Fetch a remote working list (provider|model|media_type per line) and merge into working.json.
+    Defaults to DEFAULT_REMOTE_URL. Marks entries ok=True with provider set; latency/pass_rate remain None.
+    """
+    import urllib.request
+    url = url or DEFAULT_REMOTE_URL
+    try:
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            content = resp.read().decode("utf-8", errors="ignore")
+    except Exception:
+        # No change if fetch fails
+        return WORKING_PATH
+
+    lines = [ln.strip() for ln in content.splitlines() if ln.strip() and not ln.startswith("#")]
+    # Build probes from lines
+    new_models: List[ModelProbe] = []
+    for line in lines:
+        parts = line.split("|")
+        if len(parts) >= 2:
+            provider, model = parts[0].strip(), parts[1].strip()
+            if model and _is_supported_model(model):
+                new_models.append(ModelProbe(model=model, ok=True, provider=provider, latency_s=None, pass_rate=None))
+    if not new_models:
+        return WORKING_PATH
+
+    current = _load_working()
+    cur_map: Dict[str, Dict[str, Any]] = {m.get('model'): m for m in (current.get('models') or [])}
+    for pr in new_models:
+        if pr.model not in cur_map:
+            cur_map[pr.model] = asdict(pr)
+        else:
+            cur_map[pr.model]['ok'] = True
+            if not cur_map[pr.model].get('provider'):
+                cur_map[pr.model]['provider'] = pr.provider
+    merged = [ModelProbe(**{**x, 'tested_at': x.get('tested_at') or _now_iso()}) for x in cur_map.values()]
+    # Keep deterministic order: ok first, then name
+    merged.sort(key=lambda r: (not r.ok, (r.model or '').lower()))
+    return _save_working(merged)
+
+
+def merge_from_lines(lines: List[str]) -> Path:
+    """Merge provider|model|media_type lines into working.json (marks ok=True)."""
+    new_models: List[ModelProbe] = []
+    for line in lines or []:
+        if not line or '|' not in line:
+            continue
+        parts = line.split('|')
+        if len(parts) >= 2:
+            provider, model = parts[0].strip(), parts[1].strip()
+            if model and _is_supported_model(model):
+                new_models.append(ModelProbe(model=model, ok=True, provider=provider, latency_s=None, pass_rate=None))
+    if not new_models:
+        return WORKING_PATH
+    current = _load_working()
+    cur_map: Dict[str, Dict[str, Any]] = {m.get('model'): m for m in (current.get('models') or [])}
+    for pr in new_models:
+        if pr.model not in cur_map:
+            cur_map[pr.model] = asdict(pr)
+        else:
+            cur_map[pr.model]['ok'] = True
+            if not cur_map[pr.model].get('provider'):
+                cur_map[pr.model]['provider'] = pr.provider
+    merged = [ModelProbe(**{**x, 'tested_at': x.get('tested_at') or _now_iso()}) for x in cur_map.values()]
+    merged.sort(key=lambda r: (not r.ok, (r.model or '').lower()))
+    return _save_working(merged)
+
+
+def prune_working_models() -> Path:
+    """Trim working.json to supported entries only."""
+    raw = _load_working()
+    rows = raw.get("models") or []
+    probes: List[ModelProbe] = []
+    for row in rows:
+        try:
+            probes.append(
+                ModelProbe(
+                    model=row.get("model"),
+                    ok=bool(row.get("ok")),
+                    provider=row.get("provider"),
+                    latency_s=row.get("latency_s"),
+                    pass_rate=row.get("pass_rate"),
+                    source=row.get("source"),
+                    tested_at=row.get("tested_at") or _now_iso(),
+                )
+            )
+        except Exception:
+            continue
+    if not probes:
+        probes = [ModelProbe(model=m, ok=False, provider=None, latency_s=None) for m in _static_candidates()]
+    return _save_working(probes)
+
+
+def ensure_working_models(limit: int = 8, max_age_hours: int = 6, min_ok: int = 2) -> List[str]:
+    """Return a fresh list of supported models, refreshing the watcher if needed."""
+    models = load_working_models(max_age_hours=max_age_hours)
+    if len(models) >= min_ok:
+        return models[:limit]
+    # attempt prune + refresh
+    try:
+        prune_working_models()
+    except Exception:
+        pass
+    try:
+        refresh(limit=limit, refresh_verified=True)
+    except Exception:
+        # ignore refresh errors – we'll fall back shortly
+        pass
+    models = load_working_models(max_age_hours=max_age_hours * 2)
+    if models:
+        return models[:limit]
+    fallback = [m for m in _static_candidates() if _is_supported_model(m)]
+    return fallback[:limit] or _static_candidates()[:limit]
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     import argparse
     p = argparse.ArgumentParser(description="G4F Model Watcher")
     p.add_argument("--refresh", action="store_true", help="Refresh working models and write JSON")
     p.add_argument("--limit", type=int, default=int(os.getenv("G4F_TEST_LIMIT","8")))
+    p.add_argument("--merge-remote", action="store_true", help="Merge remote working list into working.json before probing")
+    p.add_argument("--remote-url", type=str, default=DEFAULT_REMOTE_URL)
     p.add_argument("--no-refresh-verified", action="store_true", help="Skip refreshing verified list, use cache")
+    p.add_argument("--ensure", action="store_true", help="Ensure working models exist (refresh if stale) and print them")
+    p.add_argument("--prune", action="store_true", help="Prune working.json to supported/limited entries only")
     args = p.parse_args(argv)
+    if args.prune:
+        path = prune_working_models()
+        print(json.dumps({"ok": True, "path": str(path)}, ensure_ascii=False))
+        return 0
+    if args.ensure:
+        models = ensure_working_models(limit=args.limit)
+        print(json.dumps({"ok": True, "models": models}, ensure_ascii=False))
+        return 0
     if args.refresh:
+        if args.merge_remote:
+            merge_from_remote(args.remote_url)
         path = refresh(limit=args.limit, refresh_verified=(not args.no_refresh_verified))
         print(json.dumps({"ok": True, "path": str(path)}, ensure_ascii=False))
         return 0

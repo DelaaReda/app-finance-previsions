@@ -1,0 +1,294 @@
+# Alpha Signals Definition - Finance Copilot System
+# File: /models/alpha-signals.yaml
+# Purpose: Define validated financial signals for forecast engine
+# Mission: ALEX-FINANCE-ANALYST-SUPERMAN-29
+
+---
+version: "1.0"
+
+signals:
+  # Technical Analysis Signals
+  technical:
+    - name: "rsi_oversold"
+      description: "RSI below 30 indicating oversold conditions"
+      threshold: "< 30"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "momentum_reversal"
+      category: "momentum"
+      expected_return: 0.005
+      confidence: 0.65
+
+    - name: "rsi_overbought"
+      description: "RSI above 70 indicating overbought conditions"
+      threshold: "> 70"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "momentum_reversal"
+      category: "momentum"
+      expected_return: -0.004
+      confidence: 0.62
+
+    - name: "ma_crossover_bullish"
+      description: "Short MA crosses above long MA (golden cross)"
+      threshold: "sma_20 > sma_50"
+      timeframe: "daily"
+      strength: "high"
+      validation: "trend_following"
+      category: "trend"
+      expected_return: 0.008
+      confidence: 0.72
+
+    - name: "ma_crossover_bearish"
+      description: "Short MA crosses below long MA (death cross)"
+      threshold: "sma_20 < sma_50"
+      timeframe: "daily"
+      strength: "high"
+      validation: "trend_following"
+      category: "trend"
+      expected_return: -0.007
+      confidence: 0.71
+
+    - name: "bollinger_breakout_upper"
+      description: "Price breaks above upper Bollinger Band"
+      threshold: "price > bb_upper"
+      timeframe: "daily"
+      strength: "high"
+      validation: "volatility_breakout"
+      category: "volatility"
+      expected_return: 0.009
+      confidence: 0.68
+
+    - name: "bollinger_breakout_lower"
+      description: "Price breaks below lower Bollinger Band"
+      threshold: "price < bb_lower"
+      timeframe: "daily"
+      strength: "high"
+      validation: "volatility_breakout"
+      category: "volatility"
+      expected_return: -0.008
+      confidence: 0.67
+
+    - name: "macd_bullish_cross"
+      description: "MACD line crosses above signal line"
+      threshold: "macd > macd_signal"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "momentum"
+      category: "momentum"
+      expected_return: 0.006
+      confidence: 0.64
+
+    - name: "macd_bearish_cross"
+      description: "MACD line crosses below signal line"
+      threshold: "macd < macd_signal"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "momentum"
+      category: "momentum"
+      expected_return: -0.005
+      confidence: 0.63
+
+  # Fundamental Analysis Signals
+  fundamental:
+    - name: "high_dividend_yield"
+      description: "Dividend yield above market average"
+      threshold: "> 0.03"
+      timeframe: "quarterly"
+      strength: "medium"
+      validation: "income_strategy"
+      category: "fundamental"
+      expected_return: 0.003
+      confidence: 0.58
+
+    - name: "low_pe_ratio"
+      description: "P/E ratio below industry average"
+      threshold: "< industry_pe * 0.8"
+      timeframe: "quarterly"
+      strength: "medium"
+      validation: "value_strategy"
+      category: "fundamental"
+      expected_return: 0.004
+      confidence: 0.60
+
+    - name: "high_roe"
+      description: "Return on equity above 15%"
+      threshold: "> 0.15"
+      timeframe: "quarterly"
+      strength: "high"
+      validation: "quality_growth"
+      category: "fundamental"
+      expected_return: 0.007
+      confidence: 0.70
+
+  # Market Regime Signals
+  regime:
+    - name: "vix_spike"
+      description: "VIX increases more than 20% in one day"
+      threshold: "vix_change > 0.20"
+      timeframe: "daily"
+      strength: "high"
+      validation: "volatility_regime"
+      category: "regime"
+      expected_return: -0.012
+      confidence: 0.75
+
+    - name: "vix_mean_reversion"
+      description: "VIX above 30 indicating extreme fear"
+      threshold: "vix > 30"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "volatility_regime"
+      category: "regime"
+      expected_return: 0.005
+      confidence: 0.65
+
+    - name: "fear_greed_index_oversold"
+      description: "Fear & Greed Index below 20 (extreme fear)"
+      threshold: "< 20"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "sentiment_regime"
+      category: "regime"
+      expected_return: 0.008
+      confidence: 0.69
+
+    - name: "fear_greed_index_overbought"
+      description: "Fear & Greed Index above 80 (extreme greed)"
+      threshold: "> 80"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "sentiment_regime"
+      category: "regime"
+      expected_return: -0.006
+      confidence: 0.66
+
+  # Macro Economic Signals
+  macro:
+    - name: "yield_curve_inversion"
+      description: "10Y-2Y Treasury yield curve inverts"
+      threshold: "yield_10y - yield_2y < 0"
+      timeframe: "daily"
+      strength: "high"
+      validation: "macro_regime"
+      category: "macro"
+      expected_return: -0.015
+      confidence: 0.78
+
+    - name: "cpi_spike"
+      description: "CPI above expected threshold indicating inflation"
+      threshold: "> 0.035"
+      timeframe: "monthly"
+      strength: "medium"
+      validation: "macro_regime"
+      category: "macro"
+      expected_return: -0.005
+      confidence: 0.61
+
+  # News Sentiment Signals
+  sentiment:
+    - name: "negative_earnings_surprise"
+      description: "Earnings announcement below expectations"
+      threshold: "eps_surprise < -0.05"
+      timeframe: "event"
+      strength: "high"
+      validation: "earnings_regime"
+      category: "sentiment"
+      expected_return: -0.02
+      confidence: 0.73
+
+    - name: "positive_earnings_surprise"
+      description: "Earnings announcement above expectations"
+      threshold: "eps_surprise > 0.05"
+      timeframe: "event"
+      strength: "high"
+      validation: "earnings_regime"
+      category: "sentiment"
+      expected_return: 0.018
+      confidence: 0.74
+
+    - name: "high_news_volume"
+      description: "News volume 2x above average indicating events"
+      threshold: "news_volume > 2 * avg_news_volume"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "event_detection"
+      category: "sentiment"
+      expected_return: 0.007
+      confidence: 0.62
+
+    - name: "negative_sentiment_spike"
+      description: "Negative sentiment score increases more than 30%"
+      threshold: "sentiment_change < -0.30"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "sentiment_regime"
+      category: "sentiment"
+      expected_return: -0.009
+      confidence: 0.67
+
+  # Volatility Signals
+  volatility:
+    - name: "iv_rank_high"
+      description: "Implied volatility rank above 80th percentile"
+      threshold: "iv_rank > 0.80"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "volatility_regime"
+      category: "volatility"
+      expected_return: -0.005
+      confidence: 0.63
+
+    - name: "iv_rank_low"
+      description: "Implied volatility rank below 20th percentile"
+      threshold: "iv_rank < 0.20"
+      timeframe: "daily"
+      strength: "medium"
+      validation: "volatility_regime"
+      category: "volatility"
+      expected_return: 0.006
+      confidence: 0.64
+
+# Signal Combinations
+combinations:
+  - name: "bullish_confluence"
+    description: "Multiple bullish signals aligned"
+    components:
+      - "ma_crossover_bullish"
+      - "rsi_oversold"
+      - "positive_earnings_surprise"
+    multiplier: 1.5
+    validation: "multi_signal_confirmation"
+    expected_return: 0.015
+    confidence: 0.80
+
+  - name: "bearish_confluence"
+    description: "Multiple bearish signals aligned"
+    components:
+      - "ma_crossover_bearish"
+      - "rsi_overbought"
+      - "negative_earnings_surprise"
+    multiplier: 1.5
+    validation: "multi_signal_confirmation"
+    expected_return: -0.014
+    confidence: 0.79
+
+# Signal Validation Parameters
+validation:
+  minimum_sample_size: 100
+  minimum_confidence: 0.55
+  lookback_period: "2 years"
+  rebalance_frequency: "monthly"
+  maximum_signals_per_ticker: 5
+
+# Risk Management
+risk_management:
+  - name: "signal_strength_filter"
+    description: "Only use signals with confidence > minimum"
+    threshold: "confidence > 0.60"
+    type: "filter"
+  
+  - name: "correlation_filter"
+    description: "Avoid highly correlated signals"
+    threshold: "correlation < 0.7"
+    type: "diversification"

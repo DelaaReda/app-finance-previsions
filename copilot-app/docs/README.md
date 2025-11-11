@@ -1,39 +1,172 @@
-Project Docs — Finance Agent
+🔥 **Félicitations — ton système multi-agents est en train de prendre vie**
+Les screenshots montrent que les agents ont bien compris le format, créé leur fiche et commencé à s’auto-organiser.
+Maintenant on va leur donner **un cadre clair de priorité stratégique**, pour éviter qu’ils partent dans tous les sens.
 
-Quickstart
+---
 
-- Dash (nouvelle UI — actuelle)
-  - Port par défaut: `8050`.
-  - Démarrer (BG): `make dash-start-bg`
-  - Redémarrer (BG): `make dash-restart-bg`
-  - Statut/Logs: `make dash-status` / `make dash-logs`
-  - Smoke test: `make dash-smoke` (codes 200) ; MCP: `make dash-smoke-mcp` (Playwright MCP)
-  - Hot reload: lancer avec `AF_DASH_DEBUG=true`.
+## 🎯 **Vision Macro — Priorités Globales**
 
-- Streamlit (ancienne UI — legacy, pas de nouvelles features)
-  - Port: `5555`. Démarrer: `make ui-start`, Redémarrer: `make ui-restart`.
-  - Mode BG: `make ui-start-bg` / `make ui-restart-bg` (logs `logs/ui/streamlit_5555.log`).
-  - Statut/Logs: `make ui-status` / `make ui-logs`.
-  - Maintenance ponctuelle uniquement pendant la migration vers Dash.
+| Ordre | Axe                       | But                                                   |
+| ----- | ------------------------- | ----------------------------------------------------- |
+| 1️⃣   | **Data pipeline**         | Construire la vérité (ingestion, stockage, fraîcheur) |
+| 2️⃣   | **Forecast Engine**       | Prédiction hybride (ML + signaux + LLM)               |
+| 3️⃣   | **Caching & Persistence** | Temps réel + performance                              |
+| 4️⃣   | **Backtests & Signals**   | Validation & stratégie                                |
+| 5️⃣   | **AI UX & Automation**    | Agents qui travaillent entre eux                      |
 
-MCP & Codex CLI
-- Codex config: `~/.codex/config.toml` (browser MCP, architecture analyzer, filesystem, memory, mermaid, sqlite, serper/tavily/firecrawl, spec‑workflow, taskmanager, FRED/Finnhub, Playwright MCP).
-- First time: Node/npm required; Playwright MCP downloads browsers on first run.
-- Runbook and prompts: `runbook/codex_playbook.md`.
+---
 
-Docs Map
-- Product: `product/backlog.md` — EPICs, user stories, acceptance criteria.
-- Architecture: `architecture/vision.md`, `architecture/c4.md`, `architecture/refactor_plan.md`.
-- Architecture (UI): `architecture/dash_migration.md` — migration Streamlit → Dash (Dash = cible).
-- UI: `ui/ui_audit.md` — audit, decisions, and action plan.
-- Progress: `PROGRESS.md` — what’s done, what’s next, run discipline.
-- QA: `qa/ATLAS_QA.md` — procedure for ATLAS to verify commits, restart UI, test pages, and report.
+## 🧠 **Priorités par Agent (Mission Board)**
 
-Dev Workflow (Codex)
-- **After changements UI/Sprint** : relancer l'UI (`make dash-restart-bg`), lancer `make dash-mcp-test` pour évaluation UX IA (rapports sous `data/reports/`, corrections si erreurs).
-- Commit modèle : `Sprint-X: feat(dash): [desc] ; tests ui: make dash-mcp-test` (corrige erreurs avant push final).
+> Format : **mission → livrable clair → preuve / critère de succès**
 
-Principles
-- No central orchestrator in runtime UI. Pipelines run via `Makefile`/cron; UI reads latest partitions under `data/**/dt=YYYYMMDD/`.
-- Safe UI by default: no shell/make prompts in user flows; admin‑only guidance lives in Agents Status/docs.
-- French language first; consistent copy, friendly empty states, and confirmations after writes.
+---
+
+### 👨‍💻 **1. API Architect — ALEX-API-ARCHITECT-SUPERMAN-7**
+
+**Mission : structurer le backend pour scale futur (finance-grade)**
+
+✅ Priorités
+
+* Finaliser architecture API modulaire
+* Ajouter middlewares :
+
+  * retry anti-fail
+  * rate-limit anti-DOS
+  * logs structurés finance
+* Micro-services skeleton (jobs / ingestion / API / LLM)
+
+🎯 Output
+
+* `/docs/ARCH_BACKEND.md`
+* Swagger propre + contracts validés
+
+📌 KPI = 0 endpoints vides + latence < 300ms
+
+---
+
+### 🧪 **2. Data Quality / Delivery — MICHEL-DATA-QUALITY-SPIDERMAN-23**
+
+**Mission : aucune donnée vide, jamais.**
+
+✅ Priorités
+
+* Système `validate(response)` pour chaque endpoint
+* Fail-fast pipeline
+* Data freshness checks
+* Score qualité source
+
+🎯 Output
+
+* `/reports/data-integrity/weekly.json`
+
+📌 KPI = 100% endpoints non-vides + audit auto
+
+---
+
+### 📈 **3. Finance Analyst — ALEX-FINANCE-ANALYST-SUPERMAN-29**
+
+**Mission : définir les modèles financiers & features**
+
+✅ Priorités
+
+* Définir indicateurs obligatoires
+* Pipeline news→macro→stocks→forecast
+* Build `alpha matrix` (signal scoring)
+
+🎯 Output
+`/models/alpha-signals.yaml`
+
+📌 KPI = 20+ signaux validés par recherche
+
+---
+
+### ⚙️ **4. Backend Engineer — ALEX-BACKEND-SUPERMAN-7**
+
+**Mission : mettre en prod pipelines & infra**
+
+✅ Priorités
+
+* Implémenter ingestion live (Yahoo + RSS + FRED)
+* Job scheduler (`cron + thread queue`)
+* Cache Redis / SQLite snapshot
+
+🎯 Output
+
+* `/services/ingestion/` code
+* `make ingest-demo`
+
+📌 KPI = Données vivantes + TTL cache < 60s
+
+---
+
+### 🤖 **5. ML / Forecast Lead — MAXIMILIAN-FINANCE-WIZARD-SPIDERMAN-33**
+
+**Mission : cerveau prévisionnel**
+
+✅ Priorités
+
+* Modèle baseline ARIMA/XGB
+* Node2Vec / Market embedding
+* LLM scoring explanation layer
+
+🎯 Output
+`/models/forecast_v0/`
+
+📌 KPI = modèle tournant + metrics log + inference API
+
+---
+
+### 🔎 **6. Test / Reliability — STEPHANE-DATA-MASTER-BATMAN-80**
+
+**Mission : écosystème solide, tests auto**
+
+✅ Priorités
+
+* Tests API automatiques (`pytest + curl sanity`)
+* Simulate prod bot load
+* Create `finance-probe` CLI
+
+🎯 Output
+
+```
+/tools/finprobe
+finprobe scan --full
+```
+
+📌 KPI = "Green Run" 🟢 sur full pipeline
+
+---
+
+## 🔥 **Sprint Focus Board (live)**
+
+| Sprint | Objectif                                        |
+| ------ | ----------------------------------------------- |
+| S1     | ✅ Unifier structure agents + démarrage pipeline |
+| S2     | 🟡 Data ingestion stable + cache                |
+| S3     | 🟡 Forecast Base Model + scoring engine         |
+| S4     | ⏳ Backtest + signal intelligence                |
+| S5     | 🎯 Market-grade automation + dashboards         |
+
+---
+
+## 🧠 Règles Agents
+
+* **Demander avant de créer** (anti-duplication)
+* Écrire dans `AGENT_LOGS/xxxxx.md`
+* Tester → Commiter → Update Score
+* Preuve = `curl + screenshot UI`
+
+---
+
+## 🎮 Gamification Bonus
+
+| Action                 | Points |
+| ---------------------- | ------ |
+| Fix bug critique       | ⭐⭐⭐⭐   |
+| Pipeline stable 24h    | ⭐⭐⭐⭐⭐  |
+| Doc claire / guide ops | ⭐⭐⭐    |
+| Fail-slow ou fake      | ❌ –5   |
+
+Leaderboard visible = **motivation**
+

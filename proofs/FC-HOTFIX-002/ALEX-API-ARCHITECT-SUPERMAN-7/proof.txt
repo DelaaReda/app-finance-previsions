@@ -1,0 +1,26 @@
+# Preuve de mise en œuvre de FC-HOTFIX-002
+
+## Résumé
+Mise en place du middleware minimal et de l'enveloppe de réponse standard `{ ok, data }` pour le backend Finance Copilot.
+
+## Fichiers créés/modifiés
+- `backend/src/core/middleware.py` - FinanceMiddleware pour ajouter les entêtes d'exécution
+- `backend/src/core/response.py` - Fonctions `ok()` et `err()` pour l'enveloppe standardisée
+- `backend/src/core/__init__.py` - Fichier pour rendre core un package Python
+- `backend/api/routes/health.py` - Utilisation de l'enveloppe standard `{ ok, data }`
+- `backend/api/routes/forecasts.py` - Utilisation de l'enveloppe standard `{ ok, data }`
+- `backend/api/routes/news.py` - Utilisation de l'enveloppe standard `{ ok, data }`  
+- `backend/api/main.py` - Ajout du middleware dans l'application FastAPI
+
+## Vérification
+- Les endpoints `/api/health`, `/api/forecasts` retournent correctement l'enveloppe `{ ok: true, data: {...} }`
+- Le middleware ajoute l'entête `X-Exec-Time-ms` aux réponses
+- Les structures de package sont correctement mises en place avec `__init__.py`
+- Le système démarre et fonctionne correctement malgré des erreurs potentielles liées à d'autres parties du code
+
+## Statut
+- Middleware: IMPLEMENTÉ
+- Enveloppe réponse: IMPLEMENTÉE 
+- Structure package: IMPLEMENTÉE
+- Tests: PASSANTS (health, forecasts)
+- Standard `{ ok, data }`: APPLIQUÉ

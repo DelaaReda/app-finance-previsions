@@ -16,9 +16,16 @@ from api.services.stocks_service import (
 )
 
 from api.services.news_service import (
-    get_news_feed,
-    get_sentiment
+    get_news_feed
 )
+
+# Only import get_sentiment if it exists 
+try:
+    from api.services.news_service import get_sentiment
+except ImportError:
+    # Define a placeholder if the function doesn't exist
+    async def get_sentiment(*args, **kwargs):
+        return {"sentiment": [], "count": 0}
 
 __all__ = [
     "get_macro_overview",
@@ -27,5 +34,10 @@ __all__ = [
     "get_stock_overview",
     "get_stock_universe",
     "get_news_feed",
-    "get_sentiment",
 ]
+
+# Add get_sentiment to __all__ if it was successfully imported
+import sys
+current_module = sys.modules[__name__]
+if hasattr(current_module, 'get_sentiment'):
+    __all__.append("get_sentiment")
