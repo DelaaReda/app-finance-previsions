@@ -349,7 +349,11 @@ def create_app():
             
             if router is not None:
                 # Add router with appropriate prefix
-                if route_name in ["intelligence", "context", "recommendations", "correlations", "search"]:
+                # Dashboard router has no prefix set, just include it with /api prefix
+                if route_name == "dashboard":
+                    # Dashboard has routes like /kpis, so prefix becomes /api/dashboard/kpis
+                    new_app.include_router(router, prefix="/api/dashboard")
+                elif route_name in ["intelligence", "context", "recommendations", "correlations", "search"]:
                     new_app.include_router(router, prefix=f"/api/{route_name}", tags=[route_name])
                 else:
                     new_app.include_router(router, prefix="/api", tags=[route_name])

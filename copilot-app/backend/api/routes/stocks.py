@@ -17,8 +17,8 @@ from storage.io import load_json
 from services.cache_layer import load_or_compute
 
 
-# Create router instance
-stocks_router = APIRouter(prefix="/api", tags=["stocks"])
+# Create router instance (prefix will be added by main.py)
+stocks_router = APIRouter(tags=["stocks"])
 
 @stocks_router.get("/stocks/top")
 async def get_top_stocks(

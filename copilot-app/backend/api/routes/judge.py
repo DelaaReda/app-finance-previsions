@@ -17,8 +17,8 @@ from storage.io import load_json
 from services.cache_layer import load_or_compute
 
 
-# Create router instance
-judge_router = APIRouter(prefix="/api", tags=["judge"])
+# Create router instance (prefix will be added by main.py)
+judge_router = APIRouter(tags=["judge"])
 
 @judge_router.get("/judge")
 async def get_judge_verdicts(
