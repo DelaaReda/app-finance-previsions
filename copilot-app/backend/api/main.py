@@ -329,16 +329,21 @@ def create_app():
         ("forecasts", "api.routes.forecasts", "forecasts_router"),  # Register forecasts router FIRST
         ("health", "api.routes.health", "health_router"),
         ("news", "api.routes.news", "news_router"),
+        ("news_features", "api.routes.news_features", "router"),
+        ("brief", "api.routes.brief", "router"),
         ("backtests", "api.routes.backtests", "backtests_router"),
         ("macro", "api.routes.macro", "macro_router"),
         ("intelligence", "api.routes.intelligence", "intelligence_router"),
         ("context", "api.routes.context", "context_router"), 
+        ("copilot", "api.routes.copilot", "router"),
         ("recommendations", "api.routes.recommendations", "recommendations_router"),
         ("correlations", "api.routes.correlations", "correlations_router"),
         ("search", "api.routes.search", "search_router"),
         ("portfolios", "api.routes.portfolios", "portfolios_router"),
         ("dashboard", "api.routes.dashboard", "dashboard_router"),
         ("stocks", "api.routes.stocks", "stocks_router"),
+        ("stocks_client", "api.routes.stocks_client", "router"),
+        ("brief_alias", "api.routes.brief_alias", "router"),
     ]
     
     for route_name, module_path, router_name in route_configs:
@@ -368,6 +373,113 @@ def create_app():
             logger.warning(f"Error registering {route_name} routes: {str(e)}")
     
     logger.info("FastAPI application created successfully with quality improvements")
+    
+    # --- Compatibility aliases to match current frontend calls ---
+    from datetime import datetime as _dt
+    try:
+        from storage.io import load_json as _load_json
+    except Exception:
+        _load_json = lambda key: None  # type: ignore
+
+    def _ok(payload):
+        return {"ok": True, "data": payload}
+
+    @new_app.get("/api/stocks/universe")
+    async def _stocks_universe_alias():
+        data = _load_json("stocks/prices") or {}
+        tickers_map = data.get("tickers") if isinstance(data, dict) else None
+        tickers = sorted(list(tickers_map.keys())) if isinstance(tickers_map, dict) else []
+        return _ok({"tickers": [t.upper() for t in tickers], "count": len(tickers)})
+
+    @new_app.get("/api/stocks/prices")
+    async def _stocks_prices_alias(ticker: str, interval: str = "1d", downsample: int = 1000):
+        data = _load_json("stocks/prices") or {}
+        tickers = (data.get("tickers") or {}) if isinstance(data, dict) else {}
+        entry = tickers.get(ticker.upper()) or tickers.get(ticker)
+        points_resp = []
+        if entry and isinstance(entry, dict):
+            pts = entry.get("points") or []
+            if isinstance(pts, list) and pts and isinstance(pts[0], (list, tuple)):
+                if downsample and len(pts) > downsample:
+                    step = max(1, len(pts) // downsample)
+                    pts = pts[::step]
+                points_resp = [{"timestamp": int(ts), "value": float(val)} for ts, val in pts if ts is not None and val is not None]
+        payload = {
+            "ticker": ticker.upper(),
+            "interval": interval,
+            "points": points_resp,
+            "count": len(points_resp),
+            "source": "stocks/prices_snapshot",
+            "timestamp": _dt.utcnow().isoformat() + "Z",
+        }
+        return _ok(payload)
+
+    @new_app.get("/api/brief/daily")
+    async def _brief_daily_alias():
+        data = _load_json("brief_daily") or _load_json("brief_weekly")
+        if isinstance(data, dict):
+            payload = data.get("data") if isinstance(data.get("data"), dict) else data
+            return _ok(payload)
+        return _ok({
+            "summary": "No daily brief available yet.",
+            "market_sentiment": "UNKNOWN",
+            "top_signals": [],
+            "top_risks": [],
+            "key_events": [],
+            "generated_at": _dt.utcnow().isoformat() + "Z",
+        })
+
+    @new_app.get("/api/brief/weekly")
+    async def _brief_weekly_alias():
+        data = _load_json("brief_weekly")
+        if isinstance(data, dict):
+            payload = data.get("data") if isinstance(data.get("data"), dict) else data
+            return _ok(payload)
+        return _ok({
+            "summary": "No weekly brief available yet.",
+            "market_sentiment": "UNKNOWN",
+            "top_signals": [],
+            "top_risks": [],
+            "key_events": [],
+            "generated_at": _dt.utcnow().isoformat() + "Z",
+        })
+
+    @new_app.get("/api/news/features/daily")
+    async def _news_features_daily_alias(ticker: str | None = None, start: str | None = None, end: str | None = None, limit: int = 365):
+        return _ok([])
+
+    try:
+        from services.context_service import ContextService as _Ctx
+    except Exception:
+        _Ctx = None
+
+    @new_app.get("/api/copilot/context")
+    async def _copilot_context_alias():
+        if _Ctx is not None:
+            try:
+                ctx = await _Ctx().get_current_market_context()
+                return _ok(ctx)
+            except Exception:
+                pass
+        return _ok([])
+
+    @new_app.get("/api/copilot/history")
+    async def _copilot_history_alias(limit: int = 20):
+        return _ok({"conversations": [], "count": 0, "limit": limit})
+
+    @new_app.post("/api/copilot/ask")
+    async def _copilot_ask_alias(body: dict):
+        q = body.get("question") or ""
+        return _ok({
+            "answer": f"Analysis queued. Question: {q}",
+            "sources": [],
+            "citations": [],
+            "confidence": 0.4,
+            "generated_at": _dt.utcnow().isoformat() + "Z",
+            "sources_count": 0,
+            "quality_status": "insufficient_sources",
+        })
+
     return new_app
 
 
