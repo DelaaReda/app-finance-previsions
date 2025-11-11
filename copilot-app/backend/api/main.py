@@ -333,6 +333,7 @@ def create_app():
         ("brief", "api.routes.brief", "router"),
         ("backtests", "api.routes.backtests", "backtests_router"),
         ("macro", "api.routes.macro", "macro_router"),
+        ("brief", "api.routes.brief", "router"),
         ("intelligence", "api.routes.intelligence", "intelligence_router"),
         ("context", "api.routes.context", "context_router"), 
         ("copilot", "api.routes.copilot", "router"),
@@ -479,6 +480,15 @@ def create_app():
             "sources_count": 0,
             "quality_status": "insufficient_sources",
         })
+
+    # Debug: list registered paths
+    try:
+        paths = [r.path for r in new_app.router.routes]
+        logger.info(f"Registered routes count: {len(paths)}")
+        for p in sorted(set(paths)):
+            logger.info(f"ROUTE: {p}")
+    except Exception as _e:  # pragma: no cover
+        logger.warning(f"Could not list routes: {_e}")
 
     return new_app
 

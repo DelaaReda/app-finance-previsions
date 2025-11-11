@@ -56,8 +56,8 @@ os.environ['PYTHONPATH'] = ":".join(
 def _run_uvicorn(reload_enabled: bool = True) -> None:
     import uvicorn
 
+    # Prefer the full featured API in src.api.main (now import-resilient), fallback handled below
     uvicorn.run(
-        # Prefer the full featured API in src.api.main, fallback to api.main
         "src.api.main:create_app",
         host="127.0.0.1",
         port=8050,
@@ -84,16 +84,13 @@ if __name__ == "__main__":
             print("⚠️  Reload watcher non autorisé sur cet environnement. Redémarrage sans reload…")
             _run_uvicorn(reload_enabled=False)
         else:
-            # Fallback to legacy app path if src.api.main is unavailable
-            try:
-                import uvicorn
-                uvicorn.run(
-                    "api.main:create_app",
-                    host="127.0.0.1",
-                    port=8050,
-                    reload=False,
-                    factory=True,
-                    log_level="info",
-                )
-            except Exception:
-                raise
+            # Fallback to stable app path
+            import uvicorn
+            uvicorn.run(
+                "api.main:create_app",
+                host="127.0.0.1",
+                port=8050,
+                reload=False,
+                factory=True,
+                log_level="info",
+            )

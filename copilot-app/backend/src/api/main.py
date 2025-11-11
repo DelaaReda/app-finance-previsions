@@ -97,14 +97,26 @@ except ImportError as e:
     def query_parquet(sql, params=None): return []
     def parquet_glob(*parts): return str(Path(*parts))
 
-from api.services.news_service import (
-    get_news_events as lakehouse_news_events,
-    get_sentiment as lakehouse_news_sentiment,
-)
-from services.intelligence_service import (
-    get_market_context_snapshot,
-    get_market_intelligence_snapshot,
-)
+try:
+    from services.news_service import (
+        get_news_events as lakehouse_news_events,
+        get_sentiment as lakehouse_news_sentiment,
+    )
+except ImportError:  # pragma: no cover
+    from api.services.news_service import (  # type: ignore
+        get_news_events as lakehouse_news_events,
+        get_sentiment as lakehouse_news_sentiment,
+    )
+try:
+    from services.intelligence_service import (
+        get_market_context_snapshot,
+        get_market_intelligence_snapshot,
+    )
+except ImportError:  # pragma: no cover
+    from api.services.intelligence_service import (  # type: ignore
+        get_market_context_snapshot,
+        get_market_intelligence_snapshot,
+    )
 try:
     # Try importing from src.services first (since snapshot_loader is in src/services/)
     from src.services.snapshot_loader import ensure_snapshot, resolve_payload

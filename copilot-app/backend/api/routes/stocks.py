@@ -20,6 +20,113 @@ from services.cache_layer import load_or_compute
 # Create router instance (prefix will be added by main.py)
 stocks_router = APIRouter(tags=["stocks"])
 
+@stocks_router.get("/stocks/prices")
+async def get_stocks_prices(
+    ticker: Optional[str] = Query(None, description="Single ticker symbol"),
+    tickers: Optional[List[str]] = Query(None, description="Multiple tickers"),
+    interval: str = Query("1d", description="Interval (snapshot uses 1d)"),
+    downsample: int = Query(1000, ge=10, le=5000, description="Max points")
+):
+    """Return prices from precomputed snapshot data/stocks/prices.json (never-empty)."""
+    try:
+        from storage.io import load_json
+        data = load_json("stocks/prices") or {}
+        tickers_map = data.get("tickers") if isinstance(data, dict) else {}
+
+        def _one(sym: str) -> Dict[str, Any]:
+            entry = tickers_map.get(sym) or tickers_map.get(sym.upper()) or tickers_map.get(sym.lower())
+            pts = entry.get("points") if isinstance(entry, dict) else []
+            if isinstance(pts, list) and pts and isinstance(pts[0], (list, tuple)) and len(pts) > downsample:
+                step = max(1, len(pts) // downsample)
+                pts = pts[::step]
+            return {
+                "range": entry.get("range", "1y") if isinstance(entry, dict) else "1y",
+                "interval": entry.get("interval", interval) if isinstance(entry, dict) else interval,
+                "points": pts or [],
+                "count": len(pts) if isinstance(pts, list) else 0,
+                "start_date": entry.get("start_date") if isinstance(entry, dict) else None,
+                "timestamp": data.get("freshness") if isinstance(data, dict) else None,
+            }
+
+        symbols: List[str] = []
+        if ticker:
+            symbols = [ticker.upper()]
+        elif tickers:
+            symbols = [t.upper() for t in tickers]
+        else:
+            return {
+                "ok": True,
+                "data": {"tickers": {}, "interval": interval, "timestamp": data.get("freshness") if isinstance(data, dict) else None}
+            }
+
+        result = {sym: _one(sym) for sym in symbols}
+        return {"ok": True, "data": {"tickers": result, "interval": interval}}
+    except Exception as e:
+        return {"ok": True, "data": {"tickers": {}, "error": str(e)}}
+
+@stocks_router.get("/stocks/universe")
+async def get_stocks_universe():
+    """Return tracked tickers list from snapshot."""
+    try:
+        from storage.io import load_json
+        data = load_json("stocks/prices") or {}
+        tickers_map = data.get("tickers") if isinstance(data, dict) else {}
+        uni = sorted([t.upper() for t in tickers_map.keys()]) if isinstance(tickers_map, dict) else []
+        return {"ok": True, "data": {"tickers": uni, "count": len(uni)}}
+    except Exception as e:
+        return {"ok": True, "data": {"tickers": [], "count": 0, "error": str(e)}}
+
+@stocks_router.get("/stocks/search")
+async def search_stocks(q: str = Query("", description="Query"), limit: int = Query(10, ge=1, le=50)):
+    try:
+        from storage.io import load_json
+        data = load_json("stocks/prices") or {}
+        tickers_map = data.get("tickers") if isinstance(data, dict) else {}
+        universe = [t.upper() for t in (tickers_map.keys() if isinstance(tickers_map, dict) else [])]
+        qn = (q or "").strip().upper()
+        results: List[Dict[str, Any]] = []
+        for t in universe:
+            if not qn or qn in t:
+                results.append({"ticker": t, "name": t, "changePercent": 0, "change": 0})
+            if len(results) >= limit:
+                break
+        return {"ok": True, "data": {"results": results}}
+    except Exception as e:
+        return {"ok": True, "data": {"results": [], "error": str(e)}}
+
+@stocks_router.get("/stocks/{ticker}")
+async def get_ticker_detail(ticker: str):
+    try:
+        from storage.io import load_json
+        data = load_json("stocks/prices") or {}
+        tickers_map = data.get("tickers") if isinstance(data, dict) else {}
+        entry = tickers_map.get(ticker.upper()) if isinstance(tickers_map, dict) else None
+        last_price = None
+        last_ts = None
+        if isinstance(entry, dict):
+            pts = entry.get("points") or []
+            if isinstance(pts, list) and pts and isinstance(pts[-1], (list, tuple)):
+                ts, val = pts[-1]
+                last_ts = int(ts)
+                last_price = float(val)
+        resp = {
+            "ticker": ticker.upper(),
+            "last_price": last_price,
+            "date": (None if last_ts is None else datetime.utcfromtimestamp(last_ts).isoformat() + "Z"),
+            "indicators": {"rsi": None, "sma20": None, "macd": None},
+            "news_count": 0,
+        }
+        return {"ok": True, "data": resp}
+    except Exception as e:
+        return {"ok": True, "data": {"ticker": ticker.upper(), "error": str(e)}}
+
+@stocks_router.get("/stocks/meta")
+async def get_stocks_meta(tickers: Optional[str] = Query(None)):
+    items: List[Dict[str, Any]] = []
+    if tickers:
+        items = [{"ticker": t.strip().upper()} for t in tickers.split(",") if t.strip()]
+    return {"ok": True, "data": {"items": items}}
+
 @stocks_router.get("/stocks/top")
 async def get_top_stocks(
     limit: int = Query(10, ge=1, le=50, description="Limite de résultats (1-50)"),

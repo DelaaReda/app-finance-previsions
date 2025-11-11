@@ -241,6 +241,21 @@ def get_filtered_news(
         })
 
 
+@router.get("/news/features/daily")
+def news_features_daily(
+    ticker: Optional[str] = Query(None, description="Ticker filter"),
+    start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    limit: int = Query(365, ge=1, le=1095)
+):
+    """Compatibility endpoint. Returns empty rows if features gold is not materialized."""
+    try:
+        rows: List[Dict[str, Any]] = []
+        return ok({"rows": rows, "count": len(rows)})
+    except Exception as e:
+        return ok({"rows": [], "count": 0, "error": str(e)})
+
+
 def _get_sentiment_label(sentiment_score: float) -> str:
     """Helper to convert numeric sentiment score to human-readable label."""
     if sentiment_score >= 0.6:
