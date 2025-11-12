@@ -12,16 +12,19 @@
 
 .newsList {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .newsCard {
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  background: var(--metric-bg);
+  border: 1px solid var(--metric-border);
 }
 
 .newsCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 45px rgba(2, 8, 23, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(2, 8, 23, 0.35);
+  background: rgba(255,255,255,0.04);
 }
 
 .newsBody {

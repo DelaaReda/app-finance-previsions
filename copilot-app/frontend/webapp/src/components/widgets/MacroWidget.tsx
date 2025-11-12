@@ -199,7 +199,7 @@ export function MacroWidget() {
         )}
 
         {!isLoading && !error && indicators.length > 0 && (
-          <SimpleGrid cols={{ base: 2, md: 4 }} spacing="md">
+          <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="md">
             {indicators.map((indicator) => {
               const statusInfo = getStatusInfo(indicator.id, indicator.value as number);
 
@@ -234,8 +234,8 @@ export function MacroWidget() {
                   <Stack gap="xs" align="center">
                     <Text size="xs" c="dimmed" ta="center" fw={500}>{indicator.name}</Text>
                     <RingProgress
-                      size={70}
-                      thickness={7}
+                      size={60}
+                      thickness={6}
                       sections={[{ value: progressValue, color: statusInfo.color }]}
                       label={
                         <Text ta="center" fw={700} size="sm">
@@ -250,7 +250,7 @@ export function MacroWidget() {
                           {statusInfo.status}
                       </Badge>
                     </Group>
-                    <Text size="xs" c="dimmed" ta="center">{indicator.description}</Text>
+                    <Text className={styles.desc}>{indicator.description}</Text>
                   </Stack>
                 </Card>
               );

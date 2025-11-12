@@ -21,6 +21,8 @@ import {
 } from '@mantine/core';
 import { IconAlertCircle, IconInfoCircle } from '@tabler/icons-react';
 import { BadgeDelta } from '@tremor/react';
+import { formatFractionToPercent, formatPercentage } from '@/lib/utils';
+import { formatPercent, formatConfidence, getConfidenceColor } from '@/lib/formatting';
 import { useForecasts } from '@/hooks/useForecasts';
 import type { ForecastHorizon } from '@/types/forecast';
 import { ensureArray, safeGet } from '@/lib/safe';
@@ -293,11 +295,22 @@ export function ForecastCardsWidget({
                         <Stack className={styles.metricsStack} gap={2}>
                           <div className={styles.metricItem}>
                             <Text className={styles.metricLabel}>Confiance</Text>
-                            <Text className={styles.metricValue}>{Math.round((f.confidence ?? 0) * 100)}%</Text>
+                            <Text className={`${styles.metricValue} ${getConfidenceColor(f.confidence)}`}>
+                              {formatConfidence(f.confidence)}
+                            </Text>
                           </div>
                           <div className={styles.metricItem}>
                             <Text className={styles.metricLabel}>ER attendu</Text>
-                            <Text className={styles.metricValue}>{fmtPct((f.expected_return_pct ?? f.expectedReturnPct ?? 0) / 100)}</Text>
+                            <Text className={styles.metricValue}>
+                              {(() => {
+                                const erValue = f.expected_return_pct ?? f.expectedReturnPct ?? f.expected_return;
+                                // Éviter les valeurs très proches de zéro qui donnent 0.00%
+                                if (erValue === null || erValue === undefined || Math.abs(erValue) < 0.0001) {
+                                  return <span className="text-gray-400">N/A</span>;
+                                }
+                                return formatPercent(erValue);
+                              })()}
+                            </Text>
                           </div>
                         </Stack>
                       </Group>

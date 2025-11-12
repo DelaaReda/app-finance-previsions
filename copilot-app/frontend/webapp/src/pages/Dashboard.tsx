@@ -25,6 +25,7 @@ import { DashboardGrid } from '@/features/okc/components/desktop/DashboardGrid';
 import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/features/okc/components/Button';
+import { KPIBar } from '@/components/dashboard/KPIBar';
 
 const PERIODS = ['24h', '7d', '30d', '90d'] as const;
 type Period = typeof PERIODS[number];
@@ -220,10 +221,23 @@ function DashboardContent() {
   const kpiLastUpdate = kpis?.system?.last_forecast_update
     ? new Date(kpis.system.last_forecast_update).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
     : undefined;
+  const macroLast = (macroQuery.data as any)?.data?.last_updated || (macroQuery.data as any)?.last_updated;
+  const newsLast = (() => {
+    const raw = newsQuery.data as any;
+    const arr = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw?.articles) ? raw.articles : Array.isArray(raw?.rows) ? raw.rows : Array.isArray(raw?.data) ? raw.data : [];
+    if (arr.length === 0) return undefined;
+    const d = arr[0].pubDate || arr[0].published_at || arr[0].date;
+    return d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined;
+  })();
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="w-full max-w-none mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-4">
+        
+        {/* KPI Bar compacte */}
+        <KPIBar onRefresh={handleRefresh} />
+        
+        <div className="space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Header first, then adaptive widgets */}
         {
         <div className="bg-glass border border-glass-border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
@@ -269,8 +283,7 @@ function DashboardContent() {
                   leftIcon={<IconRefresh size={16} />}
                   className="flex-1 sm:flex-none"
                 >
-                  <span className="hidden sm:inline">Rafraîchir</span>
-                  <span className="sm:hidden">Raf.</span>
+                  Rafraîchir
                 </Button>
                 <Button variant="ghost" size="sm" leftIcon={<IconDownload size={16} />} className="flex-1 sm:flex-none">
                   <span className="hidden sm:inline">Exporter</span>
@@ -317,6 +330,20 @@ function DashboardContent() {
               <span className="opacity-30">•</span>
               <span className="text-text font-medium">MAJ:</span>
               <span className="text-text">{kpiLastUpdate}</span>
+            </>
+          )}
+          {macroLast && (
+            <>
+              <span className="opacity-30">•</span>
+              <span className="text-text font-medium">Macro:</span>
+              <span className="text-text">{new Date(macroLast).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+            </>
+          )}
+          {newsLast && (
+            <>
+              <span className="opacity-30">•</span>
+              <span className="text-text font-medium">News:</span>
+              <span className="text-text">{newsLast}</span>
             </>
           )}
         </div>
@@ -570,6 +597,7 @@ function DashboardContent() {
         )}
 
         {/* All core tiles (Forecasts, Stocks, Performance, News, Macro) now live in DynamicWidgetGrid above */}
+        </div>
       </div>
     </div>
   );

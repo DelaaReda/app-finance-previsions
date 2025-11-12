@@ -1,5 +1,6 @@
 .widgetCard {
-  min-height: 100%;
+  /* Let the content define height; avoid stretching on mobile */
+  min-height: auto;
 }
 
 .indicatorSkeleton {
@@ -13,4 +14,16 @@
 .indicatorCard:hover {
   transform: translateY(-4px);
   box-shadow: 0 20px 45px rgba(2, 8, 23, 0.45);
+}
+
+/* Compact description: hide on narrow screens to avoid overflow */
+.desc {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.2;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .desc { display: none; }
 }

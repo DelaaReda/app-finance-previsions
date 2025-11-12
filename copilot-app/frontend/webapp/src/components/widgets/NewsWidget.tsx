@@ -95,7 +95,21 @@ export function NewsWidget() {
               const source = article.source || article.publisher || article.sourceDomain || 'Unknown Source';
               const pubDate = article.pubDate || article.published_at || article.date || article.createdAt;
               const time = pubDate ? new Date(pubDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined;
-              return <NewsCard key={id} title={title} source={source} url={url} time={time} />;
+              return (
+                <Card key={id} padding="sm" radius="lg" withBorder className={styles.newsCard}>
+                  <Group justify="space-between" align="flex-start" wrap="nowrap">
+                    <div className={styles.newsBody}>
+                      <a href={url} target="_blank" rel="noreferrer" className={styles.newsLink} title={title}>
+                        <Text fw={600} size="sm" lineClamp={2}>{title}</Text>
+                      </a>
+                      <Text size="xs" c="dimmed" mt={4}>{source}{time ? ` • ${time}` : ''}</Text>
+                    </div>
+                    <ActionIcon component="a" href={url} target="_blank" variant="subtle" aria-label="Ouvrir l'article">
+                      <IconExternalLink size={16} />
+                    </ActionIcon>
+                  </Group>
+                </Card>
+              );
             })}
           </Stack>
         )}

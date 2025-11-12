@@ -97,8 +97,9 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   },
 
   RISK_ON: {
-    topRow: ['opportunities', 'recommendations', 'intelligence'],
-    middleRow: ['forecasts', 'stocks', 'performance'],
+    // Executive row at top: include performance snapshot
+    topRow: ['opportunities', 'intelligence', 'performance'],
+    middleRow: ['recommendations', 'forecasts', 'stocks'],
     bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {
       risk_level: 'high',
@@ -122,8 +123,8 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   },
 
   NORMAL: {
-    topRow: ['opportunities', 'recommendations', 'intelligence'],
-    middleRow: ['forecasts', 'stocks', 'performance'],
+    topRow: ['opportunities', 'intelligence', 'performance'],
+    middleRow: ['recommendations', 'forecasts', 'stocks'],
     bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {
       time_horizon: '5d',

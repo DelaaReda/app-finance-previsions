@@ -29,6 +29,7 @@
   border: 1px solid var(--metric-border);
   background: var(--metric-bg);
   padding: 0.25rem;
+  max-height: 360px;
 }
 
 .table {
@@ -42,6 +43,18 @@
 
 .price {
   font-variant-numeric: tabular-nums;
+}
+
+/* Compact table density */
+.table :global(thead th) {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.table :global(tbody td) {
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .changePositive {

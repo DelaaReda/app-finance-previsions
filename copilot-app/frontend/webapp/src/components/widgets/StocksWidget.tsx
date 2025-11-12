@@ -3,9 +3,10 @@
  * Displays real stock data and top movers
  */
 
-import { Card, Stack, Title, Text, Table, Badge, Group, Skeleton, ActionIcon, ScrollArea, Button } from '@mantine/core';
+import { Card, Stack, Title, Text, Table, Badge, Group, Skeleton, ActionIcon, ScrollArea, Button, Alert } from '@mantine/core';
 import { IconTrendingUp, IconTrendingDown, IconRefresh, IconChartBar } from '@tabler/icons-react';
 import { useApi } from '@/hooks/useApi';
+import { formatCurrency, formatPercent, getChangeColor } from '@/lib/formatting';
 import sharedStyles from '@/shared/styles/widgets/glassWidget.module.css';
 import styles from './StocksWidget.module.css';
 import ErrorAlert from '@/components/ui/ErrorAlert';
@@ -36,6 +37,11 @@ export function StocksWidget() {
   }
 
   const isEmpty = !isLoading && !error && topStocks.length === 0;
+  const allZeroChange = !isLoading && !error && topStocks.length > 0 && topStocks.every((s: any) => {
+    const p = s.change_percent ?? s.price_change_pct ?? 0;
+    const c = s.change ?? 0;
+    return (!p || Math.abs(p) < 0.001) && (!c || Math.abs(c) < 0.001);
+  });
 
   return (
     <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard}`}>
@@ -101,7 +107,9 @@ export function StocksWidget() {
                   <Table.Th>Nom</Table.Th>
                   <Table.Th>Prix</Table.Th>
                   <Table.Th>Variation</Table.Th>
-                  <Table.Th>Capitalisation</Table.Th>
+                  {!topStocks.every((s: any) => !s.market_cap && !s.mcap) && (
+                    <Table.Th>Capitalisation</Table.Th>
+                  )}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -114,30 +122,25 @@ export function StocksWidget() {
                   const changePercent = stock.change_percent || stock.price_change_pct || 0;
                   const marketCap = stock.market_cap || stock.mcap || 0;
 
-                  const formattedPrice = typeof price === 'number' && price > 0 ? `$${price.toFixed(2)}` : '—';
+                  const formattedPrice = formatCurrency(price, 'USD');
 
-                  let formattedChange = '—';
-                  if (typeof changePercent === 'number' && Number.isFinite(changePercent)) {
-                    formattedChange = `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+                  let formattedChange = 'N/A';
+                  let changeValue = 0;
+                  
+                  if (typeof changePercent === 'number' && Number.isFinite(changePercent) && Math.abs(changePercent) >= 0.01) {
+                    // Si le pourcentage est fourni et significatif (>=0.01%)
+                    changeValue = changePercent;
+                    formattedChange = formatPercent(changePercent / 100);
                   } else if (typeof change === 'number' && Number.isFinite(change) && price > 0) {
+                    // Calculer le pourcentage depuis le changement absolu
                     const calculatedPercent = (change / price) * 100;
-                    if (Number.isFinite(calculatedPercent)) {
-                      formattedChange = `${calculatedPercent > 0 ? '+' : ''}${calculatedPercent.toFixed(2)}%`;
+                    if (Number.isFinite(calculatedPercent) && Math.abs(calculatedPercent) >= 0.01) {
+                      changeValue = calculatedPercent;
+                      formattedChange = formatPercent(calculatedPercent / 100);
                     }
                   }
 
-                  let formattedMarketCap = '—';
-                  if (typeof marketCap === 'number' && marketCap > 0) {
-                    if (marketCap >= 1e9) {
-                      formattedMarketCap = `$${(marketCap / 1e9).toFixed(2)}B`;
-                    } else if (marketCap >= 1e6) {
-                      formattedMarketCap = `$${(marketCap / 1e6).toFixed(2)}M`;
-                    } else if (marketCap >= 1e3) {
-                      formattedMarketCap = `$${(marketCap / 1e3).toFixed(2)}K`;
-                    } else {
-                      formattedMarketCap = `$${marketCap.toFixed(0)}`;
-                    }
-                  }
+                  const formattedMarketCap = formatCurrency(marketCap, 'USD', true);
 
                   return (
                     <Table.Tr key={ticker}>
@@ -154,10 +157,10 @@ export function StocksWidget() {
                       </Table.Td>
                       <Table.Td>
                         <Group gap={6} justify="left">
-                          {formattedChange !== '—' && (
-                            changePercent > 0 || change > 0 ? (
+                          {formattedChange !== 'N/A' && changeValue !== 0 && (
+                            changeValue > 0 ? (
                               <IconTrendingUp size={14} color="#16a34a" />
-                            ) : (changePercent < 0 || change < 0) ? (
+                            ) : changeValue < 0 ? (
                               <IconTrendingDown size={14} color="#dc2626" />
                             ) : null
                           )}
@@ -166,11 +169,11 @@ export function StocksWidget() {
                             radius="sm"
                             variant="light"
                             color={
-                              formattedChange === '—'
+                              formattedChange === 'N/A'
                                 ? 'gray'
-                                : (changePercent > 0 || change > 0)
+                                : changeValue > 0
                                   ? 'green'
-                                  : (changePercent < 0 || change < 0)
+                                  : changeValue < 0
                                     ? 'red'
                                     : 'gray'
                             }
@@ -179,17 +182,25 @@ export function StocksWidget() {
                           </Badge>
                         </Group>
                       </Table.Td>
-                      <Table.Td>
-                        <Text size="sm" className={styles.marketCap}>
-                          {formattedMarketCap}
-                        </Text>
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
+                      {!topStocks.every((s: any) => !s.market_cap && !s.mcap) && (
+                        <Table.Td>
+                          <Text size="sm" className={styles.marketCap}>
+                            {formattedMarketCap}
+                          </Text>
+                        </Table.Td>
+                      )}
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
           </ScrollArea>
+        )}
+
+        {!isLoading && !error && allZeroChange && (
+          <Alert color="gray" variant="light" mt="xs">
+            <Text size="xs" c="dimmed">Marché fermé ou données statiques — variations indisponibles pour l’instant.</Text>
+          </Alert>
         )}
 
         {isEmpty && (

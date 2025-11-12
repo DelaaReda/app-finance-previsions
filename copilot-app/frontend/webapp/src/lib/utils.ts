@@ -15,8 +15,8 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a number as currency
  */
-export function formatCurrency(amount: number, currency = 'USD', decimals = 2): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(amount: number, currency = 'USD', decimals = 2, locale: string = 'fr-CA'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     minimumFractionDigits: decimals,
@@ -27,15 +27,20 @@ export function formatCurrency(amount: number, currency = 'USD', decimals = 2): 
 /**
  * Format a number as percentage
  */
-export function formatPercentage(value: number, decimals = 2): string {
-  return `${value.toFixed(decimals)}%`;
+export function formatPercentage(value: number, decimals = 2, locale: string = 'fr-CA'): string {
+  // Value is 0..100 (already scaled)
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value / 100);
 }
 
 /**
  * Format a number with specified decimals
  */
-export function formatNumber(value: number, decimals = 2): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatNumber(value: number, decimals = 2, locale: string = 'fr-CA'): string {
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
@@ -44,8 +49,8 @@ export function formatNumber(value: number, decimals = 2): string {
 /**
  * Format a number in compact notation (e.g., 1.2K, 3.4M)
  */
-export function formatCompactNumber(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCompactNumber(value: number, locale: string = 'fr-CA'): string {
+  return new Intl.NumberFormat(locale, {
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(value);
@@ -54,9 +59,9 @@ export function formatCompactNumber(value: number): string {
 /**
  * Format a date
  */
-export function formatDate(date: Date | string): string {
+export function formatDate(date: Date | string, locale: string = 'fr-CA'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -66,15 +71,27 @@ export function formatDate(date: Date | string): string {
 /**
  * Format a date with time
  */
-export function formatDateTime(date: Date | string): string {
+export function formatDateTime(date: Date | string, locale: string = 'fr-CA'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   }).format(d);
+}
+
+/**
+ * Format a fraction (0..1) as percentage string in locale
+ */
+export function formatFractionToPercent(fraction: number, decimals = 2, locale: string = 'fr-CA'): string {
+  const v = Math.max(-1, Math.min(1, fraction));
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(v);
 }
 
 /**
@@ -214,4 +231,3 @@ export function calculateCorrelation(x: number[], y: number[]): number {
 
   return safeDivide(numerator, denominator);
 }
-
