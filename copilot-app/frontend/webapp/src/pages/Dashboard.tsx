@@ -1,25 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
   IconRefresh,
-  IconDownload,
   IconArrowRight,
   IconSparkles,
-  IconChartBar,
-  IconTrendingUp,
-  IconActivity,
-  IconNews,
   IconGauge,
   IconAlertCircle,
+  IconDownload,
 } from '@tabler/icons-react';
 import { useDashboardKPIs } from '@/hooks/useDashboardKPIs';
 import { useForecasts } from '@/hooks/useForecasts';
 import { useApi } from '@/hooks/useApi';
 import { ensureArray } from '@/lib/safe';
-import { MetricCard, MetricGrid } from '@/features/okc/components/MetricCard';
-import { Button } from '@/features/okc/components/Button';
 import { FinancialChart, ChartDataPoint } from '@/features/okc/components/FinancialChart';
 import { Sparkline } from '@/features/okc/components/Sparkline';
 import { RadialMetric } from '@/features/okc/components/RadialMetric';
+// Components
 import { Card, CardHeader, CardTitle, CardContent } from '@/features/okc/components/Card';
 import { ForecastCard, ForecastInsight } from '@/features/okc/components/ForecastCard';
 import { MetricStrip, type StripMetric } from '@/features/okc/components/desktop/MetricStrip';
@@ -29,6 +24,7 @@ import { DynamicWidgetGrid } from '@/components/adaptive/DynamicWidgetGrid';
 import { DashboardGrid } from '@/features/okc/components/desktop/DashboardGrid';
 import { AdaptiveLayoutProvider } from '@/contexts/AdaptiveLayoutContext';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/features/okc/components/Button';
 
 const PERIODS = ['24h', '7d', '30d', '90d'] as const;
 type Period = typeof PERIODS[number];
@@ -109,43 +105,7 @@ function DashboardContent() {
     }));
   }, [newsQuery.data]);
 
-  const metrics = useMemo(() => {
-    const totalForecasts = kpis?.forecasts?.total ?? kpis?.total_forecasts ?? 0;
-    const highConfidence = kpis?.forecasts?.high_confidence ?? 0;
-    const avgConfidence = kpis?.forecasts?.avg_confidence ?? 0;
-    const newsCount = kpis?.news?.recent_count ?? 0;
-    const hitRateRaw = kpis?.backtests?.hit_rate ?? 0;
-    const hitRate = hitRateRaw > 1 ? hitRateRaw : hitRateRaw * 100;
-
-    return [
-      {
-        title: 'Prévisions actives',
-        value: totalForecasts,
-        icon: <IconChartBar size={18} />,
-        description: `${kpis?.tickers_tracked ?? 0} tickers suivis`,
-      },
-      {
-        title: 'Confiance moyenne',
-        value: avgConfidence * 100,
-        percentage: true,
-        icon: <IconTrendingUp size={18} />,
-        description: `${highConfidence} signaux > 70%`,
-      },
-      {
-        title: 'Actualités fraîches',
-        value: newsCount,
-        icon: <IconNews size={18} />,
-        description: 'Dernières 60 minutes',
-      },
-      {
-        title: 'Taux de réussite',
-        value: hitRate,
-        percentage: true,
-        icon: <IconActivity size={18} />,
-        description: kpis?.backtests?.status ?? 'Surveillance en direct',
-      },
-    ];
-  }, [kpis]);
+  // Removed legacy KPI strip (metrics) to avoid duplication with adaptive widgets
 
   const performanceChartData: ChartDataPoint[] = useMemo(() => {
     return forecastRows.slice(0, 12).map((row) => ({
@@ -252,9 +212,11 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 space-y-8 sm:space-y-10 lg:space-y-12">
-        <div className="bg-glass border border-glass-border rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="w-full max-w-none mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-4 sm:space-y-6 lg:space-y-8">
+        {/* Header first, then adaptive widgets */}
+        {
+        <div className="bg-glass border border-glass-border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-2 text-sm text-primary uppercase tracking-[0.3em]">
                 <IconSparkles size={16} />
@@ -271,7 +233,7 @@ function DashboardContent() {
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               <div className="buttons-group bg-surface rounded-xl border border-border p-1">
                 {PERIODS.map((period) => (
                   <button
@@ -309,7 +271,7 @@ function DashboardContent() {
           {/* News ticker: shows recent headlines inline, horizontally scrollable on small screens */}
           {newsItems.length > 0 && (
             <div className="mt-3 -mb-2 overflow-x-auto">
-              <div className="flex items-center gap-4 py-2 text-xs sm:text-sm min-w-full">
+              <div className="flex items-center gap-4 py-1 text-xs sm:text-sm min-w-full">
                 <span className="uppercase tracking-[0.3em] text-primary flex-shrink-0">Now</span>
                 {newsItems.slice(0, 8).map((article) => (
                   <a
@@ -327,13 +289,18 @@ function DashboardContent() {
             </div>
           )}
         </div>
+        }
 
-        <MetricGrid>
-          {metrics.map((metric) => (
-            <MetricCard key={metric.title} {...metric} />
-          ))}
-        </MetricGrid>
+        {/* Adaptive widgets directly under the header */}
+        <Card variant="glass" hoverable={false}>
+          <CardContent className="p-3 sm:p-4">
+            <DynamicWidgetGrid />
+          </CardContent>
+        </Card>
 
+        {/* KPI metric grid removed */}
+
+        {false && (
         <DashboardGrid
           left={
             <>
@@ -524,8 +491,10 @@ function DashboardContent() {
             </>
           }
         />
+        )}
 
-        <div className="space-y-4 sm:space-y-6">
+        {false && (
+        <div className="space-y-3 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div>
               <p className="text-xs sm:text-sm uppercase tracking-[0.3em] text-muted">Prévisions hybrides</p>
@@ -536,7 +505,7 @@ function DashboardContent() {
             </span>
           </div>
           {forecastsQuery.isLoading && (
-            <div className="py-12">
+            <div className="py-6">
               <p className="text-sm text-muted text-center">Chargement des prévisions…</p>
             </div>
           )}
@@ -567,19 +536,10 @@ function DashboardContent() {
               )}
             </>
           )}
-        </div>
-
-        <div className="space-y-4 sm:space-y-6">
-          <div>
-            <p className="text-xs sm:text-sm uppercase tracking-[0.3em] text-muted">Widgets adaptatifs</p>
-            <h2 className="text-xl sm:text-2xl font-semibold text-text">Vue complète Finance Copilot</h2>
           </div>
-          <Card variant="glass" hoverable={false}>
-            <CardContent className="p-4 sm:p-6">
-              <DynamicWidgetGrid />
-            </CardContent>
-          </Card>
-        </div>
+        )}
+
+        {/* All core tiles (Forecasts, Stocks, Performance, News, Macro) now live in DynamicWidgetGrid above */}
       </div>
     </div>
   );

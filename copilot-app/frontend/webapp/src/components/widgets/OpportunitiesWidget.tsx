@@ -57,7 +57,7 @@ export function OpportunitiesWidget() {
 
   if (isLoading) {
     return (
-      <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+      <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
         <Stack gap="md">
           {header}
           {Array.from({ length: 3 }).map((_, i) => (
@@ -74,7 +74,7 @@ export function OpportunitiesWidget() {
 
   if (error) {
     return (
-      <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+      <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
         <Stack gap="md">
           {header}
           <Text size="sm" c="red.6">Erreur: {error}</Text>
@@ -85,10 +85,10 @@ export function OpportunitiesWidget() {
   }
 
   return (
-    <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+    <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
       <Stack gap="md">
         {header}
-        <ScrollArea style={{ maxHeight: 300 }} type="auto">
+        <ScrollArea style={{ maxHeight: 220 }} type="auto">
           <Stack gap="sm">
             {opportunities.map((s, idx) => {
               const conf = s.confidence != null ? Math.round(s.confidence * 100) : undefined;

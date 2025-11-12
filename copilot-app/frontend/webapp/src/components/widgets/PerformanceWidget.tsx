@@ -66,7 +66,7 @@ export function PerformanceWidget() {
 
   if (loading) {
     return (
-      <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+      <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
         <Stack gap="md">
           {header}
           <Skeleton height={16} width="60%" radius="xl" />
@@ -83,7 +83,7 @@ export function PerformanceWidget() {
 
   if (error) {
     return (
-      <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+      <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
         <Stack gap="md">
           {header}
           <Text size="sm" c="red.6">Erreur: {error}</Text>
@@ -104,7 +104,7 @@ export function PerformanceWidget() {
     .map((p) => ({ name: `Sharpe ${p.sharpe?.toFixed(2)} · σ ${p.risk?.toFixed(2)}%`, value: Number((p.return ?? 0).toFixed(2)) }));
 
   return (
-    <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+    <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
       <Stack gap="md">
         {header}
         <SimpleGrid cols={{ base: 2, md: 4 }}>
@@ -153,4 +153,3 @@ export function PerformanceWidget() {
 }
 
 export default PerformanceWidget;
-

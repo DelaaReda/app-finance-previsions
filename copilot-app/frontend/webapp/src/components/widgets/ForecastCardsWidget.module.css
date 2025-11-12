@@ -12,9 +12,10 @@
 
 .forecastGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
-  padding: 0.5rem 0;
+  /* Prevent ultra-thin cards by enforcing a larger minimum */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  padding: 0.25rem 0;
 }
 
 /* Responsive breakpoints */
@@ -27,19 +28,19 @@
 
 @media (min-width: 577px) and (max-width: 768px) {
   .forecastGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
   .forecastGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
   }
 }
 
 @media (min-width: 1025px) and (max-width: 1440px) {
   .forecastGrid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
   }
 }
 

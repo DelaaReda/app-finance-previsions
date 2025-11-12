@@ -240,7 +240,7 @@ export function ForecastCardsWidget({
         )}
 
         {!isLoading && !error && hasItems && (
-          <ScrollArea className={styles.scrollArea} type="auto">
+          <ScrollArea className={styles.scrollArea} type="auto" style={{ maxHeight: 420 }}>
             <div className={styles.forecastGrid}>
               {ensureArray(items).map((f) => {
                 const trend = (f.direction || 'neutral').toLowerCase();
@@ -276,8 +276,8 @@ export function ForecastCardsWidget({
                       <Group className={styles.cardContent}>
                         <div className={styles.ringProgressWrapper}>
                           <RingProgress
-                            size={60}
-                            thickness={8}
+                            size={52}
+                            thickness={6}
                             sections={[
                               { value: f.score ?? 0, color: (f.score ?? 0) >= 66 ? 'green' : (f.score ?? 0) >= 33 ? 'yellow' : 'red' },
                             ]}

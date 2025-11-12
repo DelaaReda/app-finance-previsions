@@ -99,7 +99,7 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   RISK_ON: {
     topRow: ['opportunities', 'recommendations', 'intelligence'],
     middleRow: ['forecasts', 'stocks', 'performance'],
-    bottomRow: ['news', 'macro'],
+    bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {
       risk_level: 'high',
       beta_min: 1.2,
@@ -122,9 +122,9 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   },
 
   NORMAL: {
-    topRow: ['intelligence', 'recommendations', 'forecasts'],
-    middleRow: ['news', 'macro', 'stocks'],
-    bottomRow: ['correlations', 'performance'],
+    topRow: ['opportunities', 'recommendations', 'intelligence'],
+    middleRow: ['forecasts', 'stocks', 'performance'],
+    bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {
       time_horizon: '5d',
       risk_level: 'moderate',

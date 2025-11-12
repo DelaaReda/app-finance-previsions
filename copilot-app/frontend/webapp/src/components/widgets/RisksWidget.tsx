@@ -85,7 +85,7 @@ export function RisksWidget() {
   }
 
   return (
-    <Card padding="lg" radius="xl" className={sharedStyles.glassCard}>
+    <Card padding="md" radius="lg" className={sharedStyles.glassCard}>
       <Stack gap="md">
         {header}
         <ScrollArea style={{ maxHeight: 300 }} type="auto">

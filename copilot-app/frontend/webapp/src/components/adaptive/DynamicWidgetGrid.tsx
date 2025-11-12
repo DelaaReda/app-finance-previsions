@@ -89,11 +89,11 @@ const WIDGET_REGISTRY: Record<
  */
 function WidgetSkeleton() {
   return (
-    <Stack gap="md" p="md" style={{ minHeight: '200px' }}>
-      <Skeleton height={20} width="60%" />
-      <Skeleton height={16} width="80%" />
-      <Skeleton height={16} width="40%" />
-      <Skeleton height={100} />
+    <Stack gap="sm" p="sm" style={{ minHeight: '140px' }}>
+      <Skeleton height={16} width="50%" />
+      <Skeleton height={12} width="70%" />
+      <Skeleton height={12} width="40%" />
+      <Skeleton height={80} />
     </Stack>
   );
 }
@@ -204,7 +204,7 @@ function WidgetRow({
   };
 
   return (
-    <Grid gutter="md" style={{ alignItems: 'stretch' }}>
+    <Grid gutter="sm" style={{ alignItems: 'stretch' }}>
       {widgets.map((widgetId, index) => {
         const span = getColSpan(index, widgets.length);
         return (
@@ -235,7 +235,7 @@ export function DynamicWidgetGrid() {
 
   if (isLoading) {
     return (
-      <Stack gap="md">
+      <Stack gap="sm">
         <Text c="gray.3" ta="center">
           Loading adaptive layout...
         </Text>
@@ -246,13 +246,13 @@ export function DynamicWidgetGrid() {
   const { topRow, middleRow, bottomRow, defaultFilters } = currentLayout;
 
   return (
-    <Stack gap="xl">
+    <Stack gap="md">
       {/* Top Row - Priority Widgets (loaded first) */}
       {topRow.length > 0 && (
         <Suspense fallback={
-          <Stack gap="md">
+          <Stack gap="sm">
             <Text c="gray.3" size="sm">Loading priority widgets...</Text>
-            <Grid gutter="md">
+            <Grid gutter="sm">
               {topRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: topRow.length === 1 ? 12 : 6 }}>
                   <WidgetSkeleton />
@@ -269,9 +269,9 @@ export function DynamicWidgetGrid() {
       {/* Middle Row - Secondary Widgets (loaded after top row) */}
       {middleRow.length > 0 && (
         <Suspense fallback={
-          <Stack gap="md">
+          <Stack gap="sm">
             <Text c="gray.3" size="sm">Loading secondary widgets...</Text>
-            <Grid gutter="md">
+            <Grid gutter="sm">
               {middleRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: middleRow.length === 1 ? 12 : middleRow.length === 2 ? 6 : 4 }}>
                   <WidgetSkeleton />
@@ -288,9 +288,9 @@ export function DynamicWidgetGrid() {
       {/* Bottom Row - Tertiary Widgets (loaded last) */}
       {bottomRow.length > 0 && (
         <Suspense fallback={
-          <Stack gap="md">
+          <Stack gap="sm">
             <Text c="gray.3" size="sm">Loading additional widgets...</Text>
-            <Grid gutter="md">
+            <Grid gutter="sm">
               {bottomRow.map((id) => (
                 <Grid.Col key={id} span={{ base: 12, md: bottomRow.length <= 2 ? 6 : bottomRow.length === 3 ? 4 : 3 }}>
                   <WidgetSkeleton />
