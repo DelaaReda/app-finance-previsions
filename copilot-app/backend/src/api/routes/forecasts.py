@@ -44,7 +44,19 @@ async def get_forecasts(
             filtered_rows = [r for r in filtered_rows if r.get("asset_type", "").lower() == asset_type.lower()]
         
         if horizon != "all":
-            filtered_rows = [r for r in filtered_rows if r.get("horizon", "").lower() == horizon.lower()]
+            # Only filter if rows carry a horizon field; otherwise keep data (never-empty)
+            if any(isinstance(r, dict) and "horizon" in r for r in filtered_rows):
+                alias = {
+                    "short": {"1d", "1w", "short"},
+                    "medium": {"1m", "3m", "medium"},
+                    "long": {"6m", "1y", "long"},
+                }
+                allowed = alias.get(horizon.lower(), {horizon.lower()})
+                def _hz(v):
+                    if v is None:
+                        return ""
+                    return str(v).lower()
+                filtered_rows = [r for r in filtered_rows if _hz(r.get("horizon")) in allowed]
         
         if search:
             search_lower = search.lower()

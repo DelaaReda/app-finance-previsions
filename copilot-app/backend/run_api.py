@@ -35,26 +35,29 @@ backend_dir = Path(__file__).resolve().parent
 project_root = backend_dir.parent
 src_path = backend_dir / "src"
 
+# Ensure import resolution prefers the code in src/ over legacy mirrors in backend/
+# This avoids picking copilot-app/backend/api before copilot-app/backend/src/api
 for path in [project_root, backend_dir, src_path]:
     path_str = str(path)
     if path_str in sys.path:
         sys.path.remove(path_str)
 
-for path in reversed([project_root, backend_dir, src_path]):
+# Desired order: src_path (1st), backend_dir (2nd), project_root (3rd)
+# Insert in reverse priority so final order is [src_path, backend_dir, project_root]
+for path in [project_root, backend_dir, src_path]:
     sys.path.insert(0, str(path))
 
 # Définir explicitement PYTHONPATH pour que tous les imports fonctionnent correctement
 import os
-os.environ['PYTHONPATH'] = ":".join(
-    [
-        str(backend_dir),
-        str(src_path),
-        str(project_root),
-    ]
-)
+os.environ['PYTHONPATH'] = ":".join([
+    str(src_path),
+    str(backend_dir),
+    str(project_root),
+])
 
 def _run_uvicorn(reload_enabled: bool = True) -> None:
     import uvicorn
+    # (imports verified via tests; avoid noisy debug output in production)
 
     # Prefer the full featured API in src.api.main (now import-resilient), fallback handled below
     uvicorn.run(

@@ -12,9 +12,15 @@ from typing import Dict, Any, List
 import pandas as pd
 
 # Add backend to path
-backend_path = str(Path(__file__).parent.parent)
-if backend_path not in sys.path:
-    sys.path.insert(0, backend_path)
+backend_root = Path(__file__).parent.parent
+backend_path = str(backend_root)
+src_path = str(backend_root / "src")
+# Ensure src takes precedence over legacy backend core package
+for p in (backend_path, src_path):
+    if p in sys.path:
+        sys.path.remove(p)
+for p in (backend_path, src_path):
+    sys.path.insert(0, p)
 
 logger = logging.getLogger(__name__)
 
@@ -174,4 +180,3 @@ if __name__ == "__main__":
     
     result = run_stocks_prices_job(force=args.force, timeframe=args.timeframe)
     print(f"Result: {result}")
-

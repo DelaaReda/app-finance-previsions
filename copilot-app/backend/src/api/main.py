@@ -98,25 +98,39 @@ except ImportError as e:
     def parquet_glob(*parts): return str(Path(*parts))
 
 try:
-    from services.news_service import (
+    # Prefer explicit relative import within the 'api' package
+    from .services.news_service import (
         get_news_events as lakehouse_news_events,
         get_sentiment as lakehouse_news_sentiment,
     )
 except ImportError:  # pragma: no cover
-    from api.services.news_service import (  # type: ignore
-        get_news_events as lakehouse_news_events,
-        get_sentiment as lakehouse_news_sentiment,
-    )
+    try:
+        from api.services.news_service import (  # type: ignore
+            get_news_events as lakehouse_news_events,
+            get_sentiment as lakehouse_news_sentiment,
+        )
+    except ImportError:
+        # Last resort when 'api' is not the package root on sys.path
+        from services.news_service import (
+            get_news_events as lakehouse_news_events,
+            get_sentiment as lakehouse_news_sentiment,
+        )
 try:
-    from services.intelligence_service import (
+    from .services.intelligence_service import (
         get_market_context_snapshot,
         get_market_intelligence_snapshot,
     )
 except ImportError:  # pragma: no cover
-    from api.services.intelligence_service import (  # type: ignore
-        get_market_context_snapshot,
-        get_market_intelligence_snapshot,
-    )
+    try:
+        from api.services.intelligence_service import (  # type: ignore
+            get_market_context_snapshot,
+            get_market_intelligence_snapshot,
+        )
+    except ImportError:
+        from services.intelligence_service import (
+            get_market_context_snapshot,
+            get_market_intelligence_snapshot,
+        )
 try:
     # Try importing from src.services first (since snapshot_loader is in src/services/)
     from src.services.snapshot_loader import ensure_snapshot, resolve_payload
@@ -394,70 +408,70 @@ def create_app() -> FastAPI:
 
     # Include dashboard routes
     try:
-        from api.routes.dashboard import dashboard_router
+        from .routes.dashboard import dashboard_router
         app.include_router(dashboard_router, prefix="/api/dashboard")
     except ImportError as e:
         print(f"⚠️  Failed to include dashboard routes: {e}")
 
     # Include brief routes
     try:
-        from api.routes.brief_routes import router as brief_router
+        from .routes.brief_routes import router as brief_router
         app.include_router(brief_router)
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
 
     # Include quality routes
     try:
-        from api.routes.quality import router as quality_router
+        from .routes.quality import router as quality_router
         app.include_router(quality_router)
     except ImportError as e:
         print(f"⚠️  Failed to include quality routes: {e}")
 
     # Include cache management routes
     try:
-        from api.routes.cache_routes import router as cache_router
+        from .routes.cache_routes import router as cache_router
         app.include_router(cache_router)
     except ImportError as e:
         print(f"⚠️  Failed to include cache routes: {e}")
 
     # Include portfolios/watchlists routes
     try:
-        from api.routes.portfolios import router as portfolios_router
+        from .routes.portfolios import router as portfolios_router
         app.include_router(portfolios_router)
     except ImportError as e:
         print(f"⚠️  Failed to include portfolios routes: {e}")
 
     # Include forecasts routes
     try:
-        from api.routes.forecasts import forecasts_router
+        from .routes.forecasts import forecasts_router
         app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
     # Include forecasts routes
     try:
-        from api.routes.forecasts import forecasts_router
+        from .routes.forecasts import forecasts_router
         app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
     # Include analytics routes
     try:
-        from api.routes.analytics import router as analytics_router
+        from .routes.analytics import router as analytics_router
         app.include_router(analytics_router)
     except ImportError as e:
         print(f"⚠️  Failed to include analytics routes: {e}")
 
     # Include stocks routes (top, universe, etc.)
     try:
-        from api.routes.stocks import stocks_router
+        from .routes.stocks import stocks_router
         app.include_router(stocks_router)
     except ImportError as e:
         print(f"⚠️  Failed to include stocks routes: {e}")
 
     # Include judge routes (LLM verdicts)
     try:
-        from api.routes.judge import judge_router
+        from .routes.judge import judge_router
         app.include_router(judge_router)
     except ImportError as e:
         print(f"⚠️  Failed to include judge routes: {e}")
@@ -471,14 +485,14 @@ def create_app() -> FastAPI:
 
     # Include judge routes
     try:
-        from api.routes.judge import router as judge_router
+        from .routes.judge import router as judge_router
         app.include_router(judge_router)
     except ImportError as e:
         print(f"⚠️  Failed to include judge routes: {e}")
 
     # Include stocks routes
     try:
-        from api.routes.stocks import router as stocks_router
+        from .routes.stocks import router as stocks_router
         app.include_router(stocks_router)
     except ImportError as e:
         print(f"⚠️  Failed to include stocks routes: {e}")
@@ -804,16 +818,66 @@ def register_routes(app: FastAPI):
     # This endpoint is commented out to avoid conflicts with the router
     # The router provides better filtering, caching, and error handling
     
-    # @app.get("/api/macro/series")
-    # async def macro_series(
-    #     series_ids: Optional[str] = Query(None, description="Comma-separated series IDs"),
-    #     ids: Optional[str] = Query(None, description="Alias for series_ids"),
-    #     start: Optional[str] = Query(None, description="ISO date (e.g. 2020-01-01)"),
-    #     end: Optional[str] = Query(None, description="ISO date"),
-    #     limit: int = Query(500, ge=10, le=5000)
-    # ):
-    #     """Get macro time series data - reads from pre-computed data."""
-    #     # ... (implementation moved to api/routes/macro.py)
+    @app.get("/api/macro/series")
+    async def macro_series(
+        series_ids: Optional[str] = Query(None, description="Comma-separated FRED IDs (e.g. CPIAUCSL,DGS10,VIXCLS)"),
+        ids: Optional[str] = Query(None, description="Alias for series_ids"),
+        range: str = Query("5y", description="Range: 1m,3m,6m,1y,2y,3y,5y,10y,all"),
+        freq: Optional[str] = Query(None, description="Optional frequency hint (daily, weekly, monthly)")
+    ):
+        """Return macro time series using real data (cache first, FRED fallback).
+
+        Response shape matches the frontend adapter expectations:
+        { ok: true, data: { series: [{ id, title, unit, data: [{date, value}]}], updated_at } }
+        """
+        try:
+            from .services.macro_service import get_macro_overview
+        except Exception as e:
+            return _ok({"series": [], "error": f"macro service unavailable: {e}"})
+
+        try:
+            req_ids = series_ids or ids or None
+            overview = get_macro_overview(range_str=range, series_ids=req_ids)
+
+            series_list = []
+            for s in getattr(overview, "series", []) or []:
+                # Extract points from DataPoint dataclass or loose dicts
+                points = []
+                values = getattr(s, "values", None) or getattr(s, "data", None) or []
+                for dp in values:
+                    ts = getattr(dp, "timestamp", None) or (dp.get("timestamp") if isinstance(dp, dict) else None) or (dp.get("date") if isinstance(dp, dict) else None)
+                    val = getattr(dp, "value", None) if not isinstance(dp, dict) else dp.get("value")
+                    if ts is None or val is None:
+                        continue
+                    try:
+                        if isinstance(ts, datetime):
+                            date_str = ts.date().isoformat()
+                        else:
+                            date_str = str(ts)[:10]
+                        points.append({"date": date_str, "value": float(val)})
+                    except Exception:
+                        continue
+
+                series_list.append({
+                    "id": getattr(s, "series_id", None) or getattr(s, "id", None),
+                    "title": getattr(s, "name", None) or getattr(s, "title", None),
+                    "unit": getattr(s, "unit", None),
+                    "freq": freq,
+                    "data": points,
+                })
+
+            payload = {
+                "series": series_list,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            }
+            return _ok(payload)
+        except Exception as e:
+            # Never-empty: return empty structure with error info
+            return _ok({
+                "series": [],
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "error": str(e),
+            })
 
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
@@ -856,14 +920,27 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/macro/indicators")
     async def macro_indicators():
-        """Get macro indicators with trend analysis."""
-        # TODO: Implement trend analysis (YoY, MoM, etc.)
-        return _ok({
-            "cpi_yoy": None,
-            "yield_curve_10y_2y": None,
-            "recession_probability": None,
-            "vix": None
-        })
+        """Get macro indicators with real calculations (cache-first, FRED fallback)."""
+        try:
+            from .services.macro_service import get_macro_indicators as _get_macro_indicators
+            indicators = _get_macro_indicators()
+            # indicators is a dataclass; convert to dict if needed
+            payload = {
+                "cpi_yoy": getattr(indicators, "cpi_yoy", None),
+                "yield_curve_10y_2y": getattr(indicators, "yield_curve_10y_2y", None),
+                "recession_probability": getattr(indicators, "recession_probability", None),
+                "vix": getattr(indicators, "vix", None),
+                "trace": getattr(indicators, "trace", None),
+            }
+            return _ok(payload)
+        except Exception as e:
+            return _ok({
+                "cpi_yoy": None,
+                "yield_curve_10y_2y": None,
+                "recession_probability": None,
+                "vix": None,
+                "error": str(e),
+            })
 
     # ========================= PILLAR 2: STOCKS ==========================
 
@@ -926,13 +1003,26 @@ def register_routes(app: FastAPI):
                         }
                     else:
                         results[ticker_symbol] = {"error": f"No cached data for {ticker_symbol}"}
-                
-                return _ok({
-                    "tickers": results,
-                    "range": timeframe,
-                    "interval": interval,
-                    "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
-                })
+                # If a single ticker was requested, return the shape expected by the UI (StockPriceData)
+                if len(tickers_to_process) == 1:
+                    t = tickers_to_process[0]
+                    entry = results.get(t, {})
+                    return _ok({
+                        "ticker": t,
+                        "interval": entry.get("interval", interval),
+                        "points": entry.get("points", []),
+                        "count": entry.get("count", 0),
+                        "source": "stocks/prices_snapshot",
+                        "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
+                    })
+                else:
+                    # Multi-ticker payload
+                    return _ok({
+                        "tickers": results,
+                        "range": timeframe,
+                        "interval": interval,
+                        "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
+                    })
             
             # Fallback: compute on the fly (legacy behavior)
             from core.market_data import get_price_history
@@ -973,12 +1063,25 @@ def register_routes(app: FastAPI):
                     "timestamp": datetime.utcnow().isoformat()
                 }
             
-            return _ok({
-                "tickers": results,
-                "range": timeframe,
-                "interval": interval,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            # Single ticker vs multi ticker response for UI compatibility
+            if len(tickers_to_process) == 1:
+                t = tickers_to_process[0]
+                entry = results.get(t, {})
+                return _ok({
+                    "ticker": t,
+                    "interval": entry.get("interval", interval) or interval,
+                    "points": entry.get("points", []),
+                    "count": entry.get("count", 0),
+                    "source": "market_data_live",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            else:
+                return _ok({
+                    "tickers": results,
+                    "range": timeframe,
+                    "interval": interval,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
         except Exception as e:
             return _ok({
                 "tickers": {},
@@ -987,6 +1090,33 @@ def register_routes(app: FastAPI):
                 "timestamp": datetime.utcnow().isoformat(),
                 "error": str(e)
             })
+
+    # Alias for UI call path: map /api/stocks/top to the existing implementation
+    @app.get("/api/stocks/top")
+    async def api_stocks_top(
+        limit: int = Query(10, ge=1, le=50, description="Number of top stocks to return"),
+        sort_by: str = Query("score", description="Sort by: score, change_1d, momentum_30d, mcap"),
+    ):
+        return await stocks_top(limit=limit, sort_by=sort_by)
+
+    @app.get("/api/stocks/search")
+    async def api_stocks_search(q: Optional[str] = Query("", description="Query fragment"), limit: int = Query(10, ge=1, le=50)):
+        """Lightweight search over the available universe from snapshot (real data, no mocks)."""
+        try:
+            from storage.io import load_json
+            data = load_json("stocks/prices") or {}
+            tickers_map = data.get("tickers") if isinstance(data, dict) else {}
+            universe = [t.upper() for t in (tickers_map.keys() if isinstance(tickers_map, dict) else [])]
+            qn = (q or "").strip().upper()
+            results = []
+            for t in universe:
+                if not qn or qn in t:
+                    results.append({"ticker": t, "name": t})
+                if len(results) >= limit:
+                    break
+            return _ok({"results": results, "count": len(results)})
+        except Exception as e:
+            return _ok({"results": [], "count": 0, "error": str(e)})
 
     @app.get("/api/stocks/universe")
     async def stock_universe():
@@ -1363,7 +1493,7 @@ def register_routes(app: FastAPI):
             
             # Get recent news count for this ticker
             try:
-                from api.services.news_service import get_news_feed
+                from .services.news_service import get_news_feed
                 news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
                 news_count = news_data.count if hasattr(news_data, 'count') else 0
             except Exception:
@@ -1519,7 +1649,7 @@ def register_routes(app: FastAPI):
             news_count = 0
             news_sentiment = 0.5  # Default neutral
             try:
-                from api.services.news_service import get_news_feed
+                from .services.news_service import get_news_feed
                 news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
                 news_count = news_data.count if hasattr(news_data, 'count') else 0
                 # Calculate sentiment from news data if available
@@ -1617,21 +1747,130 @@ def register_routes(app: FastAPI):
 
     # ========================= PILLAR 3: NEWS ============================
 
-    # ========================= NEWS FEED (DISABLED - Using router instead) ======================
-    # NOTE: The /api/news/feed endpoint is now handled by api/routes/news.py router
-    # This endpoint is commented out to avoid conflicts with the router
-    # The router provides better filtering, caching, and error handling
-    
-    # @app.get("/api/news/feed")
-    # async def news_feed(
-    #     tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
-    #     since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
-    #     region: str = Query("all", description="Region filter (unused in v1)"),
-    #     score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
-    #     limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
-    # ):
-    #     """Get news feed - serves real data from news_feed.json"""
-    #     # ... (implementation moved to api/routes/news.py)
+    # Provide the /api/news/feed endpoint directly for the UI (reads real data or cached pipeline output)
+    @app.get("/api/news/feed")
+    async def news_feed(
+        tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
+        since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
+        region: str = Query("all", description="Region filter (unused in v1)"),
+        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
+        limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
+    ):
+        try:
+            # Prefer service which uses persisted data + never-empty
+            from .services.news_service import get_news_feed as _get_news_feed
+            svc = await _get_news_feed(tickers=tickers, q=None, limit=limit, window="last_week")
+            # If service returned empty, attempt direct file load (legacy structure has top-level 'articles')
+            try_direct = False
+            if isinstance(svc, dict) and svc.get("ok") is True:
+                data_block = svc.get("data") or {}
+                items = (data_block.get("items") or data_block.get("articles") or []) if isinstance(data_block, dict) else []
+                if isinstance(items, list) and len(items) > 0:
+                    return svc
+                try_direct = True
+            else:
+                try_direct = True
+
+            if try_direct:
+                from storage.io import load_json
+                news_data = load_json("news_feed") or load_json("news_feed.json") or {}
+                payload = news_data.get("payload") or news_data
+                # Normalize to items list
+                if isinstance(payload, dict) and "articles" in payload:
+                    items = payload.get("articles", [])
+                    if tickers:
+                        filtered = [a for a in items if any(t.upper() in [x.upper() for x in (a.get("tickers") or [])] for t in tickers)]
+                        # Never-empty behavior: if filtering removes everything (common when feed lacks per-article tickers),
+                        # fall back to the unfiltered head up to limit
+                        items = filtered if filtered else items
+                    items = items[:limit]
+                    return _ok({
+                        "items": items,
+                        "count": len(items),
+                        "freshness": payload.get("generated_at") or news_data.get("generated_at")
+                    })
+                return _ok(payload)
+        except Exception as e:
+            return _ok({"articles": [], "count": 0, "error": str(e)})
+
+    # ====================== RECOMMENDATIONS =======================
+    @app.get("/api/recommendations/daily")
+    async def recommendations_daily(
+        universe: Optional[List[str]] = Query(None, description="Optional list of tickers to consider"),
+        limit: int = Query(3, ge=1, le=50)
+    ):
+        """Daily recommendations derived from the latest weekly brief (real cached data).
+
+        - Uses /data/brief_weekly.json top_signals as BUY candidates
+        - Applies optional universe filter and limit
+        - Returns stable schema consumed by SmartRecommendationsWidget
+        """
+        try:
+            from storage.io import load_json
+            brief = load_json("brief_weekly") or load_json("brief_weekly.json") or {}
+            core = brief.get("data") or brief
+            top_signals = core.get("top_signals") or []
+            items = []
+            for s in top_signals:
+                tkr = (s.get("ticker") or "").upper()
+                typ = (s.get("type") or "").upper() or "BULLISH"
+                if not tkr:
+                    continue
+                if universe and len(universe) > 0 and tkr not in {u.upper() for u in universe}:
+                    continue
+                if typ != "BULLISH":
+                    continue
+                conf = s.get("confidence")
+                er = s.get("expected_return")
+                score = int(round((conf or 0) * 100)) if isinstance(conf, (int, float)) else 0
+                # Simple risk heuristic from confidence
+                risk_level = "LOW" if (conf or 0) >= 0.7 else "MEDIUM" if (conf or 0) >= 0.4 else "HIGH"
+                items.append({
+                    "ticker": tkr,
+                    "action": "BUY",
+                    "score": score,
+                    "reasoning": s.get("reasoning") or "Forecasts and market brief indicate positive setup.",
+                    "catalysts": [],
+                    "risk_level": risk_level,
+                    "confidence": float(conf) if conf is not None else 0.0,
+                    "supporting_data": {
+                        "forecast_confidence": float(conf) if conf is not None else None,
+                        "news_sentiment": None,
+                        "momentum_score": None,
+                        "macro_alignment": None,
+                    }
+                })
+
+            items = items[:limit]
+
+            # Market context snapshot for header
+            try:
+                context = await run_in_threadpool(get_market_context_snapshot)
+                market_ctx = {
+                    "regime": context.get("insights", {}).get("market_regime", {}).get("current", "NORMAL"),
+                    "summary": context.get("insights", {}).get("summary") or "",
+                    "key_drivers": []
+                }
+            except Exception:
+                mc = _fallback_market_context("Recommendations context")
+                market_ctx = {"regime": mc.get("regime", "NORMAL"), "summary": mc.get("summary", ""), "key_drivers": []}
+
+            now_iso = datetime.utcnow().isoformat() + "Z"
+            return _ok({
+                "recommendations": items,
+                "market_context": market_ctx,
+                "generated_at": now_iso,
+                "valid_until": now_iso
+            })
+        except Exception as e:
+            # Never-empty: return empty recommendations with context
+            now_iso = datetime.utcnow().isoformat() + "Z"
+            return _ok({
+                "recommendations": [],
+                "market_context": {"regime": "NORMAL", "summary": str(e), "key_drivers": []},
+                "generated_at": now_iso,
+                "valid_until": now_iso
+            })
 
     @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
@@ -2664,6 +2903,11 @@ def register_routes(app: FastAPI):
         except Exception as exc:  # noqa: BLE001
             logger.exception("market_context.snapshot_failed", exc_info=exc)
             return _ok(_fallback_market_context("Market context service temporarily unavailable."))
+
+    # Alias for compatibility with some UI hooks
+    @app.get("/api/copilot/context")
+    async def copilot_context_alias():
+        return await market_context_current()
 
     @app.get("/dashboard/kpis")
     async def dashboard_kpis(

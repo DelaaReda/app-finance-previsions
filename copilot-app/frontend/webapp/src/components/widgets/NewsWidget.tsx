@@ -29,6 +29,9 @@ export function NewsWidget() {
   let articles: any[] = [];
   if (data && data.articles) {
     articles = data.articles;
+  } else if (data && data.items) {
+    // Normalized shape from backend service
+    articles = data.items;
   } else if (data && Array.isArray(data)) {
     articles = data;
   } else if (data && data.rows) {

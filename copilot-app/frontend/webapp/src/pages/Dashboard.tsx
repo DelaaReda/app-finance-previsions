@@ -88,7 +88,10 @@ function DashboardContent() {
   const newsItems = useMemo(() => {
     const raw = newsQuery.data as any;
     if (!raw) return [] as Array<{ id: string; title: string; source?: string; url?: string; date?: string }>;
-    const articles = Array.isArray(raw?.articles)
+    // useApi now returns the inner payload from backend; handle normalized shapes
+    const articles = Array.isArray(raw?.items)
+      ? raw.items
+      : Array.isArray(raw?.articles)
       ? raw.articles
       : Array.isArray(raw?.rows)
       ? raw.rows

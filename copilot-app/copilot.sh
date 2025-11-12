@@ -81,7 +81,8 @@ start_backend() {
     cd "$BACKEND_DIR"
     # Désactiver reload pour éviter segfault sur ARM64
     export FINANCE_COPILOT_RELOAD=0
-    export PYTHONPATH="$BACKEND_DIR:$BACKEND_DIR/src"
+    # Prefer src/ first so 'api' resolves to src/api (contains services, schemas, etc.)
+    export PYTHONPATH="$BACKEND_DIR/src:$BACKEND_DIR"
     # Choisir l'interpréteur Python (éviter venv si corrompue)
     PY=""
     if [ -x ".venv/bin/python3" ]; then

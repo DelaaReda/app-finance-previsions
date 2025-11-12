@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '@/api/client';
 
 export interface ApiResult<T> {
   data: T | null;
@@ -17,23 +18,9 @@ export function useApi<T>(url: string): ApiResult<T> {
     setError(null);
     
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const jsonData = await response.json();
-      // Handle differently based on the response format
-      if (jsonData && typeof jsonData === 'object') {
-        if ('data' in jsonData) {
-          // Response format: { ok: true, data: {...} }
-          setData(jsonData.data);
-        } else {
-          // Direct data response
-          setData(jsonData);
-        }
-      } else {
-        setData(jsonData);
-      }
+      // Always resolve through central client so base URL works in static build
+      const data = await api.fetchJson<any>(url);
+      setData(data);
     } catch (err: any) {
       // Format user-friendly error messages
       let errorMessage = 'Une erreur est survenue lors du chargement des données';

@@ -70,7 +70,10 @@ export function useNewsRadar(params: NewsRadarParams) {
     queryFn: async () => {
       const searchParams = buildSearchParams(params);
       const json = await api.fetchJson<any>('/api/news/feed', { searchParams });
-      const articles = ensureArray(json?.data?.articles ?? json?.articles ?? json).map((article: any) => {
+      const raw = Array.isArray(json)
+        ? json
+        : (json?.articles ?? json?.items ?? []);
+      const articles = ensureArray(raw).map((article: any) => {
         // Handle both pubDate (ISO string) and timestamp (Unix seconds)
         let publishedAt = article?.pubDate ?? article?.published_at ?? article?.date;
         if (!publishedAt && article?.timestamp) {

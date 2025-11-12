@@ -46,6 +46,15 @@ const MacroSparklinesWidget = lazy(() =>
 const StocksWidget = lazy(() => 
   import('../widgets/StocksWidget').then(m => ({ default: m.StocksWidget }))
 );
+const OpportunitiesWidget = lazy(() =>
+  import('../widgets/OpportunitiesWidget').then(m => ({ default: m.OpportunitiesWidget }))
+);
+const RisksWidget = lazy(() =>
+  import('../widgets/RisksWidget').then(m => ({ default: m.RisksWidget }))
+);
+const PerformanceWidget = lazy(() =>
+  import('../widgets/PerformanceWidget').then(m => ({ default: m.PerformanceWidget }))
+);
 
 /**
  * Widget Registry
@@ -67,10 +76,10 @@ const WIDGET_REGISTRY: Record<
   macro: MacroWidget,
   macro_sparklines: MacroSparklinesWidget,  // Added for FC-DASH-003
   stocks: StocksWidget,
-  risks: null,
-  opportunities: null,
+  risks: RisksWidget,
+  opportunities: OpportunitiesWidget,
   alerts: null,
-  performance: null,
+  performance: PerformanceWidget,
 };
 
 /**
