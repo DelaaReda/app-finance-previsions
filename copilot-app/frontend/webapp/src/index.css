@@ -225,6 +225,11 @@ h4 { font-size: clamp(0.95rem, 0.5vw + 0.65rem, 1.1rem); }
   align-items: start;
 }
 
+/* Remove width caps applied by wrappers in some pages */
+#root main section > div > div {
+  max-width: 100% !important;
+}
+
 /* Group of period buttons: allow wrapping on narrow screens */
 .buttons-group {
   display: flex;

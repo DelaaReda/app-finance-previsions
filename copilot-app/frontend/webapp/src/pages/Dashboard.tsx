@@ -210,6 +210,17 @@ function DashboardContent() {
     setIsRefreshing(false);
   };
 
+  // Compact KPI values for quick glance bar
+  const kpiTotalForecasts = kpis?.forecasts?.total ?? kpis?.total_forecasts ?? 0;
+  const kpiAvgConfidencePct = Math.round(((kpis?.forecasts?.avg_confidence ?? 0) * 100));
+  const kpiHitRatePct = (() => {
+    const hr = kpis?.backtests?.hit_rate ?? 0;
+    return Math.round((hr > 1 ? hr : hr * 100));
+  })();
+  const kpiLastUpdate = kpis?.system?.last_forecast_update
+    ? new Date(kpis.system.last_forecast_update).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : undefined;
+
   return (
     <div className="min-h-screen bg-bg text-text">
       <div className="w-full max-w-none mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:py-6 space-y-4 sm:space-y-6 lg:space-y-8">
@@ -290,6 +301,25 @@ function DashboardContent() {
           )}
         </div>
         }
+
+        {/* KPI compact bar (executive snapshot) */}
+        <div className="bg-surface rounded-lg border border-border px-3 py-2 flex flex-wrap gap-3 items-center text-xs text-muted">
+          <span className="text-text font-medium">Prévisions actives:</span>
+          <span className="text-text">{kpiTotalForecasts}</span>
+          <span className="opacity-30">•</span>
+          <span className="text-text font-medium">Confiance moyenne:</span>
+          <span className="text-emerald-400 font-semibold">{kpiAvgConfidencePct}%</span>
+          <span className="opacity-30">•</span>
+          <span className="text-text font-medium">Taux de réussite:</span>
+          <span className="text-emerald-400 font-semibold">{kpiHitRatePct}%</span>
+          {kpiLastUpdate && (
+            <>
+              <span className="opacity-30">•</span>
+              <span className="text-text font-medium">MAJ:</span>
+              <span className="text-text">{kpiLastUpdate}</span>
+            </>
+          )}
+        </div>
 
         {/* Adaptive widgets directly under the header */}
         <Card variant="glass" hoverable={false}>
