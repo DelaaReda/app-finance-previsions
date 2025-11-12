@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://app-finance-previsions-199q.vercel.app/api/$1" },
+    { "source": "/health", "destination": "https://app-finance-previsions-199q.vercel.app/api/health" }
+  ]
+}

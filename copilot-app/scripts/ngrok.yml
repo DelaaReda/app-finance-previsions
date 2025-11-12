@@ -1,4 +1,5 @@
 version: "2"
+authtoken: 35KoFJw6mDPL6kdf8QLeExVU1zi_4beFrpj3uhi7cxQzNujsh
 
 # Define two tunnels: one for backend API (8050) and one for frontend (5173)
 tunnels:
@@ -8,4 +9,3 @@ tunnels:
   frontend:
     addr: 5173
     proto: http
-

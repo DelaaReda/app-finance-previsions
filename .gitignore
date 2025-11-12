@@ -61,3 +61,4 @@ docs/old-context/chat.md
 copilot-app/frontend/webapp/.npm-cache/
 copilot-app/frontend/webapp/.npm-cache/*
 .git_backup/
+.vercel
