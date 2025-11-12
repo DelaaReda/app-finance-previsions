@@ -11,6 +11,7 @@ Quality improvements:
 - Better import isolation
 """
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
@@ -19,6 +20,7 @@ import json
 import sys
 import os
 from pathlib import Path
+from typing import Optional
 
 # Add the backend directory to the path
 backend_path = Path(__file__).parent  # .../backend/api
@@ -35,6 +37,52 @@ for p in (backend_path, backend_root, src_path):
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _compute_allowed_origins() -> list:
+    """Build the CORS allow_origins list from environment.
+
+    Priority:
+    - FRONTEND_ORIGIN (single URL)
+    - ALLOWED_ORIGINS (comma-separated)
+    - VERCEL_URL (provided by Vercel), converted to https://<vercel_url>
+    - Always include local dev origins
+    """
+    origins = []
+
+    # Explicit frontend origin
+    fe = os.getenv("FRONTEND_ORIGIN", "").strip()
+    if fe:
+        origins.append(fe)
+
+    # Comma-separated list
+    allow_env = os.getenv("ALLOWED_ORIGINS", "")
+    if allow_env:
+        origins.extend([o.strip() for o in allow_env.split(",") if o.strip()])
+
+    # Vercel-provided URL (no scheme)
+    vercel_url = os.getenv("VERCEL_URL", "").strip()
+    if vercel_url:
+        origins.append(f"https://{vercel_url}")
+
+    # Known deployed frontend URL
+    origins.append("https://reda-delaa.vercel.app")
+
+    # Common local dev
+    origins.extend([
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://0.0.0.0:5173",
+    ])
+
+    # Deduplicate while preserving order
+    deduped = []
+    seen = set()
+    for o in origins:
+        if o and o not in seen:
+            seen.add(o)
+            deduped.append(o)
+    return deduped
+
+
 # Create main FastAPI app
 app = FastAPI(
     title="Finance Copilot API",
@@ -42,10 +90,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware
+# Add CORS middleware - dynamic from environment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://0.0.0.0:5173", "*"],
+    allow_origins=_compute_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -243,10 +291,10 @@ def create_app():
         version="1.0.0"
     )
     
-    # Add CORS middleware
+    # Add CORS middleware (dynamic for factory app too)
     new_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://0.0.0.0:5173", "*"],
+        allow_origins=_compute_allowed_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -260,16 +308,7 @@ def create_app():
         logger.warning("FinanceMiddleware not available, continuing without advanced middleware")
     
     # Register basic endpoints first
-    @new_app.get("/")
-    def root():
-        """Root endpoint for health check."""
-        return {
-            "status": "ok", 
-            "service": "Finance Copilot API", 
-            "version": "1.0.0",
-            "features": ["forecasts", "news", "macro", "stocks", "brief", "backtests"],
-            "generated_at": datetime.utcnow().isoformat() + "Z"
-        }
+    # UI serving will be wired later below; keep /api/* for API
     
     @new_app.get("/api/health")
     def health_check():
@@ -485,14 +524,21 @@ def create_app():
     # Mount static frontend (Vite build) at root so a single public URL serves UI + API
     try:
         frontend_dist = (backend_root.parent / "frontend" / "webapp" / "dist").resolve()
-        if frontend_dist.exists():
-            # Important: include routers first so /api/* takes precedence, then mount '/'
-            new_app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
-            logger.info(f"Mounted frontend dist at '/': {frontend_dist}")
+        index_html = frontend_dist / "index.html"
+        assets_dir = frontend_dist / "assets"
+
+        if index_html.exists():
+            @new_app.get("/")
+            def serve_index():
+                return HTMLResponse(index_html.read_text(encoding="utf-8"))
+
+            new_app.mount("/app", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+
+            logger.info(f"Frontend dist wired at '/' and '/app' from: {frontend_dist}\n")
         else:
-            logger.info(f"Frontend dist directory not found: {frontend_dist}")
+            logger.info(f"Frontend index.html not found: {index_html}")
     except Exception as _e:
-        logger.warning(f"Could not mount frontend static files: {_e}")
+        logger.warning(f"Could not wire frontend static files: {_e}")
 
     # Debug: list registered paths
     try:
@@ -505,6 +551,10 @@ def create_app():
 
     return new_app
 
+
+# Export full application for Vercel/ASGI servers
+# Ensures OpenAPI includes all routers registered in create_app()
+app = create_app()
 
 if __name__ == "__main__":
     # This should match the uvicorn call in run_api.py

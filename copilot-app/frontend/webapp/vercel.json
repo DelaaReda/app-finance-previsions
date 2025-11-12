@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://afton-uncoachable-vickey.ngrok-free.dev/api/$1" }
+  ]
+}
+
