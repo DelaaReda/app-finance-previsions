@@ -1257,25 +1257,70 @@ def register_routes(app: FastAPI):
                 
                 # Extract unique tickers from forecasts
                 seen_tickers = set()
-                for row in forecast_rows[:limit * 2]:  # Get more to have options
+                for row in forecast_rows[:limit * 4]:  # Get more to have options
                     ticker = row.get("ticker") or row.get("symbol")
                     if ticker and ticker not in seen_tickers:
                         seen_tickers.add(ticker)
-                        # Use forecast data to create basic stock info
+                        # Fetch real-time data for ticker
+                        try:
+                            df_rt = get_price_history(ticker, interval="1d")
+                        except Exception:
+                            df_rt = None
+
+                        last_price = None
+                        change_pct = 0.0
+                        if df_rt is not None and hasattr(df_rt, 'empty') and not df_rt.empty and "Close" in df_rt.columns:
+                            close = df_rt["Close"].dropna()
+                            if not close.empty:
+                                last_price = float(close.iloc[-1])
+                                if len(close) > 1:
+                                    prev = float(close.iloc[-2])
+                                    if prev:
+                                        change_pct = ((last_price - prev) / prev) * 100
+                        # Ultra-lightweight Yahoo chart fallback if yfinance not available
+                        if last_price is None:
+                            try:
+                                import requests as _rq
+                                resp = _rq.get(
+                                    f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}",
+                                    params={"range": "2d", "interval": "1d"},
+                                    timeout=10,
+                                    headers={"User-Agent": "Mozilla/5.0"},
+                                )
+                                js = resp.json()
+                                result = (js.get("chart", {}).get("result") or [None])[0]
+                                if result:
+                                    closes = (result.get("indicators", {}).get("quote") or [{}])[0].get("close", [])
+                                    if isinstance(closes, list) and closes:
+                                        last_price = float(closes[-1]) if closes[-1] is not None else None
+                                        if last_price is not None and len(closes) > 1 and closes[-2]:
+                                            prev = float(closes[-2])
+                                            if prev:
+                                                change_pct = ((last_price - prev) / prev) * 100
+                            except Exception:
+                                pass
+
+                        facts = {}
+                        try:
+                            facts = get_fundamentals(ticker) or {}
+                        except Exception:
+                            facts = {}
+
+                        # Use forecast confidence as score; ER only for ranking, not displayed as price
                         confidence = row.get("confidence", 0)
                         expected_return = row.get("expected_return", 0)
-                        
+
                         stock_info = {
                             "ticker": ticker,
-                            "name": f"{ticker} Corp",
-                            "price": 100.0,  # Placeholder
-                            "change": expected_return * 100 if expected_return else 0.0,
-                            "change_percent": expected_return * 100 if expected_return else 0.0,
-                            "market_cap": 0,
+                            "name": facts.get("name") or f"{ticker} Corp",
+                            "price": last_price or facts.get("price") or 0.0,
+                            "change": change_pct,
+                            "change_percent": change_pct,
+                            "market_cap": facts.get("market_cap") or 0,
                             "score": confidence,
                             "momentum_30d": expected_return * 30 if expected_return else 0.0,
-                            "pe": None,
-                            "sector": "N/A"
+                            "pe": facts.get("pe"),
+                            "sector": facts.get("sector") or "N/A"
                         }
                         stocks_list.append(stock_info)
                         if len(stocks_list) >= limit:
@@ -1766,7 +1811,37 @@ def register_routes(app: FastAPI):
                 data_block = svc.get("data") or {}
                 items = (data_block.get("items") or data_block.get("articles") or []) if isinstance(data_block, dict) else []
                 if isinstance(items, list) and len(items) > 0:
-                    return svc
+                    # Normalize shape for frontend expectations
+                    norm_items = []
+                    for a in items:
+                        if not isinstance(a, dict):
+                            continue
+                        title = a.get("title") or a.get("headline") or "(sans titre)"
+                        url = a.get("url") or a.get("link") or ""
+                        published = a.get("pubDate") or a.get("published_at") or a.get("date") or a.get("timestamp")
+                        source = a.get("source") or a.get("publisher")
+                        if not source and isinstance(url, str) and url:
+                            try:
+                                from urllib.parse import urlparse
+                                netloc = urlparse(url).netloc
+                                source = netloc.split(':')[0]
+                            except Exception:
+                                source = None
+                        norm_items.append({
+                            "title": title,
+                            "url": url,
+                            "published_at": published,
+                            "source": source,
+                            "tickers": a.get("tickers") or [],
+                            "score": a.get("score") or a.get("relevance_score") or a.get("sentiment_score"),
+                        })
+                    return _ok({
+                        "items": norm_items[:limit],
+                        "count": len(norm_items),
+                        "freshness": data_block.get("freshness") or data_block.get("generated_at"),
+                        "last_update": data_block.get("freshness") or data_block.get("generated_at"),
+                        "source": svc.get("source") or data_block.get("source"),
+                    })
                 try_direct = True
             else:
                 try_direct = True
@@ -1776,18 +1851,44 @@ def register_routes(app: FastAPI):
                 news_data = load_json("news_feed") or load_json("news_feed.json") or {}
                 payload = news_data.get("payload") or news_data
                 # Normalize to items list
-                if isinstance(payload, dict) and "articles" in payload:
-                    items = payload.get("articles", [])
+                if isinstance(payload, dict) and ("articles" in payload or (isinstance(payload.get("data"), dict) and "articles" in payload.get("data", {}))):
+                    items = payload.get("articles") or payload.get("data", {}).get("articles", [])
+                    # Normalize each article to ensure title/source fields are present
+                    norm_items = []
+                    for a in items:
+                        if not isinstance(a, dict):
+                            continue
+                        title = a.get("title") or a.get("headline") or "(sans titre)"
+                        url = a.get("url") or a.get("link") or ""
+                        published = a.get("pubDate") or a.get("published_at") or a.get("date") or a.get("timestamp")
+                        source = a.get("source") or a.get("publisher")
+                        if not source and isinstance(url, str) and url:
+                            try:
+                                from urllib.parse import urlparse
+                                netloc = urlparse(url).netloc
+                                source = netloc.split(':')[0]
+                            except Exception:
+                                source = None
+                        norm_items.append({
+                            "title": title,
+                            "url": url,
+                            "published_at": published,
+                            "source": source,
+                            "tickers": a.get("tickers") or [],
+                            "score": a.get("score") or a.get("relevance_score") or a.get("sentiment_score"),
+                        })
                     if tickers:
-                        filtered = [a for a in items if any(t.upper() in [x.upper() for x in (a.get("tickers") or [])] for t in tickers)]
+                        filtered = [a for a in norm_items if any(t.upper() in [x.upper() for x in (a.get("tickers") or [])] for t in tickers)]
                         # Never-empty behavior: if filtering removes everything (common when feed lacks per-article tickers),
                         # fall back to the unfiltered head up to limit
-                        items = filtered if filtered else items
-                    items = items[:limit]
+                        norm_items = filtered if filtered else norm_items
+                    items = norm_items[:limit]
                     return _ok({
                         "items": items,
                         "count": len(items),
-                        "freshness": payload.get("generated_at") or news_data.get("generated_at")
+                        "freshness": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
+                        "last_update": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
+                        "source": news_data.get("source") or payload.get("source")
                     })
                 return _ok(payload)
         except Exception as e:
@@ -2909,7 +3010,7 @@ def register_routes(app: FastAPI):
     async def copilot_context_alias():
         return await market_context_current()
 
-    @app.get("/dashboard/kpis")
+    @app.get("/api/dashboard/kpis")
     async def dashboard_kpis(
         sectors: List[str] = Query([], description="Filter by sectors (e.g., Technology, Healthcare, Financials)"),
         horizons: List[str] = Query([], description="Filter by horizons (e.g., short, medium, long)"),
@@ -3002,10 +3103,19 @@ def register_routes(app: FastAPI):
                     pass  # Fallback to JSON data already loaded
             except ImportError:
                 last_dt = None
+
+            # If parquet missing, derive last_dt from forecasts JSON metadata
+            if not last_dt and isinstance(forecasts_data, dict):
+                last_dt = (
+                    forecasts_data.get('last_update')
+                    or forecasts_data.get('freshness')
+                    or forecasts_data.get('generated_at')
+                )
             
             # Load news data for news KPI
             news_data = load_json("news_feed") or load_json("news_feed.json")
             news_count = 0
+            last_news_update = None
             if news_data:
                 news_items = news_data.get("articles") or news_data.get("rows") or news_data.get("data", {}).get("articles", []) or []
                 if isinstance(news_items, list):
@@ -3024,6 +3134,14 @@ def register_routes(app: FastAPI):
                                         news_count += 1
                                 except Exception:
                                     pass
+                # Capture last update if present
+                payload = news_data.get("data") or news_data.get("payload") or {}
+                last_news_update = (
+                    news_data.get("generated_at")
+                    or news_data.get("last_update")
+                    or news_data.get("freshness")
+                    or (payload.get("generated_at") if isinstance(payload, dict) else None)
+                )
             
             # Load backtests data for hit rate
             backtests_data = load_json("backtests") or load_json("backtests.json")
@@ -3037,12 +3155,21 @@ def register_routes(app: FastAPI):
                     backtest_status = "completed"
             
             # Build base_data with all KPIs
+            # Macro last update (optional)
+            last_macro_dt = None
+            try:
+                macro = load_json("macro_series") or load_json("macro_series.json")
+                if macro:
+                    last_macro_dt = macro.get("updated_at") or macro.get("generated_at") or macro.get("freshness")
+            except Exception:
+                pass
+
             base_data = {
                 "last_forecast_dt": last_dt,
                 "forecasts_count": forecasts_count,
                 "tickers": tickers_count,
                 "horizons": horizons_list,
-                "last_macro_dt": None,
+                "last_macro_dt": last_macro_dt,
                 "last_quality_dt": None,
                 # Structure compatible avec le frontend
                 "forecasts": {
@@ -3063,8 +3190,8 @@ def register_routes(app: FastAPI):
                 },
                 "system": {
                     "last_forecast_update": last_dt,
-                    "last_news_update": None,
-                    "last_backtest_update": None,
+                    "last_news_update": last_news_update,
+                    "last_backtest_update": backtests_data.get("generated_at") if isinstance(backtests_data, dict) else None,
                 },
                 "generated_at": datetime.utcnow().isoformat(),
             }
@@ -3186,31 +3313,37 @@ def register_routes(app: FastAPI):
 
             return _ok(enhanced_data)
             
-        except ImportError:
+        except ImportError as e:
+            logger.warning(f"dashboard_kpis import error: {e}")
+            # Return minimal KPIs based on any data computed above
             return _ok({
-                "last_forecast_dt": None,
-                "forecasts_count": 0,
-                "tickers": 0,
-                "horizons": [],
+                "last_forecast_dt": locals().get("last_dt"),
+                "forecasts_count": locals().get("forecasts_count", 0),
+                "tickers": locals().get("tickers_count", 0),
+                "horizons": locals().get("horizons_list", []),
                 "last_macro_dt": None,
                 "last_quality_dt": None,
                 "forecasts": {
-                    "total": 0,
-                    "high_confidence": 0,
-                    "avg_confidence": 0.0,
-                    "bullish": 0,
-                    "bearish": 0,
+                    "total": locals().get("forecasts_count", 0),
+                    "high_confidence": locals().get("high_confidence_count", 0),
+                    "avg_confidence": locals().get("avg_confidence", 0.0),
+                    "bullish": locals().get("bullish_count", 0),
+                    "bearish": locals().get("bearish_count", 0),
                 },
                 "backtests": {
-                    "hit_rate": 0.0,
+                    "hit_rate": locals().get("hit_rate", 0.0),
                     "sharpe_ratio": 0.0,
-                    "status": "pending",
+                    "status": locals().get("backtest_status", "pending"),
                 },
                 "news": {
-                    "recent_count": 0,
+                    "recent_count": locals().get("news_count", 0),
                     "avg_score": 0.0,
                 },
-                "system": {},
+                "system": {
+                    "last_forecast_update": locals().get("last_dt"),
+                    "last_news_update": None,
+                    "last_backtest_update": None,
+                },
                 "filtered_signals": [],
                 "filtered_risks": [],
                 "filter_applied": {

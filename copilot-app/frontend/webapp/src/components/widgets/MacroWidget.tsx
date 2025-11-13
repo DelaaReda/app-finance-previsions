@@ -250,7 +250,7 @@ export function MacroWidget() {
                           {statusInfo.status}
                       </Badge>
                     </Group>
-                    <Text className={styles.desc}>{indicator.description}</Text>
+                    
                   </Stack>
                 </Card>
               );

@@ -42,8 +42,23 @@ export function NewsWidget() {
     else if (Array.isArray(data.data)) articles = data.data;
   }
 
+  // Extract freshness/last update timestamp if provided by API
+  const lastUpdate: string | undefined = ((): string | undefined => {
+    if (!data) return undefined;
+    if (typeof data.last_update === 'string') return data.last_update;
+    if (typeof data.freshness === 'string') return data.freshness;
+    if (data.data && typeof data.data === 'object') {
+      const inner = data.data as any;
+      if (typeof inner.last_update === 'string') return inner.last_update;
+      if (typeof inner.freshness === 'string') return inner.freshness;
+      if (typeof inner.generated_at === 'string') return inner.generated_at;
+    }
+    if (typeof data.generated_at === 'string') return data.generated_at;
+    return undefined;
+  })();
+
   return (
-    <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard}`}>
+    <Card padding="lg" radius="xl" className={`${sharedStyles.glassCard} ${styles.widgetCard} lg:sticky lg:top-6`}>
       <Stack gap="md">
         <Group justify="space-between">
           <Group gap="xs" align="center">
@@ -64,6 +79,10 @@ export function NewsWidget() {
             <IconRefresh size={16} />
           </ActionIcon>
         </Group>
+
+        {lastUpdate && (
+          <Text size="xs" c="dimmed">MAJ: {new Date(lastUpdate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
+        )}
 
         {isLoading && (
           <Stack gap="sm">

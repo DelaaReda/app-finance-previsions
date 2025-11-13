@@ -69,71 +69,91 @@ def fetch_rss_feed(url: str, timeout: int = 10) -> str:
 
 def parse_rss_xml(xml_content: str) -> List[Dict[str, Any]]:
     """
-    Parse RSS XML content and extract articles
-    
-    Args:
-        xml_content: RSS XML as string
-        
-    Returns:
-        List of article dictionaries
+    Parse RSS/Atom XML with a robust strategy. Falls back to feedparser if needed.
     """
-    articles = []
-    
+    articles: List[Dict[str, Any]] = []
     if not xml_content:
         return articles
-    
     try:
-        # Parse XML
         root = ET.fromstring(xml_content)
-        
-        # Find all items (articles)
-        # Support both RSS 2.0 (<item>) and Atom (<entry>)
         items = root.findall('.//item') + root.findall('.//{http://www.w3.org/2005/Atom}entry')
-        
-        for item in items:
-            article = {}
-            
-            # Extract title
-            title_elem = item.find('title') or item.find('{http://www.w3.org/2005/Atom}title')
-            article['title'] = title_elem.text.strip() if title_elem is not None and title_elem.text else "No title"
-            
-            # Extract description/summary
-            desc_elem = (item.find('description') or 
-                        item.find('{http://www.w3.org/2005/Atom}summary') or
-                        item.find('{http://www.w3.org/2005/Atom}content'))
-            if desc_elem is not None and desc_elem.text:
-                # Clean HTML tags from description
-                article['summary'] = re.sub(r'<[^>]+>', '', desc_elem.text).strip()[:300]
-            else:
-                article['summary'] = ""
-            
-            # Extract link
-            link_elem = item.find('link') or item.find('{http://www.w3.org/2005/Atom}link')
+        for it in items:
+            title = (it.findtext('title') or it.findtext('{http://www.w3.org/2005/Atom}title') or '').strip()
+            desc = (
+                it.findtext('description')
+                or it.findtext('{http://www.w3.org/2005/Atom}summary')
+                or it.findtext('{http://www.w3.org/2005/Atom}content')
+                or ''
+            )
+            desc = re.sub(r'<[^>]+>', '', desc).strip()[:300]
+            link_elem = it.find('link') or it.find('{http://www.w3.org/2005/Atom}link')
+            url = ''
             if link_elem is not None:
-                # Atom link is an attribute
-                article['url'] = link_elem.get('href', link_elem.text or "")
-            else:
-                article['url'] = ""
-            
-            # Extract publication date
-            pubdate_elem = (item.find('pubDate') or 
-                           item.find('{http://www.w3.org/2005/Atom}published') or
-                           item.find('{http://www.w3.org/2005/Atom}updated'))
-            if pubdate_elem is not None and pubdate_elem.text:
-                article['published_at'] = pubdate_elem.text.strip()
-            else:
-                article['published_at'] = datetime.utcnow().isoformat() + "Z"
-            
-            articles.append(article)
-        
+                href = link_elem.get('href')
+                url = (href or (link_elem.text or '')).strip()
+            if (not url) and it.findtext('guid'):
+                g = it.findtext('guid').strip()
+                if g.startswith('http://') or g.startswith('https://'):
+                    url = g
+            pub = (
+                it.findtext('pubDate')
+                or it.findtext('{http://www.w3.org/2005/Atom}published')
+                or it.findtext('{http://www.w3.org/2005/Atom}updated')
+            )
+            articles.append({
+                'title': title if title else '(sans titre)',
+                'summary': desc,
+                'url': url,
+                'published_at': (pub.strip() if pub else datetime.utcnow().isoformat() + 'Z')
+            })
         logger.info(f"Parsed {len(articles)} articles from XML")
-        
     except ET.ParseError as e:
         logger.error(f"XML parse error: {e}")
     except Exception as e:
         logger.error(f"Unexpected error parsing XML: {e}")
-    
-    return articles
+
+    # Fallback with feedparser if titles look missing in majority
+    try:
+        missing = sum(1 for a in articles if not a.get('title') or a.get('title') in {'No title', '(sans titre)'} )
+        if not articles or (missing / max(len(articles), 1) > 0.5):
+            try:
+                import feedparser  # type: ignore
+                fp = feedparser.parse(xml_content)
+                parsed: List[Dict[str, Any]] = []
+                for entry in fp.entries:
+                    t = (getattr(entry, 'title', '') or '').strip() or '(sans titre)'
+                    link = (getattr(entry, 'link', '') or '').strip()
+                    pub = None
+                    for field in ('published', 'updated', 'created'):
+                        val = getattr(entry, field, None)
+                        if val:
+                            pub = str(val)
+                            break
+                    if not pub:
+                        pub = datetime.utcnow().isoformat() + 'Z'
+                    parsed.append({
+                        'title': t,
+                        'summary': (getattr(entry, 'summary', '') or '')[:300],
+                        'url': link,
+                        'published_at': pub,
+                    })
+                if parsed:
+                    articles = parsed
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Final cleanup
+    out: List[Dict[str, Any]] = []
+    for a in articles:
+        t = (a.get('title') or '').strip()
+        u = (a.get('url') or '').strip()
+        if not t and not u:
+            continue
+        a['title'] = t if t else '(sans titre)'
+        out.append(a)
+    return out
 
 
 def score_article(article: Dict[str, Any]) -> float:

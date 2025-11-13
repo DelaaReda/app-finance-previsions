@@ -137,7 +137,36 @@ class NewsService:
                     
                     return response_data
                 else:
-                    # Fallback if no stored data available
+                    # If no stored data available or wrong shape, try to generate real data
+                    try:
+                        from backend.jobs.news_ingest import run_news_ingest as _run_news
+                    except Exception:
+                        try:
+                            from jobs.news_ingest import run_news_ingest as _run_news
+                        except Exception:
+                            _run_news = None
+
+                    if _run_news is not None:
+                        gen = _run_news()
+                        # Reload after generation
+                        try:
+                            refreshed = load_json("news_feed")
+                            if refreshed and isinstance(refreshed, dict):
+                                payload = refreshed.get("payload") or refreshed
+                                articles = (
+                                    payload.get("articles")
+                                    if isinstance(payload, dict)
+                                    else payload.get("data", {}).get("articles", []) if isinstance(payload, dict) else []
+                                )
+                                return {
+                                    "items": articles or [],
+                                    "count": len(articles or []),
+                                    "generated_at": datetime.utcnow().isoformat(),
+                                    "source": payload.get("source", ["rss_ingestion"]) if isinstance(payload, dict) else ["rss_ingestion"],
+                                    "freshness": payload.get("generated_at") if isinstance(payload, dict) else None,
+                                }
+                        except Exception:
+                            pass
                     return None
             except Exception as e:
                 print(f"Error in compute_news_feed_internal: {e}")
@@ -147,7 +176,8 @@ class NewsService:
         if load_or_compute is not None:
             # Use the cache system if available
             try:
-                cached_result = load_or_compute("news_feed", compute_news_feed_internal, source=["news_service"])
+                # Apply TTL to avoid stale static payloads (15 minutes default)
+                cached_result = load_or_compute("news_feed", compute_news_feed_internal, source=["news_service"], ttl_minutes=15)
                 
                 if cached_result and isinstance(cached_result, dict) and "payload" in cached_result:
                     # Return the cached result in the proper format

@@ -10,6 +10,7 @@ import logging
 
 from src.core.response import ok, err
 from src.storage.io import load_json
+from src.core.market_data import get_price_history, get_fundamentals
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,43 @@ async def get_top_stocks(
             
             stocks_list.append(stock_info)
         
+        # If no data available from storage, compute a minimal real-time fallback using market_data
+        if not stocks_list:
+            logger.info("No persisted stocks data found; computing fallback metrics from market_data")
+            default_universe = [
+                "NVDA", "META", "TSLA", "AAPL", "MSFT", "GOOGL", "SPY", "QQQ"
+            ]
+            universe = default_universe[:limit]
+            for symbol in universe:
+                try:
+                    df = get_price_history(symbol, interval="1d")
+                    latest_price = None
+                    change_1d = 0.0
+                    if df is not None and not df.empty and "Close" in df.columns:
+                        close = df["Close"].dropna()
+                        if not close.empty:
+                            latest_price = float(close.iloc[-1])
+                            if len(close) > 1:
+                                prev = float(close.iloc[-2])
+                                change_1d = ((latest_price - prev) / prev) * 100 if prev else 0.0
+                    facts = get_fundamentals(symbol) or {}
+                    stocks_list.append({
+                        "ticker": symbol,
+                        "price": latest_price or facts.get("price") or 0.0,
+                        "change_1d": change_1d,
+                        "change_1d_pct": change_1d,
+                        "score": 0.0,
+                        "momentum_30d": 0.0,
+                        "market_cap": facts.get("market_cap") or 0.0,
+                        "volume": 0,
+                        "sector": facts.get("sector") or "Unknown",
+                        "pe": facts.get("pe"),
+                        "beta": facts.get("beta"),
+                        "last_updated": datetime.utcnow().isoformat()
+                    })
+                except Exception:
+                    continue
+
         # Sort by requested field
         if sort_by == "change_1d":
             stocks_list.sort(key=lambda x: abs(x.get("change_1d", 0)), reverse=True)

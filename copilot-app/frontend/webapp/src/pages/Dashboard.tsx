@@ -232,12 +232,12 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 space-y-6">
         
         {/* KPI Bar compacte */}
         <KPIBar onRefresh={handleRefresh} />
         
-        <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+        <div className="space-y-6">
         {/* Header first, then adaptive widgets */}
         {
         <div className="bg-glass border border-glass-border rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
