@@ -45,7 +45,7 @@ export interface AdaptiveLayoutConfig {
  */
 const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   BULL_MARKET: {
-    topRow: ['intelligence', 'recommendations', 'opportunities'],
+    topRow: ['intelligence', 'recommendations'],
     middleRow: ['forecasts', 'news', 'stocks'],
     bottomRow: ['macro', 'performance'],
     defaultFilters: {
@@ -97,8 +97,8 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   },
 
   RISK_ON: {
-    // Executive row at top: include performance snapshot
-    topRow: ['opportunities', 'intelligence', 'performance'],
+    // Executive row at top: include performance snapshot (opportunities shown within intelligence)
+    topRow: ['intelligence', 'performance'],
     middleRow: ['recommendations', 'forecasts', 'stocks'],
     bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {
@@ -123,7 +123,7 @@ const REGIME_LAYOUTS: Record<MarketRegime, AdaptiveLayoutConfig> = {
   },
 
   NORMAL: {
-    topRow: ['opportunities', 'intelligence', 'performance'],
+    topRow: ['intelligence', 'performance'],
     middleRow: ['recommendations', 'forecasts', 'stocks'],
     bottomRow: ['news', 'macro', 'correlations'],
     defaultFilters: {

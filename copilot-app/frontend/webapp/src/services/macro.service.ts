@@ -10,21 +10,21 @@ export const macroService = {
     const params: Record<string, string> = { limit: String(limit) }
     if (seriesIds) params.series_ids = seriesIds
     if (format) params.format_resp = format  // Use format_resp parameter for map response
-    return apiGet<MacroSeries[]>('/macro/series', params)
+    return apiGet<MacroSeries[]>('/api/macro/series', params)
   },
 
   /**
    * Get current macro snapshot (latest values)
    */
   getSnapshot: async () => {
-    return apiGet<MacroSnapshot>('/macro/snapshot')
+    return apiGet<MacroSnapshot>('/api/macro/snapshot')
   },
 
   /**
    * Get macro indicators with trend analysis
    */
   getIndicators: async () => {
-    return apiGet<MacroIndicators>('/macro/indicators')
+    return apiGet<MacroIndicators>('/api/macro/indicators')
   }
 }
 

@@ -881,41 +881,66 @@ def register_routes(app: FastAPI):
 
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
-        """Get current macro snapshot (latest values) - reads from pre-computed data."""
+        """Get current macro snapshot (latest values) - reads from persisted macro series."""
         try:
             from storage.io import load_json
-            
-            # Load from pre-computed macro snapshot
-            macro_snapshot_data = load_json("macro_snapshot")
-            
-            if macro_snapshot_data and "snapshot" in macro_snapshot_data:
-                snapshot = macro_snapshot_data["snapshot"]
-                return _ok({
-                    **snapshot,
-                    "freshness": macro_snapshot_data.get("freshness", macro_snapshot_data.get("generated_at")),
-                    "last_update": macro_snapshot_data.get("last_update", macro_snapshot_data.get("generated_at")),
-                })
-            
-            # Fallback: try legacy format
-            result = load_macro_forecast_rows(limit=10)
-            if result.get("rows"):
-                rows = result.get("rows", [])
-                snapshot = {}
-                for row in rows:
-                    for key, value in row.items():
-                        if value is not None:
-                            snapshot[key] = value
-                return _ok(snapshot)
-            
-            # Empty fallback
+
+            macro = load_json("macro_series") or load_json("macro_series.json") or {}
+            data = macro.get("data") or macro
+            series = data.get("series") or []
+
+            def last_value(sid: str) -> Optional[float]:
+                # series may be a list of dicts or a map of id -> dict
+                try:
+                    if isinstance(series, dict):
+                        s = series.get(sid)
+                        if not isinstance(s, dict):
+                            return None
+                        # map format: may have 'observations' or 'data'/'points'
+                        pts = s.get('observations') or s.get('data') or s.get('points') or []
+                        if isinstance(pts, list) and pts:
+                            lp = pts[-1]
+                            val = lp.get('value') if isinstance(lp, dict) else (lp[1] if isinstance(lp, (list, tuple)) and len(lp) >= 2 else None)
+                            return float(val) if val is not None else None
+                        return None
+                    # list format
+                    for s in series:
+                        if (s.get("id") or s.get("series_id") or s.get("name")) == sid:
+                            pts = s.get("data") or s.get("points") or s.get('observations') or []
+                            if isinstance(pts, list) and pts:
+                                lp = pts[-1]
+                                val = lp.get("value") if isinstance(lp, dict) else (lp[1] if isinstance(lp, (list, tuple)) and len(lp) >= 2 else None)
+                                return float(val) if val is not None else None
+                    return None
+                except Exception:
+                    return None
+
+            cpi = last_value("CPIAUCSL")
+            unrate = last_value("UNRATE")
+            vix = last_value("VIXCLS")
+            y10 = last_value("DGS10")
+            y2 = last_value("DGS2")
+            yc = (y10 - y2) if (y10 is not None and y2 is not None) else None
+
             return _ok({
-                "freshness": datetime.utcnow().isoformat(),
-                "last_update": datetime.utcnow().isoformat(),
+                "inflation_cpi": cpi,
+                "unemployment_rate": unrate,
+                "vix": vix,
+                "yield_10y": y10,
+                "yield_2y": y2,
+                "yield_curve": yc,
+                "updated_at": data.get("updated_at") or data.get("freshness") or macro.get("freshness"),
             })
         except Exception as e:
             return _ok({
+                "inflation_cpi": None,
+                "unemployment_rate": None,
+                "vix": None,
+                "yield_10y": None,
+                "yield_2y": None,
+                "yield_curve": None,
+                "updated_at": None,
                 "error": str(e),
-                "freshness": datetime.utcnow().isoformat(),
             })
 
     @app.get("/api/macro/indicators")
@@ -2027,6 +2052,173 @@ def register_routes(app: FastAPI):
 
         return _ok({"rows": rows, "count": len(rows)})
 
+    # ====================== MACRO SNAPSHOT =======================
+    @app.get("/api/macro/snapshot")
+    async def macro_snapshot():
+        """Return a compact macro snapshot from persisted macro series.
+
+        Shape: { ok: true, data: { inflation_cpi, unemployment_rate, vix, yield_10y, yield_2y, yield_curve, updated_at } }
+        """
+        try:
+            from storage.io import load_json
+            macro = load_json("macro_series") or load_json("macro_series.json") or {}
+            data = macro.get("data") or macro
+            series = data.get("series") or []
+
+            def last_value(sid: str) -> float | None:
+                for s in series:
+                    if (s.get("id") or s.get("series_id") or s.get("name")) == sid:
+                        pts = s.get("data") or s.get("points") or []
+                        if isinstance(pts, list) and pts:
+                            lp = pts[-1]
+                            val = lp.get("value") if isinstance(lp, dict) else (lp[1] if isinstance(lp, (list, tuple)) and len(lp) >= 2 else None)
+                            try:
+                                return float(val) if val is not None else None
+                            except Exception:
+                                return None
+                return None
+
+            cpi = last_value("CPIAUCSL")
+            unrate = last_value("UNRATE")
+            vix = last_value("VIXCLS")
+            y10 = last_value("DGS10")
+            y2 = last_value("DGS2")
+            yc = (y10 - y2) if (y10 is not None and y2 is not None) else None
+
+            return _ok({
+                "inflation_cpi": cpi,
+                "unemployment_rate": unrate,
+                "vix": vix,
+                "yield_10y": y10,
+                "yield_2y": y2,
+                "yield_curve": yc,
+                "updated_at": data.get("updated_at") or data.get("freshness") or macro.get("freshness"),
+            })
+        except Exception as e:
+            return _ok({
+                "inflation_cpi": None,
+                "unemployment_rate": None,
+                "vix": None,
+                "yield_10y": None,
+                "yield_2y": None,
+                "yield_curve": None,
+                "updated_at": None,
+                "error": str(e),
+            })
+    # ====================== PERFORMANCE MATRIX =======================
+    @app.get("/api/performance/matrix")
+    async def performance_matrix(
+        horizons: Optional[str] = Query(None, description="Comma-separated horizons: short,medium,long"),
+        tickers: Optional[str] = Query(None, description="Comma-separated tickers"),
+        sectors: Optional[str] = Query(None, description="(unused placeholder)"),
+        themes: Optional[str] = Query(None, description="(unused placeholder)")
+    ):
+        """Return a simple performance matrix computed from recent daily closes.
+
+        Horizons mapping:
+        - short  = ~1M  (21 trading days)
+        - medium = ~6M  (126 trading days)
+        - long   = ~12M (252 trading days)
+        """
+        try:
+            horizon_list = [h.strip().lower() for h in (horizons or "short,medium,long").split(",") if h.strip()]
+            req_tickers = [t.strip().upper() for t in (tickers or "").split(",") if t.strip()]
+            universe = req_tickers or DEFAULT_STOCKS_UNIVERSE[:20]
+
+            lengths = {"short": 21, "medium": 126, "long": 252}
+            results: list[dict[str, Any]] = []
+
+            from urllib.parse import urlencode
+            import requests as _rq
+            for symbol in universe:
+                try:
+                    df = get_price_history(symbol, interval="1d")
+                    closes_list = None
+                    if df is None or getattr(df, "empty", True) or "Close" not in df.columns:
+                        # Fallback to Yahoo Chart JSON (2y daily to ensure enough data)
+                        try:
+                            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?" + urlencode({"range":"2y","interval":"1d"})
+                            js = _rq.get(url, timeout=10, headers={"User-Agent":"Mozilla/5.0"}).json()
+                            result = (js.get('chart',{}).get('result') or [None])[0]
+                            closes = (result.get('indicators',{}).get('quote') or [{}])[0].get('close', []) if result else []
+                            if isinstance(closes, list) and len(closes) >= 260:
+                                closes_list = [float(x) for x in closes if x is not None]
+                        except Exception:
+                            closes_list = None
+                    else:
+                        close = df["Close"].dropna()
+                        closes_list = [float(x) for x in close.values.tolist()] if not close.empty else None
+
+                    if not closes_list or len(closes_list) < 10:
+                        continue
+                    latest = float(closes_list[-1])
+                    vals: dict[str, float | None] = {}
+                    for h in horizon_list:
+                        n = lengths.get(h)
+                        if not n or len(closes_list) <= n:
+                            vals[h] = None
+                            continue
+                        base = float(closes_list[-1 - n])
+                        vals[h] = ((latest - base) / base) * 100 if base else None
+
+                    item = {
+                        "ticker": symbol,
+                        "name": symbol + " Corp",
+                        "sector": None,
+                        "themes": [],
+                        "values": {k: (None if v is None or (isinstance(v, float) and (v != v)) else float(v)) for k, v in vals.items()},
+                        "updated_at": datetime.utcnow().isoformat() + "Z",
+                    }
+                    results.append(item)
+                except Exception:
+                    continue
+
+            return _ok({"items": results, "count": len(results), "last_update": datetime.utcnow().isoformat() + "Z"})
+        except Exception as e:
+            return _ok({"items": [], "count": 0, "error": str(e)})
+
+    # ====================== OPPORTUNITIES =======================
+    @app.get("/api/opportunities")
+    async def opportunities(
+        limit: int = Query(6, ge=1, le=50, description="Max number of opportunities"),
+        horizon: Optional[str] = Query(None, description="Optional horizon filter (e.g., 1d, 1w, 1m)"),
+    ):
+        """Expose top opportunities derived from the weekly brief snapshot.
+
+        Response: { ok: true, data: { items: [{ticker, confidence, expected_return, horizon, reasoning}], count, last_update } }
+        """
+        try:
+            from storage.io import load_json
+            brief = load_json("brief_weekly") or load_json("brief_weekly.json") or {}
+            core = brief.get("data") or brief
+            rows = core.get("top_signals") or core.get("signals") or []
+            items = []
+            for s in rows:
+                if not isinstance(s, dict):
+                    continue
+                typ = (s.get("type") or "BULLISH").upper()
+                if typ not in ("BULLISH", "NEWS_POSITIVE"):
+                    continue
+                h = s.get("horizon") or "1w"
+                if horizon and h != horizon:
+                    continue
+                items.append({
+                    "ticker": s.get("ticker"),
+                    "confidence": s.get("confidence"),
+                    "expected_return": s.get("expected_return"),
+                    "horizon": h,
+                    "reasoning": s.get("reason") or s.get("reasoning"),
+                })
+                if len(items) >= limit:
+                    break
+            return _ok({
+                "items": items,
+                "count": len(items),
+                "last_update": core.get("generated_at") or core.get("freshness") or core.get("updated_at"),
+            })
+        except Exception as e:
+            return _ok({"items": [], "count": 0, "error": str(e)})
+
     # ======================== PILLAR 4: LLM COPILOT ======================
 
     @app.post("/api/copilot/ask")
@@ -2914,6 +3106,17 @@ def register_routes(app: FastAPI):
             # Prefer cached snapshot on disk
             from backend.storage.base import load_backtests
             bt = load_backtests() or {}
+            if not bt:
+                try:
+                    from backend.jobs.backtests_simple import run_backtests_simple as _run_bt
+                except Exception:
+                    try:
+                        from jobs.backtests_simple import run_backtests_simple as _run_bt
+                    except Exception:
+                        _run_bt = None
+                if _run_bt is not None:
+                    _run_bt()
+                    bt = load_backtests() or {}
             data_block = bt.get("data") if isinstance(bt, dict) else None
             core = data_block if isinstance(data_block, dict) else bt if isinstance(bt, dict) else {}
 
@@ -2925,6 +3128,73 @@ def register_routes(app: FastAPI):
             stdev = metrics.get("stdev", 0)
 
             generated_at = core.get("until") or core.get("generated_at") or datetime.utcnow().isoformat()
+
+            # If no meaningful backtests snapshot, compute a lightweight real-time metric from latest prices
+            if not core or (not core.get("results") and not core.get("overall_metrics")):
+                try:
+                    from storage.io import load_json
+                    forecasts = load_json("forecasts") or {}
+                    rows = forecasts.get("rows") or forecasts.get("data", {}).get("rows", []) or []
+                    # Build latest direction per ticker
+                    latest_dir: Dict[str, str] = {}
+                    tickers: List[str] = []
+                    for r in rows:
+                        if isinstance(r, dict):
+                            t = (r.get("ticker") or r.get("symbol") or "").upper()
+                            d = str(r.get("direction", "")).lower()
+                            if t:
+                                latest_dir[t] = d
+                    tickers = list(latest_dir.keys())[: min(30, len(latest_dir))]
+                    total = hits = 0
+                    all_rets: List[float] = []
+                    import requests as _rq
+                    from urllib.parse import urlencode
+                    for t in tickers:
+                        try:
+                            dfp = get_price_history(t, interval="1d")
+                            if dfp is None or getattr(dfp, "empty", True) or "Close" not in dfp.columns:
+                                # Fallback to Yahoo Chart JSON
+                                try:
+                                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?{urlencode({'range':'2d','interval':'1d'})}"
+                                    js = _rq.get(url, timeout=10, headers={"User-Agent":"Mozilla/5.0"}).json()
+                                    result = (js.get('chart',{}).get('result') or [None])[0]
+                                    closes = (result.get('indicators',{}).get('quote') or [{}])[0].get('close', []) if result else []
+                                    if not isinstance(closes, list) or len(closes) < 2 or closes[-1] is None or closes[-2] is None:
+                                        continue
+                                    r1 = float(closes[-1]); r0 = float(closes[-2])
+                                except Exception:
+                                    continue
+                            else:
+                                close = dfp["Close"].dropna()
+                                if len(close) < 2:
+                                    continue
+                                r1 = float(close.iloc[-1]); r0 = float(close.iloc[-2])
+                            if r0 == 0:
+                                continue
+                            ret = (r1 - r0) / r0
+                            all_rets.append(ret)
+                            pred = latest_dir.get(t, "")
+                            if pred in ("up", "down"):
+                                total += 1
+                                if (pred == "up" and ret > 0) or (pred == "down" and ret < 0):
+                                    hits += 1
+                        except Exception:
+                            continue
+                    hit_rate_rt = (hits / total) if total > 0 else 0.0
+                    avg_ret_rt = (sum(all_rets) / len(all_rets)) if all_rets else 0.0
+                    core = {
+                        "overall_metrics": {
+                            "hit_rate": hit_rate_rt,
+                            "avg_return": avg_ret_rt,
+                            "sharpe_ratio": 0.0,
+                            "max_drawdown": 0.0,
+                            "n_trades": total,
+                            "total_trades": total,
+                        },
+                    }
+                except Exception:
+                    pass
+
             response_data = {
                 "results": {
                     "ok": True if bt else False,
@@ -2933,7 +3203,7 @@ def register_routes(app: FastAPI):
                     "median": hit_rate,
                     "stdev": stdev,
                 },
-                "overall_metrics": {
+                "overall_metrics": core.get("overall_metrics") or {
                     "hit_rate": hit_rate,
                     "avg_return": avg_ret,
                     "total_return": avg_ret * n_trades if n_trades > 0 else 0,

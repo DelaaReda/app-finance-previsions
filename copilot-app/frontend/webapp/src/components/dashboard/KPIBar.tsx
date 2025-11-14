@@ -114,6 +114,25 @@ export function KPIBar({ onRefresh }: KPIBarProps) {
           </Button>
         </div>
       </div>
+
+      {/* Unified freshness line */}
+      {!isLoading && (
+        <div className="mt-2 text-[11px] text-gray-400">
+          {(() => {
+            const sys: any = kpisQuery.data?.system || {};
+            const macroLast: any = (kpisQuery.data as any)?.last_macro_dt;
+            const fmt = (ts?: string) => ts ? new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
+            const f = fmt(sys.last_forecast_update);
+            const n = fmt(sys.last_news_update);
+            const m = fmt(macroLast);
+            return (
+              <span>
+                MAJ • Forecasts {f} • News {n} • Macro {m}
+              </span>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

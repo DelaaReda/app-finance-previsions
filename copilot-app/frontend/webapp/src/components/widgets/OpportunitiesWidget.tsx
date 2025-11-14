@@ -21,20 +21,12 @@ type BriefSignal = {
 
 export function OpportunitiesWidget() {
   const navigate = useNavigate();
-  const { data, isLoading, error, refetch } = useApi<any>('/api/brief/weekly');
+  const { data, isLoading, error, refetch } = useApi<any>('/api/opportunities?limit=6');
 
-  // Normalize payload: prefer data.top_signals; otherwise try nested structures
-  const brief = (data?.data ?? data) || {};
-  const rawSignals: BriefSignal[] = Array.isArray(brief?.top_signals)
-    ? brief.top_signals
-    : Array.isArray(brief?.signals)
-      ? brief.signals
-      : [];
-
-  // Keep only bullish signals as opportunities
-  const opportunities = rawSignals
-    .filter((s) => (s?.type || 'BULLISH').toUpperCase() === 'BULLISH')
-    .slice(0, 6);
+  // Normalize payload: prefer data.items
+  const payload = (data?.data ?? data) || {};
+  const opportunities: BriefSignal[] = Array.isArray(payload?.items) ? payload.items : [];
+  const lastUpdate: string | undefined = payload?.last_update;
 
   const header = (
     <Group justify="space-between" align="center">
@@ -44,6 +36,9 @@ export function OpportunitiesWidget() {
         </div>
         <Title order={4}>Opportunités hebdo</Title>
       </Group>
+      {lastUpdate && (
+        <Text size="xs" c="dimmed">MAJ: {new Date(lastUpdate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Text>
+      )}
       <Group gap="xs">
         <Button size="xs" variant="light" onClick={() => navigate('/brief')}>
           Voir plus
