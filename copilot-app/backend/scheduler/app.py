@@ -26,6 +26,11 @@ from backend.jobs.news_ingest import run_news_ingest
 from backend.jobs.forecasts import run_forecasts_job
 from backend.jobs.weekly_brief import run_weekly_brief_job
 from backend.jobs.backtests import run_backtests_job
+try:
+    # Lightweight real-time backtests snapshot to keep KPIs fresh between weekly runs
+    from backend.jobs.backtests_simple import run_backtests_simple
+except Exception:  # pragma: no cover
+    run_backtests_simple = None
 from backend.storage.io import save_json
 from agents.g4f_model_watcher import refresh as refresh_g4f_models
 
@@ -86,6 +91,18 @@ class JobScheduler:
             replace_existing=True
         )
         logger.info("Scheduled backtests job Wednesdays at 3:00 AM")
+
+        # Backtests simple job - every 60 minutes to persist minimal snapshot for KPIs
+        if run_backtests_simple is not None:
+            self.scheduler.add_job(
+                func=self._run_backtests_simple_job,
+                trigger="interval",
+                minutes=60,
+                id='backtests_simple_job',
+                name='Refresh backtests KPI snapshot',
+                replace_existing=True
+            )
+            logger.info("Scheduled backtests_simple job every 60 minutes")
         
         # Stocks metrics job - daily at 1:00 AM
         try:
@@ -309,6 +326,42 @@ class JobScheduler:
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
             save_json("job_backtests", job_metadata, source=["scheduler", "backtests", "error"])
+
+    def _run_backtests_simple_job(self):
+        """
+        Run lightweight backtests snapshot job to keep dashboard KPIs non-empty.
+        Persists to data/backtests.json via jobs.backtests_simple.
+        """
+        try:
+            if run_backtests_simple is None:
+                return
+            logger.info("Starting backtests_simple job...")
+            start_time = datetime.utcnow()
+            result = run_backtests_simple()
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            job_metadata = {
+                "job_id": "backtests_simple_job",
+                "start_time": start_time.isoformat() + "Z",
+                "end_time": datetime.utcnow().isoformat() + "Z",
+                "duration_seconds": duration,
+                "status": "success",
+                "result_summary": {
+                    "overall_metrics": result.get("overall_metrics", {}),
+                    "cache_status": result.get("cache_status")
+                }
+            }
+            save_json("job_backtests_simple", job_metadata, source=["scheduler", "backtests_simple"])
+            logger.info(f"backtests_simple job completed successfully in {duration:.2f}s")
+        except Exception as e:
+            logger.error(f"backtests_simple job failed: {str(e)}", exc_info=True)
+            job_metadata = {
+                "job_id": "backtests_simple_job",
+                "start_time": datetime.utcnow().isoformat() + "Z",
+                "status": "failed",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            save_json("job_backtests_simple", job_metadata, source=["scheduler", "backtests_simple", "error"])
     
     def _run_g4f_watcher_job(self):
         """

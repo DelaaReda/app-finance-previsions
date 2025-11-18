@@ -214,11 +214,13 @@ def validate_and_generate_all() -> Dict[str, Any]:
     }
     
     # Optional but recommended files
-    optional_files = {
+optional_files = {
         "market_intelligence": {"min_items": 0, "generator": generate_market_intelligence},
         "brief_weekly": {"min_items": 0, "generator": generate_brief},
         "brief_daily": {"min_items": 0, "generator": generate_brief},
         "llm_judge": {"min_items": 0, "generator": generate_llm_judge_data},
+        # Ensure KPIs aren’t empty: persist minimal backtests snapshot
+        "backtests": {"min_items": 0, "generator": lambda: __import__('jobs.backtests_simple', fromlist=['run_backtests_simple']).run_backtests_simple()},
     }
     
     results = {
@@ -291,4 +293,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

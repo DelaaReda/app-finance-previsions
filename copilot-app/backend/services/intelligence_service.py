@@ -376,7 +376,12 @@ def _collect_data_freshness(rows: List[Dict[str, Any]], news: List[Dict[str, Any
             latest_forecast_ts = ts
     latest_news_ts = None
     for article in news:
-        ts = _parse_timestamp(article.get("pubDate") or article.get("timestamp"))
+        ts = _parse_timestamp(
+            article.get("published_at")
+            or article.get("pubDate")
+            or article.get("timestamp")
+            or article.get("date")
+        )
         if ts and (latest_news_ts is None or ts > latest_news_ts):
             latest_news_ts = ts
     brief_ts = _parse_timestamp(brief.get("generated_at") or brief.get("last_update"))

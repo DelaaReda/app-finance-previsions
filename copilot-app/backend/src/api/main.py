@@ -1237,6 +1237,21 @@ def register_routes(app: FastAPI):
             
             # Build list of stocks with their metrics
             stocks_list = []
+            def _fmt_mcap(v: float | int | None) -> str | None:
+                try:
+                    if v is None:
+                        return None
+                    x = float(v)
+                    if x >= 1e12:
+                        return f"${x/1e12:.2f}T"
+                    if x >= 1e9:
+                        return f"${x/1e9:.2f}B"
+                    if x >= 1e6:
+                        return f"${x/1e6:.2f}M"
+                    return f"${x:,.0f}"
+                except Exception:
+                    return None
+
             for ticker, ticker_data in tickers_data.items():
                 if not isinstance(ticker_data, dict):
                     continue
@@ -1260,13 +1275,15 @@ def register_routes(app: FastAPI):
                 change_1d = ticker_metrics.get("change_1d", 0.0)
                 change_percent = ticker_metrics.get("change_percent", 0.0)
                 
+                mcap_raw = ticker_metrics.get("mcap") or ticker_metrics.get("market_cap") or 0
                 stock_info = {
                     "ticker": ticker,
                     "name": ticker_metrics.get("name") or ticker_data.get("name") or f"{ticker} Corp",
                     "price": current_price,
                     "change": change_1d,
                     "change_percent": change_percent,
-                    "market_cap": ticker_metrics.get("mcap") or ticker_metrics.get("market_cap") or 0,
+                    "market_cap": mcap_raw,
+                    "market_cap_label": _fmt_mcap(mcap_raw),
                     "score": ticker_metrics.get("score") or 0,
                     "momentum_30d": ticker_metrics.get("momentum_30d") or 0.0,
                     "pe": ticker_metrics.get("pe"),
@@ -1860,8 +1877,10 @@ def register_routes(app: FastAPI):
                             "tickers": a.get("tickers") or [],
                             "score": a.get("score") or a.get("relevance_score") or a.get("sentiment_score"),
                         })
+                    items_out = norm_items[:limit]
                     return _ok({
-                        "items": norm_items[:limit],
+                        "items": items_out,
+                        "articles": items_out,  # compat with legacy hooks expecting 'articles'
                         "count": len(norm_items),
                         "freshness": data_block.get("freshness") or data_block.get("generated_at"),
                         "last_update": data_block.get("freshness") or data_block.get("generated_at"),
@@ -1910,6 +1929,7 @@ def register_routes(app: FastAPI):
                     items = norm_items[:limit]
                     return _ok({
                         "items": items,
+                        "articles": items,  # compat with legacy hooks expecting 'articles'
                         "count": len(items),
                         "freshness": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
                         "last_update": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
@@ -2053,58 +2073,7 @@ def register_routes(app: FastAPI):
         return _ok({"rows": rows, "count": len(rows)})
 
     # ====================== MACRO SNAPSHOT =======================
-    @app.get("/api/macro/snapshot")
-    async def macro_snapshot():
-        """Return a compact macro snapshot from persisted macro series.
-
-        Shape: { ok: true, data: { inflation_cpi, unemployment_rate, vix, yield_10y, yield_2y, yield_curve, updated_at } }
-        """
-        try:
-            from storage.io import load_json
-            macro = load_json("macro_series") or load_json("macro_series.json") or {}
-            data = macro.get("data") or macro
-            series = data.get("series") or []
-
-            def last_value(sid: str) -> float | None:
-                for s in series:
-                    if (s.get("id") or s.get("series_id") or s.get("name")) == sid:
-                        pts = s.get("data") or s.get("points") or []
-                        if isinstance(pts, list) and pts:
-                            lp = pts[-1]
-                            val = lp.get("value") if isinstance(lp, dict) else (lp[1] if isinstance(lp, (list, tuple)) and len(lp) >= 2 else None)
-                            try:
-                                return float(val) if val is not None else None
-                            except Exception:
-                                return None
-                return None
-
-            cpi = last_value("CPIAUCSL")
-            unrate = last_value("UNRATE")
-            vix = last_value("VIXCLS")
-            y10 = last_value("DGS10")
-            y2 = last_value("DGS2")
-            yc = (y10 - y2) if (y10 is not None and y2 is not None) else None
-
-            return _ok({
-                "inflation_cpi": cpi,
-                "unemployment_rate": unrate,
-                "vix": vix,
-                "yield_10y": y10,
-                "yield_2y": y2,
-                "yield_curve": yc,
-                "updated_at": data.get("updated_at") or data.get("freshness") or macro.get("freshness"),
-            })
-        except Exception as e:
-            return _ok({
-                "inflation_cpi": None,
-                "unemployment_rate": None,
-                "vix": None,
-                "yield_10y": None,
-                "yield_2y": None,
-                "yield_curve": None,
-                "updated_at": None,
-                "error": str(e),
-            })
+    # (Removed duplicate macro_snapshot implementation below; single route defined earlier.)
     # ====================== PERFORMANCE MATRIX =======================
     @app.get("/api/performance/matrix")
     async def performance_matrix(
@@ -2185,7 +2154,10 @@ def register_routes(app: FastAPI):
     ):
         """Expose top opportunities derived from the weekly brief snapshot.
 
-        Response: { ok: true, data: { items: [{ticker, confidence, expected_return, horizon, reasoning}], count, last_update } }
+        - Filters out MARKET-level entries (ticker-less) to keep only ticker-level ideas
+        - Adds direction and score fields when available
+
+        Response: { ok: true, data: { items: [{ticker, direction, confidence, expected_return, score, horizon, reasoning}], count, last_update } }
         """
         try:
             from storage.io import load_json
@@ -2199,18 +2171,61 @@ def register_routes(app: FastAPI):
                 typ = (s.get("type") or "BULLISH").upper()
                 if typ not in ("BULLISH", "NEWS_POSITIVE"):
                     continue
+                tkr = (s.get("ticker") or "").upper()
+                if not tkr or tkr == "MARKET":
+                    continue  # skip market-level items; widget wants ticker-level
                 h = s.get("horizon") or "1w"
                 if horizon and h != horizon:
                     continue
+                conf = s.get("confidence")
+                er = s.get("expected_return")
+                # Normalize direction
+                direction = "up" if typ in ("BULLISH", "NEWS_POSITIVE") else ("down" if typ == "BEARISH" else "flat")
+                # Derive score if not present (0-100 from confidence)
+                score = s.get("score")
+                if score is None and isinstance(conf, (int, float)):
+                    score = int(round(float(conf) * 100))
                 items.append({
-                    "ticker": s.get("ticker"),
-                    "confidence": s.get("confidence"),
-                    "expected_return": s.get("expected_return"),
+                    "ticker": tkr,
+                    "direction": direction,
+                    "confidence": float(conf) if conf is not None else None,
+                    "expected_return": float(er) if er is not None else None,
+                    "score": score,
                     "horizon": h,
                     "reasoning": s.get("reason") or s.get("reasoning"),
                 })
                 if len(items) >= limit:
                     break
+            # Fallback: if no ticker-level opportunities in brief, derive from latest forecasts snapshot
+            if not items:
+                try:
+                    from storage.io import load_json as _load_json
+                    f = _load_json("forecasts") or {}
+                    frows = f.get("rows") or f.get("data", {}).get("rows", []) or []
+                    # Sort by expected_return desc and take top unique tickers
+                    uniq = {}
+                    for r in sorted(frows, key=lambda x: float(x.get("expected_return", 0) or 0), reverse=True):
+                        t = (r.get("ticker") or r.get("symbol") or "").upper()
+                        if not t or t in uniq:
+                            continue
+                        dirn = str(r.get("direction") or ("up" if (r.get("expected_return") or 0) >= 0 else "down")).lower()
+                        conf = r.get("confidence")
+                        er = r.get("expected_return")
+                        uniq[t] = {
+                            "ticker": t,
+                            "direction": dirn,
+                            "confidence": float(conf) if conf is not None else None,
+                            "expected_return": float(er) if er is not None else None,
+                            "score": int(round(float(conf) * 100)) if isinstance(conf, (int, float)) else None,
+                            "horizon": r.get("horizon") or "1m",
+                            "reasoning": r.get("explanation") or r.get("reason") or "Derived from forecasts snapshot.",
+                        }
+                        if len(uniq) >= limit:
+                            break
+                    items = list(uniq.values())
+                except Exception:
+                    items = []
+
             return _ok({
                 "items": items,
                 "count": len(items),
