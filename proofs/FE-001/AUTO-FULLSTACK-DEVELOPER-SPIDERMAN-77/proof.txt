@@ -1,1 +1,0 @@
-  - copilot-app/frontend/webapp/src/hooks/useSearchTickers.ts

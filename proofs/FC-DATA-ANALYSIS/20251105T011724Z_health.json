@@ -1,1 +1,0 @@
-{"ok":true,"data":{"status":"up","backend_up":true,"timestamp":"2025-11-05T01:17:24.710201","version":"0.1.0","last_updates":{},"data_paths":{"forecasts":"data/forecasts.json","news":"data/news_feed.json","brief_weekly":"data/brief_weekly.json","backtests":"data/backtests.json"}}}

@@ -1,1 +1,0 @@
-{"ok":true,"data":{"summary":"Weekly brief temporarily unavailable.","top_signals":[],"top_risks":[],"picks":[],"generated_at":"2025-11-05T01:09:26.303790","freshness":"error","source":["error_fallback"],"error":"No module named 'backend.storage.base'","message":"Brief generation failed, showing placeholder data"}}

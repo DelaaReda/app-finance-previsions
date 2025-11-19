@@ -1,5 +1,0 @@
-Score update for ALEX-BACKEND-SUPERMAN-7 reflecting completed tasks:
-- FC-HOTFIX-001: Backend structure fix
-- FC-P0-008: Freshness implementation  
-- FC-P0-014: Health endpoint enhancement
-- FC-P0-001: News UI empty-safe
