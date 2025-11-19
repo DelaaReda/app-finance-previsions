@@ -2245,6 +2245,23 @@ canvas {
   align-items: flex-start;
 }
 
+/* Fine-tune spacing inside KPI mega cards */
+.kpi-card-mega {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.kpi-card-mega .kpi-meta {
+  margin-top: var(--space-md);
+}
+
+.kpi-card-mega .meta-item {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
 /* ============ SVG KPI CIRCULAR PROGRESS (WIN RATE) ============ */
 .kpi-circular-progress {
   position: relative;
