@@ -85,7 +85,7 @@ const facettes = {
 function toggleDiamondDropdown() {
   const dropdown = document.getElementById('diamondDropdown');
   v16State.diamondDropdownOpen = !v16State.diamondDropdownOpen;
-  
+
   if (v16State.diamondDropdownOpen) {
     dropdown.classList.add('active');
     dropdown.style.display = 'flex';
@@ -106,7 +106,7 @@ function toggleDiamondDropdown() {
 function handleClickOutside(e) {
   const dropdown = document.getElementById('diamondDropdown');
   const diamondBtn = document.querySelector('.diamond-btn-header');
-  
+
   if (v16State.diamondDropdownOpen && dropdown && diamondBtn) {
     if (!dropdown.contains(e.target) && !diamondBtn.contains(e.target)) {
       closeDiamondDropdown();
@@ -133,59 +133,59 @@ function closeDiamondDropdown() {
 function openFacette(facetteId) {
   // V17 BUGFIX: Close dropdown when opening facette
   closeDiamondDropdown();
-  
+
   const facette = facettes[facetteId];
   if (!facette) return;
-  
+
   // Track exploration
-  if (!v15State.visitedFacettes.includes(facetteId)) {
-    v15State.visitedFacettes.push(facetteId);
-    v15State.explorationRate = Math.round((v15State.visitedFacettes.length / 9) * 100);
-    
+  if (!v16State.visitedFacettes.includes(facetteId)) {
+    v16State.visitedFacettes.push(facetteId);
+    v16State.explorationRate = Math.round((v16State.visitedFacettes.length / 9) * 100);
+
     // Update progress bar
     const progressBar = document.getElementById('explorationProgress');
     const progressText = document.getElementById('explorationText');
-    if (progressBar) progressBar.style.width = v15State.explorationRate + '%';
-    if (progressText) progressText.textContent = v15State.explorationRate + '% discovered';
-    
-    if (v15State.explorationRate >= 30 && v15State.explorationRate < 50) {
+    if (progressBar) progressBar.style.width = v16State.explorationRate + '%';
+    if (progressText) progressText.textContent = v16State.explorationRate + '% discovered';
+
+    if (v16State.explorationRate >= 30 && v16State.explorationRate < 50) {
       setTimeout(() => {
-        showToast(`🎉 You've explored ${v15State.explorationRate}% of the app!`, 'success');
+        showToast(`🎉 You've explored ${v16State.explorationRate}% of the app!`, 'success');
       }, 1000);
     }
   }
-  
-  v15State.currentFacette = facetteId;
-  v15State.breadcrumbs = ['💎', facette.name];
-  
+
+  v16State.currentFacette = facetteId;
+  v16State.breadcrumbs = ['💎', facette.name];
+
   // Hide hero, show facette view
   document.getElementById('heroSection').style.display = 'none';
   document.getElementById('facetteView').style.display = 'block';
-  
+
   // Update header
   document.getElementById('facetteIcon').textContent = facette.icon;
   document.getElementById('facetteTitle').textContent = facette.name;
-  document.getElementById('facetteBreadcrumb').textContent = v14State.breadcrumbs.join(' > ');
-  
+  document.getElementById('facetteBreadcrumb').textContent = v16State.breadcrumbs.join(' > ');
+
   // Show search if needed
   const searchEl = document.getElementById('facetteSearch');
   searchEl.style.display = facette.needsSearch ? 'flex' : 'none';
-  
+
   // Render tabs
   renderFacetteTabs(facette);
-  
+
   // Load initial content
   loadFacetteContent(facetteId, facette.tabs[0]);
-  
+
   showToast(`🚀 Ouverture ${facette.name}`);
 }
 
 function closeFacette() {
   document.getElementById('facetteView').style.display = 'none';
   document.getElementById('heroSection').style.display = 'block';
-  v15State.currentFacette = null;
-  v15State.currentTab = null;
-  v15State.breadcrumbs = [];
+  v16State.currentFacette = null;
+  v16State.currentTab = null;
+  v16State.breadcrumbs = [];
 }
 
 function renderFacetteTabs(facette) {
@@ -198,22 +198,22 @@ function renderFacetteTabs(facette) {
 }
 
 function switchFacetteTab(facetteName, tabName) {
-  v15State.currentTab = tabName;
-  v15State.breadcrumbs = ['💎', facetteName, tabName];
-  document.getElementById('facetteBreadcrumb').textContent = v14State.breadcrumbs.join(' > ');
-  
+  v16State.currentTab = tabName;
+  v16State.breadcrumbs = ['💎', facetteName, tabName];
+  document.getElementById('facetteBreadcrumb').textContent = v16State.breadcrumbs.join(' > ');
+
   // Update active tab
   document.querySelectorAll('.facette-tab').forEach(tab => {
     tab.classList.toggle('active', tab.textContent.trim() === tabName);
   });
-  
-  loadFacetteContent(v15State.currentFacette, tabName);
+
+  loadFacetteContent(v16State.currentFacette, tabName);
   showToast(`📋 Viewing ${tabName}`);
 }
 
 function loadFacetteContent(facetteId, tabName) {
   const contentContainer = document.getElementById('facetteContent');
-  
+
   // Generate sample content based on facette and tab
   const sampleContent = generateFacetteContent(facetteId, tabName);
   contentContainer.innerHTML = sampleContent;
@@ -223,45 +223,45 @@ function loadFacetteContent(facetteId, tabName) {
 function drawVolatilityChartPro() {
   const canvas = document.getElementById('volatilityChartPro');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = { top: 20, right: 20, bottom: 40, left: 50 };
-  
+
   // Clear
   ctx.clearRect(0, 0, width, height);
-  
+
   // Data (60 points for smooth curve)
-  const data = [17,25,19,24,17,23,19,21,17,23,16,21,17,19,16,22,19,17,16,19,17,16,23,18,21,19,16,22,18,19,18,21,16,20,18,16,21,19,16,20,18,19,16,19,16,20,19,17,18,21,16,20,18,19,18,16,21,19,16,20.8];
-  
+  const data = [17, 25, 19, 24, 17, 23, 19, 21, 17, 23, 16, 21, 17, 19, 16, 22, 19, 17, 16, 19, 17, 16, 23, 18, 21, 19, 16, 22, 18, 19, 18, 21, 16, 20, 18, 16, 21, 19, 16, 20, 18, 19, 16, 19, 16, 20, 19, 17, 18, 21, 16, 20, 18, 19, 18, 16, 21, 19, 16, 20.8];
+
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  
+
   // Y-axis range
   const min = 15;
   const max = 25;
   const range = max - min;
-  
+
   // Draw background zones
   // High risk zone (22-25)
   const highY = padding.top;
   const highHeight = ((25 - 22) / range) * chartHeight;
   ctx.fillStyle = 'rgba(239, 68, 68, 0.05)';
   ctx.fillRect(padding.left, highY, chartWidth, highHeight);
-  
+
   // Moderate zone (18-22)
   const modY = padding.top + highHeight;
   const modHeight = ((22 - 18) / range) * chartHeight;
   ctx.fillStyle = 'rgba(245, 158, 11, 0.05)';
   ctx.fillRect(padding.left, modY, chartWidth, modHeight);
-  
+
   // Low zone (15-18)
   const lowY = modY + modHeight;
   const lowHeight = chartHeight - highHeight - modHeight;
   ctx.fillStyle = 'rgba(34, 197, 94, 0.05)';
   ctx.fillRect(padding.left, lowY, chartWidth, lowHeight);
-  
+
   // Draw grid lines
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
   ctx.lineWidth = 1;
@@ -271,7 +271,7 @@ function drawVolatilityChartPro() {
     ctx.moveTo(padding.left, y);
     ctx.lineTo(padding.left + chartWidth, y);
     ctx.stroke();
-    
+
     // Y-axis labels
     const value = max - (range / 5) * i;
     ctx.fillStyle = '#94A3B8';
@@ -279,14 +279,14 @@ function drawVolatilityChartPro() {
     ctx.textAlign = 'right';
     ctx.fillText(value.toFixed(1), padding.left - 10, y + 4);
   }
-  
+
   // Draw X-axis
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
   ctx.beginPath();
   ctx.moveTo(padding.left, padding.top + chartHeight);
   ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
   ctx.stroke();
-  
+
   // X-axis labels
   ctx.fillStyle = '#94A3B8';
   ctx.font = '11px sans-serif';
@@ -296,12 +296,12 @@ function drawVolatilityChartPro() {
     const x = padding.left + (chartWidth / 3) * i;
     ctx.fillText(label, x, height - padding.bottom + 25);
   });
-  
+
   // Draw gradient area
   const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
   gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
   gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
-  
+
   ctx.beginPath();
   data.forEach((value, i) => {
     const x = padding.left + (i / (data.length - 1)) * chartWidth;
@@ -314,7 +314,7 @@ function drawVolatilityChartPro() {
   ctx.closePath();
   ctx.fillStyle = gradient;
   ctx.fill();
-  
+
   // Draw line
   ctx.beginPath();
   data.forEach((value, i) => {
@@ -326,7 +326,7 @@ function drawVolatilityChartPro() {
   ctx.strokeStyle = '#3B82F6';
   ctx.lineWidth = 2.5;
   ctx.stroke();
-  
+
   // Highlight last point
   const lastX = padding.left + chartWidth;
   const lastY = padding.top + chartHeight - ((data[data.length - 1] - min) / range) * chartHeight;
@@ -337,7 +337,7 @@ function drawVolatilityChartPro() {
   ctx.strokeStyle = '#FFFFFF';
   ctx.lineWidth = 2;
   ctx.stroke();
-  
+
   // Annotations (events)
   const fedX = padding.left + (chartWidth * 0.4);
   const fedY = padding.top + chartHeight - ((23 - min) / range) * chartHeight;
@@ -349,7 +349,7 @@ function drawVolatilityChartPro() {
   ctx.setLineDash([3, 3]);
   ctx.stroke();
   ctx.setLineDash([]);
-  
+
   ctx.fillStyle = '#F59E0B';
   ctx.font = '10px sans-serif';
   ctx.fillText('Fed', fedX + 5, padding.top + 15);
@@ -400,18 +400,18 @@ function generateFacetteContent(facetteId, tabName) {
 function searchStock() {
   const input = document.getElementById('stockSymbolInput');
   const symbol = input.value.trim().toUpperCase();
-  
+
   if (!symbol) {
     showToast('Please enter a stock symbol', 'warning');
     return;
   }
-  
-  v14State.currentStock = symbol;
-  v14State.breadcrumbs = ['💎', facettes[v14State.currentFacette].name, symbol];
-  document.getElementById('facetteBreadcrumb').textContent = v14State.breadcrumbs.join(' > ');
-  
+
+  v16State.currentStock = symbol;
+  v16State.breadcrumbs = ['💎', facettes[v16State.currentFacette].name, symbol];
+  document.getElementById('facetteBreadcrumb').textContent = v16State.breadcrumbs.join(' > ');
+
   showToast(`📈 Analyzing ${symbol}...`);
-  
+
   // Load stock-specific content
   setTimeout(() => {
     const contentContainer = document.getElementById('facetteContent');
@@ -461,7 +461,7 @@ function quickNeed(need) {
     'news': 'news',
     'ask': 'copilot'
   };
-  
+
   const facetteId = needMap[need];
   if (facetteId) {
     openFacette(facetteId);
@@ -483,7 +483,7 @@ function safeAddEventListener(element, event, handler) {
     console.error('Element not found for event:', event);
     return;
   }
-  
+
   element.addEventListener(event, (e) => {
     try {
       handler(e);
@@ -498,28 +498,42 @@ function safeAddEventListener(element, event, handler) {
 function safeSwitchTab(button, tabName) {
   if (isNavigating) return;
   isNavigating = true;
-  
+
   try {
     // Remove active from all tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.remove('active');
     });
-    
-    // Add active to clicked tab
-    if (button) button.classList.add('active');
-    
+
+    // Resolve the button to activate (supports calls without explicit button)
+    const targetButton = button || document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    if (targetButton) {
+      targetButton.classList.add('active');
+    }
+
     // Hide all tab content
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
       content.style.display = 'none';
     });
-    
+
     // Show selected tab content
     const selectedTab = document.getElementById(`tab-${tabName}`);
     if (selectedTab) {
       selectedTab.classList.add('active');
       selectedTab.style.display = 'block';
       currentTabName = tabName;
+
+      // Tab-specific visual initializations
+      if (tabName === 'performance') {
+        // Ensure full portfolio health gauge is rendered when the Performance tab is viewed
+        try {
+          drawHealthGauge();
+        } catch (e) {
+          console.error('Error drawing health gauge:', e);
+        }
+      }
+
       showToast(`Viewing ${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
     } else {
       console.error('Tab not found:', tabName);
@@ -543,7 +557,7 @@ function safeSwitchTab(button, tabName) {
 function openCommandK() {
   const modal = document.getElementById('commandKModal');
   const input = document.getElementById('commandKInput');
-  
+
   if (modal) {
     modal.style.display = 'flex';
     if (input) {
@@ -561,7 +575,7 @@ function closeCommandK() {
 
 function executeCommandKAction(action) {
   closeCommandK();
-  
+
   const actions = {
     'dashboard': () => safeSwitchTab(document.querySelector('[data-tab="overview"]'), 'overview'),
     'market': () => safeSwitchTab(document.querySelector('[data-tab="market"]'), 'market'),
@@ -577,7 +591,7 @@ function executeCommandKAction(action) {
     'win-rate': () => showToast('Win Rate: 72% (Above Target)'),
     'ai-forecast': () => openDrillDown('forecast')
   };
-  
+
   if (actions[action]) {
     actions[action]();
   } else {
@@ -597,7 +611,7 @@ document.addEventListener('keydown', (e) => {
     document.getElementById('notificationDrawer')?.classList.remove('active');
     document.getElementById('settingsModal')?.classList.remove('active');
   }
-  
+
   // Quick navigation shortcuts
   if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '5') {
     e.preventDefault();
@@ -737,15 +751,15 @@ const marketDrivers = [
 
 const appData = {
   // Enhanced with 60 data points for smoother graphs
-  portfolioSparkline: [125000,125150,125300,125400,125550,125700,125800,125950,126100,126200,126100,126250,126400,126500,126650,126800,126900,127050,127200,127150,127100,127250,127400,127550,127600,127750,127800,127650,127500,127650,127700,127850,127900,128050,128100,127950,127800,127650,127600,127450,127400,127250,127200,127050,127000,126850,126800,126950,127100,127250,127500,127650,127800,127950,128000,128150,128200,128050,127900,127456],
-  forecastProjection: [127456,127650,127850,128100,128350,128600,128800,129000,129250,129500,129700,129900,130100,130300,130500,130700,130900,131100,131300,131500,131700,131900,132100,132300,132500,132700,132900,133100,133300,134200],
+  portfolioSparkline: [125000, 125150, 125300, 125400, 125550, 125700, 125800, 125950, 126100, 126200, 126100, 126250, 126400, 126500, 126650, 126800, 126900, 127050, 127200, 127150, 127100, 127250, 127400, 127550, 127600, 127750, 127800, 127650, 127500, 127650, 127700, 127850, 127900, 128050, 128100, 127950, 127800, 127650, 127600, 127450, 127400, 127250, 127200, 127050, 127000, 126850, 126800, 126950, 127100, 127250, 127500, 127650, 127800, 127950, 128000, 128150, 128200, 128050, 127900, 127456],
+  forecastProjection: [127456, 127650, 127850, 128100, 128350, 128600, 128800, 129000, 129250, 129500, 129700, 129900, 130100, 130300, 130500, 130700, 130900, 131100, 131300, 131500, 131700, 131900, 132100, 132300, 132500, 132700, 132900, 133100, 133300, 134200],
   // Enhanced with 60 data points for ultra-smooth sparklines
   stockSparklines: {
-    NVDA: [820,822,825,828,830,832,835,837,840,842,845,847,850,852,855,857,860,862,865,867,870,870.5,871,871.5,872,872.5,873,873.5,874,874.5,875,875.5,876,876.5,877,877.5,878,878.5,879,879.5,880,879.5,879,878.5,878,877.5,877,876.5,876,875.5,875,874.5,874,873.5,873,873.5,874,874.5,875,875.60],
-    META: [500,501,502,503,505,506,508,509,510,511,512,513,515,516,518,519,520,521,522,522.5,523,523.5,524,524.5,525,525.5,524.5,524,523.5,523,522.5,522,521.5,521,520.5,520,519.5,519,520,520.5,521,521.5,522,522.5,523,523.5,524,524.5,525,525.5,524.5,524,523.5,523,522.5,522,522.5,523,523.5,523.45],
-    AAPL: [175,175.5,176,176.5,177,177.5,178,178.5,179,179.5,178.5,178,177.5,177,176.5,176,177,177.5,178,178.5,179,179.5,180,180.5,179.5,179,178.5,178,177.5,177,176.5,176,177,177.5,178,178.5,179,179.5,178.5,178,177.5,177,176.5,176,177,177.5,178,178.5,179,179.5,178.5,178,177.5,177,178,178.5,179,179.5,178.5,178.23],
-    MSFT: [400,401,402,403,405,406,408,409,410,411,412,413,414,415,416,415,414,413,412,411,410,411,412,413,414,415,414,413,412,411,410,411,412,413,414,415,414,413,412,411,410,411,412,413,414,415,414,413,412,411,410,411,412,413,414,415,414,413,412,412.89],
-    GOOGL: [138,138.5,139,139.5,140,140.5,141,141.5,142,141.5,141,140.5,140,139.5,139,140,140.5,141,141.5,142,142.5,143,142.5,142,141.5,141,140.5,140,141,141.5,142,142.5,143,143.5,144,143.5,143,142.5,142,141.5,141,142,142.5,143,143.5,144,143.5,143,142.5,142,141.5,141,142,142.5,143,142.5,142,141.5,142,142.78]
+    NVDA: [820, 822, 825, 828, 830, 832, 835, 837, 840, 842, 845, 847, 850, 852, 855, 857, 860, 862, 865, 867, 870, 870.5, 871, 871.5, 872, 872.5, 873, 873.5, 874, 874.5, 875, 875.5, 876, 876.5, 877, 877.5, 878, 878.5, 879, 879.5, 880, 879.5, 879, 878.5, 878, 877.5, 877, 876.5, 876, 875.5, 875, 874.5, 874, 873.5, 873, 873.5, 874, 874.5, 875, 875.60],
+    META: [500, 501, 502, 503, 505, 506, 508, 509, 510, 511, 512, 513, 515, 516, 518, 519, 520, 521, 522, 522.5, 523, 523.5, 524, 524.5, 525, 525.5, 524.5, 524, 523.5, 523, 522.5, 522, 521.5, 521, 520.5, 520, 519.5, 519, 520, 520.5, 521, 521.5, 522, 522.5, 523, 523.5, 524, 524.5, 525, 525.5, 524.5, 524, 523.5, 523, 522.5, 522, 522.5, 523, 523.5, 523.45],
+    AAPL: [175, 175.5, 176, 176.5, 177, 177.5, 178, 178.5, 179, 179.5, 178.5, 178, 177.5, 177, 176.5, 176, 177, 177.5, 178, 178.5, 179, 179.5, 180, 180.5, 179.5, 179, 178.5, 178, 177.5, 177, 176.5, 176, 177, 177.5, 178, 178.5, 179, 179.5, 178.5, 178, 177.5, 177, 176.5, 176, 177, 177.5, 178, 178.5, 179, 179.5, 178.5, 178, 177.5, 177, 178, 178.5, 179, 179.5, 178.5, 178.23],
+    MSFT: [400, 401, 402, 403, 405, 406, 408, 409, 410, 411, 412, 413, 414, 415, 416, 415, 414, 413, 412, 411, 410, 411, 412, 413, 414, 415, 414, 413, 412, 411, 410, 411, 412, 413, 414, 415, 414, 413, 412, 411, 410, 411, 412, 413, 414, 415, 414, 413, 412, 411, 410, 411, 412, 413, 414, 415, 414, 413, 412, 412.89],
+    GOOGL: [138, 138.5, 139, 139.5, 140, 140.5, 141, 141.5, 142, 141.5, 141, 140.5, 140, 139.5, 139, 140, 140.5, 141, 141.5, 142, 142.5, 143, 142.5, 142, 141.5, 141, 140.5, 140, 141, 141.5, 142, 142.5, 143, 143.5, 144, 143.5, 143, 142.5, 142, 141.5, 141, 142, 142.5, 143, 143.5, 144, 143.5, 143, 142.5, 142, 141.5, 141, 142, 142.5, 143, 142.5, 142, 141.5, 142, 142.78]
   },
   user: {
     name: 'Alex',
@@ -891,7 +905,7 @@ function initAISuggestions() {
   const panel = document.getElementById('aiSuggestionsPanel');
   const list = document.getElementById('suggestionsList');
   if (!list) return;
-  
+
   list.innerHTML = v11Data.aiSuggestions.map(s => `
     <div class="suggestion-item ${s.priority}-priority" onclick="navigateToSuggestion('${s.widget}', '${s.tab}')">
       <span class="suggestion-icon">${s.type === 'check' ? '⚠️' : s.type === 'view' ? '📊' : '⚡'}</span>
@@ -919,7 +933,7 @@ function toggleStoryMode() {
   v11State.storyMode = !v11State.storyMode;
   const overlay = document.getElementById('storyOverlay');
   if (!overlay) return;
-  
+
   if (v11State.storyMode) {
     overlay.style.display = 'block';
     v11State.currentStoryPoint = 0;
@@ -935,12 +949,12 @@ function renderStoryPoint() {
   const container = document.getElementById('storyPointContainer');
   const currentEl = document.getElementById('storyCurrent');
   const totalEl = document.getElementById('storyTotal');
-  
+
   if (!container || !points[current]) return;
-  
+
   currentEl.textContent = current + 1;
   totalEl.textContent = points.length;
-  
+
   const point = points[current];
   container.innerHTML = `
     <div class="story-point">
@@ -976,9 +990,9 @@ function openDrillDown(metric) {
   const modal = document.getElementById('drillDownModal');
   const title = document.getElementById('drillDownTitle');
   const body = document.getElementById('drillDownBody');
-  
+
   if (!modal || !title || !body) return;
-  
+
   const drillData = {
     portfolio: {
       title: 'Portfolio Change: +1.88%',
@@ -1030,9 +1044,9 @@ function openDrillDown(metric) {
       `
     }
   };
-  
+
   const data = drillData[metric] || { title: 'Details', content: '<p>No additional data available.</p>' };
-  
+
   title.textContent = data.title;
   body.innerHTML = data.content;
   modal.style.display = 'flex';
@@ -1048,9 +1062,9 @@ function toggleSplitView() {
   v11State.splitViewEnabled = !v11State.splitViewEnabled;
   const container = document.getElementById('splitViewContainer');
   const mainContainer = document.querySelector('.main-container');
-  
+
   if (!container) return;
-  
+
   if (v11State.splitViewEnabled) {
     container.style.display = 'grid';
     mainContainer.style.display = 'none';
@@ -1079,10 +1093,10 @@ function maximizePane(pane) {
 function toggleFilterBar() {
   const filterBar = document.getElementById('filterBar');
   if (!filterBar) return;
-  
+
   v11State.filterBarVisible = !v11State.filterBarVisible;
   filterBar.classList.toggle('collapsed');
-  
+
   // Update confidence slider display
   const slider = document.getElementById('confidenceSlider');
   const display = document.getElementById('confidenceValue');
@@ -1107,7 +1121,7 @@ function clearFilters() {
 function initAIInsights() {
   const list = document.getElementById('insightsList');
   if (!list) return;
-  
+
   const insights = v11Data.aiInsights.overview;
   list.innerHTML = insights.map(i => `
     <div class="insight-item ${i.type}" onclick="showToast('${i.action}')">
@@ -1167,11 +1181,27 @@ function exportWidget(widget) {
   showToast(`Exporting ${widget} data...`);
 }
 
+// ============ DIAMOND RADIAL MENU (V14) ============
+function toggleDiamondMenu() {
+  const menu = document.getElementById('diamondMenu');
+  if (!menu) return;
+
+  const isHidden = menu.style.display === 'none' || menu.style.display === '';
+  menu.style.display = isHidden ? 'block' : 'none';
+}
+
+function closeDiamondMenu() {
+  const menu = document.getElementById('diamondMenu');
+  if (menu) {
+    menu.style.display = 'none';
+  }
+}
+
 // ============ AI COPILOT FUNCTIONS ============
 function toggleAICopilot() {
   const overlay = document.getElementById('aiCopilotOverlay');
   if (!overlay) return;
-  
+
   if (overlay.style.display === 'none' || !overlay.style.display) {
     overlay.style.display = 'block';
     setTimeout(() => overlay.classList.add('active'), 10);
@@ -1185,13 +1215,13 @@ function toggleAICopilot() {
 function sendOverlayMessage() {
   const input = document.getElementById('aiOverlayInput');
   if (!input || !input.value.trim()) return;
-  
+
   const message = input.value.trim();
   input.value = '';
-  
+
   // Add user message
   addAIMessage(message, 'user');
-  
+
   // Simulate AI response
   setTimeout(() => {
     const responses = {
@@ -1199,17 +1229,17 @@ function sendOverlayMessage() {
       'what should i do': 'Given current market conditions and your portfolio composition, I recommend: 1) Hold your current tech positions as momentum remains strong, 2) Set trailing stops on NVDA at 5% to protect gains, 3) Consider taking partial profits on META if it hits $550, and 4) Monitor Fed announcements closely as dovish signals could extend the rally.',
       'simulate': 'Let me run a scenario analysis for you. If NVDA continues its current trajectory, your portfolio could see an additional 3-4% gain over the next 30 days. However, if tech sector volatility increases, we could see a 2-3% pullback. Would you like me to run a specific scenario with custom parameters?'
     };
-    
+
     const lowerMessage = message.toLowerCase();
     let response = 'I understand your question. Based on your portfolio data and current market conditions, I can provide detailed analysis. What specific aspect would you like me to focus on?';
-    
+
     for (const [key, value] of Object.entries(responses)) {
       if (lowerMessage.includes(key)) {
         response = value;
         break;
       }
     }
-    
+
     addAIMessage(response, 'ai');
   }, 1000);
 }
@@ -1226,7 +1256,7 @@ function quickAsk(action) {
     'whatdo': 'What should I do with my portfolio right now?',
     'simulate': 'Simulate a market scenario for me'
   };
-  
+
   const input = document.getElementById('aiOverlayInput');
   if (input && questions[action]) {
     input.value = questions[action];
@@ -1237,10 +1267,10 @@ function quickAsk(action) {
 function addAIMessage(content, type) {
   const panel = document.getElementById('aiMessagesPanel');
   if (!panel) return;
-  
+
   const messageDiv = document.createElement('div');
   messageDiv.className = 'ai-message';
-  
+
   if (type === 'user') {
     messageDiv.innerHTML = `
       <div class="ai-avatar" style="background: var(--color-royal-blue);">👤</div>
@@ -1256,7 +1286,7 @@ function addAIMessage(content, type) {
       </div>
     `;
   }
-  
+
   panel.appendChild(messageDiv);
   panel.scrollTop = panel.scrollHeight;
 }
@@ -1265,13 +1295,13 @@ function addAIMessage(content, type) {
 function sendAIMessage() {
   const input = document.getElementById('aiChatInput');
   if (!input || !input.value.trim()) return;
-  
+
   const message = input.value.trim();
   input.value = '';
-  
+
   const container = document.getElementById('aiChatMessages');
   if (!container) return;
-  
+
   // Add user message
   const userMsg = document.createElement('div');
   userMsg.className = 'ai-message';
@@ -1282,7 +1312,7 @@ function sendAIMessage() {
     </div>
   `;
   container.appendChild(userMsg);
-  
+
   // Simulate AI response
   setTimeout(() => {
     const aiMsg = document.createElement('div');
@@ -1364,31 +1394,31 @@ function showKpiMenu(kpi) {
 // ============ UTILITY FUNCTIONS ============
 function animateValue(element, start, end, duration, prefix = '', suffix = '') {
   const startTime = performance.now();
-  
+
   function easeOutQuart(t) {
     return 1 - Math.pow(1 - t, 4);
   }
-  
+
   function update(currentTime) {
     const elapsed = currentTime - startTime;
     const progress = Math.min(elapsed / duration, 1);
     const easedProgress = easeOutQuart(progress);
     const current = start + (end - start) * easedProgress;
-    
+
     let displayValue;
     if (end >= 1000) {
       displayValue = prefix + Math.floor(current).toLocaleString() + suffix;
     } else {
       displayValue = prefix + current.toFixed(1) + suffix;
     }
-    
+
     element.textContent = displayValue;
-    
+
     if (progress < 1) {
       requestAnimationFrame(update);
     }
   }
-  
+
   requestAnimationFrame(update);
 }
 
@@ -1407,12 +1437,12 @@ function showToast(message, type = 'success') {
     document.body.appendChild(newToast);
     return showToast(message, type);
   }
-  
+
   const messageEl = toast.querySelector('.toast-message');
   const iconEl = toast.querySelector('.toast-icon');
-  
+
   if (messageEl) messageEl.textContent = message;
-  
+
   // Set icon and color based on type
   if (type === 'success') {
     toast.style.background = 'linear-gradient(135deg, #2D9E78, #10b981)';
@@ -1427,10 +1457,10 @@ function showToast(message, type = 'success') {
     toast.style.background = 'linear-gradient(135deg, #F59E0B, #FBBF24)';
     if (iconEl) iconEl.textContent = '⚠';
   }
-  
+
   toast.style.display = 'flex';
   toast.style.animation = 'slideInRight 0.3s ease-out';
-  
+
   // Auto-dismiss after 3 seconds
   setTimeout(() => {
     toast.style.animation = 'slideOutRight 0.3s ease-in';
@@ -1459,9 +1489,9 @@ function changeBlueprint(blueprint) {
     risk: 'Risk Management',
     ai: 'AI Insights Deep Dive'
   };
-  
+
   showToast(`Switched to ${blueprintNames[blueprint]}`);
-  
+
   // Update AI context
   const contextValue = document.getElementById('aiContextValue');
   if (contextValue) {
@@ -1491,16 +1521,21 @@ document.addEventListener('click', (e) => {
 });
 
 function refreshData() {
-  const btn = event.target.closest('.header-btn');
-  btn.style.animation = 'spin 1s linear';
-  
+  // Target the dedicated refresh button instead of relying on the implicit event
+  const btn = document.querySelector('.header-btn[aria-label="Refresh data"]');
+  if (btn) {
+    btn.style.animation = 'spin 1s linear';
+  }
+
   showLoading();
-  
+
   setTimeout(() => {
     hideLoading();
-    btn.style.animation = '';
+    if (btn) {
+      btn.style.animation = '';
+    }
     showToast('Data refreshed successfully');
-    
+
     // Update timestamp
     document.querySelectorAll('.last-updated, .refresh-time').forEach(el => {
       el.textContent = 'Updated just now';
@@ -1530,10 +1565,10 @@ function closeSettings() {
 function saveSettings() {
   const autoRefresh = document.getElementById('autoRefresh').checked;
   const theme = document.getElementById('themeSelect').value;
-  
+
   appState.autoRefresh = autoRefresh;
   appState.darkMode = theme === 'dark';
-  
+
   closeSettings();
   showToast('Settings saved successfully');
 }
@@ -1541,7 +1576,7 @@ function saveSettings() {
 function toggleTheme() {
   appState.darkMode = !appState.darkMode;
   const menuItem = document.getElementById('themeMenuItem');
-  
+
   if (appState.darkMode) {
     document.body.style.background = '#0F172A';
     if (menuItem) menuItem.innerHTML = '🌙 Dark Mode';
@@ -1550,7 +1585,7 @@ function toggleTheme() {
     document.body.style.color = '#0F172A';
     if (menuItem) menuItem.innerHTML = '☀️ Light Mode';
   }
-  
+
   showToast(`Switched to ${appState.darkMode ? 'dark' : 'light'} mode`);
 }
 
@@ -1572,16 +1607,20 @@ function markAsRead(button) {
   const item = button.closest('.notification-item');
   item.classList.add('read');
   button.remove();
-  
+
   // Update badge count
-  const badge = document.querySelector('.notification-badge');
-  const currentCount = parseInt(badge.textContent);
-  if (currentCount > 0) {
-    badge.textContent = currentCount - 1;
-    if (currentCount - 1 === 0) {
+  const badges = document.querySelectorAll('.notification-badge, .nav-badge');
+  badges.forEach(badge => {
+    const currentCount = parseInt(badge.textContent || '0', 10);
+    if (!Number.isFinite(currentCount) || currentCount <= 0) {
+      return;
+    }
+    const next = currentCount - 1;
+    badge.textContent = next > 0 ? String(next) : '';
+    if (next <= 0) {
       badge.style.display = 'none';
     }
-  }
+  });
 }
 
 function markAllRead() {
@@ -1590,11 +1629,11 @@ function markAllRead() {
     const btn = item.querySelector('.mark-read');
     if (btn) btn.remove();
   });
-  
+
   document.querySelectorAll('.notification-badge, .nav-badge').forEach(badge => {
     badge.style.display = 'none';
   });
-  
+
   showToast('All notifications marked as read');
 }
 
@@ -1602,7 +1641,7 @@ function markAllRead() {
 function toggleCommandPalette() {
   const palette = document.getElementById('commandPalette');
   if (!palette) return;
-  
+
   palette.classList.toggle('active');
   if (palette.classList.contains('active')) {
     document.getElementById('commandInput').focus();
@@ -1611,8 +1650,8 @@ function toggleCommandPalette() {
 
 function executeCommand(cmd) {
   toggleCommandPalette();
-  
-  switch(cmd) {
+
+  switch (cmd) {
     case 'correlation':
       document.querySelector('.correlation-map').scrollIntoView({ behavior: 'smooth' });
       showToast('Showing correlation matrix');
@@ -1647,7 +1686,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleCommandPalette();
   }
-  
+
   // Escape closes overlays
   if (e.key === 'Escape') {
     document.getElementById('commandPalette')?.classList.remove('active');
@@ -1679,30 +1718,30 @@ function switchTabLegacy(button, tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('active');
   });
-  
+
   // Add active to clicked tab
   button.classList.add('active');
-  
+
   // Hide all tab content
   document.querySelectorAll('.tab-content').forEach(content => {
     content.classList.remove('active');
     content.style.display = 'none';
   });
-  
+
   // Show selected tab content
   const selectedTab = document.getElementById(`tab-${tabName}`);
   if (selectedTab) {
     selectedTab.classList.add('active');
     selectedTab.style.display = 'block';
   }
-  
+
   const tabNames = {
     overview: 'Overview',
     market: 'Market Analysis',
     opportunities: 'Opportunities',
     performance: 'Performance'
   };
-  
+
   showToast(`Viewing ${tabNames[tabName]}`);
 }
 
@@ -1727,7 +1766,7 @@ function showHelp(topic) {
     returns: 'Your cumulative returns over time compared to market benchmarks like S&P 500.',
     history: 'Complete record of your recent trades with profit/loss calculations.'
   };
-  
+
   showToast(helpMessages[topic] || 'Help information', 'info');
 }
 
@@ -1735,7 +1774,7 @@ function showHelp(topic) {
 function expandStory(button) {
   const expanded = button.nextElementSibling;
   if (!expanded) return;
-  
+
   const isHidden = expanded.style.display === 'none' || !expanded.style.display;
   expanded.style.display = isHidden ? 'block' : 'none';
   button.textContent = isHidden ? 'Hide analysis' : 'Read full analysis';
@@ -1744,11 +1783,11 @@ function expandStory(button) {
 function toggleInteractiveView(button) {
   const arena = document.getElementById('interactiveArena');
   if (!arena) return;
-  
+
   const isHidden = arena.style.display === 'none' || !arena.style.display;
   arena.style.display = isHidden ? 'block' : 'none';
   button.textContent = isHidden ? 'Hide Interactive View' : 'Switch to Interactive View';
-  
+
   if (isHidden) {
     showToast('Interactive bubble view activated - drag to explore!');
   }
@@ -1757,11 +1796,11 @@ function toggleInteractiveView(button) {
 function toggleCorrelationMatrix(button) {
   const container = document.getElementById('heatmapContainer');
   if (!container) return;
-  
+
   const isHidden = container.style.display === 'none' || !container.style.display;
   container.style.display = isHidden ? 'block' : 'none';
   button.textContent = isHidden ? 'Hide Full Matrix' : 'Show Full Matrix';
-  
+
   if (isHidden && !container.dataset.drawn) {
     drawCorrelationHeatmap();
     container.dataset.drawn = 'true';
@@ -1771,7 +1810,7 @@ function toggleCorrelationMatrix(button) {
 function toggleAdvancedVolatility(button) {
   const advanced = document.getElementById('volatilityAdvanced');
   if (!advanced) return;
-  
+
   const isHidden = advanced.style.display === 'none' || !advanced.style.display;
   advanced.style.display = isHidden ? 'block' : 'none';
   button.textContent = isHidden ? 'Hide Advanced View' : 'Show Advanced View';
@@ -1780,7 +1819,7 @@ function toggleAdvancedVolatility(button) {
 function toggleAlertDetails(alertItem) {
   const actions = alertItem.querySelector('.alert-actions');
   if (!actions) return;
-  
+
   const isHidden = actions.style.display === 'none' || !actions.style.display;
   actions.style.display = isHidden ? 'flex' : 'none';
   alertItem.classList.toggle('expanded');
@@ -1801,16 +1840,21 @@ function filterHistory(button, type) {
 
 
 function filterAlerts(type) {
-  const buttons = document.querySelectorAll('.filter-btn');
-  buttons.forEach(btn => btn.classList.remove('active'));
-  event.target.classList.add('active');
-  
-  const alerts = document.querySelectorAll('.alert-item');
+  const buttons = document.querySelectorAll('.alert-timeline .filter-btn');
+  buttons.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === type);
+  });
+
+  const alerts = document.querySelectorAll('.alert-timeline .alert-item');
   alerts.forEach(alert => {
     if (type === 'all') {
       alert.style.display = 'flex';
-    } else if (type === 'opportunities' || type === 'risks' || type === 'news') {
-      alert.style.display = alert.dataset.type === type ? 'flex' : 'none';
+    } else if (type === 'opportunities') {
+      alert.style.display = alert.dataset.type === 'opportunity' ? 'flex' : 'none';
+    } else if (type === 'risks') {
+      alert.style.display = alert.dataset.type === 'risk' ? 'flex' : 'none';
+    } else if (type === 'news') {
+      alert.style.display = alert.dataset.type === 'news' ? 'flex' : 'none';
     } else {
       alert.style.display = alert.dataset.priority === type ? 'flex' : 'none';
     }
@@ -1820,6 +1864,12 @@ function filterAlerts(type) {
 
 
 function toggleComparison(button) {
+  // If called without a button (e.g., from a checkbox onchange), do a simple toast and return
+  if (!button) {
+    showToast('Benchmark comparison toggled');
+    return;
+  }
+
   if (button.textContent.includes('Benchmark')) {
     button.textContent = 'Hide Benchmark';
     showToast('Showing S&P 500 comparison');
@@ -1833,19 +1883,19 @@ function toggleComparison(button) {
 function drawHealthGaugeCompact() {
   const canvas = document.getElementById('healthGaugeCompact');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const centerX = 75;
   const centerY = 75;
   const radius = 55;
-  
+
   // Background arc
   ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
   ctx.lineWidth = 10;
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 2.25 * Math.PI);
   ctx.stroke();
-  
+
   // Value arc
   const percent = appData.portfolioHealth.overall / 100;
   ctx.strokeStyle = '#1F40AF';
@@ -1860,23 +1910,23 @@ function drawHealthGaugeCompact() {
 function drawSparkline(canvasId, data, color = '#2D9E78') {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = 4;
-  
+
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   // Draw gradient fill area
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, color + '40'); // 25% opacity
   gradient.addColorStop(1, color + '08'); // 3% opacity
-  
+
   ctx.beginPath();
   data.forEach((value, index) => {
     const x = (index / (data.length - 1)) * (width - padding * 2) + padding;
@@ -1893,7 +1943,7 @@ function drawSparkline(canvasId, data, color = '#2D9E78') {
   ctx.closePath();
   ctx.fillStyle = gradient;
   ctx.fill();
-  
+
   // Draw line on top
   ctx.beginPath();
   data.forEach((value, index) => {
@@ -1910,7 +1960,7 @@ function drawSparkline(canvasId, data, color = '#2D9E78') {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.stroke();
-  
+
   // Highlight last point
   const lastX = width - padding;
   const lastY = height - padding - ((data[data.length - 1] - min) / range) * (height - padding * 2);
@@ -1921,14 +1971,14 @@ function drawSparkline(canvasId, data, color = '#2D9E78') {
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  
+
   // Highlight min/max points
   const maxIndex = data.indexOf(max);
   const minIndex = data.indexOf(min);
-  
+
   const maxX = (maxIndex / (data.length - 1)) * (width - padding * 2) + padding;
   const maxY = height - padding - ((max - min) / range) * (height - padding * 2);
-  
+
   ctx.beginPath();
   ctx.arc(maxX, maxY, 2, 0, Math.PI * 2);
   ctx.fillStyle = '#2D9E78';
@@ -1938,36 +1988,36 @@ function drawSparkline(canvasId, data, color = '#2D9E78') {
 function drawCorrelationHeatmap() {
   const canvas = document.getElementById('correlationHeatmap');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const { labels, data } = appData.correlations;
-  
+
   const size = labels.length;
   const cellSize = 60;
   const padding = 60;
-  
+
   canvas.width = cellSize * size + padding * 2;
   canvas.height = cellSize * size + padding * 2;
-  
+
   // Draw cells with staggered animation
   data.forEach((row, i) => {
     row.forEach((value, j) => {
       setTimeout(() => {
         const x = padding + j * cellSize;
         const y = padding + i * cellSize;
-        
+
         let color;
         if (value >= 0.8) color = '#1F40AF';
         else if (value >= 0.6) color = '#2E56D6';
         else if (value >= 0.4) color = '#4A6BD9';
         else color = 'rgba(255,255,255,0.1)';
-        
+
         ctx.fillStyle = color;
         const radius = 4;
         ctx.beginPath();
         ctx.roundRect(x + 2, y + 2, cellSize - 4, cellSize - 4, radius);
         ctx.fill();
-        
+
         ctx.fillStyle = value >= 0.4 ? '#E8E9F3' : 'rgba(255,255,255,0.7)';
         ctx.font = '500 12px sans-serif';
         ctx.textAlign = 'center';
@@ -1976,7 +2026,7 @@ function drawCorrelationHeatmap() {
       }, (i * size + j) * 40);
     });
   });
-  
+
   // Draw labels
   setTimeout(() => {
     ctx.fillStyle = '#B0B4CC';
@@ -1993,9 +2043,9 @@ function drawCorrelationHeatmap() {
 function drawMarketDriversDonut() {
   const canvas = document.getElementById('driversDonut');
   if (!canvas) return;
-  
+
   const colors = ['#1F40AF', '#2E56D6', '#4A6BD9', '#6687DD'];
-  
+
   new Chart(canvas, {
     type: 'doughnut',
     data: {
@@ -2020,8 +2070,8 @@ function drawMarketDriversDonut() {
       plugins: {
         legend: {
           position: 'bottom',
-          labels: { 
-            color: '#E8E9F3', 
+          labels: {
+            color: '#E8E9F3',
             font: { size: 12, weight: '500' },
             padding: 16
           }
@@ -2043,14 +2093,14 @@ function drawMarketDriversDonut() {
 function drawClusterMap() {
   const canvas = document.getElementById('clusterMap');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = 60;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   // Draw axes
   ctx.strokeStyle = '#B0B4CC';
   ctx.lineWidth = 2;
@@ -2059,7 +2109,7 @@ function drawClusterMap() {
   ctx.lineTo(width - padding, height - padding);
   ctx.lineTo(width - padding, padding);
   ctx.stroke();
-  
+
   // Labels
   ctx.fillStyle = '#B0B4CC';
   ctx.font = '12px sans-serif';
@@ -2070,7 +2120,7 @@ function drawClusterMap() {
   ctx.rotate(-Math.PI / 2);
   ctx.fillText('Return →', 0, 0);
   ctx.restore();
-  
+
   // Draw points for all 15 stocks
   const maxRisk = 30;
   const maxReturn = 15;
@@ -2081,15 +2131,15 @@ function drawClusterMap() {
     'Energy': '#B8860B',
     'Finance': '#4A6BD9'
   };
-  
+
   appData.clusterMap.forEach((point, i) => {
     setTimeout(() => {
       const x = padding + ((point.risk / maxRisk) * (width - padding * 2));
       const y = height - padding - ((point.return + 5) / (maxReturn + 5) * (height - padding * 2));
-      
+
       const pointColor = groupColors[point.group] || '#1F40AF';
       const radius = Math.abs(point.return) > 8 ? 12 : 8;
-      
+
       ctx.shadowBlur = 10;
       ctx.shadowColor = pointColor;
       ctx.fillStyle = pointColor;
@@ -2097,7 +2147,7 @@ function drawClusterMap() {
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      
+
       ctx.fillStyle = '#E8E9F3';
       ctx.font = '600 10px sans-serif';
       ctx.textAlign = 'center';
@@ -2109,7 +2159,7 @@ function drawClusterMap() {
 function renderNewsImpact() {
   const container = document.getElementById('newsTable');
   if (!container) return;
-  
+
   container.innerHTML = appData.newsImpact.slice(0, 10).map(news => `
     <div class="news-row">
       <div class="news-headline">${news.headline}</div>
@@ -2122,7 +2172,7 @@ function renderNewsImpact() {
 function drawSectorPerformance() {
   const canvas = document.getElementById('sectorChart');
   if (!canvas) return;
-  
+
   new Chart(canvas, {
     type: 'bar',
     data: {
@@ -2162,7 +2212,7 @@ function drawSectorPerformance() {
           padding: 12,
           cornerRadius: 8,
           callbacks: {
-            afterLabel: function(context) {
+            afterLabel: function (context) {
               const sector = appData.sectorPerformance[context.dataIndex];
               if (sector.holdings) {
                 return `Portfolio weight: ${sector.weight}%`;
@@ -2186,22 +2236,34 @@ function drawSectorPerformance() {
   });
 }
 
+function toggleCollapse(button) {
+  const widget = button.closest('.widget-card');
+  if (!widget) return;
+
+  const body = widget.querySelector('.widget-body');
+  if (!body) return;
+
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  button.textContent = isHidden ? '−' : '+';
+}
+
 function drawHealthGauge() {
   const canvas = document.getElementById('healthGauge');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const centerX = 100;
   const centerY = 100;
   const radius = 70;
-  
+
   // Background arc
   ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
   ctx.lineWidth = 12;
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 2.25 * Math.PI);
   ctx.stroke();
-  
+
   // Value arc with animation
   const percent = appData.portfolioHealth.overall / 100;
   ctx.strokeStyle = '#1F40AF';
@@ -2209,7 +2271,7 @@ function drawHealthGauge() {
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
   ctx.stroke();
-  
+
   const valueEl = document.getElementById('healthValue');
   if (valueEl) {
     valueEl.textContent = appData.portfolioHealth.overall + '%';
@@ -2219,14 +2281,14 @@ function drawHealthGauge() {
 function renderBacktestMetrics() {
   const container = document.getElementById('backtestMetrics');
   if (!container) return;
-  
+
   const metrics = [
     { label: 'Sharpe Ratio', value: appData.backtestResults.sharpeRatio },
     { label: 'Win Rate', value: appData.backtestResults.winRate + '%' },
     { label: 'Max Drawdown', value: appData.backtestResults.maxDrawdown + '%' },
     { label: 'Total Return', value: appData.backtestResults.totalReturn + '%' }
   ];
-  
+
   container.innerHTML = metrics.map(m => `
     <div class="backtest-metric">
       <div class="metric-label">${m.label}</div>
@@ -2240,7 +2302,7 @@ function runBacktest() {
   if (resultsDiv) {
     resultsDiv.style.display = 'block';
   }
-  
+
   showLoading();
   setTimeout(() => {
     hideLoading();
@@ -2252,7 +2314,7 @@ function runBacktest() {
 function renderOpportunities() {
   const container = document.getElementById('opportunitiesList');
   if (!container) return;
-  
+
   container.innerHTML = appData.opportunities.map(opp => `
     <div class="opportunity-card">
       <div class="opportunity-conviction">${opp.conviction} Conviction</div>
@@ -2266,7 +2328,7 @@ function renderOpportunities() {
 function renderPerformanceTable() {
   const tbody = document.getElementById('performanceTableBody');
   if (!tbody) return;
-  
+
   tbody.innerHTML = appData.topStocks.map(stock => `
     <tr>
       <td class="table-symbol">${stock.symbol}</td>
@@ -2279,12 +2341,15 @@ function renderPerformanceTable() {
       <td><canvas class="table-sparkline" width="80" height="24"></canvas></td>
     </tr>
   `).join('');
-  
-  // Draw sparklines
-  document.querySelectorAll('.table-sparkline').forEach((canvas, i) => {
+
+  // Draw sparklines only for the rows in the performance table
+  const rowSparklines = tbody.querySelectorAll('.table-sparkline');
+  rowSparklines.forEach((canvas, i) => {
+    const stock = appData.topStocks[i];
+    if (!stock) return;
     const ctx = canvas.getContext('2d');
-    const data = [0.9, 0.95, 0.92, 0.98, 1.0].map(v => v * appData.topStocks[i].price);
-    drawMiniSparkline(ctx, data, 80, 24, appData.topStocks[i].change >= 0);
+    const data = [0.9, 0.95, 0.92, 0.98, 1.0].map(v => v * stock.price);
+    drawMiniSparkline(ctx, data, 80, 24, stock.change >= 0);
   });
 }
 
@@ -2292,18 +2357,18 @@ function drawMiniSparkline(ctx, data, width, height, isPositive) {
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
-  
+
   ctx.strokeStyle = isPositive ? '#2D9E78' : '#8B3A3A';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  
+
   data.forEach((value, i) => {
     const x = (i / (data.length - 1)) * width;
     const y = height - ((value - min) / range * height);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  
+
   ctx.stroke();
 }
 
@@ -2311,23 +2376,23 @@ function drawMiniSparkline(ctx, data, width, height, isPositive) {
 function drawStockSparkline(canvasId, data, color = '#2D9E78') {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = 3;
-  
+
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   // Draw gradient fill
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, color + '30');
   gradient.addColorStop(1, color + '05');
-  
+
   ctx.beginPath();
   data.forEach((value, index) => {
     const x = (index / (data.length - 1)) * (width - padding * 2) + padding;
@@ -2343,7 +2408,7 @@ function drawStockSparkline(canvasId, data, color = '#2D9E78') {
   ctx.closePath();
   ctx.fillStyle = gradient;
   ctx.fill();
-  
+
   // Draw line
   ctx.beginPath();
   data.forEach((value, index) => {
@@ -2360,7 +2425,7 @@ function drawStockSparkline(canvasId, data, color = '#2D9E78') {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.stroke();
-  
+
   // Highlight last point
   const lastX = width - padding;
   const lastY = height - padding - ((data[data.length - 1] - min) / range) * (height - padding * 2);
@@ -2386,32 +2451,32 @@ function loadMoreStocks() {
 function drawVolatilitySurface() {
   const canvas = document.getElementById('volatilitySurface');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   const rows = 12;
   const cols = 16;
-  
+
   for (let i = 0; i < rows; i++) {
     setTimeout(() => {
       const yBase = 50 + (i * (height - 100) / rows);
       ctx.strokeStyle = `rgba(31, 64, 175, ${0.3 + (i / rows) * 0.7})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      
+
       for (let j = 0; j < cols; j++) {
         const x = 50 + (j * (width - 100) / cols);
         const volatility = Math.sin(i * 0.5) * Math.cos(j * 0.3) * 30;
         const y = yBase - volatility;
-        
+
         if (j === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-      
+
       ctx.stroke();
     }, i * 50);
   }
@@ -2423,12 +2488,12 @@ let offset = { x: 0, y: 0 };
 
 function initBubbleDrag() {
   const bubbles = document.querySelectorAll('.bubble[draggable="true"]');
-  
+
   bubbles.forEach(bubble => {
     bubble.addEventListener('mousedown', startDrag);
     bubble.addEventListener('touchstart', startDrag, { passive: false });
   });
-  
+
   document.addEventListener('mousemove', drag);
   document.addEventListener('touchmove', drag, { passive: false });
   document.addEventListener('mouseup', endDrag);
@@ -2437,40 +2502,40 @@ function initBubbleDrag() {
 
 function startDrag(e) {
   if (!e.target.closest('.bubble.user')) return;
-  
+
   draggedBubble = e.target.closest('.bubble');
   const rect = draggedBubble.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  
+
   offset.x = clientX - rect.left;
   offset.y = clientY - rect.top;
-  
+
   draggedBubble.style.cursor = 'grabbing';
   draggedBubble.style.zIndex = '100';
-  
+
   e.preventDefault();
 }
 
 function drag(e) {
   if (!draggedBubble) return;
-  
+
   const container = document.querySelector('.arena-container');
   const containerRect = container.getBoundingClientRect();
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  
+
   let x = clientX - containerRect.left - offset.x;
   let y = clientY - containerRect.top - offset.y;
-  
+
   const bubbleSize = 140;
   x = Math.max(0, Math.min(x, containerRect.width - bubbleSize));
   y = Math.max(0, Math.min(y, containerRect.height - bubbleSize));
-  
+
   draggedBubble.style.left = x + 'px';
   draggedBubble.style.top = y + 'px';
   draggedBubble.style.transform = 'none';
-  
+
   e.preventDefault();
 }
 
@@ -2486,7 +2551,7 @@ function endDrag() {
 // ============ CUSTOMIZATION FUNCTIONS ============
 function enterCustomizeMode() {
   appState.customizeMode = !appState.customizeMode;
-  
+
   if (appState.customizeMode) {
     document.body.classList.add('customize-mode');
     showToast('Customization mode enabled. Drag widgets to rearrange.');
@@ -2509,6 +2574,21 @@ function saveLayout() {
 function selectTab(button, tab) {
   document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
   button.classList.add('active');
+
+  // Synchronize with main tab system
+  const tabMap = {
+    dashboard: 'overview',
+    portfolio: 'performance',
+    opportunities: 'opportunities',
+    alerts: 'market',
+    more: 'ailab'
+  };
+  const targetTab = tabMap[tab];
+  if (targetTab) {
+    const desktopButton = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+    safeSwitchTab(desktopButton, targetTab);
+  }
+
   showToast(`Navigated to ${tab}`);
 }
 
@@ -2517,7 +2597,7 @@ function selectTab(button, tab) {
 function renderTradeIdeas() {
   const container = document.getElementById('tradeIdeasGrid');
   if (!container) return;
-  
+
   container.innerHTML = tradeIdeas.map(idea => `
     <div class="trade-card">
       <div class="trade-main">
@@ -2546,7 +2626,7 @@ function renderTradeIdeas() {
 function renderMarketCalendar() {
   const container = document.getElementById('calendarSections');
   if (!container) return;
-  
+
   let html = '<div class="calendar-section">';
   html += '<h4>Earnings (Next 7 days)</h4>';
   marketCalendar.earnings.forEach(e => {
@@ -2559,7 +2639,7 @@ function renderMarketCalendar() {
     `;
   });
   html += '</div>';
-  
+
   html += '<div class="calendar-section">';
   html += '<h4>Economic Data</h4>';
   marketCalendar.economicData.forEach(e => {
@@ -2572,7 +2652,7 @@ function renderMarketCalendar() {
     `;
   });
   html += '</div>';
-  
+
   html += '<div class="calendar-section">';
   html += '<h4>Ex-Dividend Dates</h4>';
   marketCalendar.exDividend.forEach(e => {
@@ -2585,7 +2665,7 @@ function renderMarketCalendar() {
     `;
   });
   html += '</div>';
-  
+
   container.innerHTML = html;
 }
 
@@ -2593,7 +2673,7 @@ function renderMarketCalendar() {
 function renderNewsFeed() {
   const container = document.getElementById('newsCardsGrid');
   if (!container) return;
-  
+
   container.innerHTML = newsItems.map(news => `
     <div class="news-card">
       <div class="news-header">
@@ -2626,7 +2706,7 @@ function renderNewsFeed() {
 function renderMarketDrivers() {
   const container = document.getElementById('driversBarsVisual');
   if (!container) return;
-  
+
   container.innerHTML = marketDrivers.map(driver => `
     <div class="driver-bar-item">
       <span class="driver-label">${driver.factor}</span>
@@ -2645,17 +2725,17 @@ function askLLMJudge() {
   const processing = document.getElementById('judgeProcessing');
   const result = document.getElementById('judgeResult');
   const askAnother = document.getElementById('askAnotherBtn');
-  
+
   if (!input.value.trim()) {
     showToast('Please enter a question', 'warning');
     return;
   }
-  
+
   // Show processing
   input.disabled = true;
   processing.style.display = 'block';
   result.style.display = 'none';
-  
+
   // Simulate processing steps
   const steps = processing.querySelectorAll('.processing-step');
   steps.forEach((step, i) => {
@@ -2663,14 +2743,14 @@ function askLLMJudge() {
       step.classList.add('active');
     }, i * 800);
   });
-  
+
   // Show result after processing
   setTimeout(() => {
     processing.style.display = 'none';
     result.style.display = 'block';
     askAnother.style.display = 'block';
     input.disabled = false;
-    
+
     result.innerHTML = `
       <div class="consensus-section">
         <div class="consensus-badge hold">${llmJudgeData.consensus}</div>
@@ -2723,7 +2803,7 @@ function askLLMJudge() {
         </div>
       </div>
     `;
-    
+
     showToast('AI analysis complete!', 'success');
   }, 4000);
 }
@@ -2761,17 +2841,17 @@ function loadMoreNews() {
 function drawConfidenceGauge() {
   const canvas = document.getElementById('confidenceGauge');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const value = 82;
-  
+
   // Background arc
   ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
   ctx.lineWidth = 8;
   ctx.beginPath();
   ctx.arc(60, 50, 35, 0.75 * Math.PI, 2.25 * Math.PI);
   ctx.stroke();
-  
+
   // Value arc
   const percent = value / 100;
   ctx.strokeStyle = '#10B981';
@@ -2784,30 +2864,38 @@ function drawConfidenceGauge() {
 
 // V13: Draw Win Rate Circle
 function drawWinRateCircle() {
-  const canvas = document.getElementById('winRateCircle');
-  if (!canvas) return;
-  
-  const ctx = canvas.getContext('2d');
-  const value = 72;
-  const centerX = 70;
-  const centerY = 70;
-  const radius = 55;
-  
-  // Background circle
-  ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
-  ctx.lineWidth = 10;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-  ctx.stroke();
-  
-  // Value arc
-  const percent = value / 100;
-  ctx.strokeStyle = '#10B981';
-  ctx.lineWidth = 10;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, -0.5 * Math.PI, -0.5 * Math.PI + (2 * Math.PI * percent));
-  ctx.stroke();
+  const canvases = document.querySelectorAll('.win-rate-circle');
+  if (!canvases.length) return;
+
+  canvases.forEach(canvas => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const value = (appData.hero && typeof appData.hero.winRate === 'number')
+      ? appData.hero.winRate
+      : 72;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 15;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Background circle
+    ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Value arc
+    const percent = value / 100;
+    ctx.strokeStyle = '#10B981';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, -0.5 * Math.PI, -0.5 * Math.PI + (2 * Math.PI * percent));
+    ctx.stroke();
+  });
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -2820,13 +2908,13 @@ window.addEventListener('DOMContentLoaded', () => {
   console.log('✨ All Widgets Finalized = Production-Ready Quality');
   console.log('🎯 9 Facettes = 9 Complete Universes');
   console.log('♾️ Infinite Exploration Mode');
-  
+
   // Initialize Command K immediately
   const commandKBadge = document.getElementById('commandKFloatingBadge');
   if (commandKBadge) {
     console.log('✅ Command K badge active');
   }
-  
+
   // Animate KPI values
   const kpiValues = document.querySelectorAll('.kpi-value[data-value]');
   kpiValues.forEach((element, index) => {
@@ -2834,7 +2922,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const value = parseFloat(element.dataset.value);
       const isCurrency = element.textContent.includes('$');
       const isPercent = element.classList.contains('forecast') || element.classList.contains('success');
-      
+
       if (isCurrency) {
         animateValue(element, 0, value, 2000, '$', '');
       } else if (isPercent) {
@@ -2844,25 +2932,25 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }, index * 150);
   });
-  
+
   // Animate progress bars
   setTimeout(() => {
     document.querySelectorAll('.progress-fill[data-width]').forEach(bar => {
       bar.style.width = bar.dataset.width + '%';
     });
   }, 500);
-  
+
   // Draw sparklines for all KPIs with real data (60 points for ultra-smooth)
   const sparklineData1 = appData.portfolioSparkline; // All 60 points
   const sparklineData2 = appData.forecastProjection.slice(0, 60);
-  const sparklineData3 = [68,68.2,68.5,68.8,69,69.2,69.5,69.7,70,70.2,70.5,70.7,71,71.2,71.5,71.7,72]; // Smooth progression
-  
+  const sparklineData3 = [68, 68.2, 68.5, 68.8, 69, 69.2, 69.5, 69.7, 70, 70.2, 70.5, 70.7, 71, 71.2, 71.5, 71.7, 72]; // Smooth progression
+
   setTimeout(() => {
     drawSparkline('sparkline1', sparklineData1, '#10b981');
     drawSparkline('sparkline2', sparklineData2, '#1F40AF');
     drawSparkline('sparkline3', sparklineData3, '#10b981');
   }, 300);
-  
+
   // Initialize charts and widgets (only those visible in default tab)
   setTimeout(() => {
     drawMarketDriversDonut();
@@ -2870,8 +2958,9 @@ window.addEventListener('DOMContentLoaded', () => {
     renderNewsImpact();
     drawSectorPerformance();
     drawHealthGaugeCompact();
+    drawHealthGauge();
     renderPerformanceTable();
-    
+
     // Draw sparklines for top movers
     if (appData.stockSparklines.NVDA) {
       drawStockSparkline('sparkNVDA', appData.stockSparklines.NVDA, '#2D9E78');
@@ -2881,12 +2970,12 @@ window.addEventListener('DOMContentLoaded', () => {
       drawStockSparkline('sparkGOOGL', appData.stockSparklines.GOOGL, '#2D9E78');
     }
   }, 500);
-  
+
   // V16: Initialize professional volatility chart
   setTimeout(() => {
     drawVolatilityChartPro();
   }, 1000);
-  
+
   // V17: Initialize advanced visualizations
   setTimeout(() => {
     drawCandlestickChart();
@@ -2895,7 +2984,7 @@ window.addEventListener('DOMContentLoaded', () => {
     drawTreemapChart();
     drawSparkline('sparklineMega1', appData.portfolioSparkline, '#10B981');
   }, 1200);
-  
+
   // V16: Initialize search functionality
   const searchFacettes = document.getElementById('searchFacettes');
   if (searchFacettes) {
@@ -2912,14 +3001,14 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
-  
+
   // Initialize bubble drag
   initBubbleDrag();
-  
+
   // V11: Initialize enhancements
   initAISuggestions();
   initAIInsights();
-  
+
   // V13: Initialize visual components
   setTimeout(() => {
     renderTradeIdeas();
@@ -2928,8 +3017,16 @@ window.addEventListener('DOMContentLoaded', () => {
     renderMarketDrivers();
     drawConfidenceGauge();
     drawWinRateCircle();
+
+    // Sync numeric win rate display with data attribute / appData
+    document.querySelectorAll('.circle-number[data-value]').forEach(el => {
+      const target = parseFloat(el.dataset.value);
+      if (!Number.isNaN(target)) {
+        el.textContent = target.toString();
+      }
+    });
   }, 600);
-  
+
   // Animate change values
   setTimeout(() => {
     const changeHuge = document.querySelector('.change-huge');
@@ -2937,15 +3034,15 @@ window.addEventListener('DOMContentLoaded', () => {
       animateValue(changeHuge, 0, 1.88, 2000, '+', '%');
     }
   }, 800);
-  
 
-  
+
+
   // V17 BUGFIX: Show hero section by default, hide duplicate
   const heroSection = document.getElementById('heroSection');
   const mainHeroSection = document.getElementById('mainHeroSection');
   if (heroSection) heroSection.style.display = 'block';
   if (mainHeroSection) mainHeroSection.style.display = 'none';
-  
+
   console.log('✅ V17 BUGFIXES APPLIED:');
   console.log('   - Navigation closes only on outside click');
   console.log('   - Single Hero section (duplicate hidden)');
@@ -2957,15 +3054,15 @@ window.addEventListener('DOMContentLoaded', () => {
   console.log('   - Treemap Portfolio Allocation');
   console.log('   - Multi-KPI Cards Bloomberg Style');
   console.log('🏆 V17 PROFESSIONAL READY!');
-  
+
   // V15: Hide legacy diamond hub, show dropdown button
   const diamondHub = document.getElementById('diamondHub');
   if (diamondHub) {
     diamondHub.style.display = 'none';
   }
-  
+
   console.log('💎 Diamond Dropdown Top-Left active');
-  
+
   // Make sure overview tab is visible on load
   setTimeout(() => {
     const overviewTab = document.getElementById('tab-overview');
@@ -2974,7 +3071,7 @@ window.addEventListener('DOMContentLoaded', () => {
       overviewTab.classList.add('active');
     }
   }, 100);
-  
+
   // Initialize first tab as active with error handling
   try {
     const firstTab = document.getElementById('tab-overview');
@@ -2982,42 +3079,23 @@ window.addEventListener('DOMContentLoaded', () => {
       firstTab.style.display = 'block';
       firstTab.classList.add('active');
     }
-    
-    // Attach safe event listeners to all buttons
-    document.querySelectorAll('button').forEach(button => {
-      if (!button.hasAttribute('data-safe-listener')) {
-        button.setAttribute('data-safe-listener', 'true');
-        const originalOnClick = button.getAttribute('onclick');
-        if (originalOnClick) {
-          button.addEventListener('click', (e) => {
-            try {
-              // Execute original onclick safely
-              eval(originalOnClick);
-            } catch (error) {
-              console.error('Button click error:', error);
-              showToast('Action failed. Please try again.', 'error');
-            }
-          });
-        }
-      }
-    });
-    
+
     // Global error handler
     window.addEventListener('error', (e) => {
       console.error('Global error:', e.error);
       showToast('An unexpected error occurred', 'error');
       return true; // Prevent default error handling
     });
-    
+
     // Prevent unhandled promise rejections
     window.addEventListener('unhandledrejection', (e) => {
       console.error('Unhandled promise rejection:', e.reason);
       e.preventDefault();
     });
-    
+
     console.log('✅ Error handling initialized');
     console.log('✅ All event listeners wrapped safely');
-    
+
   } catch (error) {
     console.error('Initialization error:', error);
     alert('Dashboard initialization failed. Please refresh the page.');
@@ -3112,43 +3190,43 @@ window.drawVolatilityChartPro = drawVolatilityChartPro;
 function drawCandlestickChart() {
   const canvas = document.getElementById('candlestickChart');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = { top: 20, right: 60, bottom: 40, left: 60 };
-  
+
   const candleData = [
-    {date: 'Nov 1', open: 850, high: 880, low: 845, close: 875, volume: 15000000},
-    {date: 'Nov 2', open: 875, high: 890, low: 870, close: 885, volume: 18000000},
-    {date: 'Nov 3', open: 885, high: 895, low: 875, close: 880, volume: 16000000},
-    {date: 'Nov 4', open: 880, high: 920, low: 875, close: 910, volume: 25000000},
-    {date: 'Nov 5', open: 910, high: 930, low: 905, close: 920, volume: 22000000},
-    {date: 'Nov 6', open: 920, high: 925, low: 900, close: 905, volume: 19000000},
-    {date: 'Nov 7', open: 905, high: 915, low: 895, close: 900, volume: 17000000},
-    {date: 'Nov 8', open: 900, high: 910, low: 890, close: 895, volume: 16000000},
-    {date: 'Nov 9', open: 895, high: 900, low: 880, close: 885, volume: 18000000},
-    {date: 'Nov 10', open: 885, high: 895, low: 875, close: 890, volume: 15000000},
-    {date: 'Nov 11', open: 890, high: 900, low: 885, close: 895, volume: 14000000},
-    {date: 'Nov 12', open: 895, high: 905, low: 890, close: 900, volume: 16000000},
-    {date: 'Nov 13', open: 900, high: 915, low: 895, close: 910, volume: 20000000},
-    {date: 'Nov 14', open: 910, high: 920, low: 905, close: 915, volume: 18000000},
-    {date: 'Nov 15', open: 915, high: 925, low: 910, close: 920, volume: 21000000},
-    {date: 'Nov 16', open: 920, high: 930, low: 915, close: 925, volume: 23000000},
-    {date: 'Nov 17', open: 925, high: 935, low: 920, close: 930, volume: 24000000},
-    {date: 'Nov 18', open: 930, high: 940, low: 925, close: 935, volume: 26000000}
+    { date: 'Nov 1', open: 850, high: 880, low: 845, close: 875, volume: 15000000 },
+    { date: 'Nov 2', open: 875, high: 890, low: 870, close: 885, volume: 18000000 },
+    { date: 'Nov 3', open: 885, high: 895, low: 875, close: 880, volume: 16000000 },
+    { date: 'Nov 4', open: 880, high: 920, low: 875, close: 910, volume: 25000000 },
+    { date: 'Nov 5', open: 910, high: 930, low: 905, close: 920, volume: 22000000 },
+    { date: 'Nov 6', open: 920, high: 925, low: 900, close: 905, volume: 19000000 },
+    { date: 'Nov 7', open: 905, high: 915, low: 895, close: 900, volume: 17000000 },
+    { date: 'Nov 8', open: 900, high: 910, low: 890, close: 895, volume: 16000000 },
+    { date: 'Nov 9', open: 895, high: 900, low: 880, close: 885, volume: 18000000 },
+    { date: 'Nov 10', open: 885, high: 895, low: 875, close: 890, volume: 15000000 },
+    { date: 'Nov 11', open: 890, high: 900, low: 885, close: 895, volume: 14000000 },
+    { date: 'Nov 12', open: 895, high: 905, low: 890, close: 900, volume: 16000000 },
+    { date: 'Nov 13', open: 900, high: 915, low: 895, close: 910, volume: 20000000 },
+    { date: 'Nov 14', open: 910, high: 920, low: 905, close: 915, volume: 18000000 },
+    { date: 'Nov 15', open: 915, high: 925, low: 910, close: 920, volume: 21000000 },
+    { date: 'Nov 16', open: 920, high: 930, low: 915, close: 925, volume: 23000000 },
+    { date: 'Nov 17', open: 925, high: 935, low: 920, close: 930, volume: 24000000 },
+    { date: 'Nov 18', open: 930, high: 940, low: 925, close: 935, volume: 26000000 }
   ];
-  
+
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  
+
   const prices = candleData.flatMap(d => [d.low, d.high]);
   const minPrice = Math.min(...prices) * 0.98;
   const maxPrice = Math.max(...prices) * 1.02;
   const priceRange = maxPrice - minPrice;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   // Grid lines
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
   ctx.lineWidth = 1;
@@ -3158,41 +3236,41 @@ function drawCandlestickChart() {
     ctx.moveTo(padding.left, y);
     ctx.lineTo(padding.left + chartWidth, y);
     ctx.stroke();
-    
+
     const price = maxPrice - (priceRange / 5) * i;
     ctx.fillStyle = '#94A3B8';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText('$' + price.toFixed(0), padding.left - 10, y + 4);
   }
-  
+
   const candleWidth = (chartWidth / candleData.length) * 0.7;
   const spacing = chartWidth / candleData.length;
-  
+
   candleData.forEach((candle, i) => {
     const x = padding.left + spacing * i + spacing / 2;
     const isBullish = candle.close >= candle.open;
     const color = isBullish ? '#10B981' : '#EF4444';
-    
+
     const highY = padding.top + chartHeight - ((candle.high - minPrice) / priceRange) * chartHeight;
     const lowY = padding.top + chartHeight - ((candle.low - minPrice) / priceRange) * chartHeight;
-    
+
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x, highY);
     ctx.lineTo(x, lowY);
     ctx.stroke();
-    
+
     const openY = padding.top + chartHeight - ((candle.open - minPrice) / priceRange) * chartHeight;
     const closeY = padding.top + chartHeight - ((candle.close - minPrice) / priceRange) * chartHeight;
     const bodyTop = Math.min(openY, closeY);
     const bodyHeight = Math.abs(closeY - openY);
-    
+
     ctx.fillStyle = color;
     ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, Math.max(bodyHeight, 1));
   });
-  
+
   // MA(20) overlay
   ctx.strokeStyle = '#8B5CF6';
   ctx.lineWidth = 2;
@@ -3202,13 +3280,13 @@ function drawCandlestickChart() {
       const ma = candleData.slice(Math.max(0, i - 10), i + 1).reduce((sum, c) => sum + c.close, 0) / Math.min(i + 1, 11);
       const maY = padding.top + chartHeight - ((ma - minPrice) / priceRange) * chartHeight;
       const x = padding.left + spacing * i + spacing / 2;
-      
+
       if (i === 10) ctx.moveTo(x, maY);
       else ctx.lineTo(x, maY);
     }
   });
   ctx.stroke();
-  
+
   // Event annotation
   const eventIndex = 10;
   const eventX = padding.left + spacing * eventIndex + spacing / 2;
@@ -3220,11 +3298,11 @@ function drawCandlestickChart() {
   ctx.lineTo(eventX, padding.top + chartHeight);
   ctx.stroke();
   ctx.setLineDash([]);
-  
+
   ctx.fillStyle = '#F59E0B';
   ctx.font = '10px sans-serif';
   ctx.fillText('Earnings', eventX + 5, padding.top + 15);
-  
+
   // X-axis labels
   ctx.fillStyle = '#94A3B8';
   ctx.font = '11px sans-serif';
@@ -3240,27 +3318,27 @@ function drawCandlestickChart() {
 function drawVolumeChart() {
   const canvas = document.getElementById('volumeChart');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
   const padding = { top: 10, right: 60, bottom: 20, left: 60 };
-  
+
   const volumes = [15, 18, 16, 25, 22, 19, 17, 16, 18, 15, 14, 16, 20, 18, 21, 23, 24, 26];
   const maxVolume = Math.max(...volumes);
-  
+
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const barWidth = (chartWidth / volumes.length) * 0.7;
   const spacing = chartWidth / volumes.length;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   volumes.forEach((vol, i) => {
     const x = padding.left + spacing * i + spacing / 2 - barWidth / 2;
     const barHeight = (vol / maxVolume) * chartHeight;
     const y = padding.top + chartHeight - barHeight;
-    
+
     ctx.fillStyle = i % 2 === 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)';
     ctx.fillRect(x, y, barWidth, barHeight);
   });
@@ -3269,11 +3347,11 @@ function drawVolumeChart() {
 function drawHeatmapChart() {
   const canvas = document.getElementById('heatmapChart');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
-  
+
   const stocks = ['NVDA', 'AMD', 'AAPL', 'META', 'GOOGL', 'MSFT', 'TSLA', 'AMZN'];
   const correlations = [
     [1.00, 0.85, 0.42, 0.38, 0.45, 0.50, 0.32, 0.40],
@@ -3285,28 +3363,28 @@ function drawHeatmapChart() {
     [0.32, 0.30, 0.28, 0.25, 0.30, 0.35, 1.00, 0.40],
     [0.40, 0.38, 0.60, 0.55, 0.65, 0.70, 0.40, 1.00]
   ];
-  
+
   const padding = 80;
   const cellSize = (width - padding * 2) / stocks.length;
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   correlations.forEach((row, i) => {
     row.forEach((corr, j) => {
       const x = padding + j * cellSize;
       const y = padding + i * cellSize;
-      
-      const color = corr >= 0 
+
+      const color = corr >= 0
         ? `rgba(34, 197, 94, ${corr * 0.8})`
         : `rgba(239, 68, 68, ${Math.abs(corr) * 0.8})`;
-      
+
       ctx.fillStyle = color;
       ctx.fillRect(x, y, cellSize, cellSize);
-      
+
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, cellSize, cellSize);
-      
+
       ctx.fillStyle = corr > 0.6 || corr < -0.6 ? '#FFFFFF' : '#1E293B';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
@@ -3314,7 +3392,7 @@ function drawHeatmapChart() {
       ctx.fillText(corr.toFixed(2), x + cellSize / 2, y + cellSize / 2);
     });
   });
-  
+
   ctx.fillStyle = '#F8FAFC';
   ctx.font = '13px sans-serif';
   ctx.textAlign = 'center';
@@ -3323,7 +3401,7 @@ function drawHeatmapChart() {
     const x = padding + i * cellSize + cellSize / 2;
     ctx.fillText(stock, x, padding - 10);
   });
-  
+
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   stocks.forEach((stock, i) => {
@@ -3335,11 +3413,11 @@ function drawHeatmapChart() {
 function drawTreemapChart() {
   const canvas = document.getElementById('treemapChart');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
-  
+
   const holdings = [
     { symbol: 'NVDA', value: 32000, return: 8.5 },
     { symbol: 'AAPL', value: 25000, return: 3.2 },
@@ -3350,20 +3428,20 @@ function drawTreemapChart() {
     { symbol: 'BAC', value: 8000, return: 2.8 },
     { symbol: 'XOM', value: 7000, return: 6.2 }
   ];
-  
+
   const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
-  
+
   ctx.clearRect(0, 0, width, height);
-  
+
   let currentX = 0;
   let currentY = 0;
   let remainingWidth = width;
   let remainingHeight = height;
-  
+
   holdings.forEach((holding, index) => {
     const ratio = holding.value / totalValue;
     const area = ratio * (width * height);
-    
+
     let rectWidth, rectHeight;
     if (remainingWidth > remainingHeight) {
       rectWidth = area / remainingHeight;
@@ -3378,35 +3456,35 @@ function drawTreemapChart() {
         rectHeight = remainingHeight;
       }
     }
-    
-    const color = holding.return >= 0 
+
+    const color = holding.return >= 0
       ? `rgba(34, 197, 94, ${0.6 + ratio * 0.4})`
       : `rgba(239, 68, 68, ${0.6 + ratio * 0.4})`;
-    
+
     ctx.fillStyle = color;
     ctx.fillRect(currentX, currentY, rectWidth, rectHeight);
-    
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 2;
     ctx.strokeRect(currentX, currentY, rectWidth, rectHeight);
-    
+
     if (rectWidth > 80 && rectHeight > 60) {
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(holding.symbol, currentX + rectWidth / 2, currentY + 10);
-      
+
       ctx.font = '14px sans-serif';
-      ctx.fillText('$' + (holding.value / 1000).toFixed(1) + 'K', 
-                    currentX + rectWidth / 2, currentY + 32);
-      
+      ctx.fillText('$' + (holding.value / 1000).toFixed(1) + 'K',
+        currentX + rectWidth / 2, currentY + 32);
+
       const returnColor = holding.return >= 0 ? '#A7F3D0' : '#FECACA';
       ctx.fillStyle = returnColor;
-      ctx.fillText((holding.return >= 0 ? '+' : '') + holding.return.toFixed(1) + '%', 
-                    currentX + rectWidth / 2, currentY + 50);
+      ctx.fillText((holding.return >= 0 ? '+' : '') + holding.return.toFixed(1) + '%',
+        currentX + rectWidth / 2, currentY + 50);
     }
-    
+
     if (remainingWidth > remainingHeight) {
       currentX += rectWidth;
       remainingWidth -= rectWidth;
@@ -3458,14 +3536,14 @@ window.drawWinRateCircle = drawWinRateCircle;
 function drawVolatilityLineChart() {
   const canvas = document.getElementById('volatilityLineChart');
   if (!canvas) return;
-  
+
   new Chart(canvas, {
     type: 'line',
     data: {
-      labels: Array.from({length: 30}, (_, i) => `Day ${i+1}`),
+      labels: Array.from({ length: 30 }, (_, i) => `Day ${i + 1}`),
       datasets: [{
         label: 'VIX',
-        data: Array.from({length: 30}, () => 15 + Math.random() * 10),
+        data: Array.from({ length: 30 }, () => 15 + Math.random() * 10),
         borderColor: '#1F40AF',
         backgroundColor: 'rgba(31, 64, 175, 0.1)',
         fill: true,
@@ -3497,22 +3575,22 @@ function drawVolatilityLineChart() {
 function drawReturnsChart() {
   const canvas = document.getElementById('returnsChart');
   if (!canvas) return;
-  
+
   new Chart(canvas, {
     type: 'line',
     data: {
-      labels: Array.from({length: 12}, (_, i) => `Month ${i+1}`),
+      labels: Array.from({ length: 12 }, (_, i) => `Month ${i + 1}`),
       datasets: [
         {
           label: 'Your Portfolio',
-          data: Array.from({length: 12}, (_, i) => (i+1) * 2.5),
+          data: Array.from({ length: 12 }, (_, i) => (i + 1) * 2.5),
           borderColor: '#1F40AF',
           backgroundColor: 'rgba(31, 64, 175, 0.1)',
           fill: true
         },
         {
           label: 'S&P 500',
-          data: Array.from({length: 12}, (_, i) => (i+1) * 1.3),
+          data: Array.from({ length: 12 }, (_, i) => (i + 1) * 1.3),
           borderColor: '#B0B4CC',
           backgroundColor: 'rgba(176, 180, 204, 0.05)',
           fill: true

@@ -321,35 +321,6 @@
       <div class="facette-content" id="facetteContent"></div>
     </div>
 
-    <!-- ============ HERO: WHAT DO YOU NEED TODAY ============ -->
-    <div id="heroSection" class="hero-what-need">
-      <h1 class="hero-question">What do you need today?</h1>
-      <div class="hero-need-buttons">
-        <button class="need-btn" onclick="quickNeed('analyze')">
-          <span class="need-icon">📈</span>
-          <span class="need-title">Analyser une action</span>
-          <span class="need-desc">Deep dive sur n'importe quelle action</span>
-        </button>
-        
-        <button class="need-btn" onclick="quickNeed('forecast')">
-          <span class="need-icon">🔮</span>
-          <span class="need-title">Voir prévisions</span>
-          <span class="need-desc">Forecasts portefeuille et marché</span>
-        </button>
-        
-        <button class="need-btn" onclick="quickNeed('news')">
-          <span class="need-icon">📰</span>
-          <span class="need-title">Dernières news</span>
-          <span class="need-desc">Actualités impactantes</span>
-        </button>
-        
-        <button class="need-btn" onclick="quickNeed('ask')">
-          <span class="need-icon">🤖</span>
-          <span class="need-title">Poser une question</span>
-          <span class="need-desc">Copilot AI à votre service</span>
-        </button>
-      </div>
-    </div>
     <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
     <section class="hero-section hero-glassmorphic" aria-label="Portfolio overview" style="display: none;" id="mainHeroSection">
       <div class="hero-header">
@@ -418,7 +389,7 @@
             <button class="help-icon" onclick="showHelp('winrate')" aria-label="Help" title="Learn more">?</button>
           </div>
           <div class="circular-progress-container">
-            <canvas id="winRateCircle" width="140" height="140"></canvas>
+            <canvas id="winRateCircle" class="win-rate-circle" width="140" height="140"></canvas>
             <div class="circle-value-overlay">
               <span class="circle-number" data-value="72">0</span>
               <span class="circle-unit">%</span>
@@ -606,6 +577,7 @@
 
   <!-- ============ HERO: WHAT DO YOU NEED TODAY ============ -->
   <div id="heroSection" class="hero-what-need">
+    <h1 class="hero-question"> </h1>
     <h1 class="hero-question">What do you need today?</h1>
     <p class="hero-subtitle">Choose your path or ask the AI copilot</p>
     <div class="hero-need-buttons">
@@ -746,7 +718,7 @@
             <button class="help-icon" onclick="showHelp('winrate')" aria-label="Help" title="Learn more">?</button>
           </div>
           <div class="circular-progress-container">
-            <canvas id="winRateCircle" width="140" height="140"></canvas>
+            <canvas class="win-rate-circle" width="140" height="140"></canvas>
             <div class="circle-value-overlay">
               <span class="circle-number" data-value="72">0</span>
               <span class="circle-unit">%</span>
@@ -1042,100 +1014,111 @@
       </div>
     </section>
 
-    <!-- ============ V17: TREEMAP ALLOCATION PRO ============ -->
-    <section class="widget-card treemap-allocation-pro" aria-label="Treemap Allocation">
-      <div class="widget-header">
-        <div class="widget-title-row">
-          <span class="widget-icon">🗺️</span>
-          <div>
-            <h2 class="widget-title">Portfolio Allocation</h2>
-            <p class="widget-subtitle-inline">Holdings by market value</p>
+    <!-- ============ V17: TREEMAP + KPI CARDS GRID ============ -->
+    <div class="grid-2-desktop">
+      <!-- ============ V17: TREEMAP ALLOCATION PRO ============ -->
+      <section class="widget-card treemap-allocation-pro" aria-label="Treemap Allocation">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🗺️</span>
+            <div>
+              <h2 class="widget-title">Portfolio Allocation</h2>
+              <p class="widget-subtitle-inline">Holdings by market value</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="widget-body">
-        <canvas id="treemapChart" width="800" height="500"></canvas>
-      </div>
-      <div class="widget-footer">
-        <div class="allocation-summary">
-          <span class="summary-item">Tech: 45%</span>
-          <span class="summary-item">Healthcare: 25%</span>
-          <span class="summary-item">Finance: 20%</span>
-          <span class="summary-item">Other: 10%</span>
+        <div class="widget-body">
+          <canvas id="treemapChart" width="800" height="500"></canvas>
         </div>
-      </div>
-    </section>
+        <div class="widget-footer">
+          <div class="allocation-summary">
+            <span class="summary-item">Tech: 45%</span>
+            <span class="summary-item">Healthcare: 25%</span>
+            <span class="summary-item">Finance: 20%</span>
+            <span class="summary-item">Other: 10%</span>
+          </div>
+        </div>
+      </section>
 
-    <!-- ============ V17: MULTI-KPI CARDS BLOOMBERG STYLE ============ -->
-    <section class="kpi-cards-pro">
-      <div class="kpi-card-mega">
-        <div class="kpi-header">
-          <span class="kpi-icon">💰</span>
-          <span class="kpi-label">Portfolio Value</span>
-        </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value-huge">$127,456</span>
-          <div class="kpi-change positive">
-            <span class="arrow">↗</span>
-            <span class="change-value">+1.88%</span>
+      <!-- ============ V17: MULTI-KPI CARDS BLOOMBERG STYLE ============ -->
+      <section class="widget-card kpi-cards-pro" aria-label="Portfolio KPIs">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">💰</span>
+            <h2 class="widget-title">Portfolio Summary</h2>
           </div>
         </div>
-        <canvas class="kpi-sparkline" id="sparklineMega1" width="200" height="40"></canvas>
-        <div class="kpi-meta">
-          <span class="meta-item">Day: <span class="positive">+$2.4K</span></span>
-          <span class="meta-item">Month: <span class="positive">+$5.2K</span></span>
-        </div>
-      </div>
-      
-      <div class="kpi-card-mega">
-        <div class="kpi-header">
-          <span class="kpi-icon">📈</span>
-          <span class="kpi-label">Total Return</span>
-        </div>
-        <div class="kpi-value-row">
-          <span class="kpi-value-huge">+18.5%</span>
-          <div class="kpi-badge success">Outperforming</div>
-        </div>
-        <div class="comparison-bars">
-          <div class="bar-item">
-            <span class="bar-label">You</span>
-            <div class="bar-visual">
-              <div class="bar-fill" style="width: 85%"></div>
+        <div class="widget-body">
+          <!-- Top: main portfolio value card -->
+          <div class="kpi-card-mega">
+            <div class="kpi-header">
+              <span class="kpi-icon">💰</span>
+              <span class="kpi-label">Portfolio Value</span>
             </div>
-            <span class="bar-value">18.5%</span>
-          </div>
-          <div class="bar-item">
-            <span class="bar-label">S&P 500</span>
-            <div class="bar-visual">
-              <div class="bar-fill secondary" style="width: 73%"></div>
+            <div class="kpi-value-row">
+              <span class="kpi-value-huge">$127,456</span>
+              <div class="kpi-change positive">
+                <span class="arrow">↗</span>
+                <span class="change-value">+1.88%</span>
+              </div>
             </div>
-            <span class="bar-value">15.2%</span>
+            <canvas class="kpi-sparkline" id="sparklineMega1" width="200" height="40"></canvas>
+            <div class="kpi-meta">
+              <span class="meta-item">Day: <span class="positive">+$2.4K</span></span>
+              <span class="meta-item">Month: <span class="positive">+$5.2K</span></span>
+            </div>
+          </div>
+
+          <!-- Bottom row: Total Return + Win Rate side by side -->
+          <div class="kpi-row">
+            <div class="kpi-card-mega">
+              <div class="kpi-header">
+                <span class="kpi-icon">📈</span>
+                <span class="kpi-label">Total Return</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-value-huge">+18.5%</span>
+                <div class="kpi-badge success">Outperforming</div>
+              </div>
+              <div class="comparison-bars">
+                <div class="bar-item">
+                  <span class="bar-label">You</span>
+                  <div class="bar-visual">
+                    <div class="bar-fill" style="width: 85%"></div>
+                  </div>
+                  <span class="bar-value">18.5%</span>
+                </div>
+                <div class="bar-item">
+                  <span class="bar-label">S&P 500</span>
+                  <div class="bar-visual">
+                    <div class="bar-fill secondary" style="width: 73%"></div>
+                  </div>
+                  <span class="bar-value">15.2%</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="kpi-card-mega">
+              <div class="kpi-header">
+                <span class="kpi-icon">⚡</span>
+                <span class="kpi-label">Win Rate</span>
+              </div>
+              <div class="kpi-circular-progress">
+                <canvas class="win-rate-circle" width="120" height="120"></canvas>
+                <div class="circular-value">
+                  <span class="value-num circle-number" data-value="72">0</span>
+                  <span class="value-unit">%</span>
+                </div>
+              </div>
+              <div class="kpi-meta">
+                <span class="meta-item">30 Trades</span>
+                <span class="meta-item">22 Wins / 8 Losses</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div class="kpi-card-mega">
-        <div class="kpi-header">
-          <span class="kpi-icon">⚡</span>
-          <span class="kpi-label">Win Rate</span>
-        </div>
-        <div class="kpi-circular-progress">
-          <svg viewBox="0 0 120 120" class="circular-chart">
-            <circle cx="60" cy="60" r="50" class="circle-bg"></circle>
-            <circle cx="60" cy="60" r="50" class="circle-fill" 
-                    stroke-dasharray="314" stroke-dashoffset="88"></circle>
-          </svg>
-          <div class="circular-value">
-            <span class="value-num">72</span>
-            <span class="value-unit">%</span>
-          </div>
-        </div>
-        <div class="kpi-meta">
-          <span class="meta-item">30 Trades</span>
-          <span class="meta-item">22 Wins / 8 Losses</span>
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
 
     <!-- ============ V13: MARKET DRIVERS VISUAL ============ -->
     <section class="widget-card market-drivers-visual" aria-label="Market Drivers">
@@ -1371,10 +1354,10 @@
             <h2 class="widget-title">Recent Signals &amp; Alerts</h2>
           </div>
           <div class="widget-actions">
-            <button class="filter-btn active" onclick="filterAlerts('all')">All</button>
-            <button class="filter-btn" onclick="filterAlerts('opportunities')">Opportunities</button>
-            <button class="filter-btn" onclick="filterAlerts('risks')">Risks</button>
-            <button class="filter-btn" onclick="filterAlerts('news')">News</button>
+            <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
+            <button class="filter-btn" data-filter="opportunities" onclick="filterAlerts('opportunities')">Opportunities</button>
+            <button class="filter-btn" data-filter="risks" onclick="filterAlerts('risks')">Risks</button>
+            <button class="filter-btn" data-filter="news" onclick="filterAlerts('news')">News</button>
             <button class="help-icon" onclick="showHelp('alerts')" aria-label="Help" title="Recent trading signals">?</button>
             <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
           </div>
