@@ -123,113 +123,16 @@
   </div>
 
   <!-- ============ NOTIFICATION DRAWER ============ -->
-  <div id="notificationDrawer" class="notification-drawer" role="dialog" aria-label="Notifications">
-    <div class="drawer-header">
-      <h2>Notifications</h2>
-      <button class="close-btn" onclick="closeNotifications()" aria-label="Close">✕</button>
-    </div>
-    <div class="drawer-content">
-      <div class="notification-item high">
-        <span class="notif-icon">🎯</span>
-        <div class="notif-content">
-          <h3>NVDA Breakout Detected</h3>
-          <p>Strong momentum signal with 92% confidence</p>
-          <span class="notif-time">2h ago</span>
-        </div>
-        <button class="mark-read" onclick="markAsRead(this)" aria-label="Mark as read">✓</button>
-      </div>
-      <div class="notification-item medium">
-        <span class="notif-icon">✅</span>
-        <div class="notif-content">
-          <h3>Portfolio Health Improved</h3>
-          <p>Your health score increased to 83%</p>
-          <span class="notif-time">4h ago</span>
-        </div>
-        <button class="mark-read" onclick="markAsRead(this)" aria-label="Mark as read">✓</button>
-      </div>
-      <div class="notification-item low read">
-        <span class="notif-icon">📊</span>
-        <div class="notif-content">
-          <h3>Weekly Report Ready</h3>
-          <p>Your performance summary is available</p>
-          <span class="notif-time">1d ago</span>
-        </div>
-        <button class="mark-read" onclick="markAsRead(this)" aria-label="Mark as read">✓</button>
-      </div>
-    </div>
-    <div class="drawer-footer">
-      <button class="mark-all-btn" onclick="markAllRead()">Mark all as read</button>
-    </div>
-  </div>
+  <!-- Loaded dynamically from components/modals/notification-drawer.html -->
+  <div id="notification-drawer-container"></div>
 
   <!-- ============ SETTINGS MODAL ============ -->
-  <div id="settingsModal" class="modal" role="dialog" aria-label="Settings">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Settings</h2>
-        <button class="close-btn" onclick="closeSettings()" aria-label="Close">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="setting-group">
-          <label class="setting-label">Auto-refresh
-            <input type="checkbox" id="autoRefresh" checked>
-            <span class="toggle-switch"></span>
-          </label>
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Refresh interval</label>
-          <select class="setting-select">
-            <option value="30">30 seconds</option>
-            <option value="60" selected>1 minute</option>
-            <option value="300">5 minutes</option>
-          </select>
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Theme</label>
-          <select class="setting-select" id="themeSelect">
-            <option value="dark" selected>Dark</option>
-            <option value="light">Light</option>
-            <option value="system">System</option>
-          </select>
-        </div>
-        <div class="setting-group">
-          <label class="setting-label">Notifications
-            <input type="checkbox" id="notifEnabled" checked>
-            <span class="toggle-switch"></span>
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="modal-btn primary" onclick="saveSettings()">Save preferences</button>
-        <button class="modal-btn secondary" onclick="closeSettings()">Cancel</button>
-      </div>
-    </div>
-  </div>
+  <!-- Loaded dynamically from components/modals/settings-modal.html -->
+  <div id="settings-modal-container"></div>
 
   <!-- ============ COMMAND PALETTE ============ -->
-  <div id="commandPalette" class="command-palette" role="dialog" aria-label="Command Palette">
-    <div class="command-content">
-      <div class="command-search">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="commandInput" placeholder="Search commands..." aria-label="Command search" />
-      </div>
-      <div class="command-suggestions">
-        <div class="command-section">
-          <div class="command-label">Quick Actions</div>
-          <button class="command-item" onclick="executeCommand('correlation')">📊 Show Correlation Matrix</button>
-          <button class="command-item" onclick="executeCommand('backtest')">🧪 Run Backtest Simulation</button>
-          <button class="command-item" onclick="executeCommand('report')">📄 Generate Report</button>
-          <button class="command-item" onclick="executeCommand('refresh')">🔄 Refresh All Data</button>
-          <button class="command-item" onclick="executeCommand('theme')">🎨 Toggle Theme</button>
-        </div>
-        <div class="command-section">
-          <div class="command-label">Recent Commands</div>
-          <button class="command-item" onclick="executeCommand('nvda')">💡 Check NVDA forecast</button>
-          <button class="command-item" onclick="executeCommand('risk')">⚠️ Analyze risk exposure</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Loaded dynamically from components/modals/command-palette.html -->
+  <div id="command-palette-container"></div>
 
   <!-- ============ MAIN CONTENT ============ -->
   <main class="main-container">
@@ -2623,6 +2526,37 @@
       </div>
     </div>
   </div>
+
+  <!-- POC: Dynamic Component Loading -->
+  <script type="module">
+    // Import du component loader
+    import { loadComponent, loadComponents } from './js/utils/componentLoader.js';
+
+    // Charger les composants quand le DOM est prêt
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('🚀 Loading modular components...');
+
+      try {
+        // Charger tous les modals en parallèle
+        const components = [
+          { path: 'modals/notification-drawer.html', target: '#notification-drawer-container' },
+          { path: 'modals/settings-modal.html', target: '#settings-modal-container' },
+          { path: 'modals/command-palette.html', target: '#command-palette-container' }
+        ];
+
+        const results = await loadComponents(components);
+        const successCount = results.filter(r => r).length;
+
+        console.log(`✅ Loaded ${successCount}/${components.length} components successfully!`);
+
+        if (successCount === components.length) {
+          console.log('🎉 All modals loaded! Modular architecture working perfectly!');
+        }
+      } catch (error) {
+        console.error('❌ Component loading error:', error);
+      }
+    });
+  </script>
 
   <script src="mockData.js"></script>
   <script src="app.js"></script>

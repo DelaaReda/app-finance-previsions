@@ -1,0 +1,23 @@
+<div id="commandPalette" class="command-palette" role="dialog" aria-label="Command Palette">
+    <div class="command-content">
+        <div class="command-search">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="commandInput" placeholder="Search commands..." aria-label="Command search" />
+        </div>
+        <div class="command-suggestions">
+            <div class="command-section">
+                <div class="command-label">Quick Actions</div>
+                <button class="command-item" onclick="executeCommand('correlation')">📊 Show Correlation Matrix</button>
+                <button class="command-item" onclick="executeCommand('backtest')">🧪 Run Backtest Simulation</button>
+                <button class="command-item" onclick="executeCommand('report')">📄 Generate Report</button>
+                <button class="command-item" onclick="executeCommand('refresh')">🔄 Refresh All Data</button>
+                <button class="command-item" onclick="executeCommand('theme')">🎨 Toggle Theme</button>
+            </div>
+            <div class="command-section">
+                <div class="command-label">Recent Commands</div>
+                <button class="command-item" onclick="executeCommand('nvda')">💡 Check NVDA forecast</button>
+                <button class="command-item" onclick="executeCommand('risk')">⚠️ Analyze risk exposure</button>
+            </div>
+        </div>
+    </div>
+</div>
