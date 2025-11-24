@@ -1,0 +1,326 @@
+/**
+ * DESIGN TOKENS - Finance Copilot V16 ULTIMATE
+ * 
+ * Design System centralisé suivant les principes définis dans DESIGN_PRINCIPLES.md
+ * Tous les espacements suivent le système 4-point grid
+ * 
+ * @version 1.0.0
+ * @date 2025-11-23
+ */
+
+:root {
+    /* ============================================
+     SPACING SCALE - 4-Point Grid System
+     Tous les espacements sont des multiples de 4
+     ============================================ */
+
+    --space-0: 0px;
+    --space-1: 4px;
+    /* Micro-spacing (entre icône et texte) */
+    --space-2: 8px;
+    /* Petit gap (éléments très proches) */
+    --space-3: 12px;
+    /* Gap standard (éléments d'une même section) */
+    --space-4: 16px;
+    /* Gap moyen (padding de cartes, gap entre colonnes) */
+    --space-5: 20px;
+    /* Gap large (entre sections différentes) */
+    --space-6: 24px;
+    /* Gap très large (margin-bottom entre blocs majeurs) */
+    --space-8: 32px;
+    /* Espacement exceptionnel */
+    --space-10: 40px;
+    /* Espacement exceptionnel */
+    --space-12: 48px;
+    /* Espacement exceptionnel */
+
+    /* Alias pour compatibilité avec l'ancien système */
+    --space-xs: var(--space-1);
+    /* 4px */
+    --space-sm: var(--space-2);
+    /* 8px */
+    --space-md: var(--space-3);
+    /* 12px */
+    --space-lg: var(--space-4);
+    /* 16px */
+    --space-xl: var(--space-5);
+    /* 20px */
+    --space-2xl: var(--space-6);
+    /* 24px */
+    --space-3xl: var(--space-12);
+    /* 48px */
+
+    /* ============================================
+     TYPOGRAPHY SCALE
+     Échelle harmonieuse pour toutes les tailles de texte
+     ============================================ */
+
+    /* Font Sizes */
+    --font-size-xs: 10px;
+    /* Minimum absolu (à éviter si possible) */
+    --font-size-sm: 11px;
+    /* Small labels (uppercase, métadonnées) */
+    --font-size-base: 13px;
+    /* Body text, descriptions */
+    --font-size-md: 14px;
+    /* Texte normal */
+    --font-size-lg: 16px;
+    /* Titres moyens */
+    --font-size-xl: 18px;
+    /* Grands labels */
+    --font-size-2xl: 22px;
+    /* Valeurs secondaires */
+    --font-size-3xl: 28px;
+    /* Titres principaux */
+    --font-size-4xl: 48px;
+    /* Mega values (secondaires) */
+    --font-size-5xl: 52px;
+    /* Mega values (principales) */
+    --font-size-6xl: 56px;
+    /* Mega values (maximum) */
+
+    /* Font Weights */
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* Line Heights */
+    --line-height-tight: 1.0;
+    /* Gros chiffres (52px+) */
+    --line-height-snug: 1.2;
+    /* Titres moyens (18-28px) */
+    --line-height-normal: 1.5;
+    /* Texte normal (13-16px) */
+    --line-height-relaxed: 1.6;
+    /* Paragraphes longs */
+
+    /* Letter Spacing */
+    --letter-spacing-tight: -0.5px;
+    --letter-spacing-normal: 0px;
+    --letter-spacing-wide: 0.5px;
+    --letter-spacing-wider: 0.8px;
+    --letter-spacing-widest: 1px;
+
+    /* ============================================
+     BORDER RADIUS
+     Cohérence des arrondis dans toute l'interface
+     ============================================ */
+
+    --radius-none: 0px;
+    --radius-xs: 4px;
+    /* Très petit (boutons compacts, inputs) */
+    --radius-sm: 6px;
+    /* Petit (barres de progression, petits badges) */
+    --radius-md: 8px;
+    /* Moyen (boutons standards) */
+    --radius-lg: 12px;
+    /* Large (cartes, badges importants) */
+    --radius-xl: 16px;
+    /* Très large (cartes principales) */
+    --radius-2xl: 20px;
+    /* Pills (badges arrondis) */
+    --radius-full: 50%;
+    /* Cercles parfaits */
+    --radius-round: 9999px;
+    /* Alternative pour pills */
+
+    /* ============================================
+     COLORS - Palette de couleurs
+     ============================================ */
+
+    /* Success Colors (Vert) */
+    --color-success-50: #ECFDF5;
+    --color-success-100: #D1FAE5;
+    --color-success-200: #A7F3D0;
+    --color-success-300: #6EE7B7;
+    --color-success-400: #34D399;
+    /* Primary */
+    --color-success-500: #10B981;
+    --color-success-600: #059669;
+    --color-success-700: #047857;
+    --color-success-800: #065F46;
+    --color-success-900: #064E3B;
+
+    /* Warning Colors (Orange) */
+    --color-warning-50: #FFFBEB;
+    --color-warning-100: #FEF3C7;
+    --color-warning-200: #FDE68A;
+    --color-warning-300: #FCD34D;
+    --color-warning-400: #FBBF24;
+    --color-warning-500: #F59E0B;
+    /* Primary */
+    --color-warning-600: #D97706;
+    --color-warning-700: #B45309;
+    --color-warning-800: #92400E;
+    --color-warning-900: #78350F;
+
+    /* Danger Colors (Rouge) */
+    --color-danger-50: #FEF2F2;
+    --color-danger-100: #FEE2E2;
+    --color-danger-200: #FECACA;
+    --color-danger-300: #FCA5A5;
+    --color-danger-400: #F87171;
+    --color-danger-500: #EF4444;
+    /* Primary */
+    --color-danger-600: #DC2626;
+    --color-danger-700: #B91C1C;
+    --color-danger-800: #991B1B;
+    --color-danger-900: #7F1D1D;
+
+    /* Info Colors (Bleu) */
+    --color-info-50: #EFF6FF;
+    --color-info-100: #DBEAFE;
+    --color-info-200: #BFDBFE;
+    --color-info-300: #93C5FD;
+    --color-info-400: #60A5FA;
+    --color-info-500: #3B82F6;
+    /* Primary */
+    --color-info-600: #2563EB;
+    --color-info-700: #1D4ED8;
+    --color-info-800: #1E40AF;
+    --color-info-900: #1E3A8A;
+
+    /* ============================================
+     OPACITY SCALE
+     Échelle d'opacité cohérente
+     ============================================ */
+
+    --opacity-0: 0;
+    --opacity-5: 0.05;
+    /* Fond très subtil (hover states) */
+    --opacity-10: 0.1;
+    /* Fonds de badges, cartes secondaires */
+    --opacity-15: 0.15;
+    /* Fonds de badges, cartes secondaires */
+    --opacity-20: 0.2;
+    /* Fonds de badges, cartes secondaires */
+    --opacity-30: 0.3;
+    /* Overlays, éléments en arrière-plan */
+    --opacity-40: 0.4;
+    /* Overlays, éléments en arrière-plan */
+    --opacity-50: 0.5;
+    /* Éléments semi-visibles */
+    --opacity-60: 0.6;
+    /* Éléments semi-visibles */
+    --opacity-70: 0.7;
+    /* Éléments visibles mais discrets */
+    --opacity-80: 0.8;
+    /* Éléments visibles mais discrets */
+    --opacity-85: 0.85;
+    /* Éléments visibles mais discrets */
+    --opacity-90: 0.9;
+    /* Presque opaque */
+    --opacity-100: 1;
+    /* Pleinement visible */
+
+    /* ============================================
+     SHADOWS
+     Niveaux de profondeur pour les ombres
+     ============================================ */
+
+    --shadow-none: none;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+    /* Subtle */
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    /* Card */
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+    /* Elevated */
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.2);
+    /* Modal */
+    --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.25);
+    /* Popup */
+
+    /* ============================================
+     TRANSITIONS
+     Durées et easing functions cohérentes
+     ============================================ */
+
+    /* Durations */
+    --duration-instant: 0ms;
+    --duration-fast: 150ms;
+    /* Micro-interactions (hover, focus) */
+    --duration-base: 250ms;
+    /* Transitions standards */
+    --duration-slow: 400ms;
+    /* Animations complexes */
+    --duration-slower: 600ms;
+    /* Animations lentes */
+
+    /* Easing Functions */
+    --ease-linear: linear;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-material: cubic-bezier(0.4, 0, 0.2, 1);
+    /* Material Design */
+
+    /* ============================================
+     Z-INDEX SCALE
+     Hiérarchie claire des couches
+     ============================================ */
+
+    --z-base: 0;
+    /* Arrière-plan */
+    --z-content: 10;
+    /* Contenu principal */
+    --z-dropdown: 100;
+    /* Dropdowns */
+    --z-sticky: 500;
+    /* Headers sticky */
+    --z-overlay: 900;
+    /* Overlays */
+    --z-modal: 1000;
+    /* Modals */
+    --z-tooltip: 1100;
+    /* Tooltips */
+    --z-toast: 1200;
+    /* Toasts/Notifications */
+
+    /* ============================================
+     BREAKPOINTS (pour référence)
+     À utiliser dans les @media queries
+     ============================================ */
+
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+    --breakpoint-2xl: 1536px;
+}
+
+/**
+ * Dark Theme Colors (déjà défini dans style.css)
+ * Documenté ici pour référence
+ */
+:root {
+    --color-bg-dark: #0f172a;
+    --color-bg-card: #1e293b;
+    --color-text: #ffffff;
+    --color-text-secondary: #94a3b8;
+    --card-border: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.15);
+}
+
+/**
+ * Usage Examples:
+ * 
+ * .button {
+ *   padding: var(--space-md) var(--space-lg);
+ *   border-radius: var(--radius-lg);
+ *   font-size: var(--font-size-base);
+ *   transition: all var(--duration-base) var(--ease-out);
+ * }
+ * 
+ * .card {
+ *   padding: var(--space-xl);
+ *   border-radius: var(--radius-xl);
+ *   box-shadow: var(--shadow-md);
+ * }
+ * 
+ * .mega-value {
+ *   font-size: var(--font-size-6xl);
+ *   font-weight: var(--font-weight-bold);
+ *   line-height: var(--line-height-tight);
+ * }
+ */

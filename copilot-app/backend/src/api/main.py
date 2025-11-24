@@ -476,6 +476,20 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include judge routes: {e}")
 
+    # Include legacy macro routes (from api.routes.macro) via compat wrapper
+    try:
+        from .routes.macro_legacy import router as macro_legacy_router
+        app.include_router(macro_legacy_router, prefix="/api")
+    except ImportError as e:
+        print(f"⚠️  Failed to include legacy macro routes: {e}")
+
+    # Include legacy news routes (from api.routes.news*) via compat wrapper
+    try:
+        from .routes.news_legacy import router as news_legacy_router
+        app.include_router(news_legacy_router, prefix="/api")
+    except ImportError as e:
+        print(f"⚠️  Failed to include legacy news routes: {e}")
+
     # Include forecasts routes
     try:
         from api.routes.forecasts import forecasts_router
