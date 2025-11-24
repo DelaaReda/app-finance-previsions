@@ -195,6 +195,7 @@ async def get_top_stocks(
 async def get_stocks_prices(
     ticker: Optional[str] = Query(None, description="Single ticker symbol"),
     tickers: Optional[str] = Query(None, description="Comma-separated ticker symbols"),
+    tickers_list: Optional[List[str]] = Query(None, description="List of ticker symbols"),
     timeframe: str = Query("1y", description="Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max"),
     interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo")
 ):
@@ -208,6 +209,8 @@ async def get_stocks_prices(
         tickers_to_process = []
         if ticker:
             tickers_to_process = [ticker.upper()]
+        elif tickers_list:
+            tickers_to_process = [t.strip().upper() for t in tickers_list if t.strip()]
         elif tickers:
             tickers_to_process = [t.strip().upper() for t in tickers.split(',') if t.strip()]
         else:

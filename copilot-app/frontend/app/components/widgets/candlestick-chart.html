@@ -1,0 +1,46 @@
+<section class="widget-card candlestick-chart-pro" aria-label="Candlestick Chart">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📊</span>
+            <div>
+                <h2 class="widget-title">NVDA Price Action</h2>
+                <p class="widget-subtitle-inline">Candlestick + Volume + Indicators</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <div class="timeframe-selector">
+                <button class="tf-btn active" onclick="updateCandlestickTimeframe('1W')">1W</button>
+                <button class="tf-btn" onclick="updateCandlestickTimeframe('1M')">1M</button>
+                <button class="tf-btn" onclick="updateCandlestickTimeframe('3M')">3M</button>
+            </div>
+        </div>
+    </div>
+    <div class="widget-body">
+        <div class="chart-toolbar">
+            <button class="tool-btn active">Candlestick</button>
+            <button class="tool-btn">Line</button>
+            <button class="tool-btn">Area</button>
+            <div class="separator"></div>
+            <button class="tool-btn">MA(20)</button>
+            <button class="tool-btn">RSI</button>
+        </div>
+        <canvas id="candlestickChart" width="1000" height="400"></canvas>
+        <canvas id="volumeChart" width="1000" height="100"></canvas>
+    </div>
+    <div class="widget-footer">
+        <div class="legend">
+            <span class="legend-item">
+                <span class="color-box" style="background: #10B981"></span>
+                Bullish Candles
+            </span>
+            <span class="legend-item">
+                <span class="color-box" style="background: #EF4444"></span>
+                Bearish Candles
+            </span>
+            <span class="legend-item">
+                <span class="line-sample ma"></span>
+                MA(20)
+            </span>
+        </div>
+    </div>
+</section>

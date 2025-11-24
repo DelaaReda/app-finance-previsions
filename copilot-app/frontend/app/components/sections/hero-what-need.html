@@ -1,0 +1,42 @@
+<div id="heroSection" class="hero-what-need">
+
+    <h1 class="hero-question">What do you need today?</h1>
+    <p class="hero-subtitle">Choose your path or ask the AI copilot</p>
+    <div class="hero-need-buttons">
+        <button class="need-btn" onclick="quickNeed('analyze')">
+            <span class="need-icon">📈</span>
+            <span class="need-title">Analyser une action</span>
+            <span class="need-desc">Deep dive sur n'importe quelle action</span>
+        </button>
+
+        <button class="need-btn" onclick="quickNeed('forecast')">
+            <span class="need-icon">🔮</span>
+            <span class="need-title">Voir prévisions</span>
+            <span class="need-desc">Forecasts portefeuille et marché</span>
+        </button>
+
+        <button class="need-btn" onclick="quickNeed('news')">
+            <span class="need-icon">📰</span>
+            <span class="need-title">Dernières news</span>
+            <span class="need-desc">Actualités impactantes</span>
+        </button>
+
+        <button class="need-btn" onclick="quickNeed('ask')">
+            <span class="need-icon">🤖</span>
+            <span class="need-title">Poser une question</span>
+            <span class="need-desc">Copilot AI à votre service</span>
+        </button>
+    </div>
+
+    <div class="ai-suggestions-hero">
+        <h3>🤖 AI Suggestions for you:</h3>
+        <div class="suggestions-chips">
+            <button class="suggestion-chip" onclick="showToast('Checking NVDA resistance...')">Check NVDA resistance
+                $880</button>
+            <button class="suggestion-chip" onclick="showToast('Viewing earnings calendar...')">3 earnings this week
+                impacting you</button>
+            <button class="suggestion-chip" onclick="showToast('Opening portfolio review...')">Portfolio up 1.88%,
+                consider review</button>
+        </div>
+    </div>
+</div>

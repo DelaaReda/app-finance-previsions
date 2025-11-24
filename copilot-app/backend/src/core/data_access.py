@@ -201,6 +201,18 @@ def get_close_series(ticker: str, interval: str = "1d", limit: int = 252) -> Opt
     except Exception:
         return None
 
+
+def load_macro_forecast_rows(limit: int = 200):
+    """Fallback loader used by api.main; returns a never-empty structure."""
+    try:
+        data = load_json("macro_forecasts") or {}
+        rows = data.get("rows") or data.get("data", {}).get("rows") or []
+        if limit:
+            rows = rows[:limit]
+        return {"ok": True, "rows": rows, "count": len(rows)}
+    except Exception as e:
+        return {"ok": False, "rows": [], "count": 0, "error": str(e)}
+
 def _load_stock_prices(ticker: str) -> pd.DataFrame:
     """
     Load stock prices for a specific ticker from date-partitioned storage.

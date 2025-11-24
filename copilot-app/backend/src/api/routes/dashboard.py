@@ -31,6 +31,61 @@ from ..services.dashboard_ui_service import (  # type: ignore
 # below are relative to `/api/dashboard`.
 dashboard_router = APIRouter(tags=["dashboard"])
 
+@dashboard_router.get("/kpis")
+async def dashboard_kpis() -> Dict[str, Any]:
+  """Get dashboard KPIs with real data (never-empty fallback)."""
+  try:
+    forecasts_data = load_json("forecasts") or {}
+    news_data = load_json("news_feed") or {}
+
+    forecast_rows = forecasts_data.get("rows", []) or forecasts_data.get("data", {}).get("rows", [])
+    articles = news_data.get("articles", []) or news_data.get("data", {}).get("articles", [])
+
+    total_forecasts = len(forecast_rows)
+    high_conf_count = sum(1 for r in forecast_rows if (r.get("confidence") or 0) >= 0.6)
+    bullish = sum(1 for r in forecast_rows if r.get("direction") == "up")
+    bearish = sum(1 for r in forecast_rows if r.get("direction") == "down")
+
+    news_count = len(articles)
+    positive_news = sum(1 for a in articles if (a.get("sentiment_score") or 0) >= 0.1)
+
+    return {
+      "ok": True,
+      "data": {
+        "kpi_forecasts": {
+          "active_forecasts": total_forecasts,
+          "high_confidence_forecasts": high_conf_count,
+          "bullish_signals": bullish,
+          "bearish_signals": bearish,
+        },
+        "kpi_news": {
+          "total_news": news_count,
+          "positive_news": positive_news,
+        },
+        "health": {
+          "forecasts_available": total_forecasts > 0,
+          "news_available": news_count > 0,
+          "overall_health": "healthy" if (total_forecasts > 0 and news_count > 0) else "degraded",
+        },
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+      },
+    }
+  except Exception as e:  # never-empty fallback
+    return {
+      "ok": True,
+      "data": {
+        "kpi_forecasts": {
+          "active_forecasts": 0,
+          "high_confidence_forecasts": 0,
+          "bullish_signals": 0,
+          "bearish_signals": 0,
+        },
+        "kpi_news": {"total_news": 0, "positive_news": 0},
+        "health": {"overall_health": "error"},
+        "error": str(e),
+      },
+    }
+
 
 @dashboard_router.get("/portfolio-summary")
 async def get_portfolio_summary() -> Dict[str, Any]:

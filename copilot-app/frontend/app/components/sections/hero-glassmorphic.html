@@ -1,0 +1,163 @@
+<section class="hero-section hero-glassmorphic" aria-label="Portfolio overview">
+    <div class="hero-header">
+        <div class="user-info">
+            <div class="user-avatar">👤</div>
+            <div>
+                <h1 class="greeting">Bonjour, Alex 👋</h1>
+                <p class="headline">Your AI-Powered Portfolio Command Center</p>
+            </div>
+        </div>
+        <div class="last-updated">Updated 5 minutes ago</div>
+    </div>
+
+    <div class="ai-daily-summary">
+        <div class="ai-summary-header">
+            <span class="ai-icon">🤖</span>
+            <h3>AI Copilot Analysis</h3>
+        </div>
+        <p class="ai-summary-content">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
+            Fed dovish signals support bullish continuation. Recommended: Hold current positions, monitor volatility.
+        </p>
+        <div class="ai-summary-footer">
+            <span class="ai-timestamp">Generated 2 minutes ago</span>
+            <button class="ai-action-btn" onclick="toggleAICopilot()">Ask AI Copilot</button>
+        </div>
+    </div>
+
+    <!-- V11: AI Insights Card -->
+    <div class="ai-insights-card" id="aiInsightsCard">
+        <div class="ai-insights-header">
+            <span class="insights-icon">🧠</span>
+            <h3>AI Insights</h3>
+            <button class="refresh-insights-btn" onclick="refreshInsights()" aria-label="Refresh">🔄</button>
+        </div>
+        <div class="insights-list" id="insightsList"></div>
+    </div>
+
+    <!-- V13: VISUAL HERO KPIs (HUGE NUMBERS + ARROWS + SPARKLINES) -->
+    <div class="mega-kpi-blocks visual-hero">
+        <div class="kpi-block" tabindex="0" role="article" aria-label="Portfolio value">
+            <!-- Row 1: Title + Value (Horizontal Alignment) -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="kpi-icon">💰</div>
+                    <div>
+                        <div style="font-size: 14px; color: var(--color-text-secondary); font-weight: 500;">Portfolio
+                            Value
+                        </div>
+                        <div style="font-size: 12px; color: var(--color-text-tertiary);">Live Tracking</div>
+                    </div>
+                </div>
+                <button class="help-icon" onclick="showHelp('portfolio')" aria-label="Help"
+                    title="Learn more">?</button>
+            </div>
+
+            <!-- Row 2: Main Value + Change (Aligned) -->
+            <div style="display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px;">
+                <div class="kpi-value-huge" data-value="127456">$0</div>
+                <div class="kpi-change-visual positive">
+                    <span class="arrow-huge">↗️</span>
+                    <span class="change-huge" data-value="1.88">+0%</span>
+                </div>
+            </div>
+
+            <!-- Row 3: Context Info (Clean Grid) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                <div style="font-size: 13px; color: var(--color-text-secondary);">
+                    Day: <span style="color: #34D399; font-weight: 600;">+$2,400</span>
+                </div>
+                <div style="font-size: 13px; color: var(--color-text-secondary);">
+                    Month: <span style="color: #34D399; font-weight: 600;">+$5,200</span>
+                </div>
+            </div>
+
+            <!-- Row 4: Progress to Target -->
+            <div style="margin-bottom: 16px;">
+                <div
+                    style="display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">
+                    <span>Target: $130,000</span>
+                    <span style="color: var(--color-text);">98%</span>
+                </div>
+                <div class="progress-bar-mini">
+                    <div class="progress-fill-mini" style="width: 98%"></div>
+                </div>
+            </div>
+
+            <!-- Row 5: Sparkline -->
+            <canvas class="kpi-sparkline" id="sparkline1" width="120" height="30"></canvas>
+
+            <!-- Row 6: Actions (Simplified) -->
+            <div class="kpi-actions-row" style="margin-top: 16px;">
+                <button class="kpi-action-btn primary" onclick="deepDivePortfolio()">Deep Dive</button>
+                <button class="kpi-action-btn secondary" onclick="openScenarioBuilder()">Scenario</button>
+                <button class="kpi-action-btn-icon" onclick="showKpiMenu('portfolio')"
+                    aria-label="More actions">⋮</button>
+            </div>
+        </div>
+
+        <div class="kpi-block" tabindex="0" role="article" aria-label="AI forecast">
+            <div class="kpi-header">
+                <div class="kpi-icon">🔮</div>
+                <button class="help-icon" onclick="showHelp('forecast')" aria-label="Help" title="Learn more">?</button>
+            </div>
+            <div class="kpi-value-huge forecast" data-value="5.3">+0%</div>
+            <div class="confidence-gauge-visual">
+                <canvas id="confidenceGauge" width="120" height="60"></canvas>
+                <div class="gauge-value-overlay">82%</div>
+            </div>
+            <div class="kpi-context-bar">
+                <div class="context-item">
+                    <span class="context-badge neutral">vs. Market Consensus: +3.2%</span>
+                </div>
+                <div class="context-item">
+                    <span class="context-label-gray">Bull: +12.3% | Bear: -5.8%</span>
+                </div>
+                <div class="context-item">
+                    <span class="context-label-gray">Base: Analyst estimates</span>
+                </div>
+            </div>
+            <canvas class="kpi-sparkline" id="sparkline2" width="120" height="30"></canvas>
+            <div class="kpi-actions-row">
+                <button class="kpi-action-btn primary" onclick="explainForecast()">Explain This Forecast</button>
+                <button class="kpi-action-btn secondary" onclick="openScenarioBuilder()">Custom Scenario</button>
+                <button class="kpi-action-btn secondary" onclick="openBacktest()">Backtest</button>
+            </div>
+        </div>
+
+        <div class="kpi-block" tabindex="0" role="article" aria-label="Win rate">
+            <div class="kpi-header">
+                <div class="kpi-icon">🎯</div>
+                <button class="help-icon" onclick="showHelp('winrate')" aria-label="Help" title="Learn more">?</button>
+            </div>
+            <div class="circular-progress-container">
+                <canvas class="win-rate-circle" width="140" height="140"></canvas>
+                <div class="circle-value-overlay">
+                    <span class="circle-number" data-value="72">0</span>
+                    <span class="circle-unit">%</span>
+                </div>
+            </div>
+            <div class="kpi-trend-visual">
+                <span class="trend-arrow">↗️</span>
+                <span class="trend-value">+2.3%</span>
+            </div>
+            <div class="kpi-context-bar">
+                <div class="context-item">
+                    <span class="context-label">Target: 70%</span>
+                    <span class="context-badge positive">Above Target ✓</span>
+                </div>
+                <div class="context-item">
+                    <span class="context-badge positive">vs. Last Month: +2.3%</span>
+                </div>
+                <div class="context-item">
+                    <span class="context-label-gray">Industry Avg: 68%</span>
+                </div>
+            </div>
+            <canvas class="kpi-sparkline" id="sparkline3" width="120" height="30"></canvas>
+            <div class="kpi-actions-row">
+                <button class="kpi-action-btn primary" onclick="viewAllTrades()">View All Trades</button>
+                <button class="kpi-action-btn secondary" onclick="optimizeStrategy()">Optimize Strategy</button>
+                <button class="kpi-action-btn secondary" onclick="riskAnalysis()">Risk Analysis</button>
+            </div>
+        </div>
+    </div>
+</section>

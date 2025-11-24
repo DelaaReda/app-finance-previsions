@@ -1,0 +1,22 @@
+<div id="splitViewContainer" class="split-view-container" style="display: none;">
+    <div class="split-pane left-pane">
+        <div class="pane-header">
+            <h3>Current (November)</h3>
+            <button class="maximize-btn" onclick="maximizePane('left')" aria-label="Maximize">⛶</button>
+        </div>
+        <div class="pane-content" id="leftPaneContent"></div>
+    </div>
+    <div class="split-divider"></div>
+    <div class="split-pane right-pane">
+        <div class="pane-header">
+            <h3>Compare To:</h3>
+            <select id="compareToSelect" class="compare-select" onchange="updateComparison(this.value)">
+                <option value="october">October</option>
+                <option value="benchmark">S&P 500 Benchmark</option>
+                <option value="scenario">AI Optimal Scenario</option>
+            </select>
+            <button class="close-btn" onclick="toggleSplitView()" aria-label="Close">✕</button>
+        </div>
+        <div class="pane-content" id="rightPaneContent"></div>
+    </div>
+</div>

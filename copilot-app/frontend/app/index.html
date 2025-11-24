@@ -20,37 +20,12 @@
   <div id="ai-suggestions-container"></div>
 
   <!-- V11: FILTER BAR -->
-  <div id="filterBar" class="filter-bar collapsed">
-    <div class="filter-group">
-      <label>Time Period</label>
-      <input type="date" id="filterStartDate" value="2025-10-18">
-      <span>to</span>
-      <input type="date" id="filterEndDate" value="2025-11-18">
-    </div>
-    <div class="filter-group">
-      <label>Confidence Threshold</label>
-      <input type="range" id="confidenceSlider" min="0" max="100" value="70">
-      <span id="confidenceValue">70%</span>
-    </div>
-    <div class="filter-group">
-      <label>Asset Classes</label>
-      <label class="checkbox-label"><input type="checkbox" checked> Stocks</label>
-      <label class="checkbox-label"><input type="checkbox"> Bonds</label>
-      <label class="checkbox-label"><input type="checkbox"> Crypto</label>
-    </div>
-    <div class="filter-actions">
-      <button class="apply-filters-btn" onclick="applyFilters()">Apply Filters</button>
-      <button class="clear-filters-btn" onclick="clearFilters()">Clear All</button>
-    </div>
-  </div>
+  <!-- Loaded dynamically from components/filter-bar.html -->
+  <div id="filter-bar-container"></div>
 
   <!-- MORE MENU DROPDOWN -->
-  <div id="moreMenu" class="more-menu" style="display: none;">
-    <button class="menu-item" onclick="openSettings(); toggleMoreMenu();">⚙️ Settings</button>
-    <button class="menu-item" onclick="openExportModal(); toggleMoreMenu();">📤 Export</button>
-    <button class="menu-item" onclick="toggleTheme(); toggleMoreMenu();" id="themeMenuItem">🌙 Dark Mode</button>
-    <button class="menu-item" onclick="toggleCommandPalette(); toggleMoreMenu();">⌘K Command Palette</button>
-  </div>
+  <!-- Loaded dynamically from components/modals/more-menu.html -->
+  <div id="more-menu-container"></div>
 
   <!-- ============ NOTIFICATION DRAWER ============ -->
   <!-- Loaded dynamically from components/modals/notification-drawer.html -->
@@ -208,489 +183,58 @@
     </div>
 
     <!-- ============ HERO: WHAT DO YOU NEED TODAY ============ -->
-    <div id="heroSection" class="hero-what-need">
-
-      <h1 class="hero-question">What do you need today?</h1>
-      <p class="hero-subtitle">Choose your path or ask the AI copilot</p>
-      <div class="hero-need-buttons">
-        <button class="need-btn" onclick="quickNeed('analyze')">
-          <span class="need-icon">📈</span>
-          <span class="need-title">Analyser une action</span>
-          <span class="need-desc">Deep dive sur n'importe quelle action</span>
-        </button>
-
-        <button class="need-btn" onclick="quickNeed('forecast')">
-          <span class="need-icon">🔮</span>
-          <span class="need-title">Voir prévisions</span>
-          <span class="need-desc">Forecasts portefeuille et marché</span>
-        </button>
-
-        <button class="need-btn" onclick="quickNeed('news')">
-          <span class="need-icon">📰</span>
-          <span class="need-title">Dernières news</span>
-          <span class="need-desc">Actualités impactantes</span>
-        </button>
-
-        <button class="need-btn" onclick="quickNeed('ask')">
-          <span class="need-icon">🤖</span>
-          <span class="need-title">Poser une question</span>
-          <span class="need-desc">Copilot AI à votre service</span>
-        </button>
-      </div>
-
-      <div class="ai-suggestions-hero">
-        <h3>🤖 AI Suggestions for you:</h3>
-        <div class="suggestions-chips">
-          <button class="suggestion-chip" onclick="showToast('Checking NVDA resistance...')">Check NVDA resistance
-            $880</button>
-          <button class="suggestion-chip" onclick="showToast('Viewing earnings calendar...')">3 earnings this week
-            impacting you</button>
-          <button class="suggestion-chip" onclick="showToast('Opening portfolio review...')">Portfolio up 1.88%,
-            consider review</button>
-        </div>
-      </div>
-    </div>
+    <!-- Loaded dynamically from components/sections/hero-what-need.html -->
+    <div id="hero-what-need-container"></div>
 
     <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
-    <section class="hero-section hero-glassmorphic" aria-label="Portfolio overview">
-      <div class="hero-header">
-        <div class="user-info">
-          <div class="user-avatar">👤</div>
-          <div>
-            <h1 class="greeting">Bonjour, Alex 👋</h1>
-            <p class="headline">Your AI-Powered Portfolio Command Center</p>
-          </div>
-        </div>
-        <div class="last-updated">Updated 5 minutes ago</div>
-      </div>
-
-      <div class="ai-daily-summary">
-        <div class="ai-summary-header">
-          <span class="ai-icon">🤖</span>
-          <h3>AI Copilot Analysis</h3>
-        </div>
-        <p class="ai-summary-content">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
-          Fed dovish signals support bullish continuation. Recommended: Hold current positions, monitor volatility.</p>
-        <div class="ai-summary-footer">
-          <span class="ai-timestamp">Generated 2 minutes ago</span>
-          <button class="ai-action-btn" onclick="toggleAICopilot()">Ask AI Copilot</button>
-        </div>
-      </div>
-
-      <!-- V11: AI Insights Card -->
-      <div class="ai-insights-card" id="aiInsightsCard">
-        <div class="ai-insights-header">
-          <span class="insights-icon">🧠</span>
-          <h3>AI Insights</h3>
-          <button class="refresh-insights-btn" onclick="refreshInsights()" aria-label="Refresh">🔄</button>
-        </div>
-        <div class="insights-list" id="insightsList"></div>
-      </div>
-
-      <!-- V13: VISUAL HERO KPIs (HUGE NUMBERS + ARROWS + SPARKLINES) -->
-      <div class="mega-kpi-blocks visual-hero">
-        <div class="kpi-block" tabindex="0" role="article" aria-label="Portfolio value">
-          <!-- Row 1: Title + Value (Horizontal Alignment) -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div class="kpi-icon">💰</div>
-              <div>
-                <div style="font-size: 14px; color: var(--color-text-secondary); font-weight: 500;">Portfolio Value
-                </div>
-                <div style="font-size: 12px; color: var(--color-text-tertiary);">Live Tracking</div>
-              </div>
-            </div>
-            <button class="help-icon" onclick="showHelp('portfolio')" aria-label="Help" title="Learn more">?</button>
-          </div>
-
-          <!-- Row 2: Main Value + Change (Aligned) -->
-          <div style="display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px;">
-            <div class="kpi-value-huge" data-value="127456">$0</div>
-            <div class="kpi-change-visual positive">
-              <span class="arrow-huge">↗️</span>
-              <span class="change-huge" data-value="1.88">+0%</span>
-            </div>
-          </div>
-
-          <!-- Row 3: Context Info (Clean Grid) -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
-            <div style="font-size: 13px; color: var(--color-text-secondary);">
-              Day: <span style="color: #34D399; font-weight: 600;">+$2,400</span>
-            </div>
-            <div style="font-size: 13px; color: var(--color-text-secondary);">
-              Month: <span style="color: #34D399; font-weight: 600;">+$5,200</span>
-            </div>
-          </div>
-
-          <!-- Row 4: Progress to Target -->
-          <div style="margin-bottom: 16px;">
-            <div
-              style="display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px;">
-              <span>Target: $130,000</span>
-              <span style="color: var(--color-text);">98%</span>
-            </div>
-            <div class="progress-bar-mini">
-              <div class="progress-fill-mini" style="width: 98%"></div>
-            </div>
-          </div>
-
-          <!-- Row 5: Sparkline -->
-          <canvas class="kpi-sparkline" id="sparkline1" width="120" height="30"></canvas>
-
-          <!-- Row 6: Actions (Simplified) -->
-          <div class="kpi-actions-row" style="margin-top: 16px;">
-            <button class="kpi-action-btn primary" onclick="deepDivePortfolio()">Deep Dive</button>
-            <button class="kpi-action-btn secondary" onclick="openScenarioBuilder()">Scenario</button>
-            <button class="kpi-action-btn-icon" onclick="showKpiMenu('portfolio')" aria-label="More actions">⋮</button>
-          </div>
-        </div>
-
-        <div class="kpi-block" tabindex="0" role="article" aria-label="AI forecast">
-          <div class="kpi-header">
-            <div class="kpi-icon">🔮</div>
-            <button class="help-icon" onclick="showHelp('forecast')" aria-label="Help" title="Learn more">?</button>
-          </div>
-          <div class="kpi-value-huge forecast" data-value="5.3">+0%</div>
-          <div class="confidence-gauge-visual">
-            <canvas id="confidenceGauge" width="120" height="60"></canvas>
-            <div class="gauge-value-overlay">82%</div>
-          </div>
-          <div class="kpi-context-bar">
-            <div class="context-item">
-              <span class="context-badge neutral">vs. Market Consensus: +3.2%</span>
-            </div>
-            <div class="context-item">
-              <span class="context-label-gray">Bull: +12.3% | Bear: -5.8%</span>
-            </div>
-            <div class="context-item">
-              <span class="context-label-gray">Base: Analyst estimates</span>
-            </div>
-          </div>
-          <canvas class="kpi-sparkline" id="sparkline2" width="120" height="30"></canvas>
-          <div class="kpi-actions-row">
-            <button class="kpi-action-btn primary" onclick="explainForecast()">Explain This Forecast</button>
-            <button class="kpi-action-btn secondary" onclick="openScenarioBuilder()">Custom Scenario</button>
-            <button class="kpi-action-btn secondary" onclick="openBacktest()">Backtest</button>
-          </div>
-        </div>
-
-        <div class="kpi-block" tabindex="0" role="article" aria-label="Win rate">
-          <div class="kpi-header">
-            <div class="kpi-icon">🎯</div>
-            <button class="help-icon" onclick="showHelp('winrate')" aria-label="Help" title="Learn more">?</button>
-          </div>
-          <div class="circular-progress-container">
-            <canvas class="win-rate-circle" width="140" height="140"></canvas>
-            <div class="circle-value-overlay">
-              <span class="circle-number" data-value="72">0</span>
-              <span class="circle-unit">%</span>
-            </div>
-          </div>
-          <div class="kpi-trend-visual">
-            <span class="trend-arrow">↗️</span>
-            <span class="trend-value">+2.3%</span>
-          </div>
-          <div class="kpi-context-bar">
-            <div class="context-item">
-              <span class="context-label">Target: 70%</span>
-              <span class="context-badge positive">Above Target ✓</span>
-            </div>
-            <div class="context-item">
-              <span class="context-badge positive">vs. Last Month: +2.3%</span>
-            </div>
-            <div class="context-item">
-              <span class="context-label-gray">Industry Avg: 68%</span>
-            </div>
-          </div>
-          <canvas class="kpi-sparkline" id="sparkline3" width="120" height="30"></canvas>
-          <div class="kpi-actions-row">
-            <button class="kpi-action-btn primary" onclick="viewAllTrades()">View All Trades</button>
-            <button class="kpi-action-btn secondary" onclick="optimizeStrategy()">Optimize Strategy</button>
-            <button class="kpi-action-btn secondary" onclick="riskAnalysis()">Risk Analysis</button>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- Loaded dynamically from components/sections/hero-glassmorphic.html -->
+    <div id="hero-glassmorphic-container"></div>
 
     <!-- ============ TAB NAVIGATION ============ -->
-    <section class="tab-navigation" aria-label="Widget categories">
-      <button class="tab-btn active" onclick="switchTab(this, 'overview')" data-tab="overview">
-        <span class="tab-icon">📊</span>
-        <span class="tab-label">Overview</span>
-      </button>
-      <button class="tab-btn" onclick="switchTab(this, 'market')" data-tab="market">
-        <span class="tab-icon">📈</span>
-        <span class="tab-label">Market Analysis</span>
-      </button>
-      <button class="tab-btn" onclick="switchTab(this, 'opportunities')" data-tab="opportunities">
-        <span class="tab-icon">⭐</span>
-        <span class="tab-label">Opportunities</span>
-      </button>
-      <button class="tab-btn" onclick="switchTab(this, 'performance')" data-tab="performance">
-        <span class="tab-icon">💼</span>
-        <span class="tab-label">Portfolio Analytics</span>
-      </button>
-      <button class="tab-btn" onclick="switchTab(this, 'ailab')" data-tab="ailab">
-        <span class="tab-icon">🧪</span>
-        <span class="tab-label">AI Lab</span>
-      </button>
-    </section>
+    <!-- ============ TAB NAVIGATION ============ -->
+    <!-- Loaded dynamically from components/navigation/tab-navigation.html -->
+    <div id="tab-navigation-container"></div>
 
     <!-- ============ TAB CONTENT: OVERVIEW ============ -->
     <div class="tab-content active" id="tab-overview">
 
       <!-- V11: DRILL-DOWN MODAL -->
-      <div id="drillDownModal" class="drill-down-modal" style="display: none;">
-        <div class="modal-backdrop" onclick="closeDrillDown()"></div>
-        <div class="drill-down-content">
-          <div class="drill-down-header">
-            <h2 id="drillDownTitle">Details</h2>
-            <button class="close-btn" onclick="closeDrillDown()" aria-label="Close">✕</button>
-          </div>
-          <div class="drill-down-body" id="drillDownBody"></div>
-        </div>
-      </div>
+      <!-- Loaded dynamically from components/modals/drill-down-modal.html -->
+      <div id="drill-down-modal-container"></div>
 
       <!-- V11: SPLIT VIEW CONTAINER -->
-      <div id="splitViewContainer" class="split-view-container" style="display: none;">
-        <div class="split-pane left-pane">
-          <div class="pane-header">
-            <h3>Current (November)</h3>
-            <button class="maximize-btn" onclick="maximizePane('left')" aria-label="Maximize">⛶</button>
-          </div>
-          <div class="pane-content" id="leftPaneContent"></div>
-        </div>
-        <div class="split-divider"></div>
-        <div class="split-pane right-pane">
-          <div class="pane-header">
-            <h3>Compare To:</h3>
-            <select id="compareToSelect" class="compare-select" onchange="updateComparison(this.value)">
-              <option value="october">October</option>
-              <option value="benchmark">S&P 500 Benchmark</option>
-              <option value="scenario">AI Optimal Scenario</option>
-            </select>
-            <button class="close-btn" onclick="toggleSplitView()" aria-label="Close">✕</button>
-          </div>
-          <div class="pane-content" id="rightPaneContent"></div>
-        </div>
-      </div>
+      <!-- Loaded dynamically from components/sections/split-view.html -->
+      <div id="split-view-container"></div>
 
       <!-- ============ WIDGET: MARKET PULSE (STORY) ============ -->
-      <section class="widget-card market-pulse-widget" aria-label="Market pulse" data-widget-id="market-pulse">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📊</span>
-            <h2 class="widget-title">What's Moving Your Portfolio Today</h2>
-            <!-- V11: Live Indicator -->
-            <span class="live-badge">🟢 Live <span class="update-time">Updated 38s ago</span></span>
-          </div>
-          <div class="widget-actions">
-            <!-- V11: AI Prompt Button -->
-            <button class="ai-prompt-btn" onclick="askAIAbout('market-pulse')" aria-label="Ask AI"
-              title="Ask AI about this">🤖</button>
-            <button class="help-icon" onclick="showHelp('pulse')" aria-label="Help"
-              title="AI-generated market narrative">?</button>
-            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-          </div>
-        </div>
-        <!-- V11: AI Suggested Prompts -->
-        <div class="ai-prompts">
-          <button class="prompt-bubble" onclick="askAIPrompt('Why is this changing?')">Why is this changing?</button>
-          <button class="prompt-bubble" onclick="askAIPrompt('Predict next 7 days')">Predict next 7 days</button>
-          <button class="prompt-bubble" onclick="askAIPrompt('Find anomalies')">Find anomalies</button>
-        </div>
-        <div class="widget-body">
-          <p class="story-content">Tech stocks rallying on Fed dovish signals. Your portfolio benefits from NVDA (+8.5%)
-            and META (+5.2%). Recommended action: Hold current positions.</p>
-          <button class="story-expand" onclick="expandStory(this)">Read full analysis</button>
-          <div class="story-expanded" style="display: none;">
-            <p class="story-detail">The Federal Reserve's dovish stance combined with better-than-expected earnings from
-              tech giants creates a favorable environment. Our AI models detect strong institutional buying in
-              semiconductor stocks, particularly NVDA which shows 92% confidence breakout signal. Risk factors include
-              elevated volatility in the broader tech sector.</p>
-          </div>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated 5 minutes ago</span>
-          <button class="widget-action-btn" onclick="showToast('Viewing recommendations...')">View
-            Recommendations</button>
-        </div>
-        <!-- V11: Widget Action Bar -->
-        <div class="widget-action-bar">
-          <button class="action-bar-btn primary" onclick="showToast('Executing action...')">Execute Trade</button>
-          <button class="action-bar-btn icon" onclick="pinWidget('market-pulse')" title="Pin"
-            aria-label="Pin">📌</button>
-          <button class="action-bar-btn icon" onclick="setAlert('market-pulse')" title="Alert"
-            aria-label="Set Alert">🔔</button>
-          <button class="action-bar-btn icon" onclick="exportWidget('market-pulse')" title="Export"
-            aria-label="Export">📤</button>
-          <button class="action-bar-btn icon" onclick="askAIAbout('market-pulse')" title="Ask AI"
-            aria-label="Ask AI">🤖</button>
-          <button class="action-bar-btn icon" onclick="openDrillDown('market-pulse')" title="Drill Down"
-            aria-label="Drill Down">🔍</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/market-pulse.html -->
+      <div id="market-pulse-widget-container"></div>
 
       <!-- ============ V13: TRADE IDEAS WIDGET (SCREENSHOT STYLE) ============ -->
-      <section class="widget-card trade-ideas-widget" aria-label="Trade Ideas">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">💡</span>
-            <h2 class="widget-title">Trade Ideas</h2>
-          </div>
-          <button class="view-all-btn" onclick="showToast('Viewing all ideas...')">View All Ideas</button>
-        </div>
-        <div class="widget-body">
-          <div class="trade-ideas-grid" id="tradeIdeasGrid"></div>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated hourly</span>
-        </div>
-      </section>
+      <!-- ============ V13: TRADE IDEAS WIDGET (SCREENSHOT STYLE) ============ -->
+      <!-- Loaded dynamically from components/widgets/trade-ideas.html -->
+      <div id="trade-ideas-widget-container"></div>
 
       <!-- ============ V13: MARKET CALENDAR WIDGET (SCREENSHOT STYLE) ============ -->
-      <section class="widget-card market-calendar-widget" aria-label="Market Calendar">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📅</span>
-            <h2 class="widget-title">Market Calendar</h2>
-          </div>
-          <button class="view-all-btn" onclick="showToast('Setting reminders...')">Set Reminders</button>
-        </div>
-        <div class="widget-body">
-          <p class="impact-notice">3 earnings this week may impact your holdings</p>
-          <div class="calendar-sections" id="calendarSections"></div>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated daily</span>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/market-calendar.html -->
+      <div id="market-calendar-widget-container"></div>
 
       <!-- ============ V13: NEWS FEED WIDGET (NEW DEDICATED) ============ -->
-      <section class="widget-card news-feed-widget" aria-label="News Feed">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📰</span>
-            <h2 class="widget-title">Latest Market News</h2>
-          </div>
-          <div class="header-filters">
-            <select class="filter-select" id="newsFilter" onchange="filterNews(this.value)">
-              <option value="all">All Impact</option>
-              <option value="high">High Only</option>
-              <option value="medium">Medium+</option>
-            </select>
-            <button class="view-all-btn" onclick="switchTab(document.querySelector('[data-tab=market]'), 'market')">View
-              All News</button>
-          </div>
-        </div>
-        <div class="widget-body">
-          <div class="news-cards-grid" id="newsCardsGrid"></div>
-        </div>
-        <div class="widget-footer">
-          <button class="load-more-btn" onclick="loadMoreNews()">Load More News</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/news-feed.html -->
+      <div id="news-feed-widget-container"></div>
 
       <!-- ============ V13: LLM JUDGE WIDGET (NEW INTELLIGENT) ============ -->
-      <section class="widget-card llm-judge-widget" aria-label="LLM Judge">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">🧠</span>
-            <h2 class="widget-title">AI Multi-Model Judge</h2>
-          </div>
-          <button class="help-icon" onclick="showLLMHelp()" aria-label="Help">?</button>
-        </div>
-        <div class="widget-body">
-          <div class="judge-input-section">
-            <input type="text" class="judge-question-input" id="judgeQuestion"
-              placeholder="Ask AI: What should I do with my portfolio today?" />
-            <button class="ask-judge-btn" onclick="askLLMJudge()">Ask 3 AI Models</button>
-          </div>
-          <div class="judge-processing" id="judgeProcessing" style="display: none;">
-            <div class="processing-step"><span class="spinner"></span> Querying GPT-5...</div>
-            <div class="processing-step"><span class="spinner"></span> Querying Claude...</div>
-            <div class="processing-step"><span class="spinner"></span> Querying Gemini...</div>
-            <div class="processing-step"><span class="spinner"></span> Analyzing portfolio data...</div>
-            <div class="processing-step"><span class="spinner"></span> Synthesizing consensus...</div>
-          </div>
-          <div class="judge-result" id="judgeResult" style="display: none;"></div>
-          <button class="ask-another-btn" id="askAnotherBtn" style="display: none;" onclick="resetLLMJudge()">Ask
-            Another Question</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/llm-judge.html -->
+      <div id="llm-judge-widget-container"></div>
 
       <!-- ============ V17: CANDLESTICK CHART PRO ============ -->
-      <section class="widget-card candlestick-chart-pro" aria-label="Candlestick Chart">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📊</span>
-            <div>
-              <h2 class="widget-title">NVDA Price Action</h2>
-              <p class="widget-subtitle-inline">Candlestick + Volume + Indicators</p>
-            </div>
-          </div>
-          <div class="header-actions">
-            <div class="timeframe-selector">
-              <button class="tf-btn active" onclick="updateCandlestickTimeframe('1W')">1W</button>
-              <button class="tf-btn" onclick="updateCandlestickTimeframe('1M')">1M</button>
-              <button class="tf-btn" onclick="updateCandlestickTimeframe('3M')">3M</button>
-            </div>
-          </div>
-        </div>
-        <div class="widget-body">
-          <div class="chart-toolbar">
-            <button class="tool-btn active">Candlestick</button>
-            <button class="tool-btn">Line</button>
-            <button class="tool-btn">Area</button>
-            <div class="separator"></div>
-            <button class="tool-btn">MA(20)</button>
-            <button class="tool-btn">RSI</button>
-          </div>
-          <canvas id="candlestickChart" width="1000" height="400"></canvas>
-          <canvas id="volumeChart" width="1000" height="100"></canvas>
-        </div>
-        <div class="widget-footer">
-          <div class="legend">
-            <span class="legend-item">
-              <span class="color-box" style="background: #10B981"></span>
-              Bullish Candles
-            </span>
-            <span class="legend-item">
-              <span class="color-box" style="background: #EF4444"></span>
-              Bearish Candles
-            </span>
-            <span class="legend-item">
-              <span class="line-sample ma"></span>
-              MA(20)
-            </span>
-          </div>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/candlestick-chart.html -->
+      <div id="candlestick-chart-widget-container"></div>
 
       <!-- ============ V17: HEATMAP CORRELATION PRO ============ -->
-      <section class="widget-card heatmap-correlation-pro" aria-label="Correlation Heatmap">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">🔥</span>
-            <div>
-              <h2 class="widget-title">Correlation Heatmap</h2>
-              <p class="widget-subtitle-inline">Portfolio holdings correlation matrix</p>
-            </div>
-          </div>
-        </div>
-        <div class="widget-body">
-          <canvas id="heatmapChart" width="600" height="600"></canvas>
-          <div class="heatmap-legend">
-            <span class="legend-label">-1.0</span>
-            <div class="color-gradient"></div>
-            <span class="legend-label">+1.0</span>
-          </div>
-        </div>
-        <div class="widget-footer">
-          <p class="insight">🤖 AI Insight: NVDA and AMD highly correlated (0.85). Diversification recommended with
-            low-correlation assets.</p>
-        </div>
-      </section>
+      <!-- ============ V17: HEATMAP CORRELATION PRO ============ -->
+      <!-- Loaded dynamically from components/widgets/heatmap-correlation.html -->
+      <div id="heatmap-correlation-widget-container"></div>
 
       <!-- ============ V17: TREEMAP + KPI CARDS GRID ============ -->
       <div class="grid-2-desktop">
@@ -719,219 +263,18 @@
         </section>
 
         <!-- ============ V17: MULTI-KPI CARDS BLOOMBERG STYLE ============ -->
-        <section class="widget-card kpi-cards-pro" aria-label="Portfolio KPIs">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">💰</span>
-              <h2 class="widget-title">Portfolio Summary</h2>
-            </div>
-          </div>
-          <div class="widget-body">
-            <!-- Top: main portfolio value card -->
-            <div class="kpi-card-mega">
-              <!-- Header: Compact & Discrete -->
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 20px;">💰</span>
-                  <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Portfolio
-                    Value</span>
-                </div>
-              </div>
-
-              <!-- Main Value: HUGE & Centered -->
-              <div style="text-align: center; margin-bottom: 24px;">
-                <div
-                  style="font-size: 56px; font-weight: 700; line-height: 1; margin-bottom: 8px; background: linear-gradient(135deg, #3B82F6 0%, #34D399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                  $127,456
-                </div>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                  <span style="color: #34D399; font-size: 18px;">✓</span>
-                  <span style="color: #34D399; font-size: 18px;">↗</span>
-                  <span style="color: #34D399; font-size: 20px; font-weight: 600;">+1.88%</span>
-                  <span style="font-size: 13px; color: var(--color-text-secondary);">today</span>
-                </div>
-              </div>
-
-              <!-- Metrics Grid: Priority Position -->
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-                <div
-                  style="text-align: center; padding: 16px 12px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 12px;">
-                  <div
-                    style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 6px;">
-                    Day P&L</div>
-                  <div style="font-size: 22px; font-weight: 700; color: #34D399;">+$2.4K</div>
-                </div>
-                <div
-                  style="text-align: center; padding: 16px 12px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 12px;">
-                  <div
-                    style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 6px;">
-                    Month P&L</div>
-                  <div style="font-size: 22px; font-weight: 700; color: #34D399;">+$5.2K</div>
-                </div>
-              </div>
-
-              <!-- Sparkline: Context at Bottom -->
-              <div style="opacity: 0.7; margin-top: 8px;">
-                <canvas class="kpi-sparkline" id="sparklineMega1" width="280" height="60"></canvas>
-              </div>
-            </div>
-
-            <!-- Bottom row: Total Return + Win Rate side by side -->
-            <div class="kpi-row"
-              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 24px;">
-              <div class="kpi-card-mega" style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-                <!-- Header: Compact & Discrete -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">📈</span>
-                    <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Total
-                      Return</span>
-                  </div>
-                </div>
-
-                <!-- Main Value: HUGE & Centered -->
-                <div style="text-align: center; margin-bottom: 24px;">
-                  <div
-                    style="font-size: 56px; font-weight: 700; line-height: 1; margin-bottom: 8px; background: linear-gradient(135deg, #34D399 0%, #10B981 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                    +18.5%
-                  </div>
-                  <div
-                    style="display: inline-block; padding: 6px 16px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 20px;">
-                    <span style="color: #34D399; font-size: 14px; font-weight: 600;">🏆 Outperforming</span>
-                  </div>
-                </div>
-
-                <!-- Comparison Bars: Clean & Compact -->
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                  <div style="display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--color-text);">You</span>
-                    <div style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
-                      <div
-                        style="height: 100%; width: 85%; background: linear-gradient(90deg, #34D399 0%, #10B981 100%); border-radius: 6px;">
-                      </div>
-                    </div>
-                    <span style="font-size: 13px; font-weight: 700; color: #34D399; text-align: right;">18.5%</span>
-                  </div>
-                  <div style="display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--color-text-secondary);">S&P 500</span>
-                    <div style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
-                      <div style="height: 100%; width: 73%; background: rgba(255,255,255,0.3); border-radius: 6px;">
-                      </div>
-                    </div>
-                    <span
-                      style="font-size: 13px; font-weight: 600; color: var(--color-text-secondary); text-align: right;">15.2%</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="kpi-card-mega" style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-                <!-- Header: Compact & Discrete -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">⚡</span>
-                    <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Win Rate</span>
-                  </div>
-                </div>
-
-                <!-- Main Value: HUGE & Centered with Donut Background -->
-                <div
-                  style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 24px; min-height: 220px;">
-                  <!-- Donut Chart + Text Overlay -->
-                  <div
-                    style="position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                    <!-- Donut as background -->
-                    <canvas class="win-rate-circle" width="180" height="180"
-                      style="position: absolute; top: 0; left: 0; opacity: 0.4;"></canvas>
-                    <!-- 72% on top of donut -->
-                    <div
-                      style="position: relative; z-index: 10; font-size: 52px; font-weight: 700; line-height: 1; background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
-                      72%
-                    </div>
-                  </div>
-                  <!-- SUCCESS RATE badge below donut -->
-                  <div
-                    style="display: inline-block; padding: 6px 16px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; font-size: 11px; font-weight: 700; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px;">
-                    Success Rate
-                  </div>
-                </div>
-
-                <!-- Win/Loss Metrics: Clean Grid -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-                  <div
-                    style="text-align: center; padding: 12px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 12px;">
-                    <div
-                      style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 4px;">
-                      Wins</div>
-                    <div style="font-size: 22px; font-weight: 700; color: #22C55E;">22</div>
-                  </div>
-                  <div
-                    style="text-align: center; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
-                    <div
-                      style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 4px;">
-                      Losses</div>
-                    <div style="font-size: 22px; font-weight: 700; color: #EF4444;">8</div>
-                  </div>
-                </div>
-
-                <!-- Total Trades: Secondary Info -->
-                <div style="text-align: center; font-size: 12px; color: var(--color-text-secondary);">
-                  30 Total Trades
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <!-- Loaded dynamically from components/widgets/kpi-cards-pro.html -->
+        <div id="kpi-cards-pro-widget-container"></div>
       </div>
 
       <!-- ============ V13: MARKET DRIVERS VISUAL ============ -->
-      <section class="widget-card market-drivers-visual" aria-label="Market Drivers">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">💡</span>
-            <h2 class="widget-title">What's Driving Your Portfolio</h2>
-          </div>
-        </div>
-        <div class="widget-body">
-          <div class="drivers-bars-visual" id="driversBarsVisual"></div>
-        </div>
-      </section>
+      <!-- ============ V13: MARKET DRIVERS VISUAL ============ -->
+      <!-- Loaded dynamically from components/widgets/market-drivers.html -->
+      <div id="market-drivers-widget-container"></div>
 
       <!-- ============ WIDGET: QUICK ACTIONS (RECOMMENDATIONS) ============ -->
-      <section class="quick-actions-grid" aria-label="Quick actions">
-        <div class="action-card high-priority">
-          <div class="action-header">
-            <span class="priority-badge high">High Priority</span>
-          </div>
-          <h3 class="action-title">NVDA Breakout Signal Detected</h3>
-          <div class="action-confidence">Confidence: <span class="confidence-value">92%</span></div>
-          <div class="action-buttons">
-            <button class="action-btn primary" onclick="showToast('Opening NVDA details...')">View Details</button>
-            <button class="action-btn secondary" onclick="showToast('Added to watchlist')">Add to Watchlist</button>
-          </div>
-        </div>
-        <div class="action-card medium-priority">
-          <div class="action-header">
-            <span class="priority-badge medium">Medium Priority</span>
-          </div>
-          <h3 class="action-title">Rebalance Tech Exposure</h3>
-          <div class="action-suggestion">Suggestion: Diversify to Healthcare</div>
-          <div class="action-buttons">
-            <button class="action-btn primary" onclick="showToast('Viewing rebalance plan...')">See Plan</button>
-            <button class="action-btn secondary" onclick="showToast('Executing rebalance...')">Execute</button>
-          </div>
-        </div>
-        <div class="action-card low-priority">
-          <div class="action-header">
-            <span class="priority-badge low">Low Priority</span>
-          </div>
-          <h3 class="action-title">Weekly Report Ready</h3>
-          <div class="action-suggestion">Your performance summary is available</div>
-          <div class="action-buttons">
-            <button class="action-btn primary" onclick="showToast('Opening report...')">View Report</button>
-            <button class="action-btn secondary" onclick="showToast('Email scheduled')">Schedule Email</button>
-          </div>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/quick-actions.html -->
+      <div id="quick-actions-widget-container"></div>
 
       <!-- ============ WIDGET: FORECAST SCENARIOS ============ -->
       <section class="widget-card forecast-scenarios-widget" aria-label="Forecast scenarios">
@@ -2258,12 +1601,29 @@
         // Charger tous les modals et navigation en parallèle
         const components = [
           { path: 'header.html', target: '#header-container' },
+          { path: 'ai-suggestions-panel.html', target: '#ai-suggestions-container' },
+          { path: 'filter-bar.html', target: '#filter-bar-container' },
+          { path: 'modals/more-menu.html', target: '#more-menu-container' },
           { path: 'modals/notification-drawer.html', target: '#notification-drawer-container' },
           { path: 'modals/settings-modal.html', target: '#settings-modal-container' },
           { path: 'modals/command-palette.html', target: '#command-palette-container' },
           { path: 'navigation/diamond-dropdown.html', target: '#diamond-dropdown-container' },
           { path: 'navigation/diamond-menu.html', target: '#diamond-menu-container' },
-          { path: 'navigation/facette-view.html', target: '#facette-view-container' }
+          { path: 'navigation/facette-view.html', target: '#facette-view-container' },
+          { path: 'sections/hero-what-need.html', target: '#hero-what-need-container' },
+          { path: 'sections/hero-glassmorphic.html', target: '#hero-glassmorphic-container' },
+          { path: 'navigation/tab-navigation.html', target: '#tab-navigation-container' },
+          { path: 'modals/drill-down-modal.html', target: '#drill-down-modal-container' },
+          { path: 'sections/split-view.html', target: '#split-view-container' },
+          { path: 'widgets/market-pulse.html', target: '#market-pulse-widget-container' },
+          { path: 'widgets/trade-ideas.html', target: '#trade-ideas-widget-container' },
+          { path: 'widgets/market-calendar.html', target: '#market-calendar-widget-container' },
+          { path: 'widgets/news-feed.html', target: '#news-feed-widget-container' },
+          { path: 'widgets/llm-judge.html', target: '#llm-judge-widget-container' },
+          { path: 'widgets/market-drivers.html', target: '#market-drivers-widget-container' },
+          { path: 'widgets/quick-actions.html', target: '#quick-actions-widget-container' },
+          { path: 'widgets/kpi-cards-pro.html', target: '#kpi-cards-pro-widget-container' },
+          { path: 'widgets/heatmap-correlation.html', target: '#heatmap-correlation-widget-container' }
         ];
 
         const results = await loadComponents(components);

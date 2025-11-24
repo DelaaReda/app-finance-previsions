@@ -1,0 +1,167 @@
+<section class="widget-card kpi-cards-pro" aria-label="Portfolio KPIs">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">💰</span>
+            <h2 class="widget-title">Portfolio Summary</h2>
+        </div>
+    </div>
+    <div class="widget-body">
+        <!-- Top: main portfolio value card -->
+        <div class="kpi-card-mega">
+            <!-- Header: Compact & Discrete -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">💰</span>
+                    <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Portfolio
+                        Value</span>
+                </div>
+            </div>
+
+            <!-- Main Value: HUGE & Centered -->
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div
+                    style="font-size: 56px; font-weight: 700; line-height: 1; margin-bottom: 8px; background: linear-gradient(135deg, #3B82F6 0%, #34D399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                    $127,456
+                </div>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span style="color: #34D399; font-size: 18px;">✓</span>
+                    <span style="color: #34D399; font-size: 18px;">↗</span>
+                    <span style="color: #34D399; font-size: 20px; font-weight: 600;">+1.88%</span>
+                    <span style="font-size: 13px; color: var(--color-text-secondary);">today</span>
+                </div>
+            </div>
+
+            <!-- Metrics Grid: Priority Position -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div
+                    style="text-align: center; padding: 16px 12px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 12px;">
+                    <div
+                        style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 6px;">
+                        Day P&L</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #34D399;">+$2.4K</div>
+                </div>
+                <div
+                    style="text-align: center; padding: 16px 12px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 12px;">
+                    <div
+                        style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 6px;">
+                        Month P&L</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #34D399;">+$5.2K</div>
+                </div>
+            </div>
+
+            <!-- Sparkline: Context at Bottom -->
+            <div style="opacity: 0.7; margin-top: 8px;">
+                <canvas class="kpi-sparkline" id="sparklineMega1" width="280" height="60"></canvas>
+            </div>
+        </div>
+
+        <!-- Bottom row: Total Return + Win Rate side by side -->
+        <div class="kpi-row"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 24px;">
+            <div class="kpi-card-mega" style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
+                <!-- Header: Compact & Discrete -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">📈</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Total
+                            Return</span>
+                    </div>
+                </div>
+
+                <!-- Main Value: HUGE & Centered -->
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div
+                        style="font-size: 56px; font-weight: 700; line-height: 1; margin-bottom: 8px; background: linear-gradient(135deg, #34D399 0%, #10B981 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                        +18.5%
+                    </div>
+                    <div
+                        style="display: inline-block; padding: 6px 16px; background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 20px;">
+                        <span style="color: #34D399; font-size: 14px; font-weight: 600;">🏆 Outperforming</span>
+                    </div>
+                </div>
+
+                <!-- Comparison Bars: Clean & Compact -->
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--color-text);">You</span>
+                        <div
+                            style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
+                            <div
+                                style="height: 100%; width: 85%; background: linear-gradient(90deg, #34D399 0%, #10B981 100%); border-radius: 6px;">
+                            </div>
+                        </div>
+                        <span style="font-size: 13px; font-weight: 700; color: #34D399; text-align: right;">18.5%</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 60px 1fr 60px; align-items: center; gap: 12px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--color-text-secondary);">S&P
+                            500</span>
+                        <div
+                            style="height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;">
+                            <div
+                                style="height: 100%; width: 73%; background: rgba(255,255,255,0.3); border-radius: 6px;">
+                            </div>
+                        </div>
+                        <span
+                            style="font-size: 13px; font-weight: 600; color: var(--color-text-secondary); text-align: right;">15.2%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi-card-mega" style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
+                <!-- Header: Compact & Discrete -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">⚡</span>
+                        <span style="font-size: 13px; font-weight: 500; color: var(--color-text-secondary);">Win
+                            Rate</span>
+                    </div>
+                </div>
+
+                <!-- Main Value: HUGE & Centered with Donut Background -->
+                <div
+                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 24px; min-height: 220px;">
+                    <!-- Donut Chart + Text Overlay -->
+                    <div
+                        style="position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                        <!-- Donut as background -->
+                        <canvas class="win-rate-circle" width="180" height="180"
+                            style="position: absolute; top: 0; left: 0; opacity: 0.4;"></canvas>
+                        <!-- 72% on top of donut -->
+                        <div
+                            style="position: relative; z-index: 10; font-size: 52px; font-weight: 700; line-height: 1; background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            72%
+                        </div>
+                    </div>
+                    <!-- SUCCESS RATE badge below donut -->
+                    <div
+                        style="display: inline-block; padding: 6px 16px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; font-size: 11px; font-weight: 700; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px;">
+                        Success Rate
+                    </div>
+                </div>
+
+                <!-- Win/Loss Metrics: Clean Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div
+                        style="text-align: center; padding: 12px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 12px;">
+                        <div
+                            style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 4px;">
+                            Wins</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #22C55E;">22</div>
+                    </div>
+                    <div
+                        style="text-align: center; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px;">
+                        <div
+                            style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 4px;">
+                            Losses</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #EF4444;">8</div>
+                    </div>
+                </div>
+
+                <!-- Total Trades: Secondary Info -->
+                <div style="text-align: center; font-size: 12px; color: var(--color-text-secondary);">
+                    30 Total Trades
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

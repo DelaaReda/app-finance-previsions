@@ -1,0 +1,23 @@
+<div id="filterBar" class="filter-bar collapsed">
+    <div class="filter-group">
+        <label>Time Period</label>
+        <input type="date" id="filterStartDate" value="2025-10-18">
+        <span>to</span>
+        <input type="date" id="filterEndDate" value="2025-11-18">
+    </div>
+    <div class="filter-group">
+        <label>Confidence Threshold</label>
+        <input type="range" id="confidenceSlider" min="0" max="100" value="70">
+        <span id="confidenceValue">70%</span>
+    </div>
+    <div class="filter-group">
+        <label>Asset Classes</label>
+        <label class="checkbox-label"><input type="checkbox" checked> Stocks</label>
+        <label class="checkbox-label"><input type="checkbox"> Bonds</label>
+        <label class="checkbox-label"><input type="checkbox"> Crypto</label>
+    </div>
+    <div class="filter-actions">
+        <button class="apply-filters-btn" onclick="applyFilters()">Apply Filters</button>
+        <button class="clear-filters-btn" onclick="clearFilters()">Clear All</button>
+    </div>
+</div>
