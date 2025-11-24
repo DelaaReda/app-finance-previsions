@@ -1,0 +1,62 @@
+<section class="widget-card top-movers-widget" aria-label="Top movers">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📈</span>
+            <h2 class="widget-title">Top Movers</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('movers')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <div class="movers-table">
+            <div class="mover-row">
+                <div class="mover-stock">NVDA</div>
+                <canvas class="table-sparkline" id="sparkNVDA" width="80" height="30"></canvas>
+                <div class="mover-price">$875.60</div>
+                <div class="mover-change positive">+8.5%</div>
+                <div class="mover-position">50 shares</div>
+                <button class="mover-action-btn">Trade</button>
+            </div>
+            <div class="mover-row">
+                <div class="mover-stock">META</div>
+                <canvas class="table-sparkline" id="sparkMETA" width="80" height="30"></canvas>
+                <div class="mover-price">$523.45</div>
+                <div class="mover-change positive">+5.2%</div>
+                <div class="mover-position">30 shares</div>
+                <button class="mover-action-btn">Trade</button>
+            </div>
+            <div class="mover-row">
+                <div class="mover-stock">AAPL</div>
+                <canvas class="table-sparkline" id="sparkAAPL" width="80" height="30"></canvas>
+                <div class="mover-price">$178.23</div>
+                <div class="mover-change positive">+2.1%</div>
+                <div class="mover-position">100 shares</div>
+                <button class="mover-action-btn">Trade</button>
+            </div>
+            <div class="mover-row">
+                <div class="mover-stock">MSFT</div>
+                <canvas class="table-sparkline" id="sparkMSFT" width="80" height="30"></canvas>
+                <div class="mover-price">$412.89</div>
+                <div class="mover-change positive">+1.8%</div>
+                <div class="mover-position">40 shares</div>
+                <button class="mover-action-btn">Trade</button>
+            </div>
+            <div class="mover-row">
+                <div class="mover-stock">GOOGL</div>
+                <canvas class="table-sparkline" id="sparkGOOGL" width="80" height="30"></canvas>
+                <div class="mover-price">$142.78</div>
+                <div class="mover-change positive">+1.5%</div>
+                <div class="mover-position">60 shares</div>
+                <button class="mover-action-btn">Trade</button>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn"
+            onclick="switchTab(document.querySelector('[data-tab=performance]'), 'performance')">View All
+            Stocks</button>
+    </div>
+</section>

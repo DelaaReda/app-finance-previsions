@@ -277,144 +277,12 @@
       <div id="quick-actions-widget-container"></div>
 
       <!-- ============ WIDGET: FORECAST SCENARIOS ============ -->
-      <section class="widget-card forecast-scenarios-widget" aria-label="Forecast scenarios">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">🔮</span>
-            <h2 class="widget-title">What Could Happen Next</h2>
-          </div>
-          <div class="widget-actions">
-            <button class="help-icon" onclick="showHelp('scenarios')" aria-label="Help"
-              title="AI-generated scenarios for next 30 days">?</button>
-            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-          </div>
-        </div>
-        <div class="widget-body">
-          <p class="widget-subtitle">AI-generated scenarios for next 30 days</p>
-          <div class="scenario-bars">
-            <div class="scenario-bar-item bull">
-              <div class="scenario-label">Bull Case</div>
-              <div class="scenario-bar-wrapper">
-                <div class="scenario-bar-fill" style="width: 82%">+12.3%</div>
-              </div>
-            </div>
-            <div class="scenario-bar-item base">
-              <div class="scenario-label">Base Case</div>
-              <div class="scenario-bar-wrapper">
-                <div class="scenario-bar-fill" style="width: 30%">+2.1%</div>
-              </div>
-            </div>
-            <div class="scenario-bar-item bear">
-              <div class="scenario-label">Bear Case</div>
-              <div class="scenario-bar-wrapper">
-                <div class="scenario-bar-fill" style="width: 15%">-5.8%</div>
-              </div>
-            </div>
-          </div>
-          <button class="toggle-interactive-btn" onclick="toggleInteractiveView(this)">Switch to Interactive
-            View</button>
-          <div class="interactive-arena" id="interactiveArena" style="display: none;">
-            <div class="arena-container" id="arenaContainer">
-              <div class="arena-center">$127.5K</div>
-              <div class="bubble bull" data-scenario="bull" draggable="false" style="top: 15%; right: 20%">
-                <div class="bubble-label">Bull Case</div>
-                <div class="bubble-value">+12.3%</div>
-                <div class="bubble-conf">35% conf</div>
-              </div>
-              <div class="bubble base" data-scenario="base" draggable="false"
-                style="top: 10%; left: 50%; transform: translateX(-50%)">
-                <div class="bubble-label">Base Case</div>
-                <div class="bubble-value">+2.1%</div>
-                <div class="bubble-conf">50% conf</div>
-              </div>
-              <div class="bubble bear" data-scenario="bear" draggable="false"
-                style="bottom: 15%; left: 50%; transform: translateX(-50%)">
-                <div class="bubble-label">Bear Case</div>
-                <div class="bubble-value">-5.8%</div>
-                <div class="bubble-conf">15% conf</div>
-              </div>
-              <div class="bubble user" data-scenario="user" draggable="true" style="top: 50%; left: 15%">
-                <div class="bubble-label">Votre Scénario</div>
-                <div class="bubble-value">+4.5%</div>
-                <div class="bubble-conf">Drag me!</div>
-              </div>
-              <div class="bubble consensus" data-scenario="consensus" draggable="false" style="top: 50%; right: 15%">
-                <div class="bubble-label">Consensus</div>
-                <div class="bubble-value">+3.2%</div>
-              </div>
-            </div>
-          </div>
-          <p class="scenario-context">Based on 10,000+ market signals</p>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated 5 minutes ago</span>
-          <button class="widget-action-btn" onclick="showToast('Customizing scenarios...')">Customize Scenarios</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/forecast-scenarios.html -->
+      <div id="forecast-scenarios-widget-container"></div>
 
       <!-- ============ WIDGET: TOP MOVERS ============ -->
-      <section class="widget-card top-movers-widget" aria-label="Top movers">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📈</span>
-            <h2 class="widget-title">Top Movers</h2>
-          </div>
-          <div class="widget-actions">
-            <button class="help-icon" onclick="showHelp('movers')" aria-label="Help">?</button>
-            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-          </div>
-        </div>
-        <div class="widget-body">
-          <div class="movers-table">
-            <div class="mover-row">
-              <div class="mover-stock">NVDA</div>
-              <canvas class="table-sparkline" id="sparkNVDA" width="80" height="30"></canvas>
-              <div class="mover-price">$875.60</div>
-              <div class="mover-change positive">+8.5%</div>
-              <div class="mover-position">50 shares</div>
-              <button class="mover-action-btn">Trade</button>
-            </div>
-            <div class="mover-row">
-              <div class="mover-stock">META</div>
-              <canvas class="table-sparkline" id="sparkMETA" width="80" height="30"></canvas>
-              <div class="mover-price">$523.45</div>
-              <div class="mover-change positive">+5.2%</div>
-              <div class="mover-position">30 shares</div>
-              <button class="mover-action-btn">Trade</button>
-            </div>
-            <div class="mover-row">
-              <div class="mover-stock">AAPL</div>
-              <canvas class="table-sparkline" id="sparkAAPL" width="80" height="30"></canvas>
-              <div class="mover-price">$178.23</div>
-              <div class="mover-change positive">+2.1%</div>
-              <div class="mover-position">100 shares</div>
-              <button class="mover-action-btn">Trade</button>
-            </div>
-            <div class="mover-row">
-              <div class="mover-stock">MSFT</div>
-              <canvas class="table-sparkline" id="sparkMSFT" width="80" height="30"></canvas>
-              <div class="mover-price">$412.89</div>
-              <div class="mover-change positive">+1.8%</div>
-              <div class="mover-position">40 shares</div>
-              <button class="mover-action-btn">Trade</button>
-            </div>
-            <div class="mover-row">
-              <div class="mover-stock">GOOGL</div>
-              <canvas class="table-sparkline" id="sparkGOOGL" width="80" height="30"></canvas>
-              <div class="mover-price">$142.78</div>
-              <div class="mover-change positive">+1.5%</div>
-              <div class="mover-position">60 shares</div>
-              <button class="mover-action-btn">Trade</button>
-            </div>
-          </div>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated 5 minutes ago</span>
-          <button class="widget-action-btn"
-            onclick="switchTab(document.querySelector('[data-tab=performance]'), 'performance')">View All
-            Stocks</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/top-movers.html -->
+      <div id="top-movers-widget-container"></div>
 
       <!-- ============ WIDGET: PORTFOLIO HEALTH SNAPSHOT ============ -->
       <section class="widget-card portfolio-health-snapshot" aria-label="Portfolio health">
@@ -1623,7 +1491,9 @@
           { path: 'widgets/market-drivers.html', target: '#market-drivers-widget-container' },
           { path: 'widgets/quick-actions.html', target: '#quick-actions-widget-container' },
           { path: 'widgets/kpi-cards-pro.html', target: '#kpi-cards-pro-widget-container' },
-          { path: 'widgets/heatmap-correlation.html', target: '#heatmap-correlation-widget-container' }
+          { path: 'widgets/heatmap-correlation.html', target: '#heatmap-correlation-widget-container' },
+          { path: 'widgets/forecast-scenarios.html', target: '#forecast-scenarios-widget-container' },
+          { path: 'widgets/top-movers.html', target: '#top-movers-widget-container' }
         ];
 
         const results = await loadComponents(components);
