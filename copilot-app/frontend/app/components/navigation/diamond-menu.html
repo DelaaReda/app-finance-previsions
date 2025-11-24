@@ -1,0 +1,55 @@
+<div id="diamondMenu" class="diamond-radial-menu" style="display: none;">
+    <div class="radial-backdrop" onclick="closeDiamondMenu()"></div>
+    <div class="radial-container">
+        <div class="radial-center" onclick="closeDiamondMenu()">
+            <div class="diamond-icon-large">💎</div>
+        </div>
+
+        <!-- 9 Facettes -->
+        <button class="facette-btn" style="--angle: 0deg" data-facette="deep-dive" onclick="openFacette('deep-dive')">
+            <span class="facette-icon">📈</span>
+            <span class="facette-label">Deep Dive</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 40deg" data-facette="economie" onclick="openFacette('economie')">
+            <span class="facette-icon">🌍</span>
+            <span class="facette-label">Économie</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 80deg" data-facette="news" onclick="openFacette('news')">
+            <span class="facette-icon">📰</span>
+            <span class="facette-label">News</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 120deg" data-facette="previsions"
+            onclick="openFacette('previsions')">
+            <span class="facette-icon">🔮</span>
+            <span class="facette-label">Prévisions</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 160deg" data-facette="risques" onclick="openFacette('risques')">
+            <span class="facette-icon">🚦</span>
+            <span class="facette-label">Risques</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 200deg" data-facette="copilot" onclick="openFacette('copilot')">
+            <span class="facette-icon">🤖</span>
+            <span class="facette-label">Copilot</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 240deg" data-facette="trading" onclick="openFacette('trading')">
+            <span class="facette-icon">💹</span>
+            <span class="facette-label">Trading</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 280deg" data-facette="portfolio" onclick="openFacette('portfolio')">
+            <span class="facette-icon">🗂️</span>
+            <span class="facette-label">Portfolio</span>
+        </button>
+
+        <button class="facette-btn" style="--angle: 320deg" data-facette="explorer" onclick="openFacette('explorer')">
+            <span class="facette-icon">🗺️</span>
+            <span class="facette-label">Explorer</span>
+        </button>
+    </div>
+</div>

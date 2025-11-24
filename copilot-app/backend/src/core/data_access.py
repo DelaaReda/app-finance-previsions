@@ -17,6 +17,7 @@ if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
 from storage.io import load_json
+from core.market_data import get_price_history
 
 
 def _latest_dt_under(base: str, pattern: str = "dt=*") -> Optional[str]:
@@ -163,6 +164,42 @@ def _load_commodity() -> pd.DataFrame:
         # Return empty DataFrame to maintain never-empty contract
         return pd.DataFrame()
 
+
+# ---------------------------------------------------------------------------
+# Public helpers expected by api.main and other routes
+# ---------------------------------------------------------------------------
+
+def get_close_series(ticker: str, interval: str = "1d", limit: int = 252) -> Optional[pd.Series]:
+    """Return a pandas Series of close prices for ticker.
+
+    Prefers cached JSON in storage, falls back to live fetch via market_data.
+    """
+    try:
+        ticker = (ticker or "").upper()
+        data = load_json("stocks/prices") or load_json("stocks_prices") or {}
+        candidates = None
+        if isinstance(data, dict):
+            candidates = data.get("tickers") or data.get("data", {}).get("tickers") or data
+        if isinstance(candidates, dict) and ticker in candidates:
+            points = candidates[ticker].get("points", [])
+            if points:
+                closes = [p.get("close") for p in points if isinstance(p, dict) and p.get("close") is not None]
+                idx = range(len(closes))
+                return pd.Series(closes[-limit:], index=idx[-limit:]) if closes else pd.Series(dtype=float)
+    except Exception:
+        pass
+
+    # Fallback to live fetch
+    try:
+        df = get_price_history(ticker, interval=interval)
+        if df is None or df.empty or "Close" not in df.columns:
+            return None
+        series = df["Close"].dropna()
+        if limit:
+            series = series.tail(limit)
+        return series
+    except Exception:
+        return None
 
 def _load_stock_prices(ticker: str) -> pd.DataFrame:
     """

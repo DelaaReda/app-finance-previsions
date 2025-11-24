@@ -14,7 +14,12 @@ backend_root = Path(__file__).resolve().parents[2]  # Go from backend/src/api/ro
 if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
-from backend.src.services.alert_rules import alert_rules_service
+try:
+    # Preferred import when backend/src is on sys.path
+    from services.alert_rules import alert_rules_service
+except ImportError:
+    # Fallback when referenced via backend package
+    from backend.services.alert_rules import alert_rules_service  # type: ignore
 
 router = APIRouter(prefix="/api", tags=["alerts"])
 

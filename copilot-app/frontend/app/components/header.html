@@ -1,0 +1,67 @@
+<header class="dashboard-header" role="banner">
+    <div class="header-left">
+        <!-- V15: Diamond Navigation Button -->
+        <button class="diamond-btn-header" onclick="toggleDiamondDropdown()">
+            <span class="diamond-icon">💎</span>
+            <span class="diamond-text">Navigation</span>
+            <span class="dropdown-arrow">▼</span>
+        </button>
+
+        <h1 class="logo-text">Finance Copilot V16</h1>
+
+        <!-- V11: Profile Selector -->
+        <select class="profile-selector" id="profileSelector" onchange="changeProfile(this.value)"
+            aria-label="User profile">
+            <option value="auto">🤖 Auto (AI-Detected)</option>
+            <option value="executive">👔 Executive</option>
+            <option value="trader" selected>📊 Trader</option>
+            <option value="analyst">🔬 Analyst</option>
+        </select>
+    </div>
+    <div class="header-center">
+        <div class="view-selector" role="tablist" aria-label="Blueprint selector">
+            <select class="blueprint-select" aria-label="Select blueprint" onchange="changeBlueprint(this.value)">
+                <option value="executive">Executive Summary</option>
+                <option value="full">Full Analysis</option>
+                <option value="trading">Trading Dashboard</option>
+                <option value="risk">Risk Management</option>
+                <option value="ai">AI Insights Deep Dive</option>
+            </select>
+        </div>
+    </div>
+    <div class="header-right">
+        <!-- V11: Split View Button -->
+        <button class="header-btn split-view-btn" onclick="toggleSplitView()" aria-label="Split View"
+            title="Compare views">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-label">Split View</span>
+        </button>
+
+        <!-- V11: Filter Toggle -->
+        <button class="header-btn filter-toggle-btn" onclick="toggleFilterBar()" aria-label="Filters"
+            title="Filter data">
+            <span class="btn-icon">🔍</span>
+        </button>
+
+        <button class="header-btn ai-copilot-btn" onclick="toggleAICopilot()" aria-label="AI Copilot"
+            title="Ask AI Anything">
+            <span class="btn-icon">🤖</span>
+            <span class="btn-label">Ask Anything</span>
+        </button>
+        <div class="time-period-compact">
+            <select class="period-select" aria-label="Time period" onchange="changePeriod(this.value)">
+                <option value="1D">1D</option>
+                <option value="1W" selected>1W</option>
+                <option value="1M">1M</option>
+                <option value="3M">3M</option>
+                <option value="1Y">1Y</option>
+            </select>
+        </div>
+        <button class="header-btn" onclick="refreshData()" aria-label="Refresh data" title="Last updated 5 min ago">
+            <span class="btn-icon">🔄</span>
+        </button>
+        <button class="header-btn more-menu-btn" onclick="toggleMoreMenu()" aria-label="More options" title="More">
+            <span class="btn-icon">⋯</span>
+        </button>
+    </div>
+</header>

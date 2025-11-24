@@ -34,10 +34,12 @@ import sys
 from pathlib import Path as _Path
 _backend_root = _Path(__file__).resolve().parents[2]
 _src_path = str(_backend_root / "src")
+# Ensure src is first so core/* resolves to backend/src/core
 if _src_path not in sys.path:
     sys.path.insert(0, _src_path)
+# Keep backend root after src for legacy imports (backend.*, storage.*)
 if str(_backend_root) not in sys.path:
-    sys.path.insert(0, str(_backend_root))
+    sys.path.append(str(_backend_root))
 
 
 def _configure_debug_logging():

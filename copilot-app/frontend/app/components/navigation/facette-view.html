@@ -1,0 +1,30 @@
+<div id="facetteView" class="facette-view" style="display: none;">
+    <div class="facette-header">
+        <button class="back-to-diamond" onclick="closeFacette()">
+            <span>← Back to Diamond</span>
+        </button>
+        <div class="facette-title">
+            <span class="facette-icon-header" id="facetteIcon">📈</span>
+            <h2 id="facetteTitle">Deep Dive Action</h2>
+        </div>
+        <div class="facette-breadcrumb-enhanced" id="facetteBreadcrumb">
+            <span class="breadcrumb-item">💎</span>
+            <span class="breadcrumb-separator">&gt;</span>
+            <span class="breadcrumb-item">Deep Dive</span>
+            <div class="breadcrumb-actions">
+                <button class="breadcrumb-btn" onclick="showToast('Pinned!')" title="Pin">📌</button>
+                <button class="breadcrumb-btn" onclick="showToast('Shared!')" title="Share">📤</button>
+                <button class="breadcrumb-btn" onclick="showToast('Recent paths')" title="Recent">▼</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="facette-search" id="facetteSearch" style="display: none;">
+        <input type="text" class="facette-search-input" placeholder="Enter stock symbol..." id="stockSymbolInput">
+        <button class="facette-search-btn" onclick="searchStock()">Search</button>
+    </div>
+
+    <div class="facette-tabs" id="facetteTabs"></div>
+
+    <div class="facette-content" id="facetteContent"></div>
+</div>

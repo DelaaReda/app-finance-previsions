@@ -1,0 +1,79 @@
+<div id="diamondDropdown" class="diamond-dropdown-menu">
+    <div class="dropdown-header">
+        <h3>💎 Navigation Hub</h3>
+        <button class="close-btn" onclick="closeDiamondDropdown()" aria-label="Close">✕</button>
+    </div>
+
+    <div class="dropdown-search">
+        <input type="text" class="search-facettes" placeholder="🔍 Search facettes..." id="searchFacettes">
+    </div>
+
+    <div class="facettes-grid">
+        <div class="facette-card" onclick="openFacette('deep-dive')">
+            <div class="facette-icon">📈</div>
+            <div class="facette-name">Deep Dive</div>
+            <div class="facette-desc">Analyse action complète</div>
+            <div class="facette-badge">3 alerts</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('economie')">
+            <div class="facette-icon">🌍</div>
+            <div class="facette-name">Économie</div>
+            <div class="facette-desc">Vue macro globale</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('news')">
+            <div class="facette-icon">📰</div>
+            <div class="facette-name">News</div>
+            <div class="facette-desc">Actualités impactantes</div>
+            <div class="facette-badge">12 new</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('previsions')">
+            <div class="facette-icon">🔮</div>
+            <div class="facette-name">Prévisions</div>
+            <div class="facette-desc">Forecasts IA avancés</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('risques')">
+            <div class="facette-icon">🚦</div>
+            <div class="facette-name">Risques</div>
+            <div class="facette-desc">Monitoring alertes</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('copilot')">
+            <div class="facette-icon">🤖</div>
+            <div class="facette-name">Copilot</div>
+            <div class="facette-desc">Assistant IA Q&A</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('trading')">
+            <div class="facette-icon">💹</div>
+            <div class="facette-name">Trading</div>
+            <div class="facette-desc">Opportunités trade</div>
+            <div class="facette-badge">5 ideas</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('portfolio')">
+            <div class="facette-icon">🗂️</div>
+            <div class="facette-name">Portfolio</div>
+            <div class="facette-desc">Analytics complet</div>
+        </div>
+
+        <div class="facette-card" onclick="openFacette('explorer')">
+            <div class="facette-icon">🗺️</div>
+            <div class="facette-name">Explorer</div>
+            <div class="facette-desc">Découverte avancée</div>
+        </div>
+    </div>
+
+    <div class="dropdown-footer">
+        <div class="exploration-progress">
+            <div class="progress-label">Exploration Progress</div>
+            <div class="progress-bar-exploration">
+                <div class="progress-fill-exploration" id="explorationProgress" style="width: 33%"></div>
+            </div>
+            <div class="progress-text" id="explorationText">33% discovered</div>
+        </div>
+    </div>
+</div>

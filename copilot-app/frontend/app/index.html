@@ -12,82 +12,12 @@
 
 <body>
   <!-- ============ SECTION: STICKY HEADER ============ -->
-  <header class="dashboard-header" role="banner">
-    <div class="header-left">
-      <!-- V15: Diamond Navigation Button -->
-      <button class="diamond-btn-header" onclick="toggleDiamondDropdown()">
-        <span class="diamond-icon">💎</span>
-        <span class="diamond-text">Navigation</span>
-        <span class="dropdown-arrow">▼</span>
-      </button>
-
-      <h1 class="logo-text">Finance Copilot V16</h1>
-
-      <!-- V11: Profile Selector -->
-      <select class="profile-selector" id="profileSelector" onchange="changeProfile(this.value)"
-        aria-label="User profile">
-        <option value="auto">🤖 Auto (AI-Detected)</option>
-        <option value="executive">👔 Executive</option>
-        <option value="trader" selected>📊 Trader</option>
-        <option value="analyst">🔬 Analyst</option>
-      </select>
-    </div>
-    <div class="header-center">
-      <div class="view-selector" role="tablist" aria-label="Blueprint selector">
-        <select class="blueprint-select" aria-label="Select blueprint" onchange="changeBlueprint(this.value)">
-          <option value="executive">Executive Summary</option>
-          <option value="full">Full Analysis</option>
-          <option value="trading">Trading Dashboard</option>
-          <option value="risk">Risk Management</option>
-          <option value="ai">AI Insights Deep Dive</option>
-        </select>
-      </div>
-    </div>
-    <div class="header-right">
-      <!-- V11: Split View Button -->
-      <button class="header-btn split-view-btn" onclick="toggleSplitView()" aria-label="Split View"
-        title="Compare views">
-        <span class="btn-icon">⚡</span>
-        <span class="btn-label">Split View</span>
-      </button>
-
-      <!-- V11: Filter Toggle -->
-      <button class="header-btn filter-toggle-btn" onclick="toggleFilterBar()" aria-label="Filters" title="Filter data">
-        <span class="btn-icon">🔍</span>
-      </button>
-
-      <button class="header-btn ai-copilot-btn" onclick="toggleAICopilot()" aria-label="AI Copilot"
-        title="Ask AI Anything">
-        <span class="btn-icon">🤖</span>
-        <span class="btn-label">Ask Anything</span>
-      </button>
-      <div class="time-period-compact">
-        <select class="period-select" aria-label="Time period" onchange="changePeriod(this.value)">
-          <option value="1D">1D</option>
-          <option value="1W" selected>1W</option>
-          <option value="1M">1M</option>
-          <option value="3M">3M</option>
-          <option value="1Y">1Y</option>
-        </select>
-      </div>
-      <button class="header-btn" onclick="refreshData()" aria-label="Refresh data" title="Last updated 5 min ago">
-        <span class="btn-icon">🔄</span>
-      </button>
-      <button class="header-btn more-menu-btn" onclick="toggleMoreMenu()" aria-label="More options" title="More">
-        <span class="btn-icon">⋯</span>
-      </button>
-    </div>
-  </header>
+  <!-- Loaded dynamically from components/header.html -->
+  <div id="header-container"></div>
 
   <!-- V11: AI SUGGESTIONS PANEL -->
-  <div id="aiSuggestionsPanel" class="ai-suggestions-panel">
-    <div class="suggestions-header">
-      <span class="suggestions-icon">💡</span>
-      <h3>AI Suggests</h3>
-      <button class="close-suggestions" onclick="closeSuggestions()" aria-label="Close">✕</button>
-    </div>
-    <div class="suggestions-list" id="suggestionsList"></div>
-  </div>
+  <!-- Loaded dynamically from components/ai-suggestions-panel.html -->
+  <div id="ai-suggestions-container"></div>
 
   <!-- V11: FILTER BAR -->
   <div id="filterBar" class="filter-bar collapsed">
@@ -143,93 +73,11 @@
     </div>
 
     <!-- ============ DIAMOND RADIAL MENU ============ -->
-    <div id="diamondMenu" class="diamond-radial-menu" style="display: none;">
-      <div class="radial-backdrop" onclick="closeDiamondMenu()"></div>
-      <div class="radial-container">
-        <div class="radial-center" onclick="closeDiamondMenu()">
-          <div class="diamond-icon-large">💎</div>
-        </div>
-
-        <!-- 9 Facettes -->
-        <button class="facette-btn" style="--angle: 0deg" data-facette="deep-dive" onclick="openFacette('deep-dive')">
-          <span class="facette-icon">📈</span>
-          <span class="facette-label">Deep Dive</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 40deg" data-facette="economie" onclick="openFacette('economie')">
-          <span class="facette-icon">🌍</span>
-          <span class="facette-label">Économie</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 80deg" data-facette="news" onclick="openFacette('news')">
-          <span class="facette-icon">📰</span>
-          <span class="facette-label">News</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 120deg" data-facette="previsions"
-          onclick="openFacette('previsions')">
-          <span class="facette-icon">🔮</span>
-          <span class="facette-label">Prévisions</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 160deg" data-facette="risques" onclick="openFacette('risques')">
-          <span class="facette-icon">🚦</span>
-          <span class="facette-label">Risques</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 200deg" data-facette="copilot" onclick="openFacette('copilot')">
-          <span class="facette-icon">🤖</span>
-          <span class="facette-label">Copilot</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 240deg" data-facette="trading" onclick="openFacette('trading')">
-          <span class="facette-icon">💹</span>
-          <span class="facette-label">Trading</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 280deg" data-facette="portfolio" onclick="openFacette('portfolio')">
-          <span class="facette-icon">🗂️</span>
-          <span class="facette-label">Portfolio</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 320deg" data-facette="explorer" onclick="openFacette('explorer')">
-          <span class="facette-icon">🗺️</span>
-          <span class="facette-label">Explorer</span>
-        </button>
-      </div>
-    </div>
+    <!-- First duplicate removed - loaded from components/navigation/diamond-menu.html -->
 
     <!-- ============ FACETTE VIEW CONTAINER ============ -->
-    <div id="facetteView" class="facette-view" style="display: none;">
-      <div class="facette-header">
-        <button class="back-to-diamond" onclick="closeFacette()">
-          <span>← Back to Diamond</span>
-        </button>
-        <div class="facette-title">
-          <span class="facette-icon-header" id="facetteIcon">📈</span>
-          <h2 id="facetteTitle">Deep Dive Action</h2>
-        </div>
-        <div class="facette-breadcrumb-enhanced" id="facetteBreadcrumb">
-          <span class="breadcrumb-item">💎</span>
-          <span class="breadcrumb-separator">&gt;</span>
-          <span class="breadcrumb-item">Deep Dive</span>
-          <div class="breadcrumb-actions">
-            <button class="breadcrumb-btn" onclick="showToast('Pinned!')" title="Pin">📌</button>
-            <button class="breadcrumb-btn" onclick="showToast('Shared!')" title="Share">📤</button>
-            <button class="breadcrumb-btn" onclick="showToast('Recent paths')" title="Recent">▼</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="facette-search" id="facetteSearch" style="display: none;">
-        <input type="text" class="facette-search-input" placeholder="Enter stock symbol..." id="stockSymbolInput">
-        <button class="facette-search-btn" onclick="searchStock()">Search</button>
-      </div>
-
-      <div class="facette-tabs" id="facetteTabs"></div>
-
-      <div class="facette-content" id="facetteContent"></div>
-    </div>
+    <!-- Loaded dynamically from components/navigation/facette-view.html -->
+    <div id="facette-view-container"></div>
 
     <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
     <section class="hero-section hero-glassmorphic" aria-label="Portfolio overview" style="display: none;"
@@ -329,142 +177,12 @@
     </div>
 
     <!-- ============ V16: DIAMOND DROPDOWN TOP-LEFT ============ -->
-    <div id="diamondDropdown" class="diamond-dropdown-menu">
-      <div class="dropdown-header">
-        <h3>💎 Navigation Hub</h3>
-        <button class="close-btn" onclick="closeDiamondDropdown()" aria-label="Close">✕</button>
-      </div>
-
-      <div class="dropdown-search">
-        <input type="text" class="search-facettes" placeholder="🔍 Search facettes..." id="searchFacettes">
-      </div>
-
-      <div class="facettes-grid">
-        <div class="facette-card" onclick="openFacette('deep-dive')">
-          <div class="facette-icon">📈</div>
-          <div class="facette-name">Deep Dive</div>
-          <div class="facette-desc">Analyse action complète</div>
-          <div class="facette-badge">3 alerts</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('economie')">
-          <div class="facette-icon">🌍</div>
-          <div class="facette-name">Économie</div>
-          <div class="facette-desc">Vue macro globale</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('news')">
-          <div class="facette-icon">📰</div>
-          <div class="facette-name">News</div>
-          <div class="facette-desc">Actualités impactantes</div>
-          <div class="facette-badge">12 new</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('previsions')">
-          <div class="facette-icon">🔮</div>
-          <div class="facette-name">Prévisions</div>
-          <div class="facette-desc">Forecasts IA avancés</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('risques')">
-          <div class="facette-icon">🚦</div>
-          <div class="facette-name">Risques</div>
-          <div class="facette-desc">Monitoring alertes</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('copilot')">
-          <div class="facette-icon">🤖</div>
-          <div class="facette-name">Copilot</div>
-          <div class="facette-desc">Assistant IA Q&A</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('trading')">
-          <div class="facette-icon">💹</div>
-          <div class="facette-name">Trading</div>
-          <div class="facette-desc">Opportunités trade</div>
-          <div class="facette-badge">5 ideas</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('portfolio')">
-          <div class="facette-icon">🗂️</div>
-          <div class="facette-name">Portfolio</div>
-          <div class="facette-desc">Analytics complet</div>
-        </div>
-
-        <div class="facette-card" onclick="openFacette('explorer')">
-          <div class="facette-icon">🗺️</div>
-          <div class="facette-name">Explorer</div>
-          <div class="facette-desc">Découverte avancée</div>
-        </div>
-      </div>
-
-      <div class="dropdown-footer">
-        <div class="exploration-progress">
-          <div class="progress-label">Exploration Progress</div>
-          <div class="progress-bar-exploration">
-            <div class="progress-fill-exploration" id="explorationProgress" style="width: 33%"></div>
-          </div>
-          <div class="progress-text" id="explorationText">33% discovered</div>
-        </div>
-      </div>
-    </div>
+    <!-- Loaded dynamically from components/navigation/diamond-dropdown.html -->
+    <div id="diamond-dropdown-container"></div>
 
     <!-- ============ DIAMOND RADIAL MENU ============ -->
-    <div id="diamondMenu" class="diamond-radial-menu" style="display: none;">
-      <div class="radial-backdrop" onclick="closeDiamondMenu()"></div>
-      <div class="radial-container">
-        <div class="radial-center" onclick="closeDiamondMenu()">
-          <div class="diamond-icon-large">💎</div>
-        </div>
-
-        <!-- 9 Facettes -->
-        <button class="facette-btn" style="--angle: 0deg" data-facette="deep-dive" onclick="openFacette('deep-dive')">
-          <span class="facette-icon">📈</span>
-          <span class="facette-label">Deep Dive</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 40deg" data-facette="economie" onclick="openFacette('economie')">
-          <span class="facette-icon">🌍</span>
-          <span class="facette-label">Économie</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 80deg" data-facette="news" onclick="openFacette('news')">
-          <span class="facette-icon">📰</span>
-          <span class="facette-label">News</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 120deg" data-facette="previsions"
-          onclick="openFacette('previsions')">
-          <span class="facette-icon">🔮</span>
-          <span class="facette-label">Prévisions</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 160deg" data-facette="risques" onclick="openFacette('risques')">
-          <span class="facette-icon">🚦</span>
-          <span class="facette-label">Risques</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 200deg" data-facette="copilot" onclick="openFacette('copilot')">
-          <span class="facette-icon">🤖</span>
-          <span class="facette-label">Copilot</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 240deg" data-facette="trading" onclick="openFacette('trading')">
-          <span class="facette-icon">💹</span>
-          <span class="facette-label">Trading</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 280deg" data-facette="portfolio" onclick="openFacette('portfolio')">
-          <span class="facette-icon">🗂️</span>
-          <span class="facette-label">Portfolio</span>
-        </button>
-
-        <button class="facette-btn" style="--angle: 320deg" data-facette="explorer" onclick="openFacette('explorer')">
-          <span class="facette-icon">🗺️</span>
-          <span class="facette-label">Explorer</span>
-        </button>
-      </div>
-    </div>
+    <!-- Loaded dynamically from components/navigation/diamond-menu.html -->
+    <div id="diamond-menu-container"></div>
 
     <!-- ============ FACETTE VIEW CONTAINER ============ -->
     <div id="facetteView" class="facette-view" style="display: none;">
@@ -2537,11 +2255,15 @@
       console.log('🚀 Loading modular components...');
 
       try {
-        // Charger tous les modals en parallèle
+        // Charger tous les modals et navigation en parallèle
         const components = [
+          { path: 'header.html', target: '#header-container' },
           { path: 'modals/notification-drawer.html', target: '#notification-drawer-container' },
           { path: 'modals/settings-modal.html', target: '#settings-modal-container' },
-          { path: 'modals/command-palette.html', target: '#command-palette-container' }
+          { path: 'modals/command-palette.html', target: '#command-palette-container' },
+          { path: 'navigation/diamond-dropdown.html', target: '#diamond-dropdown-container' },
+          { path: 'navigation/diamond-menu.html', target: '#diamond-menu-container' },
+          { path: 'navigation/facette-view.html', target: '#facette-view-container' }
         ];
 
         const results = await loadComponents(components);

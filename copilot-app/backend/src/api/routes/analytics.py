@@ -14,7 +14,10 @@ backend_root = Path(__file__).resolve().parents[2]  # Go from backend/src/api/ro
 if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
-from backend.src.services.prediction_analyzer import prediction_analyzer_service
+try:
+    from services.prediction_analyzer import prediction_analyzer_service
+except ImportError:
+    from backend.services.prediction_analyzer import prediction_analyzer_service  # type: ignore
 
 router = APIRouter(prefix="/api", tags=["analytics"])
 
