@@ -1,0 +1,133 @@
+<section class="widget-card alert-timeline" aria-label="Alert timeline">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">⏰</span>
+            <h2 class="widget-title">Recent Signals &amp; Alerts</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
+            <button class="filter-btn" data-filter="opportunities"
+                onclick="filterAlerts('opportunities')">Opportunities</button>
+            <button class="filter-btn" data-filter="risks" onclick="filterAlerts('risks')">Risks</button>
+            <button class="filter-btn" data-filter="news" onclick="filterAlerts('news')">News</button>
+            <button class="help-icon" onclick="showHelp('alerts')" aria-label="Help"
+                title="Recent trading signals">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">Timeline: Last 24 hours</p>
+        <div class="timeline-container" id="timelineContainer">
+            <div class="alert-item high expandable" data-priority="high" data-type="opportunity"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">⚡</span>
+                <div class="alert-content">
+                    <h3>NVDA Breakout Signal</h3>
+                    <p>92% confidence • 2h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Acting on NVDA signal...')">Act
+                        Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item high expandable" data-priority="high" data-type="risk"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">⚠️</span>
+                <div class="alert-content">
+                    <h3>Tech Concentration Risk</h3>
+                    <p>High severity • 3h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Viewing risk details...')">Act
+                        Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item medium expandable" data-priority="medium" data-type="news"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">📰</span>
+                <div class="alert-content">
+                    <h3>Fed Minutes Published</h3>
+                    <p>High impact • 4h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Reading analysis...')">Act Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item medium expandable" data-priority="medium" data-type="signal"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">📊</span>
+                <div class="alert-content">
+                    <h3>Convergence Pattern META</h3>
+                    <p>85% confidence • 5h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Viewing pattern...')">Act Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item medium expandable" data-priority="medium" data-type="opportunity"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">💡</span>
+                <div class="alert-content">
+                    <h3>Healthcare Undervalued</h3>
+                    <p>78% confidence • 6h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Exploring healthcare...')">Act
+                        Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item high expandable" data-priority="high" data-type="news"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">📊</span>
+                <div class="alert-content">
+                    <h3>CPI Report Released</h3>
+                    <p>High impact • 8h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Reading report...')">Act Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item low expandable" data-priority="low" data-type="signal"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">📈</span>
+                <div class="alert-content">
+                    <h3>AAPL Support Test</h3>
+                    <p>72% confidence • 10h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Viewing signal...')">Act Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+            <div class="alert-item medium expandable" data-priority="medium" data-type="risk"
+                onclick="toggleAlertDetails(this)">
+                <span class="alert-icon">⚠️</span>
+                <div class="alert-content">
+                    <h3>Volatility Increasing</h3>
+                    <p>Medium severity • 12h ago</p>
+                </div>
+                <div class="alert-actions" style="display: none;">
+                    <button class="alert-action-btn primary" onclick="showToast('Viewing risk...')">Act Now</button>
+                    <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
+                    <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated in real-time</span>
+    </div>
+</section>

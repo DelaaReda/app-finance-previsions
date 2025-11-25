@@ -1,0 +1,45 @@
+<section class="widget-card market-drivers" aria-label="Market drivers">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">💡</span>
+            <h2 class="widget-title">What's Driving Your Portfolio</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('drivers')" aria-label="Help"
+                title="Key factors driving market movements">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <div class="drivers-chart-container">
+            <canvas id="driversDonut" width="300" height="300"></canvas>
+        </div>
+        <p class="widget-subtitle">Technical signals are the main driver today</p>
+        <div class="drivers-expanded">
+            <div class="driver-explanation">
+                <h4>Detailed Breakdown</h4>
+                <div class="waterfall-item">
+                    <span>Technical Signals</span>
+                    <div class="waterfall-bar" style="width: 40%">40%</div>
+                </div>
+                <div class="waterfall-item">
+                    <span>Market Sentiment</span>
+                    <div class="waterfall-bar" style="width: 35%">35%</div>
+                </div>
+                <div class="waterfall-item">
+                    <span>News Events</span>
+                    <div class="waterfall-bar" style="width: 20%">20%</div>
+                </div>
+                <div class="waterfall-item">
+                    <span>Macro Factors</span>
+                    <div class="waterfall-bar" style="width: 5%">5%</div>
+                </div>
+                <button class="learn-more-btn" onclick="showToast('Opening detailed driver analysis...')">Learn
+                    more</button>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+    </div>
+</section>

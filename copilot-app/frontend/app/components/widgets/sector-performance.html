@@ -1,0 +1,26 @@
+<section class="widget-card sector-performance" aria-label="Sector performance">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🏗️</span>
+            <h2 class="widget-title">Sector Performance</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="toggle-btn" onclick="toggleComparison(this)" aria-label="Toggle comparison">vs
+                Benchmark</button>
+            <button class="help-icon" onclick="showHelp('sectors')" aria-label="Help"
+                title="Sector performance comparison">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">Tech leading, Energy lagging</p>
+        <div class="sector-chart-container">
+            <canvas id="sectorChart" width="400" height="300"></canvas>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn" onclick="showToast('Opening sector deep-dive...')">Sector
+            Deep-Dive</button>
+    </div>
+</section>

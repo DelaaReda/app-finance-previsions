@@ -285,43 +285,8 @@
       <div id="top-movers-widget-container"></div>
 
       <!-- ============ WIDGET: PORTFOLIO HEALTH SNAPSHOT ============ -->
-      <section class="widget-card portfolio-health-snapshot" aria-label="Portfolio health">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">🎯</span>
-            <h2 class="widget-title">Portfolio Health Snapshot</h2>
-          </div>
-          <div class="widget-actions">
-            <button class="help-icon" onclick="showHelp('health')" aria-label="Help">?</button>
-            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-          </div>
-        </div>
-        <div class="widget-body">
-          <div class="health-gauge-compact">
-            <canvas id="healthGaugeCompact" width="150" height="150"></canvas>
-            <div class="health-value-compact" id="healthValueCompact">83%</div>
-          </div>
-          <div class="health-context">
-            <div class="health-metric">
-              <span class="health-label">Risk Concentration:</span>
-              <span class="context-badge warning">Medium</span>
-            </div>
-            <div class="health-suggestion-compact">Suggestion: Diversify Tech → Healthcare</div>
-            <div class="health-progress">
-              <div class="progress-label">Current vs. Target Allocation</div>
-              <div class="progress-bar-mini">
-                <div class="progress-fill-mini" style="width: 75%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated 5 minutes ago</span>
-          <button class="widget-action-btn"
-            onclick="switchTab(document.querySelector('[data-tab=performance]'), 'performance')">View Full
-            Analysis</button>
-        </div>
-      </section>
+      <!-- Loaded dynamically from components/widgets/portfolio-health.html -->
+      <div id="portfolio-health-widget-container"></div>
 
     </div><!-- End tab-overview -->
 
@@ -331,372 +296,46 @@
       <!-- ============ WIDGETS GRID ROW 1: MARKET DRIVERS ============ -->
       <div class="grid-2col">
         <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
-        <section class="widget-card alert-timeline" aria-label="Alert timeline">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">⏰</span>
-              <h2 class="widget-title">Recent Signals &amp; Alerts</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
-              <button class="filter-btn" data-filter="opportunities"
-                onclick="filterAlerts('opportunities')">Opportunities</button>
-              <button class="filter-btn" data-filter="risks" onclick="filterAlerts('risks')">Risks</button>
-              <button class="filter-btn" data-filter="news" onclick="filterAlerts('news')">News</button>
-              <button class="help-icon" onclick="showHelp('alerts')" aria-label="Help"
-                title="Recent trading signals">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <p class="widget-subtitle">Timeline: Last 24 hours</p>
-            <div class="timeline-container" id="timelineContainer">
-              <div class="alert-item high expandable" data-priority="high" data-type="opportunity"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">⚡</span>
-                <div class="alert-content">
-                  <h3>NVDA Breakout Signal</h3>
-                  <p>92% confidence • 2h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Acting on NVDA signal...')">Act
-                    Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item high expandable" data-priority="high" data-type="risk"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">⚠️</span>
-                <div class="alert-content">
-                  <h3>Tech Concentration Risk</h3>
-                  <p>High severity • 3h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Viewing risk details...')">Act
-                    Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item medium expandable" data-priority="medium" data-type="news"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">📰</span>
-                <div class="alert-content">
-                  <h3>Fed Minutes Published</h3>
-                  <p>High impact • 4h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Reading analysis...')">Act Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item medium expandable" data-priority="medium" data-type="signal"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">📊</span>
-                <div class="alert-content">
-                  <h3>Convergence Pattern META</h3>
-                  <p>85% confidence • 5h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Viewing pattern...')">Act Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item medium expandable" data-priority="medium" data-type="opportunity"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">💡</span>
-                <div class="alert-content">
-                  <h3>Healthcare Undervalued</h3>
-                  <p>78% confidence • 6h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Exploring healthcare...')">Act
-                    Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item high expandable" data-priority="high" data-type="news"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">📊</span>
-                <div class="alert-content">
-                  <h3>CPI Report Released</h3>
-                  <p>High impact • 8h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Reading report...')">Act Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item low expandable" data-priority="low" data-type="signal"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">📈</span>
-                <div class="alert-content">
-                  <h3>AAPL Support Test</h3>
-                  <p>72% confidence • 10h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Viewing signal...')">Act Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-              <div class="alert-item medium expandable" data-priority="medium" data-type="risk"
-                onclick="toggleAlertDetails(this)">
-                <span class="alert-icon">⚠️</span>
-                <div class="alert-content">
-                  <h3>Volatility Increasing</h3>
-                  <p>Medium severity • 12h ago</p>
-                </div>
-                <div class="alert-actions" style="display: none;">
-                  <button class="alert-action-btn primary" onclick="showToast('Viewing risk...')">Act Now</button>
-                  <button class="alert-action-btn secondary" onclick="showToast('Reminder set')">Remind Me</button>
-                  <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated in real-time</span>
-          </div>
-        </section>
+        <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
+        <!-- Loaded dynamically from components/widgets/alerts-timeline.html -->
+        <div id="alerts-timeline-widget-container"></div>
 
         <!-- ============ WIDGET: What's Driving Your Portfolio ============ -->
-        <section class="widget-card market-drivers" aria-label="Market drivers">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">💡</span>
-              <h2 class="widget-title">What's Driving Your Portfolio</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="help-icon" onclick="showHelp('drivers')" aria-label="Help"
-                title="Key factors driving market movements">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <div class="drivers-chart-container">
-              <canvas id="driversDonut" width="300" height="300"></canvas>
-            </div>
-            <p class="widget-subtitle">Technical signals are the main driver today</p>
-            <div class="drivers-expanded">
-              <div class="driver-explanation">
-                <h4>Detailed Breakdown</h4>
-                <div class="waterfall-item">
-                  <span>Technical Signals</span>
-                  <div class="waterfall-bar" style="width: 40%">40%</div>
-                </div>
-                <div class="waterfall-item">
-                  <span>Market Sentiment</span>
-                  <div class="waterfall-bar" style="width: 35%">35%</div>
-                </div>
-                <div class="waterfall-item">
-                  <span>News Events</span>
-                  <div class="waterfall-bar" style="width: 20%">20%</div>
-                </div>
-                <div class="waterfall-item">
-                  <span>Macro Factors</span>
-                  <div class="waterfall-bar" style="width: 5%">5%</div>
-                </div>
-                <button class="learn-more-btn" onclick="showToast('Opening detailed driver analysis...')">Learn
-                  more</button>
-              </div>
-            </div>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated 5 minutes ago</span>
-          </div>
-        </section>
+        <!-- ============ WIDGET: What's Driving Your Portfolio ============ -->
+        <!-- Loaded dynamically from components/widgets/market-drivers-detailed.html -->
+        <div id="market-drivers-detailed-widget-container"></div>
       </div>
 
       <!-- ============ WIDGETS GRID ROW 2: STOCK RELATIONSHIPS + SIMILAR STOCKS ============ -->
       <div class="grid-2col">
         <!-- ============ WIDGET: Stock Relationships ============ -->
-        <section class="widget-card correlation-map" aria-label="Stock relationships">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">🔗</span>
-              <h2 class="widget-title">Which Stocks Move Together</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="help-icon" onclick="showHelp('relationships')" aria-label="Help"
-                title="Stocks that tend to move in sync">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <p class="widget-subtitle">Top 3 Correlated with Your Portfolio</p>
-            <div class="correlation-list">
-              <div class="correlation-item">
-                <span class="correlation-pair">AAPL ↔ MSFT</span>
-                <span class="correlation-value">85% correlation</span>
-              </div>
-              <div class="correlation-item">
-                <span class="correlation-pair">MSFT ↔ GOOGL</span>
-                <span class="correlation-value">78% correlation</span>
-              </div>
-              <div class="correlation-item">
-                <span class="correlation-pair">AAPL ↔ GOOGL</span>
-                <span class="correlation-value">72% correlation</span>
-              </div>
-            </div>
-            <button class="toggle-matrix-btn" onclick="toggleCorrelationMatrix(this)">Show Full Matrix</button>
-            <div class="heatmap-container" id="heatmapContainer" style="display: none;">
-              <canvas id="correlationHeatmap" width="400" height="400"></canvas>
-            </div>
-            <p class="widget-context">These stocks tend to move in sync</p>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated daily based on 1-year data</span>
-          </div>
-        </section>
+        <!-- ============ WIDGET: Stock Relationships ============ -->
+        <!-- Loaded dynamically from components/widgets/stock-relationships.html -->
+        <div id="stock-relationships-widget-container"></div>
 
         <!-- ============ WIDGET: Similar Stocks ============ -->
-        <section class="widget-card cluster-map" aria-label="Similar stocks">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">🎯</span>
-              <h2 class="widget-title">Stocks with Similar Patterns</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="help-icon" onclick="showHelp('similar')" aria-label="Help"
-                title="AI groups stocks by behavior patterns">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <p class="widget-subtitle">AI groups stocks by behavior patterns</p>
-            <div class="cluster-container">
-              <canvas id="clusterMap" width="400" height="400"></canvas>
-            </div>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated daily</span>
-            <button class="widget-action-btn" onclick="showToast('Exploring stock groups...')">Explore Groups</button>
-          </div>
-        </section>
+        <!-- ============ WIDGET: Similar Stocks ============ -->
+        <!-- Loaded dynamically from components/widgets/similar-stocks.html -->
+        <div id="similar-stocks-widget-container"></div>
       </div>
 
       <!-- ============ WIDGETS GRID ROW 3: NEWS + SECTOR ============ -->
       <div class="grid-2col">
         <!-- ============ WIDGET: News That Matters ============ -->
-        <section class="widget-card news-impact" aria-label="News impact">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">📰</span>
-              <h2 class="widget-title">News Moving the Market</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="help-icon" onclick="showHelp('news')" aria-label="Help"
-                title="News impacting your portfolio">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <div class="news-table" id="newsTable"></div>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated 5 minutes ago</span>
-            <button class="widget-action-btn" onclick="showToast('Reading all news...')">Read All News</button>
-          </div>
-        </section>
+        <!-- ============ WIDGET: News That Matters ============ -->
+        <!-- Loaded dynamically from components/widgets/news-impact.html -->
+        <div id="news-impact-widget-container"></div>
 
         <!-- ============ WIDGET: Sector Performance ============ -->
-        <section class="widget-card sector-performance" aria-label="Sector performance">
-          <div class="widget-header">
-            <div class="widget-title-row">
-              <span class="widget-icon">🏗️</span>
-              <h2 class="widget-title">Sector Performance</h2>
-            </div>
-            <div class="widget-actions">
-              <button class="toggle-btn" onclick="toggleComparison(this)" aria-label="Toggle comparison">vs
-                Benchmark</button>
-              <button class="help-icon" onclick="showHelp('sectors')" aria-label="Help"
-                title="Sector performance comparison">?</button>
-              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-            </div>
-          </div>
-          <div class="widget-body">
-            <p class="widget-subtitle">Tech leading, Energy lagging</p>
-            <div class="sector-chart-container">
-              <canvas id="sectorChart" width="400" height="300"></canvas>
-            </div>
-          </div>
-          <div class="widget-footer">
-            <span class="widget-timestamp">Updated 5 minutes ago</span>
-            <button class="widget-action-btn" onclick="showToast('Opening sector deep-dive...')">Sector
-              Deep-Dive</button>
-          </div>
-        </section>
+        <!-- ============ WIDGET: Sector Performance ============ -->
+        <!-- Loaded dynamically from components/widgets/sector-performance.html -->
+        <div id="sector-performance-widget-container"></div>
       </div>
 
       <!-- ============ V15: MARKET VOLATILITY PRO ============ -->
-      <section class="widget-card market-volatility-pro" aria-label="Market volatility">
-        <div class="widget-header">
-          <div class="widget-title-row">
-            <span class="widget-icon">📊</span>
-            <div>
-              <h2 class="widget-title">Market Volatility</h2>
-              <p class="widget-subtitle-inline">Volatility is moderate and declining</p>
-            </div>
-          </div>
-          <div class="widget-actions">
-            <button class="help-icon" onclick="showHelp('volatility')" aria-label="Help">?</button>
-            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
-          </div>
-        </div>
-
-        <div class="widget-body">
-          <div class="chart-container-pro">
-            <!-- Left: Main Chart -->
-            <div class="chart-main">
-              <canvas id="volatilityChartPro" width="800" height="300"></canvas>
-            </div>
-
-            <!-- Right: Stats Panel -->
-            <div class="stats-panel">
-              <div class="stat-item">
-                <div class="stat-label">Current VIX</div>
-                <div class="stat-value">20.8</div>
-                <div class="stat-change positive">↓ -2.3%</div>
-              </div>
-
-              <div class="stat-item">
-                <div class="stat-label">30-Day Avg</div>
-                <div class="stat-value">21.5</div>
-              </div>
-
-              <div class="stat-item">
-                <div class="stat-label">52-Week High</div>
-                <div class="stat-value">25.2</div>
-              </div>
-
-              <div class="stat-item">
-                <div class="stat-label">Risk Level</div>
-                <div class="risk-badge moderate">Moderate</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- AI Insight Bar -->
-          <div class="ai-insight-bar">
-            <span class="insight-icon">🤖</span>
-            <span class="insight-text">
-              Volatility declining suggests good environment for growth positions.
-              Fed signals and earnings momentum supporting stability.
-            </span>
-          </div>
-        </div>
-
-        <div class="widget-footer">
-          <span class="widget-timestamp">Updated 5 minutes ago</span>
-          <button class="widget-action-btn" onclick="showToast('Opening advanced view...')">Show Advanced View</button>
-        </div>
-      </section>
+      <!-- ============ V15: MARKET VOLATILITY PRO ============ -->
+      <!-- Loaded dynamically from components/widgets/market-volatility.html -->
+      <div id="market-volatility-widget-container"></div>
 
     </div><!-- End tab-market -->
 
@@ -1493,7 +1132,15 @@
           { path: 'widgets/kpi-cards-pro.html', target: '#kpi-cards-pro-widget-container' },
           { path: 'widgets/heatmap-correlation.html', target: '#heatmap-correlation-widget-container' },
           { path: 'widgets/forecast-scenarios.html', target: '#forecast-scenarios-widget-container' },
-          { path: 'widgets/top-movers.html', target: '#top-movers-widget-container' }
+          { path: 'widgets/top-movers.html', target: '#top-movers-widget-container' },
+          { path: 'widgets/portfolio-health.html', target: '#portfolio-health-widget-container' },
+          { path: 'widgets/alerts-timeline.html', target: '#alerts-timeline-widget-container' },
+          { path: 'widgets/market-drivers-detailed.html', target: '#market-drivers-detailed-widget-container' },
+          { path: 'widgets/stock-relationships.html', target: '#stock-relationships-widget-container' },
+          { path: 'widgets/similar-stocks.html', target: '#similar-stocks-widget-container' },
+          { path: 'widgets/news-impact.html', target: '#news-impact-widget-container' },
+          { path: 'widgets/sector-performance.html', target: '#sector-performance-widget-container' },
+          { path: 'widgets/market-volatility.html', target: '#market-volatility-widget-container' }
         ];
 
         const results = await loadComponents(components);
@@ -1503,6 +1150,33 @@
 
         if (successCount === components.length) {
           console.log('🎉 All modals loaded! Modular architecture working perfectly!');
+
+          // Initialize charts after components are loaded
+          setTimeout(() => {
+            console.log('🎨 Initializing charts...');
+
+            // Market Drivers Donut (detailed widget)
+            if (typeof drawMarketDriversDonut === 'function') {
+              drawMarketDriversDonut();
+            }
+
+            // Health Gauge Compact
+            if (typeof drawHealthGaugeCompact === 'function') {
+              drawHealthGaugeCompact();
+            }
+
+            // Cluster Map
+            if (typeof drawClusterMap === 'function') {
+              drawClusterMap();
+            }
+
+            // News Impact
+            if (typeof renderNewsImpact === 'function') {
+              renderNewsImpact();
+            }
+
+            console.log('✅ Charts initialized!');
+          }, 100); // Small delay to ensure DOM is fully updated
         }
       } catch (error) {
         console.error('❌ Component loading error:', error);

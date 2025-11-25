@@ -485,6 +485,51 @@ function safeSwitchTab(button, tabName) {
         }
       }
 
+      if (tabName === 'market') {
+        // Initialize Market Analysis charts after tab is visible
+        setTimeout(() => {
+          try {
+            console.log('🎨 Initializing Market Analysis charts...');
+
+            // Market Drivers Donut
+            if (typeof drawMarketDriversDonut === 'function') {
+              drawMarketDriversDonut();
+            }
+
+            // Cluster Map (Similar Stocks)
+            if (typeof drawClusterMap === 'function') {
+              drawClusterMap();
+            }
+
+            // News Impact table
+            if (typeof renderNewsImpact === 'function') {
+              renderNewsImpact();
+            }
+
+            // Sector Performance chart
+            if (typeof drawSectorPerformance === 'function') {
+              drawSectorPerformance();
+            }
+
+            // Volatility Chart Pro
+            if (typeof drawVolatilityChartPro === 'function') {
+              drawVolatilityChartPro();
+            }
+
+            // Correlation Heatmap (only draw once)
+            const heatmapContainer = document.getElementById('heatmapContainer');
+            if (heatmapContainer && !heatmapContainer.dataset.drawn && typeof drawCorrelationHeatmap === 'function') {
+              drawCorrelationHeatmap();
+              heatmapContainer.dataset.drawn = 'true';
+            }
+
+            console.log('✅ Market Analysis charts initialized!');
+          } catch (e) {
+            console.error('Error initializing Market Analysis charts:', e);
+          }
+        }, 100);
+      }
+
       showToast(`Viewing ${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
     } else {
       console.error('Tab not found:', tabName);
@@ -1780,6 +1825,12 @@ function drawMarketDriversDonut() {
   const canvas = document.getElementById('driversDonut');
   if (!canvas) return;
 
+  // Destroy existing chart if it exists
+  const existingChart = Chart.getChart(canvas);
+  if (existingChart) {
+    existingChart.destroy();
+  }
+
   const colors = ['#1F40AF', '#2E56D6', '#4A6BD9', '#6687DD'];
 
   new Chart(canvas, {
@@ -2689,11 +2740,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Initialize charts and widgets (only those visible in default tab)
   setTimeout(() => {
-    drawMarketDriversDonut();
-    drawClusterMap();
-    renderNewsImpact();
-    drawSectorPerformance();
-    drawHealthGaugeCompact();
+    // drawMarketDriversDonut(); // ⚠️ Moved to after component loading (index.html)
+    // drawClusterMap(); // ⚠️ Moved to after component loading (index.html)
+    // renderNewsImpact(); // ⚠️ Moved to after component loading (index.html)
+    // drawSectorPerformance(); // ⚠️ Moved to Market tab initialization (safeSwitchTab)
+    // drawHealthGaugeCompact(); // ⚠️ Moved to after component loading (index.html)
     drawHealthGauge();
     renderPerformanceTable();
 

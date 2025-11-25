@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import os
 import sys
 import re
@@ -11,7 +12,20 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 
+# Ensure .env is loaded (API keys, etc.)
+try:
+    from core.env_loader import ensure_env_loaded
+    ensure_env_loaded()
+except Exception:
+    pass
+
 logger = logging.getLogger(__name__)
+
+# Optional API keys (read from env; support both spellings)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
+# Propagate to env for g4f if provided under alternate spelling
+if OPENROUTER_API_KEY and "OPENROUTER_API_KEY" not in os.environ:
+    os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
 
 try:
     from g4f.client import Client as G4FClient
@@ -21,19 +35,30 @@ except Exception as e:
     ) from e
 
 
-# ======== Modèles “power” no-auth (depuis ta working list) ====================
-# IMPORTANT: on exclut gpt-4 / gpt-4.1 car ils exigent une auth et ont échoué chez toi.
-# L'ordre ≈ puissance/raisonnement/contexte. Tu peux réordonner selon tes tests.
+# ======== Modèles “power” premium (ordre de préférence) ======================
+# Priorité aux modèles premium (g4f-working, test_results.json)
 POWER_NOAUTH_MODELS: List[str] = [
-    "deepseek-ai/DeepSeek-R1-0528",
-    "deepseek-ai/DeepSeek-V3-0324-Turbo",
+    # Tier S / premium reasoning (OpenRouter slugs)
+    "openai/gpt-5.1",
+    "openai/gpt-4.1",
+    "openai/gpt-4o",
+    # DeepSeek (OpenRouter + DeepInfra aliases)
+    "deepseek/deepseek-r1",
+    "deepseek/deepseek-v3",
+    "deepseek/deepseek-chat",
+    "deepseek-ai/DeepSeek-R1",
     "deepseek-ai/DeepSeek-V3",
-    "Qwen/Qwen3-235B-A22B-Thinking-2507",
-    "Qwen/Qwen3-235B-A22B-Instruct-2507",
-    "Qwen/Qwen3-Next-80B-A3B-Instruct",
-    "zai-org/GLM-4.5",
-    "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    "openai/gpt-oss-120b",  # OSS proxy listé comme "working" no-auth
+    "deepseek-ai/DeepSeek-V3.1",
+    # Qwen premium (OpenRouter + DeepInfra)
+    "qwen/qwen3-235b-a22b",
+    "qwen/qwen-2.5-72b-instruct",
+    "qwen/qwen3-32b",
+    "qwen/qwen3-14b",
+    # LLaMA / Mistral / Phi
+    "meta-llama/llama-3.3-70b-instruct",
+    "mistralai/mistral-large-2411",
+    "mistralai/mistral-small-3.2-24b-instruct",
+    "microsoft/phi-4",
 ]
 
 DEFAULT_MODEL_CANDIDATES: List[str] = POWER_NOAUTH_MODELS[:]
@@ -47,21 +72,21 @@ def _power_rank(model: str) -> int:
 def _model_family(model: str) -> str:
     m = model.lower()
     if "deepseek" in m: return "deepseek"
+    if "deepseek-ai" in m: return "deepseek"
     if "qwen" in m: return "qwen"
     if "glm" in m: return "glm"
     if "llama" in m or "meta-llama" in m: return "llama"
+    if "phi" in m: return "phi"
+    if "mixtral" in m: return "mixtral"
+    if "mistral" in m: return "mistral"
+    if "grok" in m: return "grok"
+    if "o3" in m: return "o3"
     if "gpt-oss" in m or "openai/gpt-oss" in m: return "gpt-oss"
     return "other"
 
 def _is_preferred_model(model: Optional[str]) -> bool:
-    if not model:
-        return False
-    slug = model.lower()
-    blocked = ("claude", "gemini", "command", "comet", "sonnet", "cowboy", "puter")
-    if any(b in slug for b in blocked):
-        return False
-    allow = ("deepseek", "qwen", "glm", "llama", "meta-llama", "gpt-oss", "zai-org")
-    return any(a in slug for a in allow)
+    # Previously we blocked certains modèles (claude/gemini/command). Now we allow any non-empty model name
+    return bool(model and str(model).strip())
 
 def _pick_top3_distinct(models: List[str]) -> List[str]:
     """Prend l’ordre fourni et retient 3 modèles de familles différentes; complète si besoin."""
@@ -82,6 +107,37 @@ def _pick_top3_distinct(models: List[str]) -> List[str]:
     return chosen
 
 
+def _interleave_by_family(models: List[str]) -> List[str]:
+    """
+    Re-order list to take the top model of each family in a priority order,
+    then backfill remaining models preserving original order.
+    """
+    family_order = [
+        "deepseek", "qwen", "llama", "phi", "mixtral", "mistral", "grok", "o3", "gpt-oss", "glm", "other",
+    ]
+    buckets = {fam: [] for fam in family_order}
+    for m in models:
+        buckets.setdefault(_model_family(m), []).append(m)
+    out: List[str] = []
+    # take first of each family following priority
+    for fam in family_order:
+        if buckets.get(fam):
+            out.append(buckets[fam][0])
+            buckets[fam] = buckets[fam][1:]
+    # append the rest preserving order inside buckets
+    for fam in family_order:
+        out.extend(buckets.get(fam, []))
+    # dedup preserving order
+    seen = set()
+    ordered = []
+    for m in out:
+        if m in seen:
+            continue
+        seen.add(m)
+        ordered.append(m)
+    return ordered
+
+
 # ======== Hyperparams =========================================================
 CHAR_BUDGET = int(os.getenv("ECON_AGENT_CHAR_BUDGET", "60000"))
 MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "2048"))
@@ -98,6 +154,7 @@ Règles :
 - Si un champ de features est manquant / None, ne pas le mentionner dans la réponse.
 - Pas de conseil personnalisé ; reste générique et actionnable.
 - ≤ 350 mots, sections strictes, puces numérotées (1., 2., 3.).
+- Ajoute une section courte indiquant les données supplémentaires souhaitées pour affiner la prévision.
 Format :
 # Synthèse (1–5.)
 # Contexte & Indicateurs
@@ -105,6 +162,7 @@ Format :
 # Risques clés & Signaux
 # Impacts marchés (FX, taux, commodities, equity secteurs)
 # Actions possibles (génériques)
+# Données manquantes / requises
 # Hypothèses & Sources
 À la FIN, AJOUTE UNE SEULE LIGNE JSON VALIDE (UNE ligne) :
 {"summary":[...],
@@ -112,7 +170,8 @@ Format :
  "risks":[...],
  "impacts":{"FX":[...],"rates":[...],"commodities":[...],"equity":[...]},
  "actions":[...],
- "confidence":0.0}
+ "confidence":0.0,
+ "data_needed":[...]}
 """
 
 SYSTEM_PROMPT_EN = """You are a senior macro analyst. Do not reveal hidden chain-of-thought.
@@ -120,6 +179,7 @@ Rules:
 - ONLY use provided context; if data is missing, write exactly "not provided".
 - No personalized advice; keep it generic and actionable.
 - ≤ 350 words, strict sections, numbered bullets (1., 2., 3.).
+- Add a short section listing extra data that would improve the forecast.
 Format:
 # Summary (1–5.)
 # Context & Indicators
@@ -127,6 +187,7 @@ Format:
 # Key Risks & Signals
 # Market Impacts (FX, rates, commodities, equity sectors)
 # Possible Actions (generic)
+# Data needed / missing
 # Assumptions & Sources
 At the END, ADD ONE valid JSON LINE (single line):
 {"summary":[...],
@@ -134,7 +195,8 @@ At the END, ADD ONE valid JSON LINE (single line):
  "risks":[...],
  "impacts":{"FX":[...],"rates":[...],"commodities":[...],"equity":[...]},
  "actions":[...],
- "confidence":0.0}
+ "confidence":0.0,
+ "data_needed":[...]}
 """
 
 JSONLike = Union[Dict[str, Any], List[Any], str, int, float, bool, None]
@@ -233,6 +295,74 @@ def _build_context(ein: EconomicInput, char_budget: int) -> str:
 
 def _pick_system_prompt(locale: str) -> str:
     return SYSTEM_PROMPT_FR if (locale or "").lower().startswith("fr") else SYSTEM_PROMPT_EN
+
+
+def _provider_override(model: str) -> Optional[str]:
+    """Best-effort provider override for premium models when key is available."""
+    if not OPENROUTER_API_KEY:
+        return None
+    m = (model or "").lower()
+    # Route premium models via OpenRouter if possible
+    if any(x in m for x in ("deepseek", "qwen", "gpt-5", "gpt-4.1", "gpt-4o", "phi-4", "o3", "o4")):
+        return "OpenRouter"
+    return None
+
+
+def _provider_candidates(model: str) -> List[str]:
+    """
+    Ordered list of providers to try for premium models.
+    OpenRouter first (if key present), then DeepInfra (no key needed), then auto.
+    """
+    m = (model or "").lower()
+    providers: List[str] = []
+    if OPENROUTER_API_KEY and any(x in m for x in ("deepseek", "deepseek-ai", "qwen", "gpt-5", "gpt-4.1", "gpt-4o", "phi-4", "o3", "o4")):
+        providers.append("OpenRouter")
+    # DeepInfra exposes deepseek/qwen/llama/mistral without key in many regions
+    if any(x in m for x in ("deepseek", "deepseek-ai", "qwen", "llama", "phi", "mistral", "gpt-4.1", "gpt-4o", "gpt-5", "o3", "o4")):
+        providers.append("DeepInfra")
+    providers.append(None)  # fallback auto
+    seen = set()
+    out = []
+    for p in providers:
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
+# ======== Working list loader (g4f_model_watcher output) ======================
+def _load_working_models(max_n: int = 16) -> List[str]:
+    """
+    Charge data/llm/models/working.json (produit par g4f_model_watcher).
+    Retourne une liste ordonnée (OK + latence croissante), filtrée par patterns supportés.
+    """
+    path = Path("data/llm/models/working.json")
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        items = data.get("models") or []
+        # sort by ok desc, latency asc, then model name
+        def _key(it):
+            ok = 0 if it.get("ok") else 1
+            lat = it.get("latency_s")
+            lat = lat if isinstance(lat, (int, float)) else 9999.0
+            return (ok, lat, (it.get("model") or "").lower())
+        items = sorted(items, key=_key)
+        out = []
+        seen = set()
+        for it in items:
+            m = str(it.get("model") or "").strip()
+            if not m or m in seen:
+                continue
+            seen.add(m)
+            out.append(m)
+            if len(out) >= max_n:
+                break
+        return out
+    except Exception:
+        return []
 
 
 def clean_llm_text(txt: str, max_chars: int = 3000) -> str:
@@ -434,6 +564,18 @@ class EconomicAnalyst:
         self.retries_per_model = retries_per_model
         self.char_budget = char_budget
         self.client = G4FClient()
+        # Optionally merge a tested working list (g4f_model_watcher output) ahead of static power list
+        if model_candidates is None:
+            working = _load_working_models(max_n=MODEL_LIST_LIMIT or 32)
+            # working d'abord (liste premium de g4f-working), puis power list
+            merged = (working or []) + (POWER_NOAUTH_MODELS or [])
+            seen = set()
+            ordered = []
+            for m in merged:
+                if m and m not in seen:
+                    seen.add(m); ordered.append(m)
+            if ordered:
+                self.model_candidates = ordered[:MODEL_LIST_LIMIT] if MODEL_LIST_LIMIT else ordered
 
     def _load_models_from_env(self) -> Optional[List[str]]:
         raw = os.getenv("ECON_AGENT_MODELS", "").strip()
@@ -460,34 +602,53 @@ class EconomicAnalyst:
         last_err: Optional[str] = None
         for attempt in range(1, self.retries_per_model + 1):
             started = time.perf_counter()
-            try:
-                resp = self.client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    timeout=self.timeout,
-                )
-                latency_ms = int((time.perf_counter() - started) * 1000.0)
-                text = (resp.choices[0].message.content if hasattr(resp, "choices") else str(resp))
-                # Clean the LLM response to remove noise and limit length
-                text = clean_llm_text(text)
-                usage = getattr(resp, "usage", None)
-                parsed = _extract_tail_json_line(text)
-                return True, {
-                    "ok": True,
-                    "model": model,
-                    "attempt": attempt,
-                    "answer": text,
-                    "parsed": parsed,
-                    "usage": _to_json_serializable(usage),
-                    "latency_ms": latency_ms,
-                    "provider": "g4f",
-                }
-            except Exception as e:
-                last_err = f"{type(e).__name__}: {e}"
-                latency_ms = int((time.perf_counter() - started) * 1000.0)
-                continue
+            for provider_override in _provider_candidates(model):
+                try:
+                    # Ensure key is present in env for openrouter
+                    if provider_override in ("openrouter", "OpenRouter") and OPENROUTER_API_KEY and "OPENROUTER_API_KEY" not in os.environ:
+                        os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+                    kwargs = dict(
+                        model=model,
+                        messages=messages,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        timeout=self.timeout,
+                    )
+                    if provider_override:
+                        kwargs["provider"] = provider_override
+                    try:
+                        resp = self.client.chat.completions.create(**kwargs)
+                    except TypeError:
+                        kwargs.pop("provider", None)
+                        resp = self.client.chat.completions.create(**kwargs)
+                    except Exception as e:
+                        # If provider is unknown, retry without provider
+                        if "provider" in kwargs:
+                            kwargs.pop("provider", None)
+                            resp = self.client.chat.completions.create(**kwargs)
+                        else:
+                            raise e
+                    latency_ms = int((time.perf_counter() - started) * 1000.0)
+                    text = (resp.choices[0].message.content if hasattr(resp, "choices") else str(resp))
+                    text = clean_llm_text(text)
+                    usage = getattr(resp, "usage", None)
+                    parsed = _extract_tail_json_line(text)
+                    return True, {
+                        "ok": True,
+                        "model": model,
+                        "provider": provider_override or "g4f",
+                        "attempt": attempt,
+                        "answer": text,
+                        "parsed": parsed,
+                        "usage": _to_json_serializable(usage),
+                        "latency_ms": latency_ms,
+                        "provider_raw": provider_override or None,
+                    }
+                except Exception as e:
+                    last_err = f"{type(e).__name__}: {e}"
+                    # Trace de debug pour savoir exactement quels modèles/providers ont échoué
+                    logger.warning(f"[econ_llm_agent] model={model} provider={provider_override} attempt={attempt} failed: {last_err}")
+                    continue
         return False, {
             "ok": False,
             "model": model,
@@ -521,6 +682,8 @@ class EconomicAnalyst:
             return {"ok": False, "error": "top_n doit être ≥ 1"}
 
         base_list = POWER_NOAUTH_MODELS if force_power else (self.model_candidates or DEFAULT_MODEL_CANDIDATES)
+        base_list = list(base_list)  # already ordered by priority/working list
+        base_list = _interleave_by_family(base_list)
         first3 = _pick_top3_distinct(base_list)
         # ordre d'essai: 3 distincts d'abord, puis le reste en backfill
         backfill = [m for m in base_list if m not in first3]
@@ -539,8 +702,11 @@ class EconomicAnalyst:
             if m in tried:
                 continue
             tried.add(m)
-            _, r = self._call_model(m, messages)
+            ok, r = self._call_model(m, messages)
+            # attach model even if _call_model failed to set it
+            r["model"] = r.get("model") or m
             results.append(r)
+            # continue loop even if error (to try next models)
 
         ok_results = [r for r in results if r.get("ok")]
         models_ok = [r["model"] for r in ok_results]

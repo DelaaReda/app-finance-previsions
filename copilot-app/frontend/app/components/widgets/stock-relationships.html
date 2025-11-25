@@ -1,0 +1,38 @@
+<section class="widget-card correlation-map" aria-label="Stock relationships">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🔗</span>
+            <h2 class="widget-title">Which Stocks Move Together</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('relationships')" aria-label="Help"
+                title="Stocks that tend to move in sync">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">Top 3 Correlated with Your Portfolio</p>
+        <div class="correlation-list">
+            <div class="correlation-item">
+                <span class="correlation-pair">AAPL ↔ MSFT</span>
+                <span class="correlation-value">85% correlation</span>
+            </div>
+            <div class="correlation-item">
+                <span class="correlation-pair">MSFT ↔ GOOGL</span>
+                <span class="correlation-value">78% correlation</span>
+            </div>
+            <div class="correlation-item">
+                <span class="correlation-pair">AAPL ↔ GOOGL</span>
+                <span class="correlation-value">72% correlation</span>
+            </div>
+        </div>
+        <button class="toggle-matrix-btn" onclick="toggleCorrelationMatrix(this)">Show Full Matrix</button>
+        <div class="heatmap-container" id="heatmapContainer" style="display: none;">
+            <canvas id="correlationHeatmap" width="400" height="400"></canvas>
+        </div>
+        <p class="widget-context">These stocks tend to move in sync</p>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated daily based on 1-year data</span>
+    </div>
+</section>

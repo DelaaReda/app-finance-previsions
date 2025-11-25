@@ -1,0 +1,37 @@
+<section class="widget-card portfolio-health-snapshot" aria-label="Portfolio health">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🎯</span>
+            <h2 class="widget-title">Portfolio Health Snapshot</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('health')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <div class="health-gauge-compact">
+            <canvas id="healthGaugeCompact" width="150" height="150"></canvas>
+            <div class="health-value-compact" id="healthValueCompact">83%</div>
+        </div>
+        <div class="health-context">
+            <div class="health-metric">
+                <span class="health-label">Risk Concentration:</span>
+                <span class="context-badge warning">Medium</span>
+            </div>
+            <div class="health-suggestion-compact">Suggestion: Diversify Tech → Healthcare</div>
+            <div class="health-progress">
+                <div class="progress-label">Current vs. Target Allocation</div>
+                <div class="progress-bar-mini">
+                    <div class="progress-fill-mini" style="width: 75%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn"
+            onclick="switchTab(document.querySelector('[data-tab=performance]'), 'performance')">View Full
+            Analysis</button>
+    </div>
+</section>

@@ -31,6 +31,12 @@ try:
 except ImportError:  # pragma: no cover
     def load_or_compute(key, compute_fn, **_): return compute_fn()
 
+# Dynamic working models (OpenRouter/DeepInfra)
+try:
+    from agents.g4f_model_watcher import ensure_working_models
+except Exception:
+    ensure_working_models = None
+
 # Optional LLM judge (econ_llm_agent)
 try:
     from analytics.econ_llm_agent import EconomicAnalyst, EconomicInput  # type: ignore
@@ -122,10 +128,21 @@ async def get_judge_verdicts(
                     parts.append(f"sentiment: {b.get('market_sentiment')}")
                 return " | ".join(parts)
 
-            time_limit = 35  # Allow slow g4f responses
-            # Use the same model selection logic as econ_llm_agent (power list no-auth)
+            # Use the same model selection logic as econ_llm_agent (power list no-auth) with dynamic watcher
             os.environ.pop("ECON_AGENT_MODELS", None)
             os.environ.pop("ECON_AGENT_DYNAMIC_MODELS", None)
+            candidate_models: Optional[List[str]] = None
+            if ensure_working_models:
+                try:
+                    candidate_models = ensure_working_models(limit=6, max_age_hours=1, min_ok=1)
+                except Exception:
+                    candidate_models = None
+            agent = EconomicAnalyst(
+                model_candidates=candidate_models,
+                timeout=12,
+                retries_per_model=1,
+                char_budget=800,
+            )
             generated: List[Dict[str, Any]] = []
 
             def _parse_analysis(answer: str):
@@ -154,128 +171,134 @@ async def get_judge_verdicts(
                     "confidence": None,
                 }
 
-            for r in top_rows:
-                sym = (r.get("ticker") or r.get("symbol") or "").upper()
-                if not sym:
-                    continue
-                base_conf = float(r.get("confidence", 0.5) or 0.0)
-                expected_return = r.get("expected_return")
-                direction = r.get("direction", "neutral")
+            sem = asyncio.Semaphore(3)  # allow limited parallelism
 
-                # Enrich features to give the LLM context instead of “données insuffisantes”
-                feat = {
-                    "ticker": sym,
-                    "direction": direction,
-                    "expected_return": expected_return,
-                    "confidence": base_conf,
-                    "horizon": r.get("horizon"),
-                    "model": r.get("model"),
-                    "macro_brief": mkt_ctx.get("brief"),
-                    "forecasts_bullish": mkt_ctx.get("bullish"),
-                    "forecasts_bearish": mkt_ctx.get("bearish"),
-                    "forecasts_neutral": mkt_ctx.get("neutral"),
-                    "brief_text": _brief_text(),
-                    "news_count": len(_news_for(sym)),
-                }
+            async def _process_row(r):
+                async with sem:
+                    sym = (r.get("ticker") or r.get("symbol") or "").upper()
+                    if not sym:
+                        return None
+                    base_conf = float(r.get("confidence", 0.5) or 0.0)
+                    expected_return = r.get("expected_return")
+                    direction = r.get("direction", "neutral")
 
-                question = (
-                    f"Verdict structuré pour {sym} (horizon {r.get('horizon','1w')}). "
-                    "Donne un texte synthèse puis UNE seule ligne JSON finale avec les clés "
-                    "summary, scenarios, risks, impacts, actions, confidence."
-                )
-                payload = {
-                    "question": question,
-                    "features": feat,
-                    "news": _news_for(sym),
-                    "locale": "fr-FR",
-                    "meta": {"source": "judge_route", "ticker": sym},
-                }
-
-                def _run_subprocess():
-                    py = sys.executable
-                    env = os.environ.copy()
-                    env["PYTHONPATH"] = f"{backend_root/'src'}:{backend_root}"
-                    script = """
-import json, sys
-from analytics.econ_llm_agent import EconomicAnalyst, EconomicInput
-payload = json.loads(sys.stdin.read())
-analyst = EconomicAnalyst()
-res = analyst.analyze(EconomicInput(**payload))
-print(json.dumps(res))
-"""
-                    try:
-                        proc = subprocess.run(
-                            [py, "-c", script],
-                            input=json.dumps(payload).encode(),
-                            capture_output=True,
-                            timeout=time_limit,
-                            env=env,
-                        )
-                        if proc.returncode != 0:
-                            return {"ok": False, "error": proc.stderr.decode() or proc.stdout.decode()}
-                        return json.loads(proc.stdout.decode() or "{}")
-                    except Exception as e:
-                        return {"ok": False, "error": str(e)}
-
-                res = await asyncio.to_thread(_run_subprocess)
-                verdict_text = f"{sym}: {direction} (conf {base_conf:.2f})"
-                parsed = None
-                model_used = None
-                full_answer = None
-                if res.get("ok"):
-                    full_answer = res.get("answer")
-                    verdict_text = full_answer or verdict_text
-                    parsed = res.get("parsed")
-                    model_used = res.get("model")
-                    if parsed and isinstance(parsed, dict) and parsed.get("confidence") is not None:
-                        base_conf = float(parsed.get("confidence"))
-                else:
-                    full_answer = res.get("answer") or res.get("error") or verdict_text
-                # Ensure analysis is always a dict
-                parsed = parsed if isinstance(parsed, dict) else _parse_analysis(full_answer or verdict_text)
-                if isinstance(parsed, dict) and parsed.get("confidence") is None:
-                    parsed["confidence"] = base_conf
-                if not isinstance(parsed, dict):
-                    parsed = {}
-
-                # If parsed is still empty, synthesize a structured analysis from forecasts/news/brief
-                if not parsed:
-                    news_items = _news_for(sym)
-                    news_titles = [n.get("title") for n in news_items[:3] if n.get("title")]
-                    parsed = {
-                        "summary": [verdict_text],
-                        "scenarios": [
-                            {"name": "base", "p": 0.55, "direction": direction},
-                            {"name": "alt", "p": 0.25, "direction": "flat"},
-                            {"name": "risk", "p": 0.2, "direction": "opposite"},
-                        ],
-                        "risks": news_titles or ["news sensitivity"],
-                        "impacts": {
-                            "equity": [f"{sym} {direction}"],
-                            "rates": [],
-                            "FX": [],
-                            "commodities": [],
-                        },
-                        "actions": [
-                            f"Surveiller {sym}, expected_return={expected_return}",
-                            "Réviser si news négatives",
-                        ],
+                    feat = {
+                        "ticker": sym,
+                        "direction": direction,
+                        "expected_return": expected_return,
                         "confidence": base_conf,
+                        "horizon": r.get("horizon"),
+                        "model": r.get("model"),
+                        "macro_brief": mkt_ctx.get("brief"),
+                        "forecasts_bullish": mkt_ctx.get("bullish"),
+                        "forecasts_bearish": mkt_ctx.get("bearish"),
+                        "forecasts_neutral": mkt_ctx.get("neutral"),
+                        "brief_text": _brief_text(),
+                        "news_count": len(_news_for(sym)),
                     }
 
-                generated.append({
-                    "ticker": sym,
-                    "verdict": verdict_text,
-                    "confidence": base_conf,
-                    "expected_return": expected_return,
-                    "risk_level": "medium",
-                    "reasoning": parsed.get("summary") if isinstance(parsed, dict) else None,
-                    "analysis": parsed if isinstance(parsed, dict) else {"summary": [verdict_text]},
-                    "raw_answer": full_answer or verdict_text,
-                    "generated_at": datetime.utcnow().isoformat() + "Z",
-                    "model_version": model_used or "econ_llm_agent",
-                    "source": ["judge_route", "forecasts_llm"],
-                })
+                    question = (
+                        f"Verdict structuré pour {sym} (horizon {r.get('horizon','1w')}). "
+                        "Donne un texte synthèse puis UNE seule ligne JSON finale avec les clés "
+                        "summary, scenarios, risks, impacts, actions, confidence."
+                    )
+                    payload = {
+                        "question": question,
+                        "features": feat,
+                        "news": _news_for(sym),
+                        "locale": "fr-FR",
+                        "meta": {"source": "judge_route", "ticker": sym},
+                    }
+
+                    # Call LLM in a worker thread to avoid nested event-loop issues
+                    def _run_agent():
+                        ein = EconomicInput(**payload)
+                        ens = agent.analyze_ensemble(ein, top_n=3, force_power=False, adjudicate=False)
+                        results = ens.get("results") or []
+                        chosen = next((r for r in results if r.get("ok")), results[0] if results else None)
+                        if chosen:
+                            out = dict(chosen)
+                            out["ensemble_meta"] = {
+                                "models_tried": ens.get("models"),
+                                "avg_agreement": ens.get("avg_agreement"),
+                            }
+                            return out
+                        return {"ok": False, "error": "no results", "ensemble_meta": {
+                            "models_tried": ens.get("models"),
+                            "avg_agreement": ens.get("avg_agreement"),
+                        }}
+
+                    try:
+                        res = await asyncio.to_thread(_run_agent)
+                    except Exception as e:
+                        res = {"ok": False, "error": f"{type(e).__name__}: {e}", "answer": ""}
+                    verdict_text = f"{sym}: {direction} (conf {base_conf:.2f})"
+                    parsed = None
+                    model_used = None
+                    full_answer = None
+                    meta = res.get("ensemble_meta")
+                    if res.get("ok"):
+                        full_answer = res.get("answer")
+                        verdict_text = full_answer or verdict_text
+                        parsed = res.get("parsed")
+                        model_used = res.get("model")
+                        # attach debug info about models tried
+                        if meta and isinstance(parsed, dict):
+                            parsed["_ensemble_meta"] = meta
+                        if parsed and isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                            base_conf = float(parsed.get("confidence"))
+                    else:
+                        full_answer = res.get("answer") or res.get("error") or verdict_text
+                    parsed = parsed if isinstance(parsed, dict) else _parse_analysis(full_answer or verdict_text)
+                    # if still dict, propagate meta for debugging even on errors
+                    if meta and isinstance(parsed, dict) and "_ensemble_meta" not in parsed:
+                        parsed["_ensemble_meta"] = meta
+                    if isinstance(parsed, dict) and parsed.get("confidence") is None:
+                        parsed["confidence"] = base_conf
+                    if not isinstance(parsed, dict):
+                        parsed = {}
+
+                    if not parsed:
+                        news_items = _news_for(sym)
+                        news_titles = [n.get("title") for n in news_items[:3] if n.get("title")]
+                        parsed = {
+                            "summary": [verdict_text],
+                            "scenarios": [
+                                {"name": "base", "p": 0.55, "direction": direction},
+                                {"name": "alt", "p": 0.25, "direction": "flat"},
+                                {"name": "risk", "p": 0.2, "direction": "opposite"},
+                            ],
+                            "risks": news_titles or ["news sensitivity"],
+                            "impacts": {
+                                "equity": [f"{sym} {direction}"],
+                                "rates": [],
+                                "FX": [],
+                                "commodities": [],
+                            },
+                            "actions": [
+                                f"Surveiller {sym}, expected_return={expected_return}",
+                                "Réviser si news négatives",
+                            ],
+                            "confidence": base_conf,
+                        }
+
+                    return {
+                        "ticker": sym,
+                        "verdict": verdict_text,
+                        "confidence": base_conf,
+                        "expected_return": expected_return,
+                        "risk_level": "medium",
+                        "reasoning": parsed.get("summary") if isinstance(parsed, dict) else None,
+                        "analysis": parsed if isinstance(parsed, dict) else {"summary": [verdict_text]},
+                        "raw_answer": full_answer or verdict_text,
+                        "generated_at": datetime.utcnow().isoformat() + "Z",
+                        "model_version": model_used or "econ_llm_agent",
+                        "source": ["judge_route", "forecasts_llm"],
+                    }
+
+            tasks = [asyncio.create_task(_process_row(r)) for r in top_rows]
+            generated_list = await asyncio.gather(*tasks)
+            generated = [g for g in generated_list if g]
             verdicts = generated
 
             # Filtering and stats
