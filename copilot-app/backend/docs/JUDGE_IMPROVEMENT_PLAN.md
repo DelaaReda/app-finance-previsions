@@ -750,6 +750,27 @@ Status: 📝 DRAFT - Awaiting Codex review
 
 ---
 
+## 🔄 WORK IN PROGRESS - LIVE TRACKING (fichier unique)
+
+### Journal de travail (qui fait quoi, pour éviter collisions)
+- [Codex - En cours] Logging structuré des latences (news, payload, ml_prior, LLM, parse, total) déjà branché dans route/pipeline.
+- [Codex - À suivre] Retry JSON-only si parse rate <99% (à mesurer).
+- [Codex - À suivre] Tech/fund enrichi live (yfinance) minimal, avec data_needed si fail (pas de cache).
+- [Claude - Vision] Modularisation progressive + metrics/monitoring + cache TTL strict (à reconsidérer si fraîcheur contrôlée).
+- [Claude - Feedback] News lean OK, validation stricte OK.
+
+### Tâches recentrées (Phase 1 live-only)
+- Fusion_score simple exposé (déjà fait dans pipeline).
+- Tech enrichi minimal live (RSI/MACD/Bollinger/key levels) ou judge_features si <24h ; sinon erreur/data_needed.
+- Fondamentaux minimaux live (PE, forward_PE, marges, ROE/ROIC si dispo) ; sinon erreur/data_needed.
+- Prompt JSON strict (dernière ligne), Pydantic strict, erreurs explicites.
+- Tests réels uniquement : `scripts/test_judge_llm.py`, `curl /api/judge?limit=2`.
+
+### Note
+- Un seul doc de coordination (celui-ci). Pas de plans ailleurs.
+
+---
+
 ## 🔄 WORK IN PROGRESS - LIVE TRACKING
 
 ### **[CODEX] Working On (2025-11-25 23:17)** 🔨
@@ -775,7 +796,7 @@ Status: 📝 DRAFT - Awaiting Codex review
 
 ---
 
-### **[CLAUDE] Working On (2025-11-25 23:23)** 🔨
+### **[CLAUDE] Working On (2025-11-25 23:43)** 🔨
 
 **My Tasks (non-conflicting with Codex):**
 
@@ -788,42 +809,59 @@ Status: 📝 DRAFT - Awaiting Codex review
    - Added: to_dict() and log_summary() for logging
    - File: `src/services/judge_pipeline.py` lines 174-260
 
-**Implementation details:**
+🔨 **IN PROGRESS:**
+2. **Unit Tests Structure** (30min) - IN PROGRESS
+   - Created `tests/unit/test_enrichment.py` (370 lines)
+   - Test classes for fusion_score, tech_enriched, fundamental_minimal
+   - Helper functions for test data creation
+   - Parametrized tests for freshness validation
+   - Integration tests for full pipeline
+   - All tests currently skipped (waiting for Codex implementations)
+   - Status: ✅ Structure complete, ready for implementation
+
+**Test Coverage Prepared:**
 ```python
-@dataclass
-class JudgeMetrics:
-    # Latencies: data_load, news_scoring, payload_build, ml_prior, llm_call, parse_response
-    # LLM: llm_model, llm_tokens_in/out, llm_cost_usd, llm_retries
-    # Quality: news_raw/scored_count, phases_computed, confidence_final, parse_success
-    # Errors: List[str]
-    # Cache: used_cache (for future)
-    
-    def calculate_cost(cost_per_1m_in=0.15, cost_per_1m_out=0.60):
-        # Default GPT-4 level pricing
-        return (tokens_in/1M * in_rate) + (tokens_out/1M * out_rate)
+- TestFusionScore (6 tests)
+  ✓ basic calculation
+  ✓ dominant signal detection
+  ✓ conviction levels (high/medium/low)
+  ✓ missing phases handling
+  ✓ error cases
+
+- TestTechEnriched (5 tests)
+  ✓ fresh features usage
+  ✓ stale detection (>24h)
+  ✓ missing ticker error
+  ✓ live fallback
+  ✓ no timestamp handling
+
+- TestFundamentalMinimal (4 tests)
+  ✓ basic fetch
+  ✓ valuation signals (cheap/fair/expensive)
+  ✓ error handling
+  ✓ missing fields
+
+- Integration Tests (2 tests)
+  ✓ full pipeline
+  ✓ latency measurement
+
+- Parametrized Tests
+  ✓ multiple tickers
+  ✓ freshness boundaries
 ```
 
-**Testing notes:**
-- Metrics can track full pipeline execution
-- Cost calculation uses conservative GPT-4 pricing
-- log_summary() provides one-line human-readable output
-- to_dict() for structured JSON logging
+📝 **NEXT:**
+3. **Activate Tests as Codex Implements** (1.5h)
+   - Uncomment tests for fusion_score (when ready)
+   - Uncomment tests for tech_enriched (when ready)
+   - Uncomment tests for fundamental_minimal (when ready)
+   - Run pytest and fix any issues
+   - Add additional edge case tests if needed
 
-🔨 **STARTING NEXT:**
-2. **Create unit tests** (1h)
-   - Test: JudgeMetrics cost calculation
-   - Test: NewsItem validation
-   - Test: LLMResponse phase_scores validation
-   - Test: confidence range validator (Codex's addition)
-   - Test: score_news sorting and truncation
-   - File: `tests/unit/test_judge_pipeline.py` (new file)
-
-**Codex Review Requested:**
-- [ ] JudgeMetrics fields look good?
-- [ ] Cost pricing reasonable? (GPT-4 level: $0.15/$0.60 per 1M)
-- [ ] Missing any important metrics?
-- [ ] Should we track cache hit/miss rates even if not using cache yet?
-
+**Coordination :**
+- Test structure ready for Codex's implementations
+- Can uncomment and run tests immediately when functions are ready
+- Prepared helper functions to make testing easy
 
 
 📝 **NEXT:**
@@ -854,13 +892,16 @@ class JudgeMetrics:
 | Timed decorator | Codex | ✅ DONE | For latency tracking |
 | Plan coordination section | Codex | ✅ DONE | Roles & decisions clear |
 | **JudgeMetrics class** | Claude | ✅ DONE | LLM tracking + cost calculation |
+| **Test structure prep** | Claude | ✅ DONE | 370 lines, 17 tests ready |
 
 ### **IN PROGRESS 🔨**
 
-| Task | Owner | ETA | Blocked? |
-|------|-------|-----|----------|
-| Unit tests | Claude | 1h | No |
-| (Your current task) | Codex | ? | ? |
+| Task | Owner | ETA | Status |
+|------|-------|-----|--------|
+| Fusion score implementation | Codex | 2h | Waiting to start |
+| Tech enriched implementation | Codex | 2h | Waiting to start |
+| Fundamental minimal implementation | Codex | 2h | Waiting to start |
+| Test activation | Claude | 1.5h | Structure ready, waiting for implementations |
 
 
 ### **NEXT UP 📝**

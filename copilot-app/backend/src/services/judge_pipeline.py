@@ -322,6 +322,9 @@ def build_payload(
     merged_features["news_count"] = len(news)
     merged_features["phases"] = phases
     merged_features["ml_prior"] = ml_prior
+    fusion = compute_fusion_score(phases)
+    if fusion:
+        merged_features["fusion_score"] = fusion
 
     payload_raw = {
         "ticker": ticker,
