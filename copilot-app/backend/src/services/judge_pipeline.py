@@ -12,9 +12,11 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, validator
+import yfinance as yf
 
 # ==== Data models (validation stricte) ====
 
@@ -129,30 +131,210 @@ def score_news(news_list: List[Dict[str, Any]], cap: int = 5) -> List[Dict[str, 
 
 
 def compute_fusion_score(phases: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute a simple fusion score as mean of available phase scores."""
+    """Compute weighted fusion score (no external calls)."""
     if not phases or not isinstance(phases, dict):
         return {}
-    scores = []
-    for k in ("fundamental", "technical", "macro", "sentiment", "fusion"):
+    weights = {
+        "fundamental": 0.3,
+        "technical": 0.25,
+        "macro": 0.25,
+        "sentiment": 0.2,
+    }
+    weighted_sum = 0.0
+    weight_total = 0.0
+    dominant = None
+    dom_score = None
+    for k, w in weights.items():
         try:
             v = phases.get(k, {}).get("score") if isinstance(phases.get(k), dict) else None
-            if v is not None:
-                scores.append(float(v))
+            if v is None:
+                continue
+            fv = float(v)
+            weighted_sum += fv * w
+            weight_total += w
+            if dom_score is None or fv > dom_score:
+                dom_score = fv
+                dominant = k
         except Exception:
             continue
-    if not scores:
+    if weight_total == 0:
         return {}
-    fusion_val = sum(scores) / len(scores)
-    dominant = max(
-        ((k, phases.get(k, {}).get("score")) for k in ("fundamental", "technical", "macro", "sentiment") if isinstance(phases.get(k), dict) and phases.get(k, {}).get("score") is not None),
-        key=lambda x: x[1],
-        default=(None, None),
-    )[0]
+    fusion_val = weighted_sum / weight_total
     return {
         "score": fusion_val,
         "dominant_phase": dominant,
-        "count": len(scores),
+        "count": int(weight_total / min(weights.values())),
     }
+
+
+def _compute_rsi(series, period=14):
+    delta = series.diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    gain = up.rolling(window=period, min_periods=period).mean()
+    loss = down.rolling(window=period, min_periods=period).mean()
+    rs = gain / (loss + 1e-9)
+    rsi = 100 - (100 / (1 + rs))
+    return float(rsi.iloc[-1]) if len(rsi.dropna()) else None
+
+
+def _compute_macd(series, fast=12, slow=26, signal=9):
+    exp1 = series.ewm(span=fast, adjust=False).mean()
+    exp2 = series.ewm(span=slow, adjust=False).mean()
+    macd = exp1 - exp2
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    hist = macd - signal_line
+    return {
+        "macd": float(macd.iloc[-1]),
+        "signal": float(signal_line.iloc[-1]),
+        "hist": float(hist.iloc[-1]),
+    }
+
+
+def _compute_bollinger(series, window=20, num_std=2):
+    ma = series.rolling(window=window).mean()
+    std = series.rolling(window=window).std()
+    upper = ma + num_std * std
+    lower = ma - num_std * std
+    last = series.iloc[-1]
+    pos = None
+    if not upper.empty and not lower.empty:
+        pos = (last - lower.iloc[-1]) / (upper.iloc[-1] - lower.iloc[-1] + 1e-9)
+    return {
+        "upper": float(upper.iloc[-1]) if not upper.empty else None,
+        "lower": float(lower.iloc[-1]) if not lower.empty else None,
+        "ma": float(ma.iloc[-1]) if not ma.empty else None,
+        "position": pos,
+    }
+
+
+def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, Any]:
+    """Technical enrichment live-first; fallback to judge_features if <24h; else error."""
+    # live fetch via yfinance
+    try:
+        hist = yf.Ticker(ticker).history(period="6mo", auto_adjust=True)
+        if hist is not None and not hist.empty:
+            close = hist["Close"].dropna()
+            if len(close) >= 50:
+                rsi = _compute_rsi(close, 14)
+                macd = _compute_macd(close)
+                bb = _compute_bollinger(close, 20, 2)
+                return {
+                    "source": "yfinance_live",
+                    "rsi": rsi,
+                    "macd": macd,
+                    "bollinger": bb,
+                    "last": float(close.iloc[-1]),
+                }
+    except Exception:
+        pass
+    # fallback judge_features with freshness check
+    try:
+        ts = judge_features.get("computed_at")
+        age_hours = None
+        if ts:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            age_hours = (datetime.utcnow() - dt).total_seconds() / 3600.0
+        if age_hours is not None and age_hours > 24:
+            return {"error": "judge_features stale"}
+        entry = (judge_features.get("tickers", {}) or {}).get(ticker.upper()) or (judge_features.get("tickers", {}) or {}).get(ticker)
+        if not entry:
+            return {"error": "tech features missing"}
+        tech = entry.get("tech") or {}
+        if not tech:
+            return {"error": "tech features empty"}
+        return {"source": "judge_features", **tech}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def get_fundamental_minimal(ticker: str) -> Dict[str, Any]:
+    """Minimal fundamentals live from yfinance; explicit error on failure."""
+    try:
+        info = yf.Ticker(ticker).info
+        if not info:
+            return {"error": "no fundamentals"}
+        def _get(key):
+            v = info.get(key)
+            try:
+    """
+    Get minimal fundamental data from yfinance LIVE.
+    
+    Keep it simple and fast:
+        - P/E ratio (valuation)
+        - ROE, profit margin (profitability)
+        - Debt ratios (financial health)
+        - Market cap (size)
+        - NO DCF (too slow/complex)
+    
+    Args:
+        ticker: Stock ticker
+    
+    Returns:
+        {
+            "source": "yfinance_live",
+            "pe_ratio": float,
+            "forward_pe": float,
+            "market_cap": int,
+            "revenue": int,
+            "profit_margin": float,
+            "roe": float,
+            "debt_to_equity": float,
+            "valuation_signal": "cheap" | "fair" | "expensive",
+        }
+        
+        OR {"error": str, "source": "yfinance_live"} if fetch fails
+    """
+    try:
+        log_metrics("fundamental_fetching", ticker=ticker)
+        
+        stock = yf.Ticker(ticker)
+        info = stock.info  # Live API call
+        
+        # Extract simple metrics
+        fund = {
+            "source": "yfinance_live",
+            "pe_ratio": info.get("trailingPE"),
+            "forward_pe": info.get("forwardPE"),
+            "market_cap": info.get("marketCap"),
+            "revenue": info.get("totalRevenue"),
+            "profit_margin": info.get("profitMargins"),
+            "roe": info.get("returnOnEquity"),
+            "debt_to_equity": info.get("debtToEquity"),
+        }
+        
+        # Simple valuation signal
+        pe = fund.get("pe_ratio")
+        
+        if pe is not None:
+            if pe < 15:
+                fund["valuation_signal"] = "cheap"
+            elif pe < 25:
+                fund["valuation_signal"] = "fair"
+            else:
+                fund["valuation_signal"] = "expensive"
+        else:
+            fund["valuation_signal"] = None
+        
+        log_metrics(
+            "fundamental_fetched",
+            ticker=ticker,
+            pe=pe,
+            valuation=fund["valuation_signal"]
+        )
+        
+        return fund
+        
+    except Exception as e:
+        # Explicit error, no fallback
+        log_metrics("fundamental_failed", ticker=ticker, error=str(e))
+        
+        return {
+            "error": f"yfinance_failed: {type(e).__name__}: {str(e)}",
+            "source": "yfinance_live",
+        }
+
+
 def parse_llm_answer(answer: str) -> Dict[str, Any]:
     if not answer:
         return {"error": "empty_answer"}

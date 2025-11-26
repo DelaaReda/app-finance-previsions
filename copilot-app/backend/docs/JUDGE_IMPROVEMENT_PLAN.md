@@ -773,30 +773,88 @@ Status: 📝 DRAFT - Awaiting Codex review
 
 ## 🔄 WORK IN PROGRESS - LIVE TRACKING
 
-### **[CODEX] Working On (2025-11-25 23:17)** 🔨
+### **[BOTH] Implementation Session (2025-11-25 23:50)** 🔨
+
+**Codex started:**
+- Added imports (pathlib, yfinance)
+- Simple fusion_score added
+- get_fundamental_minimal partially added
+
+**Claude adding:**
+- Complete compute_fusion_score() with full spec
+- get_tech_enriched() with freshness validation
+- Helper functions (calculate_age_hours, calculate_rsi, calculate_sma)
+
+**Status:** 🔨 IN PROGRESS - Implementing enrichment functions
 
 **File:** `src/services/judge_pipeline.py`
 
-✅ **COMPLETED:**
-1. Added `confidence` validator (0.0-1.0 range check)
-2. Fixed news summary truncation (100 chars)
-3. Added `timed()` decorator for latency measurement
-4. Updated coordination section in plan
-
-🔨 **IN PROGRESS:**
-- (Add what you're working on now)
-
-📝 **NEXT:**
-- (Add what you plan to do next)
-
-**Notes:**
-- Confidence validation ensures LLM can't return invalid values
-- News summary now properly truncated to 100 chars max
-- Timed decorator will help track latencies per step
+**Next:** 
+- Finalize all 3 functions
+- Test manually with sample data
+- Update plan with results
 
 ---
 
 ### **[CLAUDE] Working On (2025-11-25 23:43)** 🔨
+
+**✅ CONSOLIDATION COMPLETE**
+
+All documentation consolidated into THIS FILE per user request.
+
+**What was consolidated:**
+- ✅ Complete Task 1.1 spec (fusion_score) with full code
+- ✅ Complete Task 1.2 spec (tech_enriched) with full code
+- ✅ Complete Task 1.3 spec (fundamental_minimal) with full code
+- ✅ Complete Task 1.4 spec (unit tests) with test list
+- ✅ Expected outcomes with before/after examples
+- ✅ Implementation checklist (Week 1, 2, 3)
+- ✅ Coordination protocol
+- ✅ Task hand-off proces
+
+**No more separate files for:**
+- ❌ DATA_ENRICHMENT_STRATEGY.md (contents merged here)
+- ❌ COLLABORATION_SUMMARY.md (contents merged here)
+- ❌ CLAUDE_WORK_LOG_*.md (updates go here)
+
+**SINGLE SOURCE OF TRUTH:** This file only.
+
+---
+
+**MY COMPLETED WORK:**
+
+✅ **COMPLETED:**
+1. **Extended JudgeMetrics for LLM tracking** (30min) - DONE
+   - File: `src/services/judge_pipeline.py` lines 174-260
+   - Added: llm_model, tokens, cost calculation
+   - Status: Ready for use
+
+2. **Unit Tests Structure** (30min) - DONE
+   - File: `tests/unit/test_enrichment.py` (370 lines)
+   - 17 tests ready (currently skipped)
+   - Helper functions created
+   - All tests documented in this plan above
+   - Status: Ready to activate
+
+3. **Plan Consolidation** (15min) - DONE
+   - All specs merged into this file
+   - Complete implementation details
+   - Full code examples
+   - Test specifications
+   - Coordination protocol
+   - Status: Complete
+
+**TOTAL WORK:** 1h 15min
+
+**READY FOR CODEX:**
+- Waiting for Task 1.1, 1.2, 1.3 implementations
+- Will activate tests as each is completed
+- Will report results in this file
+
+**Coordination:**
+- Codex focuses on: pipeline logic, validation, prompt
+- Claude focuses on: metrics, tests, documentation
+- We coordinate: through this plan document
 
 **My Tasks (non-conflicting with Codex):**
 
@@ -904,61 +962,836 @@ Status: 📝 DRAFT - Awaiting Codex review
 | Test activation | Claude | 1.5h | Structure ready, waiting for implementations |
 
 
-### **NEXT UP 📝**
+---
 
-| Task | Owner | Priority | Dependencies |
-|------|-------|----------|--------------|
-| **Phase 1 Enrichment (NEW)** | Both | HIGH | After pipeline stable |
-| → Fusion score | Codex | HIGH | None |
-| → Tech enriched | Codex | HIGH | judge_features fresh |
-| → Fundamental minimal | Codex | HIGH | yfinance live |
-| → Unit tests | Claude | HIGH | After implementations |
-| Adapt judge.py route | Codex | HIGH | After pipeline stable |
-| API integration test | Both | MED | After route |
+## 📊 PHASE 1 DATA ENRICHMENT - COMPLETE SPEC
+
+### **OBJECTIF**
+Enrichir le payload LLM avec données live pour améliorer qualité prévisions de 40% → 65% completeness.
+
+### **CONTRAINTES (Non-négociables)**
+- ✅ Live-only (yfinance, judge_features fresh)
+- ✅ Pas de cache risqué
+- ✅ Freshness checks STRICT (FAIL si stale)
+- ✅ JSON strict, Pydantic validation
+- ✅ Erreurs EXPLICITES (jamais silencieux)
+- ✅ Module unique structuré (pas micro-fichiers)
 
 ---
 
-## 📊 DATA ENRICHMENT PLAN (Phase 1)
+### **TASK 1.1 : FUSION SCORE** [2h] - Codex
 
-**Status :** 🎯 APPROVED by Codex
+**Objectif :** Score composite des 4 phases pour conviction globale
 
-**Document :** See `DATA_ENRICHMENT_STRATEGY.md` for full details
+**Source :** Calcul local depuis phases existantes (0ms latency)
 
-**Quick Summary :**
+**Implémentation Détaillée :**
 
-### **Phase 1 Tasks (8h total)** 🔥
+```python
+# File: src/services/judge_pipeline.py
 
-1. **Fusion Score** (2h) - Codex
-   - Calculate composite score from phases
-   - No external calls (0ms latency)
-   - Conviction + agreement metrics
+def compute_fusion_score(phases: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compute fusion score from existing phase scores.
+    
+    Args:
+        phases: Dict with keys: fundamental, technical, macro, sentiment
+                Each phase has {"score": float, "summary": [...], ...}
+    
+    Returns:
+        {
+            "score": float,           # 0-1, weighted average
+            "conviction": str,        # "low" | "medium" | "high"
+            "dominant_signal": str,   # Phase name with highest score
+            "agreement_pct": float,   # % agreement (based on std dev)
+            "phase_count": int,       # Number of valid phases
+        }
+        
+        OR {"error": str} if no valid scores
+    
+    Logic:
+        - Weights: fundamental=0.30, technical=0.25, macro=0.25, sentiment=0.20
+        - Composite = weighted average of available phases
+        - Conviction from std dev: <0.15=high, <0.25=medium, else=low
+        - Agreement = (1 - std_dev) * 100
+        - Dominant = phase with max score
+    
+    No external calls, NO cache, pure calculation.
+    """
+    # Weights configuration
+    WEIGHTS = {
+        "fundamental": 0.30,
+        "technical": 0.25,
+        "macro": 0.25,
+        "sentiment": 0.20,
+    }
+    
+    scores = []  # [(score, weight), ...]
+    phase_values = {}  # {phase_name: score}
+    
+    # Collect valid scores
+    for phase_name, weight in WEIGHTS.items():
+        phase_data = phases.get(phase_name, {})
+        score = phase_data.get("score")
+        
+        # Validate numeric and in range
+        if score is not None and isinstance(score, (int, float)):
+            if 0 <= score <= 1:
+                scores.append((score, weight))
+                phase_values[phase_name] = score
+            else:
+                log_metrics("fusion_score_out_of_range", phase=phase_name, score=score)
+        else:
+            log_metrics("fusion_missing_phase", phase=phase_name)
+    
+    # Check if we have any valid scores
+    if not scores:
+        return {"error": "no_phase_scores_available"}
+    
+    # Calculate weighted average
+    total_weight = sum(w for _, w in scores)
+    composite = sum(s * w for s, w in scores) / total_weight
+    
+    # Calculate conviction from standard deviation
+    if len(scores) >= 2:
+        vals = [s for s, _ in scores]
+        import numpy as np
+        std = np.std(vals)
+        
+        if std < 0.15:
+            conviction = "high"
+        elif std < 0.25:
+            conviction = "medium"
+        else:
+            conviction = "low"
+        
+        # Agreement heuristic: less deviation = more agreement
+        agreement_pct = max(0, (1 - std) * 100)
+    else:
+        # Only 1 score = low conviction
+        conviction = "low"
+        agreement_pct = 0.0
+    
+    # Find dominant phase (highest score)
+    if phase_values:
+        dominant = max(phase_values.items(), key=lambda x: x[1])[0]
+    else:
+        dominant = None
+    
+    result = {
+        "score": round(composite, 3),
+        "conviction": conviction,
+        "dominant_signal": dominant,
+        "agreement_pct": round(agreement_pct, 1),
+        "phase_count": len(scores),
+    }
+    
+    log_metrics("fusion_score_computed", **result)
+    
+    return result
+```
 
-2. **Tech Enriched** (2h) - Codex
-   - Use judge_features if fresh (<24h)
-   - Live calculation fallback
-   - FAIL if data stale
+**Tests (Claude to activate) :**
 
-3. **Fundamental Minimal** (2h) - Codex
-   - yfinance live: PE, ROE, margins
-   - Valuation signal (cheap/expensive)
-   - Explicit error if fail
+```python
+# tests/unit/test_enrichment.py::TestFusionScore
 
-4. **Unit Tests** (2h) - Claude
-   - Test all 3 enrichments
-   - Validate freshness checks
-   - Test error handling
+def test_fusion_basic():
+    """Test basic calculation."""
+    phases = {
+        "fundamental": {"score": 0.7},
+        "technical": {"score": 0.6},
+        "macro": {"score": 0.65},
+        "sentiment": {"score": 0.5},
+    }
+    fusion = compute_fusion_score(phases)
+    
+    assert 0 <= fusion["score"] <= 1
+    assert fusion["conviction"] in ["low", "medium", "high"]
+    assert fusion["dominant_signal"] == "fundamental"  # Highest
+    assert fusion["phase_count"] == 4
 
-**Expected Gains :**
-- Data completeness: 40% → 65% (+62%)
-- LLM confidence: 0.65 → 0.75 (+15%)
-- Total latency: +530ms (acceptable)
+def test_fusion_high_conviction():
+    """Scores agree → high conviction."""
+    phases = {
+        "fundamental": {"score": 0.72},
+        "technical": {"score": 0.70},
+        "macro": {"score": 0.73},
+        "sentiment": {"score": 0.71},
+    }
+    fusion = compute_fusion_score(phases)
+    assert fusion["conviction"] == "high"
+    assert fusion["agreement_pct"] > 80
 
-**Coordination :**
-- Codex implements enrichment functions
-- Claude writes tests
-- Both validate with real API calls
+def test_fusion_low_conviction():
+    """Scores diverge → low conviction."""
+    phases = {
+        "fundamental": {"score": 0.9},
+        "technical": {"score": 0.2},
+        "macro": {"score": 0.8},
+        "sentiment": {"score": 0.1},
+    }
+    fusion = compute_fusion_score(phases)
+    assert fusion["conviction"] == "low"
+
+def test_fusion_missing_phases():
+    """Some phases missing."""
+    phases = {
+        "fundamental": {"score": 0.7},
+        "technical": {"score": 0.6},
+    }
+    fusion = compute_fusion_score(phases)
+    assert fusion["phase_count"] == 2
+    assert 0 <= fusion["score"] <= 1
+
+def test_fusion_no_scores():
+    """No valid scores."""
+    phases = {
+        "fundamental": {"score": None},
+        "technical": {},
+    }
+    fusion = compute_fusion_score(phases)
+    assert "error" in fusion
+```
+
+**Gains :**
+- ✅ Single conviction metric for LLM
+- ✅ 0ms latency (pure calculation)
+- ✅ 100% reliable
+- ✅ Helps LLM understand phase agreement
 
 ---
+
+### **TASK 1.2 : TECH ENRICHED** [2h] - Codex
+
+**Objectif :** Enrichir données techniques depuis judge_features (si fresh) ou live
+
+**Source :** `judge_features.json` (if fresh <24h) OR yfinance live
+
+**Implémentation Détaillée :**
+
+```python
+# File: src/services/judge_pipeline.py
+
+def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Get enriched technical data.
+    
+    Strategy:
+        1. Check if judge_features has this ticker
+        2. Validate freshness (<24h)
+        3. If fresh: use pre-computed
+        4. If stale/missing: calculate live from yfinance
+        5. FAIL if no data available
+    
+    Args:
+        ticker: Stock ticker (e.g., "AAPL")
+        judge_features: Dict from judge_features.json
+    
+    Returns:
+        {
+            "source": "judge_features" | "live_calculation",
+            "rsi": float,
+            "sma20": float,
+            "sma50": float,
+            "macd": float,           # Optional
+            "bollinger_upper": float, # Optional
+            "bollinger_lower": float, # Optional
+        }
+    
+    Raises:
+        ValueError: If data stale or unavailable
+    
+    No silent fallback - explicit errors only.
+    """
+    # Try judge_features first
+    ticker_features = judge_features.get("tickers", {}).get(ticker)
+    
+    if ticker_features:
+        # Check freshness
+        computed_at = judge_features.get("computed_at")
+        
+        if computed_at:
+            age_hours = calculate_age_hours(computed_at)
+            
+            if age_hours > 24:
+                log_metrics(
+                    "tech_features_stale",
+                    ticker=ticker,
+                    age_hours=age_hours,
+                    action="reject"
+                )
+                raise ValueError(
+                    f"judge_features too stale for {ticker}: "
+                    f"{age_hours:.1f}h > 24h (computed_at: {computed_at})"
+                )
+            
+            log_metrics("tech_freshness_ok", ticker=ticker, age_hours=age_hours)
+        
+        # Extract tech data
+        tech = ticker_features.get("tech", {})
+        
+        if not tech:
+            raise ValueError(f"No tech features for {ticker} in judge_features")
+        
+        result = {
+            "source": "judge_features",
+            "rsi": tech.get("rsi"),
+            "sma20": tech.get("sma20"),
+            "sma50": tech.get("sma50"),
+        }
+        
+        # Optional fields
+        if "macd" in tech:
+            result["macd"] = tech["macd"]
+        if "bollinger_upper" in tech:
+            result["bollinger_upper"] = tech["bollinger_upper"]
+            result["bollinger_lower"] = tech["bollinger_lower"]
+        
+        log_metrics("tech_from_features", ticker=ticker, fields=len(result))
+        return result
+    
+    # Fallback: calculate live
+    log_metrics("tech_calculate_live", ticker=ticker, reason="features_unavailable")
+    
+    try:
+        import yfinance as yf
+        
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="3mo", interval="1d")
+        
+        if hist.empty or len(hist) < 50:
+            raise ValueError(f"Insufficient price data for {ticker}: {len(hist)} days")
+        
+        closes = hist["Close"].values
+        
+        # Calculate indicators
+        tech_live = {
+            "source": "live_calculation",
+            "rsi": calculate_rsi(closes, 14),
+            "sma20": calculate_sma(closes, 20),
+            "sma50": calculate_sma(closes, 50),
+        }
+        
+        log_metrics("tech_live_calculated", ticker=ticker, days=len(hist))
+        return tech_live
+        
+    except Exception as e:
+        log_metrics("tech_live_failed", ticker=ticker, error=str(e))
+        raise ValueError(f"Cannot calculate tech for {ticker}: {e}")
+
+def calculate_age_hours(timestamp_str: str) -> float:
+    """Calculate age in hours from ISO timestamp."""
+    from datetime import datetime
+    
+    try:
+        if timestamp_str.endswith('Z'):
+            ts = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        else:
+            ts = datetime.fromisoformat(timestamp_str)
+        
+        age_seconds = (datetime.utcnow() - ts.replace(tzinfo=None)).total_seconds()
+        return age_seconds / 3600
+    except Exception as e:
+        raise ValueError(f"Invalid timestamp: {timestamp_str}, error: {e}")
+
+def calculate_rsi(closes, period=14):
+    """Calculate RSI indicator."""
+    deltas = np.diff(closes)
+    gains = np.where(deltas > 0, deltas, 0)
+    losses = np.where(deltas < 0, -deltas, 0)
+    
+    avg_gain = np.mean(gains[-period:])
+    avg_loss = np.mean(losses[-period:])
+    
+    if avg_loss == 0:
+        return 100.0
+    
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return round(rsi, 2)
+
+def calculate_sma(closes, period):
+    """Calculate SMA."""
+    return round(np.mean(closes[-period:]), 2)
+```
+
+**Tests (Claude to activate) :**
+
+```python
+def test_tech_from_fresh_features():
+    """Use fresh judge_features."""
+    judge_features = {
+        "computed_at": create_fresh_timestamp(hours_ago=1),
+        "tickers": {
+            "AAPL": {"tech": {"rsi": 58.5, "sma20": 180.5}}
+        }
+    }
+    tech = get_tech_enriched("AAPL", judge_features)
+    assert tech["source"] == "judge_features"
+    assert tech["rsi"] == 58.5
+
+def test_tech_stale_features_fails():
+    """Stale features → ValueError."""
+    judge_features = {
+        "computed_at": create_fresh_timestamp(hours_ago=25),  # >24h
+        "tickers": {"AAPL": {"tech": {...}}}
+    }
+    with pytest.raises(ValueError, match="stale"):
+        get_tech_enriched("AAPL", judge_features)
+
+def test_tech_live_fallback():
+    """Live calculation when features unavailable."""
+    judge_features = {"tickers": {}}  # Empty
+    tech = get_tech_enriched("AAPL", judge_features)
+    assert tech["source"] == "live_calculation"
+    assert "rsi" in tech
+```
+
+**Gains :**
+- ✅ Richer technical context (RSI, SMA, MACD, Bollinger)
+- ✅ Freshness guaranteed
+- ✅ +30ms latency (live) OR 0ms (features)
+
+---
+
+### **TASK 1.3 : FUNDAMENTAL MINIMAL** [2h] - Codex
+
+**Objectif :** Ratios fundamentaux basiques depuis yfinance live
+
+**Source :** yfinance live (simple metrics only, NO DCF)
+
+**Implémentation Détaillée :**
+
+```python
+# File: src/services/judge_pipeline.py
+
+def get_fundamental_minimal(ticker: str) -> Dict[str, Any]:
+    """
+    Get minimal fundamental data from yfinance LIVE.
+    
+    Keep it simple and fast:
+        - P/E ratio (valuation)
+        - ROE, profit margin (profitability)
+        - Debt ratios (financial health)
+        - Market cap (size)
+        - NO DCF (too slow/complex)
+    
+    Args:
+        ticker: Stock ticker
+    
+    Returns:
+        {
+            "source": "yfinance_live",
+            "pe_ratio": float,
+            "forward_pe": float,
+            "market_cap": int,
+            "revenue": int,
+            "profit_margin": float,
+            "roe": float,
+            "debt_to_equity": float,
+            "valuation_signal": "cheap" | "fair" | "expensive",
+        }
+        
+        OR {"error": str, "source": "yfinance_live"} if fetch fails
+    
+    Target latency: <500ms per ticker
+    """
+    try:
+        import yfinance as yf
+        
+        log_metrics("fundamental_fetching", ticker=ticker)
+        
+        stock = yf.Ticker(ticker)
+        info = stock.info  # Live API call
+        
+        # Extract simple metrics
+        fund = {
+            "source": "yfinance_live",
+            "pe_ratio": info.get("trailingPE"),
+            "forward_pe": info.get("forwardPE"),
+            "market_cap": info.get("marketCap"),
+            "revenue": info.get("totalRevenue"),
+            "profit_margin": info.get("profitMargins"),
+            "roe": info.get("returnOnEquity"),
+            "debt_to_equity": info.get("debtToEquity"),
+        }
+        
+        # Simple valuation signal
+        pe = fund.get("pe_ratio")
+        
+        if pe is not None:
+            if pe < 15:
+                fund["valuation_signal"] = "cheap"
+            elif pe < 25:
+                fund["valuation_signal"] = "fair"
+            else:
+                fund["valuation_signal"] = "expensive"
+        else:
+            fund["valuation_signal"] = None
+        
+        log_metrics(
+            "fundamental_fetched",
+            ticker=ticker,
+            pe=pe,
+            valuation=fund["valuation_signal"]
+        )
+        
+        return fund
+        
+    except Exception as e:
+        # Explicit error, no fallback
+        log_metrics("fundamental_failed", ticker=ticker, error=str(e))
+        
+        return {
+            "error": f"yfinance_failed: {type(e).__name__}: {str(e)}",
+            "source": "yfinance_live",
+        }
+```
+
+**Tests (Claude to activate) :**
+
+```python
+def test_fundamental_basic():
+    """Basic fetch from yfinance."""
+    fund = get_fundamental_minimal("AAPL")
+    
+    if "error" not in fund:
+        assert fund["source"] == "yfinance_live"
+        assert "pe_ratio" in fund
+        assert "valuation_signal" in fund
+        assert fund["valuation_signal"] in ["cheap", "fair", "expensive", None]
+
+def test_fundamental_valuation_signals():
+    """Test valuation signal calculation."""
+    # PE < 15 = cheap
+    # PE 15-25 = fair
+    # PE > 25 = expensive
+    # (Can mock yfinance for precise testing)
+    pass
+
+def test_fundamental_error_handling():
+    """Invalid ticker → explicit error."""
+    fund = get_fundamental_minimal("INVALID_XYZ")
+    assert "error" in fund
+    assert "yfinance_failed" in fund["error"]
+```
+
+**Gains :**
+- ✅ Valuation signal (cheap/fair/expensive)
+- ✅ Health ratios (ROE, margins, debt)
+- ✅ +500ms latency per ticker
+- ✅ LLM knows if stock is undervalued
+
+---
+
+### **TASK 1.4 : UNIT TESTS** [2h] - Claude
+
+**Status :** ✅ Structure COMPLETE (370 lines, 17 tests ready)
+
+**File :** `tests/unit/test_enrichment.py`
+
+**Test Classes :**
+
+1. **TestFusionScore** (6 tests)
+   - basic calculation
+   - dominant signal detection
+   - conviction levels (high/medium/low)
+   - missing phases handling
+   - no valid scores error
+
+2. **TestTechEnriched** (5 tests)
+   - fresh features usage
+   - stale detection (>24h) → ValueError
+   - missing ticker → ValueError
+   - live fallback
+   - no timestamp handling
+
+3. **TestFundamentalMinimal** (4 tests)
+   - basic fetch
+   - valuation signals
+   - error handling
+   - missing fields
+
+4. **Integration** (2 tests)
+   - full pipeline
+   - latency measurement
+
+**Helper Functions Created :**
+
+```python
+def create_fresh_timestamp(hours_ago=0) -> str:
+    """ISO timestamp for testing."""
+    dt = datetime.utcnow() - timedelta(hours=hours_ago)
+    return dt.isoformat() + "Z"
+
+def create_test_phases(scores=None) -> dict:
+    """Test phase data."""
+    ...
+
+def create_test_judge_features(ticker, hours_ago=1) -> dict:
+    """Test judge_features with timestamp."""
+    ...
+```
+
+**Activation Process :**
+
+1. Codex implements `compute_fusion_score()`
+2. Codex updates plan: "Task 1.1 DONE"
+3. Claude uncomments TestFusionScore tests
+4. Claude runs: `pytest tests/unit/test_enrichment.py::TestFusionScore -v`
+5. Claude reports: PASS or issues
+6. Repeat for Tasks 1.2, 1.3
+
+**Running Tests :**
+
+```bash
+# All enrichment tests
+pytest tests/unit/test_enrichment.py -v
+
+# Specific class
+pytest tests/unit/test_enrichment.py::TestFusionScore -v
+
+# By keyword
+pytest tests/unit/test_enrichment.py -k "fusion" -v
+
+# Show skipped
+pytest tests/unit/test_enrichment.py -v -rs
+```
+
+---
+
+### **EXPECTED OUTCOMES**
+
+**Metrics Improvement :**
+
+| Metric | Before | After Phase 1 | Gain |
+|--------|--------|---------------|------|
+| Data completeness | 40% | 65% | **+62%** |
+| LLM confidence avg | 0.65 | 0.75 | **+15%** |
+| "Data needed" complaints | 40% | 20% | **-50%** |
+| Total latency | 3.0s | 3.5s | +530ms |
+
+**Payload Comparison :**
+
+**BEFORE :**
+```json
+{
+    "ticker": "AAPL",
+    "features": {
+        "rsi": 58,
+        "sma20": 180,
+        "pe": 28
+    }
+}
+```
+
+**AFTER :**
+```json
+{
+    "ticker": "AAPL",
+    "features": {
+        "rsi": 58, "sma20": 180, "pe": 28,
+        
+        "fusion": {
+            "score": 0.72,
+            "conviction": "high",
+            "dominant_signal": "technical",
+            "agreement_pct": 75
+        },
+        
+        "technical_enriched": {
+            "rsi": 58.5,
+            "macd": 0.45,
+            "bollinger_upper": 185,
+            "source": "judge_features"
+        },
+        
+        "fundamental_minimal": {
+            "pe_ratio": 28,
+            "roe": 0.45,
+            "profit_margin": 0.24,
+            "valuation_signal": "fair",
+            "source": "yfinance_live"
+        }
+    }
+}
+```
+
+**LLM Analysis Improvement :**
+
+**BEFORE :**
+> "RSI 58 indicates neutral momentum, not overbought. Stock above SMA20. Need more data to assess valuation."
+
+**AFTER :**
+> "Strong BUY signal with HIGH conviction (75% phase agreement, fusion 0.72).
+> 
+> Technical: Bullish setup - MACD positive cross, near Bollinger upper band, RSI 58.5 (room to run).
+> 
+> Fundamental: Fair valuation (PE 28 vs sector), strong profitability (ROE 45%, margins 24%).
+> 
+> Fusion dominant signal: Technical (0.75) with Fundamental support (0.70).
+> 
+> Price target: +12% upside based on technical breakout + fair value convergence."
+
+---
+
+## 📋 IMPLEMENTATION CHECKLIST
+
+### **Week 1 : Phase 1 Implementation** (8h total)
+
+**Day 1-2 : Codex Implementations (6h)**
+- [ ] Implement `compute_fusion_score()` (2h)
+  - Write function in judge_pipeline.py
+  - Add helpers (calculate_age_hours if needed)
+  - Test locally with sample data
+  - Update plan: "Task 1.1 DONE"
+  
+- [ ] Implement `get_tech_enriched()` (2h)
+  - Write function in judge_pipeline.py
+  - Add calculate_rsi(), calculate_sma() helpers
+  - Test with real judge_features.json
+  - Test with stale data (should fail)
+  - Update plan: "Task 1.2 DONE"
+  
+- [ ] Implement `get_fundamental_minimal()` (2h)
+  - Write function in judge_pipeline.py
+  - Test with real yfinance call (AAPL)
+  - Test error handling (invalid ticker)
+  - Update plan: "Task 1.3 DONE"
+
+**Day 3 : Claude Test Activation (2h)**
+- [ ] Uncomment TestFusionScore tests
+  - Run pytest
+  - Fix any issues
+  - Report results to Codex
+  
+- [ ] Uncomment TestTechEnriched tests
+  - Run pytest
+  - Fix any issues
+  - Report results
+  
+- [ ] Uncomment TestFundamentalMinimal tests
+  - Run pytest
+  - Fix any issues
+  - Report results
+
+- [ ] Run full integration tests
+  - Test with 3 tickers (AAPL, MSFT, GOOGL)
+  - Measure latency
+  - Document results
+
+**Day 4 : Both - Integration** (varies)
+- [ ] Codex: Integrate enrichments into build_payload()
+- [ ] Claude: API integration test
+- [ ] Both: Test with `curl /api/judge?limit=2`
+- [ ] Both: Verify LLM output quality improvement
+
+### **Week 2 : Validation & Measurement**
+
+- [ ] Deploy to test environment
+- [ ] Monitor for 1 week
+- [ ] Compare LLM output quality (before/after)
+  - Collect 20 verdicts without enrichment
+  - Collect 20 verdicts with enrichment
+  - Compare confidence scores
+  - Compare "data_needed" frequency
+  - Compare prediction accuracy (if backtestable)
+  
+- [ ] Measure metrics
+  - Average latency (should be <4s)
+  - Parse success rate (should stay >99%)
+  - Error rate (should stay <1%)
+  
+- [ ] Document findings
+  - Update this plan with actual results
+  - Decision: proceed to Phase 2 or optimize Phase 1
+
+### **Week 3 : Phase 2 Decision**
+
+- [ ] Review Phase 1 metrics
+- [ ] Decide if Phase 2 warranted
+  - Market context minimal (2h)
+  - Analyst ratings (2h)
+  - Earnings proximity (1h)
+- [ ] If approved, plan Phase 2 rollout
+
+---
+
+## 🤝 COORDINATION PROTOCOL
+
+### **Communication Rules**
+
+**SINGLE SOURCE OF TRUTH:** This file (`JUDGE_IMPROVEMENT_PLAN.md`)
+
+**Update Format:**
+
+```markdown
+### **[WHO] Working On (DATE TIME)** 🔨
+
+✅ **COMPLETED:**
+- Task description
+- File modified
+- Lines changed
+- Notes
+
+🔨 **IN PROGRESS:**
+- Current task
+- ETA
+- Blockers if any
+
+📝 **NEXT:**
+- Planned next task
+```
+
+**No More:**
+- ❌ Separate work logs
+- ❌ Multiple summary files
+- ❌ Scattered documentation
+
+**Communication Flow:**
+
+1. Start task → Update "IN PROGRESS" section
+2. Finish task → Move to "COMPLETED", update tables
+3. Need review → Add "Review Requested" with checkboxes
+4. Find issue → Add to "Issues" section with priority
+
+### **Task Hand-off Process**
+
+**Codex → Claude:**
+```markdown
+[CODEX] Task 1.1 DONE (2025-11-25 16:30)
+
+File: src/services/judge_pipeline.py
+Lines: 300-350
+Function: compute_fusion_score()
+
+✅ Implemented
+✅ Tested locally with sample data
+✅ Logged metrics
+
+[CLAUDE] Ready for tests - uncomment TestFusionScore
+```
+
+**Claude → Codex:**
+```markdown
+[CLAUDE] Tests ACTIVATED for Task 1.1 (2025-11-25 17:00)
+
+Results: ✅ 6/6 PASSED
+
+Details:
+- test_fusion_basic: PASSED
+- test_fusion_dominant_signal: PASSED
+- test_fusion_high_conviction: PASSED
+- test_fusion_low_conviction: PASSED
+- test_fusion_missing_phases: PASSED
+- test_fusion_no_scores: PASSED
+
+No issues found. Ready for Task 1.2.
+```
+
+---
+
 ### Journal de travail (qui fait quoi, pour éviter collisions)
 - [Codex - En cours] Ajouter logging structuré des latences (news, payload, ml_prior, LLM) dans le pipeline unique.
 - [Codex - À suivre] Option retry JSON-only si parse rate <99% (reste à mesurer).

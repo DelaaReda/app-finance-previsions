@@ -424,7 +424,7 @@ async def get_judge_verdicts(
                         "forecasts_neutral": mkt_ctx.get("neutral"),
                         "brief_text": _brief_text(),
                         "news_count": len(_news_for(sym)),
-                        "tech": enriched.get("tech") or _tech_for(sym),
+                        "tech": {},
                         "macro": macro_ctx,
                         "sector": r.get("sector") or _ownership_for(sym).get("sector") or enriched.get("fundamentals", {}).get("sector"),
                         "industry": _ownership_for(sym).get("industry") or enriched.get("fundamentals", {}).get("industry"),
@@ -436,6 +436,21 @@ async def get_judge_verdicts(
                         "peer_signals": r.get("peer_signals"),
                         "ml_prior": ml_prior,
                     }
+                    # Enrich tech/fund live (with errors as data_needed hints)
+                    try:
+                        from services.judge_pipeline import get_tech_enriched, get_fundamental_minimal
+                        tech_enriched = get_tech_enriched(sym, judge_features if isinstance(judge_features, dict) else {})
+                        if tech_enriched.get("error"):
+                            feat.setdefault("data_needed", []).append(tech_enriched["error"])
+                        else:
+                            feat["tech"] = tech_enriched
+                        fund_enriched = get_fundamental_minimal(sym)
+                        if fund_enriched.get("error"):
+                            feat.setdefault("data_needed", []).append(fund_enriched["error"])
+                        else:
+                            feat["fundamentals_enriched"] = fund_enriched
+                    except Exception as e:
+                        feat.setdefault("data_needed", []).append(f"enrichment_failed: {e}")
 
                     t_news = time.perf_counter()
                     news_items = _news_for(sym)[:5]  # limiter le volume envoyé au LLM
