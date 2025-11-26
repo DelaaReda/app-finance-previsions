@@ -1,0 +1,9 @@
+Warning: Could not import from backend cache_service: No module named 'backend.src'
+Traceback (most recent call last):
+  File "/Users/venom/Documents/analyse-financiere/copilot-app/backend/profile_enrichments.py", line 15, in <module>
+    from services.judge_pipeline import (
+    ...<3 lines>...
+    )
+  File "/Users/venom/Documents/analyse-financiere/copilot-app/backend/src/services/judge_pipeline.py", line 18, in <module>
+    from pydantic import BaseModel, Field, validator
+ModuleNotFoundError: No module named 'pydantic'
