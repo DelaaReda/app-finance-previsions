@@ -230,9 +230,26 @@ def run_news_ingest():
     
     try:
         from storage.base import save_json
+        try:
+            from storage.io import load_json
+        except Exception:
+            load_json = None
         
         all_articles = []
         sources_processed = []
+
+        # Known tickers from forecasts (pour enrichir l'extraction)
+        known_tickers = set()
+        if load_json:
+            try:
+                fc = load_json("forecasts") or {}
+                rows = fc.get("rows") or fc.get("data", {}).get("rows", []) or []
+                for r in rows:
+                    t = (r.get("ticker") or r.get("symbol") or "").upper()
+                    if t:
+                        known_tickers.add(t)
+            except Exception:
+                pass
         
         # Fetch from each RSS source
         for source in RSS_SOURCES:
@@ -263,9 +280,13 @@ def run_news_ingest():
                     article['score'] = score_article(article)
                     article['sentiment'] = detect_sentiment(article)
                     
-                    # Add ticker extraction (simple version - look for $TICKER pattern)
-                    tickers = re.findall(r'\$([A-Z]{1,5})', article.get('title', '') + ' ' + article.get('summary', ''))
-                    article['tickers'] = list(set(tickers))[:5]  # Max 5 unique tickers
+                    # Ticker extraction améliorée : $TICKER + détection sur liste connue
+                    text = (article.get('title', '') + ' ' + article.get('summary', '')).upper()
+                    tickers = set(re.findall(r'\$([A-Z]{1,5})', text))
+                    for kt in known_tickers:
+                        if re.search(rf'\\b{re.escape(kt)}\\b', text):
+                            tickers.add(kt)
+                    article['tickers'] = list(tickers)[:5]  # Max 5 uniques
                     
                     # Add ingestion timestamp
                     article['ingested_at'] = datetime.utcnow().isoformat() + "Z"

@@ -47,6 +47,12 @@ except Exception as e:  # pragma: no cover
 else:
     _LLM_IMPORT_ERROR = None
 
+# Phase adapter (lightweight summaries)
+try:
+    from analytics.phases_adapter import build_phase_blocks
+except Exception:
+    build_phase_blocks = None
+
 logger = logging.getLogger(__name__)
 
 JUDGE_VERSION = "v3"
@@ -73,6 +79,63 @@ async def get_judge_verdicts(
             news_feed = load_json("news_feed") or {}
             brief_daily = load_json("brief_daily") or load_json("brief_weekly") or {}
             backend_root = Path(__file__).resolve().parents[3]
+            # Raw data for prices/macro (re-used for tech/macro features)
+            prices_path = backend_root / "data" / "stocks" / "prices.json"
+            macro_path = backend_root / "data" / "macro_series.json"
+            ownership_path = backend_root / "data" / "ownership_snapshot.json"
+            yahoo_cache: Dict[str, Dict[str, Any]] = {}
+            judge_features_path = backend_root / "data" / "judge_features.json"
+
+            def _load_judge_features():
+                try:
+                    return json.loads(judge_features_path.read_text()).get("tickers", {})
+                except Exception:
+                    return {}
+
+            def _load_prices():
+                try:
+                    return json.loads(prices_path.read_text()).get("tickers", {})
+                except Exception:
+                    return {}
+
+            def _load_macro():
+                try:
+                    return json.loads(macro_path.read_text()).get("series", {})
+                except Exception:
+                    return {}
+
+            def _load_ownership():
+                try:
+                    return json.loads(ownership_path.read_text())
+                except Exception:
+                    return {}
+
+            prices_data = _load_prices()
+            macro_series = _load_macro()
+            ownership_data = _load_ownership()
+            judge_features = _load_judge_features()
+
+            def _yahoo_snapshot(sym: str) -> Dict[str, Any]:
+                symu = sym.upper()
+                if symu in yahoo_cache:
+                    return yahoo_cache[symu]
+                if isinstance(ownership_data, dict) and ownership_data.get(symu):
+                    yahoo_cache[symu] = ownership_data[symu]
+                    return yahoo_cache[symu]
+                try:
+                    from ingestion.financials_ownership_client import yahoo_snapshot
+                except Exception:
+                    yahoo_snapshot = None
+                if not yahoo_snapshot:
+                    return {}
+                try:
+                    snap = yahoo_snapshot(symu, use_cache=True)
+                    if snap:
+                        yahoo_cache[symu] = snap
+                        return snap
+                except Exception:
+                    return {}
+                return {}
 
             rows = forecasts.get("rows") or forecasts.get("data", {}).get("rows", []) or []
             articles = news_feed.get("articles") or news_feed.get("data", {}).get("articles", []) or []
@@ -110,8 +173,102 @@ async def get_judge_verdicts(
                     a for a in articles
                     if symu in (a.get("tickers") or []) or symu in (a.get("symbols") or [])
                 ]
-                rel = sorted(rel, key=lambda a: a.get("sentiment_score", 0), reverse=True)
+                # Prioritize recency then sentiment
+                def _ts(a):
+                    ts = a.get("timestamp") or a.get("ts") or a.get("published_at")
+                    return ts or ""
+                rel = sorted(rel, key=lambda a: (_ts(a), a.get("sentiment_score", 0)), reverse=True)
                 return rel[:12]
+
+            def _tech_for(sym: str) -> Dict[str, Any]:
+                data = prices_data.get(sym) or {}
+                pts = data.get("points") or data.get("prices") or []
+                if not pts or len(pts) < 5:
+                    return {}
+                pts = sorted(pts, key=lambda x: x[0])
+                closes = [float(p[1]) for p in pts if len(p) >= 2]
+                if not closes:
+                    return {}
+                def sma(window):
+                    if len(closes) < window:
+                        return None
+                    return sum(closes[-window:]) / window
+                def vol(window):
+                    if len(closes) < window:
+                        return None
+                    rets = []
+                    for i in range(1, window):
+                        if closes[-window + i -1] != 0:
+                            rets.append((closes[-window + i] - closes[-window + i -1]) / closes[-window + i -1])
+                    if not rets:
+                        return None
+                    avg = sum(rets)/len(rets)
+                    var = sum((r-avg)**2 for r in rets)/len(rets)
+                    return var**0.5
+                def rsi(period=14):
+                    if len(closes) <= period:
+                        return None
+                    gains, losses = 0.0, 0.0
+                    for i in range(len(closes)-period, len(closes)-1):
+                        diff = closes[i+1]-closes[i]
+                        if diff > 0: gains += diff
+                        else: losses -= diff
+                    if gains == 0 and losses == 0:
+                        return 50.0
+                    if losses == 0:
+                        return 100.0
+                    rs = gains/max(1e-9, losses)
+                    return 100 - (100/(1+rs))
+                last_close = closes[-1]
+                sma20 = sma(20)
+                sma50 = sma(50)
+                vol20 = vol(20)
+                return {
+                    "rsi": round(rsi(14), 2) if rsi(14) is not None else None,
+                    "sma20_vs_price": round((sma20 - last_close)/last_close, 4) if sma20 else None,
+                    "sma50_vs_price": round((sma50 - last_close)/last_close, 4) if sma50 else None,
+                    "vol20": round(vol20, 4) if vol20 is not None else None,
+                    "volume": data.get("volume"),
+                    "last_price": last_close,
+                }
+
+            def _macro_snapshot():
+                out = {}
+                def last_val(key):
+                    series = macro_series.get(key, {}).get("observations") or []
+                    return series[-1]["value"] if series else None
+                out["vix"] = last_val("VIXCLS")
+                out["us10y"] = last_val("DGS10")
+                out["cpi_last"] = last_val("CPIAUCSL")
+                out["cpi_last_date"] = (macro_series.get("CPIAUCSL", {}).get("observations") or [{}])[-1].get("date") if macro_series.get("CPIAUCSL") else None
+                # DXY (broad trade-weighted USD) si dispo
+                for key in ("DTWEXBGS", "DTWEXAFEGS", "DXY"):
+                    val = last_val(key)
+                    if val is not None:
+                        out["dxy"] = val
+                        out["dxy_series"] = key
+                        break
+                return out
+
+            def _ownership_for(sym: str) -> Dict[str, Any]:
+                snap = ownership_data.get(sym.upper()) if isinstance(ownership_data, dict) else None
+                if not snap:
+                    snap = _yahoo_snapshot(sym)
+                if snap and isinstance(snap, dict):
+                    return {
+                        "sector": snap.get("sector") or snap.get("industry"),
+                        "industry": snap.get("industry"),
+                        "marketCap": snap.get("marketCap") or snap.get("mktCap"),
+                        "pe": snap.get("trailingPE") or snap.get("pe"),
+                        "beta": snap.get("beta"),
+                        "avgVolume": snap.get("averageVolume") or snap.get("avgVolume"),
+                    }
+                return {}
+
+            def _judge_feature_for(sym: str) -> Dict[str, Any]:
+                return judge_features.get(sym.upper()) if isinstance(judge_features, dict) else {}
+
+            macro_ctx = _macro_snapshot()
 
             def _brief_text():
                 b = mkt_ctx.get("brief") or {}
@@ -137,9 +294,11 @@ async def get_judge_verdicts(
                     candidate_models = ensure_working_models(limit=6, max_age_hours=1, min_ok=1)
                 except Exception:
                     candidate_models = None
+            # Allow a quick-test override via env (skip heavy models if needed)
+            test_mode = os.getenv("JUDGE_TEST_MODE", "false").lower() in ("1", "true", "yes")
             agent = EconomicAnalyst(
                 model_candidates=candidate_models,
-                timeout=12,
+                timeout=120,           # 120s par appel LLM
                 retries_per_model=1,
                 char_budget=800,
             )
@@ -181,13 +340,15 @@ async def get_judge_verdicts(
                     base_conf = float(r.get("confidence", 0.5) or 0.0)
                     expected_return = r.get("expected_return")
                     direction = r.get("direction", "neutral")
+                    horizon = r.get("horizon") or "1w"
 
+                    enriched = _judge_feature_for(sym) or {}
                     feat = {
                         "ticker": sym,
                         "direction": direction,
                         "expected_return": expected_return,
                         "confidence": base_conf,
-                        "horizon": r.get("horizon"),
+                        "horizon": horizon,
                         "model": r.get("model"),
                         "macro_brief": mkt_ctx.get("brief"),
                         "forecasts_bullish": mkt_ctx.get("bullish"),
@@ -195,66 +356,94 @@ async def get_judge_verdicts(
                         "forecasts_neutral": mkt_ctx.get("neutral"),
                         "brief_text": _brief_text(),
                         "news_count": len(_news_for(sym)),
+                        "tech": enriched.get("tech") or _tech_for(sym),
+                        "macro": macro_ctx,
+                        "sector": r.get("sector") or _ownership_for(sym).get("sector") or enriched.get("fundamentals", {}).get("sector"),
+                        "industry": _ownership_for(sym).get("industry") or enriched.get("fundamentals", {}).get("industry"),
+                        "beta": _ownership_for(sym).get("beta") or enriched.get("fundamentals", {}).get("beta"),
+                        "marketCap": _ownership_for(sym).get("marketCap") or enriched.get("fundamentals", {}).get("marketCap"),
+                        "pe": _ownership_for(sym).get("pe") or enriched.get("fundamentals", {}).get("pe"),
+                        "avgVolume": _ownership_for(sym).get("avgVolume") or enriched.get("fundamentals", {}).get("avgVolume"),
+                        "fundamentals": enriched.get("fundamentals", {}),
+                        "peer_signals": r.get("peer_signals"),
                     }
 
+                    news_items = _news_for(sym)[:5]  # limiter le volume envoyé au LLM
+                    news_headlines = [
+                        {
+                            "title": n.get("title") or n.get("headline"),
+                            "sent": n.get("sentiment_score"),
+                            "ts": n.get("timestamp") or n.get("ts") or n.get("published_at"),
+                            "source": n.get("source"),
+                        }
+                        for n in news_items[:10]
+                        if n.get("title") or n.get("headline")
+                    ]
+
                     question = (
-                        f"Verdict structuré pour {sym} (horizon {r.get('horizon','1w')}). "
+                        f"Verdict structuré pour {sym} (horizon {horizon}). "
                         "Donne un texte synthèse puis UNE seule ligne JSON finale avec les clés "
-                        "summary, scenarios, risks, impacts, actions, confidence."
+                        "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
+                        "ET une clé phase_scores avec les scores numeric (fundamental, technical, macro, sentiment, fusion). "
+                        "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et la ligne JSON. "
+                        "Signale explicitement quelles données supplémentaires seraient utiles si elles manquent."
                     )
+                    phase_blocks = {}
+                    if build_phase_blocks:
+                        phase_features = dict(enriched)
+                        phase_features.setdefault("fundamentals", enriched.get("fundamentals", {}))
+                        phase_features.setdefault("tech", enriched.get("tech") or _tech_for(sym))
+                        phase_blocks = build_phase_blocks(
+                            sym,
+                            phase_features,
+                            macro_ctx,
+                            news_items,
+                        ) or {}
                     payload = {
                         "question": question,
                         "features": feat,
-                        "news": _news_for(sym),
+                        "phases": phase_blocks or None,
+                        "news": news_items,
+                        "attachments": news_headlines or None,
                         "locale": "fr-FR",
                         "meta": {"source": "judge_route", "ticker": sym},
                     }
 
-                    # Call LLM in a worker thread to avoid nested event-loop issues
+                    # Call LLM in a worker thread to avoid nested event-loop issues (single-model analyze)
                     def _run_agent():
                         ein = EconomicInput(**payload)
-                        ens = agent.analyze_ensemble(ein, top_n=3, force_power=False, adjudicate=False)
-                        results = ens.get("results") or []
-                        chosen = next((r for r in results if r.get("ok")), results[0] if results else None)
-                        if chosen:
-                            out = dict(chosen)
-                            out["ensemble_meta"] = {
-                                "models_tried": ens.get("models"),
-                                "avg_agreement": ens.get("avg_agreement"),
-                            }
-                            return out
-                        return {"ok": False, "error": "no results", "ensemble_meta": {
-                            "models_tried": ens.get("models"),
-                            "avg_agreement": ens.get("avg_agreement"),
-                        }}
+                        res = agent.analyze(ein)
+                        return res
 
                     try:
-                        res = await asyncio.to_thread(_run_agent)
+                        # Timeout global pour le juge (5 minutes max) — conserve 300s
+                        res = await asyncio.wait_for(asyncio.to_thread(_run_agent), timeout=300)
+                    except asyncio.TimeoutError:
+                        res = {"ok": False, "error": "timeout", "answer": ""}
                     except Exception as e:
                         res = {"ok": False, "error": f"{type(e).__name__}: {e}", "answer": ""}
                     verdict_text = f"{sym}: {direction} (conf {base_conf:.2f})"
                     parsed = None
                     model_used = None
                     full_answer = None
-                    meta = res.get("ensemble_meta")
+                    meta = None
                     if res.get("ok"):
                         full_answer = res.get("answer")
                         verdict_text = full_answer or verdict_text
                         parsed = res.get("parsed")
                         model_used = res.get("model")
-                        # attach debug info about models tried
-                        if meta and isinstance(parsed, dict):
-                            parsed["_ensemble_meta"] = meta
                         if parsed and isinstance(parsed, dict) and parsed.get("confidence") is not None:
                             base_conf = float(parsed.get("confidence"))
                     else:
                         full_answer = res.get("answer") or res.get("error") or verdict_text
                     parsed = parsed if isinstance(parsed, dict) else _parse_analysis(full_answer or verdict_text)
-                    # if still dict, propagate meta for debugging even on errors
-                    if meta and isinstance(parsed, dict) and "_ensemble_meta" not in parsed:
-                        parsed["_ensemble_meta"] = meta
                     if isinstance(parsed, dict) and parsed.get("confidence") is None:
                         parsed["confidence"] = base_conf
+                    if isinstance(parsed, dict) and phase_blocks:
+                        parsed.setdefault("phase_scores", {
+                            k: (v.get("score") if isinstance(v, dict) else None)
+                            for k, v in phase_blocks.items()
+                        })
                     if not isinstance(parsed, dict):
                         parsed = {}
 
@@ -290,6 +479,8 @@ async def get_judge_verdicts(
                         "risk_level": "medium",
                         "reasoning": parsed.get("summary") if isinstance(parsed, dict) else None,
                         "analysis": parsed if isinstance(parsed, dict) else {"summary": [verdict_text]},
+                        "phases": phase_blocks or None,
+                        "phase_scores": {k: (v.get("score") if isinstance(v, dict) else None) for k, v in (phase_blocks or {}).items()} or None,
                         "raw_answer": full_answer or verdict_text,
                         "generated_at": datetime.utcnow().isoformat() + "Z",
                         "model_version": model_used or "econ_llm_agent",

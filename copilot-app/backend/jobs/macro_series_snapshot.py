@@ -14,6 +14,7 @@ import sys
 
 import pandas as pd
 import requests
+import yfinance as yf
 
 # Load environment variables from .env file using centralized loader
 try:
@@ -91,9 +92,27 @@ except ImportError:
         else:
             raise ImportError(f"Could not find storage/io.py. Tried: {BACKEND_DIR / 'storage' / 'io.py'}, {BACKEND_DIR / 'src' / 'storage' / 'io.py'}")
 
+# Include FX + commodities by default so downstream consumers (judge, briefs) always
+# get dollar regime and key energy/metals signals without relying on env overrides.
+# - DTWEXBGS : Broad dollar index (DXY proxy)
+# - DCOILWTICO / DCOILBRENTEU : WTI & Brent crude
+# - GOLDAMGBD228NLBM : Gold (London fix)
 DEFAULT_SERIES = os.getenv(
     "MACRO_SNAPSHOT_SERIES",
-    "CPIAUCSL,VIXCLS,DFF,UNRATE,DGS10,DGS2,MICH",
+    ",".join(
+        [
+            "CPIAUCSL",        # US CPI
+            "VIXCLS",         # VIX
+            "DFF",            # Fed funds effective
+            "UNRATE",         # Unemployment rate
+            "DGS10", "DGS2",  # Treasury 10Y / 2Y
+            "MICH",           # Michigan sentiment
+            "DTWEXBGS",       # Dollar index (broad)
+            "DCOILWTICO",     # WTI crude
+            "DCOILBRENTEU",   # Brent crude
+            "GOLDAMGBD228NLBM",  # Gold
+        ]
+    ),
 ).split(",")
 MAX_POINTS = int(os.getenv("MACRO_SNAPSHOT_MAX_POINTS", "1200"))
 
@@ -140,6 +159,23 @@ def _observations_from_df(df: pd.DataFrame, series_id: str) -> List[Dict[str, An
     return observations
 
 
+def _gold_fallback_from_yf(max_points: int) -> pd.DataFrame | None:
+    """
+    FRED gold series can occasionally be unavailable.
+    Fall back to yfinance front-month gold futures (GC=F) if needed.
+    """
+    try:
+        ticker = yf.Ticker("GC=F")
+        hist = ticker.history(period="10y")  # enough history, trimmed later
+        if hist is None or hist.empty:
+            return None
+        close = hist[["Close"]].rename(columns={"Close": "GOLD"})
+        # Keep only the last max_points rows to align with other series trimming
+        return close.tail(max_points)
+    except Exception:
+        return None
+
+
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Persist macro series snapshot")
     parser.add_argument("--series", type=str, help="Comma separated list of series IDs to fetch")
@@ -180,6 +216,13 @@ def main(argv: List[str] | None = None) -> int:
                 print(f"   Récupération de {series_id} avec fallback CSV...")
             
             df = get_fred_series(series_id)
+            # Gold fallback via yfinance if FRED returns empty
+            if (df is None or df.empty) and series_id == "GOLDAMGBD228NLBM":
+                print("   ⚠️  GOLDAMGBD228NLBM: empty from FRED, trying yfinance GC=F fallback...")
+                df = _gold_fallback_from_yf(MAX_POINTS)
+                if df is not None and not df.empty:
+                    df.columns = [series_id]
+                    print("   ✅ GOLD fallback GC=F (yfinance) recovered data")
             if df is None or df.empty:
                 print(f"   ⚠️  {series_id}: DataFrame vide ou None")
                 failed_series.append(series_id)

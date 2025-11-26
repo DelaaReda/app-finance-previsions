@@ -205,6 +205,7 @@ JSONLike = Union[Dict[str, Any], List[Any], str, int, float, bool, None]
 class EconomicInput:
     question: str
     features: Optional[Dict[str, Any]] = None
+    phases: Optional[Dict[str, Any]] = None
     news: Optional[List[Dict[str, Any]]] = None
     attachments: Optional[List[JSONLike]] = None
     locale: str = "fr-FR"
@@ -253,6 +254,21 @@ def _format_news(news: List[Dict[str, Any]], limit_items: int = 50) -> str:
     more = "" if len(news) <= limit_items else f"... et {len(news) - limit_items} de plus\n"
     return "## News\n" + "\n".join(lines) + more
 
+def _format_phases(ph: Dict[str, Any]) -> str:
+    lines = ["## Phases (multi-branch synthesis)"]
+    for name, block in ph.items():
+        if not isinstance(block, dict):
+            lines.append(f"- {name}: {block}")
+            continue
+        score = block.get("score")
+        summary = block.get("summary") or []
+        if isinstance(summary, (list, tuple)):
+            summary_txt = "; ".join(str(x) for x in summary if x is not None)
+        else:
+            summary_txt = str(summary)
+        lines.append(f"- {name}: score={score} | {summary_txt}")
+    return "\n".join(lines) + "\n"
+
 def _format_attachments(atts: List[JSONLike], limit_chars_each: int = 8000, limit_total: int = 40000) -> str:
     chunks: List[str] = []
     total = 0
@@ -276,6 +292,9 @@ def _build_context(ein: EconomicInput, char_budget: int) -> str:
     parts.append(f"# Question\n{ein.question}\n")
     if ein.features:
         parts.append(_format_features(ein.features))
+    if ein.phases:
+        phase_budget = int(char_budget * 0.2)
+        parts.append(_truncate(_format_phases(ein.phases), phase_budget))
     if ein.news:
         news_budget = int(char_budget * 0.4)
         news_block = _format_news(ein.news, limit_items=120)
