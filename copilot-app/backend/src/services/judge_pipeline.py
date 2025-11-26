@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, validator
 import yfinance as yf
+import pandas as pd
 
 # ==== Data models (validation stricte) ====
 
@@ -44,7 +45,7 @@ class MlPrior(BaseModel):
     error: Optional[str] = None
 
 class JudgePayload(BaseModel):
-    ticker: str = Field(..., regex=r"^[A-Z0-9]{1,8}$")
+    ticker: str = Field(..., pattern=r"^[A-Z0-9]{1,8}$")
     features: Dict[str, Any]
     phases: Dict[str, Any]
     news: List[NewsItem] = Field(default_factory=list, max_items=5)
@@ -208,6 +209,11 @@ def _compute_bollinger(series, window=20, num_std=2):
     }
 
 
+def _compute_sma(series, window=20):
+    ma = series.rolling(window=window).mean()
+    return float(ma.iloc[-1]) if not ma.empty else None
+
+
 def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, Any]:
     """Technical enrichment live-first; fallback to judge_features if <24h; else error."""
     # live fetch via yfinance
@@ -219,11 +225,15 @@ def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, 
                 rsi = _compute_rsi(close, 14)
                 macd = _compute_macd(close)
                 bb = _compute_bollinger(close, 20, 2)
+                sma20 = _compute_sma(close, 20)
+                sma50 = _compute_sma(close, 50)
                 return {
                     "source": "yfinance_live",
                     "rsi": rsi,
                     "macd": macd,
                     "bollinger": bb,
+                    "sma20": sma20,
+                    "sma50": sma50,
                     "last": float(close.iloc[-1]),
                 }
     except Exception:
@@ -492,17 +502,85 @@ def build_payload(
     phases: Dict[str, Any],
     ml_prior: Optional[Dict[str, Any]],
     locale: str = "fr-FR",
+    judge_features: Optional[Dict[str, Any]] = None,  # New param for tech enrichment
 ) -> JudgePayload:
-    # Attach macro, phases, news_count, ml_prior in features/meta for context
+    """
+    Build enriched payload with all Phase 1 enrichments.
+    
+    Enrichments:
+    1. Fusion score (from phases)
+    2. Tech enriched (from judge_features or live)
+    3. Fundamental minimal (live yfinance)
+    """
+    # Base features
     merged_features = {**features}
     merged_features["macro"] = macro
     merged_features["news_count"] = len(news)
     merged_features["phases"] = phases
     merged_features["ml_prior"] = ml_prior
+    
+    # === ENRICHMENT 1: Fusion Score ===
     fusion = compute_fusion_score(phases)
-    if fusion:
+    if fusion and "error" not in fusion:
         merged_features["fusion_score"] = fusion
+        log_metrics(
+            "enrichment_fusion_added",
+            ticker=ticker,
+            score=fusion.get("score"),
+            conviction=fusion.get("conviction")
+        )
+    else:
+        log_metrics("enrichment_fusion_skipped", ticker=ticker, reason=fusion.get("error") if fusion else "no_phases")
+    
+    # === ENRICHMENT 2: Tech Enriched ===
+    if judge_features:
+        try:
+            tech_enriched = get_tech_enriched(ticker, judge_features)
+            if tech_enriched and "error" not in tech_enriched:
+                merged_features["tech_enriched"] = tech_enriched
+                log_metrics(
+                    "enrichment_tech_added",
+                    ticker=ticker,
+                    source=tech_enriched.get("source"),
+                    rsi=tech_enriched.get("rsi")
+                )
+            else:
+                log_metrics(
+                    "enrichment_tech_failed",
+                    ticker=ticker,
+                    error=tech_enriched.get("error") if isinstance(tech_enriched, dict) else str(tech_enriched)
+                )
+        except ValueError as e:
+            # Freshness check failed or data unavailable
+            log_metrics("enrichment_tech_rejected", ticker=ticker, reason=str(e))
+        except Exception as e:
+            # Unexpected error - log but don't fail pipeline
+            log_metrics("enrichment_tech_error", ticker=ticker, error=str(e))
+    else:
+        log_metrics("enrichment_tech_skipped", ticker=ticker, reason="no_judge_features")
+    
+    # === ENRICHMENT 3: Fundamental Minimal ===
+    try:
+        fundamental = get_fundamental_minimal(ticker)
+        if fundamental and "error" not in fundamental:
+            merged_features["fundamental_minimal"] = fundamental
+            log_metrics(
+                "enrichment_fundamental_added",
+                ticker=ticker,
+                pe_ratio=fundamental.get("pe_ratio"),
+                valuation=fundamental.get("valuation_signal")
+            )
+        else:
+            log_metrics(
+                "enrichment_fundamental_failed",
+                ticker=ticker,
+                error=fundamental.get("error") if isinstance(fundamental, dict) else "unknown"
+            )
+    except Exception as e:
+        # yfinance can fail - log but don't break pipeline
+        log_metrics("enrichment_fundamental_error", ticker=ticker, error=str(e))
 
+    # Build final payload
     payload_raw = {
         "ticker": ticker,
         "features": merged_features,
@@ -518,10 +596,17 @@ def build_payload(
             "data_timestamps": {
                 "macro": macro.get("cpi_last_date"),
             },
+            "enrichments_applied": {
+                "fusion": "fusion_score" in merged_features,
+                "tech": "tech_enriched" in merged_features,
+                "fundamental": "fundamental_minimal" in merged_features,
+            },
         },
         "ml_prior": ml_prior,
     }
+    
     return JudgePayload(**payload_raw)
+
 
 
 def validate_llm_response(parsed: Dict[str, Any]) -> LLMResponse:
