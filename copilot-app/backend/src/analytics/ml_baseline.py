@@ -18,34 +18,30 @@ from __future__ import annotations
 from typing import Tuple, Optional
 import pandas as pd
 import numpy as np
+import logging
 from pathlib import Path
 
-from sklearn.linear_model import RidgeCV
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import r2_score
+HAS_SKLEARN = True
+try:
+    from sklearn.linear_model import RidgeCV
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.metrics import r2_score
+except Exception:
+    HAS_SKLEARN = False
 
 HORIZON_TO_DAYS = {"1w": 5, "1m": 21, "1y": 252}
 
 
 def _load_prices(ticker: str) -> Optional[pd.DataFrame]:
-    """Load cached prices parquet if present; fallback to yfinance."""
-    pfile = Path("data/prices") / f"ticker={ticker}" / "prices.parquet"
-    if pfile.exists():
-        try:
-            df = pd.read_parquet(pfile)
-            if "date" in df.columns:
-                df["date"] = pd.to_datetime(df["date"], errors="coerce")
-                df = df.set_index("date")
-            return df
-        except Exception:
-            pass
-    # fallback
+    """Fetch fresh prices from yfinance only. No cache fallback to avoid staleness."""
     try:
         import yfinance as yf
-        hist = yf.Ticker(ticker).history(period="5y", auto_adjust=True)
-        return hist if hist is not None and not hist.empty else None
-    except Exception:
-        return None
+        hist = yf.Ticker(ticker).history(period="6mo", auto_adjust=True)
+        if hist is not None and not hist.empty and "Close" in hist.columns:
+            return hist
+    except Exception as e:
+        logger.debug(f"yfinance fetch failed for {ticker}: {e}")
+    return None
 
 
 def _make_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -74,11 +70,11 @@ def ml_predict_next_return(ticker: str, horizon: str = "1m") -> Tuple[Optional[f
     close = df["Close"].reindex(feats.index)
     y = _forward_return(close, days)
     Xy = pd.concat([feats, y.rename("target")], axis=1).dropna()
-    if len(Xy) < 150:
-        # insufficient history
-        # simple momentum proxy = r_21 * 0.5
+    # If sklearn is unavailable or data is short, fallback to momentum proxy
+    if (not HAS_SKLEARN) or len(Xy) < 150:
         val = float(feats.iloc[-1]["r_21"]) * 0.5 if not feats.empty else 0.0
-        return val, 0.3
+        conf = 0.35 if HAS_SKLEARN else 0.3
+        return val, conf
     X = Xy.drop(columns=["target"]).values
     yv = Xy["target"].values
     # time series CV
@@ -102,4 +98,3 @@ def ml_predict_next_return(ticker: str, horizon: str = "1m") -> Tuple[Optional[f
         # fallback momentum
         val = float(feats.iloc[-1]["r_21"]) * 0.5 if not feats.empty else 0.0
         return val, 0.3
-

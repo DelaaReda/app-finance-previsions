@@ -11,6 +11,7 @@ import logging
 import asyncio
 import os
 import subprocess
+import time
 
 # Ensure nested event loops don't break g4f client
 try:
@@ -47,11 +48,33 @@ except Exception as e:  # pragma: no cover
 else:
     _LLM_IMPORT_ERROR = None
 
+# Optional ML prior
+try:
+    from analytics.ml_baseline import ml_predict_next_return
+except Exception:
+    ml_predict_next_return = None
+
 # Phase adapter (lightweight summaries)
 try:
     from analytics.phases_adapter import build_phase_blocks
 except Exception:
     build_phase_blocks = None
+
+# Judge pipeline helpers (scoring, payload, validation)
+try:
+    from services.judge_pipeline import (
+        score_news,
+        build_payload,
+        parse_llm_answer,
+        validate_llm_response,
+        log_metrics,
+    )
+except Exception:
+    score_news = None
+    build_payload = None
+    parse_llm_answer = None
+    validate_llm_response = None
+    log_metrics = None
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +108,7 @@ async def get_judge_verdicts(
             ownership_path = backend_root / "data" / "ownership_snapshot.json"
             yahoo_cache: Dict[str, Dict[str, Any]] = {}
             judge_features_path = backend_root / "data" / "judge_features.json"
+            metrics_log: List[Dict[str, Any]] = []
 
             def _load_judge_features():
                 try:
@@ -142,6 +166,32 @@ async def get_judge_verdicts(
             rows_sorted = sorted(rows, key=lambda r: r.get("confidence", 0), reverse=True)
             top_rows = rows_sorted[: min(limit or 3, 3)]
 
+            def _parse_ts(ts_val):
+                if not ts_val:
+                    return None
+                try:
+                    return datetime.fromisoformat(ts_val.replace("Z", "+00:00"))
+                except Exception:
+                    try:
+                        return datetime.strptime(ts_val, "%Y-%m-%d")
+                    except Exception:
+                        return None
+
+            def _score_news_items(news_list: List[Dict[str, Any]], cap: int = 5) -> List[Dict[str, Any]]:
+                """Rank news by recency then |sentiment|, keep top cap."""
+                scored = []
+                for n in news_list:
+                    ts = n.get("timestamp") or n.get("ts") or n.get("published_at") or n.get("date")
+                    dt = _parse_ts(ts)
+                    sent = n.get("sentiment_score") or n.get("sent") or n.get("sentiment")
+                    try:
+                        sent_abs = abs(float(sent)) if sent is not None else 0.0
+                    except Exception:
+                        sent_abs = 0.0
+                    scored.append((dt, sent_abs, n))
+                scored.sort(key=lambda x: ((x[0] or datetime.min), x[1]), reverse=True)
+                return [x[2] for x in scored[:cap]]
+
             # Build global context to avoid “données insuffisantes”
             def _market_context():
                 total = len(rows)
@@ -173,12 +223,7 @@ async def get_judge_verdicts(
                     a for a in articles
                     if symu in (a.get("tickers") or []) or symu in (a.get("symbols") or [])
                 ]
-                # Prioritize recency then sentiment
-                def _ts(a):
-                    ts = a.get("timestamp") or a.get("ts") or a.get("published_at")
-                    return ts or ""
-                rel = sorted(rel, key=lambda a: (_ts(a), a.get("sentiment_score", 0)), reverse=True)
-                return rel[:12]
+                return _score_news_items(rel, cap=12)
 
             def _tech_for(sym: str) -> Dict[str, Any]:
                 data = prices_data.get(sym) or {}
@@ -234,20 +279,45 @@ async def get_judge_verdicts(
 
             def _macro_snapshot():
                 out = {}
-                def last_val(key):
+                def last_and_delta(key, win: int = 21):
                     series = macro_series.get(key, {}).get("observations") or []
-                    return series[-1]["value"] if series else None
-                out["vix"] = last_val("VIXCLS")
-                out["us10y"] = last_val("DGS10")
-                out["cpi_last"] = last_val("CPIAUCSL")
+                    if not series:
+                        return None, None
+                    vals = [s.get("value") for s in series if s.get("value") is not None]
+                    if not vals:
+                        return None, None
+                    last = vals[-1]
+                    delta = None
+                    if len(vals) > win:
+                        prev = vals[-1 - win]
+                        if prev not in (None, 0):
+                            delta = (last - prev) / prev
+                    return last, delta
+
+                out["vix"], out["vix_delta_1m"] = last_and_delta("VIXCLS", 21)
+                out["us10y"], out["us10y_delta_1m"] = last_and_delta("DGS10", 21)
+                cpi_last, cpi_delta = last_and_delta("CPIAUCSL", 1)  # CPI delta m/m si dispo
+                out["cpi_last"] = cpi_last
+                out["cpi_delta_1m"] = cpi_delta
                 out["cpi_last_date"] = (macro_series.get("CPIAUCSL", {}).get("observations") or [{}])[-1].get("date") if macro_series.get("CPIAUCSL") else None
                 # DXY (broad trade-weighted USD) si dispo
                 for key in ("DTWEXBGS", "DTWEXAFEGS", "DXY"):
-                    val = last_val(key)
+                    val, delta = last_and_delta(key, 21)
                     if val is not None:
                         out["dxy"] = val
+                        out["dxy_delta_1m"] = delta
                         out["dxy_series"] = key
                         break
+                # Commodities (WTI/Brent/Gold) si présents
+                wti, wti_delta = last_and_delta("DCOILWTICO", 21)
+                brent, brent_delta = last_and_delta("DCOILBRENTEU", 21)
+                gold, gold_delta = last_and_delta("GOLDAMGBD228NLBM", 21)
+                if wti is not None:
+                    out["wti"] = wti; out["wti_delta_1m"] = wti_delta
+                if brent is not None:
+                    out["brent"] = brent; out["brent_delta_1m"] = brent_delta
+                if gold is not None:
+                    out["gold"] = gold; out["gold_delta_1m"] = gold_delta
                 return out
 
             def _ownership_for(sym: str) -> Dict[str, Any]:
@@ -304,31 +374,6 @@ async def get_judge_verdicts(
             )
             generated: List[Dict[str, Any]] = []
 
-            def _parse_analysis(answer: str):
-                """Try to extract the JSON line from the LLM answer; fallback to a structured dict."""
-                if not answer:
-                    return None
-                # Try to parse last JSON object in the text
-                tail = answer.strip().splitlines()
-                for line in reversed(tail):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                        if isinstance(obj, dict) and {"summary", "scenarios", "risks", "impacts", "actions", "confidence"} <= set(obj.keys()):
-                            return obj
-                    except Exception:
-                        continue
-                # Fallback: wrap the text in a minimal structure
-                return {
-                    "summary": [answer],
-                    "scenarios": [],
-                    "risks": [],
-                    "impacts": {},
-                    "actions": [],
-                    "confidence": None,
-                }
 
             sem = asyncio.Semaphore(3)  # allow limited parallelism
 
@@ -337,10 +382,33 @@ async def get_judge_verdicts(
                     sym = (r.get("ticker") or r.get("symbol") or "").upper()
                     if not sym:
                         return None
+                    t_total = time.perf_counter()
+                    met = {
+                        "news_ms": None,
+                        "payload_ms": None,
+                        "ml_prior_ms": None,
+                        "llm_ms": None,
+                        "parse_ms": None,
+                        "total_ms": None,
+                        "llm_model": None,
+                        "llm_provider": None,
+                    }
                     base_conf = float(r.get("confidence", 0.5) or 0.0)
                     expected_return = r.get("expected_return")
                     direction = r.get("direction", "neutral")
                     horizon = r.get("horizon") or "1w"
+
+                    ml_prior = None
+                    t_ml = time.perf_counter()
+                    if ml_predict_next_return:
+                        try:
+                            pred, conf_ml = ml_predict_next_return(sym, horizon=horizon if horizon in ("1w","1m","1y") else "1m")
+                            ml_prior = {"pred_return": pred, "confidence": conf_ml, "horizon": horizon, "source": "ml_baseline"}
+                        except Exception:
+                            ml_prior = {"error": "ml_baseline_failed"}
+                    if ml_prior is None:
+                        ml_prior = {"error": "ml_baseline_unavailable"}
+                    met["ml_prior_ms"] = (time.perf_counter() - t_ml) * 1000.0
 
                     enriched = _judge_feature_for(sym) or {}
                     feat = {
@@ -366,27 +434,32 @@ async def get_judge_verdicts(
                         "avgVolume": _ownership_for(sym).get("avgVolume") or enriched.get("fundamentals", {}).get("avgVolume"),
                         "fundamentals": enriched.get("fundamentals", {}),
                         "peer_signals": r.get("peer_signals"),
+                        "ml_prior": ml_prior,
                     }
 
+                    t_news = time.perf_counter()
                     news_items = _news_for(sym)[:5]  # limiter le volume envoyé au LLM
+                    met["news_ms"] = (time.perf_counter() - t_news) * 1000.0
                     news_headlines = [
                         {
                             "title": n.get("title") or n.get("headline"),
-                            "sent": n.get("sentiment_score"),
-                            "ts": n.get("timestamp") or n.get("ts") or n.get("published_at"),
+                            "sent": n.get("sentiment_score") or n.get("sent") or n.get("sentiment"),
+                            "ts": n.get("timestamp") or n.get("ts") or n.get("published_at") or n.get("date"),
                             "source": n.get("source"),
+                            "summary": (n.get("summary") or n.get("description") or (n.get("raw_text") or ""))[:100],
+                            "tickers": n.get("tickers") or n.get("symbols") or [],
                         }
-                        for n in news_items[:10]
+                        for n in news_items
                         if n.get("title") or n.get("headline")
                     ]
 
                     question = (
                         f"Verdict structuré pour {sym} (horizon {horizon}). "
-                        "Donne un texte synthèse puis UNE seule ligne JSON finale avec les clés "
+                        "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
                         "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
-                        "ET une clé phase_scores avec les scores numeric (fundamental, technical, macro, sentiment, fusion). "
-                        "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et la ligne JSON. "
-                        "Signale explicitement quelles données supplémentaires seraient utiles si elles manquent."
+                        "phase_scores (scores numériques), ml_prior. "
+                        "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et le JSON. "
+                        "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
                     )
                     phase_blocks = {}
                     if build_phase_blocks:
@@ -401,13 +474,60 @@ async def get_judge_verdicts(
                         ) or {}
                     payload = {
                         "question": question,
-                        "features": feat,
+                        "features": {
+                            **feat,
+                            "macro": macro_ctx,
+                            "news_count": len(news_items),
+                            "phases": phase_blocks or {},
+                            "ml_prior": ml_prior,
+                        },
                         "phases": phase_blocks or None,
                         "news": news_items,
                         "attachments": news_headlines or None,
                         "locale": "fr-FR",
-                        "meta": {"source": "judge_route", "ticker": sym},
+                        "meta": {
+                            "source": "judge_route",
+                            "ticker": sym,
+                            "ml_prior": ml_prior,
+                            "data_timestamps": {
+                                "macro": macro_ctx.get("cpi_last_date"),
+                            },
+                        },
                     }
+
+                    # Validate payload (Pydantic) before LLM
+                    validated = None
+                    if build_payload:
+                        try:
+                            t_payload = time.perf_counter()
+                            validated = build_payload(
+                                ticker=sym,
+                                features=payload["features"],
+                                macro=macro_ctx,
+                                news=news_items,
+                                attachments=news_headlines,
+                                phases=phase_blocks or {},
+                                ml_prior=ml_prior,
+                                locale="fr-FR",
+                            )
+                            met["payload_ms"] = (time.perf_counter() - t_payload) * 1000.0
+                        except Exception as e:
+                            return {
+                                "ticker": sym,
+                                "verdict": verdict_text,
+                                "confidence": base_conf,
+                                "expected_return": expected_return,
+                                "risk_level": "medium",
+                                "reasoning": [f"payload_validation_error: {e}"],
+                                "analysis": {"error": "payload_validation_error", "details": str(e)},
+                                "phases": phase_blocks or None,
+                                "phase_scores": {k: (v.get("score") if isinstance(v, dict) else None) for k, v in (phase_blocks or {}).items()} or None,
+                                "ml_prior": ml_prior,
+                                "raw_answer": "",
+                                "generated_at": datetime.utcnow().isoformat() + "Z",
+                                "model_version": "econ_llm_agent",
+                                "source": ["judge_route", "forecasts_llm"],
+                            }
 
                     # Call LLM in a worker thread to avoid nested event-loop issues (single-model analyze)
                     def _run_agent():
@@ -416,8 +536,10 @@ async def get_judge_verdicts(
                         return res
 
                     try:
+                        t_llm = time.perf_counter()
                         # Timeout global pour le juge (5 minutes max) — conserve 300s
                         res = await asyncio.wait_for(asyncio.to_thread(_run_agent), timeout=300)
+                        met["llm_ms"] = (time.perf_counter() - t_llm) * 1000.0
                     except asyncio.TimeoutError:
                         res = {"ok": False, "error": "timeout", "answer": ""}
                     except Exception as e:
@@ -436,16 +558,25 @@ async def get_judge_verdicts(
                             base_conf = float(parsed.get("confidence"))
                     else:
                         full_answer = res.get("answer") or res.get("error") or verdict_text
+                    t_parse = time.perf_counter()
                     parsed = parsed if isinstance(parsed, dict) else _parse_analysis(full_answer or verdict_text)
-                    if isinstance(parsed, dict) and parsed.get("confidence") is None:
-                        parsed["confidence"] = base_conf
-                    if isinstance(parsed, dict) and phase_blocks:
-                        parsed.setdefault("phase_scores", {
-                            k: (v.get("score") if isinstance(v, dict) else None)
-                            for k, v in phase_blocks.items()
-                        })
-                    if not isinstance(parsed, dict):
-                        parsed = {}
+                    if isinstance(parsed, dict):
+                        if parsed.get("confidence") is None:
+                            parsed["confidence"] = base_conf
+                        if phase_blocks:
+                            parsed.setdefault("phase_scores", {
+                                k: (v.get("score") if isinstance(v, dict) else None)
+                                for k, v in phase_blocks.items()
+                            })
+                        if ml_prior:
+                            parsed["ml_prior"] = ml_prior
+                        try:
+                            parsed = validate_llm_response(parsed) if validate_llm_response else parsed
+                        except Exception as e:
+                            parsed = {"error": f"llm_validation_error: {e}", "raw": full_answer or verdict_text}
+                    else:
+                        parsed = {"error": "json_parse_failed", "raw": full_answer or verdict_text}
+                    met["parse_ms"] = (time.perf_counter() - t_parse) * 1000.0
 
                     if not parsed:
                         news_items = _news_for(sym)
@@ -471,6 +602,24 @@ async def get_judge_verdicts(
                             "confidence": base_conf,
                         }
 
+                    met["total_ms"] = (time.perf_counter() - t_total) * 1000.0
+                    if log_metrics:
+                        try:
+                            log_metrics(
+                                "judge_metrics",
+                                ticker=sym,
+                                news_ms=met.get("news_ms"),
+                                payload_ms=met.get("payload_ms"),
+                                ml_prior_ms=met.get("ml_prior_ms"),
+                                llm_ms=met.get("llm_ms"),
+                                parse_ms=met.get("parse_ms"),
+                                total_ms=met.get("total_ms"),
+                                llm_model=model_used,
+                                llm_provider=res.get("provider_raw") or res.get("provider") if isinstance(res, dict) else None,
+                            )
+                        except Exception:
+                            pass
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -481,6 +630,7 @@ async def get_judge_verdicts(
                         "analysis": parsed if isinstance(parsed, dict) else {"summary": [verdict_text]},
                         "phases": phase_blocks or None,
                         "phase_scores": {k: (v.get("score") if isinstance(v, dict) else None) for k, v in (phase_blocks or {}).items()} or None,
+                        "ml_prior": ml_prior,
                         "raw_answer": full_answer or verdict_text,
                         "generated_at": datetime.utcnow().isoformat() + "Z",
                         "model_version": model_used or "econ_llm_agent",
