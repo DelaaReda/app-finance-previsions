@@ -248,15 +248,9 @@ def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, 
         return {"error": str(e)}
 
 
+
+
 def get_fundamental_minimal(ticker: str) -> Dict[str, Any]:
-    """Minimal fundamentals live from yfinance; explicit error on failure."""
-    try:
-        info = yf.Ticker(ticker).info
-        if not info:
-            return {"error": "no fundamentals"}
-        def _get(key):
-            v = info.get(key)
-            try:
     """
     Get minimal fundamental data from yfinance LIVE.
     
@@ -285,6 +279,7 @@ def get_fundamental_minimal(ticker: str) -> Dict[str, Any]:
         
         OR {"error": str, "source": "yfinance_live"} if fetch fails
     """
+
     try:
         log_metrics("fundamental_fetching", ticker=ticker)
         
