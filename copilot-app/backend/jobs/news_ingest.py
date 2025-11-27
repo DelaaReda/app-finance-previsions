@@ -14,6 +14,7 @@ import urllib.error
 import xml.etree.ElementTree as ET
 import re
 from typing import List, Dict, Any
+import yaml
 
 # Add parent directory to path to import storage
 backend_path = str(Path(__file__).parent.parent)
@@ -30,6 +31,16 @@ RSS_SOURCES = [
         "category": "markets"
     },
     {
+        "name": "Yahoo Finance - NVDA",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=NVDA&region=US&lang=en-US",
+        "category": "semiconductors"
+    },
+    {
+        "name": "Yahoo Finance - AAPL",
+        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL&region=US&lang=en-US",
+        "category": "mega-cap-tech"
+    },
+    {
         "name": "MarketWatch - Top Stories",
         "url": "http://feeds.marketwatch.com/marketwatch/topstories/",
         "category": "general"
@@ -40,6 +51,22 @@ RSS_SOURCES = [
         "category": "analysis"
     }
 ]
+
+# Univers par défaut et mapping mots-clés -> ticker (pour mieux tagger les news)
+DEFAULT_TICKERS = {"SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "GOOG", "NVDA", "TSLA", "META", "AMZN"}
+COMPANY_KEYWORDS = {
+    "NVIDIA": "NVDA",
+    "NVDIA": "NVDA",
+    "NVDA": "NVDA",
+    "APPLE": "AAPL",
+    "MICROSOFT": "MSFT",
+    "TESLA": "TSLA",
+    "GOOGLE": "GOOGL",
+    "ALPHABET": "GOOGL",
+    "META": "META",
+    "FACEBOOK": "META",
+    "AMAZON": "AMZN",
+}
 
 def fetch_rss_feed(url: str, timeout: int = 10) -> str:
     """
@@ -238,8 +265,8 @@ def run_news_ingest():
         all_articles = []
         sources_processed = []
 
-        # Known tickers from forecasts (pour enrichir l'extraction)
-        known_tickers = set()
+        # Known tickers from forecasts + profiles (pour enrichir l'extraction)
+        known_tickers = set(DEFAULT_TICKERS)
         if load_json:
             try:
                 fc = load_json("forecasts") or {}
@@ -250,6 +277,17 @@ def run_news_ingest():
                         known_tickers.add(t)
             except Exception:
                 pass
+        # Add tickers from judge profiles (YAML) if available
+        profiles_dir = Path(__file__).parent.parent / "data" / "judge_profiles"
+        if profiles_dir.exists():
+            try:
+                for p in profiles_dir.glob("*.yaml"):
+                    cfg = yaml.safe_load(p.read_text()) or {}
+                    for t in cfg.get("tickers", []) or []:
+                        if isinstance(t, str):
+                            known_tickers.add(t.upper())
+            except Exception as e:
+                logger.warning(f"Failed to load profile tickers: {e}")
         
         # Fetch from each RSS source
         for source in RSS_SOURCES:
@@ -280,12 +318,15 @@ def run_news_ingest():
                     article['score'] = score_article(article)
                     article['sentiment'] = detect_sentiment(article)
                     
-                    # Ticker extraction améliorée : $TICKER + détection sur liste connue
+                    # Ticker extraction améliorée : $TICKER + détection sur liste connue + mots-clés société
                     text = (article.get('title', '') + ' ' + article.get('summary', '')).upper()
                     tickers = set(re.findall(r'\$([A-Z]{1,5})', text))
                     for kt in known_tickers:
-                        if re.search(rf'\\b{re.escape(kt)}\\b', text):
+                        if re.search(rf'\b{re.escape(kt)}\b', text):
                             tickers.add(kt)
+                    for name, tk in COMPANY_KEYWORDS.items():
+                        if name in text:
+                            tickers.add(tk)
                     article['tickers'] = list(tickers)[:5]  # Max 5 uniques
                     
                     # Add ingestion timestamp

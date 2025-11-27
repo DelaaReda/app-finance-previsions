@@ -89,7 +89,7 @@ refresh_live_data() {
     else
         log_error "Python introuvable (python3/python). Installez Python 3."
         exit 1
-    }
+    fi
 
     export PYTHONPATH="$BACKEND_DIR/src:$BACKEND_DIR"
 
@@ -114,6 +114,19 @@ start_backend() {
     log "Démarrage du backend..."
     
     cd "$BACKEND_DIR"
+    # Charger l'environnement (.env backend et racine) pour propager les API keys (OpenRouter, DeepInfra, etc.)
+    if [ -f ".env" ]; then
+        set -a
+        # shellcheck source=/dev/null
+        source ".env"
+        set +a
+    fi
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        set -a
+        # shellcheck source=/dev/null
+        source "$SCRIPT_DIR/.env"
+        set +a
+    fi
     # Désactiver reload pour éviter segfault sur ARM64
     export FINANCE_COPILOT_RELOAD=0
     # Prefer src/ first so 'api' resolves to src/api (contains services, schemas, etc.)

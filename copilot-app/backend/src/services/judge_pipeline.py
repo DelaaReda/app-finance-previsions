@@ -18,6 +18,50 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field, validator
 import yfinance as yf
 import pandas as pd
+import yaml
+from dataclasses import dataclass, field as dc_field
+
+# ==== Profile Configuration ====
+
+@dataclass
+class JudgeProfile:
+    """Configuration profile for different judge use cases."""
+    name: str
+    horizon: str  # "1w", "1m", "3m"
+    tickers: List[str]
+    prompt_template: str
+    sources_weights: Dict[str, float]
+    max_tokens: int = 1200
+    focus: str = "balanced"  # "tech", "fundamental", "macro", "sentiment", "balanced"
+
+def load_profile(name: str) -> JudgeProfile:
+    """
+    Load judge profile from YAML config.
+    
+    Args:
+        name: Profile name (e.g., "equity_1w", "sector_regime")
+    
+    Returns:
+        JudgeProfile instance
+    
+    Raises:
+        FileNotFoundError: If profile doesn't exist
+        ValueError: If profile config is invalid
+    
+    Example:
+        >>> prof = load_profile("equity_1w")
+        >>> prof.horizon
+        '1w'
+    """
+    path = Path(f"data/judge_profiles/{name}.yaml")
+    if not path.exists():
+        raise FileNotFoundError(f"Profile not found: {name} (looked in {path})")
+    
+    try:
+        config = yaml.safe_load(path.read_text())
+        return JudgeProfile(**config)
+    except Exception as e:
+        raise ValueError(f"Invalid profile config for {name}: {e}")
 
 # ==== Data models (validation stricte) ====
 
@@ -632,22 +676,41 @@ def build_payload(
     phases: Dict[str, Any],
     ml_prior: Optional[Dict[str, Any]],
     locale: str = "fr-FR",
-    judge_features: Optional[Dict[str, Any]] = None,  # New param for tech enrichment
+    judge_features: Optional[Dict[str, Any]] = None,  # For tech enrichment
+    profile: Optional[JudgeProfile] = None,  # NEW: Judge profile config
 ) -> JudgePayload:
     """
     Build enriched payload with all Phase 1 enrichments.
+    
+    Args:
+        profile: Judge profile config. If None, loads default "equity_1w" profile.
     
     Enrichments:
     1. Fusion score (from phases)
     2. Tech enriched (from judge_features or live)
     3. Fundamental minimal (live yfinance)
     """
+    # Load default profile if not provided
+    if profile is None:
+        try:
+            profile = load_profile("equity_1w")
+        except (FileNotFoundError, ValueError):
+            # Fallback to None - pipeline works without profile
+            profile = None
+    
     # Base features
     merged_features = {**features}
     merged_features["macro"] = macro
     merged_features["news_count"] = len(news)
     merged_features["phases"] = phases
     merged_features["ml_prior"] = ml_prior
+    
+    # === PLACEHOLDERS FOR MISSING DATA (Étape B) ===
+    # Explicit null fields signal to LLM what data is unavailable
+    merged_features["options_data"] = None  # Options flow, OI, IV
+    merged_features["flows_data"] = None    # Institutional flows, dark pool
+    merged_features["insider_trading"] = None  # Insider buys/sells
+    merged_features["analyst_ratings"] = None  # PT, upgrades/downgrades
     
     # === ENRICHMENT 1: Fusion Score ===
     fusion = compute_fusion_score(phases)
@@ -730,6 +793,12 @@ def build_payload(
                 "fusion": "fusion_score" in merged_features,
                 "tech": "tech_enriched" in merged_features,
                 "fundamental": "fundamental_minimal" in merged_features,
+            },
+            "data_gaps": {
+                "options": "not_available",
+                "flows": "not_available",
+                "insider": "not_available",
+                "analyst": "not_available",
             },
         },
         "ml_prior": ml_prior,
