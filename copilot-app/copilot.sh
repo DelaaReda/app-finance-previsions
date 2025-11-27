@@ -74,6 +74,41 @@ generate_initial_data() {
     log "Les données seront disponibles progressivement (voir /tmp/data_generation.log)"
 }
 
+# Rafraîchir les snapshots critiques (news, sentiment, judge_enrich, macro)
+refresh_live_data() {
+    log "Rafraîchissement des données (news, sentiment, judge_enrich, macro)..."
+    cd "$BACKEND_DIR"
+
+    PY=""
+    if [ -x ".venv/bin/python3" ]; then
+        PY=".venv/bin/python3"
+    elif command -v python3 >/dev/null 2>&1; then
+        PY="$(command -v python3)"
+    elif command -v python >/dev/null 2>&1; then
+        PY="$(command -v python)"
+    else
+        log_error "Python introuvable (python3/python). Installez Python 3."
+        exit 1
+    }
+
+    export PYTHONPATH="$BACKEND_DIR/src:$BACKEND_DIR"
+
+    run_job() {
+        local job="$1"
+        log " → $job"
+        if ! "$PY" "$job"; then
+            log_warning "Job échoué: $job (on continue, pas de fallback silencieux)"
+        fi
+    }
+
+    run_job "jobs/news_ingest.py"
+    run_job "jobs/news_sentiment.py"
+    run_job "jobs/judge_enrich.py"
+    run_job "jobs/macro_series_snapshot.py"
+
+    log_success "Rafraîchissement des données terminé."
+}
+
 # Démarrer le backend
 start_backend() {
     log "Démarrage du backend..."
@@ -189,6 +224,9 @@ start() {
     
     # Générer les données en arrière-plan
     generate_initial_data
+
+    # Rafraîchir les données live critiques (synchrones, pas de mock)
+    refresh_live_data
     
     # Démarrer les services
     start_backend
