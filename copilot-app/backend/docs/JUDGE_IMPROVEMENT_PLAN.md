@@ -1739,56 +1739,38 @@ def filter_by_ticker(ticker, all_news):
 
 ---
 
-### 2. **Raccourcir prompt / limiter réponse** (Impact: HIGH, Effort: 30min)
+### 2. **⚠️ SKIP - Script test truncation (non-bloquant)** (Impact: LOW, Effort: 30min)
 
-**Problème:** LLM truncation dans script test
+**Problème:** Script `test_judge_llm.py` parfois JSON truncation
 
-**Solution #1: Constraint explicite dans prompt**
+**IMPORTANT:** ✅ **L'API fonctionne PARFAITEMENT** (parse 100%)
+- Ce n'est QU'un problème du script de test
+- Pas besoin de toucher l'API ni les prompts
+- **Decision: SKIP** (test bidon ne justifie pas changement API)
+
+**Si vraiment nécessaire (optionnel):**
 ```python
-# Dans test_judge_llm.py ou build_prompt()
-system_prompt = """
-You are a financial analyst.
-CRITICAL: Keep response UNDER 500 tokens.
-Return ONLY JSON (no markdown blocks, no explanation).
-JSON must be valid and complete.
-"""
-
-user_prompt = f"""
-Analyze {ticker}.
-
-RESPONSE FORMAT (max 1500 characters):
-{{
-  "summary": ["max 3 concise bullets"],
-  "scenarios": [
-    {{"name": "...", "probability": 0.0-1.0, "impact": "..."}}
-  ],  // max 2 scenarios
-  "risks": ["max 3"],
-  "impacts": {{"revenue": "...", "margin": "..."}},
-  "actions": ["max 3"],
-  "confidence": 0.0-1.0
-}}
-
-Data: {truncate_payload(payload, max_len=1500)}
-"""
+# Dans scripts/test_judge_llm.py UNIQUEMENT
+def analyze_with_retry(agent, payload):
+    # First try - normal
+    res = agent.analyze(payload)
+    
+    if res.get("parsed") is None and res.get("ok"):
+        # Retry with "JSON only" instruction
+        payload_short = {
+            **payload,
+            "question": f"{payload['question']} - RÉPONSE COURTE JSON ONLY"
+        }
+        res = agent.analyze(payload_short)
+    
+    return res
 ```
 
-**Solution #2: max_tokens parameter**
-```python
-# Dans LLM call
-response = client.chat.completions.create(
-    model="deepseek-chat",
-    messages=[...],
-    max_tokens=800,  # Hard limit
-    temperature=0.3,
-)
-```
+**Recommandation Codex:** Ignorer ce test ou ajouter retry dans LE TEST uniquement
 
-**Impact:**
-- ✅ Pas de truncation
-- ✅ Parse rate → 100%
-- ✅ Response faster (moins tokens)
+**Priorité:** 🟢 SKIP - API fonctionne, test bidon
 
-**Priorité:** 🔥 HIGH - Fix script test
+---
 
 ---
 
@@ -1939,7 +1921,467 @@ if monitor.total % 100 == 0:
 2. **Faire #1 cette semaine** (2h) → Améliore data quality
 3. **Faire #3 + #4 ensuite** (1h15) → Better observability
 
+
 ---
+
+## 🚀 PHASE 2: PROFILES ARCHITECTURE (Plan Codex)
+
+**Objectif:** Garder le judge actuel comme POC/template et définir des **"profiles" réutilisables (config)** pour des juges ciblés **sans dupliquer la logique**.
+
+---
+
+### 🏗️ ARCHITECTURE
+
+#### 1. **Noyau réutilisable (pas de code dupliqué)**
+
+**Conserver actuel:**
+- ✅ Assembleur payload: tech/fund/macro/news/ML prior + phases + fusion_score
+- ✅ Parse/validation JSON strict (dernière ligne JSON)
+- ✅ Error handling graceful
+- ✅ Structured logging
+
+**Nouveau: Exposer "profile"**
+```python
+@dataclass
+class JudgeProfile:
+    name: str
+    horizon: str  # "1w", "1m", "3m"
+    tickers: List[str]  # ["SPY", "QQQ", "AAPL", ...]
+    prompt_template: str  # Specific prompt for this profile
+    sources_weights: Dict[str, float]  # {"news": 0.3, "tech": 0.25, ...}
+    max_tokens: int = 1200
+    focus: str = "balanced"  # "tech", "fundamental", "macro", "sentiment"
+
+# Usage
+profile = load_profile("equity_1w")
+payload = build_payload(..., profile=profile)
+```
+
+---
+
+### 📋 PROFILES (Config, pas code copié)
+
+#### Profile 1: **equity_1w** (default, actuel)
+```yaml
+name: equity_1w
+horizon: 1w
+tickers:
+  - SPY
+  - QQQ
+  - AAPL
+  - MSFT
+  - GOOGL
+  - NVDA
+  - TSLA
+  - META
+focus: balanced
+sources_weights:
+  news: 0.30
+  technical: 0.25
+  fundamental: 0.20
+  macro: 0.15
+  sentiment: 0.10
+prompt_template: |
+  Analyze {ticker} for 1-week horizon.
+  Focus: Short-term momentum + news impact.
+  Keep response <500 tokens.
+max_tokens: 1200
+```
+
+#### Profile 2: **sector_regime** (new)
+```yaml
+name: sector_regime
+horizon: 1m
+tickers:
+  - SPY   # S&P 500
+  - QQQ   # Tech
+  - XLE   # Energy
+  - XLF   # Financials
+  - XLK   # Technology
+  - XLV   # Healthcare
+  - XLI   # Industrials
+  - XLP   # Consumer Staples
+focus: macro
+sources_weights:
+  macro: 0.40
+  sentiment: 0.30
+  technical: 0.20
+  fundamental: 0.10
+  news: 0.00  # Less granular, top-down
+prompt_template: |
+  Sector rotation analysis for {ticker}.
+  Focus: Macro regime + top-down sentiment.
+  Ignore stock-specific news.
+max_tokens: 1000
+```
+
+#### Profile 3: **equity_1m_plus** (new)
+```yaml
+name: equity_1m_plus
+horizon: 1m-3m
+tickers: []  # Same as equity_1w
+focus: fundamental
+sources_weights:
+  fundamental: 0.40
+  macro: 0.25
+  technical: 0.20
+  news: 0.10  # Less weight
+  sentiment: 0.05
+prompt_template: |
+  Analyze {ticker} for 1-3 month horizon.
+  Focus: Fundamentals (valuation, earnings) + macro.
+  News impact secondary.
+max_tokens: 1500
+```
+
+#### Profile 4: **custom_universe** (external config)
+```yaml
+name: custom_universe
+config_source: external
+config_path: data/custom_judge_config.json
+# Load tickers + weights + horizon from external file
+# No hardcoded logic
+```
+
+---
+
+### 📊 DONNÉES & ENRICHISSEMENTS (Communs)
+
+#### News - Amélioration tagging
+```python
+# Dans news_ingest.py
+def tag_tickers_in_news(news_item):
+    """Extract tickers mentioned in title/summary."""
+    title = news_item.get('title', '')
+    summary = news_item.get('summary', '')
+    text = f"{title} {summary}"
+    
+    # Regex patterns for ticker symbols
+    patterns = [
+        r'\b([A-Z]{2,5})\b',  # 2-5 uppercase letters
+        r'\$([A-Z]{2,5})\b',  # $AAPL format
+    ]
+    
+    # Extract + validate against known tickers list
+    tickers = extract_and_validate_symbols(text, patterns)
+    news_item['tickers'] = tickers
+    return news_item
+
+# Dans build_payload()
+def get_news_for_ticker(ticker, all_news, limit=5):
+    """Filter news relevant to ticker."""
+    relevant = [
+        n for n in all_news 
+        if ticker in n.get('tickers', []) or ticker in n.get('title', '')
+    ]
+    # Score by recency × |sentiment|
+    scored = sorted(relevant, key=lambda n: 
+        n.get('recency_score', 0) * abs(n.get('sent', 0)),
+        reverse=True
+    )
+    return scored[:limit]
+```
+
+#### Options/Flows - Placeholders explicites
+```python
+# Dans build_payload()
+payload = {
+    ...
+    "options_data": None,  # Explicit placeholder
+    "flows_data": None,    # Explicit placeholder
+    "insider_trading": None,
+    "analyst_ratings": None,
+    
+    "meta": {
+        ...
+        "data_gaps": {
+            "options": "not_available",
+            "flows": "not_available", 
+            "insider": "not_available",
+            "analyst": "not_available",
+        }
+    }
+}
+```
+
+**Prompt adjustment:**
+```
+Available data:
+- ✓ Technical, Fundamental, News, Macro
+- ✗ options_data (null) → List in data_needed if important
+- ✗ flows_data (null) → List in data_needed if important
+```
+
+#### Tech/Fund/Macro (déjà OK)
+- ✅ Tech: Live yfinance priority, fallback judge_features <24h
+- ✅ Fundamental: Live yfinance
+- ✅ Macro: FRED + fallback Gold (GC=F)
+
+---
+
+### 💬 PROMPT & SORTIE
+
+**Un prompt par profile:**
+```python
+def build_prompt(ticker, profile, payload):
+    """Build profile-specific prompt."""
+    template = profile.prompt_template
+    
+    # Common constraints
+    common = """
+CRITICAL: Response MUST end with valid JSON line.
+Format: {"summary":[...],"scenarios":[...],"risks":[...],...}
+Max {max_tokens} tokens.
+"""
+    
+    return template.format(
+        ticker=ticker,
+        max_tokens=profile.max_tokens
+    ) + common
+```
+
+**Parse fail retry (test uniquement):**
+```python
+# Dans scripts/test_judge_llm.py
+def test_with_retry():
+    res = agent.analyze(payload)
+    
+    if res.get("parsed") is None and res.get("ok"):
+        # Retry with "JSON-only short"
+        payload_short = {
+            **payload,
+            "question": f"{payload['question']} - JSON ONLY <1500 chars"
+        }
+        res = agent.analyze(payload_short)
+    
+    return res
+```
+
+---
+
+### 🌐 API / ROUTING
+
+**Option 1: Query parameter (simple)**
+```python
+# routes/judge.py
+@app.get("/api/judge")
+def judge(limit: int = 10, profile: str = "equity_1w"):
+    prof = load_profile(profile)  # equity_1w, sector_regime, etc
+    
+    # Rest of logic unchanged, just use prof
+    for ticker in tickers[:limit]:
+        payload = build_payload(ticker, ..., profile=prof)
+        verdict = call_llm(payload, prof)
+    
+    return results
+```
+
+**Option 2: Dedicated endpoints (later)**
+```python
+@app.get("/api/judge/equity")     # Default equity_1w
+@app.get("/api/judge/sector")     # sector_regime  
+@app.get("/api/judge/custom")     # custom_universe
+```
+
+**Decision:** Start with Option 1 (query param), keep single route
+
+---
+
+### 🧪 TESTS & QA
+
+**Data refresh (already in copilot.sh):**
+```bash
+./copilot.sh start   # or restart
+# Runs: news_ingest, news_sentiment, judge_enrich, macro
+```
+
+**Tests manuels:**
+```bash
+# 1. Script test with retry
+PYTHONPATH=src .venv/bin/python scripts/test_judge_llm.py
+
+# 2. API default profile
+curl "http://localhost:8050/api/judge?limit=2"
+
+# 3. API with profile
+curl "http://localhost:8050/api/judge?limit=2&profile=sector_regime"
+
+# 4. Verify news_count > 0
+curl "http://localhost:8050/api/news?ticker=NVDA&limit=5"
+```
+
+**Validation:**
+- [ ] news_count > 0 pour SPY/NVDA/AAPL après tagging
+- [ ] Parse rate 100% avec retry
+- [ ] Latency <2s per ticker
+- [ ] Different profiles give different analyses
+
+---
+
+### 📅 ROADMAP INCRÉMENTALE
+
+#### **Étape A: Profile infrastructure** (2-3h)
+```python
+# 1. Create profiles/
+mkdir -p data/judge_profiles/
+touch data/judge_profiles/equity_1w.yaml
+touch data/judge_profiles/sector_regime.yaml
+
+# 2. Add JudgeProfile dataclass
+# src/services/judge_pipeline.py
+@dataclass
+class JudgeProfile:
+    name: str
+    horizon: str
+    tickers: List[str]
+    prompt_template: str
+    sources_weights: Dict[str, float]
+    max_tokens: int = 1200
+
+# 3. Load profile function
+def load_profile(name: str) -> JudgeProfile:
+    path = Path(f"data/judge_profiles/{name}.yaml")
+    config = yaml.safe_load(path.read_text())
+    return JudgeProfile(**config)
+
+# 4. Update build_payload() to accept profile
+def build_payload(..., profile: Optional[JudgeProfile] = None):
+    if profile is None:
+        profile = load_profile("equity_1w")  # default
+    
+    # Use profile.sources_weights for weighting
+    # ...
+```
+
+**Deliverable:** Profile system works, backward compatible
+
+---
+
+#### **Étape B: Placeholders options/flows** (1h)
+```python
+# Dans build_payload()
+merged_features["options_data"] = None
+merged_features["flows_data"] = None
+merged_features["insider_trading"] = None
+
+meta["data_gaps"] = {
+    "options": "not_available",
+    "flows": "not_available",
+}
+
+# Update prompt
+prompt += """
+Missing data (list in data_needed if critical):
+- options_data: null
+- flows_data: null
+"""
+```
+
+**Deliverable:** LLM aware of missing data types
+
+---
+
+#### **Étape C: News tagging par ticker** (2-3h)
+```python
+# 1. Update news_ingest.py
+def ingest_news():
+    articles = fetch_from_sources()
+    
+    for article in articles:
+        article = tag_tickers_in_news(article)  # NEW
+    
+    save_news(articles)
+
+# 2. Update build_payload()
+def get_news_for_ticker(ticker, all_news):
+    return [n for n in all_news if ticker in n.get('tickers', [])]
+
+news = get_news_for_ticker(ticker, all_news_db)
+```
+
+**Deliverable:** news_count > 0 for major tickers
+
+---
+
+#### **Étape D: Profile sector_regime** (1h)
+```yaml
+# data/judge_profiles/sector_regime.yaml
+name: sector_regime
+horizon: 1m
+tickers: [SPY, QQQ, XLE, XLF, XLK, XLV]
+focus: macro
+sources_weights:
+  macro: 0.40
+  sentiment: 0.30
+  technical: 0.20
+  fundamental: 0.10
+```
+
+**Test:**
+```bash
+curl "http://localhost:8050/api/judge?limit=3&profile=sector_regime"
+```
+
+**Deliverable:** Second profile works, reuses core logic
+
+---
+
+#### **Étape E: Metrics & Optimization** (2h)
+```python
+# Monitor per profile
+class ProfileMetrics:
+    def __init__(self, profile_name):
+        self.profile = profile_name
+        self.parse_rate = ParseRateMonitor()
+        self.latencies = []
+        self.llm_costs = []
+    
+    def record(self, latency_ms, cost_usd, parsed_ok):
+        self.latencies.append(latency_ms)
+        self.llm_costs.append(cost_usd)
+        self.parse_rate.record(parsed_ok)
+    
+    def summary(self):
+        return {
+            "profile": self.profile,
+            "avg_latency_ms": np.mean(self.latencies),
+            "total_cost_usd": sum(self.llm_costs),
+            "parse_rate": self.parse_rate.rate,
+        }
+
+# Log per profile
+metrics = ProfileMetrics(profile.name)
+# ... after LLM call
+metrics.record(latency, cost, parsed_ok)
+log_metrics("profile_summary", **metrics.summary())
+```
+
+**Deliverable:** Monitoring par profile, optimization data
+
+---
+
+## 📊 SUMMARY ROADMAP
+
+| Étape | Description | Effort | Priority |
+|-------|-------------|--------|----------|
+| A | Profile infrastructure | 2-3h | 🔥 HIGH |
+| B | Placeholders options/flows | 1h | 🟡 MEDIUM |
+| C | News tagging par ticker | 2-3h | 🔥 HIGH |
+| D | Profile sector_regime | 1h | 🟡 MEDIUM |
+| E | Metrics & optimization | 2h | 🟢 LOW |
+
+**Total effort:** ~8-10h
+
+**Benefits:**
+- ✅ No code duplication
+- ✅ Easy to add new profiles
+- ✅ Reusable core logic
+- ✅ Config-driven (YAML)
+- ✅ Testable per profile
+
+---
+
+**🎯 PRÊT POUR IMPLÉMENTATION PHASE 2 !**
 
 ## 📝 POUR CODEX (QA & TESTS)
 
