@@ -139,13 +139,26 @@ def _interleave_by_family(models: List[str]) -> List[str]:
 
 
 # ======== Hyperparams =========================================================
-CHAR_BUDGET = int(os.getenv("ECON_AGENT_CHAR_BUDGET", "60000"))
-MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "2048"))
+# Mode: "dev" (fast models, low latency) or "prod" (power models, best quality)
+MODE = os.getenv("ECON_AGENT_MODE", "dev").lower()  # dev | prod
+
+# Dev mode: Fast, lightweight models for rapid development (OpenRouter free tier)
+DEV_MODELS = [
+    "gpt-4o-mini",  # OpenRouter free tier, plus rapide/stable
+    "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+]
+DEV_TIMEOUT = 20  # 20s timeout for dev (g4f can be slow)
+DEV_MAX_TOKENS = 800  # Shorter responses for dev
+DEV_CHAR_BUDGET = 30000  # Smaller context for dev
+
+# Production mode: Keep existing power models
+CHAR_BUDGET = int(os.getenv("ECON_AGENT_CHAR_BUDGET", "30000" if MODE == "dev" else "60000"))
+MAX_TOKENS = int(os.getenv("ECON_AGENT_MAX_TOKENS", "800" if MODE == "dev" else "2048"))
 TEMPERATURE = float(os.getenv("ECON_AGENT_TEMPERATURE", "0.2"))
-TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "15"))  # Réduit de 30s à 15s par défaut
+TIMEOUT = int(os.getenv("ECON_AGENT_TIMEOUT", "20" if MODE == "dev" else "30"))  # 20s for dev, 30s for prod
 RETRIES_PER_MODEL = int(os.getenv("ECON_AGENT_RETRIES", "1"))
-MODEL_LIST_LIMIT = int(os.getenv("ECON_AGENT_MAX_MODELS", "18"))
-DYNAMIC_MODEL_LIMIT = int(os.getenv("ECON_AGENT_MAX_DYNAMIC", "12"))
+MODEL_LIST_LIMIT = int(os.getenv("ECON_AGENT_MAX_MODELS", "3" if MODE == "dev" else "18"))
+DYNAMIC_MODEL_LIMIT = int(os.getenv("ECON_AGENT_MAX_DYNAMIC", "2" if MODE == "dev" else "12"))
 
 # ======== Prompts système (structurés + JSON final) ===========================
 SYSTEM_PROMPT_FR = """Tu es un analyste macro-financier senior. Ne révèle pas ton raisonnement interne.
@@ -525,13 +538,25 @@ class EconomicAnalyst:
         char_budget: int = CHAR_BUDGET,
     ):
         env_models = self._load_models_from_env()
-        base = env_models or model_candidates or DEFAULT_MODEL_CANDIDATES
-        base = [m for m in base if _is_preferred_model(m)]
-        if not base:
-            base = DEFAULT_MODEL_CANDIDATES[:]
+        
+        # DEV MODE: Override with fast models for development (force OpenRouter if possible)
+        if MODE == "dev":
+            logger.info(f"🚀 DEV MODE: Using fast models for rapid development")
+            # Hint g4f to prefer OpenRouter provider when available
+            os.environ.setdefault("G4F_PROVIDER", "OpenRouter")
+            base = DEV_MODELS[:]
+            logger.info(f"   Models: {base}")
+        else:
+            # PROD MODE: Use standard power models
+            logger.info(f"⚡ PROD MODE: Using power models from g4f_model_watcher")
+            base = env_models or model_candidates or DEFAULT_MODEL_CANDIDATES
+            base = [m for m in base if _is_preferred_model(m)]
+            if not base:
+                base = DEFAULT_MODEL_CANDIDATES[:]
         # Overlay dynamic working models if available (fresh within max age)
+        # Skip in DEV mode to avoid slow g4f_model_watcher calls
         try:
-            if os.getenv("ECON_AGENT_DYNAMIC_MODELS", "1") == "1":
+            if MODE != "dev" and os.getenv("ECON_AGENT_DYNAMIC_MODELS", "1") == "1":
                 from agents.g4f_model_watcher import ensure_working_models
                 max_age_h = int(os.getenv("G4F_WORKING_MAX_AGE_H", "24"))
                 dyn = ensure_working_models(limit=DYNAMIC_MODEL_LIMIT, max_age_hours=max_age_h)
@@ -550,21 +575,23 @@ class EconomicAnalyst:
         except Exception:
             pass
         # Reorder with a light reasoning-first preference for economic/trading analysis
+        # Skip in DEV mode to preserve DEV_MODELS order
         try:
-            pref = [
-                "deepseek" ,   # R1 / V3 families first
-                "qwen3-235b-a22b-thinking",
-                "glm-4.5",
-                "llama-3.3-70b",
-                "gpt-oss-120b",
-            ]
-            def _key(m: str) -> tuple:
-                lm = (m or "").lower()
-                for i, pat in enumerate(pref):
-                    if pat in lm:
-                        return (0, i)  # highest bucket then by pref index
-                return (1, lm)
-            base = sorted(list(dict.fromkeys(base)), key=_key)
+            if MODE != "dev":
+                pref = [
+                    "deepseek" ,   # R1 / V3 families first
+                    "qwen3-235b-a22b-thinking",
+                    "glm-4.5",
+                    "llama-3.3-70b",
+                    "gpt-oss-120b",
+                ]
+                def _key(m: str) -> tuple:
+                    lm = (m or "").lower()
+                    for i, pat in enumerate(pref):
+                        if pat in lm:
+                            return (0, i)  # highest bucket then by pref index
+                    return (1, lm)
+                base = sorted(list(dict.fromkeys(base)), key=_key)
         except Exception:
             pass
         dedup: List[str] = []
@@ -584,7 +611,8 @@ class EconomicAnalyst:
         self.char_budget = char_budget
         self.client = G4FClient()
         # Optionally merge a tested working list (g4f_model_watcher output) ahead of static power list
-        if model_candidates is None:
+        # Skip in DEV mode to preserve DEV_MODELS
+        if MODE != "dev" and model_candidates is None:
             working = _load_working_models(max_n=MODEL_LIST_LIMIT or 32)
             # working d'abord (liste premium de g4f-working), puis power list
             merged = (working or []) + (POWER_NOAUTH_MODELS or [])

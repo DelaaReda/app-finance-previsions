@@ -1,7 +1,7 @@
 """
 Judge API Routes - merged version with options + caching
 """
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 import asyncio
@@ -104,18 +104,23 @@ async def get_judge_verdicts(
         description="Tri par: confidence, expected_return, score, risk_level, timestamp",
     ),
     sort_order: Optional[str] = Query("desc", description="Ordre de tri: asc, desc"),
+    profile: str = Query("equity_1w", description="Judge profile: equity_1w, sector_regime, etc"),
 ):
-    """Get LLM judge verdicts for tickers (never-empty, cached)."""
+    """Get LLM judge verdicts for tickers (never-empty, cached). Supports multiple profiles."""
+    logger.info(f"🔍 /api/judge called: limit={limit}, profile={profile}, ticker={ticker}")
     try:
 
         async def compute_judge_verdicts():
+            logger.info("🔄 compute_judge_verdicts started")
             if _LLM_IMPORT_ERROR or not EconomicAnalyst or not EconomicInput:
+                logger.error(f"❌ LLM import error: {_LLM_IMPORT_ERROR}")
                 raise HTTPException(
                     status_code=500,
                     detail=f"econ_llm_agent unavailable: {_LLM_IMPORT_ERROR}",
                 )
 
             # Base data (forecasts + news + macro/brief snapshot)
+            logger.info("📊 Loading data...")
             forecasts = load_json("forecasts") or {}
             news_feed = load_json("news_feed") or {}
             brief_daily = load_json("brief_daily") or load_json("brief_weekly") or {}
@@ -129,6 +134,21 @@ async def get_judge_verdicts(
             judge_features_path = backend_root / "data" / "judge_features.json"
 
             yahoo_cache: Dict[str, Dict[str, Any]] = {}
+
+            # Load judge profile
+            prof = None
+            try:
+                logger.info(f"🎯 Loading profile: {profile}")
+                from services.judge_pipeline import load_profile
+                prof = load_profile(profile)
+                logger.info(f"✅ Profile loaded: {prof.name}, horizon={prof.horizon}, focus={prof.focus}, " +
+                           f"tickers={len(prof.tickers)}, max_tokens={prof.max_tokens}")
+            except FileNotFoundError as e:
+                logger.warning(f"⚠️ Profile '{profile}' not found: {e}, using default")
+                prof = None
+            except Exception as e:
+                logger.error(f"❌ Failed to load profile '{profile}': {e}", exc_info=True)
+                prof = None
 
             def _load_judge_features():
                 try:
@@ -199,16 +219,33 @@ async def get_judge_verdicts(
             rows_sorted = sorted(
                 rows, key=lambda r: r.get("confidence", 0), reverse=True
             )
+            
+            # Filter by profile tickers if profile is loaded
+            if prof and prof.tickers:
+                prof_tickers = {t.upper() for t in prof.tickers}
+                rows_sorted = [
+                    r for r in rows_sorted
+                    if (r.get("ticker") or r.get("symbol") or "").upper() in prof_tickers
+                ]
+                logger.info(f"Filtered to {len(rows_sorted)} tickers from profile {prof.name}")
+            
             top_rows = rows_sorted[: min(limit or 3, 3)]
+            logger.info(f"📋 Selected {len(top_rows)} top_rows for processing (limit={limit})")
+            if top_rows:
+                logger.info(f"   First ticker: {top_rows[0].get('ticker') if top_rows else 'N/A'}")
 
             def _parse_ts(ts_val):
                 if not ts_val:
                     return None
                 try:
-                    return datetime.fromisoformat(ts_val.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(str(ts_val).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt
                 except Exception:
                     try:
-                        return datetime.strptime(ts_val, "%Y-%m-%d")
+                        dt = datetime.strptime(str(ts_val), "%Y-%m-%d")
+                        return dt.replace(tzinfo=timezone.utc)
                     except Exception:
                         return None
 
@@ -225,6 +262,11 @@ async def get_judge_verdicts(
                         or n.get("date")
                     )
                     dt = _parse_ts(ts)
+                    ts_num = None
+                    try:
+                        ts_num = dt.timestamp() if dt else None
+                    except Exception:
+                        ts_num = None
                     sent = (
                         n.get("sentiment_score")
                         or n.get("sent")
@@ -234,8 +276,11 @@ async def get_judge_verdicts(
                         sent_abs = abs(float(sent)) if sent is not None else 0.0
                     except Exception:
                         sent_abs = 0.0
-                    scored.append((dt, sent_abs, n))
-                scored.sort(key=lambda x: ((x[0] or datetime.min), x[1]), reverse=True)
+                    normalized = dict(n)
+                    if ts:
+                        normalized.setdefault("ts", ts)
+                    scored.append((ts_num, sent_abs, normalized))
+                scored.sort(key=lambda x: ((x[0] or 0.0), x[1]), reverse=True)
                 return [x[2] for x in scored[:cap]]
 
             # Build global context to avoid “données insuffisantes”
@@ -531,6 +576,7 @@ async def get_judge_verdicts(
                 timeout=120,  # 120s par appel LLM
                 retries_per_model=1,
                 char_budget=800,
+                max_tokens=prof.max_tokens if prof else 1200,  # Use profile max_tokens
             )
 
             sem = asyncio.Semaphore(3)  # allow limited parallelism
@@ -687,14 +733,27 @@ async def get_judge_verdicts(
                         if n.get("title") or n.get("headline")
                     ]
 
-                    question = (
-                        f"Verdict structuré pour {sym} (horizon {horizon}). "
-                        "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
-                        "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
-                        "phase_scores (scores numériques), ml_prior. "
-                        "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et le JSON. "
-                        "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
-                    )
+                    # Build question using profile template or fallback
+                    if prof and prof.prompt_template:
+                        # Use profile-specific prompt
+                        question = (
+                            prof.prompt_template.format(ticker=sym) + " "
+                            "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
+                            "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
+                            "phase_scores (scores numériques), ml_prior. "
+                            "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores. "
+                            "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
+                        )
+                    else:
+                        # Fallback to default prompt
+                        question = (
+                            f"Verdict structuré pour {sym} (horizon {horizon}). "
+                            "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
+                            "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
+                            "phase_scores (scores numériques), ml_prior. "
+                            "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et le JSON. "
+                            "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
+                        )
 
                     phase_blocks: Dict[str, Any] = {}
                     if build_phase_blocks:
