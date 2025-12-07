@@ -62,3 +62,5 @@ copilot-app/frontend/webapp/.npm-cache/
 copilot-app/frontend/webapp/.npm-cache/*
 .git_backup/
 copilot-app/frontend/temp-exported-assets/
+# Tools clones (local only)
+tools/g4f-working/
