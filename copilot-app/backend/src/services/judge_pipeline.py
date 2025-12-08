@@ -389,24 +389,39 @@ def _compute_sma(series, window=20):
 
 def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, Any]:
     """Technical enrichment live-first; fallback to judge_features if <24h; else error."""
-    # live fetch via yfinance
+    live_last = None
+    live_volume = None
+    live_ts = None
+
+    # Intraday/very recent price & volume (avoid stale cache)
+    try:
+        intraday = yf.Ticker(ticker).history(period="5d", interval="1h", auto_adjust=True)
+        if intraday is not None and not intraday.empty:
+            live_last = float(intraday["Close"].dropna().iloc[-1])
+            if "Volume" in intraday.columns:
+                live_volume = float(intraday["Volume"].fillna(0).iloc[-1])
+            live_ts = intraday.index[-1].isoformat()
+    except Exception as e:
+        log_metrics("yfinance_intraday_failed", ticker=ticker, error=str(e))
+
+    # Daily history for indicators
     try:
         hist = yf.Ticker(ticker).history(period="6mo", auto_adjust=True)
         if hist is not None and not hist.empty:
             close = hist["Close"].dropna()
             if len(close) >= 50:
-                # Optimized: compute all indicators in single pass
                 indicators = _compute_all_technical_indicators(close)
-                
                 return {
                     "source": "yfinance_live",
-                    **indicators,  # rsi, macd, bollinger, sma20, sma50
-                    "last": float(close.iloc[-1]),
+                    **indicators,
+                    "last": live_last if live_last is not None else float(close.iloc[-1]),
+                    "volume_live": live_volume,
+                    "live_ts": live_ts,
                 }
     except Exception as e:
         log_metrics("yfinance_tech_failed", ticker=ticker, error=str(e))
-        pass
-    
+        # fall through to cached / error
+
     # fallback judge_features with freshness check
     try:
         ts = judge_features.get("computed_at")
@@ -420,7 +435,7 @@ def get_tech_enriched(ticker: str, judge_features: Dict[str, Any]) -> Dict[str, 
             except ValueError as e:
                 log_metrics("judge_features_invalid_timestamp", ticker=ticker, error=str(e))
                 return {"error": f"invalid timestamp: {e}"}
-        
+
         entry = (judge_features.get("tickers", {}) or {}).get(ticker.upper()) or (judge_features.get("tickers", {}) or {}).get(ticker)
         if not entry:
             return {"error": "tech features missing"}

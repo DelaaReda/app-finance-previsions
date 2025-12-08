@@ -571,9 +571,9 @@ async def get_judge_verdicts(
             # Force dev mode and a stable free OpenRouter stack for judge (fast + fiable en dev)
             os.environ["ECON_AGENT_MODE"] = "dev"
             os.environ["ECON_AGENT_MODELS"] = ",".join([
+                "tngtech/deepseek-r1t2-chimera:free",
                 "openai/gpt-oss-120b:free",
                 "qwen/qwen3-235b-a22b:free",
-                "tngtech/deepseek-r1t2-chimera:free",
                 "google/gemini-2.0-flash-exp:free",
             ])
             os.environ.pop("ECON_AGENT_DYNAMIC_MODELS", None)
@@ -744,25 +744,29 @@ async def get_judge_verdicts(
                     ]
 
                     # Build question using profile template or fallback
+                    base_prompt = (
+                        "NE RÉPONDS QUE PAR UNE SEULE LIGNE JSON STRICT qui commence par { et se termine par }.\n"
+                        "AUCUN TEXTE AVANT ou APRÈS.\n"
+                        "Clés attendues : summary, scenarios, risks, impacts, actions, confidence, data_needed, phase_scores, ml_prior.\n"
+                        "Exemple de structure : "
+                        "{\"summary\": [\"...\", \"...\"], "
+                        "\"scenarios\": [{\"name\": \"base\", \"p\": 60}], "
+                        "\"risks\": [\"...\"], "
+                        "\"impacts\": {\"FX\": [\"...\"], \"rates\": [\"...\"], \"commodities\": [\"...\"], \"equity\": [\"...\"]}, "
+                        "\"actions\": [\"...\"], "
+                        "\"confidence\": 0.0-1.0, "
+                        "\"data_needed\": [\"...\"], "
+                        "\"phase_scores\": {\"fundamental\": num, \"technical\": num, \"macro\": num, \"sentiment\": num, \"fusion\": num}, "
+                        "\"ml_prior\": {\"pred_return\": num, \"confidence\": num, \"horizon\": \"...\"}}\n"
+                        "Utilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores. "
+                        "Si une donnée manque, liste-la dans data_needed. "
+                        "SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}."
+                    )
                     if prof and prof.prompt_template:
-                        # Use profile-specific prompt
-                        question = (
-                            prof.prompt_template.format(ticker=sym) + " "
-                            "Donne un texte synthèse COURT puis UNE seule ligne JSON FINALE (DERNIÈRE LIGNE UNIQUEMENT JSON) avec les clés "
-                            "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
-                            "phase_scores (scores numériques), ml_prior. "
-                            "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores. "
-                            "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
-                        )
+                        question = prof.prompt_template.format(ticker=sym) + " " + base_prompt
                     else:
-                        # Fallback to default prompt
                         question = (
-                            f"Verdict structuré pour {sym} (horizon {horizon}). "
-                            "Donne un texte synthèse COURT puis UNE seule ligne JSON FINALE (DERNIÈRE LIGNE UNIQUEMENT JSON) avec les clés "
-                            "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
-                            "phase_scores (scores numériques), ml_prior. "
-                            "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et le JSON. "
-                            "Si une donnée manque, indique-la dans data_needed. Ne renvoie aucun texte après la ligne JSON finale."
+                            f"Verdict structuré pour {sym} (horizon {horizon}). " + base_prompt
                         )
 
                     phase_blocks: Dict[str, Any] = {}
@@ -806,6 +810,25 @@ async def get_judge_verdicts(
                             },
                         },
                     }
+
+                    # Debug: log payload summary (no heavy data)
+                    try:
+                        logger.info(
+                            "judge_llm_request",
+                            extra={
+                                "ticker": sym,
+                                "models": os.environ.get("ECON_AGENT_MODELS"),
+                                "question": question,
+                                "news_count": len(news_items),
+                                "attachments": len(news_headlines or []),
+                                "phases": list((phase_blocks or {}).keys()),
+                                "macro_keys": list(macro_ctx.keys()),
+                                "feature_keys": list(payload.get("features", {}).keys()),
+                                "ml_prior_keys": list((ml_prior or {}).keys()),
+                            },
+                        )
+                    except Exception:
+                        pass
 
                     # Validate payload (Pydantic) before LLM
                     if build_payload:
@@ -879,6 +902,21 @@ async def get_judge_verdicts(
                             "error": f"{type(e).__name__}: {e}",
                             "answer": "",
                         }
+
+                    try:
+                        logger.info(
+                            "judge_llm_raw_response",
+                            extra={
+                                "ticker": sym,
+                                "model": res.get("model") if isinstance(res, dict) else None,
+                                "provider": res.get("provider") if isinstance(res, dict) else None,
+                                "raw_preview": (res.get("answer") or "")[:320]
+                                if isinstance(res, dict)
+                                else "",
+                            },
+                        )
+                    except Exception:
+                        pass
 
                     parsed: Optional[Dict[str, Any]] = None
                     model_used = None
