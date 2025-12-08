@@ -876,7 +876,7 @@ async def get_judge_verdicts(
                                     "meta": payload.get("meta"),
                                 },
                                 default=str,
-                            )[:200000],
+                            ),
                         )
                     except Exception:
                         pass
@@ -960,13 +960,13 @@ async def get_judge_verdicts(
                             f"ticker={sym} "
                             f"model={res.get('model') if isinstance(res, dict) else None} "
                             f"provider={res.get('provider') if isinstance(res, dict) else None} "
-                            f"raw_preview={(res.get('answer') or '')[:32000] if isinstance(res, dict) else ''!r}"
+                            f"raw_preview={(res.get('answer') or '') if isinstance(res, dict) else ''!r}"
                         )
                         logger.warning(
                             "judge_llm_raw_response_payload=%s",
-                            json.dumps(res, default=str)[:20000]
+                            json.dumps(res, default=str)
                             if isinstance(res, dict)
-                            else str(res)[:20000],
+                            else str(res),
                         )
                     except Exception:
                         pass
