@@ -90,6 +90,22 @@ JUDGE_VERSION = "v3"
 router = APIRouter(prefix="/api/judge", tags=["judge"])
 
 
+def _normalize_ts_str(ts: Any) -> Optional[str]:
+    """Normalize timestamp-like values to an ISO string."""
+    if ts is None:
+        return None
+    try:
+        if isinstance(ts, str):
+            return ts
+        if isinstance(ts, (int, float)):
+            return datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
+        if hasattr(ts, "isoformat"):
+            return ts.isoformat()
+    except Exception:
+        return None
+    return str(ts)
+
+
 @router.get("")
 async def get_judge_verdicts(
     limit: int = Query(20, ge=1, le=100, description="Limite de résultats (1-100)"),
@@ -552,24 +568,16 @@ async def get_judge_verdicts(
                     pass
                 return {}
 
-            # Use the same model selection logic as econ_llm_agent (power list no-auth) with dynamic watcher
-            os.environ.pop("ECON_AGENT_MODELS", None)
+            # Force dev mode and a stable free OpenRouter stack for judge (fast + fiable en dev)
+            os.environ["ECON_AGENT_MODE"] = "dev"
+            os.environ["ECON_AGENT_MODELS"] = ",".join([
+                "openai/gpt-oss-120b:free",
+                "qwen/qwen3-235b-a22b:free",
+                "tngtech/deepseek-r1t2-chimera:free",
+                "google/gemini-2.0-flash-exp:free",
+            ])
             os.environ.pop("ECON_AGENT_DYNAMIC_MODELS", None)
             candidate_models: Optional[List[str]] = None
-            if ensure_working_models:
-                try:
-                    candidate_models = ensure_working_models(
-                        limit=6, max_age_hours=1, min_ok=1
-                    )
-                except Exception:
-                    candidate_models = None
-
-            # Allow a quick-test override via env (skip heavy models if needed)
-            test_mode = os.getenv("JUDGE_TEST_MODE", "false").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
 
             agent = EconomicAnalyst(
                 model_candidates=candidate_models,
@@ -715,16 +723,18 @@ async def get_judge_verdicts(
                             "sent": n.get("sentiment_score")
                             or n.get("sent")
                             or n.get("sentiment"),
-                            "ts": n.get("timestamp")
-                            or n.get("ts")
-                            or n.get("published_at")
-                            or n.get("date"),
+                            "ts": _normalize_ts_str(
+                                n.get("timestamp")
+                                or n.get("ts")
+                                or n.get("published_at")
+                                or n.get("date")
+                            ),
                             "source": n.get("source"),
                             "summary": (
                                 n.get("summary")
                                 or n.get("description")
                                 or (n.get("raw_text") or "")
-                            )[:100],
+                            )[:180],
                             "tickers": n.get("tickers")
                             or n.get("symbols")
                             or [],
@@ -738,7 +748,7 @@ async def get_judge_verdicts(
                         # Use profile-specific prompt
                         question = (
                             prof.prompt_template.format(ticker=sym) + " "
-                            "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
+                            "Donne un texte synthèse COURT puis UNE seule ligne JSON FINALE (DERNIÈRE LIGNE UNIQUEMENT JSON) avec les clés "
                             "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
                             "phase_scores (scores numériques), ml_prior. "
                             "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores. "
@@ -748,7 +758,7 @@ async def get_judge_verdicts(
                         # Fallback to default prompt
                         question = (
                             f"Verdict structuré pour {sym} (horizon {horizon}). "
-                            "Donne un texte synthèse puis UNE seule ligne JSON FINALE (dernière ligne uniquement JSON) avec les clés "
+                            "Donne un texte synthèse COURT puis UNE seule ligne JSON FINALE (DERNIÈRE LIGNE UNIQUEMENT JSON) avec les clés "
                             "summary, scenarios, risks, impacts, actions, confidence, data_needed (liste courte), "
                             "phase_scores (scores numériques), ml_prior. "
                             "Utilise et cite les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores dans la synthèse et le JSON. "
@@ -939,6 +949,19 @@ async def get_judge_verdicts(
                     met["parse_ms"] = (
                         time.perf_counter() - t_parse
                     ) * 1000.0
+
+                    logger.debug(
+                        "judge_llm_call",
+                        extra={
+                            "ticker": sym,
+                            "model": model_used,
+                            "provider": res.get("provider") if isinstance(res, dict) else None,
+                            "answer_len": len(full_answer or ""),
+                            "parsed_keys": list(parsed.keys()) if isinstance(parsed, dict) else None,
+                            "parsed_conf": parsed.get("confidence") if isinstance(parsed, dict) else None,
+                            "parse_error": parsed.get("error") if isinstance(parsed, dict) else None,
+                        },
+                    )
 
                     # Default if parsed vide
                     if not parsed or (

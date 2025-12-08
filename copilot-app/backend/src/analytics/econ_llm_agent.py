@@ -155,9 +155,12 @@ MODE = os.getenv("ECON_AGENT_MODE", "dev").lower()  # dev | prod
 # Dev mode: Fast, lightweight models for rapid development (OpenRouter free tier)
 # Prioritize stable free models with decent context.
 DEV_MODELS = [
-    "google/gemini-2.0-flash-exp:free",
+    # 🏆 Tier 1 – principaux cerveaux free OpenRouter
+    "openai/gpt-oss-120b:free",
+    "qwen/qwen3-235b-a22b:free",
     "tngtech/deepseek-r1t2-chimera:free",
-    "qwen/qwen3-coder:free",
+    # Backup rapide
+    "google/gemini-2.0-flash-exp:free",
 ]
 DEV_TIMEOUT = 20  # 20s timeout for dev (g4f can be slow)
 DEV_MAX_TOKENS = 800  # Shorter responses for dev
