@@ -611,6 +611,8 @@ async def get_judge_verdicts(
                     expected_return = r.get("expected_return")
                     direction = r.get("direction", "neutral")
                     horizon = r.get("horizon") or "1w"
+                    expected_return_ensemble = expected_return
+                    expected_return_final = expected_return_ensemble
 
                     # verdict_text doit exister même si on échoue avant l'appel LLM
                     verdict_text = (
@@ -644,6 +646,34 @@ async def get_judge_verdicts(
                         time.perf_counter() - t_ml
                     ) * 1000.0
 
+                    # Ensemble expected_return avec ml_prior si disponible
+                    try:
+                        er_raw = float(expected_return) if expected_return is not None else None
+                        er_ml = (
+                            float(ml_prior.get("pred_return"))
+                            if isinstance(ml_prior, dict)
+                            and ml_prior.get("pred_return") is not None
+                            else None
+                        )
+                        w_ml = (
+                            float(ml_prior.get("confidence"))
+                            if isinstance(ml_prior, dict)
+                            and ml_prior.get("confidence") is not None
+                            else None
+                        )
+                        if w_ml is None:
+                            w_ml = 0.5
+                        w_ml = max(0.0, min(1.0, w_ml))
+                        if er_raw is not None and er_ml is not None:
+                            expected_return_ensemble = w_ml * er_ml + (1 - w_ml) * er_raw
+                        elif er_ml is not None:
+                            expected_return_ensemble = er_ml
+                        else:
+                            expected_return_ensemble = er_raw
+                    except Exception:
+                        expected_return_ensemble = expected_return
+                    expected_return_final = expected_return_ensemble
+
                     enriched = _judge_feature_for(sym) or {}
                     ownership = _ownership_for(sym)
 
@@ -651,6 +681,7 @@ async def get_judge_verdicts(
                         "ticker": sym,
                         "direction": direction,
                         "expected_return": expected_return,
+                        "expected_return_ensemble": expected_return_ensemble,
                         "confidence": base_conf,
                         "horizon": horizon,
                         "model": r.get("model"),
@@ -678,6 +709,12 @@ async def get_judge_verdicts(
                         "fundamentals": enriched.get("fundamentals", {}),
                         "peer_signals": r.get("peer_signals"),
                         "ml_prior": ml_prior,
+                        "ml_prior_pred": ml_prior.get("pred_return")
+                        if isinstance(ml_prior, dict)
+                        else None,
+                        "ml_prior_conf": ml_prior.get("confidence")
+                        if isinstance(ml_prior, dict)
+                        else None,
                     }
 
                     # Enrich tech/fund live (with errors as data_needed hints)
@@ -988,6 +1025,21 @@ async def get_judge_verdicts(
                         time.perf_counter() - t_parse
                     ) * 1000.0
 
+                    # Ajustement return_adjust (LLM) sur l'ensemble
+                    expected_return_final = expected_return_ensemble
+                    if isinstance(parsed, dict):
+                        ra = parsed.get("return_adjust")
+                        try:
+                            if ra is not None:
+                                ra = float(ra)
+                                ra = max(min(ra, 0.03), -0.03)  # clamp ±3%
+                                if expected_return_final is None and expected_return is not None:
+                                    expected_return_final = expected_return
+                                if expected_return_final is not None:
+                                    expected_return_final = expected_return_final + ra
+                        except Exception:
+                            pass
+
                     logger.debug(
                         "judge_llm_call",
                         extra={
@@ -1076,7 +1128,9 @@ async def get_judge_verdicts(
                         "ticker": sym,
                         "verdict": verdict_text,
                         "confidence": base_conf,
-                        "expected_return": expected_return,
+                        "expected_return": expected_return_final,
+                        "expected_return_raw": expected_return,
+                        "expected_return_ensemble": expected_return_ensemble,
                         "risk_level": "medium",
                         "reasoning": parsed.get("summary")
                         if isinstance(parsed, dict)
