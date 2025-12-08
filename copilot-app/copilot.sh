@@ -130,12 +130,12 @@ start_backend() {
     
     # Export API keys with both naming conventions for compatibility
     if [ -n "$OPEN_ROUTER_API_KEY" ]; then
-        export OPENROUTER_API_KEY="$OPEN_ROUTER_API_KEY"
+        export OPEN_ROUTER_API_KEY="$OPEN_ROUTER_API_KEY"
         log "✅ OpenRouter API key loaded"
     fi
     
     # Force use of free g4f models if no auth keys
-    if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$DEEPINFRA_API_KEY" ]; then
+    if [ -z "$OPEN_ROUTER_API_KEY" ] && [ -z "$DEEPINFRA_API_KEY" ]; then
         log_warning "⚠️ No API keys found, forcing free g4f models"
         export G4F_PROVIDER="Blackbox"  # Free provider
         export ECON_AGENT_MODELS="gpt-4o-mini"  # Free model via g4f

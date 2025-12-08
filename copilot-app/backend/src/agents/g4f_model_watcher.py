@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 # Optional API keys (read from env; do NOT hardcode)
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPEN_ROUTER_API_KEY = os.getenv("OPEN_ROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
 
 
 WORKING_PATH = Path("data/llm/models/working.json")
@@ -452,8 +452,8 @@ def _probe_model(model_name: str, system: Optional[str] = None, prompt: Optional
         if provider_id:
             kwargs["provider"] = provider_id
         # ensure openrouter key is visible to downstream client if present
-        if OPENROUTER_API_KEY and "OPENROUTER_API_KEY" not in os.environ:
-            os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+        if OPEN_ROUTER_API_KEY and "OPEN_ROUTER_API_KEY" not in os.environ:
+            os.environ["OPEN_ROUTER_API_KEY"] = OPEN_ROUTER_API_KEY
         res = ask_with_specific_model(model_name, **kwargs)
         provider_hint = res.get("provider")
         return ModelProbe(model=model_name, ok=bool(res.get("ok")), provider=provider_hint, latency_s=res.get("latency_s"))

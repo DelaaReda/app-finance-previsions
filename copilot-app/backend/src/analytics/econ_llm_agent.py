@@ -11,21 +11,31 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 import time
+import requests
+from dotenv import load_dotenv
 
 # Ensure .env is loaded (API keys, etc.)
 try:
     from core.env_loader import ensure_env_loaded
     ensure_env_loaded()
 except Exception:
-    pass
+    # Fallback manual .env load (backend/.env puis racine)
+    try:
+        backend_env = Path(__file__).resolve().parents[2] / ".env"
+        root_env = Path(__file__).resolve().parents[3] / ".env"
+        load_dotenv(backend_env, override=False)
+        load_dotenv(root_env, override=False)
+    except Exception:
+        pass
 
 logger = logging.getLogger(__name__)
 
-# Optional API keys (read from env; support both spellings)
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
-# Propagate to env for g4f if provided under alternate spelling
-if OPENROUTER_API_KEY and "OPENROUTER_API_KEY" not in os.environ:
-    os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+# Optional API keys (read from env; support both spellings). Canonical: OPEN_ROUTER_API_KEY
+OPEN_ROUTER_API_KEY = os.getenv("OPEN_ROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
+# Propagate both spellings for downstream libs (g4f uses OPEN_ROUTER_API_KEY)
+if OPEN_ROUTER_API_KEY:
+    os.environ.setdefault("OPEN_ROUTER_API_KEY", OPEN_ROUTER_API_KEY)
+    os.environ.setdefault("OPEN_ROUTER_API_KEY", OPEN_ROUTER_API_KEY)
 
 try:
     from g4f.client import Client as G4FClient
@@ -36,7 +46,7 @@ except Exception as e:
 
 
 # ======== Modèles “power” premium (ordre de préférence) ======================
-# Priorité aux modèles premium (g4f-working, test_results.json)
+        # Priorité aux modèles premium (g4f-working, test_results.json)
 POWER_NOAUTH_MODELS: List[str] = [
     # Tier S / premium reasoning (OpenRouter slugs)
     "openai/gpt-5.1",
@@ -143,9 +153,11 @@ def _interleave_by_family(models: List[str]) -> List[str]:
 MODE = os.getenv("ECON_AGENT_MODE", "dev").lower()  # dev | prod
 
 # Dev mode: Fast, lightweight models for rapid development (OpenRouter free tier)
+# Prioritize stable free models with decent context.
 DEV_MODELS = [
-    "gpt-4o-mini",  # OpenRouter free tier, plus rapide/stable
-    "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+    "google/gemini-2.0-flash-exp:free",
+    "tngtech/deepseek-r1t2-chimera:free",
+    "qwen/qwen3-coder:free",
 ]
 DEV_TIMEOUT = 20  # 20s timeout for dev (g4f can be slow)
 DEV_MAX_TOKENS = 800  # Shorter responses for dev
@@ -331,7 +343,7 @@ def _pick_system_prompt(locale: str) -> str:
 
 def _provider_override(model: str) -> Optional[str]:
     """Best-effort provider override for premium models when key is available."""
-    if not OPENROUTER_API_KEY:
+    if not OPEN_ROUTER_API_KEY:
         return None
     m = (model or "").lower()
     # Route premium models via OpenRouter if possible
@@ -347,7 +359,7 @@ def _provider_candidates(model: str) -> List[str]:
     """
     m = (model or "").lower()
     providers: List[str] = []
-    if OPENROUTER_API_KEY and any(x in m for x in ("deepseek", "deepseek-ai", "qwen", "gpt-5", "gpt-4.1", "gpt-4o", "phi-4", "o3", "o4")):
+    if OPEN_ROUTER_API_KEY and any(x in m for x in ("deepseek", "deepseek-ai", "qwen", "gpt-5", "gpt-4.1", "gpt-4o", "phi-4", "o3", "o4")):
         providers.append("OpenRouter")
     # DeepInfra exposes deepseek/qwen/llama/mistral without key in many regions
     if any(x in m for x in ("deepseek", "deepseek-ai", "qwen", "llama", "phi", "mistral", "gpt-4.1", "gpt-4o", "gpt-5", "o3", "o4")):
@@ -647,13 +659,54 @@ class EconomicAnalyst:
 
     def _call_model(self, model: str, messages: List[Dict[str, str]]) -> Tuple[bool, Dict[str, Any]]:
         last_err: Optional[str] = None
+        # In dev mode, force direct OpenRouter API when key is available
+        if MODE == "dev":
+            if not OPEN_ROUTER_API_KEY:
+                return False, {"ok": False, "error": "MissingAuthError: OPEN_ROUTER_API_KEY not set"}
+            try:
+                headers = {
+                    "Authorization": f"Bearer {OPEN_ROUTER_API_KEY}",
+                    "HTTP-Referer": "http://localhost",
+                    "X-Title": "Finance-Copilot-Dev",
+                }
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": self.max_tokens,
+                    "temperature": self.temperature,
+                }
+                r = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=self.timeout or 20,
+                )
+                r.raise_for_status()
+                data = r.json()
+                text = clean_llm_text(data["choices"][0]["message"]["content"])
+                parsed = _extract_tail_json_line(text)
+                usage = data.get("usage")
+                latency_ms = int((time.perf_counter()) * 0)
+                return True, {
+                    "ok": True,
+                    "model": model,
+                    "provider": "OpenRouter",
+                    "attempt": 1,
+                    "answer": text,
+                    "parsed": parsed,
+                    "usage": usage,
+                    "latency_ms": latency_ms,
+                }
+            except Exception as e:
+                return False, {"ok": False, "error": f"openrouter_dev_failed: {e}"}
+
         for attempt in range(1, self.retries_per_model + 1):
             started = time.perf_counter()
             for provider_override in _provider_candidates(model):
                 try:
                     # Ensure key is present in env for openrouter
-                    if provider_override in ("openrouter", "OpenRouter") and OPENROUTER_API_KEY and "OPENROUTER_API_KEY" not in os.environ:
-                        os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+                    if provider_override in ("openrouter", "OpenRouter") and OPEN_ROUTER_API_KEY and "OPEN_ROUTER_API_KEY" not in os.environ:
+                        os.environ["OPEN_ROUTER_API_KEY"] = OPEN_ROUTER_API_KEY
                     kwargs = dict(
                         model=model,
                         messages=messages,

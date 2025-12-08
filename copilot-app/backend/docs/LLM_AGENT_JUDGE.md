@@ -1,7 +1,7 @@
 # LLM Judge & Economic Analyst — Mode opératoire
 
 ## Ce que fait le module `econ_llm_agent.py`
-- Charge la configuration `.env` et utilise les clés `OPENROUTER_API_KEY` si présentes.
+- Charge la configuration `.env` et utilise les clés `OPEN_ROUTER_API_KEY` si présentes.
 - Récupère dynamiquement les modèles premium (OpenRouter / DeepInfra) via `agents.g4f_model_watcher.ensure_working_models`.
 - Priorise trois familles distinctes (DeepSeek / Qwen / LLaMA/phi/Mistral…) avant de rendre un verdict.
 - `analyze` : tente les modèles dans l’ordre de priorité et renvoie la première réponse OK.
@@ -19,7 +19,7 @@
 
 ## Points clés pour maintenir la qualité
 - Laisser `ECON_AGENT_MODELS` vide pour que le watcher injecte les modèles premium (OpenRouter/DeepInfra).
-- Garder `OPENROUTER_API_KEY` dans `.env` (backend) pour les slugs OpenRouter.
+- Garder `OPEN_ROUTER_API_KEY` dans `.env` (backend) pour les slugs OpenRouter.
 - Éviter de réintroduire des subprocess dans `/api/judge` : tout est en-process avec `asyncio.to_thread`.
 - Surveiller les réponses `data_needed` : elles indiquent quelles données supplémentaires collecter (features, news, macro) pour augmenter la pertinence et la confiance.
 
