@@ -848,21 +848,35 @@ async def get_judge_verdicts(
                         },
                     }
 
-                    # Debug: log payload summary (no heavy data)
+                    # Debug: log payload summary (no heavy data) + compact JSON
                     try:
                         logger.info(
-                            "judge_llm_request",
-                            extra={
-                                "ticker": sym,
-                                "models": os.environ.get("ECON_AGENT_MODELS"),
-                                "question": question,
-                                "news_count": len(news_items),
-                                "attachments": len(news_headlines or []),
-                                "phases": list((phase_blocks or {}).keys()),
-                                "macro_keys": list(macro_ctx.keys()),
-                                "feature_keys": list(payload.get("features", {}).keys()),
-                                "ml_prior_keys": list((ml_prior or {}).keys()),
-                            },
+                            "judge_llm_request "
+                            f"ticker={sym} "
+                            f"models={os.environ.get('ECON_AGENT_MODELS')} "
+                            f"question_preview={(question or '')[:160]!r} "
+                            f"news_count={len(news_items)} "
+                            f"attachments={len(news_headlines or [])} "
+                            f"phases={list((phase_blocks or {}).keys())} "
+                            f"macro_keys={list(macro_ctx.keys())} "
+                            f"feature_keys={list(payload.get('features', {}).keys())} "
+                            f"ml_prior_pred={ml_prior.get('pred_return') if isinstance(ml_prior, dict) else None} "
+                            f"ml_prior_conf={ml_prior.get('confidence') if isinstance(ml_prior, dict) else None}"
+                        )
+                        logger.warning(
+                            "judge_llm_request_payload=%s",
+                            json.dumps(
+                                {
+                                    "ticker": sym,
+                                    "question": question,
+                                    "features": payload.get("features"),
+                                    "phases": phase_blocks,
+                                    "news": news_items,
+                                    "attachments": news_headlines,
+                                    "meta": payload.get("meta"),
+                                },
+                                default=str,
+                            )[:200000],
                         )
                     except Exception:
                         pass
@@ -942,15 +956,17 @@ async def get_judge_verdicts(
 
                     try:
                         logger.info(
-                            "judge_llm_raw_response",
-                            extra={
-                                "ticker": sym,
-                                "model": res.get("model") if isinstance(res, dict) else None,
-                                "provider": res.get("provider") if isinstance(res, dict) else None,
-                                "raw_preview": (res.get("answer") or "")[:320]
-                                if isinstance(res, dict)
-                                else "",
-                            },
+                            "judge_llm_raw_response "
+                            f"ticker={sym} "
+                            f"model={res.get('model') if isinstance(res, dict) else None} "
+                            f"provider={res.get('provider') if isinstance(res, dict) else None} "
+                            f"raw_preview={(res.get('answer') or '')[:32000] if isinstance(res, dict) else ''!r}"
+                        )
+                        logger.warning(
+                            "judge_llm_raw_response_payload=%s",
+                            json.dumps(res, default=str)[:20000]
+                            if isinstance(res, dict)
+                            else str(res)[:20000],
                         )
                     except Exception:
                         pass
@@ -1050,6 +1066,9 @@ async def get_judge_verdicts(
                             "parsed_keys": list(parsed.keys()) if isinstance(parsed, dict) else None,
                             "parsed_conf": parsed.get("confidence") if isinstance(parsed, dict) else None,
                             "parse_error": parsed.get("error") if isinstance(parsed, dict) else None,
+                            "expected_return_raw": expected_return,
+                            "expected_return_ensemble": expected_return_ensemble,
+                            "expected_return_final": expected_return_final,
                         },
                     )
 

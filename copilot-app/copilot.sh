@@ -24,8 +24,9 @@ log_error() { echo -e "${RED}[$(date +'%H:%M:%S')]${NC} $1"; }
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 BACKEND_DIR="$SCRIPT_DIR/backend"
-FRONTEND_DIR="$SCRIPT_DIR/frontend/webapp"
-FRONTEND_DIST="$FRONTEND_DIR/dist"
+# Nouveau frontend statique (pas de build npm, juste servir app/)
+FRONTEND_DIR="$SCRIPT_DIR/frontend/app"
+FRONTEND_DIST="$FRONTEND_DIR"
 
 # Vérifier si un port est utilisé
 is_port_in_use() {
@@ -183,20 +184,13 @@ start_backend() {
 # Démarrer le frontend
 start_frontend() {
     log "Démarrage du frontend..."
-    
-    # Vérifier si le build existe
-    if [ ! -d "$FRONTEND_DIST" ]; then
-        log_warning "Build frontend non trouvé, tentative de build..."
-        cd "$FRONTEND_DIR"
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        npm run build || {
-            log_error "Échec du build frontend"
-            exit 1
-        }
+
+    if [ ! -d "$FRONTEND_DIST" ] || [ ! -f "$FRONTEND_DIST/index.html" ]; then
+        log_error "Frontend introuvable dans $FRONTEND_DIST (index.html manquant)"
+        exit 1
     fi
-    
-    # Servir le build avec Python (simple et rapide)
+
+    # Servir les fichiers statiques (app/) avec Python (simple et rapide)
     cd "$FRONTEND_DIST"
     nohup python3 -m http.server 5173 > /tmp/frontend.log 2>&1 &
     FRONTEND_PID=$!
