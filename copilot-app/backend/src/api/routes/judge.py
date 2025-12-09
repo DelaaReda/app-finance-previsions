@@ -11,6 +11,7 @@ import time
 from typing import Dict, Any, List, Optional
 
 from fastapi import APIRouter, Query, HTTPException
+from statistics import stdev
 
 # Ensure nested event loops don't break g4f client
 try:
@@ -125,6 +126,285 @@ def _normalize_ts_str(ts: Any) -> Optional[str]:
     except Exception:
         return None
     return str(ts)
+
+
+def _compute_price_features(points: List[List[Any]]) -> Dict[str, Any]:
+    """Compute multi-horizon price stats from OHLC (ts, close)."""
+    if not points:
+        return {}
+    pts = sorted(points, key=lambda x: x[0])
+    closes = [float(p[1]) for p in pts if len(p) >= 2]
+    if len(closes) < 2:
+        return {}
+
+    def ret(period: int) -> Optional[float]:
+        if len(closes) <= period:
+            return None
+        return (closes[-1] / closes[-period - 1]) - 1.0
+
+    def realized_vol(period: int) -> Optional[float]:
+        if len(closes) <= period:
+            return None
+        rets = []
+        for i in range(len(closes) - period, len(closes) - 1):
+            if closes[i] != 0:
+                rets.append((closes[i + 1] - closes[i]) / closes[i])
+        if len(rets) < 2:
+            return None
+        try:
+            return float(stdev(rets))
+        except Exception:
+            return None
+
+    def max_drawdown(period: int) -> Optional[float]:
+        if len(closes) <= period:
+            return None
+        window = closes[-period - 1 :]
+        peak = window[0]
+        dd = 0.0
+        for c in window[1:]:
+            if c > peak:
+                peak = c
+            dd = min(dd, (c / peak) - 1.0)
+        return dd
+
+    price_min_1y = min(closes[-252:]) if len(closes) >= 5 else min(closes)
+    price_max_1y = max(closes[-252:]) if len(closes) >= 5 else max(closes)
+    last = closes[-1]
+    price_vs_high = last / price_max_1y if price_max_1y else None
+    price_vs_low = last / price_min_1y if price_min_1y else None
+
+    stats = {
+        "ret_1d": ret(1),
+        "ret_5d": ret(5),
+        "ret_1m": ret(21),
+        "ret_3m": ret(63),
+        "ret_6m": ret(126),
+        "ret_1y": ret(252),
+        "vol_1m": realized_vol(21),
+        "vol_3m": realized_vol(63),
+        "vol_1y": realized_vol(252),
+        "max_drawdown_3m": max_drawdown(63),
+        "max_drawdown_1y": max_drawdown(252),
+        "price_vs_1y_high": price_vs_high,
+        "price_vs_1y_low": price_vs_low,
+    }
+
+    def trend_state(ret3m: Optional[float]) -> Optional[str]:
+        if ret3m is None:
+            return None
+        if ret3m > 0.05:
+            return "up"
+        if ret3m < -0.05:
+            return "down"
+        return "range"
+
+    stats["trend_state_3m"] = trend_state(stats.get("ret_3m"))
+    return {k: v for k, v in stats.items() if v is not None}
+
+
+def _price_profile_from_stats(stats: Dict[str, Any]) -> Dict[str, str]:
+    def fmt_pct(x: Optional[float]) -> str:
+        if x is None:
+            return "n/a"
+        return f"{x*100:.1f}%"
+
+    short = f"Ret 5d={fmt_pct(stats.get('ret_5d'))}, ret 1m={fmt_pct(stats.get('ret_1m'))}"
+    medium = f"3m={fmt_pct(stats.get('ret_3m'))}, 6m={fmt_pct(stats.get('ret_6m'))}"
+    long = f"1y={fmt_pct(stats.get('ret_1y'))}, vs 1y high={fmt_pct(stats.get('price_vs_1y_high') and stats.get('price_vs_1y_high')-1)}"
+    return {
+        "short_term": short,
+        "medium_term": medium,
+        "long_term": long,
+    }
+
+
+def _sentiment_windows(news_items: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Aggregate sentiment on 24h/3d/7d/30d based on ingested_at."""
+    if not news_items:
+        return {}
+    windows = {
+        "24h": 24,
+        "3d": 72,
+        "7d": 168,
+        "30d": 720,
+    }
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    out: Dict[str, Dict[str, Any]] = {}
+    for label, hours in windows.items():
+        pos = neg = neu = 0
+        scores: List[float] = []
+        for n in news_items:
+            ts = n.get("ingested_at") or n.get("ts") or n.get("published_at")
+            if not ts:
+                continue
+            try:
+                nts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if nts.tzinfo is None:
+                nts = nts.replace(tzinfo=timezone.utc)
+            delta_h = (now - nts).total_seconds() / 3600.0
+            if delta_h > hours:
+                continue
+            sc = n.get("score") or n.get("sentiment_score") or n.get("sent")
+            label_sent = (n.get("sentiment") or "").lower()
+            if sc is None:
+                if label_sent == "positive":
+                    sc = 1.0
+                elif label_sent == "negative":
+                    sc = -1.0
+                elif label_sent == "neutral":
+                    sc = 0.0
+            try:
+                fsc = float(sc)
+                scores.append(fsc)
+                if fsc > 0:
+                    pos += 1
+                elif fsc < 0:
+                    neg += 1
+                else:
+                    neu += 1
+            except Exception:
+                continue
+        if scores or pos or neg or neu:
+            avg = sum(scores) / len(scores) if scores else None
+            out[label] = {
+                "avg": avg,
+                "count": len(scores) if scores else pos + neg + neu,
+                "pos": pos,
+                "neg": neg,
+                "neu": neu,
+            }
+    return out
+
+
+def _sentiment_profile(sent_win: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Derive simple trend/skew from sentiment_windows."""
+    w7 = sent_win.get("7d", {}) if isinstance(sent_win, dict) else {}
+    w30 = sent_win.get("30d", {}) if isinstance(sent_win, dict) else {}
+
+    def trend():
+        a7 = w7.get("avg")
+        a30 = w30.get("avg")
+        if a7 is None or a30 is None:
+            return None
+        diff = a7 - a30
+        if diff > 5:
+            return "improving"
+        if diff < -5:
+            return "worsening"
+        return "stable"
+
+    def skew():
+        if not w7.get("count"):
+            return None
+        pos = w7.get("pos", 0)
+        neg = w7.get("neg", 0)
+        if pos >= 2 * max(1, neg):
+            return "mostly_positive"
+        if neg >= 2 * max(1, pos):
+            return "mostly_negative"
+        return "mixed"
+
+    return {
+        "trend_7d_vs_30d": trend(),
+        "skew_7d": skew(),
+        "summary": f"Flux: {w7.get('count', 0)} news/7j, avg7d={w7.get('avg')}, avg30d={w30.get('avg')}",
+    }
+
+
+def _fundamentals_profile(fund: Dict[str, Any]) -> Dict[str, Any]:
+    """Bucket valuation/growth/risk to guide LLM."""
+    pe = fund.get("pe") or fund.get("pe_ratio")
+    beta = fund.get("beta")
+    growth = fund.get("revenueGrowth") or fund.get("revenue_growth")
+    margin = fund.get("profitMargins") or fund.get("profit_margin")
+
+    def bucket_pe(v):
+        if v is None:
+            return None
+        if v < 10:
+            return "very_cheap"
+        if v < 18:
+            return "cheap"
+        if v < 25:
+            return "fair"
+        if v < 40:
+            return "expensive"
+        return "very_expensive"
+
+    def bucket_beta(v):
+        if v is None:
+            return None
+        if v < 0.8:
+            return "low_risk"
+        if v < 1.2:
+            return "normal_risk"
+        if v < 1.8:
+            return "elevated_risk"
+        return "high_risk"
+
+    valuation = bucket_pe(pe)
+    beta_label = bucket_beta(beta)
+    if growth is not None:
+        growth_label = (
+            "high_growth" if growth > 0.15 else "moderate_growth" if growth > 0.05 else "low_growth"
+        )
+    else:
+        growth_label = None
+    if margin is not None:
+        margin_label = (
+            "high_margin" if margin > 0.3 else "moderate_margin" if margin > 0.1 else "low_margin"
+        )
+    else:
+        margin_label = None
+
+    if beta_label in ("elevated_risk", "high_risk"):
+        risk_profile = "high_beta"
+    elif beta_label == "low_risk":
+        risk_profile = "defensive"
+    else:
+        risk_profile = "balanced"
+
+    return {
+        "valuation": valuation,
+        "growth_label": growth_label,
+        "margin_label": margin_label,
+        "beta_label": beta_label,
+        "risk_profile": risk_profile,
+    }
+
+
+def _macro_profile(macro: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarize macro context into buckets."""
+    vix = macro.get("vix")
+    us10y_delta = macro.get("us10y_delta_1m")
+    dxy = macro.get("dxy")
+    if vix is None:
+        vix_level = None
+    elif vix < 15:
+        vix_level = "low"
+    elif vix < 25:
+        vix_level = "normal"
+    else:
+        vix_level = "high"
+
+    if us10y_delta is None:
+        us10y_trend = None
+    elif us10y_delta > 0.005:
+        us10y_trend = "rising"
+    elif us10y_delta < -0.005:
+        us10y_trend = "falling"
+    else:
+        us10y_trend = "stable"
+
+    return {
+        "vix_level": vix_level,
+        "vix_value": vix,
+        "us10y_trend": us10y_trend,
+        "dxy_value": dxy,
+    }
 
 
 @router.get("")
@@ -890,6 +1170,32 @@ async def get_judge_verdicts(
                         if n.get("title") or n.get("headline")
                     ]
 
+                    # Price features (multi-horizon) from cached price points
+                    price_features = {}
+                    try:
+                        price_points = (
+                            prices_data.get(sym, {}).get("points")
+                            or prices_data.get(sym, {}).get("prices")
+                            or []
+                        )
+                        price_stats = _compute_price_features(price_points)
+                        if price_stats:
+                            price_features["price_stats"] = price_stats
+                            price_features["price_profile"] = _price_profile_from_stats(price_stats)
+                    except Exception:
+                        price_features = {}
+
+                    # Sentiment multi-fenêtre + profil
+                    sent_windows = _sentiment_windows(news_items)
+                    sent_profile = _sentiment_profile(sent_windows) if sent_windows else {}
+
+                    # Fundamentals / macro profiles (heuristiques rapides)
+                    fund_profile = _fundamentals_profile(
+                        feat.get("fundamentals_enriched", {})
+                        or feat.get("fundamentals", {})
+                    )
+                    macro_prof = _macro_profile(macro_ctx)
+
                     # Build question using profile template or fallback
                     base_prompt = (
                         "NE RÉPONDS QUE PAR UNE SEULE LIGNE JSON STRICT qui commence par { et se termine par }.\n"
@@ -905,7 +1211,7 @@ async def get_judge_verdicts(
                         "\"data_needed\": [\"...\"], "
                         "\"phase_scores\": {\"fundamental\": num, \"technical\": num, \"macro\": num, \"sentiment\": num, \"fusion\": num}, "
                         "\"ml_prior\": {\"pred_return\": num, \"confidence\": num, \"horizon\": \"...\"}}\n"
-                        "Utilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores. "
+                        "Utilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores, ainsi que price_stats/price_profile, sentiment_windows/sentiment_profile, fundamentals_profile, macro_profile. "
                         "Si une donnée manque, liste-la dans data_needed. "
                         "SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}."
                     )
@@ -1032,6 +1338,21 @@ async def get_judge_verdicts(
                                         details[key] = float(tech_src[key])
                                     except Exception:
                                         pass
+                    except Exception:
+                        pass
+
+                    # Inject extra feature blocks for LLM context
+                    try:
+                        if price_features:
+                            feat.update(price_features)
+                        if sent_windows:
+                            feat["sentiment_windows"] = sent_windows
+                        if sent_profile:
+                            feat["sentiment_profile"] = sent_profile
+                        if fund_profile:
+                            feat["fundamentals_profile"] = fund_profile
+                        if macro_prof:
+                            feat["macro_profile"] = macro_prof
                     except Exception:
                         pass
 
