@@ -257,6 +257,13 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         provider = debug_llm_res.get("provider") or provider
 
     source = row.get("source")
+    data_ts = None
+    try:
+        meta_in = row.get("meta") or {}
+        if isinstance(meta_in, dict) and meta_in.get("data_timestamps"):
+            data_ts = meta_in.get("data_timestamps")
+    except Exception:
+        data_ts = None
 
     meta = VerdictMeta(
         generated_at=generated_at,
@@ -264,6 +271,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         provider=provider,
         profile=profile,
         source=source if isinstance(source, list) else None,
+        data_timestamps=data_ts,
     )
 
     quant_confidence: Optional[float] = None
@@ -291,6 +299,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         data_needed=list(data_needed),
         phases=phases,
         attachments=attachments,
+        analysis=llm_dict if isinstance(llm_dict, dict) else None,
         meta=meta,
         raw_answer=raw_answer,
         debug_payload=row.get("debug_payload"),

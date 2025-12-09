@@ -123,6 +123,7 @@ class VerdictMeta(BaseModel):
     provider: Optional[str] = None
     profile: Optional[str] = None
     source: Optional[List[str]] = None  # ex: ["judge_route", "forecasts_llm"]
+    data_timestamps: Optional[Dict[str, Any]] = None
 
 
 # ---------- Verdict principal ----------
@@ -187,6 +188,9 @@ class JudgeVerdict(BaseModel):
     # Détail par phase + news attachées
     phases: Optional[Phases] = None
     attachments: List[NewsAttachment] = Field(default_factory=list)
+
+    # Analyse brute LLM structurée
+    analysis: Optional[Dict[str, Any]] = None
 
     # Métadonnées et debug
     meta: VerdictMeta

@@ -1,0 +1,1959 @@
+{
+  "ok": true,
+  "data": {
+    "verdicts": [
+      {
+        "ticker": "NVDA",
+        "horizon": "1w",
+        "direction": "up",
+        "expected_return": 0.0011468321623057907,
+        "expected_return_ensemble": 0.0011468321623057907,
+        "expected_return_raw": 0.0063,
+        "risk_level": "medium",
+        "confidence": 0.4,
+        "quant_confidence": 0.35,
+        "summary": [],
+        "scenarios": [],
+        "risks": [],
+        "impacts": {
+          "FX": null,
+          "rates": null,
+          "commodities": null,
+          "equity": null
+        },
+        "actions": [],
+        "phase_scores": {
+          "fundamental": 0.6,
+          "technical": 0.6085,
+          "macro": 0.475,
+          "sentiment": 0.74,
+          "fusion": 0.5611666666666667
+        },
+        "phase_scores_raw": {
+          "fundamental": 0.6,
+          "technical": 0.6085,
+          "macro": 0.475,
+          "sentiment": 0.74,
+          "fusion": 0.5611666666666667
+        },
+        "ml_prior": {
+          "pred_return": -0.008423336679126314,
+          "confidence": 0.35,
+          "horizon": "1w",
+          "source": "ml_baseline"
+        },
+        "data_needed": [],
+        "phases": {
+          "fundamental": {
+            "score": 0.6,
+            "summary": [
+              "PE=45.898262",
+              "rev_growth=0.625",
+              "margin=0.53007",
+              "beta=2.284"
+            ],
+            "details": {
+              "pe": 45.898262,
+              "revenueGrowth": 0.625,
+              "profitMargins": 0.53007,
+              "beta": 2.284,
+              "profile": {
+                "valuation": "very_expensive",
+                "growth_label": null,
+                "margin_label": "high_margin",
+                "beta_label": null,
+                "risk_profile": "balanced"
+              }
+            }
+          },
+          "technical": {
+            "score": 0.6085,
+            "summary": [
+              "rsi=54.34",
+              "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+            ],
+            "details": {
+              "rsi": 54.34,
+              "momentum_1m": null,
+              "momentum_3m": null,
+              "drawdown_3m": null,
+              "price_stats": {
+                "ret_1d": 0.018308328527997686,
+                "ret_5d": -0.023821045974419253,
+                "ret_1m": -0.022039062861608727,
+                "ret_3m": 0.0021745651184577053,
+                "ret_6m": 0.3444866037992975,
+                "vol_1m": 0.029545795803235252,
+                "vol_3m": 0.02372793793362208,
+                "max_drawdown_3m": -0.13601231315923934,
+                "price_vs_1y_high": 0.8798058572555861,
+                "price_vs_1y_low": 1.9316925090889085,
+                "trend_state_3m": "range"
+              }
+            }
+          },
+          "macro": {
+            "score": 0.475,
+            "summary": [
+              "vix=16.66",
+              "us10y=4.17",
+              "dxy=121.0615"
+            ],
+            "details": {
+              "vix": 16.66,
+              "us10y": 4.17,
+              "dxy": 121.0615,
+              "profile": {
+                "vix_level": "normal",
+                "vix_value": 16.66,
+                "us10y_trend": "stable",
+                "dxy_value": 121.0615
+              }
+            }
+          },
+          "sentiment": {
+            "score": 0.74,
+            "summary": [
+              "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+            ],
+            "details": {
+              "news_count": 5,
+              "positive": 5,
+              "negative": 0,
+              "neutral": 0,
+              "windows": {
+                "24h": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "3d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "7d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "30d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                }
+              },
+              "profile": {
+                "trend_7d_vs_30d": "stable",
+                "skew_7d": "mostly_positive",
+                "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+              },
+              "top_news_highlights": [
+                "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                "Why Trump's Nvidia–China announcement didn't move markets"
+              ],
+              "avg_score": 74.0
+            }
+          },
+          "fusion": {
+            "score": 0.5611666666666667,
+            "summary": [
+              "fusion_score=0.5611666666666667"
+            ],
+            "details": {}
+          }
+        },
+        "attachments": [],
+        "analysis": {
+          "error": "no_json",
+          "phase_scores": {},
+          "ml_prior": {
+            "pred_return": -0.008423336679126314,
+            "confidence": 0.35,
+            "horizon": "1w",
+            "source": "ml_baseline"
+          },
+          "confidence": 0.4,
+          "scenarios": []
+        },
+        "meta": {
+          "generated_at": "2025-12-09T23:46:21.482397+00:00",
+          "model_version": "codestral-2508",
+          "provider": "Codestral",
+          "profile": "equity_1w",
+          "source": [
+            "judge_route",
+            "forecasts_llm"
+          ],
+          "data_timestamps": {
+            "macro": "2025-09-01",
+            "price_live": "2025-12-09T15:30:00-05:00",
+            "news_last": "Tue, 09 Dec 2025 22:35:20 +0000"
+          }
+        },
+        "raw_answer": "{\"error\":\"no_json\"}",
+        "debug_payload": {
+          "question": "Analyze NVDA for 1-week horizon.\nFocus: Short-term momentum + news impact.\nKeep response under 500 tokens.\n NE RÉPONDS QUE PAR UNE SEULE LIGNE JSON STRICT qui commence par { et se termine par }.\nAUCUN TEXTE AVANT ou APRÈS.\nClés attendues : summary, scenarios, risks, impacts, actions, confidence, data_needed, phase_scores, ml_prior.\nExemple de structure : {\"summary\": [\"...\", \"...\"], \"scenarios\": [{\"name\": \"base\", \"p\": 60}], \"risks\": [\"...\"], \"impacts\": {\"FX\": [\"...\"], \"rates\": [\"...\"], \"commodities\": [\"...\"], \"equity\": [\"...\"]}, \"actions\": [\"...\"], \"confidence\": 0.0-1.0, \"data_needed\": [\"...\"], \"phase_scores\": {\"fundamental\": num, \"technical\": num, \"macro\": num, \"sentiment\": num, \"fusion\": num}, \"ml_prior\": {\"pred_return\": num, \"confidence\": num, \"horizon\": \"...\"}}\nUtilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores, ainsi que price_stats/price_profile, sentiment_windows/sentiment_profile, fundamentals_profile, macro_profile. Si une donnée manque, liste-la dans data_needed. SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}.",
+          "features": {
+            "ticker": "NVDA",
+            "direction": "up",
+            "expected_return": 0.0063,
+            "expected_return_ensemble": 0.0011468321623057907,
+            "confidence": 0.4,
+            "horizon": "1w",
+            "model": null,
+            "macro_brief": {
+              "summary": "Daily Market Brief",
+              "top_signals": [
+                {
+                  "ticker": "AAPL",
+                  "composite_score": 0.63375,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "NVDA",
+                  "composite_score": 0.6105125,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "SPY",
+                  "composite_score": 0.5940025,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                }
+              ],
+              "top_risks": [
+                {
+                  "ticker": "MSFT",
+                  "composite_score": -0.5688475000000001,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "SPY",
+                  "composite_score": -0.43215250000000005,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "MSFT",
+                  "composite_score": -0.4296825,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                }
+              ],
+              "market_sentiment": null
+            },
+            "forecasts_bullish": 4,
+            "forecasts_bearish": 0,
+            "forecasts_neutral": 4,
+            "brief_text": "Daily Market Brief | top_signals: AAPL, NVDA, SPY | top_risks: MSFT, SPY, MSFT",
+            "news_count": 5,
+            "tech": {
+              "source": "yfinance_live",
+              "rsi": 54.33876081234479,
+              "macd": {
+                "macd": -1.5141263480086025,
+                "signal": -1.9440278670930433,
+                "hist": 0.42990151908444085
+              },
+              "bollinger": {
+                "upper": 193.18813222943015,
+                "lower": 174.08552041949565,
+                "ma": 183.6368263244629,
+                "position": 0.5697901893994879
+              },
+              "sma20": 183.6368263244629,
+              "sma50": 187.2975930786133,
+              "last": 184.97000122070312,
+              "volume_live": 42282644.0,
+              "live_ts": "2025-12-09T15:30:00-05:00"
+            },
+            "macro": {
+              "vix": 16.66,
+              "vix_delta_1m": -0.1268343815513626,
+              "us10y": 4.17,
+              "us10y_delta_1m": 0.0,
+              "cpi_last": 324.368,
+              "cpi_delta_1m": 0.00310486015759336,
+              "cpi_last_date": "2025-09-01",
+              "dxy": 121.0615,
+              "dxy_delta_1m": -0.009370197681630938,
+              "dxy_series": "DTWEXBGS",
+              "wti": 59.47,
+              "wti_delta_1m": -0.029219719229513535,
+              "brent": 64.22,
+              "brent_delta_1m": -0.018643031784841058,
+              "gold": 4238.7998046875,
+              "gold_delta_1m": 0.0598589558907214
+            },
+            "sector": "Technology",
+            "industry": "Semiconductors",
+            "beta": 2.269,
+            "marketCap": 4503464574976,
+            "pe": 45.185646,
+            "avgVolume": 191231363,
+            "fundamentals": {
+              "sector": "Technology",
+              "industry": "Semiconductors",
+              "marketCap": 4503464574976,
+              "beta": 2.284,
+              "pe": 45.898262,
+              "avgVolume": 191231363,
+              "eps": 4.03,
+              "dividendYield": 0.02,
+              "nextEarningsDate": 1763586000,
+              "profitMargins": 0.53007,
+              "operatingMargins": 0.63168997,
+              "grossMargins": 0.7005,
+              "revenueGrowth": 0.625,
+              "ebitdaMargins": 0.60220003,
+              "bookValue": 4.892,
+              "priceToBook": 37.81071
+            },
+            "peer_signals": null,
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "ml_prior_pred": -0.008423336679126314,
+            "ml_prior_conf": 0.35,
+            "fundamentals_enriched": {
+              "source": "yfinance_live",
+              "pe_ratio": 45.898262,
+              "forward_pe": 44.895634,
+              "market_cap": 4503464574976,
+              "revenue": 187141996544,
+              "profit_margin": 0.53007,
+              "roe": 1.07359,
+              "debt_to_equity": 9.102,
+              "valuation_signal": "expensive"
+            },
+            "price_stats": {
+              "ret_1d": 0.018308328527997686,
+              "ret_5d": -0.023821045974419253,
+              "ret_1m": -0.022039062861608727,
+              "ret_3m": 0.0021745651184577053,
+              "ret_6m": 0.3444866037992975,
+              "vol_1m": 0.029545795803235252,
+              "vol_3m": 0.02372793793362208,
+              "max_drawdown_3m": -0.13601231315923934,
+              "price_vs_1y_high": 0.8798058572555861,
+              "price_vs_1y_low": 1.9316925090889085,
+              "trend_state_3m": "range"
+            },
+            "price_profile": {
+              "short_term": "Ret 5d=-2.4%, ret 1m=-2.2%",
+              "medium_term": "3m=0.2%, 6m=34.4%",
+              "long_term": "1y=n/a, vs 1y high=-12.0%"
+            },
+            "sentiment_windows": {
+              "24h": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "3d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "7d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "30d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              }
+            },
+            "sentiment_profile": {
+              "trend_7d_vs_30d": "stable",
+              "skew_7d": "mostly_positive",
+              "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+            },
+            "fundamentals_profile": {
+              "valuation": "very_expensive",
+              "growth_label": null,
+              "margin_label": "high_margin",
+              "beta_label": null,
+              "risk_profile": "balanced"
+            },
+            "macro_profile": {
+              "vix_level": "normal",
+              "vix_value": 16.66,
+              "us10y_trend": "stable",
+              "dxy_value": 121.0615
+            },
+            "phases": {
+              "fundamental": {
+                "score": 0.6,
+                "summary": [
+                  "PE=45.898262",
+                  "rev_growth=0.625",
+                  "margin=0.53007",
+                  "beta=2.284"
+                ],
+                "details": {
+                  "pe": 45.898262,
+                  "revenueGrowth": 0.625,
+                  "profitMargins": 0.53007,
+                  "beta": 2.284,
+                  "profile": {
+                    "valuation": "very_expensive",
+                    "growth_label": null,
+                    "margin_label": "high_margin",
+                    "beta_label": null,
+                    "risk_profile": "balanced"
+                  }
+                }
+              },
+              "technical": {
+                "score": 0.6085,
+                "summary": [
+                  "rsi=54.34",
+                  "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+                ],
+                "details": {
+                  "rsi": 54.34,
+                  "momentum_1m": null,
+                  "momentum_3m": null,
+                  "drawdown_3m": null,
+                  "price_stats": {
+                    "ret_1d": 0.018308328527997686,
+                    "ret_5d": -0.023821045974419253,
+                    "ret_1m": -0.022039062861608727,
+                    "ret_3m": 0.0021745651184577053,
+                    "ret_6m": 0.3444866037992975,
+                    "vol_1m": 0.029545795803235252,
+                    "vol_3m": 0.02372793793362208,
+                    "max_drawdown_3m": -0.13601231315923934,
+                    "price_vs_1y_high": 0.8798058572555861,
+                    "price_vs_1y_low": 1.9316925090889085,
+                    "trend_state_3m": "range"
+                  }
+                }
+              },
+              "macro": {
+                "score": 0.475,
+                "summary": [
+                  "vix=16.66",
+                  "us10y=4.17",
+                  "dxy=121.0615"
+                ],
+                "details": {
+                  "vix": 16.66,
+                  "us10y": 4.17,
+                  "dxy": 121.0615,
+                  "profile": {
+                    "vix_level": "normal",
+                    "vix_value": 16.66,
+                    "us10y_trend": "stable",
+                    "dxy_value": 121.0615
+                  }
+                }
+              },
+              "sentiment": {
+                "score": 0.74,
+                "summary": [
+                  "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                ],
+                "details": {
+                  "news_count": 5,
+                  "positive": 5,
+                  "negative": 0,
+                  "neutral": 0,
+                  "windows": {
+                    "24h": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "3d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "7d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "30d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    }
+                  },
+                  "profile": {
+                    "trend_7d_vs_30d": "stable",
+                    "skew_7d": "mostly_positive",
+                    "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                  },
+                  "top_news_highlights": [
+                    "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                    "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                    "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                    "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                    "Why Trump's Nvidia–China announcement didn't move markets"
+                  ],
+                  "avg_score": 74.0
+                }
+              },
+              "fusion": {
+                "score": 0.5611666666666667,
+                "summary": [
+                  "fusion_score=0.5611666666666667"
+                ]
+              }
+            }
+          },
+          "phases": {
+            "fundamental": {
+              "score": 0.6,
+              "summary": [
+                "PE=45.898262",
+                "rev_growth=0.625",
+                "margin=0.53007",
+                "beta=2.284"
+              ],
+              "details": {
+                "pe": 45.898262,
+                "revenueGrowth": 0.625,
+                "profitMargins": 0.53007,
+                "beta": 2.284,
+                "profile": {
+                  "valuation": "very_expensive",
+                  "growth_label": null,
+                  "margin_label": "high_margin",
+                  "beta_label": null,
+                  "risk_profile": "balanced"
+                }
+              }
+            },
+            "technical": {
+              "score": 0.6085,
+              "summary": [
+                "rsi=54.34",
+                "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+              ],
+              "details": {
+                "rsi": 54.34,
+                "momentum_1m": null,
+                "momentum_3m": null,
+                "drawdown_3m": null,
+                "price_stats": {
+                  "ret_1d": 0.018308328527997686,
+                  "ret_5d": -0.023821045974419253,
+                  "ret_1m": -0.022039062861608727,
+                  "ret_3m": 0.0021745651184577053,
+                  "ret_6m": 0.3444866037992975,
+                  "vol_1m": 0.029545795803235252,
+                  "vol_3m": 0.02372793793362208,
+                  "max_drawdown_3m": -0.13601231315923934,
+                  "price_vs_1y_high": 0.8798058572555861,
+                  "price_vs_1y_low": 1.9316925090889085,
+                  "trend_state_3m": "range"
+                }
+              }
+            },
+            "macro": {
+              "score": 0.475,
+              "summary": [
+                "vix=16.66",
+                "us10y=4.17",
+                "dxy=121.0615"
+              ],
+              "details": {
+                "vix": 16.66,
+                "us10y": 4.17,
+                "dxy": 121.0615,
+                "profile": {
+                  "vix_level": "normal",
+                  "vix_value": 16.66,
+                  "us10y_trend": "stable",
+                  "dxy_value": 121.0615
+                }
+              }
+            },
+            "sentiment": {
+              "score": 0.74,
+              "summary": [
+                "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+              ],
+              "details": {
+                "news_count": 5,
+                "positive": 5,
+                "negative": 0,
+                "neutral": 0,
+                "windows": {
+                  "24h": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "3d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "7d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "30d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  }
+                },
+                "profile": {
+                  "trend_7d_vs_30d": "stable",
+                  "skew_7d": "mostly_positive",
+                  "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                },
+                "top_news_highlights": [
+                  "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                  "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                  "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                  "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                  "Why Trump's Nvidia–China announcement didn't move markets"
+                ],
+                "avg_score": 74.0
+              }
+            },
+            "fusion": {
+              "score": 0.5611666666666667,
+              "summary": [
+                "fusion_score=0.5611666666666667"
+              ]
+            }
+          },
+          "news": [
+            {
+              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+              "summary": "",
+              "url": "",
+              "published_at": "2025-12-08T15:11:00Z",
+              "source": "Yahoo Finance - Markets",
+              "category": "markets",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:27.627705Z",
+              "ts": "2025-12-08T15:11:00Z"
+            },
+            {
+              "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+              "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:31:30 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 100,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.265808Z",
+              "ts": "Tue, 09 Dec 2025 21:31:30 +0000"
+            },
+            {
+              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 90.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA",
+                "TSLA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.264261Z",
+              "ts": "Tue, 09 Dec 2025 22:35:20 +0000"
+            },
+            {
+              "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+              "summary": "🔎 Nvidia (NVDA): President Trump said he would let Nvidia export its H200 chip to China, and the U.S. would receive a 25% cut. He said the government would take a similar approach to AMD (AMD) and Intel (INTC) exports.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 22:06:42 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.264730Z",
+              "ts": "Tue, 09 Dec 2025 22:06:42 +0000"
+            },
+            {
+              "title": "Why Trump's Nvidia–China announcement didn't move markets",
+              "summary": "President Trump announced on Monday that he has approved Nvidia (NVDA) selling H200 chips in China. Yahoo Finance Technology Editor Dan Howley joins Market Domination Overtime host Josh Lipton to explain the muted market (^DJI, ^GSPC, ^IXIC) reaction to the news. To watch more expert insights and an",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:33:13 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.265643Z",
+              "ts": "Tue, 09 Dec 2025 21:33:13 +0000"
+            }
+          ],
+          "attachments": [
+            {
+              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+              "sent": "positive",
+              "ts": "2025-12-08T15:11:00Z",
+              "source": "Yahoo Finance - Markets",
+              "summary": "",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:31:30 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
+              "tickers": [
+                "NVDA",
+                "TSLA"
+              ]
+            },
+            {
+              "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 22:06:42 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "🔎 Nvidia (NVDA): President Trump said he would let Nvidia export its H200 chip to China, and the U.S. would receive a 25% cut. He said the government would take a similar approach ",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Why Trump's Nvidia–China announcement didn't move markets",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:33:13 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "President Trump announced on Monday that he has approved Nvidia (NVDA) selling H200 chips in China. Yahoo Finance Technology Editor Dan Howley joins Market Domination Overtime host",
+              "tickers": [
+                "NVDA"
+              ]
+            }
+          ],
+          "locale": "fr-FR",
+          "meta": {
+            "source": "judge_route",
+            "ticker": "NVDA",
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "data_timestamps": {
+              "macro": "2025-09-01"
+            }
+          }
+        },
+        "debug_llm_res": {
+          "ok": true,
+          "answer": "{\"error\":\"no_json\"}",
+          "model": "codestral-2508",
+          "provider": "Codestral",
+          "usage": {
+            "prompt_tokens": 2299,
+            "total_tokens": 2306,
+            "completion_tokens": 7
+          },
+          "raw": {
+            "id": "308f8fffaa7149bda443430a0fe6078f",
+            "created": 1765323981,
+            "model": "codestral-2508",
+            "usage": {
+              "prompt_tokens": 2299,
+              "total_tokens": 2306,
+              "completion_tokens": 7
+            },
+            "object": "chat.completion",
+            "choices": [
+              {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {
+                  "role": "assistant",
+                  "tool_calls": null,
+                  "content": "{\"error\":\"no_json\"}"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "count": 1,
+    "stats": {
+      "total_verdicts": 1,
+      "high_confidence_count": 0,
+      "avg_confidence": 0.4,
+      "generated_at": "2025-12-09T23:46:21.483521Z"
+    },
+    "filters_applied": {
+      "min_confidence": 0.3,
+      "tickers": null,
+      "sort_by": "confidence",
+      "sort_order": "desc",
+      "limit": 1
+    },
+    "generated_at": "2025-12-09T23:46:21.483521Z",
+    "source": [
+      "judge_route",
+      "forecasts_llm"
+    ],
+    "debug_pipeline": [
+      {
+        "timestamp": "2025-12-09T23:46:18.258304Z",
+        "event": "debug_start",
+        "limit": 1,
+        "profile": "equity_1w"
+      },
+      {
+        "timestamp": "2025-12-09T23:46:18.258354Z",
+        "event": "data_load_start"
+      },
+      {
+        "timestamp": "2025-12-09T23:46:18.262585Z",
+        "event": "data_loaded",
+        "forecasts": 8,
+        "news_count": 100
+      },
+      {
+        "timestamp": "2025-12-09T23:46:18.273059Z",
+        "event": "row_start",
+        "ticker": "NVDA"
+      },
+      {
+        "timestamp": "2025-12-09T23:46:18.892126Z",
+        "event": "ml_prior",
+        "ticker": "NVDA",
+        "pred": -0.008423336679126314,
+        "conf": 0.35,
+        "error": null
+      },
+      {
+        "timestamp": "2025-12-09T23:46:18.892165Z",
+        "event": "ensemble",
+        "ticker": "NVDA",
+        "expected_return_raw": 0.0063,
+        "ml_prior_pred": -0.008423336679126314,
+        "weight_ml": 0.35,
+        "expected_return_ensemble": 0.0011468321623057907
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.014993Z",
+        "event": "phases_built",
+        "ticker": "NVDA",
+        "duration_ms": 0.14266697689890862,
+        "phases": [
+          "fundamental",
+          "technical",
+          "macro",
+          "sentiment",
+          "fusion"
+        ]
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015009Z",
+        "event": "phase_done",
+        "ticker": "NVDA",
+        "phase": "fundamental",
+        "score": 0.6
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015015Z",
+        "event": "phase_done",
+        "ticker": "NVDA",
+        "phase": "technical",
+        "score": 0.6085
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015020Z",
+        "event": "phase_done",
+        "ticker": "NVDA",
+        "phase": "macro",
+        "score": 0.475
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015025Z",
+        "event": "phase_done",
+        "ticker": "NVDA",
+        "phase": "sentiment",
+        "score": null
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015030Z",
+        "event": "phase_done",
+        "ticker": "NVDA",
+        "phase": "fusion",
+        "score": 0.5611666666666667
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015038Z",
+        "event": "phases_state",
+        "ticker": "NVDA",
+        "scores": {
+          "fundamental": 0.6,
+          "technical": 0.6085,
+          "macro": 0.475,
+          "sentiment": null,
+          "fusion": 0.5611666666666667
+        }
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015051Z",
+        "event": "phase_inputs",
+        "ticker": "NVDA",
+        "tech_keys": [
+          "source",
+          "rsi",
+          "macd",
+          "bollinger",
+          "sma20",
+          "sma50",
+          "last",
+          "volume_live",
+          "live_ts"
+        ],
+        "fund_keys": [
+          "sector",
+          "industry",
+          "marketCap",
+          "beta",
+          "pe",
+          "avgVolume",
+          "eps",
+          "dividendYield",
+          "nextEarningsDate",
+          "profitMargins",
+          "operatingMargins",
+          "grossMargins",
+          "revenueGrowth",
+          "ebitdaMargins",
+          "bookValue",
+          "priceToBook"
+        ],
+        "macro_keys": [
+          "vix",
+          "vix_delta_1m",
+          "us10y",
+          "us10y_delta_1m",
+          "cpi_last",
+          "cpi_delta_1m",
+          "cpi_last_date",
+          "dxy",
+          "dxy_delta_1m",
+          "dxy_series",
+          "wti",
+          "wti_delta_1m",
+          "brent",
+          "brent_delta_1m",
+          "gold",
+          "gold_delta_1m"
+        ],
+        "news_count": 5
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.015062Z",
+        "event": "phase_outputs",
+        "ticker": "NVDA",
+        "phases_summary": {
+          "fundamental": {
+            "score": 0.6,
+            "summary_len": 4
+          },
+          "technical": {
+            "score": 0.6085,
+            "summary_len": 1
+          },
+          "macro": {
+            "score": 0.475,
+            "summary_len": 3
+          },
+          "sentiment": {
+            "score": null,
+            "summary_len": 0
+          },
+          "fusion": {
+            "score": 0.5611666666666667,
+            "summary_len": 1
+          }
+        }
+      },
+      {
+        "timestamp": "2025-12-09T23:46:20.016091Z",
+        "event": "payload_ready",
+        "ticker": "NVDA",
+        "phases": [
+          "fundamental",
+          "technical",
+          "macro",
+          "sentiment",
+          "fusion"
+        ],
+        "news": 5
+      },
+      {
+        "timestamp": "2025-12-09T23:46:21.482227Z",
+        "event": "llm_call",
+        "ticker": "NVDA",
+        "ok": true,
+        "model": "codestral-2508",
+        "provider": "Codestral",
+        "parsed_ok": false,
+        "fallback": null,
+        "llm_ms": 535.1037080399692
+      },
+      {
+        "timestamp": "2025-12-09T23:46:21.482274Z",
+        "event": "row_done",
+        "ticker": "NVDA",
+        "total_ms": 3209.175958065316,
+        "confidence": 0.4,
+        "expected_return": 0.0011468321623057907
+      }
+    ],
+    "verdicts_raw": [
+      {
+        "ticker": "NVDA",
+        "verdict": "{\"error\":\"no_json\"}",
+        "confidence": 0.4,
+        "expected_return": 0.0011468321623057907,
+        "expected_return_raw": 0.0063,
+        "expected_return_ensemble": 0.0011468321623057907,
+        "risk_level": "medium",
+        "reasoning": null,
+        "analysis": {
+          "error": "no_json",
+          "phase_scores": {},
+          "ml_prior": {
+            "pred_return": -0.008423336679126314,
+            "confidence": 0.35,
+            "horizon": "1w",
+            "source": "ml_baseline"
+          },
+          "confidence": 0.4,
+          "scenarios": []
+        },
+        "phases": {
+          "fundamental": {
+            "score": 0.6,
+            "summary": [
+              "PE=45.898262",
+              "rev_growth=0.625",
+              "margin=0.53007",
+              "beta=2.284"
+            ],
+            "details": {
+              "pe": 45.898262,
+              "revenueGrowth": 0.625,
+              "profitMargins": 0.53007,
+              "beta": 2.284,
+              "profile": {
+                "valuation": "very_expensive",
+                "growth_label": null,
+                "margin_label": "high_margin",
+                "beta_label": null,
+                "risk_profile": "balanced"
+              }
+            }
+          },
+          "technical": {
+            "score": 0.6085,
+            "summary": [
+              "rsi=54.34",
+              "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+            ],
+            "details": {
+              "rsi": 54.34,
+              "momentum_1m": null,
+              "momentum_3m": null,
+              "drawdown_3m": null,
+              "price_stats": {
+                "ret_1d": 0.018308328527997686,
+                "ret_5d": -0.023821045974419253,
+                "ret_1m": -0.022039062861608727,
+                "ret_3m": 0.0021745651184577053,
+                "ret_6m": 0.3444866037992975,
+                "vol_1m": 0.029545795803235252,
+                "vol_3m": 0.02372793793362208,
+                "max_drawdown_3m": -0.13601231315923934,
+                "price_vs_1y_high": 0.8798058572555861,
+                "price_vs_1y_low": 1.9316925090889085,
+                "trend_state_3m": "range"
+              }
+            }
+          },
+          "macro": {
+            "score": 0.475,
+            "summary": [
+              "vix=16.66",
+              "us10y=4.17",
+              "dxy=121.0615"
+            ],
+            "details": {
+              "vix": 16.66,
+              "us10y": 4.17,
+              "dxy": 121.0615,
+              "profile": {
+                "vix_level": "normal",
+                "vix_value": 16.66,
+                "us10y_trend": "stable",
+                "dxy_value": 121.0615
+              }
+            }
+          },
+          "sentiment": {
+            "score": 0.74,
+            "summary": [
+              "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+            ],
+            "details": {
+              "news_count": 5,
+              "positive": 5,
+              "negative": 0,
+              "neutral": 0,
+              "windows": {
+                "24h": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "3d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "7d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                },
+                "30d": {
+                  "avg": 74.0,
+                  "count": 5,
+                  "pos": 5,
+                  "neg": 0,
+                  "neu": 0
+                }
+              },
+              "profile": {
+                "trend_7d_vs_30d": "stable",
+                "skew_7d": "mostly_positive",
+                "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+              },
+              "top_news_highlights": [
+                "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                "Why Trump's Nvidia–China announcement didn't move markets"
+              ],
+              "avg_score": 74.0
+            }
+          },
+          "fusion": {
+            "score": 0.5611666666666667,
+            "summary": [
+              "fusion_score=0.5611666666666667"
+            ]
+          }
+        },
+        "phase_scores_raw": {
+          "fundamental": 0.6,
+          "technical": 0.6085,
+          "macro": 0.475,
+          "sentiment": 0.74,
+          "fusion": 0.5611666666666667
+        },
+        "phase_scores": {
+          "fundamental": 0.6,
+          "technical": 0.6085,
+          "macro": 0.475,
+          "sentiment": 0.74,
+          "fusion": 0.5611666666666667
+        },
+        "ml_prior": {
+          "pred_return": -0.008423336679126314,
+          "confidence": 0.35,
+          "horizon": "1w",
+          "source": "ml_baseline"
+        },
+        "raw_answer": "{\"error\":\"no_json\"}",
+        "generated_at": "2025-12-09T23:46:21.482397Z",
+        "model_version": "codestral-2508",
+        "source": [
+          "judge_route",
+          "forecasts_llm"
+        ],
+        "meta": {
+          "data_timestamps": {
+            "macro": "2025-09-01",
+            "price_live": "2025-12-09T15:30:00-05:00",
+            "news_last": "Tue, 09 Dec 2025 22:35:20 +0000"
+          }
+        },
+        "debug_payload": {
+          "question": "Analyze NVDA for 1-week horizon.\nFocus: Short-term momentum + news impact.\nKeep response under 500 tokens.\n NE RÉPONDS QUE PAR UNE SEULE LIGNE JSON STRICT qui commence par { et se termine par }.\nAUCUN TEXTE AVANT ou APRÈS.\nClés attendues : summary, scenarios, risks, impacts, actions, confidence, data_needed, phase_scores, ml_prior.\nExemple de structure : {\"summary\": [\"...\", \"...\"], \"scenarios\": [{\"name\": \"base\", \"p\": 60}], \"risks\": [\"...\"], \"impacts\": {\"FX\": [\"...\"], \"rates\": [\"...\"], \"commodities\": [\"...\"], \"equity\": [\"...\"]}, \"actions\": [\"...\"], \"confidence\": 0.0-1.0, \"data_needed\": [\"...\"], \"phase_scores\": {\"fundamental\": num, \"technical\": num, \"macro\": num, \"sentiment\": num, \"fusion\": num}, \"ml_prior\": {\"pred_return\": num, \"confidence\": num, \"horizon\": \"...\"}}\nUtilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores, ainsi que price_stats/price_profile, sentiment_windows/sentiment_profile, fundamentals_profile, macro_profile. Si une donnée manque, liste-la dans data_needed. SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}.",
+          "features": {
+            "ticker": "NVDA",
+            "direction": "up",
+            "expected_return": 0.0063,
+            "expected_return_ensemble": 0.0011468321623057907,
+            "confidence": 0.4,
+            "horizon": "1w",
+            "model": null,
+            "macro_brief": {
+              "summary": "Daily Market Brief",
+              "top_signals": [
+                {
+                  "ticker": "AAPL",
+                  "composite_score": 0.63375,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "NVDA",
+                  "composite_score": 0.6105125,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "SPY",
+                  "composite_score": 0.5940025,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Signal composite",
+                  "confidence": 1.0
+                }
+              ],
+              "top_risks": [
+                {
+                  "ticker": "MSFT",
+                  "composite_score": -0.5688475000000001,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "SPY",
+                  "composite_score": -0.43215250000000005,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                },
+                {
+                  "ticker": "MSFT",
+                  "composite_score": -0.4296825,
+                  "macro_score": 50.0,
+                  "technical_score": 50.0,
+                  "news_score": 50.0,
+                  "reason": "Risk composite",
+                  "confidence": 1.0
+                }
+              ],
+              "market_sentiment": null
+            },
+            "forecasts_bullish": 4,
+            "forecasts_bearish": 0,
+            "forecasts_neutral": 4,
+            "brief_text": "Daily Market Brief | top_signals: AAPL, NVDA, SPY | top_risks: MSFT, SPY, MSFT",
+            "news_count": 5,
+            "tech": {
+              "source": "yfinance_live",
+              "rsi": 54.33876081234479,
+              "macd": {
+                "macd": -1.5141263480086025,
+                "signal": -1.9440278670930433,
+                "hist": 0.42990151908444085
+              },
+              "bollinger": {
+                "upper": 193.18813222943015,
+                "lower": 174.08552041949565,
+                "ma": 183.6368263244629,
+                "position": 0.5697901893994879
+              },
+              "sma20": 183.6368263244629,
+              "sma50": 187.2975930786133,
+              "last": 184.97000122070312,
+              "volume_live": 42282644.0,
+              "live_ts": "2025-12-09T15:30:00-05:00"
+            },
+            "macro": {
+              "vix": 16.66,
+              "vix_delta_1m": -0.1268343815513626,
+              "us10y": 4.17,
+              "us10y_delta_1m": 0.0,
+              "cpi_last": 324.368,
+              "cpi_delta_1m": 0.00310486015759336,
+              "cpi_last_date": "2025-09-01",
+              "dxy": 121.0615,
+              "dxy_delta_1m": -0.009370197681630938,
+              "dxy_series": "DTWEXBGS",
+              "wti": 59.47,
+              "wti_delta_1m": -0.029219719229513535,
+              "brent": 64.22,
+              "brent_delta_1m": -0.018643031784841058,
+              "gold": 4238.7998046875,
+              "gold_delta_1m": 0.0598589558907214
+            },
+            "sector": "Technology",
+            "industry": "Semiconductors",
+            "beta": 2.269,
+            "marketCap": 4503464574976,
+            "pe": 45.185646,
+            "avgVolume": 191231363,
+            "fundamentals": {
+              "sector": "Technology",
+              "industry": "Semiconductors",
+              "marketCap": 4503464574976,
+              "beta": 2.284,
+              "pe": 45.898262,
+              "avgVolume": 191231363,
+              "eps": 4.03,
+              "dividendYield": 0.02,
+              "nextEarningsDate": 1763586000,
+              "profitMargins": 0.53007,
+              "operatingMargins": 0.63168997,
+              "grossMargins": 0.7005,
+              "revenueGrowth": 0.625,
+              "ebitdaMargins": 0.60220003,
+              "bookValue": 4.892,
+              "priceToBook": 37.81071
+            },
+            "peer_signals": null,
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "ml_prior_pred": -0.008423336679126314,
+            "ml_prior_conf": 0.35,
+            "fundamentals_enriched": {
+              "source": "yfinance_live",
+              "pe_ratio": 45.898262,
+              "forward_pe": 44.895634,
+              "market_cap": 4503464574976,
+              "revenue": 187141996544,
+              "profit_margin": 0.53007,
+              "roe": 1.07359,
+              "debt_to_equity": 9.102,
+              "valuation_signal": "expensive"
+            },
+            "price_stats": {
+              "ret_1d": 0.018308328527997686,
+              "ret_5d": -0.023821045974419253,
+              "ret_1m": -0.022039062861608727,
+              "ret_3m": 0.0021745651184577053,
+              "ret_6m": 0.3444866037992975,
+              "vol_1m": 0.029545795803235252,
+              "vol_3m": 0.02372793793362208,
+              "max_drawdown_3m": -0.13601231315923934,
+              "price_vs_1y_high": 0.8798058572555861,
+              "price_vs_1y_low": 1.9316925090889085,
+              "trend_state_3m": "range"
+            },
+            "price_profile": {
+              "short_term": "Ret 5d=-2.4%, ret 1m=-2.2%",
+              "medium_term": "3m=0.2%, 6m=34.4%",
+              "long_term": "1y=n/a, vs 1y high=-12.0%"
+            },
+            "sentiment_windows": {
+              "24h": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "3d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "7d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              },
+              "30d": {
+                "avg": 74.0,
+                "count": 5,
+                "pos": 5,
+                "neg": 0,
+                "neu": 0
+              }
+            },
+            "sentiment_profile": {
+              "trend_7d_vs_30d": "stable",
+              "skew_7d": "mostly_positive",
+              "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+            },
+            "fundamentals_profile": {
+              "valuation": "very_expensive",
+              "growth_label": null,
+              "margin_label": "high_margin",
+              "beta_label": null,
+              "risk_profile": "balanced"
+            },
+            "macro_profile": {
+              "vix_level": "normal",
+              "vix_value": 16.66,
+              "us10y_trend": "stable",
+              "dxy_value": 121.0615
+            },
+            "phases": {
+              "fundamental": {
+                "score": 0.6,
+                "summary": [
+                  "PE=45.898262",
+                  "rev_growth=0.625",
+                  "margin=0.53007",
+                  "beta=2.284"
+                ],
+                "details": {
+                  "pe": 45.898262,
+                  "revenueGrowth": 0.625,
+                  "profitMargins": 0.53007,
+                  "beta": 2.284,
+                  "profile": {
+                    "valuation": "very_expensive",
+                    "growth_label": null,
+                    "margin_label": "high_margin",
+                    "beta_label": null,
+                    "risk_profile": "balanced"
+                  }
+                }
+              },
+              "technical": {
+                "score": 0.6085,
+                "summary": [
+                  "rsi=54.34",
+                  "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+                ],
+                "details": {
+                  "rsi": 54.34,
+                  "momentum_1m": null,
+                  "momentum_3m": null,
+                  "drawdown_3m": null,
+                  "price_stats": {
+                    "ret_1d": 0.018308328527997686,
+                    "ret_5d": -0.023821045974419253,
+                    "ret_1m": -0.022039062861608727,
+                    "ret_3m": 0.0021745651184577053,
+                    "ret_6m": 0.3444866037992975,
+                    "vol_1m": 0.029545795803235252,
+                    "vol_3m": 0.02372793793362208,
+                    "max_drawdown_3m": -0.13601231315923934,
+                    "price_vs_1y_high": 0.8798058572555861,
+                    "price_vs_1y_low": 1.9316925090889085,
+                    "trend_state_3m": "range"
+                  }
+                }
+              },
+              "macro": {
+                "score": 0.475,
+                "summary": [
+                  "vix=16.66",
+                  "us10y=4.17",
+                  "dxy=121.0615"
+                ],
+                "details": {
+                  "vix": 16.66,
+                  "us10y": 4.17,
+                  "dxy": 121.0615,
+                  "profile": {
+                    "vix_level": "normal",
+                    "vix_value": 16.66,
+                    "us10y_trend": "stable",
+                    "dxy_value": 121.0615
+                  }
+                }
+              },
+              "sentiment": {
+                "score": 0.74,
+                "summary": [
+                  "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                ],
+                "details": {
+                  "news_count": 5,
+                  "positive": 5,
+                  "negative": 0,
+                  "neutral": 0,
+                  "windows": {
+                    "24h": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "3d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "7d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    },
+                    "30d": {
+                      "avg": 74.0,
+                      "count": 5,
+                      "pos": 5,
+                      "neg": 0,
+                      "neu": 0
+                    }
+                  },
+                  "profile": {
+                    "trend_7d_vs_30d": "stable",
+                    "skew_7d": "mostly_positive",
+                    "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                  },
+                  "top_news_highlights": [
+                    "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                    "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                    "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                    "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                    "Why Trump's Nvidia–China announcement didn't move markets"
+                  ],
+                  "avg_score": 74.0
+                }
+              },
+              "fusion": {
+                "score": 0.5611666666666667,
+                "summary": [
+                  "fusion_score=0.5611666666666667"
+                ]
+              }
+            }
+          },
+          "phases": {
+            "fundamental": {
+              "score": 0.6,
+              "summary": [
+                "PE=45.898262",
+                "rev_growth=0.625",
+                "margin=0.53007",
+                "beta=2.284"
+              ],
+              "details": {
+                "pe": 45.898262,
+                "revenueGrowth": 0.625,
+                "profitMargins": 0.53007,
+                "beta": 2.284,
+                "profile": {
+                  "valuation": "very_expensive",
+                  "growth_label": null,
+                  "margin_label": "high_margin",
+                  "beta_label": null,
+                  "risk_profile": "balanced"
+                }
+              }
+            },
+            "technical": {
+              "score": 0.6085,
+              "summary": [
+                "rsi=54.34",
+                "Ret 5d=-2.4%, ret 1m=-2.2% | 3m=0.2%, 6m=34.4% | 1y=n/a, vs 1y high=-12.0%"
+              ],
+              "details": {
+                "rsi": 54.34,
+                "momentum_1m": null,
+                "momentum_3m": null,
+                "drawdown_3m": null,
+                "price_stats": {
+                  "ret_1d": 0.018308328527997686,
+                  "ret_5d": -0.023821045974419253,
+                  "ret_1m": -0.022039062861608727,
+                  "ret_3m": 0.0021745651184577053,
+                  "ret_6m": 0.3444866037992975,
+                  "vol_1m": 0.029545795803235252,
+                  "vol_3m": 0.02372793793362208,
+                  "max_drawdown_3m": -0.13601231315923934,
+                  "price_vs_1y_high": 0.8798058572555861,
+                  "price_vs_1y_low": 1.9316925090889085,
+                  "trend_state_3m": "range"
+                }
+              }
+            },
+            "macro": {
+              "score": 0.475,
+              "summary": [
+                "vix=16.66",
+                "us10y=4.17",
+                "dxy=121.0615"
+              ],
+              "details": {
+                "vix": 16.66,
+                "us10y": 4.17,
+                "dxy": 121.0615,
+                "profile": {
+                  "vix_level": "normal",
+                  "vix_value": 16.66,
+                  "us10y_trend": "stable",
+                  "dxy_value": 121.0615
+                }
+              }
+            },
+            "sentiment": {
+              "score": 0.74,
+              "summary": [
+                "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+              ],
+              "details": {
+                "news_count": 5,
+                "positive": 5,
+                "negative": 0,
+                "neutral": 0,
+                "windows": {
+                  "24h": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "3d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "7d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  },
+                  "30d": {
+                    "avg": 74.0,
+                    "count": 5,
+                    "pos": 5,
+                    "neg": 0,
+                    "neu": 0
+                  }
+                },
+                "profile": {
+                  "trend_7d_vs_30d": "stable",
+                  "skew_7d": "mostly_positive",
+                  "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                },
+                "top_news_highlights": [
+                  "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+                  "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+                  "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                  "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+                  "Why Trump's Nvidia–China announcement didn't move markets"
+                ],
+                "avg_score": 74.0
+              }
+            },
+            "fusion": {
+              "score": 0.5611666666666667,
+              "summary": [
+                "fusion_score=0.5611666666666667"
+              ]
+            }
+          },
+          "news": [
+            {
+              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+              "summary": "",
+              "url": "",
+              "published_at": "2025-12-08T15:11:00Z",
+              "source": "Yahoo Finance - Markets",
+              "category": "markets",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:27.627705Z",
+              "ts": "2025-12-08T15:11:00Z"
+            },
+            {
+              "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+              "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:31:30 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 100,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.265808Z",
+              "ts": "Tue, 09 Dec 2025 21:31:30 +0000"
+            },
+            {
+              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 90.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA",
+                "TSLA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.264261Z",
+              "ts": "Tue, 09 Dec 2025 22:35:20 +0000"
+            },
+            {
+              "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+              "summary": "🔎 Nvidia (NVDA): President Trump said he would let Nvidia export its H200 chip to China, and the U.S. would receive a 25% cut. He said the government would take a similar approach to AMD (AMD) and Intel (INTC) exports.",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 22:06:42 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.264730Z",
+              "ts": "Tue, 09 Dec 2025 22:06:42 +0000"
+            },
+            {
+              "title": "Why Trump's Nvidia–China announcement didn't move markets",
+              "summary": "President Trump announced on Monday that he has approved Nvidia (NVDA) selling H200 chips in China. Yahoo Finance Technology Editor Dan Howley joins Market Domination Overtime host Josh Lipton to explain the muted market (^DJI, ^GSPC, ^IXIC) reaction to the news. To watch more expert insights and an",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:33:13 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-09T23:39:28.265643Z",
+              "ts": "Tue, 09 Dec 2025 21:33:13 +0000"
+            }
+          ],
+          "attachments": [
+            {
+              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
+              "sent": "positive",
+              "ts": "2025-12-08T15:11:00Z",
+              "source": "Yahoo Finance - Markets",
+              "summary": "",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:31:30 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
+              "tickers": [
+                "NVDA",
+                "TSLA"
+              ]
+            },
+            {
+              "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 22:06:42 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "🔎 Nvidia (NVDA): President Trump said he would let Nvidia export its H200 chip to China, and the U.S. would receive a 25% cut. He said the government would take a similar approach ",
+              "tickers": [
+                "NVDA"
+              ]
+            },
+            {
+              "title": "Why Trump's Nvidia–China announcement didn't move markets",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:33:13 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "President Trump announced on Monday that he has approved Nvidia (NVDA) selling H200 chips in China. Yahoo Finance Technology Editor Dan Howley joins Market Domination Overtime host",
+              "tickers": [
+                "NVDA"
+              ]
+            }
+          ],
+          "locale": "fr-FR",
+          "meta": {
+            "source": "judge_route",
+            "ticker": "NVDA",
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "data_timestamps": {
+              "macro": "2025-09-01"
+            }
+          }
+        },
+        "debug_llm_res": {
+          "ok": true,
+          "answer": "{\"error\":\"no_json\"}",
+          "model": "codestral-2508",
+          "provider": "Codestral",
+          "usage": {
+            "prompt_tokens": 2299,
+            "total_tokens": 2306,
+            "completion_tokens": 7
+          },
+          "raw": {
+            "id": "308f8fffaa7149bda443430a0fe6078f",
+            "created": 1765323981,
+            "model": "codestral-2508",
+            "usage": {
+              "prompt_tokens": 2299,
+              "total_tokens": 2306,
+              "completion_tokens": 7
+            },
+            "object": "chat.completion",
+            "choices": [
+              {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {
+                  "role": "assistant",
+                  "tool_calls": null,
+                  "content": "{\"error\":\"no_json\"}"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "freshness": "2025-12-09T23:46:21.483521Z"
+}
