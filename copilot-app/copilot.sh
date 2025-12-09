@@ -110,10 +110,51 @@ refresh_live_data() {
     log_success "Rafraîchissement des données terminé."
 }
 
+# Tester les modèles G4F (écrit tested_g4f_models*.json)
+run_g4f_tests() {
+    log "Test des modèles G4F..."
+    cd "$BACKEND_DIR"
+
+    PY=""
+    if [ -x ".venv/bin/python3" ]; then
+        PY=".venv/bin/python3"
+    elif command -v python3 >/dev/null 2>&1; then
+        PY="$(command -v python3)"
+    elif command -v python >/dev/null 2>&1; then
+        PY="$(command -v python)"
+    else
+        log_warning "⚠️  Python introuvable (python3/python). Skip G4F tests."
+        return
+    fi
+
+    export PYTHONPATH="$BACKEND_DIR/src:$BACKEND_DIR"
+
+    if [ ! -f "scripts/test_g4f_models.py" ]; then
+        log_warning "⚠️  scripts/test_g4f_models.py introuvable, skip G4F tests."
+        return
+    fi
+
+    # Ne pas casser le start en cas d'échec
+    set +e
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 120 "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
+    else
+        "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
+    fi
+    rc=$?
+    set -e
+
+    if [ $rc -ne 0 ]; then
+        log_warning "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
+    else
+        log_success "✅ Tests G4F terminés. Résultats dans src/tested_g4f_models*.json et /tmp/g4f_test.log"
+    fi
+}
+
 # Démarrer le backend
 start_backend() {
     log "Démarrage du backend..."
-    
+
     cd "$BACKEND_DIR"
     # Charger l'environnement (.env backend et racine) pour propager les API keys (OpenRouter, DeepInfra, etc.)
     if [ -f ".env" ]; then
@@ -248,6 +289,9 @@ start() {
 
     # Rafraîchir les données live critiques (synchrones, pas de mock)
     refresh_live_data
+
+    # Tester les modèles G4F (écrit la shortlist pour le runtime)
+    run_g4f_tests
     
     # Démarrer les services
     start_backend

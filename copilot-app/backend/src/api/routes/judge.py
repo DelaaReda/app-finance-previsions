@@ -83,6 +83,22 @@ except Exception:
     validate_llm_response = None
     log_metrics = None
 
+# Codestral fallback client
+try:
+    from services.codestral_client import call_codestral  # type: ignore
+except Exception:
+    call_codestral = None
+# G4F fallback client
+try:
+    from services.g4f_client import call_g4f  # type: ignore
+except Exception:
+    call_g4f = None
+# Groq (Grok) client (utilisé aussi comme réparateur)
+try:
+    from services.groq_client import call_groq  # type: ignore
+except Exception:
+    call_groq = None
+
 logger = logging.getLogger(__name__)
 
 JUDGE_VERSION = "v3"
@@ -121,6 +137,7 @@ async def get_judge_verdicts(
     ),
     sort_order: Optional[str] = Query("desc", description="Ordre de tri: asc, desc"),
     profile: str = Query("equity_1w", description="Judge profile: equity_1w, sector_regime, etc"),
+    debug: bool = Query(False, description="Active les traces et le payload LLM dans la réponse"),
 ):
     """Get LLM judge verdicts for tickers (never-empty, cached). Supports multiple profiles."""
     logger.info(f"🔍 /api/judge called: limit={limit}, profile={profile}, ticker={ticker}")
@@ -128,6 +145,22 @@ async def get_judge_verdicts(
 
         async def compute_judge_verdicts():
             logger.info("🔄 compute_judge_verdicts started")
+            traces = []
+
+            def add_trace(event: str, **kwargs):
+                try:
+                    traces.append(
+                        {
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "event": event,
+                            **kwargs,
+                        }
+                    )
+                except Exception:
+                    pass
+
+            if debug:
+                add_trace("debug_start", limit=limit, profile=profile)
             if _LLM_IMPORT_ERROR or not EconomicAnalyst or not EconomicInput:
                 logger.error(f"❌ LLM import error: {_LLM_IMPORT_ERROR}")
                 raise HTTPException(
@@ -137,6 +170,8 @@ async def get_judge_verdicts(
 
             # Base data (forecasts + news + macro/brief snapshot)
             logger.info("📊 Loading data...")
+            if debug:
+                add_trace("data_load_start")
             forecasts = load_json("forecasts") or {}
             news_feed = load_json("news_feed") or {}
             brief_daily = load_json("brief_daily") or load_json("brief_weekly") or {}
@@ -189,6 +224,30 @@ async def get_judge_verdicts(
                     return json.loads(ownership_path.read_text())
                 except Exception:
                     return {}
+
+            # Counts for debug visibility
+            def _forecasts_count():
+                rows_local = (
+                    forecasts.get("rows")
+                    or forecasts.get("data", {}).get("rows", [])
+                    or []
+                )
+                return len(rows_local)
+
+            def _news_count():
+                articles_local = (
+                    news_feed.get("articles")
+                    or news_feed.get("data", {}).get("articles", [])
+                    or []
+                )
+                return len(articles_local)
+
+            if debug:
+                add_trace(
+                    "data_loaded",
+                    forecasts=_forecasts_count(),
+                    news_count=_news_count(),
+                )
 
             prices_data = _load_prices()
             macro_series = _load_macro()
@@ -544,7 +603,26 @@ async def get_judge_verdicts(
                 return " | ".join(parts)
 
             def _parse_analysis(answer: str) -> Dict[str, Any]:
-                """Parse LLM answer: use external parser if dispo, sinon JSON sur la dernière ligne."""
+                """Parse LLM answer: use external parser if dispo, sinon JSON le plus probable."""
+                def _extract_json_block(text: str) -> Optional[str]:
+                    """Retourne le plus grand bloc {...} équilibré trouvé dans le texte."""
+                    best = None
+                    depth = 0
+                    start_idx = None
+                    for i, ch in enumerate(text):
+                        if ch == "{":
+                            if depth == 0:
+                                start_idx = i
+                            depth += 1
+                        elif ch == "}":
+                            depth = max(0, depth - 1)
+                            if depth == 0 and start_idx is not None:
+                                cand = text[start_idx : i + 1]
+                                if not best or len(cand) > len(best):
+                                    best = cand
+                                start_idx = None
+                    return best
+
                 if not answer:
                     return {}
                 # 1) parser dédié si dispo
@@ -557,15 +635,23 @@ async def get_judge_verdicts(
                         pass
                 # 2) fallback: dernière ligne JSON
                 lines = [l.strip() for l in answer.strip().splitlines() if l.strip()]
-                if not lines:
-                    return {}
-                last_line = lines[-1]
-                try:
-                    data = json.loads(last_line)
-                    if isinstance(data, dict):
-                        return data
-                except Exception:
-                    pass
+                if lines:
+                    last_line = lines[-1]
+                    try:
+                        data = json.loads(last_line)
+                        if isinstance(data, dict):
+                            return data
+                    except Exception:
+                        pass
+                # 3) bloc JSON le plus probable dans tout le texte
+                block = _extract_json_block(answer)
+                if block:
+                    try:
+                        data = json.loads(block)
+                        if isinstance(data, dict):
+                            return data
+                    except Exception:
+                        pass
                 return {}
 
             # Force dev mode and a stable free OpenRouter stack for judge (fast + fiable en dev)
@@ -594,6 +680,8 @@ async def get_judge_verdicts(
                     sym = (r.get("ticker") or r.get("symbol") or "").upper()
                     if not sym:
                         return None
+                    if debug:
+                        add_trace("row_start", ticker=sym)
 
                     t_total = time.perf_counter()
                     met = {
@@ -645,6 +733,14 @@ async def get_judge_verdicts(
                     met["ml_prior_ms"] = (
                         time.perf_counter() - t_ml
                     ) * 1000.0
+                    if debug:
+                        add_trace(
+                            "ml_prior",
+                            ticker=sym,
+                            pred=ml_prior.get("pred_return"),
+                            conf=ml_prior.get("confidence"),
+                            error=ml_prior.get("error"),
+                        )
 
                     # Ensemble expected_return avec ml_prior si disponible
                     try:
@@ -673,6 +769,15 @@ async def get_judge_verdicts(
                     except Exception:
                         expected_return_ensemble = expected_return
                     expected_return_final = expected_return_ensemble
+                    if debug:
+                        add_trace(
+                            "ensemble",
+                            ticker=sym,
+                            expected_return_raw=expected_return,
+                            ml_prior_pred=ml_prior.get("pred_return") if isinstance(ml_prior, dict) else None,
+                            weight_ml=w_ml if "w_ml" in locals() else None,
+                            expected_return_ensemble=expected_return_ensemble,
+                        )
 
                     enriched = _judge_feature_for(sym) or {}
                     ownership = _ownership_for(sym)
@@ -807,6 +912,7 @@ async def get_judge_verdicts(
                         )
 
                     phase_blocks: Dict[str, Any] = {}
+                    t_phase = time.perf_counter()
                     if build_phase_blocks:
                         phase_features = dict(enriched)
                         phase_features.setdefault(
@@ -824,6 +930,83 @@ async def get_judge_verdicts(
                             )
                             or {}
                         )
+                    if debug:
+                        duration_ms = (time.perf_counter() - t_phase) * 1000.0
+                        add_trace(
+                            "phases_built",
+                            ticker=sym,
+                            duration_ms=duration_ms,
+                            phases=list((phase_blocks or {}).keys()),
+                        )
+                        for pname, pobj in (phase_blocks or {}).items():
+                            add_trace(
+                                "phase_done",
+                                ticker=sym,
+                                phase=pname,
+                                score=pobj.get("score") if isinstance(pobj, dict) else None,
+                            )
+                        add_trace(
+                            "phases_state",
+                            ticker=sym,
+                            scores={
+                                k: (v.get("score") if isinstance(v, dict) else None)
+                                for k, v in (phase_blocks or {}).items()
+                            },
+                        )
+                        add_trace(
+                            "phase_inputs",
+                            ticker=sym,
+                            tech_keys=list((feat.get("tech") or {}).keys()) if isinstance(feat, dict) else None,
+                            fund_keys=list((feat.get("fundamentals") or {}).keys()) if isinstance(feat, dict) else None,
+                            macro_keys=list((macro_ctx or {}).keys()),
+                            news_count=len(news_items),
+                        )
+                        add_trace(
+                            "phase_outputs",
+                            ticker=sym,
+                            phases_summary={
+                                k: {
+                                    "score": (v.get("score") if isinstance(v, dict) else None),
+                                    "summary_len": len(v.get("summary") or []) if isinstance(v, dict) else None,
+                                }
+                                for k, v in (phase_blocks or {}).items()
+                            },
+                        )
+                    # Enrichir les phases avec sentiment simple et momentum si absent
+                    try:
+                        # Sentiment: moyenne simple des scores/labels si score absent
+                        sent_block = phase_blocks.get("sentiment") if isinstance(phase_blocks, dict) else None
+                        if sent_block is not None and sent_block.get("score") is None and news_items:
+                            vals = []
+                            for n in news_items:
+                                sc = n.get("score") or n.get("sentiment_score") or n.get("sent")
+                                if sc is None:
+                                    label = (n.get("sentiment") or "").lower()
+                                    if label == "positive":
+                                        sc = 1.0
+                                    elif label == "negative":
+                                        sc = -1.0
+                                try:
+                                    if sc is not None:
+                                        vals.append(float(sc))
+                                except Exception:
+                                    pass
+                            if vals:
+                                sent_block["score"] = float(sum(vals) / len(vals))
+                                sent_block.setdefault("details", {})["news_count"] = len(news_items)
+                        # Momentum/drawdown depuis tech_enriched si manquants
+                        tech_block = phase_blocks.get("technical") if isinstance(phase_blocks, dict) else None
+                        if tech_block is not None:
+                            details = tech_block.setdefault("details", {})
+                            tech_src = feat.get("tech") if isinstance(feat, dict) else {}
+                            for key in ("momentum_1m", "momentum_3m", "drawdown_3m"):
+                                if details.get(key) is None and tech_src.get(key) is not None:
+                                    try:
+                                        details[key] = float(tech_src[key])
+                                    except Exception:
+                                        pass
+                    except Exception:
+                        pass
 
                     payload = {
                         "question": question,
@@ -880,6 +1063,13 @@ async def get_judge_verdicts(
                         )
                     except Exception:
                         pass
+                    if debug:
+                        add_trace(
+                            "payload_ready",
+                            ticker=sym,
+                            phases=list((phase_blocks or {}).keys()),
+                            news=len(news_items),
+                        )
 
                     # Validate payload (Pydantic) before LLM
                     if build_payload:
@@ -936,23 +1126,137 @@ async def get_judge_verdicts(
                         ein = EconomicInput(**payload)
                         return agent.analyze(ein)
 
-                    try:
-                        t_llm = time.perf_counter()
-                        # Timeout global pour le juge (5 minutes max)
-                        res = await asyncio.wait_for(
-                            asyncio.to_thread(_run_agent), timeout=300
-                        )
-                        met["llm_ms"] = (
-                            time.perf_counter() - t_llm
-                        ) * 1000.0
-                    except asyncio.TimeoutError:
-                        res = {"ok": False, "error": "timeout", "answer": ""}
-                    except Exception as e:
-                        res = {
-                            "ok": False,
-                            "error": f"{type(e).__name__}: {e}",
-                            "answer": "",
-                        }
+                    res = {"ok": False, "error": "not_called", "answer": ""}
+                    t_llm = time.perf_counter()
+                    for attempt_idx in range(2):
+                        try:
+                            res = await asyncio.wait_for(
+                                asyncio.to_thread(_run_agent), timeout=300
+                            )
+                            break
+                        except asyncio.TimeoutError:
+                            res = {"ok": False, "error": "timeout", "answer": ""}
+                            break
+                        except Exception as e:
+                            err_msg = f"{type(e).__name__}: {e}"
+                            # Retry once if rate limited
+                            if "Too Many Requests" in err_msg:
+                                alt_key = os.environ.get("OPEN_ROUTER_API_KEY_2")
+                                if alt_key and os.environ.get("OPEN_ROUTER_API_KEY") != alt_key:
+                                    os.environ["OPEN_ROUTER_API_KEY"] = alt_key
+                                    await asyncio.sleep(1.0)
+                                    continue
+                                if attempt_idx == 0:
+                                    await asyncio.sleep(2.0)
+                                    continue
+                            res = {"ok": False, "error": err_msg, "answer": ""}
+                            break
+                    met["llm_ms"] = (time.perf_counter() - t_llm) * 1000.0
+
+                    # G4F fallback si OpenRouter échoue
+                    if (
+                        not res.get("ok")
+                        and call_g4f
+                        and os.environ.get("G4F_PROVIDER")
+                    ):
+                        try:
+                            messages = [
+                                {"role": "system", "content": "Réponds uniquement par un JSON strict sur une seule ligne."},
+                                {"role": "user", "content": question},
+                                {
+                                    "role": "user",
+                                    "content": "Contexte (features JSON) : " + json.dumps(payload.get("features", {}), default=str)[:3500],
+                                },
+                            ]
+                            res_g4f = call_g4f(
+                                messages=messages,
+                                model=os.environ.get("G4F_MODEL"),
+                                provider=os.environ.get("G4F_PROVIDER"),
+                                timeout=60,
+                            )
+                            if res_g4f.get("ok"):
+                                res = res_g4f
+                                try:
+                                    logger.warning("g4f_raw_response=%s", json.dumps(res_g4f, default=str)[:2000])
+                                except Exception:
+                                    pass
+                            else:
+                                try:
+                                    logger.warning("g4f_error=%s", res_g4f.get("error"))
+                                except Exception:
+                                    pass
+                        except Exception as e:
+                            res = {"ok": False, "error": f"g4f_failed: {e}", "answer": ""}
+
+                    # Codestral fallback ensuite
+                    if (
+                        not res.get("ok")
+                        and call_codestral
+                        and os.environ.get("CODESTRAL_API_KEY")
+                    ):
+                        try:
+                            messages = [
+                                {"role": "system", "content": "Réponds uniquement par un JSON strict sur une seule ligne."},
+                                {"role": "user", "content": question},
+                                {
+                                    "role": "user",
+                                    "content": "Contexte (features JSON) : " + json.dumps(payload.get("features", {}), default=str)[:3500],
+                                },
+                            ]
+                            res_cd = call_codestral(
+                                messages=messages,
+                                model="codestral-2508",
+                                max_tokens=1200,
+                                temperature=0.2,
+                            )
+                            if res_cd.get("ok"):
+                                res = res_cd
+                                try:
+                                    logger.warning("codestral_raw_response=%s", json.dumps(res_cd, default=str)[:2000])
+                                except Exception:
+                                    pass
+                            else:
+                                try:
+                                    logger.warning("codestral_error=%s", res_cd.get("error"))
+                                except Exception:
+                                    pass
+                        except Exception as e:
+                            res = {"ok": False, "error": f"codestral_failed: {e}", "answer": ""}
+
+                    # Groq fallback si toujours KO
+                    if (
+                        not res.get("ok")
+                        and call_groq
+                        and os.environ.get("GROQ_API_KEY")
+                    ):
+                        try:
+                            messages = [
+                                {"role": "system", "content": "Réponds uniquement par un JSON strict sur une seule ligne."},
+                                {"role": "user", "content": question},
+                                {
+                                    "role": "user",
+                                    "content": "Contexte (features JSON) : " + json.dumps(payload.get("features", {}), default=str)[:3500],
+                                },
+                            ]
+                            res_groq = call_groq(
+                                messages=messages,
+                                model="qwen/qwen3-32b",
+                                max_tokens=1200,
+                                temperature=0.2,
+                            )
+                            if res_groq.get("ok"):
+                                res = res_groq
+                                try:
+                                    logger.warning("groq_raw_response=%s", json.dumps(res_groq, default=str)[:2000])
+                                except Exception:
+                                    pass
+                            else:
+                                try:
+                                    logger.warning("groq_error=%s", res_groq.get("error"))
+                                except Exception:
+                                    pass
+                        except Exception as e:
+                            res = {"ok": False, "error": f"groq_failed: {e}", "answer": ""}
 
                     try:
                         logger.info(
@@ -974,6 +1278,7 @@ async def get_judge_verdicts(
                     parsed: Optional[Dict[str, Any]] = None
                     model_used = None
                     full_answer = None
+                    fallback_used = None
 
                     if isinstance(res, dict) and res.get("ok"):
                         full_answer = res.get("answer")
@@ -1004,34 +1309,122 @@ async def get_judge_verdicts(
                         if isinstance(parsed, dict)
                         else _parse_analysis(full_answer or verdict_text)
                     )
+                    if not (isinstance(res, dict) and res.get("ok")):
+                        # LLM a échoué: garder l'erreur explicite
+                        parsed = {
+                            "error": res.get("error")
+                            if isinstance(res, dict)
+                            else "llm_failed",
+                            "raw": full_answer or verdict_text,
+                        }
                     if isinstance(parsed, dict):
-                        if parsed.get("confidence") is None:
-                            parsed["confidence"] = base_conf
-                        if phase_blocks:
-                            parsed.setdefault(
-                                "phase_scores",
-                                {
-                                    k: (
-                                        v.get("score")
-                                        if isinstance(v, dict)
-                                        else None
-                                    )
-                                    for k, v in phase_blocks.items()
-                                },
-                            )
+                        # Normalisation pour Pydantic: phase_scores doit être un dict
+                        ps = parsed.get("phase_scores")
+                        if isinstance(ps, list):
+                            parsed["phase_scores"] = {}
+                        elif ps is None:
+                            parsed["phase_scores"] = {}
+                        # On force ml_prior issu du pipeline (ignore ce que le LLM renvoie éventuellement)
                         if ml_prior:
                             parsed["ml_prior"] = ml_prior
-                        try:
-                            parsed = (
-                                validate_llm_response(parsed)
-                                if validate_llm_response
-                                else parsed
-                            )
-                        except Exception as e:
-                            parsed = {
-                                "error": f"llm_validation_error: {e}",
-                                "raw": full_answer or verdict_text,
-                            }
+                        if parsed.get("confidence") is None:
+                            parsed["confidence"] = base_conf
+                        if parsed.get("error") is None:
+                            if phase_blocks:
+                                parsed.setdefault(
+                                    "phase_scores",
+                                    {
+                                        k: (
+                                            v.get("score")
+                                            if isinstance(v, dict)
+                                            else None
+                                        )
+                                        for k, v in phase_blocks.items()
+                                    },
+                                )
+                            if ml_prior:
+                                parsed["ml_prior"] = ml_prior
+                            try:
+                                if validate_llm_response:
+                                    parsed = validate_llm_response(parsed)
+                                    # Revenir à un dict pour éviter les parsed_ok=False
+                                    if hasattr(parsed, "model_dump"):
+                                        parsed = parsed.model_dump()
+                            except Exception as e:
+                                parsed = {
+                                    "error": f"llm_validation_error: {e}",
+                                    "raw": full_answer or verdict_text,
+                                }
+
+                        # Harmoniser la confiance finale avec ce que le LLM fournit
+                        if isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                            try:
+                                base_conf = float(parsed.get("confidence"))
+                            except Exception:
+                                pass
+                        else:
+                            # Tentative de réparation via Groq (qwen3-32b) si JSON invalide
+                            if call_groq and parsed.get("error"):
+                                repair_prompt = (
+                                    "Tu es un réparateur JSON. "
+                                    "On te donne un texte qui devait être un JSON valide selon ce schéma : "
+                                    "{\"summary\":[],\"scenarios\":[],\"risks\":[],\"impacts\":{},\"actions\":[],\"confidence\":0.0,\"data_needed\":[],\"phase_scores\":{},\"ml_prior\":{}}. "
+                                    "Renvoie UNIQUEMENT un JSON valide qui suit ce schéma, sans texte autour. "
+                                    "Si une clé manque, mets une valeur par défaut appropriée."
+                                )
+                                messages_repair = [
+                                    {"role": "system", "content": repair_prompt},
+                                    {"role": "user", "content": full_answer or verdict_text or ""},
+                                ]
+                                try:
+                                    res_repair = call_groq(
+                                        messages=messages_repair,
+                                        model="qwen/qwen3-32b",
+                                        max_tokens=600,
+                                        temperature=0.0,
+                                    )
+                                    if res_repair.get("ok"):
+                                        repaired = res_repair.get("answer", "")
+                                        try:
+                                            parsed = json.loads(repaired)
+                                            if isinstance(parsed, dict):
+                                                # phase_scores par défaut
+                                                if isinstance(parsed.get("phase_scores"), list):
+                                                    parsed["phase_scores"] = {}
+                                                if parsed.get("phase_scores") is None:
+                                                    parsed["phase_scores"] = {}
+                                                if ml_prior:
+                                                    parsed["ml_prior"] = ml_prior
+                                                if parsed.get("confidence") is None:
+                                                    parsed["confidence"] = base_conf
+                                                try:
+                                                    parsed = (
+                                                        validate_llm_response(parsed)
+                                                        if validate_llm_response
+                                                        else parsed
+                                                    )
+                                                except Exception as e3:
+                                                    parsed = {
+                                                        "error": f"llm_validation_error_repair: {e3}",
+                                                        "raw": repaired,
+                                                    }
+                                                # Log succès réparation
+                                                logger.warning("repair_llm_used=groq_qwen3_32b")
+                                            else:
+                                                parsed = {
+                                                    "error": "repair_return_not_dict",
+                                                    "raw": repaired,
+                                                }
+                                        except Exception as e2:
+                                            parsed = {
+                                                "error": f"repair_json_error: {e2}",
+                                                "raw": repaired,
+                                            }
+                                except Exception as e:
+                                    parsed = {
+                                        "error": f"repair_call_failed: {e}",
+                                        "raw": full_answer or verdict_text,
+                                    }
                     else:
                         parsed = {
                             "error": "json_parse_failed",
@@ -1068,7 +1461,7 @@ async def get_judge_verdicts(
                             "parse_error": parsed.get("error") if isinstance(parsed, dict) else None,
                             "expected_return_raw": expected_return,
                             "expected_return_ensemble": expected_return_ensemble,
-                            "expected_return_final": expected_return_final,
+                        "expected_return_final": expected_return_final,
                         },
                     )
 
@@ -1077,6 +1470,7 @@ async def get_judge_verdicts(
                         isinstance(parsed, dict)
                         and parsed.get("error") == "json_parse_failed"
                     ):
+                        fallback_used = "simple_verdict_from_forecast"
                         fallback_news = _news_for(sym)
                         news_titles = [
                             n.get("title")
@@ -1116,6 +1510,18 @@ async def get_judge_verdicts(
                             "confidence": base_conf,
                         }
 
+                    if debug:
+                        add_trace(
+                            "llm_call",
+                            ticker=sym,
+                            ok=isinstance(res, dict) and res.get("ok"),
+                            model=model_used,
+                            provider=res.get("provider") if isinstance(res, dict) else None,
+                            parsed_ok=isinstance(parsed, dict) and not parsed.get("error"),
+                            fallback=fallback_used,
+                            llm_ms=met.get("llm_ms"),
+                        )
+
                     met["total_ms"] = (
                         time.perf_counter() - t_total
                     ) * 1000.0
@@ -1128,6 +1534,13 @@ async def get_judge_verdicts(
                                 if isinstance(res, dict)
                                 else None
                             )
+                            # Consolider la confiance finale à partir du parsing LLM si dispo
+                            conf_final = base_conf
+                            if isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                                try:
+                                    conf_final = float(parsed.get("confidence"))
+                                except Exception:
+                                    pass
                             log_metrics(
                                 "judge_metrics",
                                 ticker=sym,
@@ -1142,11 +1555,32 @@ async def get_judge_verdicts(
                             )
                         except Exception:
                             pass
+                    if debug:
+                        conf_final = base_conf
+                        if isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                            try:
+                                conf_final = float(parsed.get("confidence"))
+                            except Exception:
+                                pass
+                        add_trace(
+                            "row_done",
+                            ticker=sym,
+                            total_ms=met.get("total_ms"),
+                            confidence=conf_final,
+                            expected_return=expected_return_final,
+                        )
+
+                    conf_final = base_conf
+                    if isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                        try:
+                            conf_final = float(parsed.get("confidence"))
+                        except Exception:
+                            pass
 
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
-                        "confidence": base_conf,
+                        "confidence": conf_final,
                         "expected_return": expected_return_final,
                         "expected_return_raw": expected_return,
                         "expected_return_ensemble": expected_return_ensemble,
@@ -1172,6 +1606,14 @@ async def get_judge_verdicts(
                         "generated_at": datetime.utcnow().isoformat() + "Z",
                         "model_version": model_used or "econ_llm_agent",
                         "source": ["judge_route", "forecasts_llm"],
+                        **(
+                            {
+                                "debug_payload": payload,
+                                "debug_llm_res": res,
+                            }
+                            if debug
+                            else {}
+                        ),
                     }
 
             tasks = [asyncio.create_task(_process_row(r)) for r in top_rows]
@@ -1192,12 +1634,14 @@ async def get_judge_verdicts(
                 for v in verdicts
                 if v.get("confidence", 0) >= min_confidence
             ]
+            # Si filtrage vide mais des erreurs LLM existent, on renvoie quand même pour diagnostic
             if not confidence_filtered and verdicts:
-                confidence_filtered = sorted(
-                    verdicts,
-                    key=lambda x: x.get("confidence", 0),
-                    reverse=True,
+                has_error = any(
+                    isinstance(v.get("analysis"), dict) and v["analysis"].get("error")
+                    for v in verdicts
                 )
+                if has_error:
+                    confidence_filtered = verdicts
 
             reverse_sort = sort_order != "asc"
 
@@ -1260,7 +1704,7 @@ async def get_judge_verdicts(
 
             now_iso = datetime.utcnow().isoformat() + "Z"
 
-            return {
+            response_obj = {
                 "verdicts": limited_verdicts,
                 "count": len(limited_verdicts),
                 "stats": {
@@ -1279,6 +1723,9 @@ async def get_judge_verdicts(
                 "generated_at": now_iso,
                 "source": ["judge_route", "forecasts_llm"],
             }
+            if debug:
+                response_obj["debug_pipeline"] = traces
+            return response_obj
 
         # Ici on pourrait rebrancher load_or_compute si tu veux du cache :
         # verdicts_data = await load_or_compute("judge_verdicts", compute_judge_verdicts)
