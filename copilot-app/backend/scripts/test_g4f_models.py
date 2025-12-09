@@ -12,8 +12,10 @@ import os
 import sys
 import time
 from typing import Any, Dict, List, Tuple
+import tempfile
 
 import requests
+import shutil
 
 try:
     from dotenv import load_dotenv
@@ -33,6 +35,12 @@ PROMPT = "Salut, réponds strictement après ce message par: OK"
 
 
 def main():
+    # Exécuter les appels g4f dans un répertoire temporaire pour éviter les fichiers
+    # générés dans le repo (ex: generated_media).
+    tmpdir = tempfile.mkdtemp(prefix="g4f_tests_")
+    prev_cwd = os.getcwd()
+    os.chdir(tmpdir)
+
     # Charge les variables d'environnement depuis .env si disponible
     if load_dotenv:
         # backend/.env en priorité, sinon racine
@@ -128,6 +136,13 @@ def main():
         print(f"Saved categorized -> {cat_path}")
     except Exception as e:
         print(f"⚠️  Impossible de sauver la catégorisation {cat_path}: {e}")
+
+    # Revenir au répertoire initial et nettoyer le tmp
+    os.chdir(prev_cwd)
+    try:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def fetch_remote_models(url: str) -> List[Tuple[str, str, str]]:

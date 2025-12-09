@@ -1,80 +1,45 @@
 {
-  "forecast": [],
+  "forecast": [
+    {
+      "provider": "AnyProvider",
+      "model": "claude-opus-4",
+      "task": "text",
+      "ok": true,
+      "ms": 338.1,
+      "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
+      "error": null
+    }
+  ],
   "helper_json": [
-    {
-      "provider": "AnyProvider",
-      "model": "command-r",
-      "task": "text",
-      "ok": true,
-      "ms": 291.7,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "command-r7b-12-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 305.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "command-r-08-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 311.6,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-a",
-      "task": "text",
-      "ok": true,
-      "ms": 324.8,
-      "answer": "OK",
-      "error": null
-    },
     {
       "provider": "AnyProvider",
       "model": "command-r7b24",
       "task": "text",
       "ok": true,
-      "ms": 347.8,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r7b",
-      "task": "text",
-      "ok": true,
-      "ms": 354.7,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-a25",
-      "task": "text",
-      "ok": true,
-      "ms": 357.4,
+      "ms": 306.0,
       "answer": "OK",
       "error": null
     },
     {
       "provider": "HuggingSpace",
-      "model": "command-a-03-2025",
+      "model": "command-r-plus-08-2024",
       "task": "text",
       "ok": true,
-      "ms": 358.9,
+      "ms": 352.7,
       "answer": "OK",
       "error": null
     },
     {
-      "provider": "CohereForAI_C4AI_Command",
+      "provider": "AnyProvider",
+      "model": "command-r",
+      "task": "text",
+      "ok": true,
+      "ms": 362.5,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
       "model": "command-r-08-2024",
       "task": "text",
       "ok": true,
@@ -87,52 +52,7 @@
       "model": "command-r24",
       "task": "text",
       "ok": true,
-      "ms": 385.7,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "command-a",
-      "task": "text",
-      "ok": true,
-      "ms": 392.2,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "CohereForAI_C4AI_Command",
-      "model": "command-r7b-12-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 409.1,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r7b-arabic25",
-      "task": "text",
-      "ok": true,
-      "ms": 411.2,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "CohereForAI_C4AI_Command",
-      "model": "command-r-plus-08-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 493.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r-plus24",
-      "task": "text",
-      "ok": true,
-      "ms": 515.1,
+      "ms": 368.0,
       "answer": "OK",
       "error": null
     },
@@ -141,16 +61,142 @@
       "model": "command-r",
       "task": "text",
       "ok": true,
-      "ms": 577.8,
+      "ms": 369.0,
       "answer": "OK",
       "error": null
     },
     {
       "provider": "HuggingSpace",
+      "model": "command-r7b-12-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 386.7,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a",
+      "task": "text",
+      "ok": true,
+      "ms": 394.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b",
+      "task": "text",
+      "ok": true,
+      "ms": 399.8,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a-03-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 403.3,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r7b-12-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 412.3,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-a",
+      "task": "text",
+      "ok": true,
+      "ms": 418.7,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r-plus24",
+      "task": "text",
+      "ok": true,
+      "ms": 462.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-a25",
+      "task": "text",
+      "ok": true,
+      "ms": 463.7,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 503.4,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r7b-arabic-02-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 513.4,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-a-03-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 566.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b-arabic25",
+      "task": "text",
+      "ok": true,
+      "ms": 605.1,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r7b-arabic-02-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 611.3,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r-plus-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 743.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "Qwen_Qwen_3",
       "model": "qwen-3-30b-a3b",
       "task": "text",
       "ok": true,
-      "ms": 984.5,
+      "ms": 932.6,
       "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
       "error": null
     }
@@ -158,20 +204,56 @@
   "basic": [
     {
       "provider": "AnyProvider",
-      "model": "llama-4-maverick",
+      "model": "llama-4-scout",
       "task": "text",
       "ok": true,
-      "ms": 434.5,
+      "ms": 370.0,
       "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
       "error": null
     },
     {
       "provider": "AnyProvider",
-      "model": "llama-4-scout",
+      "model": "kimi-k2",
       "task": "text",
       "ok": true,
-      "ms": 462.7,
+      "ms": 475.6,
       "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "glm-4.5-air",
+      "task": "text",
+      "ok": true,
+      "ms": 480.6,
+      "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
+      "error": null
+    },
+    {
+      "provider": "OpenAIFM",
+      "model": "verse",
+      "task": "text",
+      "ok": true,
+      "ms": 896.0,
+      "answer": "",
+      "error": "'AudioResponse' object is not subscriptable"
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "qwen-3-8b",
+      "task": "text",
+      "ok": true,
+      "ms": 909.8,
+      "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
+      "error": null
+    },
+    {
+      "provider": "Qwen_Qwen_3",
+      "model": "qwen-3-8b",
+      "task": "text",
+      "ok": true,
+      "ms": 967.3,
+      "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
       "error": null
     },
     {
@@ -179,43 +261,7 @@
       "model": "nova",
       "task": "text",
       "ok": true,
-      "ms": 891.4,
-      "answer": "",
-      "error": "'AudioResponse' object is not subscriptable"
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "qwen-3-8b",
-      "task": "text",
-      "ok": true,
-      "ms": 914.1,
-      "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
-      "error": null
-    },
-    {
-      "provider": "OpenAIFM",
-      "model": "onyx",
-      "task": "text",
-      "ok": true,
-      "ms": 925.9,
-      "answer": "",
-      "error": "'AudioResponse' object is not subscriptable"
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "qwen-3-8b",
-      "task": "text",
-      "ok": true,
-      "ms": 976.7,
-      "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
-      "error": null
-    },
-    {
-      "provider": "OpenAIFM",
-      "model": "ash",
-      "task": "text",
-      "ok": true,
-      "ms": 983.2,
+      "ms": 977.7,
       "answer": "",
       "error": "'AudioResponse' object is not subscriptable"
     }

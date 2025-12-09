@@ -1825,16 +1825,13 @@ async def get_judge_verdicts(
                         logger.info("verdict_typed_failed", extra={"error": str(e)})
                         continue
 
-            # On ne garde qu'une seule clé pour la liste finale afin d'éviter la duplication.
-            # Si des verdicts typés existent, ils remplacent la liste brute.
-            final_verdicts = typed_verdicts if typed_verdicts else limited_verdicts
+            # On ne garde qu'une seule clé pour la liste finale : verdicts typés si dispo.
+            if typed_verdicts:
+                response_obj["verdicts"] = typed_verdicts
 
             if debug:
                 response_obj["debug_pipeline"] = traces
                 response_obj["verdicts_raw"] = limited_verdicts
-
-            response_obj["verdicts"] = final_verdicts
-            # On ne conserve pas verdicts_typed en parallèle pour éviter la duplication.
             response_obj.pop("verdicts_typed", None)
             return response_obj
 
