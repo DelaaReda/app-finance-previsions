@@ -1,76 +1,21 @@
 {
-  "forecast": [
-    {
-      "provider": "DeepInfra",
-      "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-      "task": "text",
-      "ok": true,
-      "ms": 343.8,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "deepseek-v3-0324-turbo",
-      "task": "text",
-      "ok": true,
-      "ms": 943.7,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-Turbo",
-      "task": "text",
-      "ok": true,
-      "ms": 1179.0,
-      "answer": "OK",
-      "error": null
-    }
-  ],
+  "forecast": [],
   "helper_json": [
     {
       "provider": "AnyProvider",
-      "model": "command-r7b",
+      "model": "command-r",
       "task": "text",
       "ok": true,
-      "ms": 317.9,
+      "ms": 291.7,
       "answer": "OK",
       "error": null
     },
     {
       "provider": "HuggingSpace",
-      "model": "command-a",
+      "model": "command-r7b-12-2024",
       "task": "text",
       "ok": true,
-      "ms": 341.6,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "llama-3.3-70b",
-      "task": "text",
-      "ok": true,
-      "ms": 345.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "command-a-03-2025",
-      "task": "text",
-      "ok": true,
-      "ms": 346.3,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "mistral-small-3.1-24b",
-      "task": "text",
-      "ok": true,
-      "ms": 354.3,
+      "ms": 305.0,
       "answer": "OK",
       "error": null
     },
@@ -79,70 +24,7 @@
       "model": "command-r-08-2024",
       "task": "text",
       "ok": true,
-      "ms": 354.9,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "microsoft/Phi-4-multimodal-instruct",
-      "task": "text",
-      "ok": true,
-      "ms": 355.5,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r-plus24",
-      "task": "text",
-      "ok": true,
-      "ms": 355.9,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r24",
-      "task": "text",
-      "ok": true,
-      "ms": 357.1,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r",
-      "task": "text",
-      "ok": true,
-      "ms": 365.2,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r7b24",
-      "task": "text",
-      "ok": true,
-      "ms": 368.6,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "command-r7b-arabic25",
-      "task": "text",
-      "ok": true,
-      "ms": 373.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "HuggingSpace",
-      "model": "command-r7b-12-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 385.8,
+      "ms": 311.6,
       "answer": "OK",
       "error": null
     },
@@ -151,52 +33,25 @@
       "model": "command-a",
       "task": "text",
       "ok": true,
-      "ms": 415.8,
+      "ms": 324.8,
       "answer": "OK",
       "error": null
     },
     {
-      "provider": "CohereForAI_C4AI_Command",
-      "model": "command-r7b-12-2024",
+      "provider": "AnyProvider",
+      "model": "command-r7b24",
       "task": "text",
       "ok": true,
-      "ms": 423.8,
+      "ms": 347.8,
       "answer": "OK",
       "error": null
     },
     {
-      "provider": "HuggingSpace",
-      "model": "command-r-plus-08-2024",
+      "provider": "AnyProvider",
+      "model": "command-r7b",
       "task": "text",
       "ok": true,
-      "ms": 453.2,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "mistralai/Devstral-Small-2507",
-      "task": "text",
-      "ok": true,
-      "ms": 467.3,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "CohereForAI_C4AI_Command",
-      "model": "command-a-03-2025",
-      "task": "text",
-      "ok": true,
-      "ms": 475.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "CohereForAI_C4AI_Command",
-      "model": "command-r-plus-08-2024",
-      "task": "text",
-      "ok": true,
-      "ms": 477.9,
+      "ms": 354.7,
       "answer": "OK",
       "error": null
     },
@@ -205,7 +60,88 @@
       "model": "command-a25",
       "task": "text",
       "ok": true,
-      "ms": 559.7,
+      "ms": 357.4,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a-03-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 358.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 366.3,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r24",
+      "task": "text",
+      "ok": true,
+      "ms": 385.7,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a",
+      "task": "text",
+      "ok": true,
+      "ms": 392.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r7b-12-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 409.1,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b-arabic25",
+      "task": "text",
+      "ok": true,
+      "ms": 411.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r-plus-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 493.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r-plus24",
+      "task": "text",
+      "ok": true,
+      "ms": 515.1,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r",
+      "task": "text",
+      "ok": true,
+      "ms": 577.8,
       "answer": "OK",
       "error": null
     },
@@ -214,28 +150,19 @@
       "model": "qwen-3-30b-a3b",
       "task": "text",
       "ok": true,
-      "ms": 893.2,
+      "ms": 984.5,
       "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "phi-4-multimodal",
-      "task": "text",
-      "ok": true,
-      "ms": 1343.0,
-      "answer": "OK",
       "error": null
     }
   ],
   "basic": [
     {
       "provider": "AnyProvider",
-      "model": "llama-3.2-90b",
+      "model": "llama-4-maverick",
       "task": "text",
       "ok": true,
-      "ms": 273.7,
-      "answer": "OK",
+      "ms": 434.5,
+      "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
       "error": null
     },
     {
@@ -243,205 +170,16 @@
       "model": "llama-4-scout",
       "task": "text",
       "ok": true,
-      "ms": 281.8,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-      "task": "text",
-      "ok": true,
-      "ms": 312.2,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-      "task": "text",
-      "ok": true,
-      "ms": 321.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "gemma-3-12b",
-      "task": "text",
-      "ok": true,
-      "ms": 343.1,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "gemma-3-27b",
-      "task": "text",
-      "ok": true,
-      "ms": 351.1,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "airoboros-70b",
-      "task": "text",
-      "ok": true,
-      "ms": 360.5,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "lzlv-70b",
-      "task": "text",
-      "ok": true,
-      "ms": 365.6,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "meta-llama/Llama-Guard-4-12B",
-      "task": "text",
-      "ok": true,
-      "ms": 378.6,
-      "answer": "safe",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "gemma-2-9b",
-      "task": "text",
-      "ok": true,
-      "ms": 433.0,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "google/gemma-3-27b-it",
-      "task": "text",
-      "ok": true,
-      "ms": 438.4,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "deepseek-ai/DeepSeek-V3",
-      "task": "text",
-      "ok": true,
-      "ms": 509.7,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "llama-4-maverick",
-      "task": "text",
-      "ok": true,
-      "ms": 605.9,
+      "ms": 462.7,
       "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
       "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "deepseek-ai/DeepSeek-V3-0324",
-      "task": "text",
-      "ok": true,
-      "ms": 686.3,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "kimi-k2",
-      "task": "text",
-      "ok": true,
-      "ms": 700.0,
-      "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "PaddlePaddle/PaddleOCR-VL-0.9B",
-      "task": "text",
-      "ok": true,
-      "ms": 743.6,
-      "answer": "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ",
-      "error": null
-    },
-    {
-      "provider": "OpenAIFM",
-      "model": "onyx",
-      "task": "text",
-      "ok": true,
-      "ms": 802.8,
-      "answer": "",
-      "error": "'AudioResponse' object is not subscriptable"
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
-      "task": "text",
-      "ok": true,
-      "ms": 831.5,
-      "answer": "  OK",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "deepseek-r1-distill-qwen-32b",
-      "task": "text",
-      "ok": true,
-      "ms": 833.7,
-      "answer": "  OK",
-      "error": null
-    },
-    {
-      "provider": "DeepInfra",
-      "model": "deepseek-ai/DeepSeek-OCR",
-      "task": "text",
-      "ok": true,
-      "ms": 860.6,
-      "answer": "1. Salut, réponds strictement après ce message par: OK  2. Salut, réponds strictement après ce message par: OK  3. Salut",
-      "error": null
-    },
-    {
-      "provider": "AnyProvider",
-      "model": "deepseek-prover-v2",
-      "task": "text",
-      "ok": true,
-      "ms": 925.4,
-      "answer": "OK",
-      "error": null
-    },
-    {
-      "provider": "OpenAIFM",
-      "model": "ash",
-      "task": "text",
-      "ok": true,
-      "ms": 928.0,
-      "answer": "",
-      "error": "'AudioResponse' object is not subscriptable"
-    },
-    {
-      "provider": "OpenAIFM",
-      "model": "shimmer",
-      "task": "text",
-      "ok": true,
-      "ms": 967.5,
-      "answer": "",
-      "error": "'AudioResponse' object is not subscriptable"
     },
     {
       "provider": "OpenAIFM",
       "model": "nova",
       "task": "text",
       "ok": true,
-      "ms": 994.2,
+      "ms": 891.4,
       "answer": "",
       "error": "'AudioResponse' object is not subscriptable"
     },
@@ -450,9 +188,36 @@
       "model": "qwen-3-8b",
       "task": "text",
       "ok": true,
-      "ms": 1052.9,
+      "ms": 914.1,
       "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
       "error": null
+    },
+    {
+      "provider": "OpenAIFM",
+      "model": "onyx",
+      "task": "text",
+      "ok": true,
+      "ms": 925.9,
+      "answer": "",
+      "error": "'AudioResponse' object is not subscriptable"
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "qwen-3-8b",
+      "task": "text",
+      "ok": true,
+      "ms": 976.7,
+      "answer": "<span style=\"color: var(--color-red-500)\">'NoneType' object has no attribute 'choices'</span>",
+      "error": null
+    },
+    {
+      "provider": "OpenAIFM",
+      "model": "ash",
+      "task": "text",
+      "ok": true,
+      "ms": 983.2,
+      "answer": "",
+      "error": "'AudioResponse' object is not subscriptable"
     }
   ]
 }

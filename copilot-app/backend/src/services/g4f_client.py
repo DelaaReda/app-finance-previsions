@@ -29,18 +29,22 @@ def call_g4f(
     # puis tested_g4f_models_ok.json (ou tested_g4f_models.json) triés par latence,
     # avec préférence pour la catégorie "forecast" si dispo.
     tested_model = _fastest_tested_model(category_preference="forecast")
-    model_name = (
-        model
-        or os.environ.get("G4F_MODEL")
-        or (tested_model[1] if tested_model else None)
-        or "meta-llama/Llama-3.3-70B-Instruct"
-    )
-    provider_name = (
-        provider
-        or os.environ.get("G4F_PROVIDER")
-        or (tested_model[0] if tested_model else None)
-        or "DeepInfra"
-    )
+
+    model_name = model or os.environ.get("G4F_MODEL")
+    provider_name = provider or os.environ.get("G4F_PROVIDER")
+
+    # Si pas de modèle explicite/env et pas de modèle testé, on skip g4f pour laisser les autres clients agir
+    if not model_name and not tested_model:
+        return {"ok": False, "error": "g4f_no_tested_models", "answer": ""}
+
+    if not model_name and tested_model:
+        model_name = tested_model[1]
+    if not provider_name and tested_model:
+        provider_name = tested_model[0]
+
+    # Si malgré tout on n'a pas de couple provider/model, on abandonne
+    if not model_name or not provider_name:
+        return {"ok": False, "error": "g4f_model_or_provider_missing", "answer": ""}
 
     try:
         client = G4FClient()
@@ -77,8 +81,34 @@ def _fastest_tested_model(category_preference: Optional[str] = None) -> Optional
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         ok_path = os.path.join(base_dir, "tested_g4f_models_ok.json")
         full_path = os.path.join(base_dir, "tested_g4f_models.json")
+        cat_path = os.path.join(base_dir, "tested_g4f_models_categorized.json")
 
         data = None
+        # 1) Utiliser directement la version catégorisée si elle existe et qu'on demande une catégorie
+        if category_preference and os.path.exists(cat_path):
+            with open(cat_path, "r", encoding="utf-8") as f:
+                cat_data = json.load(f)
+            if isinstance(cat_data, dict):
+                wanted = cat_data.get(category_preference.lower()) or cat_data.get(category_preference)
+                if isinstance(wanted, list):
+                    if not wanted:
+                        # Catégorie demandée présente mais vide -> pas de fallback vers d'autres catégories
+                        return None
+                    wanted = sorted(wanted, key=lambda r: r.get("ms", 1e9))
+                    best = wanted[0]
+                    logger.info(
+                        "g4f_selected_tested_model",
+                        extra={
+                            "provider": best.get("provider"),
+                            "model": best.get("model"),
+                            "ms": best.get("ms"),
+                            "category": category_preference,
+                        },
+                    )
+                    return best.get("provider"), best.get("model")
+                else:
+                    # Pas de catégorie correspondante dans le fichier catégorisé -> ne pas retomber sur d'autres catégories
+                    return None
         if os.path.exists(ok_path):
             with open(ok_path, "r", encoding="utf-8") as f:
                 data = json.load(f)

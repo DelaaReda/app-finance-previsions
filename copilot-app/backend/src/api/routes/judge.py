@@ -88,6 +88,11 @@ try:
     from services.codestral_client import call_codestral  # type: ignore
 except Exception:
     call_codestral = None
+# Typed verdict builder (Pydantic schemas)
+try:
+    from services.judge_builder import build_judge_verdict  # type: ignore
+except Exception:
+    build_judge_verdict = None
 # G4F fallback client
 try:
     from services.g4f_client import call_g4f  # type: ignore
@@ -126,7 +131,7 @@ def _normalize_ts_str(ts: Any) -> Optional[str]:
 async def get_judge_verdicts(
     limit: int = Query(20, ge=1, le=100, description="Limite de résultats (1-100)"),
     min_confidence: float = Query(
-        0.5, ge=0.0, le=1.0, description="Confiance minimum pour inclusion (0.0-1.0)"
+        0.3, ge=0.0, le=1.0, description="Confiance minimum pour inclusion (0.0-1.0)"
     ),
     ticker: Optional[List[str]] = Query(
         None, description="Filtre par ticker (plusieurs autorisés)"
@@ -976,24 +981,46 @@ async def get_judge_verdicts(
                     try:
                         # Sentiment: moyenne simple des scores/labels si score absent
                         sent_block = phase_blocks.get("sentiment") if isinstance(phase_blocks, dict) else None
-                        if sent_block is not None and sent_block.get("score") is None and news_items:
+                        if sent_block is not None and news_items:
                             vals = []
+                            pos = neg = neu = 0
                             for n in news_items:
                                 sc = n.get("score") or n.get("sentiment_score") or n.get("sent")
+                                label = (n.get("sentiment") or "").lower()
                                 if sc is None:
-                                    label = (n.get("sentiment") or "").lower()
                                     if label == "positive":
                                         sc = 1.0
                                     elif label == "negative":
                                         sc = -1.0
+                                    elif label == "neutral":
+                                        sc = 0.0
                                 try:
                                     if sc is not None:
-                                        vals.append(float(sc))
+                                        fsc = float(sc)
+                                        vals.append(fsc)
+                                        if fsc > 0:
+                                            pos += 1
+                                        elif fsc < 0:
+                                            neg += 1
+                                        else:
+                                            neu += 1
                                 except Exception:
                                     pass
+                            det = sent_block.setdefault("details", {})
+                            det["news_count"] = len(news_items)
+                            det["positive"] = pos
+                            det["negative"] = neg
+                            det["neutral"] = neu
                             if vals:
-                                sent_block["score"] = float(sum(vals) / len(vals))
-                                sent_block.setdefault("details", {})["news_count"] = len(news_items)
+                                avg = float(sum(vals) / len(vals))
+                                det["avg_score"] = avg
+                                if sent_block.get("score") is None:
+                                    sent_block["score"] = avg
+                                # Ajouter un mini résumé lisible si absent
+                                if not sent_block.get("summary"):
+                                    sent_block["summary"] = [
+                                        f"{pos}/{len(news_items)} positives, {neg} negatives, {neu} neutres (avg={avg:.2f})"
+                                    ]
                         # Momentum/drawdown depuis tech_enriched si manquants
                         tech_block = phase_blocks.get("technical") if isinstance(phase_blocks, dict) else None
                         if tech_block is not None:
@@ -1317,6 +1344,41 @@ async def get_judge_verdicts(
                             else "llm_failed",
                             "raw": full_answer or verdict_text,
                         }
+                    # Double passe: auditeur JSON pour réparer/valider la structure
+                    if (
+                        call_groq
+                        and isinstance(parsed, dict)
+                        and not parsed.get("error")
+                        and isinstance(res, dict)
+                        and res.get("ok")
+                        and full_answer
+                    ):
+                        audit_prompt = (
+                            "Tu es un AUDITEUR JSON. "
+                            "On te donne un texte qui doit être un JSON respectant ce schéma strict : "
+                            '{"summary":[],"scenarios":[],"risks":[],"impacts":{"FX":[],"rates":[],"commodities":[],"equity":[]},"actions":[],"confidence":0.0,"data_needed":[],"phase_scores":{},"ml_prior":{}}. '
+                            "Ne renvoie QUE le JSON réparé. Si tu ne peux pas, renvoie {\"error\":\"invalid_schema\"}."
+                        )
+                        messages_audit = [
+                            {"role": "system", "content": audit_prompt},
+                            {"role": "user", "content": full_answer},
+                        ]
+                        try:
+                            res_audit = call_groq(
+                                messages=messages_audit,
+                                model="qwen/qwen3-32b",
+                                max_tokens=400,
+                                temperature=0.0,
+                            )
+                            if res_audit.get("ok") and res_audit.get("answer"):
+                                try:
+                                    audited = json.loads(res_audit.get("answer", ""))
+                                    if isinstance(audited, dict):
+                                        parsed = audited
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
                     if isinstance(parsed, dict):
                         # Normalisation pour Pydantic: phase_scores doit être un dict
                         ps = parsed.get("phase_scores")
@@ -1577,6 +1639,39 @@ async def get_judge_verdicts(
                         except Exception:
                             pass
 
+                    # Phase scores: distinguer brut (pipeline) vs normalisé (0-1)
+                    raw_phase_scores = {
+                        k: (v.get("score") if isinstance(v, dict) else None)
+                        for k, v in (phase_blocks or {}).items()
+                    } or None
+                    parsed_phase_scores = (
+                        parsed.get("phase_scores") if isinstance(parsed, dict) else None
+                    )
+
+                    def _normalize_scores(scores: Dict[str, Any]) -> Dict[str, float]:
+                        out: Dict[str, float] = {}
+                        for k, v in (scores or {}).items():
+                            try:
+                                val = float(v)
+                                # si >1, on suppose une échelle 0-100
+                                if val > 1.0:
+                                    val = val / 100.0
+                                # clamp 0-1
+                                if val < 0:
+                                    val = 0.0
+                                if val > 1:
+                                    val = 1.0
+                                out[k] = val
+                            except Exception:
+                                pass
+                        return out
+
+                    norm_phase_scores = None
+                    if parsed_phase_scores and isinstance(parsed_phase_scores, dict):
+                        norm_phase_scores = _normalize_scores(parsed_phase_scores)
+                    elif raw_phase_scores and isinstance(raw_phase_scores, dict):
+                        norm_phase_scores = _normalize_scores(raw_phase_scores)
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -1592,15 +1687,8 @@ async def get_judge_verdicts(
                         if isinstance(parsed, dict)
                         else {"summary": [verdict_text]},
                         "phases": phase_blocks or None,
-                        "phase_scores": {
-                            k: (
-                                v.get("score")
-                                if isinstance(v, dict)
-                                else None
-                            )
-                            for k, v in (phase_blocks or {}).items()
-                        }
-                        or None,
+                        "phase_scores_raw": raw_phase_scores,
+                        "phase_scores": norm_phase_scores or None,
                         "ml_prior": ml_prior,
                         "raw_answer": full_answer or verdict_text,
                         "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -1723,8 +1811,31 @@ async def get_judge_verdicts(
                 "generated_at": now_iso,
                 "source": ["judge_route", "forecasts_llm"],
             }
+            # Optionnel : version typée/canonique des verdicts (Pydantic schemas)
+            typed_verdicts = []
+            if build_judge_verdict:
+                for v in limited_verdicts:
+                    try:
+                        tv = build_judge_verdict(v, profile=profile)
+                        if hasattr(tv, "model_dump"):
+                            typed_verdicts.append(tv.model_dump())
+                        elif hasattr(tv, "dict"):
+                            typed_verdicts.append(tv.dict())
+                    except Exception as e:
+                        logger.info("verdict_typed_failed", extra={"error": str(e)})
+                        continue
+
+            # On ne garde qu'une seule clé pour la liste finale afin d'éviter la duplication.
+            # Si des verdicts typés existent, ils remplacent la liste brute.
+            final_verdicts = typed_verdicts if typed_verdicts else limited_verdicts
+
             if debug:
                 response_obj["debug_pipeline"] = traces
+                response_obj["verdicts_raw"] = limited_verdicts
+
+            response_obj["verdicts"] = final_verdicts
+            # On ne conserve pas verdicts_typed en parallèle pour éviter la duplication.
+            response_obj.pop("verdicts_typed", None)
             return response_obj
 
         # Ici on pourrait rebrancher load_or_compute si tu veux du cache :
