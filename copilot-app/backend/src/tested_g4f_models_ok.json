@@ -1,80 +1,10 @@
 [
   {
     "provider": "AnyProvider",
-    "model": "command-r-plus24",
-    "task": "text",
-    "ok": true,
-    "ms": 384.7,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r",
-    "task": "text",
-    "ok": true,
-    "ms": 388.1,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r",
-    "task": "text",
-    "ok": true,
-    "ms": 436.9,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-r7b-arabic-02-2025",
-    "task": "text",
-    "ok": true,
-    "ms": 495.8,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-r-plus-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 518.2,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 632.1,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-a-03-2025",
-    "task": "text",
-    "ok": true,
-    "ms": 658.5,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "AnyProvider",
     "model": "command-r7b",
     "task": "text",
     "ok": true,
-    "ms": 659.4,
+    "ms": 318.9,
     "answer": "OK",
     "error": null,
     "category": "helper_json"
@@ -84,27 +14,7 @@
     "model": "command-r24",
     "task": "text",
     "ok": true,
-    "ms": 667.1,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-r-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 673.1,
-    "answer": "OK",
-    "error": null,
-    "category": "helper_json"
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r-plus-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 675.4,
+    "ms": 352.7,
     "answer": "OK",
     "error": null,
     "category": "helper_json"
@@ -114,7 +24,117 @@
     "model": "command-r7b24",
     "task": "text",
     "ok": true,
-    "ms": 702.8,
+    "ms": 363.7,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 379.6,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 387.2,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 398.3,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 544.1,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b-arabic25",
+    "task": "text",
+    "ok": true,
+    "ms": 588.4,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 608.4,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 664.5,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 711.2,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 877.9,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus24",
+    "task": "text",
+    "ok": true,
+    "ms": 1050.5,
+    "answer": "OK",
+    "error": null,
+    "category": "helper_json"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 1346.5,
     "answer": "OK",
     "error": null,
     "category": "helper_json"

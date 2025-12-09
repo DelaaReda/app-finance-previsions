@@ -67,3 +67,6 @@ copilot-app/frontend/webapp/.npm-cache/*
 copilot-app/frontend/temp-exported-assets/
 # Tools clones (local only)
 tools/g4f-working/
+copilot-app/backend/src/tested_g4f_models_categorized.json
+copilot-app/backend/src/tested_g4f_models_ok.json
+copilot-app/backend/src/tested_g4f_models.json

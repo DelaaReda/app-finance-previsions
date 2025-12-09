@@ -1317,11 +1317,23 @@ async def get_judge_verdicts(
                             det["positive"] = pos
                             det["negative"] = neg
                             det["neutral"] = neu
+                            if sent_windows:
+                                det["windows"] = sent_windows
+                            if sent_profile:
+                                det["profile"] = sent_profile
+                            if news_headlines:
+                                det["top_news_highlights"] = [
+                                    (n.get("title") or "")[:140]
+                                    for n in news_headlines[:5]
+                                    if n.get("title")
+                                ]
                             if vals:
                                 avg = float(sum(vals) / len(vals))
                                 det["avg_score"] = avg
                                 if sent_block.get("score") is None:
                                     sent_block["score"] = avg
+                                if sent_block.get("score") and sent_block["score"] > 1:
+                                    sent_block["score"] = sent_block["score"] / 100.0
                                 # Ajouter un mini résumé lisible si absent
                                 if not sent_block.get("summary"):
                                     sent_block["summary"] = [
@@ -1338,6 +1350,19 @@ async def get_judge_verdicts(
                                         details[key] = float(tech_src[key])
                                     except Exception:
                                         pass
+                            if price_features.get("price_stats"):
+                                details.setdefault("price_stats", price_features["price_stats"])
+                            if price_features.get("price_profile"):
+                                tech_block.setdefault("summary", [])
+                                tech_block["summary"].append(
+                                    " | ".join(price_features["price_profile"].values())
+                                )
+                        fund_block = phase_blocks.get("fundamental") if isinstance(phase_blocks, dict) else None
+                        if fund_block is not None and fund_profile:
+                            fund_block.setdefault("details", {}).setdefault("profile", fund_profile)
+                        macro_block_phase = phase_blocks.get("macro") if isinstance(phase_blocks, dict) else None
+                        if macro_block_phase is not None and macro_prof:
+                            macro_block_phase.setdefault("details", {}).setdefault("profile", macro_prof)
                     except Exception:
                         pass
 
@@ -1960,6 +1985,53 @@ async def get_judge_verdicts(
                         except Exception:
                             pass
 
+                    # Normaliser les scénarios et dériver un niveau de risque simple
+                    def _normalize_scenarios(sc_list: Any) -> List[Dict[str, Any]]:
+                        out = []
+                        if not isinstance(sc_list, list):
+                            return out
+                        for sc in sc_list:
+                            if not isinstance(sc, dict):
+                                continue
+                            try:
+                                pval = float(sc.get("p"))
+                            except Exception:
+                                pval = 0.0
+                            if pval > 1.0:
+                                pval = pval / 100.0
+                            out.append(
+                                {
+                                    "name": sc.get("name"),
+                                    "p": pval,
+                                    "description": sc.get("description"),
+                                }
+                            )
+                        total = sum(s.get("p", 0.0) for s in out)
+                        if total > 0:
+                            for s in out:
+                                s["p"] = s.get("p", 0.0) / total
+                        return out
+
+                    scenarios_norm = _normalize_scenarios(parsed.get("scenarios") if isinstance(parsed, dict) else None)
+                    if isinstance(parsed, dict):
+                        parsed["scenarios"] = scenarios_norm
+
+                    def _derive_risk_level(sc_list: List[Dict[str, Any]]) -> str:
+                        if not sc_list:
+                            return "medium"
+                        p_bear = max(
+                            (s.get("p") or 0.0)
+                            for s in sc_list
+                            if (s.get("name") or "").lower().startswith("bear")
+                        ) if any((s.get("name") or "").lower().startswith("bear") for s in sc_list) else 0.0
+                        if p_bear >= 0.35:
+                            return "high"
+                        if p_bear <= 0.15:
+                            return "low"
+                        return "medium"
+
+                    derived_risk = _derive_risk_level(scenarios_norm)
+
                     # Phase scores: distinguer brut (pipeline) vs normalisé (0-1)
                     raw_phase_scores = {
                         k: (v.get("score") if isinstance(v, dict) else None)
@@ -1993,6 +2065,31 @@ async def get_judge_verdicts(
                     elif raw_phase_scores and isinstance(raw_phase_scores, dict):
                         norm_phase_scores = _normalize_scores(raw_phase_scores)
 
+                    # Freshness timestamps
+                    latest_news_ts = None
+                    try:
+                        ts_vals = [
+                            _normalize_ts_str(n.get("ts") or n.get("published_at") or n.get("ingested_at"))
+                            for n in news_items
+                        ]
+                        ts_vals = [t for t in ts_vals if t]
+                        if ts_vals:
+                            latest_news_ts = max(ts_vals)
+                    except Exception:
+                        latest_news_ts = None
+
+                    price_live_ts = None
+                    try:
+                        price_live_ts = _normalize_ts_str(feat.get("tech", {}).get("live_ts"))
+                    except Exception:
+                        price_live_ts = None
+
+                    data_timestamps = {
+                        "macro": macro_ctx.get("cpi_last_date"),
+                        "price_live": price_live_ts,
+                        "news_last": latest_news_ts,
+                    }
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -2000,7 +2097,7 @@ async def get_judge_verdicts(
                         "expected_return": expected_return_final,
                         "expected_return_raw": expected_return,
                         "expected_return_ensemble": expected_return_ensemble,
-                        "risk_level": "medium",
+                        "risk_level": derived_risk,
                         "reasoning": parsed.get("summary")
                         if isinstance(parsed, dict)
                         else None,
@@ -2015,6 +2112,9 @@ async def get_judge_verdicts(
                         "generated_at": datetime.utcnow().isoformat() + "Z",
                         "model_version": model_used or "econ_llm_agent",
                         "source": ["judge_route", "forecasts_llm"],
+                        "meta": {
+                            "data_timestamps": data_timestamps,
+                        },
                         **(
                             {
                                 "debug_payload": payload,
