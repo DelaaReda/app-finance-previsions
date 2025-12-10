@@ -1268,6 +1268,18 @@ async def get_judge_verdicts(
                         if price_stats:
                             price_features["price_stats"] = price_stats
                             price_features["price_profile"] = _price_profile_from_stats(price_stats)
+                            # Quick-win extras for snapshot-style consumption
+                            if price_stats.get("trend_state_3m"):
+                                price_features["price_regime"] = price_stats["trend_state_3m"]
+                            vol_block = {}
+                            if "vol_1m" in price_stats:
+                                vol_block["1m"] = price_stats["vol_1m"]
+                            if "vol_3m" in price_stats:
+                                vol_block["3m"] = price_stats["vol_3m"]
+                            if "vol_1y" in price_stats:
+                                vol_block["1y"] = price_stats["vol_1y"]
+                            if vol_block:
+                                price_features["volatility"] = {"realized_vol": vol_block}
                     except Exception:
                         price_features = {}
 
@@ -1456,6 +1468,11 @@ async def get_judge_verdicts(
                     try:
                         if price_features:
                             feat.update(price_features)
+                            # Keep a flat alias for price_regime if present
+                            if "price_regime" in price_features:
+                                feat["price_regime"] = price_features["price_regime"]
+                            if "volatility" in price_features:
+                                feat["volatility"] = price_features["volatility"]
                         if sent_windows:
                             feat["sentiment_windows"] = sent_windows
                         if sent_profile:

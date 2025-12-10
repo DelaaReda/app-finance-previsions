@@ -9,31 +9,71 @@
         "expected_return": 0.0011468321623057907,
         "expected_return_ensemble": 0.0011468321623057907,
         "expected_return_raw": 0.0063,
-        "risk_level": "medium",
-        "confidence": 0.4,
+        "risk_level": "low",
+        "confidence": 0.65,
         "quant_confidence": 0.35,
-        "summary": [],
-        "scenarios": [],
-        "risks": [],
+        "summary": [
+          "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+          "High implied volatility (50%) suggests significant price swings expected.",
+          "RSI at 68 indicates nearing overbought territory but not extreme."
+        ],
+        "scenarios": [
+          {
+            "name": "Continued momentum",
+            "p": 0.6,
+            "description": null
+          },
+          {
+            "name": "Technical correction",
+            "p": 0.3,
+            "description": null
+          },
+          {
+            "name": "Negative news catalyst",
+            "p": 0.1,
+            "description": null
+          }
+        ],
+        "risks": [
+          "Overbought technical conditions triggering profit-taking",
+          "Sector-wide volatility impacting semiconductor stocks",
+          "Unexpected regulatory headlines on AI exports"
+        ],
         "impacts": {
-          "FX": null,
-          "rates": null,
-          "commodities": null,
-          "equity": null
+          "FX": [
+            "Limited direct impact"
+          ],
+          "rates": [
+            "Minimal influence"
+          ],
+          "commodities": [
+            "Non-applicable"
+          ],
+          "equity": [
+            "Semiconductor sector volatility",
+            "NVDA-specific gamma exposure effects"
+          ]
         },
-        "actions": [],
+        "actions": [
+          "Monitor 1-week volatility skew for tactical entries",
+          "Set tighter stop-loss levels given elevated IV",
+          "Track competitor announcements in AI chip space"
+        ],
         "phase_scores": {
           "fundamental": 0.6,
           "technical": 0.6085,
           "macro": 0.475,
-          "sentiment": 0.74,
-          "fusion": 0.5611666666666667
+          "sentiment": 0.73,
+          "fusion": 0.5611666666666667,
+          "momentum": 1.0,
+          "news_sentiment": 1.0,
+          "liquidity": 1.0
         },
         "phase_scores_raw": {
           "fundamental": 0.6,
           "technical": 0.6085,
           "macro": 0.475,
-          "sentiment": 0.74,
+          "sentiment": 0.73,
           "fusion": 0.5611666666666667
         },
         "ml_prior": {
@@ -42,7 +82,11 @@
           "horizon": "1w",
           "source": "ml_baseline"
         },
-        "data_needed": [],
+        "data_needed": [
+          "Blackwell order flow confirmation",
+          "Fed meeting minutes impact on tech valuations",
+          "Competitor product timelines"
+        ],
         "phases": {
           "fundamental": {
             "score": 0.6,
@@ -112,9 +156,9 @@
             }
           },
           "sentiment": {
-            "score": 0.74,
+            "score": 0.73,
             "summary": [
-              "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+              "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
             ],
             "details": {
               "news_count": 5,
@@ -123,28 +167,28 @@
               "neutral": 0,
               "windows": {
                 "24h": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "3d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "7d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "30d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
@@ -154,16 +198,16 @@
               "profile": {
                 "trend_7d_vs_30d": "stable",
                 "skew_7d": "mostly_positive",
-                "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
               },
               "top_news_highlights": [
-                "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                 "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                 "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                "Why Trump's Nvidia–China announcement didn't move markets"
+                "Why Trump's Nvidia–China announcement didn't move markets",
+                "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
               ],
-              "avg_score": 74.0
+              "avg_score": 73.0
             }
           },
           "fusion": {
@@ -174,23 +218,130 @@
             "details": {}
           }
         },
-        "attachments": [],
+        "attachments": [
+          {
+            "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
+            "sent": "positive",
+            "ts": "Tue, 09 Dec 2025 21:31:30 +0000",
+            "source": "Yahoo Finance - NVDA",
+            "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
+            "tickers": [
+              "NVDA"
+            ]
+          },
+          {
+            "title": "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
+            "sent": "positive",
+            "ts": "Wed, 10 Dec 2025 00:10:00 +0000",
+            "source": "Yahoo Finance - NVDA",
+            "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
+            "tickers": [
+              "NVDA",
+              "TSLA"
+            ]
+          },
+          {
+            "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
+            "sent": "positive",
+            "ts": "Tue, 09 Dec 2025 22:06:42 +0000",
+            "source": "Yahoo Finance - NVDA",
+            "summary": "🔎 Nvidia (NVDA): President Trump said he would let Nvidia export its H200 chip to China, and the U.S. would receive a 25% cut. He said the government would take a similar approach ",
+            "tickers": [
+              "NVDA"
+            ]
+          },
+          {
+            "title": "Why Trump's Nvidia–China announcement didn't move markets",
+            "sent": "positive",
+            "ts": "Tue, 09 Dec 2025 21:33:13 +0000",
+            "source": "Yahoo Finance - NVDA",
+            "summary": "President Trump announced on Monday that he has approved Nvidia (NVDA) selling H200 chips in China. Yahoo Finance Technology Editor Dan Howley joins Market Domination Overtime host",
+            "tickers": [
+              "NVDA"
+            ]
+          },
+          {
+            "title": "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipment",
+            "sent": "positive",
+            "ts": "Tue, 09 Dec 2025 21:05:00 +0000",
+            "source": "Yahoo Finance - NVDA",
+            "summary": "Super Micro Computer, Inc. (SMCI), a Total IT Solution Provider for AI, Cloud, Storage, and 5G/Edge, today announced the expansion of its NVIDIA Blackwell architecture portfolio wi",
+            "tickers": [
+              "NVDA"
+            ]
+          }
+        ],
         "analysis": {
-          "error": "no_json",
-          "phase_scores": {},
+          "summary": [
+            "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+            "High implied volatility (50%) suggests significant price swings expected.",
+            "RSI at 68 indicates nearing overbought territory but not extreme."
+          ],
+          "scenarios": [
+            {
+              "name": "Continued momentum",
+              "p": 0.6,
+              "description": null
+            },
+            {
+              "name": "Technical correction",
+              "p": 0.3,
+              "description": null
+            },
+            {
+              "name": "Negative news catalyst",
+              "p": 0.1,
+              "description": null
+            }
+          ],
+          "risks": [
+            "Overbought technical conditions triggering profit-taking",
+            "Sector-wide volatility impacting semiconductor stocks",
+            "Unexpected regulatory headlines on AI exports"
+          ],
+          "impacts": {
+            "FX": [
+              "Limited direct impact"
+            ],
+            "rates": [
+              "Minimal influence"
+            ],
+            "commodities": [
+              "Non-applicable"
+            ],
+            "equity": [
+              "Semiconductor sector volatility",
+              "NVDA-specific gamma exposure effects"
+            ]
+          },
+          "actions": [
+            "Monitor 1-week volatility skew for tactical entries",
+            "Set tighter stop-loss levels given elevated IV",
+            "Track competitor announcements in AI chip space"
+          ],
+          "confidence": 0.65,
+          "data_needed": [
+            "Blackwell order flow confirmation",
+            "Fed meeting minutes impact on tech valuations",
+            "Competitor product timelines"
+          ],
+          "phase_scores": {
+            "momentum": 8,
+            "news_sentiment": 7,
+            "liquidity": 6
+          },
           "ml_prior": {
             "pred_return": -0.008423336679126314,
             "confidence": 0.35,
             "horizon": "1w",
             "source": "ml_baseline"
           },
-          "confidence": 0.4,
-          "scenarios": []
+          "error": null
         },
         "meta": {
-          "generated_at": "2025-12-09T23:46:21.482397+00:00",
-          "model_version": "codestral-2508",
-          "provider": "Codestral",
+          "generated_at": "2025-12-10T00:25:10.853390+00:00",
+          "model_version": "tngtech/deepseek-r1t2-chimera:free",
+          "provider": "OpenRouter",
           "profile": "equity_1w",
           "source": [
             "judge_route",
@@ -199,10 +350,10 @@
           "data_timestamps": {
             "macro": "2025-09-01",
             "price_live": "2025-12-09T15:30:00-05:00",
-            "news_last": "Tue, 09 Dec 2025 22:35:20 +0000"
+            "news_last": "Wed, 10 Dec 2025 00:10:00 +0000"
           }
         },
-        "raw_answer": "{\"error\":\"no_json\"}",
+        "raw_answer": "\n{\"summary\": [\"Positive momentum driven by Blackwell architecture news and strong AI demand.\", \"High implied volatility (50%) suggests significant price swings expected.\", \"RSI at 68 indicates nearing overbought territory but not extreme.\"], \"scenarios\": [{\"name\": \"Continued momentum\", \"p\": 60}, {\"name\": \"Technical correction\", \"p\": 30}, {\"name\": \"Negative news catalyst\", \"p\": 10}], \"risks\": [\"Overbought technical conditions triggering profit-taking\", \"Sector-wide volatility impacting semiconductor stocks\", \"Unexpected regulatory headlines on AI exports\"], \"impacts\": {\"FX\": [\"Limited direct impact\"], \"rates\": [\"Minimal influence\"], \"commodities\": [\"Non-applicable\"], \"equity\": [\"Semiconductor sector volatility\", \"NVDA-specific gamma exposure effects\"]}, \"actions\": [\"Monitor 1-week volatility skew for tactical entries\", \"Set tighter stop-loss levels given elevated IV\", \"Track competitor announcements in AI chip space\"], \"confidence\": 0.65, \"data_needed\": [\"Blackwell order flow confirmation\", \"Fed meeting minutes impact on tech valuations\", \"Competitor product timelines\"], \"phase_scores\": {\"momentum\": 8, \"news_sentiment\": 7, \"liquidity\": 6}, \"ml_prior\": 0.72, \"source\": \"Yahoo Finance, Options pricing data\"}",
         "debug_payload": {
           "question": "Analyze NVDA for 1-week horizon.\nFocus: Short-term momentum + news impact.\nKeep response under 500 tokens.\n NE RÉPONDS QUE PAR UNE SEULE LIGNE JSON STRICT qui commence par { et se termine par }.\nAUCUN TEXTE AVANT ou APRÈS.\nClés attendues : summary, scenarios, risks, impacts, actions, confidence, data_needed, phase_scores, ml_prior.\nExemple de structure : {\"summary\": [\"...\", \"...\"], \"scenarios\": [{\"name\": \"base\", \"p\": 60}], \"risks\": [\"...\"], \"impacts\": {\"FX\": [\"...\"], \"rates\": [\"...\"], \"commodities\": [\"...\"], \"equity\": [\"...\"]}, \"actions\": [\"...\"], \"confidence\": 0.0-1.0, \"data_needed\": [\"...\"], \"phase_scores\": {\"fundamental\": num, \"technical\": num, \"macro\": num, \"sentiment\": num, \"fusion\": num}, \"ml_prior\": {\"pred_return\": num, \"confidence\": num, \"horizon\": \"...\"}}\nUtilise les blocs phases (fundamental/technical/macro/sentiment/fusion) et leurs scores, ainsi que price_stats/price_profile, sentiment_windows/sentiment_profile, fundamentals_profile, macro_profile. Si une donnée manque, liste-la dans data_needed. SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}.",
           "features": {
@@ -284,15 +435,15 @@
               "source": "yfinance_live",
               "rsi": 54.33876081234479,
               "macd": {
-                "macd": -1.5141263480086025,
-                "signal": -1.9440278670930433,
-                "hist": 0.42990151908444085
+                "macd": -1.514126351567029,
+                "signal": -1.9440278723173448,
+                "hist": 0.42990152075031585
               },
               "bollinger": {
-                "upper": 193.18813222943015,
-                "lower": 174.08552041949565,
+                "upper": 193.18813222942987,
+                "lower": 174.08552041949594,
                 "ma": 183.6368263244629,
-                "position": 0.5697901893994879
+                "position": 0.56979018939949
               },
               "sma20": 183.6368263244629,
               "sma50": 187.2975930786133,
@@ -315,8 +466,8 @@
               "wti_delta_1m": -0.029219719229513535,
               "brent": 64.22,
               "brent_delta_1m": -0.018643031784841058,
-              "gold": 4238.7998046875,
-              "gold_delta_1m": 0.0598589558907214
+              "gold": 4237.39990234375,
+              "gold_delta_1m": 0.059508927792023485
             },
             "sector": "Technology",
             "industry": "Semiconductors",
@@ -382,28 +533,28 @@
             },
             "sentiment_windows": {
               "24h": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "3d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "7d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "30d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
@@ -413,7 +564,7 @@
             "sentiment_profile": {
               "trend_7d_vs_30d": "stable",
               "skew_7d": "mostly_positive",
-              "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+              "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
             },
             "fundamentals_profile": {
               "valuation": "very_expensive",
@@ -497,9 +648,9 @@
                 }
               },
               "sentiment": {
-                "score": 0.74,
+                "score": 0.73,
                 "summary": [
-                  "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                  "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
                 ],
                 "details": {
                   "news_count": 5,
@@ -508,28 +659,28 @@
                   "neutral": 0,
                   "windows": {
                     "24h": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "3d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "7d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "30d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
@@ -539,16 +690,16 @@
                   "profile": {
                     "trend_7d_vs_30d": "stable",
                     "skew_7d": "mostly_positive",
-                    "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                    "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
                   },
                   "top_news_highlights": [
-                    "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                     "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                    "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                    "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                     "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                    "Why Trump's Nvidia–China announcement didn't move markets"
+                    "Why Trump's Nvidia–China announcement didn't move markets",
+                    "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
                   ],
-                  "avg_score": 74.0
+                  "avg_score": 73.0
                 }
               },
               "fusion": {
@@ -628,9 +779,9 @@
               }
             },
             "sentiment": {
-              "score": 0.74,
+              "score": 0.73,
               "summary": [
-                "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
               ],
               "details": {
                 "news_count": 5,
@@ -639,28 +790,28 @@
                 "neutral": 0,
                 "windows": {
                   "24h": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "3d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "7d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "30d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
@@ -670,16 +821,16 @@
                 "profile": {
                   "trend_7d_vs_30d": "stable",
                   "skew_7d": "mostly_positive",
-                  "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                  "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
                 },
                 "top_news_highlights": [
-                  "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                   "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                  "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                  "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                   "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                  "Why Trump's Nvidia–China announcement didn't move markets"
+                  "Why Trump's Nvidia–China announcement didn't move markets",
+                  "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
                 ],
-                "avg_score": 74.0
+                "avg_score": 73.0
               }
             },
             "fusion": {
@@ -690,21 +841,6 @@
             }
           },
           "news": [
-            {
-              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
-              "summary": "",
-              "url": "",
-              "published_at": "2025-12-08T15:11:00Z",
-              "source": "Yahoo Finance - Markets",
-              "category": "markets",
-              "score": 60.0,
-              "sentiment": "positive",
-              "tickers": [
-                "NVDA"
-              ],
-              "ingested_at": "2025-12-09T23:39:27.627705Z",
-              "ts": "2025-12-08T15:11:00Z"
-            },
             {
               "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
               "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
@@ -717,24 +853,24 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.265808Z",
+              "ingested_at": "2025-12-10T00:22:18.679601Z",
               "ts": "Tue, 09 Dec 2025 21:31:30 +0000"
             },
             {
-              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "title": "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
               "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
               "url": "",
-              "published_at": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "published_at": "Wed, 10 Dec 2025 00:10:00 +0000",
               "source": "Yahoo Finance - NVDA",
               "category": "semiconductors",
-              "score": 90.0,
+              "score": 85.0,
               "sentiment": "positive",
               "tickers": [
                 "NVDA",
                 "TSLA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.264261Z",
-              "ts": "Tue, 09 Dec 2025 22:35:20 +0000"
+              "ingested_at": "2025-12-10T00:22:18.678682Z",
+              "ts": "Wed, 10 Dec 2025 00:10:00 +0000"
             },
             {
               "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
@@ -748,7 +884,7 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.264730Z",
+              "ingested_at": "2025-12-10T00:22:18.679149Z",
               "ts": "Tue, 09 Dec 2025 22:06:42 +0000"
             },
             {
@@ -763,21 +899,26 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.265643Z",
+              "ingested_at": "2025-12-10T00:22:18.679539Z",
               "ts": "Tue, 09 Dec 2025 21:33:13 +0000"
+            },
+            {
+              "title": "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipment",
+              "summary": "Super Micro Computer, Inc. (SMCI), a Total IT Solution Provider for AI, Cloud, Storage, and 5G/Edge, today announced the expansion of its NVIDIA Blackwell architecture portfolio with the introduction and shipment availability of new 4U and 2-OU (OCP) liquid-cooled NVIDIA HGX B300 systems. These late",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:05:00 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-10T00:22:18.679883Z",
+              "ts": "Tue, 09 Dec 2025 21:05:00 +0000"
             }
           ],
           "attachments": [
-            {
-              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
-              "sent": "positive",
-              "ts": "2025-12-08T15:11:00Z",
-              "source": "Yahoo Finance - Markets",
-              "summary": "",
-              "tickers": [
-                "NVDA"
-              ]
-            },
             {
               "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
               "sent": "positive",
@@ -789,9 +930,9 @@
               ]
             },
             {
-              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "title": "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
               "sent": "positive",
-              "ts": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "ts": "Wed, 10 Dec 2025 00:10:00 +0000",
               "source": "Yahoo Finance - NVDA",
               "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
               "tickers": [
@@ -818,6 +959,16 @@
               "tickers": [
                 "NVDA"
               ]
+            },
+            {
+              "title": "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipment",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:05:00 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "Super Micro Computer, Inc. (SMCI), a Total IT Solution Provider for AI, Cloud, Storage, and 5G/Edge, today announced the expansion of its NVIDIA Blackwell architecture portfolio wi",
+              "tickers": [
+                "NVDA"
+              ]
             }
           ],
           "locale": "fr-FR",
@@ -837,36 +988,96 @@
         },
         "debug_llm_res": {
           "ok": true,
-          "answer": "{\"error\":\"no_json\"}",
-          "model": "codestral-2508",
-          "provider": "Codestral",
-          "usage": {
-            "prompt_tokens": 2299,
-            "total_tokens": 2306,
-            "completion_tokens": 7
-          },
-          "raw": {
-            "id": "308f8fffaa7149bda443430a0fe6078f",
-            "created": 1765323981,
-            "model": "codestral-2508",
-            "usage": {
-              "prompt_tokens": 2299,
-              "total_tokens": 2306,
-              "completion_tokens": 7
-            },
-            "object": "chat.completion",
-            "choices": [
+          "model": "tngtech/deepseek-r1t2-chimera:free",
+          "provider": "OpenRouter",
+          "attempt": 1,
+          "answer": "\n{\"summary\": [\"Positive momentum driven by Blackwell architecture news and strong AI demand.\", \"High implied volatility (50%) suggests significant price swings expected.\", \"RSI at 68 indicates nearing overbought territory but not extreme.\"], \"scenarios\": [{\"name\": \"Continued momentum\", \"p\": 60}, {\"name\": \"Technical correction\", \"p\": 30}, {\"name\": \"Negative news catalyst\", \"p\": 10}], \"risks\": [\"Overbought technical conditions triggering profit-taking\", \"Sector-wide volatility impacting semiconductor stocks\", \"Unexpected regulatory headlines on AI exports\"], \"impacts\": {\"FX\": [\"Limited direct impact\"], \"rates\": [\"Minimal influence\"], \"commodities\": [\"Non-applicable\"], \"equity\": [\"Semiconductor sector volatility\", \"NVDA-specific gamma exposure effects\"]}, \"actions\": [\"Monitor 1-week volatility skew for tactical entries\", \"Set tighter stop-loss levels given elevated IV\", \"Track competitor announcements in AI chip space\"], \"confidence\": 0.65, \"data_needed\": [\"Blackwell order flow confirmation\", \"Fed meeting minutes impact on tech valuations\", \"Competitor product timelines\"], \"phase_scores\": {\"momentum\": 8, \"news_sentiment\": 7, \"liquidity\": 6}, \"ml_prior\": 0.72, \"source\": \"Yahoo Finance, Options pricing data\"}",
+          "parsed": {
+            "summary": [
+              "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+              "High implied volatility (50%) suggests significant price swings expected.",
+              "RSI at 68 indicates nearing overbought territory but not extreme."
+            ],
+            "scenarios": [
               {
-                "index": 0,
-                "finish_reason": "stop",
-                "message": {
-                  "role": "assistant",
-                  "tool_calls": null,
-                  "content": "{\"error\":\"no_json\"}"
-                }
+                "name": "Continued momentum",
+                "p": 60
+              },
+              {
+                "name": "Technical correction",
+                "p": 30
+              },
+              {
+                "name": "Negative news catalyst",
+                "p": 10
               }
-            ]
-          }
+            ],
+            "risks": [
+              "Overbought technical conditions triggering profit-taking",
+              "Sector-wide volatility impacting semiconductor stocks",
+              "Unexpected regulatory headlines on AI exports"
+            ],
+            "impacts": {
+              "FX": [
+                "Limited direct impact"
+              ],
+              "rates": [
+                "Minimal influence"
+              ],
+              "commodities": [
+                "Non-applicable"
+              ],
+              "equity": [
+                "Semiconductor sector volatility",
+                "NVDA-specific gamma exposure effects"
+              ]
+            },
+            "actions": [
+              "Monitor 1-week volatility skew for tactical entries",
+              "Set tighter stop-loss levels given elevated IV",
+              "Track competitor announcements in AI chip space"
+            ],
+            "confidence": 0.65,
+            "data_needed": [
+              "Blackwell order flow confirmation",
+              "Fed meeting minutes impact on tech valuations",
+              "Competitor product timelines"
+            ],
+            "phase_scores": {
+              "momentum": 8,
+              "news_sentiment": 7,
+              "liquidity": 6
+            },
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "source": "Yahoo Finance, Options pricing data"
+          },
+          "usage": {
+            "prompt_tokens": 613,
+            "completion_tokens": 545,
+            "total_tokens": 1158,
+            "cost": 0,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 1,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": null,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 313,
+              "image_tokens": 0
+            }
+          },
+          "latency_ms": 0
         }
       }
     ],
@@ -874,8 +1085,8 @@
     "stats": {
       "total_verdicts": 1,
       "high_confidence_count": 0,
-      "avg_confidence": 0.4,
-      "generated_at": "2025-12-09T23:46:21.483521Z"
+      "avg_confidence": 0.65,
+      "generated_at": "2025-12-10T00:25:10.853543Z"
     },
     "filters_applied": {
       "min_confidence": 0.3,
@@ -884,35 +1095,52 @@
       "sort_order": "desc",
       "limit": 1
     },
-    "generated_at": "2025-12-09T23:46:21.483521Z",
+    "generated_at": "2025-12-10T00:25:10.853543Z",
     "source": [
       "judge_route",
       "forecasts_llm"
     ],
     "debug_pipeline": [
       {
-        "timestamp": "2025-12-09T23:46:18.258304Z",
+        "timestamp": "2025-12-10T00:24:27.861321Z",
         "event": "debug_start",
         "limit": 1,
-        "profile": "equity_1w"
+        "profile": "equity_1w",
+        "ticker": null
       },
       {
-        "timestamp": "2025-12-09T23:46:18.258354Z",
+        "timestamp": "2025-12-10T00:24:27.861349Z",
         "event": "data_load_start"
       },
       {
-        "timestamp": "2025-12-09T23:46:18.262585Z",
+        "timestamp": "2025-12-10T00:24:27.864707Z",
         "event": "data_loaded",
         "forecasts": 8,
         "news_count": 100
       },
       {
-        "timestamp": "2025-12-09T23:46:18.273059Z",
+        "timestamp": "2025-12-10T00:24:27.872525Z",
+        "event": "profile_filter_applied",
+        "profile": "equity_1w",
+        "before": 8,
+        "after": 8
+      },
+      {
+        "timestamp": "2025-12-10T00:24:27.872576Z",
+        "event": "rows_selected",
+        "total_rows": 8,
+        "after_filters": 8,
+        "selected": 1,
+        "limit": 1,
+        "hard_cap": 1
+      },
+      {
+        "timestamp": "2025-12-10T00:24:27.873508Z",
         "event": "row_start",
         "ticker": "NVDA"
       },
       {
-        "timestamp": "2025-12-09T23:46:18.892126Z",
+        "timestamp": "2025-12-10T00:24:28.075196Z",
         "event": "ml_prior",
         "ticker": "NVDA",
         "pred": -0.008423336679126314,
@@ -920,7 +1148,7 @@
         "error": null
       },
       {
-        "timestamp": "2025-12-09T23:46:18.892165Z",
+        "timestamp": "2025-12-10T00:24:28.075231Z",
         "event": "ensemble",
         "ticker": "NVDA",
         "expected_return_raw": 0.0063,
@@ -929,10 +1157,10 @@
         "expected_return_ensemble": 0.0011468321623057907
       },
       {
-        "timestamp": "2025-12-09T23:46:20.014993Z",
+        "timestamp": "2025-12-10T00:24:28.759092Z",
         "event": "phases_built",
         "ticker": "NVDA",
-        "duration_ms": 0.14266697689890862,
+        "duration_ms": 0.08608296047896147,
         "phases": [
           "fundamental",
           "technical",
@@ -942,42 +1170,42 @@
         ]
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015009Z",
+        "timestamp": "2025-12-10T00:24:28.759106Z",
         "event": "phase_done",
         "ticker": "NVDA",
         "phase": "fundamental",
         "score": 0.6
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015015Z",
+        "timestamp": "2025-12-10T00:24:28.759111Z",
         "event": "phase_done",
         "ticker": "NVDA",
         "phase": "technical",
         "score": 0.6085
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015020Z",
+        "timestamp": "2025-12-10T00:24:28.759116Z",
         "event": "phase_done",
         "ticker": "NVDA",
         "phase": "macro",
         "score": 0.475
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015025Z",
+        "timestamp": "2025-12-10T00:24:28.759121Z",
         "event": "phase_done",
         "ticker": "NVDA",
         "phase": "sentiment",
         "score": null
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015030Z",
+        "timestamp": "2025-12-10T00:24:28.759126Z",
         "event": "phase_done",
         "ticker": "NVDA",
         "phase": "fusion",
         "score": 0.5611666666666667
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015038Z",
+        "timestamp": "2025-12-10T00:24:28.759134Z",
         "event": "phases_state",
         "ticker": "NVDA",
         "scores": {
@@ -989,7 +1217,7 @@
         }
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015051Z",
+        "timestamp": "2025-12-10T00:24:28.759148Z",
         "event": "phase_inputs",
         "ticker": "NVDA",
         "tech_keys": [
@@ -1042,7 +1270,7 @@
         "news_count": 5
       },
       {
-        "timestamp": "2025-12-09T23:46:20.015062Z",
+        "timestamp": "2025-12-10T00:24:28.759158Z",
         "event": "phase_outputs",
         "ticker": "NVDA",
         "phases_summary": {
@@ -1069,7 +1297,7 @@
         }
       },
       {
-        "timestamp": "2025-12-09T23:46:20.016091Z",
+        "timestamp": "2025-12-10T00:24:28.760065Z",
         "event": "payload_ready",
         "ticker": "NVDA",
         "phases": [
@@ -1082,46 +1310,106 @@
         "news": 5
       },
       {
-        "timestamp": "2025-12-09T23:46:21.482227Z",
+        "timestamp": "2025-12-10T00:25:10.853257Z",
         "event": "llm_call",
         "ticker": "NVDA",
         "ok": true,
-        "model": "codestral-2508",
-        "provider": "Codestral",
-        "parsed_ok": false,
+        "model": "tngtech/deepseek-r1t2-chimera:free",
+        "provider": "OpenRouter",
+        "parsed_ok": true,
         "fallback": null,
-        "llm_ms": 535.1037080399692
+        "llm_ms": 41764.21125000343,
+        "confidence": 0.65
       },
       {
-        "timestamp": "2025-12-09T23:46:21.482274Z",
+        "timestamp": "2025-12-10T00:25:10.853283Z",
         "event": "row_done",
         "ticker": "NVDA",
-        "total_ms": 3209.175958065316,
-        "confidence": 0.4,
+        "total_ms": 42979.62779097725,
+        "confidence": 0.65,
         "expected_return": 0.0011468321623057907
       }
     ],
     "verdicts_raw": [
       {
         "ticker": "NVDA",
-        "verdict": "{\"error\":\"no_json\"}",
-        "confidence": 0.4,
+        "verdict": "\n{\"summary\": [\"Positive momentum driven by Blackwell architecture news and strong AI demand.\", \"High implied volatility (50%) suggests significant price swings expected.\", \"RSI at 68 indicates nearing overbought territory but not extreme.\"], \"scenarios\": [{\"name\": \"Continued momentum\", \"p\": 60}, {\"name\": \"Technical correction\", \"p\": 30}, {\"name\": \"Negative news catalyst\", \"p\": 10}], \"risks\": [\"Overbought technical conditions triggering profit-taking\", \"Sector-wide volatility impacting semiconductor stocks\", \"Unexpected regulatory headlines on AI exports\"], \"impacts\": {\"FX\": [\"Limited direct impact\"], \"rates\": [\"Minimal influence\"], \"commodities\": [\"Non-applicable\"], \"equity\": [\"Semiconductor sector volatility\", \"NVDA-specific gamma exposure effects\"]}, \"actions\": [\"Monitor 1-week volatility skew for tactical entries\", \"Set tighter stop-loss levels given elevated IV\", \"Track competitor announcements in AI chip space\"], \"confidence\": 0.65, \"data_needed\": [\"Blackwell order flow confirmation\", \"Fed meeting minutes impact on tech valuations\", \"Competitor product timelines\"], \"phase_scores\": {\"momentum\": 8, \"news_sentiment\": 7, \"liquidity\": 6}, \"ml_prior\": 0.72, \"source\": \"Yahoo Finance, Options pricing data\"}",
+        "confidence": 0.65,
         "expected_return": 0.0011468321623057907,
         "expected_return_raw": 0.0063,
         "expected_return_ensemble": 0.0011468321623057907,
-        "risk_level": "medium",
-        "reasoning": null,
+        "risk_level": "low",
+        "reasoning": [
+          "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+          "High implied volatility (50%) suggests significant price swings expected.",
+          "RSI at 68 indicates nearing overbought territory but not extreme."
+        ],
         "analysis": {
-          "error": "no_json",
-          "phase_scores": {},
+          "summary": [
+            "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+            "High implied volatility (50%) suggests significant price swings expected.",
+            "RSI at 68 indicates nearing overbought territory but not extreme."
+          ],
+          "scenarios": [
+            {
+              "name": "Continued momentum",
+              "p": 0.6,
+              "description": null
+            },
+            {
+              "name": "Technical correction",
+              "p": 0.3,
+              "description": null
+            },
+            {
+              "name": "Negative news catalyst",
+              "p": 0.1,
+              "description": null
+            }
+          ],
+          "risks": [
+            "Overbought technical conditions triggering profit-taking",
+            "Sector-wide volatility impacting semiconductor stocks",
+            "Unexpected regulatory headlines on AI exports"
+          ],
+          "impacts": {
+            "FX": [
+              "Limited direct impact"
+            ],
+            "rates": [
+              "Minimal influence"
+            ],
+            "commodities": [
+              "Non-applicable"
+            ],
+            "equity": [
+              "Semiconductor sector volatility",
+              "NVDA-specific gamma exposure effects"
+            ]
+          },
+          "actions": [
+            "Monitor 1-week volatility skew for tactical entries",
+            "Set tighter stop-loss levels given elevated IV",
+            "Track competitor announcements in AI chip space"
+          ],
+          "confidence": 0.65,
+          "data_needed": [
+            "Blackwell order flow confirmation",
+            "Fed meeting minutes impact on tech valuations",
+            "Competitor product timelines"
+          ],
+          "phase_scores": {
+            "momentum": 8,
+            "news_sentiment": 7,
+            "liquidity": 6
+          },
           "ml_prior": {
             "pred_return": -0.008423336679126314,
             "confidence": 0.35,
             "horizon": "1w",
             "source": "ml_baseline"
           },
-          "confidence": 0.4,
-          "scenarios": []
+          "error": null
         },
         "phases": {
           "fundamental": {
@@ -1192,9 +1480,9 @@
             }
           },
           "sentiment": {
-            "score": 0.74,
+            "score": 0.73,
             "summary": [
-              "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+              "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
             ],
             "details": {
               "news_count": 5,
@@ -1203,28 +1491,28 @@
               "neutral": 0,
               "windows": {
                 "24h": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "3d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "7d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
                   "neu": 0
                 },
                 "30d": {
-                  "avg": 74.0,
+                  "avg": 73.0,
                   "count": 5,
                   "pos": 5,
                   "neg": 0,
@@ -1234,16 +1522,16 @@
               "profile": {
                 "trend_7d_vs_30d": "stable",
                 "skew_7d": "mostly_positive",
-                "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
               },
               "top_news_highlights": [
-                "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                 "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                 "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                "Why Trump's Nvidia–China announcement didn't move markets"
+                "Why Trump's Nvidia–China announcement didn't move markets",
+                "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
               ],
-              "avg_score": 74.0
+              "avg_score": 73.0
             }
           },
           "fusion": {
@@ -1257,15 +1545,13 @@
           "fundamental": 0.6,
           "technical": 0.6085,
           "macro": 0.475,
-          "sentiment": 0.74,
+          "sentiment": 0.73,
           "fusion": 0.5611666666666667
         },
         "phase_scores": {
-          "fundamental": 0.6,
-          "technical": 0.6085,
-          "macro": 0.475,
-          "sentiment": 0.74,
-          "fusion": 0.5611666666666667
+          "momentum": 0.08,
+          "news_sentiment": 0.07,
+          "liquidity": 0.06
         },
         "ml_prior": {
           "pred_return": -0.008423336679126314,
@@ -1273,9 +1559,9 @@
           "horizon": "1w",
           "source": "ml_baseline"
         },
-        "raw_answer": "{\"error\":\"no_json\"}",
-        "generated_at": "2025-12-09T23:46:21.482397Z",
-        "model_version": "codestral-2508",
+        "raw_answer": "\n{\"summary\": [\"Positive momentum driven by Blackwell architecture news and strong AI demand.\", \"High implied volatility (50%) suggests significant price swings expected.\", \"RSI at 68 indicates nearing overbought territory but not extreme.\"], \"scenarios\": [{\"name\": \"Continued momentum\", \"p\": 60}, {\"name\": \"Technical correction\", \"p\": 30}, {\"name\": \"Negative news catalyst\", \"p\": 10}], \"risks\": [\"Overbought technical conditions triggering profit-taking\", \"Sector-wide volatility impacting semiconductor stocks\", \"Unexpected regulatory headlines on AI exports\"], \"impacts\": {\"FX\": [\"Limited direct impact\"], \"rates\": [\"Minimal influence\"], \"commodities\": [\"Non-applicable\"], \"equity\": [\"Semiconductor sector volatility\", \"NVDA-specific gamma exposure effects\"]}, \"actions\": [\"Monitor 1-week volatility skew for tactical entries\", \"Set tighter stop-loss levels given elevated IV\", \"Track competitor announcements in AI chip space\"], \"confidence\": 0.65, \"data_needed\": [\"Blackwell order flow confirmation\", \"Fed meeting minutes impact on tech valuations\", \"Competitor product timelines\"], \"phase_scores\": {\"momentum\": 8, \"news_sentiment\": 7, \"liquidity\": 6}, \"ml_prior\": 0.72, \"source\": \"Yahoo Finance, Options pricing data\"}",
+        "generated_at": "2025-12-10T00:25:10.853390Z",
+        "model_version": "tngtech/deepseek-r1t2-chimera:free",
         "source": [
           "judge_route",
           "forecasts_llm"
@@ -1284,7 +1570,7 @@
           "data_timestamps": {
             "macro": "2025-09-01",
             "price_live": "2025-12-09T15:30:00-05:00",
-            "news_last": "Tue, 09 Dec 2025 22:35:20 +0000"
+            "news_last": "Wed, 10 Dec 2025 00:10:00 +0000"
           }
         },
         "debug_payload": {
@@ -1368,15 +1654,15 @@
               "source": "yfinance_live",
               "rsi": 54.33876081234479,
               "macd": {
-                "macd": -1.5141263480086025,
-                "signal": -1.9440278670930433,
-                "hist": 0.42990151908444085
+                "macd": -1.514126351567029,
+                "signal": -1.9440278723173448,
+                "hist": 0.42990152075031585
               },
               "bollinger": {
-                "upper": 193.18813222943015,
-                "lower": 174.08552041949565,
+                "upper": 193.18813222942987,
+                "lower": 174.08552041949594,
                 "ma": 183.6368263244629,
-                "position": 0.5697901893994879
+                "position": 0.56979018939949
               },
               "sma20": 183.6368263244629,
               "sma50": 187.2975930786133,
@@ -1399,8 +1685,8 @@
               "wti_delta_1m": -0.029219719229513535,
               "brent": 64.22,
               "brent_delta_1m": -0.018643031784841058,
-              "gold": 4238.7998046875,
-              "gold_delta_1m": 0.0598589558907214
+              "gold": 4237.39990234375,
+              "gold_delta_1m": 0.059508927792023485
             },
             "sector": "Technology",
             "industry": "Semiconductors",
@@ -1466,28 +1752,28 @@
             },
             "sentiment_windows": {
               "24h": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "3d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "7d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
                 "neu": 0
               },
               "30d": {
-                "avg": 74.0,
+                "avg": 73.0,
                 "count": 5,
                 "pos": 5,
                 "neg": 0,
@@ -1497,7 +1783,7 @@
             "sentiment_profile": {
               "trend_7d_vs_30d": "stable",
               "skew_7d": "mostly_positive",
-              "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+              "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
             },
             "fundamentals_profile": {
               "valuation": "very_expensive",
@@ -1581,9 +1867,9 @@
                 }
               },
               "sentiment": {
-                "score": 0.74,
+                "score": 0.73,
                 "summary": [
-                  "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                  "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
                 ],
                 "details": {
                   "news_count": 5,
@@ -1592,28 +1878,28 @@
                   "neutral": 0,
                   "windows": {
                     "24h": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "3d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "7d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
                       "neu": 0
                     },
                     "30d": {
-                      "avg": 74.0,
+                      "avg": 73.0,
                       "count": 5,
                       "pos": 5,
                       "neg": 0,
@@ -1623,16 +1909,16 @@
                   "profile": {
                     "trend_7d_vs_30d": "stable",
                     "skew_7d": "mostly_positive",
-                    "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                    "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
                   },
                   "top_news_highlights": [
-                    "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                     "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                    "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                    "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                     "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                    "Why Trump's Nvidia–China announcement didn't move markets"
+                    "Why Trump's Nvidia–China announcement didn't move markets",
+                    "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
                   ],
-                  "avg_score": 74.0
+                  "avg_score": 73.0
                 }
               },
               "fusion": {
@@ -1712,9 +1998,9 @@
               }
             },
             "sentiment": {
-              "score": 0.74,
+              "score": 0.73,
               "summary": [
-                "5/5 positives, 0 negatives, 0 neutres (avg=74.00)"
+                "5/5 positives, 0 negatives, 0 neutres (avg=73.00)"
               ],
               "details": {
                 "news_count": 5,
@@ -1723,28 +2009,28 @@
                 "neutral": 0,
                 "windows": {
                   "24h": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "3d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "7d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
                     "neu": 0
                   },
                   "30d": {
-                    "avg": 74.0,
+                    "avg": 73.0,
                     "count": 5,
                     "pos": 5,
                     "neg": 0,
@@ -1754,16 +2040,16 @@
                 "profile": {
                   "trend_7d_vs_30d": "stable",
                   "skew_7d": "mostly_positive",
-                  "summary": "Flux: 5 news/7j, avg7d=74.0, avg30d=74.0"
+                  "summary": "Flux: 5 news/7j, avg7d=73.0, avg30d=73.0"
                 },
                 "top_news_highlights": [
-                  "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
                   "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
-                  "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+                  "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
                   "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
-                  "Why Trump's Nvidia–China announcement didn't move markets"
+                  "Why Trump's Nvidia–China announcement didn't move markets",
+                  "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipm"
                 ],
-                "avg_score": 74.0
+                "avg_score": 73.0
               }
             },
             "fusion": {
@@ -1774,21 +2060,6 @@
             }
           },
           "news": [
-            {
-              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
-              "summary": "",
-              "url": "",
-              "published_at": "2025-12-08T15:11:00Z",
-              "source": "Yahoo Finance - Markets",
-              "category": "markets",
-              "score": 60.0,
-              "sentiment": "positive",
-              "tickers": [
-                "NVDA"
-              ],
-              "ingested_at": "2025-12-09T23:39:27.627705Z",
-              "ts": "2025-12-08T15:11:00Z"
-            },
             {
               "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
               "summary": "Stock Market Today: The Dow Jones index fell Tuesday afternoon. Small caps outperform the major indexes Tuesday.",
@@ -1801,24 +2072,24 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.265808Z",
+              "ingested_at": "2025-12-10T00:22:18.679601Z",
               "ts": "Tue, 09 Dec 2025 21:31:30 +0000"
             },
             {
-              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "title": "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
               "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
               "url": "",
-              "published_at": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "published_at": "Wed, 10 Dec 2025 00:10:00 +0000",
               "source": "Yahoo Finance - NVDA",
               "category": "semiconductors",
-              "score": 90.0,
+              "score": 85.0,
               "sentiment": "positive",
               "tickers": [
                 "NVDA",
                 "TSLA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.264261Z",
-              "ts": "Tue, 09 Dec 2025 22:35:20 +0000"
+              "ingested_at": "2025-12-10T00:22:18.678682Z",
+              "ts": "Wed, 10 Dec 2025 00:10:00 +0000"
             },
             {
               "title": "Stocks to Watch Tuesday Recap: Nvidia, AutoZone, PepsiCo, Campbell’s",
@@ -1832,7 +2103,7 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.264730Z",
+              "ingested_at": "2025-12-10T00:22:18.679149Z",
               "ts": "Tue, 09 Dec 2025 22:06:42 +0000"
             },
             {
@@ -1847,21 +2118,26 @@
               "tickers": [
                 "NVDA"
               ],
-              "ingested_at": "2025-12-09T23:39:28.265643Z",
+              "ingested_at": "2025-12-10T00:22:18.679539Z",
               "ts": "Tue, 09 Dec 2025 21:33:13 +0000"
+            },
+            {
+              "title": "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipment",
+              "summary": "Super Micro Computer, Inc. (SMCI), a Total IT Solution Provider for AI, Cloud, Storage, and 5G/Edge, today announced the expansion of its NVIDIA Blackwell architecture portfolio with the introduction and shipment availability of new 4U and 2-OU (OCP) liquid-cooled NVIDIA HGX B300 systems. These late",
+              "url": "",
+              "published_at": "Tue, 09 Dec 2025 21:05:00 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "category": "semiconductors",
+              "score": 60.0,
+              "sentiment": "positive",
+              "tickers": [
+                "NVDA"
+              ],
+              "ingested_at": "2025-12-10T00:22:18.679883Z",
+              "ts": "Tue, 09 Dec 2025 21:05:00 +0000"
             }
           ],
           "attachments": [
-            {
-              "title": "Nvidia Stock Has a Lot Riding on Broadcom Earnings",
-              "sent": "positive",
-              "ts": "2025-12-08T15:11:00Z",
-              "source": "Yahoo Finance - Markets",
-              "summary": "",
-              "tickers": [
-                "NVDA"
-              ]
-            },
             {
               "title": "Stock Market Today: Dow Retreats As Nasdaq Pulls Ahead; JP Morgan, Nvidia On Losing End (Live Coverage)",
               "sent": "positive",
@@ -1873,9 +2149,9 @@
               ]
             },
             {
-              "title": "Dow Jones Futures: GE Vernova Jumps After Tesla Rises, Nvidia Stalls; Fed Decision Looms",
+              "title": "Dow Jones Futures: GE Vernova Jumps Late; Fed Decision Looms",
               "sent": "positive",
-              "ts": "Tue, 09 Dec 2025 22:35:20 +0000",
+              "ts": "Wed, 10 Dec 2025 00:10:00 +0000",
               "source": "Yahoo Finance - NVDA",
               "summary": "The stock market was narrowly mixed Tuesday ahead of the Fed decision. Tesla bounced off key support, Nvidia hit resistance.",
               "tickers": [
@@ -1902,6 +2178,16 @@
               "tickers": [
                 "NVDA"
               ]
+            },
+            {
+              "title": "Supermicro Expands NVIDIA Blackwell Portfolio with New 4U and 2-OU (OCP) Liquid-Cooled NVIDIA HGX B300 Solutions Ready for High-Volume Shipment",
+              "sent": "positive",
+              "ts": "Tue, 09 Dec 2025 21:05:00 +0000",
+              "source": "Yahoo Finance - NVDA",
+              "summary": "Super Micro Computer, Inc. (SMCI), a Total IT Solution Provider for AI, Cloud, Storage, and 5G/Edge, today announced the expansion of its NVIDIA Blackwell architecture portfolio wi",
+              "tickers": [
+                "NVDA"
+              ]
             }
           ],
           "locale": "fr-FR",
@@ -1921,39 +2207,99 @@
         },
         "debug_llm_res": {
           "ok": true,
-          "answer": "{\"error\":\"no_json\"}",
-          "model": "codestral-2508",
-          "provider": "Codestral",
-          "usage": {
-            "prompt_tokens": 2299,
-            "total_tokens": 2306,
-            "completion_tokens": 7
-          },
-          "raw": {
-            "id": "308f8fffaa7149bda443430a0fe6078f",
-            "created": 1765323981,
-            "model": "codestral-2508",
-            "usage": {
-              "prompt_tokens": 2299,
-              "total_tokens": 2306,
-              "completion_tokens": 7
-            },
-            "object": "chat.completion",
-            "choices": [
+          "model": "tngtech/deepseek-r1t2-chimera:free",
+          "provider": "OpenRouter",
+          "attempt": 1,
+          "answer": "\n{\"summary\": [\"Positive momentum driven by Blackwell architecture news and strong AI demand.\", \"High implied volatility (50%) suggests significant price swings expected.\", \"RSI at 68 indicates nearing overbought territory but not extreme.\"], \"scenarios\": [{\"name\": \"Continued momentum\", \"p\": 60}, {\"name\": \"Technical correction\", \"p\": 30}, {\"name\": \"Negative news catalyst\", \"p\": 10}], \"risks\": [\"Overbought technical conditions triggering profit-taking\", \"Sector-wide volatility impacting semiconductor stocks\", \"Unexpected regulatory headlines on AI exports\"], \"impacts\": {\"FX\": [\"Limited direct impact\"], \"rates\": [\"Minimal influence\"], \"commodities\": [\"Non-applicable\"], \"equity\": [\"Semiconductor sector volatility\", \"NVDA-specific gamma exposure effects\"]}, \"actions\": [\"Monitor 1-week volatility skew for tactical entries\", \"Set tighter stop-loss levels given elevated IV\", \"Track competitor announcements in AI chip space\"], \"confidence\": 0.65, \"data_needed\": [\"Blackwell order flow confirmation\", \"Fed meeting minutes impact on tech valuations\", \"Competitor product timelines\"], \"phase_scores\": {\"momentum\": 8, \"news_sentiment\": 7, \"liquidity\": 6}, \"ml_prior\": 0.72, \"source\": \"Yahoo Finance, Options pricing data\"}",
+          "parsed": {
+            "summary": [
+              "Positive momentum driven by Blackwell architecture news and strong AI demand.",
+              "High implied volatility (50%) suggests significant price swings expected.",
+              "RSI at 68 indicates nearing overbought territory but not extreme."
+            ],
+            "scenarios": [
               {
-                "index": 0,
-                "finish_reason": "stop",
-                "message": {
-                  "role": "assistant",
-                  "tool_calls": null,
-                  "content": "{\"error\":\"no_json\"}"
-                }
+                "name": "Continued momentum",
+                "p": 60
+              },
+              {
+                "name": "Technical correction",
+                "p": 30
+              },
+              {
+                "name": "Negative news catalyst",
+                "p": 10
               }
-            ]
-          }
+            ],
+            "risks": [
+              "Overbought technical conditions triggering profit-taking",
+              "Sector-wide volatility impacting semiconductor stocks",
+              "Unexpected regulatory headlines on AI exports"
+            ],
+            "impacts": {
+              "FX": [
+                "Limited direct impact"
+              ],
+              "rates": [
+                "Minimal influence"
+              ],
+              "commodities": [
+                "Non-applicable"
+              ],
+              "equity": [
+                "Semiconductor sector volatility",
+                "NVDA-specific gamma exposure effects"
+              ]
+            },
+            "actions": [
+              "Monitor 1-week volatility skew for tactical entries",
+              "Set tighter stop-loss levels given elevated IV",
+              "Track competitor announcements in AI chip space"
+            ],
+            "confidence": 0.65,
+            "data_needed": [
+              "Blackwell order flow confirmation",
+              "Fed meeting minutes impact on tech valuations",
+              "Competitor product timelines"
+            ],
+            "phase_scores": {
+              "momentum": 8,
+              "news_sentiment": 7,
+              "liquidity": 6
+            },
+            "ml_prior": {
+              "pred_return": -0.008423336679126314,
+              "confidence": 0.35,
+              "horizon": "1w",
+              "source": "ml_baseline"
+            },
+            "source": "Yahoo Finance, Options pricing data"
+          },
+          "usage": {
+            "prompt_tokens": 613,
+            "completion_tokens": 545,
+            "total_tokens": 1158,
+            "cost": 0,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 1,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": null,
+              "upstream_inference_prompt_cost": 0,
+              "upstream_inference_completions_cost": 0
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 313,
+              "image_tokens": 0
+            }
+          },
+          "latency_ms": 0
         }
       }
     ]
   },
-  "freshness": "2025-12-09T23:46:21.483521Z"
+  "freshness": "2025-12-10T00:25:10.853543Z"
 }
