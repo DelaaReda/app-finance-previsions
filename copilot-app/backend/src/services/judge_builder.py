@@ -1,7 +1,12 @@
 """
 Helper pour construire un JudgeVerdict typé (schemas/judge.py) à partir
 du dictionnaire brut produit par la route /api/judge (analysis, phases, etc.).
-Cette couche normalise notamment les phase_scores et les probabilités de scénarios.
+
+Cette couche :
+  - extrait le bloc LLM (analysis / raw_answer / verdict)
+  - normalise les phase_scores (raw + normalisés)
+  - normalise les probabilités de scénarios (0–1)
+  - reconstruit un JudgeVerdict canonique pour le frontend.
 """
 from __future__ import annotations
 
@@ -15,34 +20,70 @@ except Exception:
     ValidationError = Exception  # fallback pour éviter crash si pydantic absent
 
 from schemas.judge import (
-        JudgeVerdict,
-        Scenario,
-        Impacts,
-        PhaseScore,
-        Phases,
-        MLPrior,
-        VerdictMeta,
-        NewsAttachment,
-    )
+    JudgeVerdict,
+    Scenario,
+    Impacts,
+    PhaseScore,
+    Phases,
+    MLPrior,
+    VerdictMeta,
+    NewsAttachment,
+)
 
 
-def _parse_iso_datetime(dt: str) -> datetime:
+# =====================================================================
+# Helpers génériques
+# =====================================================================
+
+def _parse_iso_datetime(dt: Any) -> datetime:
+    """
+    Normalise un timestamp en datetime :
+      - datetime → renvoyé tel quel
+      - str ISO (avec ou sans Z) → parsé
+      - None / vide / invalide → datetime.utcnow()
+    """
     if not dt:
         return datetime.utcnow()
     if isinstance(dt, datetime):
         return dt
-    if isinstance(dt, str) and dt.endswith("Z"):
-        dt = dt.replace("Z", "+00:00")
-    return datetime.fromisoformat(dt)
+    if isinstance(dt, str):
+        s = dt
+        if s.endswith("Z"):
+            s = s.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            return datetime.utcnow()
+    return datetime.utcnow()
 
+
+def _safe_float(v: Any) -> Optional[float]:
+    try:
+        if v is None:
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+
+# =====================================================================
+# Extraction du bloc LLM (analysis / raw_answer / verdict / debug_llm_res)
+# =====================================================================
 
 def _extract_llm_block(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
+    """
+    Renvoie (llm_dict, raw_answer_str) :
+      - llm_dict = dict issu de analysis ou JSON de raw_answer/verdict/debug_llm_res.answer
+      - raw_answer_str = la string brute si dispo
+    """
     analysis = row.get("analysis")
     raw_answer = row.get("raw_answer")
 
+    # Cas idéal : analysis déjà parsé
     if isinstance(analysis, dict):
         return analysis, raw_answer
 
+    # Fallback : essayer raw_answer ou verdict comme JSON
     for key in ("raw_answer", "verdict"):
         raw = row.get(key)
         if isinstance(raw, str) and raw.strip():
@@ -52,50 +93,97 @@ def _extract_llm_block(row: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[st
             except Exception:
                 continue
 
+    # Fallback supplémentaire : debug_llm_res.answer
+    debug_llm_res = row.get("debug_llm_res")
+    if isinstance(debug_llm_res, dict):
+        ans = debug_llm_res.get("answer")
+        if isinstance(ans, str) and ans.strip():
+            try:
+                llm_dict = json.loads(ans)
+                # si raw_answer n'était pas défini, on peut utiliser cette string
+                raw_answer = raw_answer or ans
+                return llm_dict, raw_answer
+            except Exception:
+                pass
+
+    # Rien de propre trouvable
     return {"error": "no_json"}, raw_answer
 
+
+# =====================================================================
+# Phase scores : raw + normalisés
+# =====================================================================
 
 def _normalize_phase_scores(
     row_phase_scores: Optional[Dict[str, Any]],
     llm_phase_scores: Optional[Dict[str, Any]],
 ) -> Tuple[Dict[str, float], Optional[Dict[str, float]]]:
+    """
+    Retourne (phase_scores_norm, phase_scores_raw).
+
+    Convention :
+      - row_phase_scores = valeurs "brutes" issues du pipeline (peuvent contenir sentiment=79.4, etc.)
+      - llm_phase_scores = valeurs normalisées proposées par le LLM (0–1 typiquement)
+
+    Stratégie :
+      - phase_scores_raw = cast float(row_phase_scores)
+      - phase_scores_norm :
+          * pour chaque phase de row_phase_scores :
+              - si phase == "sentiment" et score > 1.0 → diviser par 100
+              - sinon garder tel quel (en clampant 0–1)
+          * ensuite on laisse l'LLM écraser / compléter :
+              - si llm_phase_scores[phase] existe → considéré déjà normalisé (clamp 0–1)
+    """
     raw: Dict[str, float] = {}
     norm: Dict[str, float] = {}
 
     row_phase_scores = row_phase_scores or {}
 
+    # 1) Raw baseline (pipeline)
     for k, v in row_phase_scores.items():
-        try:
-            x = float(v)
-        except Exception:
+        val = _safe_float(v)
+        if val is None:
             continue
-        raw[k] = x
-        x_norm = x / 100.0 if x > 1.0 else x
+        raw[k] = val
+
+        # Normalisation par défaut à partir du raw
+        if k == "sentiment" and val > 1.0:
+            x_norm = val / 100.0
+        else:
+            x_norm = val
+
+        # clamp
         if x_norm < 0.0:
             x_norm = 0.0
         if x_norm > 1.0:
             x_norm = 1.0
         norm[k] = x_norm
 
+    # 2) Overlay LLM (prioritaire pour la vue "canonique")
     if isinstance(llm_phase_scores, dict):
         for k, v in llm_phase_scores.items():
-            if k not in norm:
-                try:
-                    x = float(v)
-                except Exception:
-                    continue
-                x_norm = x / 100.0 if x > 1.0 else x
-                if x_norm < 0.0:
-                    x_norm = 0.0
-                if x_norm > 1.0:
-                    x_norm = 1.0
-                norm[k] = x_norm
+            val = _safe_float(v)
+            if val is None:
+                continue
+            x_norm = val
+            if x_norm < 0.0:
+                x_norm = 0.0
+            if x_norm > 1.0:
+                x_norm = 1.0
+            norm[k] = x_norm  # l'LLM écrase ou ajoute
 
     return norm, (raw or None)
 
 
 def _build_phases(row: Dict[str, Any]) -> Optional[Phases]:
-    phases_raw = row.get("phases")
+    """
+    Construit le bloc Phases (détails par phase) si disponible.
+    On prend en priorité row["phases"], sinon debug_payload.features.phases.
+    """
+    debug_payload = row.get("debug_payload") or {}
+    features = debug_payload.get("features") or {}
+
+    phases_raw = row.get("phases") or features.get("phases")
     if not isinstance(phases_raw, dict):
         return None
 
@@ -121,8 +209,62 @@ def _build_phases(row: Dict[str, Any]) -> Optional[Phases]:
     )
 
 
+# =====================================================================
+# Scénarios : normalisation des probabilités
+# =====================================================================
+
+def _normalize_probability(p: Any) -> float:
+    """
+    Normalise une probabilité :
+      - si p > 1, on suppose % → /100
+      - clamp dans [0, 1]
+    """
+    val = _safe_float(p)
+    if val is None:
+        return 0.0
+    if val > 1.0:
+        val = val / 100.0
+    if val < 0.0:
+        val = 0.0
+    if val > 1.0:
+        val = 1.0
+    return val
+
+
+def _build_scenarios(llm_dict: Dict[str, Any]) -> List[Scenario]:
+    scenarios: List[Scenario] = []
+    scenarios_raw = llm_dict.get("scenarios") or []
+    if not isinstance(scenarios_raw, list):
+        return scenarios
+
+    for sc in scenarios_raw:
+        if not isinstance(sc, dict):
+            continue
+        try:
+            p_norm = _normalize_probability(sc.get("p", 0.0))
+            scenarios.append(
+                Scenario(
+                    name=str(sc.get("name", "unknown")),
+                    p=p_norm,
+                    description=sc.get("description"),
+                )
+            )
+        except ValidationError:
+            continue
+
+    return scenarios
+
+
+# =====================================================================
+# Attachments & ML prior
+# =====================================================================
+
 def _build_attachments(row: Dict[str, Any]) -> List[NewsAttachment]:
-    raw_attachments = row.get("attachments") or []
+    raw_attachments = (
+        row.get("attachments")
+        or (row.get("debug_payload") or {}).get("attachments")
+        or []
+    )
     attachments: List[NewsAttachment] = []
     for att in raw_attachments:
         if not isinstance(att, dict):
@@ -144,7 +286,16 @@ def _build_attachments(row: Dict[str, Any]) -> List[NewsAttachment]:
 
 
 def _build_ml_prior(row: Dict[str, Any], llm_dict: Dict[str, Any]) -> Optional[MLPrior]:
-    candidate = row.get("ml_prior") or llm_dict.get("ml_prior")
+    dp = row.get("debug_payload") or {}
+    features = dp.get("features") or {}
+
+    candidate = (
+        row.get("ml_prior")
+        or llm_dict.get("ml_prior")
+        or features.get("ml_prior")
+        or dp.get("ml_prior")
+    )
+
     if not isinstance(candidate, dict):
         return None
     try:
@@ -158,7 +309,30 @@ def _build_ml_prior(row: Dict[str, Any], llm_dict: Dict[str, Any]) -> Optional[M
         return None
 
 
-def _compute_direction(expected_return: float, eps: float = 1e-6) -> Optional[str]:
+# =====================================================================
+# Direction
+# =====================================================================
+
+def _compute_direction(
+    expected_return: float,
+    row: Dict[str, Any],
+) -> Optional[str]:
+    """
+    Détermine la direction :
+      1) row["direction"] si présent
+      2) debug_payload.features.direction
+      3) signe d'expected_return
+    """
+    direction = row.get("direction")
+    if not isinstance(direction, str):
+        dp = row.get("debug_payload") or {}
+        features = dp.get("features") or {}
+        direction = features.get("direction")
+
+    if direction in ("up", "down", "flat"):
+        return direction
+
+    eps = 1e-6
     if expected_return > eps:
         return "up"
     if expected_return < -eps:
@@ -166,49 +340,72 @@ def _compute_direction(expected_return: float, eps: float = 1e-6) -> Optional[st
     return "flat"
 
 
+# =====================================================================
+# Builder principal
+# =====================================================================
+
 def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> JudgeVerdict:
     """
     Transforme un row brut (issu du pipeline judge) en JudgeVerdict Pydantic.
+    Centralise la normalisation pour éviter d'avoir à toucher la route à chaque fois.
     """
     llm_dict, raw_answer = _extract_llm_block(row)
 
-    ticker = row.get("ticker") or row.get("features", {}).get("ticker") or "UNKNOWN"
-    expected_return = float(row.get("expected_return", 0.0))
-    expected_return_ensemble = row.get("expected_return_ensemble")
-    expected_return_raw = row.get("expected_return_raw")
-    confidence = float(row.get("confidence", llm_dict.get("confidence", 0.0)))
+    debug_payload = row.get("debug_payload") or {}
+    debug_llm_res = row.get("debug_llm_res")
+    features = debug_payload.get("features") or {}
 
+    # --- Ticker / horizon ---
+    ticker = row.get("ticker") or features.get("ticker") or "UNKNOWN"
+
+    horizon = (
+        row.get("horizon")
+        or (row.get("ml_prior") or {}).get("horizon")
+        or (llm_dict.get("ml_prior") or {}).get("horizon")
+        or features.get("horizon")
+        or "1w"
+    )
+
+    # --- Expected returns ---
+    expected_return_raw = row.get("expected_return_raw")
+    expected_return_ensemble = row.get("expected_return_ensemble")
+    expected_return_value = row.get("expected_return")
+
+    if expected_return_value is None:
+        if expected_return_ensemble is not None:
+            expected_return_value = expected_return_ensemble
+        elif expected_return_raw is not None:
+            expected_return_value = expected_return_raw
+        else:
+            mlp = (
+                row.get("ml_prior")
+                or llm_dict.get("ml_prior")
+                or features.get("ml_prior")
+                or {}
+            )
+            expected_return_value = mlp.get("pred_return", 0.0)
+
+    try:
+        expected_return = float(expected_return_value or 0.0)
+    except Exception:
+        expected_return = 0.0
+
+    # --- Confidence ---
+    conf_val = row.get("confidence", llm_dict.get("confidence", 0.0))
+    try:
+        confidence = float(conf_val)
+    except Exception:
+        confidence = 0.0
+
+    # --- Risk level ---
     risk_level = row.get("risk_level", "medium")
     if risk_level not in ("low", "medium", "high"):
         risk_level = "medium"
 
-    horizon = (
-        row.get("horizon")
-        or row.get("ml_prior", {}).get("horizon")
-        or llm_dict.get("ml_prior", {}).get("horizon")
-        or "1w"
-    )
-
+    # --- Summary / lists principales ---
     summary = llm_dict.get("summary") or []
     if isinstance(summary, str):
         summary = [summary]
-
-    scenarios: List[Scenario] = []
-    scenarios_raw = llm_dict.get("scenarios") or []
-    if isinstance(scenarios_raw, list):
-        for sc in scenarios_raw:
-            if not isinstance(sc, dict):
-                continue
-            try:
-                scenarios.append(
-                    Scenario(
-                        name=str(sc.get("name", "unknown")),
-                        p=sc.get("p", 0.0),
-                        description=sc.get("description"),
-                    )
-                )
-            except ValidationError:
-                continue
 
     risks = llm_dict.get("risks") or []
     if isinstance(risks, str):
@@ -232,6 +429,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
     if isinstance(data_needed, str):
         data_needed = [data_needed]
 
+    # --- Phase scores (raw + norm) ---
     row_phase_scores = row.get("phase_scores_raw") or row.get("phase_scores")
     llm_phase_scores = llm_dict.get("phase_scores")
     phase_scores, phase_scores_raw = _normalize_phase_scores(
@@ -239,29 +437,44 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         llm_phase_scores=llm_phase_scores,
     )
 
+    # --- Phases détaillées & autres blocs ---
     phases = _build_phases(row)
     attachments = _build_attachments(row)
     ml_prior = _build_ml_prior(row, llm_dict)
 
-    generated_at_str = row.get("generated_at") or row.get("meta", {}).get("generated_at")
-    generated_at = (
-        _parse_iso_datetime(generated_at_str)
-        if generated_at_str
-        else datetime.utcnow()
+    # --- Meta ---
+    # generated_at : row.generated_at > meta.generated_at > debug_payload.meta.generated_at
+    generated_at_str = (
+        row.get("generated_at")
+        or (row.get("meta") or {}).get("generated_at")
+        or (debug_payload.get("meta") or {}).get("generated_at")
+    )
+    generated_at = _parse_iso_datetime(generated_at_str)
+
+    # model_version : row.model_version > meta.model_version > debug_llm_res.model
+    model_version = (
+        row.get("model_version")
+        or (row.get("meta") or {}).get("model_version")
+        or (debug_llm_res or {}).get("model")
     )
 
-    model_version = row.get("model_version") or llm_dict.get("model")
     provider = None
-    debug_llm_res = row.get("debug_llm_res")
     if isinstance(debug_llm_res, dict):
         provider = debug_llm_res.get("provider") or provider
 
     source = row.get("source")
+    if not isinstance(source, list):
+        source = None
+
     data_ts = None
     try:
         meta_in = row.get("meta") or {}
         if isinstance(meta_in, dict) and meta_in.get("data_timestamps"):
             data_ts = meta_in.get("data_timestamps")
+        else:
+            dp_meta = debug_payload.get("meta") or {}
+            if isinstance(dp_meta, dict) and dp_meta.get("data_timestamps"):
+                data_ts = dp_meta.get("data_timestamps")
     except Exception:
         data_ts = None
 
@@ -270,18 +483,22 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         model_version=model_version,
         provider=provider,
         profile=profile,
-        source=source if isinstance(source, list) else None,
+        source=source,
         data_timestamps=data_ts,
     )
 
+    # --- Quant confidence ---
     quant_confidence: Optional[float] = None
     if ml_prior is not None:
         quant_confidence = ml_prior.confidence
 
+    # --- Direction ---
+    direction = _compute_direction(expected_return, row)
+
     verdict = JudgeVerdict(
         ticker=ticker,
         horizon=horizon,
-        direction=_compute_direction(expected_return),
+        direction=direction,
         expected_return=expected_return,
         expected_return_ensemble=expected_return_ensemble,
         expected_return_raw=expected_return_raw,
@@ -289,7 +506,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         confidence=confidence,
         quant_confidence=quant_confidence,
         summary=list(summary),
-        scenarios=scenarios,
+        scenarios=_build_scenarios(llm_dict),
         risks=list(risks),
         impacts=impacts,
         actions=list(actions),
@@ -302,7 +519,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         analysis=llm_dict if isinstance(llm_dict, dict) else None,
         meta=meta,
         raw_answer=raw_answer,
-        debug_payload=row.get("debug_payload"),
+        debug_payload=debug_payload,
         debug_llm_res=debug_llm_res,
     )
 
