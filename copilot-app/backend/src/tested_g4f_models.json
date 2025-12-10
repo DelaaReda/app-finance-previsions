@@ -4,7 +4,7 @@
     "model": "ling-flash-2.0",
     "task": "text",
     "ok": false,
-    "ms": 2.5,
+    "ms": 2.0,
     "answer": "",
     "error": "Provider not found: BAAI_Ling"
   },
@@ -13,7 +13,7 @@
     "model": "ling-1t",
     "task": "text",
     "ok": false,
-    "ms": 2.1,
+    "ms": 1.5,
     "answer": "",
     "error": "Provider not found: BAAI_Ling"
   },
@@ -22,7 +22,7 @@
     "model": "ring-flash-2.0",
     "task": "text",
     "ok": false,
-    "ms": 2.1,
+    "ms": 1.5,
     "answer": "",
     "error": "Provider not found: BAAI_Ling"
   },
@@ -31,7 +31,7 @@
     "model": "ring-1t",
     "task": "text",
     "ok": false,
-    "ms": 2.0,
+    "ms": 1.4,
     "answer": "",
     "error": "Provider not found: BAAI_Ling"
   },
@@ -40,7 +40,7 @@
     "model": "GPT OSS 120B",
     "task": "text",
     "ok": false,
-    "ms": 2.0,
+    "ms": 0.9,
     "answer": "",
     "error": "Provider not found: GradientNetwork"
   },
@@ -49,7 +49,7 @@
     "model": "Qwen3 235B",
     "task": "text",
     "ok": false,
-    "ms": 1.8,
+    "ms": 1.4,
     "answer": "",
     "error": "Provider not found: GradientNetwork"
   },
@@ -58,7 +58,7 @@
     "model": "ling-flash-2.0",
     "task": "text",
     "ok": false,
-    "ms": 3.5,
+    "ms": 2.6,
     "answer": "",
     "error": null
   },
@@ -67,7 +67,7 @@
     "model": "ling-1t",
     "task": "text",
     "ok": false,
-    "ms": 1.2,
+    "ms": 1.0,
     "answer": "",
     "error": null
   },
@@ -76,17 +76,8 @@
     "model": "ling",
     "task": "text",
     "ok": false,
-    "ms": 0.6,
+    "ms": 0.8,
     "answer": "",
-    "error": null
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r7b-arabic-02-2025",
-    "task": "text",
-    "ok": true,
-    "ms": 354.1,
-    "answer": "OK",
     "error": null
   },
   {
@@ -94,70 +85,25 @@
     "model": "flux",
     "task": "text",
     "ok": false,
-    "ms": 361.5,
+    "ms": 184.7,
     "answer": "",
-    "error": "You have exceeded your GPU quota (75s requested vs. 16s left). Try again in 23:40:32"
+    "error": "You have exceeded your GPU quota (75s requested vs. 71s left). Try again in 23:07:39"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "flux",
+    "task": "text",
+    "ok": false,
+    "ms": 217.2,
+    "answer": "",
+    "error": "You have exceeded your GPU quota (75s requested vs. 71s left). Try again in 23:07:39"
   },
   {
     "provider": "CohereForAI_C4AI_Command",
     "model": "command-r-08-2024",
     "task": "text",
     "ok": true,
-    "ms": 399.1,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-r7b-arabic-02-2025",
-    "task": "text",
-    "ok": true,
-    "ms": 411.4,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "ring-flash-2.0",
-    "task": "text",
-    "ok": false,
-    "ms": 0.6,
-    "answer": "",
-    "error": null
-  },
-  {
-    "provider": "CohereForAI_C4AI_Command",
-    "model": "command-a-03-2025",
-    "task": "text",
-    "ok": true,
-    "ms": 446.8,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "ring-1t",
-    "task": "text",
-    "ok": false,
-    "ms": 0.6,
-    "answer": "",
-    "error": null
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r-plus-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 453.7,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "HuggingSpace",
-    "model": "command-r-08-2024",
-    "task": "text",
-    "ok": true,
-    "ms": 589.5,
+    "ms": 316.4,
     "answer": "OK",
     "error": null
   },
@@ -166,8 +112,35 @@
     "model": "command-r",
     "task": "text",
     "ok": true,
-    "ms": 855.9,
+    "ms": 331.7,
     "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "ring-flash-2.0",
+    "task": "text",
+    "ok": false,
+    "ms": 0.9,
+    "answer": "",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 429.4,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "ring-1t",
+    "task": "text",
+    "ok": false,
+    "ms": 0.7,
+    "answer": "",
     "error": null
   },
   {
@@ -175,7 +148,25 @@
     "model": "command-r-plus-08-2024",
     "task": "text",
     "ok": true,
-    "ms": 881.3,
+    "ms": 442.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 511.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 602.5,
     "answer": "OK",
     "error": null
   },
@@ -184,7 +175,7 @@
     "model": "qwen-3-8b",
     "task": "text",
     "ok": false,
-    "ms": 1004.3,
+    "ms": 1063.4,
     "answer": "",
     "error": ""
   },
@@ -193,7 +184,7 @@
     "model": "qwen-3-30b-a3b",
     "task": "text",
     "ok": false,
-    "ms": 1002.9,
+    "ms": 1023.4,
     "answer": "",
     "error": ""
   },
@@ -202,7 +193,7 @@
     "model": "qwen-3-14b",
     "task": "text",
     "ok": false,
-    "ms": 1004.5,
+    "ms": 1001.4,
     "answer": "",
     "error": ""
   },
@@ -211,7 +202,7 @@
     "model": "qwen-3-235b",
     "task": "text",
     "ok": false,
-    "ms": 1001.8,
+    "ms": 1001.9,
     "answer": "",
     "error": ""
   },
@@ -220,7 +211,7 @@
     "model": "meta-ai",
     "task": "text",
     "ok": false,
-    "ms": 1004.0,
+    "ms": 1002.3,
     "answer": "",
     "error": ""
   },
@@ -229,7 +220,16 @@
     "model": "patient_teacher",
     "task": "text",
     "ok": false,
-    "ms": 1004.1,
+    "ms": 1002.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": false,
+    "ms": 1527.9,
     "answer": "",
     "error": ""
   },
@@ -238,16 +238,16 @@
     "model": "friendly",
     "task": "text",
     "ok": false,
-    "ms": 1003.2,
+    "ms": 1003.7,
     "answer": "",
     "error": ""
   },
   {
-    "provider": "OpenAIFM",
-    "model": "alloy",
+    "provider": "HuggingSpace",
+    "model": "command-r7b-arabic-02-2025",
     "task": "text",
     "ok": false,
-    "ms": 1003.6,
+    "ms": 1752.6,
     "answer": "",
     "error": ""
   },
@@ -256,7 +256,7 @@
     "model": "custom/blackbox-base",
     "task": "text",
     "ok": false,
-    "ms": 1508.1,
+    "ms": 1563.1,
     "answer": "",
     "error": ""
   },
@@ -265,7 +265,16 @@
     "model": "cowboy",
     "task": "text",
     "ok": false,
-    "ms": 1002.5,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "alloy",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.3,
     "answer": "",
     "error": ""
   },
@@ -274,7 +283,7 @@
     "model": "calm",
     "task": "text",
     "ok": false,
-    "ms": 1003.4,
+    "ms": 1001.7,
     "answer": "",
     "error": ""
   },
@@ -283,7 +292,7 @@
     "model": "scientific_style",
     "task": "text",
     "ok": false,
-    "ms": 1003.2,
+    "ms": 1004.2,
     "answer": "",
     "error": ""
   },
@@ -291,44 +300,35 @@
     "provider": "OpenAIFM",
     "model": "fable",
     "task": "text",
-    "ok": false,
-    "ms": 1003.7,
+    "ok": true,
+    "ms": 992.3,
     "answer": "",
-    "error": ""
+    "error": "'AudioResponse' object is not subscriptable"
   },
   {
     "provider": "OpenAIFM",
     "model": "ballad",
     "task": "text",
-    "ok": false,
-    "ms": 1004.6,
+    "ok": true,
+    "ms": 983.6,
     "answer": "",
-    "error": ""
+    "error": "'AudioResponse' object is not subscriptable"
   },
   {
     "provider": "OpenAIFM",
     "model": "ash",
     "task": "text",
     "ok": false,
-    "ms": 1005.0,
+    "ms": 1003.2,
     "answer": "",
     "error": ""
-  },
-  {
-    "provider": "Perplexity",
-    "model": "claude2",
-    "task": "text",
-    "ok": false,
-    "ms": 159.6,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
   },
   {
     "provider": "OpenAIFM",
     "model": "nova",
     "task": "text",
     "ok": false,
-    "ms": 1005.2,
+    "ms": 1003.1,
     "answer": "",
     "error": ""
   },
@@ -336,206 +336,26 @@
     "provider": "OpenAIFM",
     "model": "shimmer",
     "task": "text",
-    "ok": false,
-    "ms": 1002.6,
+    "ok": true,
+    "ms": 996.9,
     "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "noir_detective",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.9,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "Perplexity",
-    "model": "gpt41",
-    "task": "text",
-    "ok": false,
-    "ms": 218.4,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
+    "error": "'AudioResponse' object is not subscriptable"
   },
   {
     "provider": "Perplexity",
     "model": "gpt5_thinking",
     "task": "text",
     "ok": false,
-    "ms": 150.2,
+    "ms": 155.4,
     "answer": "",
     "error": "Response 403: Cloudflare detected"
   },
   {
     "provider": "Perplexity",
-    "model": "gpt5",
+    "model": "gpt41",
     "task": "text",
     "ok": false,
-    "ms": 125.1,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "claude45sonnet",
-    "task": "text",
-    "ok": false,
-    "ms": 148.7,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "claude40opusthinking",
-    "task": "text",
-    "ok": false,
-    "ms": 151.5,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "claude37sonnetthinking",
-    "task": "text",
-    "ok": false,
-    "ms": 163.5,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "o3pro",
-    "task": "text",
-    "ok": false,
-    "ms": 180.2,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "o3",
-    "task": "text",
-    "ok": false,
-    "ms": 156.5,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "coral",
-    "task": "text",
-    "ok": false,
-    "ms": 1004.0,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "verse",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.3,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "sage",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.1,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "echo",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.2,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "Perplexity",
-    "model": "pplx_alpha",
-    "task": "text",
-    "ok": false,
-    "ms": 154.2,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "OpenAIFM",
-    "model": "onyx",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.0,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "Perplexity",
-    "model": "grok4",
-    "task": "text",
-    "ok": false,
-    "ms": 191.0,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "pplx_pro_upgraded",
-    "task": "text",
-    "ok": false,
-    "ms": 145.6,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "pplx_pro",
-    "task": "text",
-    "ok": false,
-    "ms": 153.4,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "grok",
-    "task": "text",
-    "ok": false,
-    "ms": 136.0,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "gpt45",
-    "task": "text",
-    "ok": false,
-    "ms": 243.4,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "gpt4",
-    "task": "text",
-    "ok": false,
-    "ms": 269.5,
-    "answer": "",
-    "error": "Response 403: Cloudflare detected"
-  },
-  {
-    "provider": "Perplexity",
-    "model": "experimental",
-    "task": "text",
-    "ok": false,
-    "ms": 365.4,
+    "ms": 270.0,
     "answer": "",
     "error": "Response 403: Cloudflare detected"
   },
@@ -544,9 +364,171 @@
     "model": "auto",
     "task": "text",
     "ok": false,
-    "ms": 1005.7,
+    "ms": 147.6,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude2",
+    "task": "text",
+    "ok": false,
+    "ms": 420.8,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "noir_detective",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.3,
     "answer": "",
     "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude37sonnetthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 147.3,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude40opusthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 182.9,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude45sonnet",
+    "task": "text",
+    "ok": false,
+    "ms": 377.3,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "o3",
+    "task": "text",
+    "ok": false,
+    "ms": 131.0,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "gpt5",
+    "task": "text",
+    "ok": false,
+    "ms": 439.0,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "coral",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "verse",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "echo",
+    "task": "text",
+    "ok": true,
+    "ms": 955.1,
+    "answer": "",
+    "error": "'AudioResponse' object is not subscriptable"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_alpha",
+    "task": "text",
+    "ok": false,
+    "ms": 154.5,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "sage",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_pro",
+    "task": "text",
+    "ok": false,
+    "ms": 146.9,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "o3pro",
+    "task": "text",
+    "ok": false,
+    "ms": 389.8,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "gpt4",
+    "task": "text",
+    "ok": false,
+    "ms": 132.9,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "onyx",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "grok",
+    "task": "text",
+    "ok": false,
+    "ms": 183.6,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "gpt45",
+    "task": "text",
+    "ok": false,
+    "ms": 185.9,
+    "answer": "",
+    "error": "Response 403: Cloudflare detected"
   },
   {
     "provider": "OperaAria",
@@ -558,20 +540,38 @@
     "error": ""
   },
   {
-    "provider": "Qwen_Qwen_3",
-    "model": "qwen-3-30b-a3b",
+    "provider": "Perplexity",
+    "model": "grok4",
     "task": "text",
     "ok": false,
-    "ms": 1001.5,
+    "ms": 1003.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_pro_upgraded",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "experimental",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.2,
     "answer": "",
     "error": ""
   },
   {
     "provider": "Qwen_Qwen_3",
-    "model": "qwen-3-235b",
+    "model": "qwen-3-30b-a3b",
     "task": "text",
     "ok": false,
-    "ms": 1003.8,
+    "ms": 1002.1,
     "answer": "",
     "error": ""
   },
@@ -580,106 +580,16 @@
     "model": "qwen-3-8b",
     "task": "text",
     "ok": false,
-    "ms": 1003.9,
+    "ms": 1002.1,
     "answer": "",
     "error": ""
   },
   {
     "provider": "Qwen_Qwen_3",
-    "model": "qwen-3-14b",
+    "model": "qwen-3-235b",
     "task": "text",
     "ok": false,
-    "ms": 1002.8,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "Video",
-    "model": "search",
-    "task": "text",
-    "ok": false,
-    "ms": 537.9,
-    "answer": "",
-    "error": "Install \"nodriver\" and \"platformdirs\" package | pip install -U nodriver platformdirs"
-  },
-  {
-    "provider": "Yqcloud",
-    "model": "gpt-4",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.9,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "default",
-    "task": "text",
-    "ok": false,
-    "ms": 1004.1,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "WeWordle",
-    "model": "gpt-4",
-    "task": "text",
-    "ok": false,
-    "ms": 1888.7,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r",
-    "task": "text",
-    "ok": true,
-    "ms": 427.1,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "gpt-4",
-    "task": "text",
-    "ok": false,
-    "ms": 1006.3,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "meta-ai",
-    "task": "text",
-    "ok": false,
-    "ms": 1010.8,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "PollinationsAI",
-    "model": "flux",
-    "task": "text",
-    "ok": false,
-    "ms": 2412.5,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r7b",
-    "task": "text",
-    "ok": true,
-    "ms": 459.4,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "PollinationsAI",
-    "model": "openai",
-    "task": "text",
-    "ok": false,
-    "ms": 2517.2,
+    "ms": 1002.0,
     "answer": "",
     "error": ""
   },
@@ -688,7 +598,70 @@
     "model": "turbo",
     "task": "text",
     "ok": false,
-    "ms": 2576.1,
+    "ms": 1518.9,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Video",
+    "model": "search",
+    "task": "text",
+    "ok": false,
+    "ms": 533.5,
+    "answer": "",
+    "error": "Install \"nodriver\" and \"platformdirs\" package | pip install -U nodriver platformdirs"
+  },
+  {
+    "provider": "WeWordle",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Yqcloud",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "default",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.9,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 323.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "flux",
+    "task": "text",
+    "ok": false,
+    "ms": 1938.3,
     "answer": "",
     "error": ""
   },
@@ -696,17 +669,44 @@
     "provider": "AnyProvider",
     "model": "mistral-small-3.1-24b",
     "task": "text",
+    "ok": true,
+    "ms": 518.6,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai",
+    "task": "text",
     "ok": false,
-    "ms": 1003.0,
+    "ms": 2053.3,
     "answer": "",
     "error": ""
   },
   {
     "provider": "AnyProvider",
-    "model": "qwen-3-14b",
+    "model": "command-r7b",
+    "task": "text",
+    "ok": true,
+    "ms": 356.5,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "meta-ai",
     "task": "text",
     "ok": false,
-    "ms": 1003.9,
+    "ms": 1002.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-v3",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.2,
     "answer": "",
     "error": ""
   },
@@ -721,19 +721,19 @@
   },
   {
     "provider": "AnyProvider",
-    "model": "aria",
+    "model": "qwen-3-14b",
     "task": "text",
     "ok": false,
-    "ms": 1004.1,
+    "ms": 1088.5,
     "answer": "",
     "error": ""
   },
   {
     "provider": "AnyProvider",
-    "model": "sdxl-turbo",
+    "model": "aria",
     "task": "text",
     "ok": false,
-    "ms": 1006.3,
+    "ms": 1002.8,
     "answer": "",
     "error": ""
   },
@@ -742,178 +742,7 @@
     "model": "flux-pro",
     "task": "text",
     "ok": false,
-    "ms": 1005.3,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "deepseek-v3",
-    "task": "text",
-    "ok": false,
-    "ms": 1350.8,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "gpt-5-thinking",
-    "task": "text",
-    "ok": false,
-    "ms": 150.4,
-    "answer": "",
-    "error": "No .har file found"
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:mistral-small-3.1-24b",
-    "task": "text",
-    "ok": false,
-    "ms": 1001.1,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:evil",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.3,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "grok",
-    "task": "text",
-    "ok": false,
-    "ms": 358.0,
-    "answer": "",
-    "error": "API key is required for Puter.js API"
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:deepseek-v3",
-    "task": "text",
-    "ok": false,
-    "ms": 1003.4,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "gpt-5",
-    "task": "text",
-    "ok": false,
-    "ms": 692.3,
-    "answer": "",
-    "error": "No .har file found"
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:openai",
-    "task": "text",
-    "ok": false,
-    "ms": 1003.4,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "o3",
-    "task": "text",
-    "ok": false,
-    "ms": 144.3,
-    "answer": "",
-    "error": "No Yupp accounts configured. Set YUPP_API_KEY environment variable."
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "flux-schnell",
-    "task": "text",
-    "ok": false,
-    "ms": 1006.5,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:llama-roblox",
-    "task": "text",
-    "ok": false,
-    "ms": 1001.7,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r-plus24",
-    "task": "text",
-    "ok": true,
-    "ms": 384.6,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "PollinationsAI:flux",
-    "task": "text",
-    "ok": false,
-    "ms": 1004.4,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "llama-roblox",
-    "task": "text",
-    "ok": false,
-    "ms": 1002.1,
-    "answer": "",
-    "error": ""
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r7b24",
-    "task": "text",
-    "ok": true,
-    "ms": 373.3,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r24",
-    "task": "text",
-    "ok": true,
-    "ms": 305.1,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "claude-sonnet-4",
-    "task": "text",
-    "ok": true,
-    "ms": 514.8,
-    "answer": "The model does not exist in our api at the moment. To request a model please join: https://discord.gg/9g5wkVTn8s",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "command-r7b-arabic25",
-    "task": "text",
-    "ok": true,
-    "ms": 362.7,
-    "answer": "OK",
-    "error": null
-  },
-  {
-    "provider": "AnyProvider",
-    "model": "qwen-3-8b",
-    "task": "text",
-    "ok": false,
-    "ms": 1001.8,
+    "ms": 1006.6,
     "answer": "",
     "error": ""
   },
@@ -922,7 +751,61 @@
     "model": "flux-dev",
     "task": "text",
     "ok": false,
-    "ms": 2788.0,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:mistral-small-3.1-24b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5-thinking",
+    "task": "text",
+    "ok": false,
+    "ms": 148.7,
+    "answer": "",
+    "error": "No .har file found"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:evil",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "grok",
+    "task": "text",
+    "ok": false,
+    "ms": 146.9,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 2538.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sdxl-turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 1687.9,
     "answer": "",
     "error": ""
   },
@@ -930,17 +813,134 @@
     "provider": "AnyProvider",
     "model": "deepseek",
     "task": "text",
+    "ok": true,
+    "ms": 536.7,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:deepseek-v3",
+    "task": "text",
     "ok": false,
-    "ms": 2022.6,
+    "ms": 1003.9,
     "answer": "",
     "error": ""
   },
   {
-    "provider": "HuggingSpace",
-    "model": "flux",
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:openai",
     "task": "text",
     "ok": false,
-    "ms": 20379.7,
+    "ms": 1002.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "flux-schnell",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "o3",
+    "task": "text",
+    "ok": false,
+    "ms": 160.3,
+    "answer": "",
+    "error": "No Yupp accounts configured. Set YUPP_API_KEY environment variable."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:llama-roblox",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "llama-roblox",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "PollinationsAI:flux",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus24",
+    "task": "text",
+    "ok": true,
+    "ms": 500.5,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b24",
+    "task": "text",
+    "ok": true,
+    "ms": 369.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b-arabic25",
+    "task": "text",
+    "ok": true,
+    "ms": 474.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r24",
+    "task": "text",
+    "ok": true,
+    "ms": 506.5,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-sonnet-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1075.8,
     "answer": "",
     "error": ""
   }

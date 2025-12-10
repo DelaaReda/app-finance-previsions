@@ -579,7 +579,7 @@ async def get_judge_verdicts(
             rows_sorted = sorted(
                 rows, key=lambda r: r.get("confidence", 0), reverse=True
             )
-            
+
             # Filter by profile tickers if profile is loaded
             if prof and prof.tickers:
                 prof_tickers = {t.upper() for t in prof.tickers}
@@ -588,8 +588,20 @@ async def get_judge_verdicts(
                     if (r.get("ticker") or r.get("symbol") or "").upper() in prof_tickers
                 ]
                 logger.info(f"Filtered to {len(rows_sorted)} tickers from profile {prof.name}")
-            
-            top_rows = rows_sorted[: min(limit or 3, 3)]
+
+            # Optional filter by query tickers (apply before limit)
+            if ticker:
+                ticker_list = {t.upper() for t in ticker}
+                rows_sorted = [
+                    r
+                    for r in rows_sorted
+                    if (r.get("ticker") or r.get("symbol") or "").upper() in ticker_list
+                ]
+                logger.info(f"Query ticker filter applied: {len(rows_sorted)} rows kept")
+
+            # Respect limit with safety cap
+            limit_cap = max(1, min(limit or 1, 30))
+            top_rows = rows_sorted[:limit_cap]
             logger.info(f"📋 Selected {len(top_rows)} top_rows for processing (limit={limit})")
             if top_rows:
                 logger.info(f"   First ticker: {top_rows[0].get('ticker') if top_rows else 'N/A'}")

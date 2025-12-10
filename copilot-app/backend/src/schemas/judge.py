@@ -1,8 +1,13 @@
 """
 Typed schemas for judge verdicts (Pydantic v1/v2 compatible).
 
-These models are not yet wired as FastAPI response_model but provide a clear
-contract for validation/normalization between pipeline, API and frontend.
+These models define the canonical contract between:
+- the judge pipeline (raw dict rows),
+- the typed builder (services/judge_builder.py),
+- and the frontend.
+
+They are NOT yet wired as FastAPI response_model, but they are
+used for validation / normalization and as a reference for the API shape.
 """
 
 from __future__ import annotations
@@ -22,8 +27,13 @@ except ImportError:
         def model_dump(self):
             return self.__dict__
 
+        # pydantic v1 alias
         def dict(self):
             return self.__dict__
+
+        def __repr__(self) -> str:
+            fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items())
+            return f"{self.__class__.__name__}({fields})"
 
     def Field(default=None, **kwargs):  # type: ignore
         return default
@@ -31,7 +41,24 @@ except ImportError:
     def validator(*args, **kwargs):  # type: ignore
         def deco(func):
             return func
+
         return deco
+
+
+__all__ = [
+    "Scenario",
+    "Impacts",
+    "PhaseScore",
+    "Phases",
+    "NewsAttachment",
+    "MLPrior",
+    "VerdictMeta",
+    "JudgeVerdict",
+    "JudgeStats",
+    "JudgeFiltersApplied",
+    "JudgeData",
+    "JudgeResponse",
+]
 
 
 # ---------- Basic building blocks ----------
@@ -40,7 +67,10 @@ except ImportError:
 class Scenario(BaseModel):
     """
     Scénario (base / bullish / bearish) avec probabilité normalisée.
-    p est ramené à 0–1 (si le LLM renvoie 60 on le /100).
+
+    - p est ramené à 0–1 :
+      * si le LLM renvoie 60, on le /100
+      * si la somme des scénarios != 1, on renormalise au niveau JudgeVerdict.
     """
 
     name: str = Field(..., description="Nom du scénario, ex: base / bullish / bearish")
@@ -54,17 +84,27 @@ class Scenario(BaseModel):
 
     @validator("p", pre=True)
     def normalize_probability(cls, v: Any) -> float:
+        """Accepte 0–1, 0–100, ou valeurs un peu moches venant du LLM."""
         try:
             x = float(v)
         except Exception:
             raise ValueError(f"Invalid probability value: {v!r}")
+
+        # Cas '60' => 0.60
         if x > 1.0:
             x = x / 100.0
+
+        # Clamp de sécurité
+        if x < 0.0:
+            x = 0.0
+        if x > 1.0:
+            x = 1.0
+
         return x
 
 
 class Impacts(BaseModel):
-    """Impacts macro par dimension. Tous optionnels."""
+    """Impacts par dimension macro / marché. Tous optionnels."""
 
     FX: Optional[List[str]] = None
     rates: Optional[List[str]] = None
@@ -75,7 +115,10 @@ class Impacts(BaseModel):
 class PhaseScore(BaseModel):
     """
     Détail d'une phase (fundamental / technical / macro / sentiment / fusion).
-    score : idéalement 0–1 normalisé côté pipeline.
+
+    - score : idéalement 0–1 normalisé côté pipeline ou builder.
+    - summary : quelques bullet points lisibles.
+    - details : structure libre pour le frontend (peut être typée plus tard).
     """
 
     score: float = Field(..., description="Score de phase, idéalement normalisé 0–1")
@@ -132,6 +175,7 @@ class VerdictMeta(BaseModel):
 class JudgeVerdict(BaseModel):
     """
     Verdict canonique retourné par /api/judge (data.verdicts[]).
+
     Le debug complet reste dans debug_payload / debug_llm_res.
     """
 
@@ -206,6 +250,12 @@ class JudgeVerdict(BaseModel):
 
     @validator("phase_scores", pre=True, always=True)
     def ensure_phase_scores_dict(cls, v: Any) -> Dict[str, float]:
+        """
+        Force un dict str->float.
+
+        Le builder normalise déjà, mais on garde une seconde ligne de défense
+        pour éviter des objets bizarres venant d'autres callers éventuels.
+        """
         if v is None:
             return {}
         if not isinstance(v, dict):
@@ -222,11 +272,18 @@ class JudgeVerdict(BaseModel):
 
     @validator("scenarios")
     def normalize_scenarios_sum(cls, v: List[Scenario]) -> List[Scenario]:
+        """
+        Renormalise les probabilités pour que la somme soit 1
+        (dans la limite d'une petite tolérance numérique).
+        """
         if not v:
             return v
         total = sum(s.p for s in v)
         if total > 0 and abs(total - 1.0) > 1e-6:
-            v = [Scenario(name=s.name, p=s.p / total, description=s.description) for s in v]
+            v = [
+                Scenario(name=s.name, p=s.p / total, description=s.description)
+                for s in v
+            ]
         return v
 
 
