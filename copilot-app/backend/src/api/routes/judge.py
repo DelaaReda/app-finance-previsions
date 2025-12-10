@@ -430,9 +430,11 @@ async def get_judge_verdicts(
 
         async def compute_judge_verdicts():
             logger.info("🔄 compute_judge_verdicts started")
-            traces = []
+            traces: List[Dict[str, Any]] = []
 
             def add_trace(event: str, **kwargs):
+                if not debug:
+                    return
                 try:
                     traces.append(
                         {
@@ -444,8 +446,8 @@ async def get_judge_verdicts(
                 except Exception:
                     pass
 
-            if debug:
-                add_trace("debug_start", limit=limit, profile=profile)
+            add_trace("debug_start", limit=limit, profile=profile, ticker=ticker)
+
             if _LLM_IMPORT_ERROR or not EconomicAnalyst or not EconomicInput:
                 logger.error(f"❌ LLM import error: {_LLM_IMPORT_ERROR}")
                 raise HTTPException(
@@ -455,8 +457,7 @@ async def get_judge_verdicts(
 
             # Base data (forecasts + news + macro/brief snapshot)
             logger.info("📊 Loading data...")
-            if debug:
-                add_trace("data_load_start")
+            add_trace("data_load_start")
             forecasts = load_json("forecasts") or {}
             news_feed = load_json("news_feed") or {}
             brief_daily = load_json("brief_daily") or load_json("brief_weekly") or {}
@@ -477,8 +478,14 @@ async def get_judge_verdicts(
                 logger.info(f"🎯 Loading profile: {profile}")
                 from services.judge_pipeline import load_profile
                 prof = load_profile(profile)
-                logger.info(f"✅ Profile loaded: {prof.name}, horizon={prof.horizon}, focus={prof.focus}, " +
-                           f"tickers={len(prof.tickers)}, max_tokens={prof.max_tokens}")
+                logger.info(
+                    "✅ Profile loaded: name=%s horizon=%s focus=%s tickers=%d max_tokens=%s",
+                    getattr(prof, "name", profile),
+                    getattr(prof, "horizon", None),
+                    getattr(prof, "focus", None),
+                    len(getattr(prof, "tickers", []) or []),
+                    getattr(prof, "max_tokens", None),
+                )
             except FileNotFoundError as e:
                 logger.warning(f"⚠️ Profile '{profile}' not found: {e}, using default")
                 prof = None
@@ -527,12 +534,11 @@ async def get_judge_verdicts(
                 )
                 return len(articles_local)
 
-            if debug:
-                add_trace(
-                    "data_loaded",
-                    forecasts=_forecasts_count(),
-                    news_count=_news_count(),
-                )
+            add_trace(
+                "data_loaded",
+                forecasts=_forecasts_count(),
+                news_count=_news_count(),
+            )
 
             prices_data = _load_prices()
             macro_series = _load_macro()
@@ -581,30 +587,98 @@ async def get_judge_verdicts(
             )
 
             # Filter by profile tickers if profile is loaded
-            if prof and prof.tickers:
-                prof_tickers = {t.upper() for t in prof.tickers}
-                rows_sorted = [
-                    r for r in rows_sorted
-                    if (r.get("ticker") or r.get("symbol") or "").upper() in prof_tickers
-                ]
-                logger.info(f"Filtered to {len(rows_sorted)} tickers from profile {prof.name}")
-
-            # Optional filter by query tickers (apply before limit)
-            if ticker:
-                ticker_list = {t.upper() for t in ticker}
+            if prof and getattr(prof, "tickers", None):
+                prof_tickers = {t.upper() for t in (prof.tickers or [])}
+                before = len(rows_sorted)
                 rows_sorted = [
                     r
                     for r in rows_sorted
-                    if (r.get("ticker") or r.get("symbol") or "").upper() in ticker_list
+                    if (r.get("ticker") or r.get("symbol") or "").upper() in prof_tickers
                 ]
-                logger.info(f"Query ticker filter applied: {len(rows_sorted)} rows kept")
+                logger.info(
+                    "Filtered to %d rows from profile %s (from %d)",
+                    len(rows_sorted),
+                    getattr(prof, "name", profile),
+                    before,
+                )
+                add_trace(
+                    "profile_filter_applied",
+                    profile=profile,
+                    before=before,
+                    after=len(rows_sorted),
+                )
 
-            # Respect limit with safety cap
-            limit_cap = max(1, min(limit or 1, 30))
-            top_rows = rows_sorted[:limit_cap]
-            logger.info(f"📋 Selected {len(top_rows)} top_rows for processing (limit={limit})")
+            # Filter by explicit ticker query parameter
+            if ticker:
+                ticker_set = {t.upper() for t in ticker}
+                before = len(rows_sorted)
+                rows_sorted = [
+                    r
+                    for r in rows_sorted
+                    if (r.get("ticker") or r.get("symbol") or "").upper() in ticker_set
+                ]
+                logger.info(
+                    "Filtered to %d rows from ticker param %s (from %d)",
+                    len(rows_sorted),
+                    ticker_set,
+                    before,
+                )
+                add_trace(
+                    "ticker_filter_applied",
+                    tickers=list(ticker_set),
+                    before=before,
+                    after=len(rows_sorted),
+                )
+
+            if not rows_sorted:
+                logger.warning("⚠️ No rows left after profile/ticker filtering")
+                now_iso = datetime.utcnow().isoformat() + "Z"
+                empty_response = {
+                    "verdicts": [],
+                    "count": 0,
+                    "stats": {
+                        "total_verdicts": 0,
+                        "high_confidence_count": 0,
+                        "avg_confidence": 0.0,
+                        "generated_at": now_iso,
+                    },
+                    "filters_applied": {
+                        "min_confidence": min_confidence,
+                        "tickers": ticker,
+                        "sort_by": sort_by,
+                        "sort_order": sort_order,
+                        "limit": limit,
+                    },
+                    "generated_at": now_iso,
+                    "source": ["judge_route", "forecasts_llm", "empty_after_filter"],
+                }
+                if debug:
+                    empty_response["debug_pipeline"] = traces
+                return empty_response
+
+            # Respect limit but add a hard cap for safety
+            max_tickers = min(max(limit, 1), 30)
+            top_rows = rows_sorted[:max_tickers]
+            logger.info(
+                "📋 Selected %d top_rows for processing (limit=%d, hard_cap=%d, available=%d)",
+                len(top_rows),
+                limit,
+                max_tickers,
+                len(rows_sorted),
+            )
             if top_rows:
-                logger.info(f"   First ticker: {top_rows[0].get('ticker') if top_rows else 'N/A'}")
+                logger.info(
+                    "   First ticker: %s",
+                    top_rows[0].get("ticker") or top_rows[0].get("symbol") or "N/A",
+                )
+            add_trace(
+                "rows_selected",
+                total_rows=len(rows),
+                after_filters=len(rows_sorted),
+                selected=len(top_rows),
+                limit=limit,
+                hard_cap=max_tickers,
+            )
 
             def _parse_ts(ts_val):
                 if not ts_val:
@@ -1227,7 +1301,7 @@ async def get_judge_verdicts(
                         "Si une donnée manque, liste-la dans data_needed. "
                         "SI TU NE PEUX PAS DONNER LE JSON, RÉPONDS PAR {\"error\":\"no_json\"}."
                     )
-                    if prof and prof.prompt_template:
+                    if prof and getattr(prof, "prompt_template", None):
                         question = prof.prompt_template.format(ticker=sym) + " " + base_prompt
                     else:
                         question = (
@@ -1806,8 +1880,9 @@ async def get_judge_verdicts(
                                     if res_repair.get("ok"):
                                         repaired = res_repair.get("answer", "")
                                         try:
-                                            parsed = json.loads(repaired)
-                                            if isinstance(parsed, dict):
+                                            repaired_parsed = json.loads(repaired)
+                                            if isinstance(repaired_parsed, dict):
+                                                parsed = repaired_parsed
                                                 # phase_scores par défaut
                                                 if isinstance(parsed.get("phase_scores"), list):
                                                     parsed["phase_scores"] = {}
@@ -1828,7 +1903,6 @@ async def get_judge_verdicts(
                                                         "error": f"llm_validation_error_repair: {e3}",
                                                         "raw": repaired,
                                                     }
-                                                # Log succès réparation
                                                 logger.warning("repair_llm_used=groq_qwen3_32b")
                                             else:
                                                 parsed = {
@@ -1881,7 +1955,7 @@ async def get_judge_verdicts(
                             "parse_error": parsed.get("error") if isinstance(parsed, dict) else None,
                             "expected_return_raw": expected_return,
                             "expected_return_ensemble": expected_return_ensemble,
-                        "expected_return_final": expected_return_final,
+                            "expected_return_final": expected_return_final,
                         },
                     )
 
@@ -1931,6 +2005,12 @@ async def get_judge_verdicts(
                         }
 
                     if debug:
+                        conf_final_dbg = base_conf
+                        if isinstance(parsed, dict) and parsed.get("confidence") is not None:
+                            try:
+                                conf_final_dbg = float(parsed.get("confidence"))
+                            except Exception:
+                                pass
                         add_trace(
                             "llm_call",
                             ticker=sym,
@@ -1940,6 +2020,7 @@ async def get_judge_verdicts(
                             parsed_ok=isinstance(parsed, dict) and not parsed.get("error"),
                             fallback=fallback_used,
                             llm_ms=met.get("llm_ms"),
+                            confidence=conf_final_dbg,
                         )
 
                     met["total_ms"] = (
@@ -1955,10 +2036,10 @@ async def get_judge_verdicts(
                                 else None
                             )
                             # Consolider la confiance finale à partir du parsing LLM si dispo
-                            conf_final = base_conf
+                            conf_final_metric = base_conf
                             if isinstance(parsed, dict) and parsed.get("confidence") is not None:
                                 try:
-                                    conf_final = float(parsed.get("confidence"))
+                                    conf_final_metric = float(parsed.get("confidence"))
                                 except Exception:
                                     pass
                             log_metrics(
@@ -1976,17 +2057,17 @@ async def get_judge_verdicts(
                         except Exception:
                             pass
                     if debug:
-                        conf_final = base_conf
+                        conf_final_dbg2 = base_conf
                         if isinstance(parsed, dict) and parsed.get("confidence") is not None:
                             try:
-                                conf_final = float(parsed.get("confidence"))
+                                conf_final_dbg2 = float(parsed.get("confidence"))
                             except Exception:
                                 pass
                         add_trace(
                             "row_done",
                             ticker=sym,
                             total_ms=met.get("total_ms"),
-                            confidence=conf_final,
+                            confidence=conf_final_dbg2,
                             expected_return=expected_return_final,
                         )
 
