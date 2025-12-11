@@ -134,21 +134,22 @@ run_g4f_tests() {
         return
     fi
 
-    # Ne pas casser le start en cas d'échec
-    set +e
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 120 "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
-    else
-        "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
-    fi
-    rc=$?
-    set -e
-
-    if [ $rc -ne 0 ]; then
-        log_warning "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
-    else
-        log_success "✅ Tests G4F terminés. Résultats dans src/tested_g4f_models*.json et /tmp/g4f_test.log"
-    fi
+    # Ne pas bloquer le démarrage : lancer en arrière-plan
+    (
+        set +e
+        if command -v timeout >/dev/null 2>&1; then
+            timeout 120 "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
+        else
+            "$PY" scripts/test_g4f_models.py > /tmp/g4f_test.log 2>&1
+        fi
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            log_warning "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
+        else
+            log_success "✅ Tests G4F terminés. Résultats dans src/tested_g4f_models*.json et /tmp/g4f_test.log"
+        fi
+    ) &
+    log "G4F tests lancés en arrière-plan (voir /tmp/g4f_test.log)"
 }
 
 # Démarrer le backend
