@@ -25,8 +25,9 @@ start_session() {
 
   tmux new-session -d -s "${name}" "bash -lc 'cd \"${PROJECT_DIR}\" && export PATH=\"${PATH_OVERRIDE}\" && export QWEN_CODE_AUTO_CONFIRM=1 && ${QWEN_BIN:-qwen} || exec bash'"
 
-  # Pipe pane output to log (append)
-  tmux pipe-pane -o -t "${name}" "cat >> \"${LOG_DIR}/${name}.log\""
+  # Pipe pane output to log (append). Target the first pane explicitly.
+  local target="${name}:0.0"
+  tmux pipe-pane -o -t "${target}" "cat >> \"${LOG_DIR}/${name}.log\""
 }
 
 start_session qwen_planner
