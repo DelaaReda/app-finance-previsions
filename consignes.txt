@@ -2199,3 +2199,698 @@ Si tu veux ensuite, on peut :
 	•	raffiner le format pour gérer plusieurs fichiers,
 	•	ajouter un READ_FILE dans les prompts du dev pour qu’il demande à lire des fichiers existants avant de les modifier,
 	•	ou ajouter un 4e agent “Data Scientist” qui propose des nouvelles métriques / visualisations pour ton analyse financière.
+
+    Yes, parfait, on arrête le “plomberie RPG” et on passe à un vrai GroupChat Autogen branché sur ton Qwen CLI. 😄
+
+Je te donne un seul fichier à ajouter, qui utilise ce que tu as déjà (tmux + QwenTmuxLLM + venv backend), sans réinventer les roues.
+
+⸻
+
+🎯 Objectif
+
+Créer scripts/autogen_groupchat_qwen.py qui :
+	•	utilise Autogen GroupChat (Planner / Dev / Tester),
+	•	chaque agent parle via Qwen Code en tmux (sessions que tu as déjà),
+	•	tu démarres le tout avec une seule commande,
+	•	pas de boucle multi-pass maison : c’est GroupChatManager qui orchestre.
+
+On n’intègre pas encore les dev_tools dans le cycle interne (pour aller vite). On pourra les brancher ensuite comme “qualité + R&D”.
+
+⸻
+
+1️⃣ Fichier à créer : scripts/autogen_groupchat_qwen.py
+
+Place-le dans :
+/Users/venom/Documents/analyse-financiere/scripts/autogen_groupchat_qwen.py
+
+#!/usr/bin/env python
+import os
+from types import SimpleNamespace
+
+from autogen import ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
+
+# ⚠️ Tu as déjà ce fichier-là:
+# scripts/qwen_tmux_backend.py avec QwenTmuxLLM
+from scripts.qwen_tmux_backend import QwenTmuxLLM
+
+
+# ------------------------------------------------------------------------------
+# 1. Bridge AutoGen -> Qwen Code en tmux
+#    (Custom "model client" simplifié compatible avec AutoGen 0.2.x)
+# ------------------------------------------------------------------------------
+
+class QwenTmuxModelClient:
+    """
+    Client minimal pour AutoGen qui envoie les messages au QwenTmuxLLM
+    (donc à Qwen Code qui tourne dans tmux).
+
+    Il respecte juste assez le "ModelClient protocol" pour marcher avec AutoGen:
+    - create(params)
+    - message_retrieval(response)
+    - cost(response)
+    - get_usage(response)
+    """
+
+    def __init__(self, config, **kwargs):
+        # config_list[0] contient notre config custom
+        cfg = None
+        if isinstance(config, dict) and "config_list" in config:
+            cfg = config["config_list"][0]
+        else:
+            cfg = config or {}
+
+        self.session_name = cfg.get("session_name", "qwen_dev")
+        self.wait_seconds = cfg.get("wait_seconds", 10)
+        self.system_prompt = cfg.get("system_prompt", "")
+
+        # On réutilise ton backend existant
+        self.qwen = QwenTmuxLLM(
+            session_name=self.session_name,
+            system_prompt=self.system_prompt,
+            wait_seconds=self.wait_seconds,
+        )
+
+    # Ce que AutoGen appelle pour "générer une réponse"
+    def create(self, params):
+        """
+        params["messages"] = liste de dicts style OpenAI:
+        [{"role": "user"|"assistant"|"system", "content": "..."}]
+        """
+
+        messages = params.get("messages", [])
+
+        # On compacte simplement tout le contexte texte dans un prompt unique
+        # pour Qwen Code (qui ne gère pas nativement les rôles).
+        prompt_lines = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            prompt_lines.append(f"{role.upper()}:\n{content}\n")
+
+        prompt = "\n".join(prompt_lines).strip()
+
+        # Appel à ton Qwen CLI via tmux
+        reply_text = self.qwen.chat(
+            [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ]
+        )
+
+        # On emballe dans un objet façon OpenAI
+        msg = SimpleNamespace()
+        msg.content = reply_text
+        msg.function_call = None
+
+        choice = SimpleNamespace()
+        choice.message = msg
+
+        resp = SimpleNamespace()
+        resp.choices = [choice]
+        resp.model = "qwen-tmux"
+
+        return resp
+
+    def message_retrieval(self, response):
+        # AutoGen utilise ça pour récupérer le texte
+        return [c.message.content for c in response.choices]
+
+    def cost(self, response) -> float:
+        # Pas de coût pour Qwen CLI
+        return 0.0
+
+    @staticmethod
+    def get_usage(response):
+        # Pas de métriques d'usage pour l’instant
+        return {}
+
+
+# ------------------------------------------------------------------------------
+# 2. Config LLM pour AutoGen (utilise QwenTmuxModelClient)
+# ------------------------------------------------------------------------------
+
+def make_llm_config(session_name: str, system_prompt: str, wait_seconds: int = 10):
+    return {
+        "config_list": [
+            {
+                "model": "qwen-tmux",              # identifiant logique
+                "model_client_cls": "QwenTmuxModelClient",
+                "session_name": session_name,      # pour QwenTmuxModelClient
+                "system_prompt": system_prompt,
+                "wait_seconds": wait_seconds,
+            }
+        ],
+        # IMPORTANT: on n'utilise pas de cache OpenAI
+        "cache_seed": None,
+    }
+
+
+# ------------------------------------------------------------------------------
+# 3. Création des agents : Planner / Dev / Tester + UserProxy
+# ------------------------------------------------------------------------------
+
+def build_agents(feature_text: str):
+    """
+    Construit les 3 agents principaux + le user_proxy qui lance la discussion.
+    """
+
+    # System prompts – tu peux les affiner après test
+    planner_sys = (
+        "Tu es PLANNER, architecte technique senior.\n"
+        "Ton rôle : transformer une feature en plan de tâches clair, "
+        "numéroté, réaliste, pour un dev qui travaille sur le projet "
+        "Finance Copilot (FastAPI backend, jobs, services, RAG, etc.).\n"
+        "Toujours en français, concis, mais structuré.\n"
+        "Quand tu as fini ton plan, termine par une phrase claire "
+        "adressée au Dev pour qu'il commence l'implémentation."
+    )
+
+    dev_sys = (
+        "Tu es DEV, développeur backend senior qui travaille DANS le repo "
+        "Finance Copilot sur cette machine.\n"
+        "- Tu peux exécuter des commandes shell via Qwen Code.\n"
+        "- Tu DOIS travailler proprement (petites étapes, fichiers ciblés).\n"
+        "- Tu n'exécutes pas de migrations destructrices ni de rm dangereux.\n"
+        "- Tu expliques brièvement ce que tu fais, mais tu privilégies le code.\n"
+        "Tu réponds en français, avec des extraits de code si nécessaire."
+    )
+
+    tester_sys = (
+        "Tu es TESTER / QA.\n"
+        "- Tu ne modifies pas le code toi-même.\n"
+        "- Tu proposes des tests (pytest) et des cas limites.\n"
+        "- Tu critiques le plan et l'implémentation de DEV.\n"
+        "- Tu peux demander à DEV d'exécuter pytest, ou d'écrire des tests.\n"
+        "Tu réponds en français. Termine clairement par une recommandation."
+    )
+
+    # LLM configs utilisant notre QwenTmuxModelClient
+    planner_llm = make_llm_config(
+        session_name="qwen_planner",
+        system_prompt=planner_sys,
+        wait_seconds=12,
+    )
+    dev_llm = make_llm_config(
+        session_name="qwen_dev",
+        system_prompt=dev_sys,
+        wait_seconds=20,
+    )
+    tester_llm = make_llm_config(
+        session_name="qwen_tester",
+        system_prompt=tester_sys,
+        wait_seconds=15,
+    )
+
+    # Agents Autogen classiques, mais avec notre client custom
+    planner = ConversableAgent(
+        name="Planner",
+        system_message=planner_sys,
+        llm_config=planner_llm,
+        human_input_mode="NEVER",
+    )
+
+    dev = ConversableAgent(
+        name="Dev",
+        system_message=dev_sys,
+        llm_config=dev_llm,
+        human_input_mode="NEVER",
+    )
+
+    tester = ConversableAgent(
+        name="Tester",
+        system_message=tester_sys,
+        llm_config=tester_llm,
+        human_input_mode="NEVER",
+    )
+
+    # UserProxy = toi qui lance la demande de feature
+    # (pas besoin d'LLM pour lui)
+    user_proxy = UserProxyAgent(
+        name="Reda",
+        human_input_mode="NEVER",   # on veut un run full auto
+        code_execution_config=False,
+    )
+
+    # Décrit chaque agent pour aider le GroupChatManager
+    planner.description = "Découpe les features en plan technique détaillé."
+    dev.description = "Implémente les changements dans le code du backend."
+    tester.description = "Propose et critique les tests, valide la qualité."
+
+    return user_proxy, planner, dev, tester
+
+
+# ------------------------------------------------------------------------------
+# 4. Lancement d’un GroupChat
+# ------------------------------------------------------------------------------
+
+def run_groupchat_for_feature(feature_text: str, max_rounds: int = 10):
+    user_proxy, planner, dev, tester = build_agents(feature_text)
+
+    # GroupChat = tous les agents dans un même thread
+    groupchat = GroupChat(
+        agents=[planner, dev, tester],
+        messages=[],              # on part d'un historique vide
+        max_round=max_rounds,
+        send_introductions=True,  # chaque agent se présente
+    )
+
+    # Manager = choisit qui parle à chaque tour (auto via LLM)
+    chat_manager = GroupChatManager(
+        groupchat=groupchat,
+        llm_config=None,  # on laisse la sélection simple (pas besoin d'un autre LLM ici)
+    )
+
+    # Lancement: c’est le UserProxy (toi) qui initie la demande
+    result = user_proxy.initiate_chat(
+        chat_manager,
+        message=(
+            "Feature à implémenter dans le backend Finance Copilot :\n"
+            f"{feature_text}\n\n"
+            "Planner : commence par proposer un plan structuré.\n"
+            "Dev : ensuite, implémente progressivement en utilisant les commandes shell et les fichiers du repo.\n"
+            "Tester : valide la qualité, les tests, et propose des améliorations.\n"
+            "Quand vous estimez que la feature est bien en place, arrêtez la discussion."
+        ),
+        summary_method="reflection_with_llm",
+    )
+
+    print("\n================= RÉSUMÉ FINAL (Autogen) =================\n")
+    try:
+        print(result.summary)
+    except Exception:
+        print("(Pas de résumé disponible, mais le chat a bien tourné.)")
+
+
+# ------------------------------------------------------------------------------
+# 5. Entrée principale
+# ------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # Tu peux changer la feature ici pour tester différentes choses
+    default_feature = (
+        "Ajouter un endpoint GET /health sur l'API FastAPI principale "
+        "qui retourne un JSON {\"status\": \"ok\", \"version\": \"1.0.0\"}, "
+        "documenté dans la doc OpenAPI, avec au moins un test pytest."
+    )
+
+    feature = os.environ.get("FC_FEATURE", default_feature)
+    run_groupchat_for_feature(feature_text=feature, max_rounds=8)
+
+
+⸻
+
+2️⃣ Comment le lancer
+	1.	Démarrer tes sessions tmux Qwen (tu as déjà le script) :
+
+cd /Users/venom/Documents/analyse-financiere
+./scripts/start_qwen_tmux.sh
+
+	2.	Activer la venv backend :
+
+cd /Users/venom/Documents/analyse-financiere
+. copilot-app/backend/.venv/bin/activate
+
+	3.	Lancer le GroupChat :
+
+python scripts/autogen_groupchat_qwen.py
+
+Optionnel : changer la feature à la volée :
+
+FC_FEATURE="Refactoriser la gestion du cache des données FRED pour réduire le temps de réponse" \
+python scripts/autogen_groupchat_qwen.py
+
+
+⸻
+
+3️⃣ Et après ?
+
+Une fois que ça tourne et que tu vois Planner → Dev → Tester discuter via Qwen CLI :
+	•	Étape suivante (R&D) :
+	•	injecter les résultats de run_pytest_tool, git_diff_tool, etc.
+comme messages supplémentaires dans la boucle (par ex. un “Observer” ou en ajoutant un message système entre deux tours).
+	•	commencer à travailler sur :
+	•	la priorisation des tâches,
+	•	les règles de qualité,
+	•	comment empêcher les agents de polluer le repo ou d’inventer des mocks débiles.
+
+Mais là, on a enfin :
+	•	Autogen GroupChat ✅
+	•	Qwen Code en tmux comme moteur unique ✅
+	•	Un point d’entrée simple pour expérimenter ✅
+
+Si tu veux, au prochain message, on ajoute une couche “Observer qualité” qui pousse automatiquement les résultats de pytest / git status dans la conversation du Tester, sans que toi tu aies à gérer ça à la main.
+
+Parfait 🙌 On branche l’Observer Qualité par-dessus ton GroupChat Autogen et on arrête de toucher à tout le reste.
+
+On garde :
+	•	Qwen Code en tmux ✅
+	•	QwenTmuxLLM ✅
+	•	GroupChat Autogen ✅
+	•	scripts/dev_tools.py ✅
+
+On ajoute juste :
+	1.	Un agent “QualityObserver” qui lit les résultats de pytest, git status, git diff, etc.
+	2.	Un appel automatique aux tools après le GroupChat, et un mini-chat où l’Observer te fait un rapport propre.
+
+⸻
+
+1️⃣ Ajout : QualityObserver + appel aux tools
+
+On modifie ton fichier :
+scripts/autogen_groupchat_qwen.py
+
+Je te montre la version complète (tu peux remplacer l’ancienne par celle-ci).
+
+#!/usr/bin/env python
+import os
+from types import SimpleNamespace
+
+from autogen import ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
+
+# ⚠️ Tu as déjà ceci :
+from scripts.qwen_tmux_backend import QwenTmuxLLM
+
+# ⚠️ On réutilise tes outils read-only
+from scripts.dev_tools import (
+    run_pytest_tool,
+    run_specific_tests_tool,
+    git_status_tool,
+    git_diff_tool,
+    # list_endpoints_tool, list_todos_tool  # dispo si tu veux plus tard
+)
+
+
+PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
+
+
+# ------------------------------------------------------------------------------
+# 1. Bridge AutoGen -> Qwen Code en tmux
+# ------------------------------------------------------------------------------
+
+class QwenTmuxModelClient:
+    def __init__(self, config, **kwargs):
+        cfg = None
+        if isinstance(config, dict) and "config_list" in config:
+            cfg = config["config_list"][0]
+        else:
+            cfg = config or {}
+
+        self.session_name = cfg.get("session_name", "qwen_dev")
+        self.wait_seconds = cfg.get("wait_seconds", 10)
+        self.system_prompt = cfg.get("system_prompt", "")
+
+        self.qwen = QwenTmuxLLM(
+            session_name=self.session_name,
+            system_prompt=self.system_prompt,
+            wait_seconds=self.wait_seconds,
+        )
+
+    def create(self, params):
+        messages = params.get("messages", [])
+
+        prompt_lines = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            prompt_lines.append(f"{role.upper()}:\n{content}\n")
+
+        prompt = "\n".join(prompt_lines).strip()
+
+        reply_text = self.qwen.chat(
+            [
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ]
+        )
+
+        msg = SimpleNamespace()
+        msg.content = reply_text
+        msg.function_call = None
+
+        choice = SimpleNamespace()
+        choice.message = msg
+
+        resp = SimpleNamespace()
+        resp.choices = [choice]
+        resp.model = "qwen-tmux"
+
+        return resp
+
+    def message_retrieval(self, response):
+        return [c.message.content for c in response.choices]
+
+    def cost(self, response) -> float:
+        return 0.0
+
+    @staticmethod
+    def get_usage(response):
+        return {}
+
+
+def make_llm_config(session_name: str, system_prompt: str, wait_seconds: int = 10):
+    return {
+        "config_list": [
+            {
+                "model": "qwen-tmux",
+                "model_client_cls": "QwenTmuxModelClient",
+                "session_name": session_name,
+                "system_prompt": system_prompt,
+                "wait_seconds": wait_seconds,
+            }
+        ],
+        "cache_seed": None,
+    }
+
+
+# ------------------------------------------------------------------------------
+# 2. Agents : Planner / Dev / Tester + QualityObserver + UserProxy
+# ------------------------------------------------------------------------------
+
+def build_agents(feature_text: str):
+    planner_sys = (
+        "Tu es PLANNER, architecte technique senior.\n"
+        "Tu transformes une feature en plan de tâches clair, numéroté, réaliste, "
+        "adapté au projet Finance Copilot (FastAPI backend, jobs, services, RAG, etc.).\n"
+        "Toujours en français, structuré. À la fin, adresse un message explicite au Dev pour commencer."
+    )
+
+    dev_sys = (
+        "Tu es DEV, développeur backend senior qui travaille DANS le repo Finance Copilot.\n"
+        "- Tu peux exécuter des commandes shell via Qwen Code.\n"
+        "- Tu fais des changements ciblés, étape par étape.\n"
+        "- Tu expliques brièvement ce que tu fais, mais tu privilégies le code.\n"
+        "- Tu n'exécutes pas de commandes destructrices.\n"
+        "Réponds en français."
+    )
+
+    tester_sys = (
+        "Tu es TESTER / QA.\n"
+        "- Tu ne modifies pas le code toi-même.\n"
+        "- Tu proposes des tests pytest, des cas limites, et critiques le travail de DEV.\n"
+        "- Tu peux demander explicitement à DEV d'exécuter des commandes (pytest, etc.).\n"
+        "Réponds en français et termine par une recommandation claire."
+    )
+
+    quality_sys = (
+        "Tu es QUALITY_OBSERVER.\n"
+        "On te fournit :\n"
+        "- les résultats de pytest (global et ciblé),\n"
+        "- le git status,\n"
+        "- un diff tronqué.\n\n"
+        "Ton rôle :\n"
+        "- Résumer l'état de santé de la feature implémentée (succès / échecs tests),\n"
+        "- Signaler les risques majeurs (tests manquants, code fragile, warnings importants),\n"
+        "- Proposer des priorités pour le prochain cycle de travail.\n\n"
+        "Tu ne proposes PAS de nouveaux changements de code détaillés, tu restes au niveau QA/risques.\n"
+        "Réponds en français, sous forme de rapport structuré."
+    )
+
+    planner_llm = make_llm_config(
+        session_name="qwen_planner",
+        system_prompt=planner_sys,
+        wait_seconds=12,
+    )
+    dev_llm = make_llm_config(
+        session_name="qwen_dev",
+        system_prompt=dev_sys,
+        wait_seconds=20,
+    )
+    tester_llm = make_llm_config(
+        session_name="qwen_tester",
+        system_prompt=tester_sys,
+        wait_seconds=15,
+    )
+    quality_llm = make_llm_config(
+        session_name="qwen_tester",  # on peut réutiliser une session, ou créer "qwen_quality"
+        system_prompt=quality_sys,
+        wait_seconds=12,
+    )
+
+    planner = ConversableAgent(
+        name="Planner",
+        system_message=planner_sys,
+        llm_config=planner_llm,
+        human_input_mode="NEVER",
+    )
+
+    dev = ConversableAgent(
+        name="Dev",
+        system_message=dev_sys,
+        llm_config=dev_llm,
+        human_input_mode="NEVER",
+    )
+
+    tester = ConversableAgent(
+        name="Tester",
+        system_message=tester_sys,
+        llm_config=tester_llm,
+        human_input_mode="NEVER",
+    )
+
+    quality_observer = ConversableAgent(
+        name="QualityObserver",
+        system_message=quality_sys,
+        llm_config=quality_llm,
+        human_input_mode="NEVER",
+    )
+
+    user_proxy = UserProxyAgent(
+        name="Reda",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+    )
+
+    planner.description = "Découpe les features en plan technique détaillé."
+    dev.description = "Implémente les changements dans le code du backend."
+    tester.description = "Propose/critique les tests et la qualité."
+    quality_observer.description = "Analyse pytest/git diff/status et produit un rapport QA."
+
+    return user_proxy, planner, dev, tester, quality_observer
+
+
+# ------------------------------------------------------------------------------
+# 3. GroupChat principal + passage par l’Observer Qualité
+# ------------------------------------------------------------------------------
+
+def run_groupchat_for_feature(feature_text: str, max_rounds: int = 10):
+    user_proxy, planner, dev, tester, quality_observer = build_agents(feature_text)
+
+    groupchat = GroupChat(
+        agents=[planner, dev, tester],
+        messages=[],
+        max_round=max_rounds,
+        send_introductions=True,
+    )
+
+    chat_manager = GroupChatManager(
+        groupchat=groupchat,
+        llm_config=None,
+    )
+
+    result = user_proxy.initiate_chat(
+        chat_manager,
+        message=(
+            "Feature à implémenter dans le backend Finance Copilot :\n"
+            f"{feature_text}\n\n"
+            "Planner : commence par proposer un plan structuré.\n"
+            "Dev : implémente progressivement, en petites étapes.\n"
+            "Tester : critique et renforce la qualité.\n"
+            "Arrêtez quand vous estimez que la feature est globalement en place."
+        ),
+        summary_method="reflection_with_llm",
+    )
+
+    print("\n================= RÉSUMÉ FINAL (GroupChat Autogen) =================\n")
+    try:
+        print(result.summary)
+    except Exception:
+        print("(Pas de résumé disponible, mais le chat a bien tourné.)")
+
+    # 🔍 Phase QA automatique après le GroupChat: on appelle tes outils
+    print("\n================= PHASE QA AUTOMATISÉE =================\n")
+
+    print(">> Lancement pytest global...")
+    pytest_global = run_pytest_tool()
+
+    print(">> Lancement pytest ciblé (pattern 'health')...")
+    pytest_health = run_specific_tests_tool("health")
+
+    print(">> Récupération git status / diff...")
+    status = git_status_tool()
+    diff = git_diff_tool(max_lines=220)
+
+    qa_message = (
+        "Voici les éléments de QA collectés automatiquement après le travail de l'équipe :\n\n"
+        "=== PYTEST GLOBAL ===\n"
+        f"{pytest_global['output']}\n\n"
+        "=== PYTEST CIBLÉ (pattern 'health') ===\n"
+        f"{pytest_health['output']}\n\n"
+        "=== GIT STATUS ===\n"
+        f"{status or '(aucun changement détecté)'}\n\n"
+        "=== GIT DIFF (tronqué) ===\n"
+        f"{diff or '(diff vide)'}\n\n"
+        "Produis un rapport QA structuré, en te basant uniquement sur ces informations."
+    )
+
+    qa_result = quality_observer.initiate_chat(
+        user_proxy,
+        message=qa_message,
+    )
+
+    print("\n================= RAPPORT QUALITY_OBSERVER =================\n")
+    # qa_result est un ChatResult, le dernier message est dans messages[-1]
+    try:
+        last_msg = qa_result.chat_history[-1]["content"]
+        print(last_msg)
+    except Exception:
+        print("(Impossible de récupérer le message QA, mais la conversation a eu lieu.)")
+
+
+if __name__ == "__main__":
+    default_feature = (
+        "Ajouter un endpoint GET /health sur l'API FastAPI principale "
+        "qui retourne un JSON {\"status\": \"ok\", \"version\": \"1.0.0\"}, "
+        "documenté dans la doc OpenAPI, avec au moins un test pytest."
+    )
+
+    feature = os.environ.get("FC_FEATURE", default_feature)
+    os.chdir(PROJECT_DIR)
+    run_groupchat_for_feature(feature_text=feature, max_rounds=8)
+
+
+⸻
+
+2️⃣ Comment l’utiliser
+
+Toujours le même rituel :
+
+cd /Users/venom/Documents/analyse-financiere
+./scripts/start_qwen_tmux.sh
+. copilot-app/backend/.venv/bin/activate
+python scripts/autogen_groupchat_qwen.py
+
+À la fin, tu verras :
+	1.	Le résumé Autogen du GroupChat (Planner / Dev / Tester).
+	2.	Puis la PHASE QA AUTOMATISÉE :
+	•	pytest global
+	•	pytest ciblé "health"
+	•	git status
+	•	git diff tronqué
+	3.	Enfin, un rapport structuré généré par QualityObserver à partir de ces infos.
+
+⸻
+
+Avec ça :
+	•	Tu ne réinventes pas la roue : GroupChat + Qwen + tes tools existants.
+	•	Tu as une architecture déjà assez avancée pour commencer la vraie R&D :
+	•	comment mieux prioriser,
+	•	comment imposer des règles qualité,
+	•	comment étendre à d’autres features.
+
+Quand tu auras fait un premier run, si tu veux, tu me colles juste :
+	•	le rapport QualityObserver
+et on réfléchit à la prochaine “invention” (policies, data guardian, spécialisation d’agents, etc.).

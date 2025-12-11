@@ -10,11 +10,14 @@ from typing import Dict, List, Optional
 from datetime import datetime
 
 # Add backend root to path for imports
-backend_root = Path(__file__).resolve().parents[2]  # Go from backend/src/services/alert_rules.py to backend/
-if str(backend_root) not in sys.path:
-    sys.path.insert(0, str(backend_root))
+backend_root = Path(__file__).resolve().parents[2]  # .../backend
+# Prefer src/ first, then backend root for legacy imports
+for p in (backend_root / "src", backend_root):
+    p_str = str(p)
+    if p_str not in sys.path:
+        sys.path.insert(0, p_str)
 
-from backend.src.models.alert_configuration import AlertRule
+from models.alert_configuration import AlertRule
 
 
 class AlertRulesService:
