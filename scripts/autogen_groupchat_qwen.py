@@ -236,10 +236,20 @@ def run_groupchat_for_feature(feature_text: str, max_rounds: int = 10):
         send_introductions=True,
     )
 
+    manager_llm_config = make_llm_config(
+        session_name="qwen_planner",
+        system_prompt=(
+            "Tu es MANAGER. Tu observes la discussion entre les agents et tu aides à "
+            "faire des résumés clairs et fidèles. Tu ne proposes pas de nouveau code."
+        ),
+        wait_seconds=12,
+    )
+
     chat_manager = GroupChatManager(
         groupchat=groupchat,
-        llm_config=None,
+        llm_config=manager_llm_config,
     )
+    chat_manager.register_model_client(model_client_cls=QwenTmuxModelClient)
 
     result = user_proxy.initiate_chat(
         chat_manager,
