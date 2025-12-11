@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from textwrap import dedent
 from typing import List, Dict, Any, Callable, Optional
+
+PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
+if PROJECT_DIR not in sys.path:
+    sys.path.insert(0, PROJECT_DIR)
 
 from scripts.qwen_tmux_backend import QwenTmuxLLM
 from scripts.dev_tools import (
@@ -13,7 +19,41 @@ from scripts.dev_tools import (
     git_diff_tool,
 )
 
-PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
+
+# ------------------------------------------------------------------------------
+# 0. Utilities: ensure tmux sessions are up
+# ------------------------------------------------------------------------------
+
+def ensure_tmux_sessions():
+    """Start Qwen tmux sessions if they are not already running."""
+    try:
+        ok_planner = subprocess.run(
+            ["tmux", "has-session", "-t", "qwen_planner"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        ok_dev = subprocess.run(
+            ["tmux", "has-session", "-t", "qwen_dev"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        ok_tester = subprocess.run(
+            ["tmux", "has-session", "-t", "qwen_tester"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if ok_planner and ok_dev and ok_tester:
+            print("ℹ️  Sessions tmux déjà actives (qwen_planner/dev/tester).")
+            return
+    except FileNotFoundError:
+        print("⚠️ tmux introuvable, impossible de démarrer les sessions Qwen.")
+        return
+
+    print("🚀 Démarrage des sessions tmux Qwen...")
+    subprocess.run(
+        [os.path.join(PROJECT_DIR, "scripts", "start_qwen_tmux.sh")],
+        check=True,
+    )
 
 
 # ------------------------------------------------------------------------------
@@ -323,6 +363,9 @@ def infer_test_pattern_from_feature(feature_text: str, default: str = "health") 
 
 
 def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
+    # S'assurer que les sessions tmux Qwen sont prêtes (et repartir sur un contexte propre)
+    ensure_tmux_sessions()
+
     # --- Prompts système pour chaque rôle ---
 
     planner_sys = dedent("""

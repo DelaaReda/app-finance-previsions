@@ -17,10 +17,17 @@ class QwenTmuxSession:
     ]
 
     NOISE_PATTERNS = [
-        re.compile(r"Qwen Code update available", re.IGNORECASE),
-        re.compile(r"You are running Qwen Code in your home directory", re.IGNORECASE),
-        re.compile(r"Type your message or @path/to/file", re.IGNORECASE),
-        re.compile(r"no sandbox", re.IGNORECASE),
+        "Qwen Code update available",
+        "You are running Qwen Code in your home directory",
+        "Type your message or @path/to/file",
+        "no sandbox",
+        "Ask questions, edit files, or run commands.",
+        "Be specific for the best results.",
+        "/help for more information.",
+        "Installed via Homebrew. Please update with",
+        "...~//analyse-financiere",
+        "coder-model",
+        "sandbox (",
     ]
 
     def __init__(self, session_name: str, wait_seconds: float = 12.0):
@@ -56,55 +63,85 @@ class QwenTmuxSession:
                 return confirms_done + 1
         return confirms_done
 
-    def _clean_output(self, text: str) -> str:
-        """
-        Nettoie la sortie brute de tmux :
-        - ne garde que la DERNIÈRE réponse d'assistant (à partir du dernier '✦ ')
-        - enlève spinners, cadres ASCII, bruit connu
-        - dédoublonne les lignes
-        """
-        if not text:
+    def _clean_output(self, raw: str) -> str:
+        """Nettoie la sortie brute de Qwen Code pour ne garder que la réponse utile."""
+        if not raw:
             return ""
 
-        # Garder uniquement à partir du dernier "✦ " s'il existe
-        last_star = text.rfind("✦ ")
-        if last_star != -1:
-            text = text[last_star:]
+        # 1) Enlever toutes les séquences ANSI
+        ansi_re = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+        text = ansi_re.sub("", raw)
 
-        lines = text.splitlines()
+        # 2) Normaliser les lignes
+        lines = [line.rstrip() for line in text.splitlines()]
         cleaned: List[str] = []
-        seen = set()
 
-        for raw in lines:
-            stripped = raw.strip()
-
-            # éviter les multiples lignes vides
-            if stripped == "":
-                if cleaned and cleaned[-1].strip() == "":
-                    continue
-                cleaned.append("")
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
                 continue
 
-            # spinners type "⠙ ..." ou "⠋ ..."
-            if stripped.startswith("⠙") or stripped.startswith("⠋") or stripped.startswith("⠏"):
+            lower = stripped.lower()
+
+            # UI générique Qwen / helper
+            if "ask questions, edit files, or run commands." in stripped:
+                continue
+            if "be specific for the best results." in stripped:
+                continue
+            if "/help for more information." in stripped:
+                continue
+            if "installed via homebrew. please update with" in lower:
+                continue
+            if "using: 1 qwen.md file" in lower:
+                continue
+            if "auto-accept edits" in lower:
+                continue
+            if "waiting for user confirmation" in lower:
+                continue
+            if "allow execution of:" in lower:
+                continue
+            if "yes, allow once" in lower or "yes, allow always" in lower:
+                continue
+            if "no, suggest changes" in lower:
                 continue
 
-            # lignes de cadre ASCII ou "Using: ... QWEN.md"
-            if stripped.startswith("Using:"):
+            # Spinners / “loading” jokes
+            if stripped.startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧")):
                 continue
-            if any(ch in stripped for ch in ["╭", "╰", "│", "───"]):
-                continue
-
-            # bruit connu (bannière, update, tips)
-            if any(p.search(stripped) for p in self.NOISE_PATTERNS):
+            if "(esc to cancel" in lower:
                 continue
 
-            # dédoublonnage simple
-            if stripped in seen:
+            # Ligne d’état de la barre en bas (chemin, sandbox, coder-model, etc.)
+            if "...//analyse-financiere" in stripped:
                 continue
-            seen.add(stripped)
+            if "coder-model" in lower and "sandbox" in lower:
+                continue
 
-            cleaned.append(raw)
+            # Lignes de cadres / bordures (tmux / TUI)
+            if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", stripped):
+                continue
+
+            # Autres bruits connus
+            if any(pat.lower() in lower for pat in self.NOISE_PATTERNS):
+                continue
+
+            cleaned.append(stripped)
+
+        if not cleaned:
+            return ""
+
+        # 3) Heuristique : garder le bloc après la dernière ligne qui commence par '✦'
+        last_star_idx = None
+        for i, line in enumerate(cleaned):
+            if line.lstrip().startswith("✦"):
+                last_star_idx = i
+
+        if last_star_idx is not None:
+            cleaned = cleaned[last_star_idx:]
+
+        # 4) Sécurité : ne conserver que les 40 dernières lignes max
+        if len(cleaned) > 40:
+            cleaned = cleaned[-40:]
 
         return "\n".join(cleaned).strip()
 

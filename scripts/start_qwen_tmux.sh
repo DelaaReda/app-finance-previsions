@@ -7,21 +7,17 @@ set -e
 
 BASE_DIR="$(cd "$(dirname "$0")/.."; pwd)"
 LOG_DIR="$BASE_DIR/logs"
+RUN_DIR="$LOG_DIR/$(date +%Y%m%d-%H%M%S)"
 PATH_OVERRIDE="/opt/homebrew/bin:/usr/local/bin:$PATH"
 QWEN_BIN="$(command -v qwen || true)"
 
-mkdir -p "$LOG_DIR"
-
-# Rotation simple : on vide les logs à chaque start
-echo "" > "$LOG_DIR/qwen_planner.log"
-echo "" > "$LOG_DIR/qwen_dev.log"
-echo "" > "$LOG_DIR/qwen_tester.log"
+mkdir -p "$RUN_DIR"
 
 echo "🚀 Starting Qwen tmux sessions with live logging..."
 
 start_session() {
     local name="$1"
-    local log_file="$LOG_DIR/${name}.log"
+    local log_file="$RUN_DIR/${name}.log"
 
     # Créer la session détachée et lancer qwen directement
     tmux new-session -d -s "$name" "bash -lc 'cd \"${BASE_DIR}\" && export PATH=\"${PATH_OVERRIDE}\" && export QWEN_CODE_AUTO_CONFIRM=1 && ${QWEN_BIN:-qwen} || exec bash'"
@@ -44,3 +40,4 @@ start_session "qwen_tester"
 echo ""
 echo "ℹ️  Attach with: tmux attach -t qwen_planner"
 echo "ℹ️  Logs live: tail -f logs/qwen_planner.log"
+echo "ℹ️  Current run logs: $RUN_DIR/qwen_*.log"
