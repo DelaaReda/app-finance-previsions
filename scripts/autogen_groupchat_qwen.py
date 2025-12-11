@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 import os
-from types import SimpleNamespace
+from dataclasses import dataclass, field
+from textwrap import dedent
+from typing import List, Dict, Any, Callable, Optional
 
-from autogen import ConversableAgent, GroupChat, GroupChatManager, UserProxyAgent
-
-# Import backend Qwen -> tmux (tu l'as déjà dans ton repo)
 from scripts.qwen_tmux_backend import QwenTmuxLLM
-
-# Import des outils read-only (déjà présents)
 from scripts.dev_tools import (
     run_pytest_tool,
     run_specific_tests_tool,
@@ -15,52 +12,51 @@ from scripts.dev_tools import (
     git_diff_tool,
 )
 
-
 PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
 
 
 # ------------------------------------------------------------------------------
-# 1. Bridge AutoGen -> Qwen Code en tmux
+# 1. Modèle de message & agent
 # ------------------------------------------------------------------------------
 
-class QwenTmuxModelClient:
+@dataclass
+class ConversationMessage:
+    round_index: int
+    sender: str          # "Planner", "Dev", "Tester", "QA"
+    role_type: str       # "planner" | "dev" | "tester" | "qa"
+    content: str
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+class RoleAgent:
     """
-    Client minimal pour AutoGen qui envoie les messages au QwenTmuxLLM
-    (donc à Qwen Code qui tourne dans tmux).
+    Agent relié à une session tmux Qwen Code.
+    Qwen garde le contexte dans la session, nous on gère juste l'orchestration.
     """
 
-    def __init__(self, config, **kwargs):
-        if isinstance(config, dict) and "config_list" in config:
-            cfg = config["config_list"][0]
-        else:
-            cfg = config or {}
-
-        self.session_name = cfg.get("session_name", "qwen_dev")
-        self.wait_seconds = cfg.get("wait_seconds", 10)
-        self.system_prompt = cfg.get("system_prompt", "")
-
-        self.qwen = QwenTmuxLLM(
-            session_name=self.session_name,
-            system_prompt=self.system_prompt,
-            wait_seconds=self.wait_seconds,
+    def __init__(
+        self,
+        name: str,
+        role_type: str,
+        session_name: str,
+        system_prompt: str,
+        wait_seconds: int = 15,
+    ):
+        self.name = name
+        self.role_type = role_type
+        self.session_name = session_name
+        self.llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_prompt,
+            wait_seconds=wait_seconds,
         )
 
-    def create(self, params):
-        """
-        AutoGen appelle create(...) avec une liste de messages au format OpenAI.
-        On compacte tout dans un prompt texte qu'on envoie à Qwen Code.
-        """
-        messages = params.get("messages", [])
+    def send(self, prompt: str) -> str:
+        print(f"\n================= {self.name.upper()} – PROMPT =================\n")
+        print(prompt)
+        print("\n============================================================\n")
 
-        prompt_lines = []
-        for m in messages:
-            role = m.get("role", "user")
-            content = m.get("content", "")
-            prompt_lines.append(f"{role.upper()}:\n{content}\n")
-
-        prompt = "\n".join(prompt_lines).strip()
-
-        reply_text = self.qwen.chat(
+        reply = self.llm.chat(
             [
                 {
                     "role": "user",
@@ -69,245 +65,374 @@ class QwenTmuxModelClient:
             ]
         )
 
-        msg = SimpleNamespace()
-        msg.content = reply_text
-        msg.function_call = None
+        print(f"\n================= {self.name.upper()} – RÉPONSE =================\n")
+        print(reply)
+        print("\n============================================================\n")
 
-        choice = SimpleNamespace()
-        choice.message = msg
-
-        resp = SimpleNamespace()
-        resp.choices = [choice]
-        resp.model = "qwen-tmux"
-
-        return resp
-
-    def message_retrieval(self, response):
-        return [c.message.content for c in response.choices]
-
-    def cost(self, response) -> float:
-        return 0.0
-
-    @staticmethod
-    def get_usage(response):
-        return {}
-
-
-def make_llm_config(session_name: str, system_prompt: str, wait_seconds: int = 10):
-    """
-    Configuration LLM pour AutoGen, qui utilise notre QwenTmuxModelClient
-    plutôt qu'un modèle OpenAI classique.
-    """
-    return {
-        "config_list": [
-            {
-                "model": "qwen-tmux",
-                "model_client_cls": "QwenTmuxModelClient",
-                "session_name": session_name,
-                "system_prompt": system_prompt,
-                "wait_seconds": wait_seconds,
-            }
-        ],
-        "cache_seed": None,
-    }
+        return reply
 
 
 # ------------------------------------------------------------------------------
-# 2. Agents : Planner / Dev / Tester / QualityObserver + UserProxy
+# 2. Moteur de GroupChat générique
 # ------------------------------------------------------------------------------
 
-def build_agents(feature_text: str):
-    planner_sys = (
-        "Tu es PLANNER, architecte technique senior.\n"
-        "Tu transformes une feature en plan de tâches clair, numéroté, réaliste, "
-        "adapté au projet Finance Copilot (FastAPI backend, jobs, services, RAG, etc.).\n"
-        "Toujours en français, structuré. À la fin, adresse un message explicite au Dev."
-    )
+class GroupChatEngine:
+    """
+    Petit moteur de group chat maison :
+    - connaît les rôles,
+    - stocke l'historique,
+    - gère les rondes,
+    - applique une fonction de stop.
+    """
 
-    dev_sys = (
-        "Tu es DEV, développeur backend senior qui travaille DANS le repo Finance Copilot.\n"
-        "- Tu peux exécuter des commandes shell via Qwen Code.\n"
-        "- Tu fais des changements ciblés, étape par étape.\n"
-        "- Tu expliques brièvement ce que tu fais, mais tu privilégies le code.\n"
-        "- Tu n'exécutes pas de commandes destructrices (rm -rf, drop DB, etc.).\n"
-        "Réponds en français."
-    )
+    def __init__(
+        self,
+        agents: Dict[str, RoleAgent],      # { "planner": RoleAgent, ... }
+        max_rounds: int = 3,
+        stop_condition: Optional[Callable[[List[ConversationMessage]], bool]] = None,
+    ):
+        self.agents = agents
+        self.max_rounds = max_rounds
+        self.stop_condition = stop_condition
+        self.history: List[ConversationMessage] = []
 
-    tester_sys = (
-        "Tu es TESTER / QA.\n"
-        "- Tu ne modifies pas directement le code.\n"
-        "- Tu proposes des tests pytest, des cas limites, et critiques le travail de DEV.\n"
-        "- Tu peux demander explicitement à DEV d'exécuter des commandes (pytest, etc.).\n"
-        "Réponds en français et termine par une recommandation claire."
-    )
+    def add_message(
+        self,
+        round_index: int,
+        sender: RoleAgent,
+        content: str,
+        meta: Dict[str, Any] | None = None,
+    ):
+        self.history.append(
+            ConversationMessage(
+                round_index=round_index,
+                sender=sender.name,
+                role_type=sender.role_type,
+                content=content,
+                meta=meta or {},
+            )
+        )
 
-    quality_sys = (
-        "Tu es QUALITY_OBSERVER.\n"
-        "On te fournit :\n"
-        "- les résultats de pytest (global et ciblé),\n"
-        "- le git status,\n"
-        "- un diff tronqué.\n\n"
-        "Ton rôle :\n"
-        "- Résumer l'état de santé de la feature implémentée (succès / échecs tests),\n"
-        "- Signaler les risques majeurs (tests manquants, warnings, code fragile),\n"
-        "- Proposer des priorités pour le prochain cycle de travail.\n\n"
-        "Tu ne donnes pas de patchs détaillés, tu restes au niveau QA/risques.\n"
-        "Réponds en français, sous forme de rapport structuré."
-    )
+    def get_history_text(self) -> str:
+        """
+        Résumé textuel simple de l'historique.
+        Utile si tu veux fournir du contexte à un agent.
+        """
+        lines = []
+        for msg in self.history:
+            lines.append(f"[round {msg.round_index}][{msg.sender}]")
+            lines.append(msg.content)
+            lines.append("")  # ligne vide
+        return "\n".join(lines).strip()
 
-    planner_llm = make_llm_config(
+    def run_rounds(
+        self,
+        feature_text: str,
+        round_callback: Optional[Callable[["GroupChatEngine", int], None]] = None,
+    ):
+        """
+        Boucle principale : exécute jusqu'à max_rounds, ou jusqu'à ce que stop_condition soit vraie.
+
+        round_callback(self, round_index) te permet d'injecter de la logique custom par round
+        (ex: lancer pytest après chaque Dev, etc.).
+        """
+        for r in range(1, self.max_rounds + 1):
+            print(f"\n==================== ROUND {r} ====================\n")
+
+            # 1. Planner
+            planner = self.agents.get("planner")
+            if planner:
+                planner_prompt = self._build_planner_prompt(feature_text, round_index=r)
+                planner_reply = planner.send(planner_prompt)
+                self.add_message(r, planner, planner_reply)
+
+            # 2. Dev
+            dev = self.agents.get("dev")
+            if dev:
+                dev_prompt = self._build_dev_prompt(feature_text, round_index=r)
+                dev_reply = dev.send(dev_prompt)
+                self.add_message(r, dev, dev_reply)
+
+            # 3. Tester
+            tester = self.agents.get("tester")
+            if tester:
+                tester_prompt = self._build_tester_prompt(feature_text, round_index=r)
+                tester_reply = tester.send(tester_prompt)
+                self.add_message(r, tester, tester_reply)
+
+            # callback custom par round (ex: mini-QA intermédiaire)
+            if round_callback:
+                round_callback(self, r)
+
+            # stop condition globale
+            if self.stop_condition and self.stop_condition(self.history):
+                print("\n>>> Stop condition atteinte, arrêt des rounds.\n")
+                break
+
+    # --------- Prompts standards (tu peux les override dans un subclass) ---------
+
+    def _build_planner_prompt(self, feature_text: str, round_index: int) -> str:
+        history_summary = self.get_history_text() if round_index > 1 else ""
+        base = dedent(f"""
+            Tu es PLANNER (round {round_index}) dans une équipe d'agents qui travaillent
+            sur le projet Finance Copilot (backend FastAPI, jobs, services, RAG, etc.).
+
+            Feature à implémenter / améliorer :
+
+            {feature_text}
+        """).strip()
+
+        if history_summary:
+            base += dedent(f"""
+
+                CONTEXTE DES ROUNDS PRÉCÉDENTS
+                --------------------------------
+                {history_summary}
+
+                Ta mission :
+                - Mettre à jour le plan en fonction de ce qui a déjà été fait / discuté,
+                - Proposer des tâches réalistes pour ce round uniquement,
+                - Ne pas réécrire tout à zéro, mais affiner.
+            """).strip()
+        else:
+            base += dedent("""
+
+                Ta mission :
+                - Proposer un plan de tâches numéroté,
+                - Indiquer les fichiers principaux impactés,
+                - Mentionner 1–3 risques techniques.
+
+                Forme attendue :
+
+                PLAN
+                1. ...
+                2. ...
+
+                FICHIERS
+                - ...
+
+                RISQUES
+                - ...
+            """).strip()
+
+        return base
+
+    def _build_dev_prompt(self, feature_text: str, round_index: int) -> str:
+        history_summary = self.get_history_text()
+        return dedent(f"""
+            Tu es DEV (round {round_index}), développeur backend senior dans le projet Finance Copilot.
+
+            FEATURE
+            -------
+            {feature_text}
+
+            HISTORIQUE
+            ----------
+            {history_summary}
+
+            Ta mission pour ce round :
+            - Implémenter des changements concrets, ciblés, cohérents avec le plan du PLANNER,
+            - Indiquer les fichiers précis à modifier (chemins),
+            - Fournir des extraits de code précis,
+            - Proposer des commandes à exécuter (pytest -k ..., etc.),
+            - Rester raisonnable : amélioration incrémentale, pas de refactor massif.
+
+            Réponds avec :
+
+            RÉSUMÉ
+            - ...
+
+            MODIFS PROPOSÉES
+            - fichier: ...
+              ```python
+              ...
+              ```
+
+            COMMANDES SUGGÉRÉES
+            - pytest ...
+            - ...
+        """).strip()
+
+    def _build_tester_prompt(self, feature_text: str, round_index: int) -> str:
+        history_summary = self.get_history_text()
+        return dedent(f"""
+            Tu es TESTER / QA (round {round_index}).
+
+            FEATURE
+            -------
+            {feature_text}
+
+            HISTORIQUE
+            ----------
+            {history_summary}
+
+            Ta mission :
+            - Proposer des tests pytest concrets (fichiers + fonctions de test),
+            - Couvrir les cas principaux + 2–3 cas limites,
+            - Signaler les risques et dettes de tests.
+
+            Forme attendue :
+
+            TESTS PYTEST
+            - tests/....py
+              - test_xxx: ...
+
+            CAS LIMITES
+            - ...
+
+            RISQUES
+            - ...
+        """).strip()
+
+
+# ------------------------------------------------------------------------------
+# 3. Implémentation spécifique Finance Copilot : QA finale + stop condition
+# ------------------------------------------------------------------------------
+
+def stop_condition_basic(history: List[ConversationMessage]) -> bool:
+    """
+    Exemple simple : on regarde si QA a déjà conclu "prêt pour merge" dans un message.
+    (Tu pourras raffiner ça plus tard.)
+    """
+    for msg in history:
+        if msg.role_type == "qa" and "prêt pour un merge" in msg.content.lower():
+            return True
+    return False
+
+
+def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
+    # --- Définition des rôles (prompts systèmes) ---
+
+    planner_sys = dedent("""
+        Tu es PLANNER, architecte technique pour Finance Copilot.
+        Tu penses en termes de petits incréments et tu aides Dev à ne pas partir dans tous les sens.
+        Tu réponds toujours en français, de façon structurée.
+    """).strip()
+
+    dev_sys = dedent("""
+        Tu es DEV, développeur backend Finance Copilot.
+        Tu écris du code FastAPI / Python / pytest, en modifiant seulement ce qui est nécessaire.
+        Tu évites de casser la structure existante. Tu réponds en français, avec du code précis.
+    """).strip()
+
+    tester_sys = dedent("""
+        Tu es TESTER / QA technique.
+        Tu proposes des tests pytest concrets et signales les trous de couverture.
+        Tu réponds en français, sous forme de checklist + explications.
+    """).strip()
+
+    qa_sys = dedent("""
+        Tu es QUALITY_OBSERVER.
+        Tu reçois les résultats pytest, git status et git diff.
+        Tu rédiges un rapport QA structuré (ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS).
+        Tu réponds en français.
+    """).strip()
+
+    planner = RoleAgent(
+        name="Planner",
+        role_type="planner",
         session_name="qwen_planner",
         system_prompt=planner_sys,
-        wait_seconds=12,
-    )
-    dev_llm = make_llm_config(
-        session_name="qwen_dev",
-        system_prompt=dev_sys,
-        wait_seconds=20,
-    )
-    tester_llm = make_llm_config(
-        session_name="qwen_tester",
-        system_prompt=tester_sys,
         wait_seconds=15,
     )
-    quality_llm = make_llm_config(
-        session_name="qwen_tester",  # on peut réutiliser la session tester pour QA
-        system_prompt=quality_sys,
-        wait_seconds=12,
-    )
 
-    planner = ConversableAgent(
-        name="Planner",
-        system_message=planner_sys,
-        llm_config=planner_llm,
-        human_input_mode="NEVER",
-    )
-
-    dev = ConversableAgent(
+    dev = RoleAgent(
         name="Dev",
-        system_message=dev_sys,
-        llm_config=dev_llm,
-        human_input_mode="NEVER",
+        role_type="dev",
+        session_name="qwen_dev",
+        system_prompt=dev_sys,
+        wait_seconds=25,
     )
 
-    tester = ConversableAgent(
+    tester = RoleAgent(
         name="Tester",
-        system_message=tester_sys,
-        llm_config=tester_llm,
-        human_input_mode="NEVER",
+        role_type="tester",
+        session_name="qwen_tester",
+        system_prompt=tester_sys,
+        wait_seconds=20,
     )
 
-    quality_observer = ConversableAgent(
+    qa = RoleAgent(
         name="QualityObserver",
-        system_message=quality_sys,
-        llm_config=quality_llm,
-        human_input_mode="NEVER",
+        role_type="qa",
+        session_name="qwen_tester",  # tu peux créer une session "qwen_qa" si tu veux
+        system_prompt=qa_sys,
+        wait_seconds=20,
     )
 
-    user_proxy = UserProxyAgent(
-        name="Reda",
-        human_input_mode="NEVER",
-        code_execution_config=False,
+    engine = GroupChatEngine(
+        agents={
+            "planner": planner,
+            "dev": dev,
+            "tester": tester,
+        },
+        max_rounds=max_rounds,
+        stop_condition=None,  # on pourrait brancher stop_condition_basic plus tard
     )
 
-    planner.description = "Découpe les features en plan technique détaillé."
-    dev.description = "Implémente les changements dans le code du backend."
-    tester.description = "Propose/critique les tests et la qualité."
-    quality_observer.description = "Analyse pytest/git diff/status et produit un rapport QA."
+    # --- Rounds Planner/Dev/Tester ---
 
-    # 🔗 Activer le client custom QwenTmuxModelClient sur chaque agent
-    for agent in (planner, dev, tester, quality_observer):
-        agent.register_model_client(model_client_cls=QwenTmuxModelClient)
+    def round_callback(engine: GroupChatEngine, round_index: int):
+        # Ici tu pourrais déjà lancer un mini-pytest à chaque round si tu veux.
+        print(f"\n>>> Fin du round {round_index} (callback custom possible ici)\n")
 
-    return user_proxy, planner, dev, tester, quality_observer
+    engine.run_rounds(feature_text=feature_text, round_callback=round_callback)
 
+    # --- Phase QA finale : pytest + git + rapport QA ---
 
-# ------------------------------------------------------------------------------
-# 3. GroupChat principal + phase QA automatique
-# ------------------------------------------------------------------------------
-
-def run_groupchat_for_feature(feature_text: str, max_rounds: int = 10):
-    user_proxy, planner, dev, tester, quality_observer = build_agents(feature_text)
-
-    groupchat = GroupChat(
-        agents=[planner, dev, tester],
-        messages=[],
-        max_round=max_rounds,
-        send_introductions=True,
-    )
-
-    manager_llm_config = make_llm_config(
-        session_name="qwen_planner",
-        system_prompt=(
-            "Tu es MANAGER. Tu observes la discussion entre les agents et tu aides à "
-            "faire des résumés clairs et fidèles. Tu ne proposes pas de nouveau code."
-        ),
-        wait_seconds=12,
-    )
-
-    chat_manager = GroupChatManager(
-        groupchat=groupchat,
-        llm_config=manager_llm_config,
-    )
-    chat_manager.register_model_client(model_client_cls=QwenTmuxModelClient)
-
-    result = user_proxy.initiate_chat(
-        chat_manager,
-        message=(
-            "Feature à implémenter dans le backend Finance Copilot :\n"
-            f"{feature_text}\n\n"
-            "Planner : commence par proposer un plan structuré.\n"
-            "Dev : implémente progressivement, en petites étapes.\n"
-            "Tester : critique et renforce la qualité.\n"
-            "Arrêtez quand vous estimez que la feature est globalement en place."
-        ),
-        summary_method="reflection_with_llm",
-    )
-
-    print("\n================= RÉSUMÉ FINAL (GroupChat Autogen) =================\n")
-    try:
-        print(result.summary)
-    except Exception:
-        print("(Pas de résumé disponible, mais le chat a bien tourné.)")
-
-    # ---------- Phase QA automatique ----------
     print("\n================= PHASE QA AUTOMATISÉE =================\n")
 
     print(">> Lancement pytest global...")
     pytest_global = run_pytest_tool()
 
-    print(">> Lancement pytest ciblé (pattern 'health')...")
+    print("\n>> Lancement pytest ciblé (pattern 'health')...")
     pytest_health = run_specific_tests_tool("health")
 
-    print(">> Récupération git status / diff...")
+    print("\n>> Récupération git status / diff...")
     status = git_status_tool()
     diff = git_diff_tool(max_lines=220)
 
-    qa_message = (
-        "Voici les éléments de QA collectés automatiquement après le travail de l'équipe :\n\n"
-        "=== PYTEST GLOBAL ===\n"
-        f"{pytest_global['output']}\n\n"
-        "=== PYTEST CIBLÉ (pattern 'health') ===\n"
-        f"{pytest_health['output']}\n\n"
-        "=== GIT STATUS ===\n"
-        f"{status or '(aucun changement détecté)'}\n\n"
-        "=== GIT DIFF (tronqué) ===\n"
-        f"{diff or '(diff vide)'}\n\n"
-        "Produis un rapport QA structuré, en te basant uniquement sur ces informations."
-    )
+    history_text = engine.get_history_text()
 
-    qa_result = quality_observer.initiate_chat(
-        user_proxy,
-        message=qa_message,
-    )
+    qa_prompt = dedent(f"""
+        Contexte : projet Finance Copilot (FastAPI, Python, pytest).
 
-    print("\n================= RAPPORT QUALITY_OBSERVER =================\n")
-    try:
-        last_msg = qa_result.chat_history[-1]["content"]
-        print(last_msg)
-    except Exception:
-        print("(Impossible de récupérer le message QA, mais la conversation a eu lieu.)")
+        FEATURE
+        -------
+        {feature_text}
 
+        HISTORIQUE DISCUSSION (Planner / Dev / Tester)
+        ----------------------------------------------
+        {history_text}
+
+        === PYTEST GLOBAL ===
+        {pytest_global['output']}
+
+        === PYTEST CIBLÉ (pattern 'health') ===
+        {pytest_health['output']}
+
+        === GIT STATUS ===
+        {status or '(aucun changement détecté)'}
+
+        === GIT DIFF (tronqué) ===
+        {diff or '(diff vide)'}
+
+        Ta mission :
+        - Faire un rapport QA structuré (ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS),
+        - Dire si la feature semble raisonnablement prête pour un merge (en supposant revue humaine),
+        - Proposer les 3 prochaines priorités techniques.
+    """).strip()
+
+    qa_report = qa.send(qa_prompt)
+
+    print("\n================= RAPPORT FINAL QUALITY_OBSERVER =================\n")
+    print(qa_report)
+    print("\n============================================================\n")
+
+
+# ------------------------------------------------------------------------------
+# 4. Entrée principale
+# ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     default_feature = (
@@ -317,5 +442,6 @@ if __name__ == "__main__":
     )
 
     feature = os.environ.get("FC_FEATURE", default_feature)
+
     os.chdir(PROJECT_DIR)
-    run_groupchat_for_feature(feature_text=feature, max_rounds=8)
+    run_finance_copilot_groupchat(feature_text=feature, max_rounds=2)
