@@ -15,7 +15,7 @@ fi
 start_session() {
   local name=$1
   tmux has-session -t "${name}" 2>/dev/null || \
-    tmux new-session -d -s "${name}" "cd '${PROJECT_DIR}' && qwen"
+    tmux new-session -d -s "${name}" "cd '${PROJECT_DIR}' && QWEN_CODE_AUTO_CONFIRM=1 qwen"
 }
 
 start_session qwen_planner

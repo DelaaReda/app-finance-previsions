@@ -57,14 +57,56 @@ class QwenTmuxSession:
         return confirms_done
 
     def _clean_output(self, text: str) -> str:
-        """Filtre le bruit (bannière, updates...)."""
+        """
+        Nettoie la sortie brute de tmux :
+        - ne garde que la DERNIÈRE réponse d'assistant (à partir du dernier '✦ ')
+        - enlève spinners, cadres ASCII, bruit connu
+        - dédoublonne les lignes
+        """
+        if not text:
+            return ""
+
+        # Garder uniquement à partir du dernier "✦ " s'il existe
+        last_star = text.rfind("✦ ")
+        if last_star != -1:
+            text = text[last_star:]
+
         lines = text.splitlines()
         cleaned: List[str] = []
-        for line in lines:
-            if any(p.search(line) for p in self.NOISE_PATTERNS):
+        seen = set()
+
+        for raw in lines:
+            stripped = raw.strip()
+
+            # éviter les multiples lignes vides
+            if stripped == "":
+                if cleaned and cleaned[-1].strip() == "":
+                    continue
+                cleaned.append("")
                 continue
-            cleaned.append(line)
-        return "\n".join(l for l in cleaned).strip()
+
+            # spinners type "⠙ ..." ou "⠋ ..."
+            if stripped.startswith("⠙") or stripped.startswith("⠋") or stripped.startswith("⠏"):
+                continue
+
+            # lignes de cadre ASCII ou "Using: ... QWEN.md"
+            if stripped.startswith("Using:"):
+                continue
+            if any(ch in stripped for ch in ["╭", "╰", "│", "───"]):
+                continue
+
+            # bruit connu (bannière, update, tips)
+            if any(p.search(stripped) for p in self.NOISE_PATTERNS):
+                continue
+
+            # dédoublonnage simple
+            if stripped in seen:
+                continue
+            seen.add(stripped)
+
+            cleaned.append(raw)
+
+        return "\n".join(cleaned).strip()
 
     def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
         """Envoie un message, auto-confirme les prompts et retourne la sortie nettoyée."""
