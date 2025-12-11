@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import re
 from dataclasses import dataclass, field
 from textwrap import dedent
 from typing import List, Dict, Any, Callable, Optional
@@ -22,7 +23,7 @@ PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
 @dataclass
 class ConversationMessage:
     round_index: int
-    sender: str          # "Planner", "Dev", "Tester", "QA"
+    sender: str          # "Planner", "Dev", "Tester", "QualityObserver"
     role_type: str       # "planner" | "dev" | "tester" | "qa"
     content: str
     meta: Dict[str, Any] = field(default_factory=dict)
@@ -31,7 +32,7 @@ class ConversationMessage:
 class RoleAgent:
     """
     Agent relié à une session tmux Qwen Code.
-    Qwen garde le contexte dans la session, nous on gère juste l'orchestration.
+    Qwen garde le contexte dans la session, on orchestre juste qui parle et quand.
     """
 
     def __init__(
@@ -73,16 +74,17 @@ class RoleAgent:
 
 
 # ------------------------------------------------------------------------------
-# 2. Moteur de GroupChat générique
+# 2. Petit moteur de GroupChat maison
 # ------------------------------------------------------------------------------
 
 class GroupChatEngine:
     """
-    Petit moteur de group chat maison :
+    Moteur minimal de group chat :
     - connaît les rôles,
     - stocke l'historique,
-    - gère les rondes,
-    - applique une fonction de stop.
+    - gère les rounds,
+    - permet un callback par round,
+    - peut appliquer une stop_condition (à brancher plus tard).
     """
 
     def __init__(
@@ -90,10 +92,12 @@ class GroupChatEngine:
         agents: Dict[str, RoleAgent],      # { "planner": RoleAgent, ... }
         max_rounds: int = 3,
         stop_condition: Optional[Callable[[List[ConversationMessage]], bool]] = None,
+        max_history_chars: int = 6000,
     ):
         self.agents = agents
         self.max_rounds = max_rounds
         self.stop_condition = stop_condition
+        self.max_history_chars = max_history_chars
         self.history: List[ConversationMessage] = []
 
     def add_message(
@@ -101,29 +105,37 @@ class GroupChatEngine:
         round_index: int,
         sender: RoleAgent,
         content: str,
-        meta: Dict[str, Any] | None = None,
+        meta: Optional[Dict[str, Any]] = None,
     ):
         self.history.append(
             ConversationMessage(
                 round_index=round_index,
                 sender=sender.name,
                 role_type=sender.role_type,
-                content=content,
+                content=content or "",
                 meta=meta or {},
             )
         )
 
     def get_history_text(self) -> str:
         """
-        Résumé textuel simple de l'historique.
-        Utile si tu veux fournir du contexte à un agent.
+        Résumé textuel de l'historique, tronqué si besoin.
+        Utile pour donner du contexte à Planner/Dev/Tester.
         """
-        lines = []
+        lines: List[str] = []
         for msg in self.history:
             lines.append(f"[round {msg.round_index}][{msg.sender}]")
             lines.append(msg.content)
             lines.append("")  # ligne vide
-        return "\n".join(lines).strip()
+
+        full = "\n".join(lines).strip()
+
+        if len(full) <= self.max_history_chars:
+            return full
+
+        # On tronque le début (les vieux rounds) et on garde la fin.
+        truncated = full[-self.max_history_chars :]
+        return f"(Historique tronqué)\n...\n{truncated}"
 
     def run_rounds(
         self,
@@ -131,10 +143,7 @@ class GroupChatEngine:
         round_callback: Optional[Callable[["GroupChatEngine", int], None]] = None,
     ):
         """
-        Boucle principale : exécute jusqu'à max_rounds, ou jusqu'à ce que stop_condition soit vraie.
-
-        round_callback(self, round_index) te permet d'injecter de la logique custom par round
-        (ex: lancer pytest après chaque Dev, etc.).
+        Boucle principale : exécute jusqu'à max_rounds, ou jusqu'à stop_condition.
         """
         for r in range(1, self.max_rounds + 1):
             print(f"\n==================== ROUND {r} ====================\n")
@@ -160,16 +169,16 @@ class GroupChatEngine:
                 tester_reply = tester.send(tester_prompt)
                 self.add_message(r, tester, tester_reply)
 
-            # callback custom par round (ex: mini-QA intermédiaire)
+            # callback custom par round (mini QA, logs, etc.)
             if round_callback:
                 round_callback(self, r)
 
-            # stop condition globale
+            # stop condition globale (si définie)
             if self.stop_condition and self.stop_condition(self.history):
                 print("\n>>> Stop condition atteinte, arrêt des rounds.\n")
                 break
 
-    # --------- Prompts standards (tu peux les override dans un subclass) ---------
+    # --------- Prompts standards (override possibles) ---------
 
     def _build_planner_prompt(self, feature_text: str, round_index: int) -> str:
         history_summary = self.get_history_text() if round_index > 1 else ""
@@ -231,7 +240,7 @@ class GroupChatEngine:
             {history_summary}
 
             Ta mission pour ce round :
-            - Implémenter des changements concrets, ciblés, cohérents avec le plan du PLANNER,
+            - Implémenter des changements concrets, cohérents avec le plan du PLANNER,
             - Indiquer les fichiers précis à modifier (chemins),
             - Fournir des extraits de code précis,
             - Proposer des commandes à exécuter (pytest -k ..., etc.),
@@ -286,13 +295,13 @@ class GroupChatEngine:
 
 
 # ------------------------------------------------------------------------------
-# 3. Implémentation spécifique Finance Copilot : QA finale + stop condition
+# 3. Helpers spécifiques Finance Copilot : stop condition, pattern de tests, QA
 # ------------------------------------------------------------------------------
 
 def stop_condition_basic(history: List[ConversationMessage]) -> bool:
     """
-    Exemple simple : on regarde si QA a déjà conclu "prêt pour merge" dans un message.
-    (Tu pourras raffiner ça plus tard.)
+    Exemple simple : on regarderait si QA a déjà conclu "prêt pour merge".
+    (Non utilisé pour l'instant, mais prêt pour plus tard.)
     """
     for msg in history:
         if msg.role_type == "qa" and "prêt pour un merge" in msg.content.lower():
@@ -300,24 +309,38 @@ def stop_condition_basic(history: List[ConversationMessage]) -> bool:
     return False
 
 
+def infer_test_pattern_from_feature(feature_text: str, default: str = "health") -> str:
+    """
+    Essaie de deviner un pattern pour pytest à partir de la feature.
+    Exemple : "Implémente un endpoint GET /weather ..." -> "weather".
+    Si rien ne ressort, retourne `default`.
+    """
+    # Cherche un "/xxx" dans le texte
+    m = re.search(r"/([a-zA-Z0-9_]+)", feature_text)
+    if m:
+        return m.group(1)
+    return default
+
+
 def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
-    # --- Définition des rôles (prompts systèmes) ---
+    # --- Prompts système pour chaque rôle ---
 
     planner_sys = dedent("""
         Tu es PLANNER, architecte technique pour Finance Copilot.
-        Tu penses en termes de petits incréments et tu aides Dev à ne pas partir dans tous les sens.
+        Tu penses en petits incréments concrets et tu aides Dev à rester focalisé.
         Tu réponds toujours en français, de façon structurée.
     """).strip()
 
     dev_sys = dedent("""
         Tu es DEV, développeur backend Finance Copilot.
-        Tu écris du code FastAPI / Python / pytest, en modifiant seulement ce qui est nécessaire.
-        Tu évites de casser la structure existante. Tu réponds en français, avec du code précis.
+        Tu écris du code FastAPI / Python / pytest en modifiant seulement ce qui est nécessaire.
+        Tu évites de casser la structure existante et tu expliques brièvement tes choix.
+        Tu réponds en français, avec du code précis quand c'est utile.
     """).strip()
 
     tester_sys = dedent("""
         Tu es TESTER / QA technique.
-        Tu proposes des tests pytest concrets et signales les trous de couverture.
+        Tu proposes des tests pytest concrets et signales les trous de couverture (cas limites, erreurs).
         Tu réponds en français, sous forme de checklist + explications.
     """).strip()
 
@@ -327,6 +350,8 @@ def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
         Tu rédiges un rapport QA structuré (ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS).
         Tu réponds en français.
     """).strip()
+
+    # --- Création des agents Qwen/tmux ---
 
     planner = RoleAgent(
         name="Planner",
@@ -355,7 +380,7 @@ def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
     qa = RoleAgent(
         name="QualityObserver",
         role_type="qa",
-        session_name="qwen_tester",  # tu peux créer une session "qwen_qa" si tu veux
+        session_name="qwen_tester",  # tu peux créer une session dédiée "qwen_qa" si tu veux
         system_prompt=qa_sys,
         wait_seconds=20,
     )
@@ -367,13 +392,14 @@ def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
             "tester": tester,
         },
         max_rounds=max_rounds,
-        stop_condition=None,  # on pourrait brancher stop_condition_basic plus tard
+        stop_condition=None,          # tu peux brancher stop_condition_basic plus tard
+        max_history_chars=6000,       # évite de balancer 50 écrans de logs à Qwen
     )
 
     # --- Rounds Planner/Dev/Tester ---
 
     def round_callback(engine: GroupChatEngine, round_index: int):
-        # Ici tu pourrais déjà lancer un mini-pytest à chaque round si tu veux.
+        # Hook possible : mini-pytest intermédiaire, logs, heuristique, etc.
         print(f"\n>>> Fin du round {round_index} (callback custom possible ici)\n")
 
     engine.run_rounds(feature_text=feature_text, round_callback=round_callback)
@@ -385,8 +411,10 @@ def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
     print(">> Lancement pytest global...")
     pytest_global = run_pytest_tool()
 
-    print("\n>> Lancement pytest ciblé (pattern 'health')...")
-    pytest_health = run_specific_tests_tool("health")
+    # Déduire un pattern de tests adapté à la feature (/health, /weather, etc.)
+    test_pattern = infer_test_pattern_from_feature(feature_text, default="health")
+    print(f"\n>> Lancement pytest ciblé (pattern '{test_pattern}')...")
+    pytest_targeted = run_specific_tests_tool(test_pattern)
 
     print("\n>> Récupération git status / diff...")
     status = git_status_tool()
@@ -408,8 +436,8 @@ def run_finance_copilot_groupchat(feature_text: str, max_rounds: int = 2):
         === PYTEST GLOBAL ===
         {pytest_global['output']}
 
-        === PYTEST CIBLÉ (pattern 'health') ===
-        {pytest_health['output']}
+        === PYTEST CIBLÉ (pattern '{test_pattern}') ===
+        {pytest_targeted['output']}
 
         === GIT STATUS ===
         {status or '(aucun changement détecté)'}
