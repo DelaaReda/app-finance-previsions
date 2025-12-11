@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Stop tmux sessions used for Qwen agents.
-# Usage: ./scripts/stop_qwen_tmux.sh
+# Version PRO : stop propre des sessions + pipe-pane.
+set -e
 
-set -euo pipefail
+stop_session() {
+    local name="$1"
+    if tmux has-session -t "$name" 2>/dev/null; then
+        tmux pipe-pane -t "${name}.0" 2>/dev/null || true
+        tmux kill-session -t "$name"
+        echo "🛑 Session stopped: $name"
+    fi
+}
 
-sessions=(qwen_planner qwen_dev qwen_tester)
-
-for s in "${sessions[@]}"; do
-  if tmux has-session -t "$s" 2>/dev/null; then
-    tmux kill-session -t "$s"
-    echo "Session tmux arrêtée : $s"
-  fi
-done
-
-# Si plus aucune session tmux ne tourne, tmux ls retournera une erreur; on ignore
-tmux ls 2>/dev/null || true
+stop_session "qwen_planner"
+stop_session "qwen_dev"
+stop_session "qwen_tester"

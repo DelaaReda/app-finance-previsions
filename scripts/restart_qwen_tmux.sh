@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Redémarre les sessions tmux Qwen (planner/dev/tester) en utilisant les scripts start/stop.
-# Usage: ./scripts/restart_qwen_tmux.sh
+# Version PRO : restart = stop + start
+set -e
 
-set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$PROJECT_DIR"
-
-./scripts/stop_qwen_tmux.sh
-./scripts/start_qwen_tmux.sh
+echo "♻️  Restarting all Qwen tmux sessions..."
+"$SCRIPT_DIR/stop_qwen_tmux.sh"
+"$SCRIPT_DIR/start_qwen_tmux.sh"
+echo "✓ Restart done."
