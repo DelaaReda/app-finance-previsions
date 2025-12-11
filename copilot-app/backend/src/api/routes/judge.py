@@ -1428,10 +1428,16 @@ async def get_judge_verdicts(
                             if vals:
                                 avg = float(sum(vals) / len(vals))
                                 det["avg_score"] = avg
+                                # Normaliser score 0-1
                                 if sent_block.get("score") is None:
                                     sent_block["score"] = avg
                                 if sent_block.get("score") and sent_block["score"] > 1:
                                     sent_block["score"] = sent_block["score"] / 100.0
+                                if sent_block.get("score") is not None:
+                                    try:
+                                        sent_block["score"] = max(0.0, min(1.0, float(sent_block["score"])))
+                                    except Exception:
+                                        pass
                                 # Ajouter un mini résumé lisible si absent
                                 if not sent_block.get("summary"):
                                     sent_block["summary"] = [
@@ -1477,6 +1483,19 @@ async def get_judge_verdicts(
                             feat["sentiment_windows"] = sent_windows
                         if sent_profile:
                             feat["sentiment_profile"] = sent_profile
+                        # Sentiment score unifié 0-1 pour LLM (utile pour phase_scores)
+                        try:
+                            avg_sent = None
+                            if isinstance(sent_windows, dict):
+                                avg_sent = sent_windows.get("7d", {}).get("avg") or sent_windows.get("24h", {}).get("avg")
+                            if avg_sent is not None:
+                                sent_norm = float(avg_sent)
+                                if sent_norm > 1:
+                                    sent_norm = sent_norm / 100.0
+                                sent_norm = max(0.0, min(1.0, sent_norm))
+                                feat["sentiment_score_norm"] = sent_norm
+                        except Exception:
+                            pass
                         if fund_profile:
                             feat["fundamentals_profile"] = fund_profile
                         if macro_prof:
@@ -2200,6 +2219,16 @@ async def get_judge_verdicts(
                         "news_last": latest_news_ts,
                     }
 
+                    # Alerte fraîcheur macro si trop ancien (>90j)
+                    try:
+                        if macro_ctx.get("cpi_last_date"):
+                            last_macro = datetime.fromisoformat(str(macro_ctx["cpi_last_date"]) + "T00:00:00+00:00")
+                            age_days = (datetime.now(timezone.utc) - last_macro).days
+                            if age_days > 90:
+                                parsed.setdefault("data_needed", []).append(f"macro stale ({age_days}d)")
+                    except Exception:
+                        pass
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -2208,6 +2237,8 @@ async def get_judge_verdicts(
                         "expected_return_raw": expected_return,
                         "expected_return_ensemble": expected_return_ensemble,
                         "risk_level": derived_risk,
+                        "price_regime": price_features.get("price_regime") if isinstance(price_features, dict) else None,
+                        "volatility": price_features.get("volatility") if isinstance(price_features, dict) else None,
                         "reasoning": parsed.get("summary")
                         if isinstance(parsed, dict)
                         else None,

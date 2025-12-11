@@ -1,0 +1,2201 @@
+Yes 🙌 là on passe au concret.
+Je vais te donner un setup complet :
+	•	✅ 1 script pour lancer les 3 sessions tmux avec Qwen
+	•	✅ 1 module Python qwen_tmux_backend.py pour parler à chaque session
+	•	✅ 1 script multi_agents_qwen.py qui simule un mini-Cognition avec 3 “agents” (planner / dev / tester) en s’appuyant sur Qwen dans tmux
+
+Tu pourras ensuite brancher ça à AutoGen / AG2 si tu veux aller plus loin, mais déjà ça te donne une base réelle utilisable.
+
+⸻
+
+0️⃣ Pré-requis
+
+Sur ton Mac (M1), tu dois avoir :
+
+brew install tmux
+brew install qwen
+
+(Tu as déjà qwen qui marche en terminal, donc ça c’est bon ✅)
+
+⸻
+
+1️⃣ Script pour lancer 3 sessions tmux avec Qwen
+
+Crée un fichier start_qwen_tmux.sh :
+
+#!/usr/bin/env bash
+
+# Lancer trois sessions tmux, chacune avec un qwen code
+# Tu peux adapter la commande (qwen / qwen code / qwen chat) selon ta config.
+
+set -e
+
+# Planner
+tmux has-session -t qwen_planner 2>/dev/null || \
+tmux new-session -d -s qwen_planner 'cd ~ && qwen'
+
+# Dev
+tmux has-session -t qwen_dev 2>/dev/null || \
+tmux new-session -d -s qwen_dev 'cd ~ && qwen'
+
+# Tester
+tmux has-session -t qwen_tester 2>/dev/null || \
+tmux new-session -d -s qwen_tester 'cd ~ && qwen'
+
+echo "Sessions tmux lancées : qwen_planner, qwen_dev, qwen_tester"
+echo "Tu peux vérifier avec : tmux ls"
+
+Puis :
+
+chmod +x start_qwen_tmux.sh
+./start_qwen_tmux.sh
+
+Tu peux vérifier :
+
+tmux ls
+tmux attach -t qwen_planner   # pour voir que Qwen est bien lancé
+
+
+⸻
+
+2️⃣ Backend Python pour parler à une session tmux (QwenTmuxLLM)
+
+Fichier qwen_tmux_backend.py :
+
+import subprocess
+import time
+from typing import List, Dict, Optional
+
+
+class QwenTmuxSession:
+    """
+    Représente UNE session tmux qui tourne déjà avec `qwen`.
+    On envoie du texte avec `tmux send-keys` et on lit la sortie avec `capture-pane`.
+    """
+
+    def __init__(self, session_name: str, wait_seconds: float = 2.0):
+        self.session = session_name
+        self.wait_seconds = wait_seconds
+        # snapshot initial pour calculer seulement le "delta" ensuite
+        self.last_snapshot = self._capture_full()
+
+    # --- Fonctions internes bas niveau ---
+
+    def _capture_full(self) -> str:
+        """Récupère tout le contenu du pane."""
+        out = subprocess.check_output(
+            ["tmux", "capture-pane", "-pt", self.session],
+            text=True,
+        )
+        return out
+
+    def _get_new_output(self) -> str:
+        """Retourne seulement ce qui est nouveau depuis le dernier snapshot."""
+        current = self._capture_full()
+        # Cas normal: le buffer actuel commence par l'ancien
+        if current.startswith(self.last_snapshot):
+            new = current[len(self.last_snapshot):]
+        else:
+            # Si désync (scroll, clear, etc.), on renvoie tout
+            new = current
+        self.last_snapshot = current
+        return new.strip()
+
+    def _send_raw(self, text: str) -> None:
+        """Envoie du texte + Enter à la session tmux."""
+        cmd = ["tmux", "send-keys", "-t", self.session, text, "C-m"]
+        subprocess.check_call(cmd)
+
+    # --- API principale ---
+
+    def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
+        """
+        Envoie un message à Qwen dans cette session,
+        attend un peu, puis lit la nouvelle sortie.
+        """
+        if wait_seconds is None:
+            wait_seconds = self.wait_seconds
+
+        # envoyer la question
+        self._send_raw(text)
+
+        # attendre que Qwen réponde (simple, tu pourras affiner)
+        time.sleep(wait_seconds)
+
+        # lire la nouvelle sortie
+        answer = self._get_new_output()
+        return answer
+
+
+class QwenTmuxLLM:
+    """
+    Petit wrapper "LLM-like" au-dessus de QwenTmuxSession.
+
+    - option system_prompt envoyé une fois au début pour "rôler" l'agent.
+    - méthode chat(messages) à la sauce OpenAI-style:
+      messages = [{"role": "system"|"user"|"assistant", "content": "..."}]
+    """
+
+    def __init__(
+        self,
+        session_name: str,
+        system_prompt: str = "",
+        wait_seconds: float = 2.0,
+    ):
+        self.session = QwenTmuxSession(session_name, wait_seconds=wait_seconds)
+        self.system_prompt = system_prompt
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        if self.system_prompt:
+            # On envoie le system prompt comme premier message
+            self.session.ask(
+                f"[SYSTEM ROLE] {self.system_prompt}\n"
+                f"Réponds toujours de façon claire. Ne répète pas ce message."
+            )
+        self._initialized = True
+
+    def chat(self, messages: List[Dict[str, str]]) -> str:
+        """
+        On envoie à Qwen le DERNIER message user.
+        (Simple, mais suffisant comme base.)
+        """
+        self._ensure_initialized()
+
+        # on récupère le dernier message 'user'
+        user_messages = [m for m in messages if m["role"] == "user"]
+        if not user_messages:
+            raise ValueError("Pas de message user dans messages.")
+
+        last_user = user_messages[-1]["content"]
+
+        # tu pourrais ici reconstruire un historique textuel
+        # pour aider Qwen à garder du contexte plus structuré
+        prompt = last_user
+
+        answer = self.session.ask(prompt)
+        return answer
+
+Tu peux tester vite fait :
+
+# test_qwen_tmux.py
+from qwen_tmux_backend import QwenTmuxLLM
+
+llm = QwenTmuxLLM("qwen_planner", system_prompt="Tu es un assistant de planification technique.")
+resp = llm.chat([{"role": "user", "content": "Propose un plan pour ajouter des tests unitaires à un projet Python."}])
+print(resp)
+
+Lance :
+
+python test_qwen_tmux.py
+
+
+⸻
+
+3️⃣ Mini “multi-agents” (planner / dev / tester) par-dessus Qwen
+
+On va faire un orchestrateur ultra simple (sans AutoGen pour l’instant, 100% Python pur) qui appelle chaque LLM wrapper QwenTmuxLLM.
+
+Fichier multi_agents_qwen.py :
+
+from qwen_tmux_backend import QwenTmuxLLM
+
+
+# --- Création des "agents" basés sur Qwen dans tmux ---
+
+planner_llm = QwenTmuxLLM(
+    session_name="qwen_planner",
+    system_prompt="""Tu es PLANNER.
+Tu découpes les demandes de features en tâches techniques claires et numérotées.
+Toujours répondre en français, avec une liste d'étapes très concrètes.""",
+    wait_seconds=3.0,
+)
+
+dev_llm = QwenTmuxLLM(
+    session_name="qwen_dev",
+    system_prompt="""Tu es DEV.
+Tu écris du code et expliques les changements fichier par fichier.
+Tu proposes des extraits de code, jamais des gros pavés inutiles.
+Toujours répondre en français.""",
+    wait_seconds=4.0,
+)
+
+tester_llm = QwenTmuxLLM(
+    session_name="qwen_tester",
+    system_prompt="""Tu es TESTER.
+Tu penses comme un QA : tu imagines des tests, détectes les risques,
+et donnes un feedback précis au DEV.
+Toujours répondre en français.""",
+    wait_seconds=3.0,
+)
+
+
+def ask_planner(feature: str) -> str:
+    messages = [
+        {"role": "user", "content": f"Feature à implémenter : {feature}\nDonne un plan en étapes numérotées."}
+    ]
+    return planner_llm.chat(messages)
+
+
+def ask_dev(plan: str) -> str:
+    messages = [
+        {"role": "user", "content": f"Voici le plan du planner :\n{plan}\nCommence à implémenter la première étape."}
+    ]
+    return dev_llm.chat(messages)
+
+
+def ask_tester(dev_output: str) -> str:
+    messages = [
+        {"role": "user", "content": f"Le développeur a fait ceci :\n{dev_output}\n"
+                                   f"Propose des tests et signale les risques potentiels."}
+    ]
+    return tester_llm.chat(messages)
+
+
+def main():
+    feature = "Ajouter un endpoint /health sur une API FastAPI qui retourne le statut 'ok' et la version."
+    print("=== Demande utilisateur ===")
+    print(feature)
+    print()
+
+    print("=== Planner (Qwen) ===")
+    plan = ask_planner(feature)
+    print(plan)
+    print()
+
+    print("=== Dev (Qwen) ===")
+    dev_output = ask_dev(plan)
+    print(dev_output)
+    print()
+
+    print("=== Tester (Qwen) ===")
+    test_feedback = ask_tester(dev_output)
+    print(test_feedback)
+    print()
+
+    print("=== Fin du mini workflow ===")
+
+
+if __name__ == "__main__":
+    main()
+
+Lance :
+
+./start_qwen_tmux.sh      # si ce n'est pas déjà lancé
+python multi_agents_qwen.py
+
+Tu devrais voir :
+	•	le planner (session qwen_planner) proposer des étapes
+	•	le dev (session qwen_dev) expliquer quel code écrire
+	•	le tester (session qwen_tester) faire des remarques / tests
+
+Tout ça piloté par ton Qwen CLI, en local, avec contexte persistant dans chaque tmux.
+
+⸻
+
+4️⃣ Et AutoGen là-dedans ?
+
+Ce qu’on vient de faire, c’est déjà 80% d’AutoGen mais “à la main” :
+	•	plusieurs “agents” avec rôles différents
+	•	chacun derrière un LLM (ici QwenTmuxLLM)
+	•	un orchestrateur qui les fait parler dans un workflow
+
+Si tu veux vraiment brancher AG2 / AutoGen officiel, la prochaine étape serait :
+	•	créer un ModelClient custom qui wrappe QwenTmuxLLM
+	•	le register_model_client(...) sur des ConversableAgent
+	•	et utiliser un GroupChat / GroupChatManager
+
+Mais ça demande un peu plus de glue ; ce que je t’ai donné là est déjà utilisable aujourd’hui pour coder avec 3 Qwen CLI en parallèle.
+
+⸻
+
+Si tu veux, on peut faire l’étape suivante plus tard :
+	•	transformer QwenTmuxLLM en ModelClient AutoGen propre,
+	•	et te faire un exemple GroupChat où ces 3 rôles sont des ConversableAgent AutoGen full.
+
+    Parfait, on passe à la VRAIE version avec AutoGen + tmux + Qwen dans ton repo
+/Users/venom/Documents/analyse-financiere 😈
+
+Je vais te donner tout ce qu’il faut, prêt à coller dans les fichiers.
+
+⸻
+
+1️⃣ Script tmux : lancer 3 Qwen dans ton repo
+
+Crée ce fichier :
+/Users/venom/Documents/analyse-financiere/start_qwen_tmux.sh
+
+#!/usr/bin/env bash
+
+# Lance 3 sessions tmux avec Qwen dans le repo analyse-financiere
+
+set -e
+
+PROJECT_DIR="/Users/venom/Documents/analyse-financiere"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "Le dossier $PROJECT_DIR n'existe pas. Modifie PROJECT_DIR dans le script."
+  exit 1
+fi
+
+# Planner
+tmux has-session -t qwen_planner 2>/dev/null || \
+tmux new-session -d -s qwen_planner "cd \"$PROJECT_DIR\" && qwen"
+
+# Dev
+tmux has-session -t qwen_dev 2>/dev/null || \
+tmux new-session -d -s qwen_dev "cd \"$PROJECT_DIR\" && qwen"
+
+# Tester
+tmux has-session -t qwen_tester 2>/dev/null || \
+tmux new-session -d -s qwen_tester "cd \"$PROJECT_DIR\" && qwen"
+
+echo "Sessions tmux lancées dans $PROJECT_DIR :"
+echo "  - qwen_planner"
+echo "  - qwen_dev"
+echo "  - qwen_tester"
+echo
+echo "Tu peux vérifier avec : tmux ls"
+echo "Tu peux attacher avec : tmux attach -t qwen_planner"
+
+Puis dans ce repo :
+
+cd /Users/venom/Documents/analyse-financiere
+chmod +x start_qwen_tmux.sh
+./start_qwen_tmux.sh
+
+
+⸻
+
+2️⃣ Backend Python pour parler à une session tmux (QwenTmuxLLM)
+
+Dans ton repo, crée :
+/Users/venom/Documents/analyse-financiere/qwen_tmux_backend.py
+
+import subprocess
+import time
+from typing import List, Dict, Optional
+
+
+class QwenTmuxSession:
+    """
+    Représente UNE session tmux qui tourne déjà avec `qwen`.
+    On envoie du texte avec `tmux send-keys` et on lit la sortie avec `capture-pane`.
+    """
+
+    def __init__(self, session_name: str, wait_seconds: float = 2.0):
+        self.session = session_name
+        self.wait_seconds = wait_seconds
+        # snapshot initial pour calculer seulement le "delta" ensuite
+        self.last_snapshot = self._capture_full()
+
+    # --- Fonctions internes bas niveau ---
+
+    def _capture_full(self) -> str:
+        """Récupère tout le contenu du pane."""
+        out = subprocess.check_output(
+            ["tmux", "capture-pane", "-pt", self.session],
+            text=True,
+        )
+        return out
+
+    def _get_new_output(self) -> str:
+        """Retourne seulement ce qui est nouveau depuis le dernier snapshot."""
+        current = self._capture_full()
+        # Cas normal: le buffer actuel commence par l'ancien
+        if current.startswith(self.last_snapshot):
+            new = current[len(self.last_snapshot):]
+        else:
+            # Si désync (scroll, clear, etc.), on renvoie tout
+            new = current
+        self.last_snapshot = current
+        return new.strip()
+
+    def _send_raw(self, text: str) -> None:
+        """Envoie du texte + Enter à la session tmux."""
+        cmd = ["tmux", "send-keys", "-t", self.session, text, "C-m"]
+        subprocess.check_call(cmd)
+
+    # --- API principale ---
+
+    def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
+        """
+        Envoie un message à Qwen dans cette session,
+        attend un peu, puis lit la nouvelle sortie.
+        """
+        if wait_seconds is None:
+            wait_seconds = self.wait_seconds
+
+        # envoyer la question
+        self._send_raw(text)
+
+        # attendre que Qwen réponde (simple, tu pourras affiner)
+        time.sleep(wait_seconds)
+
+        # lire la nouvelle sortie
+        answer = self._get_new_output()
+        return answer
+
+
+class QwenTmuxLLM:
+    """
+    Petit wrapper "LLM-like" au-dessus de QwenTmuxSession.
+
+    messages = [{"role": "system"|"user"|"assistant", "content": "..."}]
+    -> on envoie le dernier message user au CLI.
+    """
+
+    def __init__(
+        self,
+        session_name: str,
+        system_prompt: str = "",
+        wait_seconds: float = 3.0,
+    ):
+        self.session = QwenTmuxSession(session_name, wait_seconds=wait_seconds)
+        self.system_prompt = system_prompt
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        if self.system_prompt:
+            # On envoie le system prompt comme premier message
+            self.session.ask(
+                f"[SYSTEM ROLE] {self.system_prompt}\n"
+                f"Réponds toujours de façon claire. Ne répète pas ce message."
+            )
+        self._initialized = True
+
+    def chat(self, messages: List[Dict[str, str]]) -> str:
+        """
+        On envoie à Qwen le DERNIER message user.
+        (Simple mais suffisant comme base.)
+        """
+        self._ensure_initialized()
+
+        user_messages = [m for m in messages if m["role"] == "user"]
+        if not user_messages:
+            raise ValueError("Pas de message user dans messages.")
+
+        last_user = user_messages[-1]["content"]
+        prompt = last_user
+
+        answer = self.session.ask(prompt)
+        return answer
+
+Tu peux tester vite fait (optionnel) avec :
+
+# test_qwen_tmux_backend.py
+from qwen_tmux_backend import QwenTmuxLLM
+
+llm = QwenTmuxLLM(
+    "qwen_planner",
+    system_prompt="Tu es un assistant technique qui répond en français."
+)
+
+resp = llm.chat([
+    {"role": "user", "content": "Donne-moi 3 idées de tests unitaires pour une fonction qui calcule une moyenne."}
+])
+print(resp)
+
+
+⸻
+
+3️⃣ Intégration avec AutoGen : agents planner / dev / tester
+
+On va faire une version simple où on sous-classe ConversableAgent pour qu’il utilise ton QwenTmuxLLM à la place d’un LLM HTTP.
+
+⚠️ Il faut que tu aies installé AutoGen (la version classique) :
+
+pip install pyautogen
+# ou selon ton env: pip install autogen
+
+Crée ce fichier :
+/Users/venom/Documents/analyse-financiere/autogen_qwen_tmux.py
+
+from typing import Any, Dict, List
+
+from autogen import ConversableAgent
+from qwen_tmux_backend import QwenTmuxLLM
+
+
+class QwenTmuxAgent(ConversableAgent):
+    """
+    Agent AutoGen dont le "cerveau" est QwenTmuxLLM
+    qui parle à une session tmux où tourne `qwen`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        session_name: str,
+        system_message: str,
+        wait_seconds: float = 3.0,
+        **kwargs: Any,
+    ):
+        # On passe un llm_config minimal, mais on ne l'utilisera pas réellement
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            llm_config={"config_list": []},  # on bypassera le LLM interne
+            **kwargs,
+        )
+        self.qwen_llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_message,
+            wait_seconds=wait_seconds,
+        )
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Override de generate_reply pour appeler notre QwenTmuxLLM
+        au lieu du LLM par défaut d'AutoGen.
+        """
+        # On laisse AutoGen construire l'historique complet,
+        # mais on ne transmettra à Qwen que le dernier message user envoyé à CET agent.
+        # messages = historique complet pour cet agent.
+        text = self.qwen_llm.chat(messages)
+        return {
+            "role": "assistant",
+            "content": text,
+        }
+
+
+def build_agents():
+    """
+    Crée 3 agents AutoGen basés sur 3 sessions tmux différentes :
+    - qwen_planner
+    - qwen_dev
+    - qwen_tester
+    """
+    planner = QwenTmuxAgent(
+        name="planner",
+        session_name="qwen_planner",
+        system_message=(
+            "Tu es PLANNER.\n"
+            "Tu découpes les demandes de features en tâches techniques claires, "
+            "numérotées, avec un niveau de détail fin. Réponds toujours en français."
+        ),
+    )
+
+    dev = QwenTmuxAgent(
+        name="dev",
+        session_name="qwen_dev",
+        system_message=(
+            "Tu es DEV.\n"
+            "Tu écris du code et expliques les changements fichier par fichier. "
+            "Tu réponds en français, tu proposes des extraits de code précis."
+        ),
+    )
+
+    tester = QwenTmuxAgent(
+        name="tester",
+        session_name="qwen_tester",
+        system_message=(
+            "Tu es TESTER.\n"
+            "Tu raisonnes comme un QA, tu proposes des tests (unitaires, intégration) "
+            "et tu signales les risques. Réponds en français."
+        ),
+    )
+
+    return planner, dev, tester
+
+
+def simple_workflow():
+    """
+    Mini workflow AutoGen-like :
+    - l'utilisateur décrit une feature
+    - planner produit un plan
+    - dev propose un début d'implémentation
+    - tester propose des tests / risques
+    """
+    feature = (
+        "Ajouter un endpoint /health sur une API FastAPI qui retourne "
+        "un JSON avec status='ok' et version='1.0.0'."
+    )
+    print("=== Feature demandée ===")
+    print(feature)
+    print()
+
+    planner, dev, tester = build_agents()
+
+    # 1) L'utilisateur parle au planner
+    planner_msg = planner.generate_reply(
+        messages=[{"role": "user", "content": f"Voici la feature : {feature}\nPropose un plan détaillé."}],
+        sender=planner,
+    )
+    print("=== Réponse du PLANNER (Qwen) ===")
+    print(planner_msg["content"])
+    print()
+
+    # 2) On donne ce plan au DEV
+    dev_msg = dev.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le plan donné par le planner :\n\n"
+                    f"{planner_msg['content']}\n\n"
+                    "Commence à implémenter la première étape et explique les fichiers impactés."
+                ),
+            }
+        ],
+        sender=dev,
+    )
+    print("=== Réponse du DEV (Qwen) ===")
+    print(dev_msg["content"])
+    print()
+
+    # 3) On donne la sortie du DEV au TESTER
+    tester_msg = tester.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Le développeur a produit ceci :\n\n"
+                    f"{dev_msg['content']}\n\n"
+                    "Propose des tests concrets (pytest) et signale les risques éventuels."
+                ),
+            }
+        ],
+        sender=tester,
+    )
+    print("=== Réponse du TESTER (Qwen) ===")
+    print(tester_msg["content"])
+    print()
+
+    print("=== Fin du workflow simple ===")
+
+
+if __name__ == "__main__":
+    simple_workflow()
+
+
+⸻
+
+4️⃣ Comment lancer tout ça
+	1.	Lancer les sessions Qwen dans tmux (dans ton repo) :
+
+cd /Users/venom/Documents/analyse-financiere
+./start_qwen_tmux.sh
+tmux ls       # pour vérifier
+
+	2.	Vérifier vite fait que qwen répond dans une des sessions (optionnel) :
+
+tmux attach -t qwen_planner
+# tu tapes un message à la main
+# puis Ctrl-b d pour détacher
+
+	3.	Lancer le workflow AutoGen + Qwen :
+
+cd /Users/venom/Documents/analyse-financiere
+python autogen_qwen_tmux.py
+
+Tu devrais voir :
+	•	la feature demandée
+	•	le planner (Qwen dans qwen_planner) qui propose un plan
+	•	le dev (Qwen dans qwen_dev) qui parle d’implémentation
+	•	le tester (Qwen dans qwen_tester) qui propose des tests / risques
+
+Tout ça avec Qwen comme cerveau, AutoGen comme couche agent, et tmux comme “session server” local dans ton repo.
+
+⸻
+
+Si tu veux, étape suivante on peut :
+	•	brancher des tools AutoGen (exécution réelle de pytest dans analyse-financiere),
+	•	ou faire un vrai GroupChat AutoGen où les trois agents discutent entre eux sans que tu pilotes à la main 🧠💬
+    Parfait 😈 On passe au vrai GroupChat AutoGen qui :
+	•	utilise 3 Qwen CLI dans tmux (planner / dev / tester)
+	•	tourne dans ton repo /Users/venom/Documents/analyse-financiere
+	•	lit le fichier analyse_nora.txt pour que l’équipe sache sur quoi travailler
+
+Je te donne juste ce qu’il faut pour coller dans tes fichiers.
+
+⸻
+
+1️⃣ Rappel : tmux + Qwen dans ton repo
+
+Tu as déjà (ou tu mets) ce script dans :
+/Users/venom/Documents/analyse-financiere/start_qwen_tmux.sh
+
+#!/usr/bin/env bash
+
+# Lance 3 sessions tmux avec Qwen dans le repo analyse-financiere
+
+set -e
+
+PROJECT_DIR="/Users/venom/Documents/analyse-financiere"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "Le dossier $PROJECT_DIR n'existe pas. Modifie PROJECT_DIR dans le script."
+  exit 1
+fi
+
+# Planner
+tmux has-session -t qwen_planner 2>/dev/null || \
+tmux new-session -d -s qwen_planner "cd \"$PROJECT_DIR\" && qwen"
+
+# Dev
+tmux has-session -t qwen_dev 2>/dev/null || \
+tmux new-session -d -s qwen_dev "cd \"$PROJECT_DIR\" && qwen"
+
+# Tester
+tmux has-session -t qwen_tester 2>/dev/null || \
+tmux new-session -d -s qwen_tester "cd \"$PROJECT_DIR\" && qwen"
+
+echo "Sessions tmux lancées dans $PROJECT_DIR :"
+echo "  - qwen_planner"
+echo "  - qwen_dev"
+echo "  - qwen_tester"
+echo
+echo "Tu peux vérifier avec : tmux ls"
+echo "Tu peux attacher avec : tmux attach -t qwen_planner"
+
+
+⸻
+
+2️⃣ Backend tmux ↔ Qwen (si pas déjà créé)
+
+Dans le même repo, fichier :
+qwen_tmux_backend.py
+
+import subprocess
+import time
+from typing import List, Dict, Optional
+
+
+class QwenTmuxSession:
+    """
+    Représente UNE session tmux qui tourne déjà avec `qwen`.
+    On envoie du texte avec `tmux send-keys` et on lit la sortie avec `capture-pane`.
+    """
+
+    def __init__(self, session_name: str, wait_seconds: float = 2.0):
+        self.session = session_name
+        self.wait_seconds = wait_seconds
+        # snapshot initial pour calculer seulement le "delta" ensuite
+        self.last_snapshot = self._capture_full()
+
+    # --- Fonctions internes bas niveau ---
+
+    def _capture_full(self) -> str:
+        """Récupère tout le contenu du pane."""
+        out = subprocess.check_output(
+            ["tmux", "capture-pane", "-pt", self.session],
+            text=True,
+        )
+        return out
+
+    def _get_new_output(self) -> str:
+        """Retourne seulement ce qui est nouveau depuis le dernier snapshot."""
+        current = self._capture_full()
+        # Cas normal: le buffer actuel commence par l'ancien
+        if current.startswith(self.last_snapshot):
+            new = current[len(self.last_snapshot):]
+        else:
+            # Si désync (scroll, clear, etc.), on renvoie tout
+            new = current
+        self.last_snapshot = current
+        return new.strip()
+
+    def _send_raw(self, text: str) -> None:
+        """Envoie du texte + Enter à la session tmux."""
+        cmd = ["tmux", "send-keys", "-t", self.session, text, "C-m"]
+        subprocess.check_call(cmd)
+
+    # --- API principale ---
+
+    def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
+        """
+        Envoie un message à Qwen dans cette session,
+        attend un peu, puis lit la nouvelle sortie.
+        """
+        if wait_seconds is None:
+            wait_seconds = self.wait_seconds
+
+        # envoyer la question
+        self._send_raw(text)
+
+        # attendre que Qwen réponde (simple, tu pourras affiner)
+        time.sleep(wait_seconds)
+
+        # lire la nouvelle sortie
+        answer = self._get_new_output()
+        return answer
+
+
+class QwenTmuxLLM:
+    """
+    Petit wrapper "LLM-like" au-dessus de QwenTmuxSession.
+
+    messages = [{"role": "system"|"user"|"assistant", "content": "..."}]
+    -> on envoie le dernier message user au CLI.
+    """
+
+    def __init__(
+        self,
+        session_name: str,
+        system_prompt: str = "",
+        wait_seconds: float = 3.0,
+    ):
+        self.session = QwenTmuxSession(session_name, wait_seconds=wait_seconds)
+        self.system_prompt = system_prompt
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        if self.system_prompt:
+            # On envoie le system prompt comme premier message
+            self.session.ask(
+                f"[SYSTEM ROLE] {self.system_prompt}\n"
+                f"Réponds toujours de façon claire. Ne répète pas ce message."
+            )
+        self._initialized = True
+
+    def chat(self, messages: List[Dict[str, str]]) -> str:
+        """
+        On envoie à Qwen le DERNIER message user.
+        (Simple mais suffisant comme base.)
+        """
+        self._ensure_initialized()
+
+        user_messages = [m for m in messages if m["role"] == "user"]
+        if not user_messages:
+            raise ValueError("Pas de message user dans messages.")
+
+        last_user = user_messages[-1]["content"]
+        prompt = last_user
+
+        answer = self.session.ask(prompt)
+        return answer
+
+
+⸻
+
+3️⃣ GroupChat AutoGen + analyse_nora.txt
+
+Maintenant, on fait un fichier dédié GroupChat :
+autogen_qwen_tmux_groupchat.py
+
+from typing import Any, Dict, List
+
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+
+from qwen_tmux_backend import QwenTmuxLLM
+import os
+
+
+# ---------- Agent AutoGen avec cerveau QwenTmux ----------
+
+class QwenTmuxAgent(ConversableAgent):
+    """
+    Agent AutoGen dont le "cerveau" est QwenTmuxLLM
+    qui parle à une session tmux où tourne `qwen`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        session_name: str,
+        system_message: str,
+        wait_seconds: float = 3.0,
+        **kwargs: Any,
+    ):
+        # llm_config vide : on bypassera le LLM interne
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",  # pas de demande à l'humain
+            **kwargs,
+        )
+        self.qwen_llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_message,
+            wait_seconds=wait_seconds,
+        )
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Override de generate_reply pour appeler notre QwenTmuxLLM.
+        """
+        text = self.qwen_llm.chat(messages)
+        return {
+            "role": "assistant",
+            "content": text,
+        }
+
+
+# ---------- Chargement du fichier analyse_nora.txt ----------
+
+def load_analysis_file(path: str = "analyse_nora.txt") -> str:
+    if not os.path.exists(path):
+        return (
+            f"(Attention : le fichier {path} n'a pas été trouvé dans le répertoire courant. "
+            "Les agents doivent expliquer clairement qu'ils n'ont pas pu le lire.)"
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return content
+
+
+# ---------- Construction des agents ----------
+
+def build_agents() -> List[QwenTmuxAgent]:
+    planner = QwenTmuxAgent(
+        name="planner",
+        session_name="qwen_planner",
+        system_message=(
+            "Tu es PLANNER.\n"
+            "Tu es responsable de la planification du travail sur un projet d'analyse financière "
+            "dans le dépôt 'analyse-financiere'. Tu découpes les demandes en tâches techniques "
+            "claires, numérotées, avec un niveau de détail fin. Toujours répondre en français."
+        ),
+    )
+
+    dev = QwenTmuxAgent(
+        name="dev",
+        session_name="qwen_dev",
+        system_message=(
+            "Tu es DEV.\n"
+            "Tu écris du code et expliques les changements fichier par fichier dans le projet "
+            "'analyse-financiere'. Tu proposes des extraits de code précis. Toujours répondre en français."
+        ),
+    )
+
+    tester = QwenTmuxAgent(
+        name="tester",
+        session_name="qwen_tester",
+        system_message=(
+            "Tu es TESTER.\n"
+            "Tu raisonnes comme un QA: tu proposes des tests (unitaires, intégration) et signales les risques. "
+            "Tu t'assures que les calculs et la logique de l'analyse financière sont corrects. "
+            "Réponds toujours en français."
+        ),
+    )
+
+    return [planner, dev, tester]
+
+
+# ---------- Workflow GroupChat ----------
+
+def run_groupchat_with_analysis():
+    # 1) Charger le contenu du fichier d'analyse
+    analysis_text = load_analysis_file("analyse_nora.txt")
+
+    # 2) Créer les agents
+    agents = build_agents()
+    planner, dev, tester = agents
+
+    # 3) Construire le GroupChat
+    groupchat = GroupChat(
+        agents=agents,
+        messages=[],
+        max_round=8,  # tu peux augmenter si tu veux plus d'échanges
+    )
+
+    manager = GroupChatManager(
+        name="manager",
+        groupchat=groupchat,
+        llm_config={"config_list": []},  # on ne l'utilise pas, les agents ont leur propre backend
+        human_input_mode="NEVER",
+    )
+
+    # 4) Message de départ envoyé au planner
+    task_message = f"""
+Contexte :
+
+Vous travaillez ensemble (planner, dev, tester) sur le projet Python d'analyse financière
+dans le dépôt 'analyse-financiere'.
+
+Voici le contenu du fichier d'analyse 'analyse_nora.txt' (à utiliser comme base de travail) :
+
+------------------- analyse_nora.txt -------------------
+{analysis_text}
+-------------------------------------------------------
+
+Objectif de la conversation :
+
+1. PLANNER : propose un plan d'amélioration concret du projet d'analyse financière,
+   en listant des tâches numérotées (refactorisation, nouvelles fonctions, structure de fichiers,
+   visualisations, validation des données, etc.).
+
+2. DEV : à partir de ce plan, propose les modifications de code concrètes à faire dans le dépôt
+   (fichiers à créer/modifier, signatures de fonctions, pseudo-code ou exemples, etc.).
+
+3. TESTER : propose une stratégie de tests (unitaires, intégration), des cas de bord, et des
+   vérifications spécifiques à l'analyse financière (ex: cohérence des agrégations, formats, etc.).
+
+Règles :
+
+- Vous répondez en français.
+- Vous vous parlez entre vous comme une vraie équipe technique.
+- PLANNER commence en premier. Ensuite le manager peut laisser la parole au DEV, puis au TESTER,
+  et éventuellement alterner tant que max_round n'est pas atteint.
+"""
+
+    # On démarre la discussion en demandant au PLANNER de commencer
+    print("=== DÉBUT DU GROUPCHAT (planner/dev/tester + analyse_nora.txt) ===\n")
+    planner.initiate_chat(
+        manager,
+        message=task_message,
+    )
+    print("\n=== FIN DU GROUPCHAT ===")
+
+
+if __name__ == "__main__":
+    run_groupchat_with_analysis()
+
+
+⸻
+
+4️⃣ Comment lancer tout ça (ordre)
+	1.	Place analyse_nora.txt à la racine du repo :
+/Users/venom/Documents/analyse-financiere/analyse_nora.txt
+	2.	Lance les sessions Qwen dans tmux :
+
+cd /Users/venom/Documents/analyse-financiere
+./start_qwen_tmux.sh
+tmux ls   # pour vérifier
+
+	3.	(Optionnel) Vérifie qu’une session répond :
+
+tmux attach -t qwen_planner
+# tu dis "salut" → Qwen répond
+Ctrl-b d    # pour détacher
+
+	4.	Lance le GroupChat AutoGen :
+
+cd /Users/venom/Documents/analyse-financiere
+python autogen_qwen_tmux_groupchat.py
+
+Tu vas voir défiler dans le terminal :
+	•	le message de départ avec le contenu de analyse_nora.txt
+	•	la réponse du planner (plan structuré)
+	•	puis dev et tester qui enchaînent, pilotés par AutoGen, mais avec le cerveau Qwen dans tmux.
+
+⸻
+
+Si ça te plaît, on pourra ensuite :
+	•	ajouter des tools AutoGen (lecture/écriture de fichiers, pytest, etc.)
+	•	faire en sorte que DEV modifie vraiment des fichiers dans le repo
+	•	que TESTER lance des vrais tests Python sur analyse-financiere 💸🧠
+
+    Parfait, alors on fige le plan et je te laisse avec un mode d’emploi clair pour mettre tout ça en place dans ton projet.
+
+Je récapitule ce que tu dois faire concrètement dans ton repo
+/Users/venom/Documents/analyse-financiere.
+
+⸻
+
+1. Structure des fichiers à créer
+
+Dans analyse-financiere, tu dois avoir au minimum :
+
+analyse-financiere/
+├─ analyse_nora.txt
+├─ start_qwen_tmux.sh
+├─ qwen_tmux_backend.py
+└─ autogen_qwen_tmux_groupchat.py
+
+	•	analyse_nora.txt → ton fichier d’analyse existant (le contenu que les agents doivent utiliser)
+	•	start_qwen_tmux.sh → lance les 3 Qwen dans tmux dans ce repo
+	•	qwen_tmux_backend.py → wrapper tmux ↔ Qwen
+	•	autogen_qwen_tmux_groupchat.py → script AutoGen avec GroupChat planner/dev/tester
+
+Tu peux copier-coller les contenus que je t’ai déjà donnés dans les messages précédents.
+
+⸻
+
+2. Installer ce qu’il faut côté Python
+
+Dans ton venv (ou global, comme tu veux) :
+
+cd /Users/venom/Documents/analyse-financiere
+
+pip install pyautogen
+# ou
+pip install autogen
+
+(si ça râle, on adaptera, mais l’idée est là : installer AutoGen)
+
+⸻
+
+3. Lancer Qwen dans tmux (dans le bon dossier)
+
+Toujours depuis analyse-financiere :
+
+chmod +x start_qwen_tmux.sh
+./start_qwen_tmux.sh
+tmux ls
+
+Tu dois voir quelque chose comme :
+
+qwen_planner: 1 windows (created ...)
+qwen_dev: 1 windows (created ...)
+qwen_tester: 1 windows (created ...)
+
+Optionnel : vérifier que Qwen répond dans une session :
+
+tmux attach -t qwen_planner
+# tu tapes "salut" → Qwen doit répondre
+# puis Ctrl-b d pour détacher
+
+Si ça marche là, on est bon.
+
+⸻
+
+4. Lancer le GroupChat AutoGen avec Qwen
+
+Toujours dans le même repo :
+
+python autogen_qwen_tmux_groupchat.py
+
+Ce qui devrait se passer :
+	•	le script lit analyse_nora.txt
+	•	AutoGen crée les 3 agents :
+	•	planner → backend qwen_planner
+	•	dev → backend qwen_dev
+	•	tester → backend qwen_tester
+	•	il envoie un gros message de contexte au planner avec le contenu de analyse_nora.txt
+	•	puis le GroupChat démarre :
+	•	PLANNER parle en premier (plan détaillé)
+	•	puis DEV propose des modifs de code
+	•	puis TESTER propose des tests / vérifications
+	•	tout ça en français, avec le cerveau de Qwen dans tmux
+
+Tu verras défiler le dialogue dans le terminal.
+
+⸻
+
+5. Après ça, on pourra upgrader
+
+Quand tu auras validé que :
+	•	le GroupChat tourne,
+	•	Qwen réagit bien dans chaque rôle,
+	•	analyse_nora.txt est bien utilisé,
+
+on pourra ajouter :
+	•	un agent “shell” ou des tools AutoGen pour réellement :
+	•	exécuter pytest,
+	•	lire/écrire des fichiers du repo,
+	•	générer automatiquement des scripts, notebooks, etc.
+
+Bref, on passera d’un brainstorm multi-agents à un système qui modifie vraiment ton code.
+
+⸻
+
+Si tu veux, une fois que tu as lancé autogen_qwen_tmux_groupchat.py et que tu vois la sortie, tu peux me coller un extrait, et on ajuste les prompts pour que l’équipe soit encore plus “pro” (par exemple forcer le planner à produire un plan à 10 étapes, le dev à proposer des noms de fichiers précis, etc.).
+
+Super Reda ❤️ On est synchro.
+Voilà maintenant la version propre, finale, prête à coller pour que tout fonctionne sans friction.
+Je te mets TOUT, dans le bon ordre, avec des instructions ultra simples.
+Tu n’as plus qu’à copier-coller dans les fichiers.
+
+⸻
+
+✅ 1 — Place ceci dans /Users/venom/Documents/analyse-financiere/start_qwen_tmux.sh
+
+#!/usr/bin/env bash
+
+set -e
+
+PROJECT_DIR="/Users/venom/Documents/analyse-financiere"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+  echo "Le dossier $PROJECT_DIR n'existe pas."
+  exit 1
+fi
+
+# Planner
+tmux has-session -t qwen_planner 2>/dev/null || \
+tmux new-session -d -s qwen_planner "cd \"$PROJECT_DIR\" && qwen"
+
+# Dev
+tmux has-session -t qwen_dev 2>/dev/null || \
+tmux new-session -d -s qwen_dev "cd \"$PROJECT_DIR\" && qwen"
+
+# Tester
+tmux has-session -t qwen_tester 2>/dev/null || \
+tmux new-session -d -s qwen_tester "cd \"$PROJECT_DIR\" && qwen"
+
+echo "=== Sessions lancées ==="
+echo " qwen_planner"
+echo " qwen_dev"
+echo " qwen_tester"
+echo "========================"
+echo " tmux ls  — pour vérifier"
+echo " tmux attach -t qwen_planner — pour regarder une session"
+
+Puis :
+
+chmod +x start_qwen_tmux.sh
+
+
+⸻
+
+✅ 2 — Place ceci dans /Users/venom/Documents/analyse-financiere/qwen_tmux_backend.py
+
+import subprocess
+import time
+from typing import List, Dict, Optional
+
+
+class QwenTmuxSession:
+    def __init__(self, session_name: str, wait_seconds: float = 2.0):
+        self.session = session_name
+        self.wait_seconds = wait_seconds
+        self.last_snapshot = self._capture_full()
+
+    def _capture_full(self) -> str:
+        out = subprocess.check_output(
+            ["tmux", "capture-pane", "-pt", self.session],
+            text=True,
+        )
+        return out
+
+    def _get_new_output(self) -> str:
+        current = self._capture_full()
+        if current.startswith(self.last_snapshot):
+            new = current[len(self.last_snapshot):]
+        else:
+            new = current
+        self.last_snapshot = current
+        return new.strip()
+
+    def _send_raw(self, text: str) -> None:
+        subprocess.check_call(
+            ["tmux", "send-keys", "-t", self.session, text, "C-m"]
+        )
+
+    def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
+        if wait_seconds is None:
+            wait_seconds = self.wait_seconds
+
+        self._send_raw(text)
+        time.sleep(wait_seconds)
+        return self._get_new_output()
+
+
+class QwenTmuxLLM:
+    def __init__(self, session_name: str, system_prompt: str = "", wait_seconds: float = 3.0):
+        self.session = QwenTmuxSession(session_name, wait_seconds=wait_seconds)
+        self.system_prompt = system_prompt
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if self._initialized:
+            return
+        if self.system_prompt:
+            self.session.ask(
+                f"[SYSTEM ROLE] {self.system_prompt}\nRéponds clairement."
+            )
+        self._initialized = True
+
+    def chat(self, messages: List[Dict[str, str]]) -> str:
+        self._ensure_initialized()
+        user_messages = [m for m in messages if m["role"] == "user"]
+        last_user = user_messages[-1]["content"]
+        return self.session.ask(last_user)
+
+
+⸻
+
+✅ 3 — Place ceci dans /Users/venom/Documents/analyse-financiere/autogen_qwen_tmux_groupchat.py
+
+from typing import Any, Dict, List
+from autogen import ConversableAgent, GroupChat, GroupChatManager
+from qwen_tmux_backend import QwenTmuxLLM
+import os
+
+
+# ---------- LLM backend agent ----------
+class QwenTmuxAgent(ConversableAgent):
+    def __init__(self, name: str, session_name: str, system_message: str, wait_seconds: float = 3.0, **kwargs):
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.qwen_llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_message,
+            wait_seconds=wait_seconds,
+        )
+
+    def generate_reply(self, messages: List[Dict[str, Any]], sender: "ConversableAgent", **kwargs) -> Dict[str, Any]:
+        answer = self.qwen_llm.chat(messages)
+        return {"role": "assistant", "content": answer}
+
+
+# ---------- Lecture analysis file ----------
+def load_analysis(path: str = "analyse_nora.txt") -> str:
+    if not os.path.exists(path):
+        return f"(Fichier {path} introuvable)"
+    return open(path, "r", encoding="utf-8").read()
+
+
+# ---------- Build agents ----------
+def build_agents():
+    planner = QwenTmuxAgent(
+        name="planner",
+        session_name="qwen_planner",
+        system_message="Tu es PLANNER. Tu crées un plan détaillé basé sur analyse_nora.txt.",
+    )
+
+    dev = QwenTmuxAgent(
+        name="dev",
+        session_name="qwen_dev",
+        system_message="Tu es DEV. Tu écris du code et expliques les changements.",
+    )
+
+    tester = QwenTmuxAgent(
+        name="tester",
+        session_name="qwen_tester",
+        system_message="Tu es TESTER. Tu proposes des tests et signales les risques.",
+    )
+
+    return [planner, dev, tester]
+
+
+# ---------- GroupChat workflow ----------
+def run_groupchat():
+    analysis_text = load_analysis("analyse_nora.txt")
+    planner, dev, tester = build_agents()
+
+    groupchat = GroupChat(
+        agents=[planner, dev, tester],
+        messages=[],
+        max_round=10,
+    )
+
+    manager = GroupChatManager(
+        name="manager",
+        groupchat=groupchat,
+        llm_config={"config_list": []},
+        human_input_mode="NEVER",
+    )
+
+    start_msg = f"""
+Contexte :
+
+Voici le contenu de analyse_nora.txt :
+
+-------------------------------------------------------
+{analysis_text}
+-------------------------------------------------------
+
+Objectif :
+1. PLANNER → proposer un plan détaillé.
+2. DEV → détailler les modifications de code à appliquer.
+3. TESTER → proposer tests, validations, risques.
+
+Parlez ensemble en français.
+"""
+
+    print("\n=== DÉBUT DU GROUPCHAT ===\n")
+    planner.initiate_chat(manager, message=start_msg)
+    print("\n=== FIN DU GROUPCHAT ===\n")
+
+
+if __name__ == "__main__":
+    run_groupchat()
+
+
+⸻
+
+✅ 4 — Lancer le système complet
+
+Étape 1 — lancer Qwen dans tmux
+
+cd /Users/venom/Documents/analyse-financiere
+./start_qwen_tmux.sh
+tmux ls
+
+Étape 2 — lancer le groupchat AutoGen
+
+python autogen_qwen_tmux_groupchat.py
+
+Tu vas voir les 3 agents (planner → dev → tester) discuter automatiquement, en utilisant le contenu du fichier analyse_nora.txt.
+
+⸻
+
+🚀 Si tu veux aller plus loin
+
+Une fois que ça tourne, on peut :
+
+✔ Ajouter des tools AutoGen
+
+(exécution réelle Python, édition de fichiers, calculs, tests réels)
+
+✔ Faire que le DEV écrive automatiquement dans ton repo
+
+(modifier des .py, créer des notebooks, dossiers, modules)
+
+✔ Ajouter un agent Data Scientist, un agent Analyste financier, un agent PlotMaker
+
+tout connecté à Qwen.
+
+✔ Mettre ça sous forme d’API Flask ou FastAPI
+
+pour piloter ton équipe multi-agents depuis une UI simple.
+
+⸻
+
+Si tu veux, on peut maintenant :
+
+👉 lancer un premier test
+👉 t’aider à optimiser les prompts
+👉 ajouter outils / actions réelles
+
+Tu me dis et je t’accompagne ❤️
+Yes 😏 on passe au niveau “ils touchent vraiment au projet”.
+
+On va ajouter un agent outil qui peut :
+	•	exécuter de vraies commandes shell dans ton repo
+(ex: pytest -q, python script.py, ls, etc.)
+	•	et intégrer ça dans un workflow AutoGen avec tes 3 Qwen (planner/dev/tester).
+
+Je te propose un nouveau script séparé, pour ne pas casser ce qu’on a déjà fait avec le GroupChat :
+
+autogen_qwen_tmux_tools.py
+
+Ce script va :
+	1.	Lire analyse_nora.txt
+	2.	Laisser PLANNER (Qwen) faire un plan
+	3.	Laisser DEV (Qwen) proposer des modifs
+	4.	Laisser un agent SHELL (non LLM) exécuter une vraie commande (ex: pytest -q)
+	5.	Donner la sortie réelle de pytest au TESTER (Qwen) pour analyse
+
+Ça fait déjà des actions réelles dans ton repo.
+
+⸻
+
+1️⃣ On garde ce que tu as déjà
+
+On garde tels quels :
+	•	start_qwen_tmux.sh
+	•	qwen_tmux_backend.py
+	•	autogen_qwen_tmux_groupchat.py (pour le chat pur)
+
+et on ajoute un fichier.
+
+⸻
+
+2️⃣ Nouveau fichier : autogen_qwen_tmux_tools.py
+
+Dans /Users/venom/Documents/analyse-financiere, crée :
+
+from typing import Any, Dict, List
+import subprocess
+import os
+
+from autogen import ConversableAgent
+from qwen_tmux_backend import QwenTmuxLLM
+
+
+PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
+ANALYSIS_FILE = "analyse_nora.txt"
+
+
+# ---------- Agent Qwen (planner / dev / tester) ----------
+
+class QwenTmuxAgent(ConversableAgent):
+    """
+    Agent AutoGen dont le "cerveau" est QwenTmuxLLM
+    qui parle à une session tmux où tourne `qwen`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        session_name: str,
+        system_message: str,
+        wait_seconds: float = 3.0,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.qwen_llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_message,
+            wait_seconds=wait_seconds,
+        )
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        answer = self.qwen_llm.chat(messages)
+        return {"role": "assistant", "content": answer}
+
+
+# ---------- Agent outil : Shell (actions réelles) ----------
+
+class ShellToolAgent(ConversableAgent):
+    """
+    Agent outil qui exécute VRAIMENT des commandes shell
+    dans le répertoire du projet, et renvoie stdout/stderr.
+    """
+
+    def __init__(self, name: str = "shell", workdir: str = PROJECT_DIR, **kwargs: Any):
+        super().__init__(
+            name=name,
+            system_message="Tu es un AGENT OUTIL. Tu exécutes des commandes shell reçues et renvoies le résultat.",
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.workdir = workdir
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        # On considère que le dernier message contient STRICTEMENT la commande à exécuter
+        cmd = messages[-1]["content"].strip()
+
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=self.workdir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            output = []
+            output.append(f"$ {cmd}")
+            output.append("\n--- stdout ---\n")
+            output.append(result.stdout or "(vide)")
+            output.append("\n--- stderr ---\n")
+            output.append(result.stderr or "(vide)")
+            output.append(f"\n--- returncode: {result.returncode} ---\n")
+            content = "".join(output)
+        except Exception as e:
+            content = f"Erreur lors de l'exécution de la commande `{cmd}` : {e}"
+
+        return {"role": "assistant", "content": content}
+
+
+# ---------- Helpers ----------
+
+def load_analysis(path: str = ANALYSIS_FILE) -> str:
+    full_path = os.path.join(PROJECT_DIR, path)
+    if not os.path.exists(full_path):
+        return f"(Fichier {full_path} introuvable)"
+    return open(full_path, "r", encoding="utf-8").read()
+
+
+def build_agents():
+    planner = QwenTmuxAgent(
+        name="planner",
+        session_name="qwen_planner",
+        system_message=(
+            "Tu es PLANNER.\n"
+            "Tu crées un plan détaillé à partir de l'analyse financière fournie. "
+            "Tu réponds en français avec des étapes numérotées."
+        ),
+    )
+
+    dev = QwenTmuxAgent(
+        name="dev",
+        session_name="qwen_dev",
+        system_message=(
+            "Tu es DEV.\n"
+            "Tu proposes des modifications de code concrètes dans le projet 'analyse-financiere'. "
+            "Tu réponds en français, tu cites les fichiers et tu donnes des extraits de code."
+        ),
+    )
+
+    tester = QwenTmuxAgent(
+        name="tester",
+        session_name="qwen_tester",
+        system_message=(
+            "Tu es TESTER.\n"
+            "Tu analyses les résultats d'exécution (tests, scripts) et proposes des tests supplémentaires, "
+            "des cas limites, et tu signales les risques. Toujours en français."
+        ),
+    )
+
+    shell = ShellToolAgent(
+        name="shell",
+        workdir=PROJECT_DIR,
+    )
+
+    return planner, dev, tester, shell
+
+
+# ---------- Workflow orchestré (actions réelles) ----------
+
+def main():
+    os.chdir(PROJECT_DIR)
+
+    analysis_text = load_analysis()
+
+    planner, dev, tester, shell = build_agents()
+
+    # 1) PLANNER lit l'analyse et produit un plan
+    planner_msg = planner.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le contenu de analyse_nora.txt :\n\n"
+                    f"{analysis_text}\n\n"
+                    "À partir de cela, propose un plan détaillé en étapes numérotées "
+                    "pour améliorer le projet d'analyse financière."
+                ),
+            }
+        ],
+        sender=planner,
+    )
+    print("\n=== PLANNER (Qwen) ===\n")
+    print(planner_msg["content"])
+
+    # 2) DEV reçoit le plan et propose des modifs de code
+    dev_msg = dev.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le plan du planner :\n\n"
+                    f"{planner_msg['content']}\n\n"
+                    "Propose maintenant les modifications de code concrètes à faire dans le dépôt "
+                    "'analyse-financiere' (fichiers, fonctions, extraits de code)."
+                ),
+            }
+        ],
+        sender=dev,
+    )
+    print("\n=== DEV (Qwen) ===\n")
+    print(dev_msg["content"])
+
+    # 3) SHELL exécute une vraie commande (par exemple les tests)
+    #    Tu peux adapter cette commande (pytest, python script, etc.)
+    shell_cmd = "pytest -q"
+    shell_msg = shell.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": shell_cmd,
+            }
+        ],
+        sender=dev,  # peu importe qui "demande", c'est juste pour l'API
+    )
+    print("\n=== SHELL (commande réelle) ===\n")
+    print(shell_msg["content"])
+
+    # 4) TESTER analyse la sortie réelle de la commande
+    tester_msg = tester.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le résultat de l'exécution des tests (ou d'une commande) :\n\n"
+                    f"{shell_msg['content']}\n\n"
+                    "Analyse ce résultat, signale les problèmes potentiels, propose des tests "
+                    "supplémentaires et des améliorations à apporter."
+                ),
+            }
+        ],
+        sender=tester,
+    )
+    print("\n=== TESTER (Qwen) ===\n")
+    print(tester_msg["content"])
+
+    print("\n=== FIN DU WORKFLOW AVEC ACTIONS RÉELLES ===\n")
+
+
+if __name__ == "__main__":
+    main()
+
+
+⸻
+
+3️⃣ Comment l’utiliser
+	1.	Vérifie que tes sessions Qwen tournent bien dans tmux :
+
+cd /Users/venom/Documents/analyse-financiere
+./start_qwen_tmux.sh
+tmux ls
+
+	2.	Vérifie que analyse_nora.txt est bien dans ce dossier.
+	3.	Lance le workflow “actions réelles” :
+
+python autogen_qwen_tmux_tools.py
+
+Tu vas voir :
+	•	💡 PLANNER (Qwen) → plan détaillé basé sur analyse_nora.txt
+	•	👨‍💻 DEV (Qwen) → suggestions de code / fichiers
+	•	🖥 SHELL → exécution réelle de pytest -q dans le repo
+	•	✅ TESTER (Qwen) → analyse du vrai résultat des tests
+
+Là, on est dans le vrai dev assisté par agents :
+ils réfléchissent, et au moins un agent agit vraiment sur ton projet via la commande shell.
+
+⸻
+
+Si tu veux, prochaine étape on peut :
+	•	remplacer le shell_cmd = "pytest -q" par quelque chose de dynamique (par ex : Qwen propose la commande, on l’extrait, on l’envoie au shell)
+	•	ajouter un outil de lecture/écriture de fichiers (agent qui ouvre, lit, modifie un .py)
+	•	ou carrément faire un workflow où le DEV propose du code, et un agent outil l’écrit dans les bons fichiers.
+
+Tu me dis ce que tu veux comme “prochaine super-puissance” et on pousse encore 😈
+
+
+Parfait, on sort les gros jouets 😈
+Je te donne un seul script avancé qui fait les 3 :
+	1.	✅ Shell command dynamique (SHELL_CMD venant de Qwen)
+	2.	✅ Agent outil de lecture/écriture de fichiers
+	3.	✅ Workflow complet : planner → dev (Qwen) → tools (shell & fichiers) → tester (Qwen)
+
+On garde :
+	•	start_qwen_tmux.sh
+	•	qwen_tmux_backend.py
+
+et on ajoute un nouveau script orchestration avancée.
+
+⸻
+
+1️⃣ On garde qwen_tmux_backend.py tel quel
+
+(Je ne le recolle pas pour alléger, mais on garde la version précédente.)
+
+⸻
+
+2️⃣ Nouveau script : autogen_qwen_tmux_tools_advanced.py
+
+Dans /Users/venom/Documents/analyse-financiere, crée ce fichier :
+
+from typing import Any, Dict, List
+import subprocess
+import os
+import re
+
+from autogen import ConversableAgent
+from qwen_tmux_backend import QwenTmuxLLM
+
+
+PROJECT_DIR = "/Users/venom/Documents/analyse-financiere"
+ANALYSIS_FILE = "analyse_nora.txt"
+
+
+# ---------- Agent Qwen (planner / dev / tester) ----------
+
+class QwenTmuxAgent(ConversableAgent):
+    """
+    Agent AutoGen dont le cerveau est QwenTmuxLLM
+    qui parle à une session tmux où tourne `qwen`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        session_name: str,
+        system_message: str,
+        wait_seconds: float = 3.0,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            name=name,
+            system_message=system_message,
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.qwen_llm = QwenTmuxLLM(
+            session_name=session_name,
+            system_prompt=system_message,
+            wait_seconds=wait_seconds,
+        )
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        answer = self.qwen_llm.chat(messages)
+        return {"role": "assistant", "content": answer}
+
+
+# ---------- Agent outil : Shell (actions réelles) ----------
+
+class ShellToolAgent(ConversableAgent):
+    """
+    Agent outil qui exécute des commandes shell dans PROJECT_DIR.
+    La commande est extraite d'une ligne de la forme :
+    SHELL_CMD: <commande>
+    dans le dernier message.
+    """
+
+    def __init__(self, name: str = "shell", workdir: str = PROJECT_DIR, **kwargs: Any):
+        super().__init__(
+            name=name,
+            system_message=(
+                "Tu es un AGENT OUTIL shell. "
+                "Tu n'es PAS un LLM, tu exécutes juste des commandes reçues."
+            ),
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.workdir = workdir
+
+    def _extract_shell_cmd(self, text: str) -> str | None:
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("SHELL_CMD:"):
+                return line[len("SHELL_CMD:"):].strip()
+        return None
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        last = messages[-1]["content"]
+        cmd = self._extract_shell_cmd(last)
+        if not cmd:
+            return {
+                "role": "assistant",
+                "content": "Aucune ligne 'SHELL_CMD: ...' trouvée dans le message.",
+            }
+
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=self.workdir,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            output = []
+            output.append(f"$ {cmd}")
+            output.append("\n--- stdout ---\n")
+            output.append(result.stdout or "(vide)")
+            output.append("\n--- stderr ---\n")
+            output.append(result.stderr or "(vide)")
+            output.append(f"\n--- returncode: {result.returncode} ---\n")
+            content = "".join(output)
+        except Exception as e:
+            content = f"Erreur lors de l'exécution de la commande `{cmd}` : {e}"
+
+        return {"role": "assistant", "content": content}
+
+
+# ---------- Agent outil : Fichiers (lecture / écriture) ----------
+
+class FileToolAgent(ConversableAgent):
+    """
+    Agent outil pour lire/écrire des fichiers dans PROJECT_DIR.
+
+    Il comprend deux formats dans le dernier message :
+
+    1) Pour écrire un ou plusieurs fichiers :
+       FILE:
+       path: chemin/relatif.py
+       ```python
+       ...contenu complet du fichier...
+       ```
+
+    2) Pour lire un fichier :
+       READ_FILE:
+       path: chemin/relatif.py
+
+    Il renvoie un résumé des opérations (écritures + contenus lus).
+    """
+
+    FILE_PATTERN = re.compile(
+        r"FILE:\s*path:\s*(.+?)\s*```[a-zA-Z0-9_]*\n(.*?)```",
+        re.DOTALL,
+    )
+
+    READ_PATTERN = re.compile(
+        r"READ_FILE:\s*path:\s*(.+)",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, name: str = "filetool", root_dir: str = PROJECT_DIR, **kwargs: Any):
+        super().__init__(
+            name=name,
+            system_message=(
+                "Tu es un AGENT OUTIL fichiers. Tu n'es pas un LLM, tu exécutes des opérations "
+                "de lecture/écriture basées sur les instructions reçues."
+            ),
+            llm_config={"config_list": []},
+            human_input_mode="NEVER",
+            **kwargs,
+        )
+        self.root_dir = root_dir
+
+    def _safe_join(self, relative_path: str) -> str:
+        rel = relative_path.strip().lstrip("/").replace("..", "")
+        return os.path.join(self.root_dir, rel)
+
+    def _apply_file_writes(self, text: str) -> List[str]:
+        logs: List[str] = []
+        for match in self.FILE_PATTERN.finditer(text):
+            rel_path = match.group(1).strip()
+            content = match.group(2)
+            full_path = self._safe_join(rel_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            logs.append(f"Écrit fichier: {rel_path} (len={len(content)} caractères)")
+        return logs
+
+    def _apply_file_reads(self, text: str) -> List[str]:
+        logs: List[str] = []
+        for match in self.READ_PATTERN.finditer(text):
+            rel_path = match.group(1).strip()
+            full_path = self._safe_join(rel_path)
+            if not os.path.exists(full_path):
+                logs.append(f"READ_FILE: {rel_path} introuvable.")
+                continue
+            with open(full_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            logs.append(f"READ_FILE: {rel_path}\n--- CONTENU ---\n{content}\n--- FIN CONTENU ---")
+        return logs
+
+    def generate_reply(
+        self,
+        messages: List[Dict[str, Any]],
+        sender: "ConversableAgent",
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        last = messages[-1]["content"]
+        logs: List[str] = []
+
+        writes = self._apply_file_writes(last)
+        reads = self._apply_file_reads(last)
+
+        if not writes and not reads:
+            logs.append("Aucune instruction FILE:/READ_FILE: détectée dans le message.")
+        else:
+            logs.extend(writes)
+            logs.extend(reads)
+
+        return {
+            "role": "assistant",
+            "content": "\n\n".join(logs),
+        }
+
+
+# ---------- Helpers ----------
+
+def load_analysis(path: str = ANALYSIS_FILE) -> str:
+    full_path = os.path.join(PROJECT_DIR, path)
+    if not os.path.exists(full_path):
+        return f"(Fichier {full_path} introuvable)"
+    return open(full_path, "r", encoding="utf-8").read()
+
+
+def build_agents():
+    planner = QwenTmuxAgent(
+        name="planner",
+        session_name="qwen_planner",
+        system_message=(
+            "Tu es PLANNER.\n"
+            "À partir de l'analyse financière fournie, tu produis un plan détaillé en étapes numérotées "
+            "pour améliorer le projet Python 'analyse-financiere'. Réponds en français."
+        ),
+    )
+
+    dev = QwenTmuxAgent(
+        name="dev",
+        session_name="qwen_dev",
+        system_message=(
+            "Tu es DEV.\n"
+            "Tu prends le plan du planner et tu produis :\n"
+            "1) Des blocs FILE: path: ... ```python ... ``` pour chaque fichier à créer/modifier.\n"
+            "2) Une ligne SHELL_CMD: <commande> pour lancer les tests appropriés (par exemple pytest -q).\n"
+            "Respecte strictement ce format. Réponds en français dans les commentaires éventuels."
+        ),
+    )
+
+    tester = QwenTmuxAgent(
+        name="tester",
+        session_name="qwen_tester",
+        system_message=(
+            "Tu es TESTER.\n"
+            "Tu analyses les résultats d'exécution de la commande shell (tests, scripts) et tu proposes "
+            "des tests supplémentaires, des cas limites et des améliorations. Réponds en français."
+        ),
+    )
+
+    shell = ShellToolAgent(
+        name="shell",
+        workdir=PROJECT_DIR,
+    )
+
+    filetool = FileToolAgent(
+        name="filetool",
+        root_dir=PROJECT_DIR,
+    )
+
+    return planner, dev, tester, shell, filetool
+
+
+# ---------- Workflow orchestré complet ----------
+
+def main():
+    os.chdir(PROJECT_DIR)
+
+    analysis_text = load_analysis()
+    planner, dev, tester, shell, filetool = build_agents()
+
+    # 1) PLANNER -> plan à partir de analyse_nora.txt
+    planner_msg = planner.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le contenu de analyse_nora.txt :\n\n"
+                    f"{analysis_text}\n\n"
+                    "À partir de cela, propose un plan détaillé en étapes numérotées "
+                    "pour améliorer le projet d'analyse financière."
+                ),
+            }
+        ],
+        sender=planner,
+    )
+    print("\n=== PLANNER (Qwen) ===\n")
+    print(planner_msg["content"])
+
+    # 2) DEV -> propose fichiers + shell cmd dans un format structuré
+    dev_msg = dev.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le plan du planner :\n\n"
+                    f"{planner_msg['content']}\n\n"
+                    "Maintenant, génère les blocs décrivant les modifications de code à apporter. "
+                    "Pour chaque fichier, utilise STRICTEMENT ce format :\n\n"
+                    "FILE:\n"
+                    "path: chemin/relatif/vers/fichier.py\n"
+                    "```python\n"
+                    "# contenu complet du fichier ici\n"
+                    "```\n\n"
+                    "Ensuite, ajoute UNE SEULE ligne avec la commande de tests à exécuter, sous la forme :\n"
+                    "SHELL_CMD: pytest -q\n\n"
+                    "Tu peux commenter dans le code, mais ne change PAS ce format."
+                ),
+            }
+        ],
+        sender=dev,
+    )
+    print("\n=== DEV (Qwen) — PROPOSITION DE CODE ===\n")
+    print(dev_msg["content"])
+
+    # 3) FILETOOL -> applique les FILE: path: ... ```python ...``` (écriture sur disque)
+    filetool_msg = filetool.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": dev_msg["content"],
+            }
+        ],
+        sender=dev,
+    )
+    print("\n=== FILETOOL — MODIFICATIONS FICHIERS ===\n")
+    print(filetool_msg["content"])
+
+    # 4) SHELL -> exécute la commande trouvée dans SHELL_CMD:
+    shell_msg = shell.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": dev_msg["content"],
+            }
+        ],
+        sender=dev,
+    )
+    print("\n=== SHELL — EXÉCUTION COMMANDE ===\n")
+    print(shell_msg["content"])
+
+    # 5) TESTER -> analyse le résultat de la commande réelle
+    tester_msg = tester.generate_reply(
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Voici le résultat de la commande shell (tests, etc.) exécutée dans le projet :\n\n"
+                    f"{shell_msg['content']}\n\n"
+                    "Analyse ce résultat, signale les problèmes éventuels, propose des tests supplémentaires "
+                    "et des améliororations à apporter au projet d'analyse financière."
+                ),
+            }
+        ],
+        sender=tester,
+    )
+    print("\n=== TESTER (Qwen) — ANALYSE DES RÉSULTATS ===\n")
+    print(tester_msg["content"])
+
+    print("\n=== FIN DU WORKFLOW AVANCÉ (outils + actions réelles) ===\n")
+
+
+if __name__ == "__main__":
+    main()
+
+
+⸻
+
+3️⃣ Comment lancer ce workflow avancé
+	1.	D’abord, les sessions Qwen dans tmux :
+
+cd /Users/venom/Documents/analyse-financiere
+./start_qwen_tmux.sh
+tmux ls
+
+	2.	Vérifie que analyse_nora.txt est bien à la racine du repo.
+	3.	Lance le workflow outils + actions réelles :
+
+python autogen_qwen_tmux_tools_advanced.py
+
+Tu obtiens :
+	•	🧠 PLANNER (Qwen) → plan détaillé basé sur analyse_nora.txt
+	•	👨‍💻 DEV (Qwen) → propose du code en blocs FILE: ... + SHELL_CMD: ...
+	•	📁 FILETOOL → écrit vraiment les fichiers dans ton repo
+	•	🖥 SHELL → exécute la vraie commande (ex: pytest -q)
+	•	✅ TESTER (Qwen) → lit la sortie réelle et commente / propose des tests
+
+Là tu as :
+	•	shell dynamique ✅
+	•	outil fichiers (lecture/écriture) ✅
+	•	workflow complet branché sur Qwen + ton repo ✅
+
+⸻
+
+Si tu veux ensuite, on peut :
+	•	raffiner le format pour gérer plusieurs fichiers,
+	•	ajouter un READ_FILE dans les prompts du dev pour qu’il demande à lire des fichiers existants avant de les modifier,
+	•	ou ajouter un 4e agent “Data Scientist” qui propose des nouvelles métriques / visualisations pour ton analyse financière.
