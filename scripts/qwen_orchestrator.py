@@ -238,11 +238,12 @@ def tmux_capture(session: str, last_lines: int = CAPTURE_LAST_LINES) -> str:
     Capture plus robuste:
     - -J : join wrapped lines
     - -S -N : start from last N lines of history
+    - -E -1 : end at last line
     """
     tmux_start_server()
     target = tmux_target(session)
-    start = f"-{max(200, int(last_lines))}"
-    cp = run(["tmux", "capture-pane", "-p", "-J", "-S", start, "-t", target], capture=True)
+    n = max(200, int(last_lines))
+    cp = run(["tmux", "capture-pane", "-p", "-J", "-S", f"-{n}", "-E", "-1", "-t", target], capture=True)
     return cp.stdout or ""
 
 
@@ -349,11 +350,6 @@ def session_names() -> List[str]:
 
 
 def _parse_fc_qwen_exports() -> List[str]:
-    """
-    Optionnel: permet d'injecter des exports dans le shell tmux avant qwen.
-    Exemple:
-      export FC_QWEN_EXPORTS='FOO=1;BAR=hello'
-    """
     raw = (os.environ.get("FC_QWEN_EXPORTS") or "").strip()
     if not raw:
         return []
@@ -412,7 +408,6 @@ def qwen_start(
         if not tmux_has_session(sess):
             tmux_new_session(sess, bash_cmd)
 
-        # Options utiles pour ton use case (logs + capture)
         tmux_set_option(sess, "history-limit", str(TMUX_HISTORY_LIMIT))
 
         if clean_startup:
@@ -494,13 +489,11 @@ class QwenTmuxSession:
     def _get_new_output(self) -> str:
         cur = tmux_capture(self.session, last_lines=self.capture_lines)
 
-        # Fast path: prefix
         if cur.startswith(self.last_snapshot):
             new = cur[len(self.last_snapshot):]
             self.last_snapshot = cur
             return (new or "").strip()
 
-        # Overlap heuristic: find tail of previous in current
         tail = (self.last_snapshot or "")[-2000:]
         if tail:
             idx = cur.find(tail)
@@ -509,7 +502,6 @@ class QwenTmuxSession:
                 self.last_snapshot = cur
                 return (new or "").strip()
 
-        # Worst case: full replace
         self.last_snapshot = cur
         return (cur or "").strip()
 
@@ -530,7 +522,7 @@ class QwenTmuxSession:
         if not s:
             return ""
         s = re.sub(r"\x1b\][^\x07]*\x07", "", s)        # OSC ... BEL
-        s = re.sub(r"\x1b\][^\x1b]*\x1b\\", "", s)      # OSC ... ST
+        s = re.sub(r"\x1b\][^\\x1b]*\x1b\\", "", s)     # OSC ... ST (rare)
         s = re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", s)   # CSI
         s = re.sub(r"\x1B[@-Z\\-_]", "", s)             # other ESC
         return s
@@ -541,7 +533,6 @@ class QwenTmuxSession:
         text = self._strip_terminal_noise(raw)
 
         noise_substrings = [
-            # bannières / hints
             "Ask questions, edit files, or run commands.",
             "Be specific for the best results.",
             "/help for more information.",
@@ -566,11 +557,9 @@ class QwenTmuxSession:
                 continue
             low = s.strip().lower()
 
-            # spinners braille
             if s.strip().startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
                 continue
 
-            # ascii art borders
             if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", s.strip()):
                 continue
 
@@ -579,20 +568,10 @@ class QwenTmuxSession:
 
             cleaned.append(s.strip())
 
-        # keep last assistant block if present
-        last_star = None
-        for i, ln in enumerate(cleaned):
-            if ln.lstrip().startswith("✦"):
-                last_star = i
-        if last_star is not None:
-            cleaned = cleaned[last_star:]
-
-        # cap lines
         if len(cleaned) > 120:
             cleaned = cleaned[-120:]
 
-        out = "\n".join(cleaned).strip()
-        return out
+        return "\n".join(cleaned).strip()
 
     @staticmethod
     def _fingerprint(s: str) -> str:
@@ -607,9 +586,6 @@ class QwenTmuxSession:
         poll_interval: float = 0.55,
         min_wait: float = 1.2,
     ) -> str:
-        """
-        Envoie un message, puis attend que la sortie "nettoyée" cesse de changer pendant settle_seconds.
-        """
         self._send(text)
 
         start = time.time()
@@ -622,7 +598,6 @@ class QwenTmuxSession:
         last_fp = ""
         last_change = time.time()
 
-        # small guard to avoid returning instantly on empty output
         while time.time() < deadline:
             time.sleep(poll_interval)
 
@@ -642,14 +617,12 @@ class QwenTmuxSession:
             stable_for = time.time() - last_change
             elapsed = time.time() - start
 
-            if elapsed >= min_wait and stable_for >= settle_seconds and (last_clean.strip() != ""):
+            if elapsed >= min_wait and stable_for >= settle_seconds and last_clean.strip():
                 break
 
-        # anti "echo prompt": si la sortie est vide ou trop faible, on tente une relance courte
         if not last_clean.strip():
             self._send("Ne recopie pas le prompt. Donne uniquement une réponse structurée et actionnable.")
             time.sleep(0.6)
-            # petite seconde passe de stabilisation
             extra_buf = ""
             last_fp = ""
             last_change = time.time()
@@ -804,9 +777,6 @@ def build_debug_feature(run_id: str) -> str:
 # ==============================================================================
 
 def _format_autogen_context(messages: List[Dict[str, Any]], max_msgs: int = 10) -> str:
-    """
-    Transforme l'historique AutoGen en un contexte lisible, sans exploser la taille.
-    """
     tail = messages[-max_msgs:] if len(messages) > max_msgs else messages
     parts: List[str] = []
     for m in tail:
@@ -881,7 +851,6 @@ def run_feature_autogen_tmux(
     qa._tmux_llm = qa_llm            # type: ignore[attr-defined]
 
     def tmux_reply(recipient, messages, sender, config):
-        # Contexte AutoGen -> prompt stable
         ctx_text = _format_autogen_context(messages or [], max_msgs=10)
         if not ctx_text:
             ctx_text = feature.strip()
@@ -918,18 +887,30 @@ def run_feature_autogen_tmux(
             position=0,
         )
 
-    # max_round in autogen is not "turns", so keep it conservative
+    # --------- FIX: calcul "tours" réellement exécutés ----------
+    # On veut au minimum Planner->Dev->Tester (3 tours) par round,
+    # et un peu de marge.
+    max_turns = max(6, int(max_rounds) * 3)
+
+    # Certaines versions utilisent max_round (et l'interprètent bizarrement).
+    # On le met large pour ne pas couper prématurément.
     groupchat = autogen.GroupChat(
         agents=[planner, dev, tester],
         messages=[],
-        max_round=max(1, int(max_rounds)),
+        max_round=max_turns,
         speaker_selection_method="round_robin",
         allow_repeat_speaker=False,
     )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
-    transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_rounds={max_rounds}")
-    planner.initiate_chat(manager, message=feature)
+    transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_rounds={max_rounds} max_turns={max_turns}")
+
+    # --------- FIX: forcer le nombre de tours côté initiate_chat ----------
+    try:
+        planner.initiate_chat(manager, message=feature, max_turns=max_turns)
+    except TypeError:
+        # compat versions autogen: max_round au lieu de max_turns
+        planner.initiate_chat(manager, message=feature, max_round=max_turns)
 
     transcript_append(ctx, "Runner", "INFO", "PHASE QA (autogen-tmux): pytest + git")
 
