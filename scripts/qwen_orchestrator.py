@@ -9,6 +9,7 @@ import json
 import argparse
 import subprocess
 import shlex
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,10 @@ SESSIONS: Dict[str, str] = {
 
 RUNS_DIR_DEFAULT = Path(os.environ.get("FC_RUNS_DIR", str(PROJECT_DIR / "logs-qwen-runs"))).expanduser().resolve()
 
+# capture tuning
+CAPTURE_LAST_LINES = int(os.environ.get("FC_CAPTURE_LAST_LINES", "4000"))
+TMUX_HISTORY_LIMIT = int(os.environ.get("FC_TMUX_HISTORY_LIMIT", "200000"))
+
 
 def now_id() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -63,25 +68,23 @@ DEFAULT_PATH_OVERRIDE = build_default_path_override()
 # Strict requirements (NO fallback)
 # ==============================================================================
 
-def _die(msg: str, code: int = 1) -> None:
+def _die(msg: str) -> None:
     raise RuntimeError(msg)
 
 
 def ensure_venv_or_reexec() -> None:
     """
     Si la venv backend existe mais que l'environnement courant n'est pas la venv,
-    on relance le script via VENV_PY. On ne se contente pas de comparer sys.executable
-    (souvent un symlink vers l'interpréteur système) : on vérifie sys.prefix/base_prefix.
+    on relance le script via VENV_PY.
     """
     if not VENV_PY.exists():
         return
 
     venv_root = VENV_BIN.parent.resolve()
-    in_venv = Path(sys.prefix).resolve() == venv_root and getattr(sys, "base_prefix", None) != sys.prefix
+    in_venv = (Path(sys.prefix).resolve() == venv_root) and (getattr(sys, "base_prefix", sys.prefix) != sys.prefix)
     if in_venv:
         return
 
-    # Re-exec dans la venv pour garantir les deps (autogen, etc.)
     os.execv(str(VENV_PY), [str(VENV_PY), *sys.argv])
 
 
@@ -89,19 +92,8 @@ def require_module(name: str) -> Any:
     try:
         return __import__(name)
     except Exception as e:
-        _die(f"Module requis introuvable: '{name}'. Installe-le puis relance. Détail: {e}")
+        _die(f"Module requis introuvable: '{name}'. Installe-le puis relance.\nDétail: {e}")
 
-
-def require_bin(bin_name: str) -> str:
-    p = which(bin_name)
-    if not p:
-        _die(f"Binaire requis introuvable: '{bin_name}'. Installe-le (ex: brew install {bin_name}).")
-    return p
-
-
-# ==============================================================================
-# subprocess / tmux helpers
-# ==============================================================================
 
 def run(
     cmd: List[str],
@@ -139,12 +131,37 @@ def which(bin_name: str) -> Optional[str]:
         return None
 
 
+def require_bin(bin_name: str) -> str:
+    p = which(bin_name)
+    if not p:
+        _die(f"Binaire requis introuvable: '{bin_name}'. Installe-le (ex: brew install {bin_name}).")
+    return p
+
+
+def require_executable(path_or_name: str) -> str:
+    # path explicite
+    if os.path.sep in path_or_name or path_or_name.startswith("."):
+        p = Path(path_or_name).expanduser().resolve()
+        if not p.exists():
+            _die(f"Exécutable requis introuvable: {p}")
+        if not os.access(str(p), os.X_OK):
+            _die(f"Exécutable requis non-exécutable: {p}")
+        return str(p)
+
+    # sinon via PATH
+    return require_bin(path_or_name)
+
+
 def ensure_project_exists() -> None:
     if not PROJECT_DIR.exists():
         _die(f"PROJECT_DIR introuvable: {PROJECT_DIR}")
     if not BACKEND_DIR.exists():
         _die(f"BACKEND_DIR introuvable: {BACKEND_DIR}")
 
+
+# ==============================================================================
+# tmux helpers
+# ==============================================================================
 
 def ensure_tmux_exists() -> None:
     require_bin("tmux")
@@ -179,6 +196,11 @@ def tmux_new_session(name: str, bash_cmd: str) -> None:
     )
 
 
+def tmux_set_option(session: str, option: str, value: str) -> None:
+    tmux_start_server()
+    run(["tmux", "set-option", "-t", session, option, value], capture=False)
+
+
 def tmux_list_sessions() -> List[str]:
     tmux_start_server()
     cp = run(["tmux", "list-sessions", "-F", "#{session_name}"], capture=True)
@@ -211,10 +233,16 @@ def tmux_unpipe_pane(session: str) -> None:
     run(["tmux", "pipe-pane", "-t", target], capture=False)
 
 
-def tmux_capture(session: str) -> str:
+def tmux_capture(session: str, last_lines: int = CAPTURE_LAST_LINES) -> str:
+    """
+    Capture plus robuste:
+    - -J : join wrapped lines
+    - -S -N : start from last N lines of history
+    """
     tmux_start_server()
     target = tmux_target(session)
-    cp = run(["tmux", "capture-pane", "-p", "-t", target], capture=True)
+    start = f"-{max(200, int(last_lines))}"
+    cp = run(["tmux", "capture-pane", "-p", "-J", "-S", start, "-t", target], capture=True)
     return cp.stdout or ""
 
 
@@ -278,6 +306,8 @@ def write_manifest(ctx: RunCtx, feature: str, qwen_bin: str, extra: Optional[Dic
         "backend_dir": str(BACKEND_DIR),
         "qwen_bin": qwen_bin,
         "sessions": {k: v for k, v in SESSIONS.items()},
+        "capture_last_lines": CAPTURE_LAST_LINES,
+        "tmux_history_limit": TMUX_HISTORY_LIMIT,
     }
     if extra:
         data.update(extra)
@@ -293,7 +323,7 @@ def transcript_append(ctx: RunCtx, role: str, kind: str, content: str) -> None:
 
 def snapshot_all(ctx: RunCtx) -> None:
     for sess in sorted(set(SESSIONS.values())):
-        snap = tmux_capture(sess)
+        snap = tmux_capture(sess, last_lines=CAPTURE_LAST_LINES)
         (ctx.snapshots_dir / f"{sess}.txt").write_text(snap, encoding="utf-8")
 
 
@@ -318,6 +348,28 @@ def session_names() -> List[str]:
     return sorted(set(SESSIONS.values()))
 
 
+def _parse_fc_qwen_exports() -> List[str]:
+    """
+    Optionnel: permet d'injecter des exports dans le shell tmux avant qwen.
+    Exemple:
+      export FC_QWEN_EXPORTS='FOO=1;BAR=hello'
+    """
+    raw = (os.environ.get("FC_QWEN_EXPORTS") or "").strip()
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.split(";") if p.strip()]
+    exports: List[str] = []
+    for p in parts:
+        if "=" not in p:
+            continue
+        k, v = p.split("=", 1)
+        k = k.strip()
+        v = v.strip()
+        if k:
+            exports.append(f'export {k}="{v}"')
+    return exports
+
+
 def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -> str:
     setup_cmds = [f'cd "{str(PROJECT_DIR)}"']
 
@@ -329,6 +381,8 @@ def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -
 
     if auto_confirm:
         setup_cmds.append('export QWEN_CODE_AUTO_CONFIRM=1')
+
+    setup_cmds.extend(_parse_fc_qwen_exports())
 
     setup_cmds.append(f'{qwen_bin} || exec bash')
     return " && ".join(setup_cmds)
@@ -347,18 +401,22 @@ def qwen_start(
     ensure_project_exists()
     tmux_start_server()
 
+    qwen_bin = require_executable(qwen_bin)
+
     if restart:
         qwen_stop(all_sessions=True)
 
     bash_cmd = build_qwen_bash_cmd(qwen_bin=qwen_bin, path_override=path_override, auto_confirm=auto_confirm)
 
     for sess in session_names():
-        if tmux_has_session(sess):
-            continue
-        tmux_new_session(sess, bash_cmd)
+        if not tmux_has_session(sess):
+            tmux_new_session(sess, bash_cmd)
+
+        # Options utiles pour ton use case (logs + capture)
+        tmux_set_option(sess, "history-limit", str(TMUX_HISTORY_LIMIT))
 
         if clean_startup:
-            time.sleep(0.2)
+            time.sleep(0.15)
             tmux_send_keys(sess, "clear")
             tmux_clear_history(sess)
 
@@ -416,6 +474,11 @@ def qwen_attach(role_or_session: str) -> int:
 # ==============================================================================
 
 class QwenTmuxSession:
+    """
+    Stratégie robuste: attendre que la "sortie nettoyée" soit STABLE pendant settle_seconds.
+    Ça marche même si la TUI anime des spinners (qu'on supprime au nettoyage).
+    """
+
     CONFIRM_RULES: List[Tuple[re.Pattern, str]] = [
         (re.compile(r"apply\s+patch\?.*(\[\s*y\s*/\s*n\s*\]|\[y/N\]|\(y/n\))", re.IGNORECASE), "y"),
         (re.compile(r"proceed\?.*(\[\s*y\s*/\s*n\s*\]|\[y/N\]|\(y/n\))", re.IGNORECASE), "y"),
@@ -423,19 +486,32 @@ class QwenTmuxSession:
         (re.compile(r"waiting for user confirmation", re.IGNORECASE), "1"),
     ]
 
-    def __init__(self, session_name: str, wait_seconds: float = 12.0):
+    def __init__(self, session_name: str, capture_lines: int = CAPTURE_LAST_LINES):
         self.session = session_name
-        self.wait_seconds = wait_seconds
-        self.last_snapshot = tmux_capture(self.session)
+        self.capture_lines = capture_lines
+        self.last_snapshot = tmux_capture(self.session, last_lines=self.capture_lines)
 
     def _get_new_output(self) -> str:
-        cur = tmux_capture(self.session)
+        cur = tmux_capture(self.session, last_lines=self.capture_lines)
+
+        # Fast path: prefix
         if cur.startswith(self.last_snapshot):
             new = cur[len(self.last_snapshot):]
-        else:
-            new = cur
+            self.last_snapshot = cur
+            return (new or "").strip()
+
+        # Overlap heuristic: find tail of previous in current
+        tail = (self.last_snapshot or "")[-2000:]
+        if tail:
+            idx = cur.find(tail)
+            if idx != -1:
+                new = cur[idx + len(tail):]
+                self.last_snapshot = cur
+                return (new or "").strip()
+
+        # Worst case: full replace
         self.last_snapshot = cur
-        return (new or "").strip()
+        return (cur or "").strip()
 
     def _send(self, text: str) -> None:
         tmux_send_keys(self.session, text)
@@ -457,7 +533,6 @@ class QwenTmuxSession:
         s = re.sub(r"\x1b\][^\x1b]*\x1b\\", "", s)      # OSC ... ST
         s = re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", s)   # CSI
         s = re.sub(r"\x1B[@-Z\\-_]", "", s)             # other ESC
-        s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", s)  # C0 except \n \t
         return s
 
     def _clean_output(self, raw: str) -> str:
@@ -466,10 +541,13 @@ class QwenTmuxSession:
         text = self._strip_terminal_noise(raw)
 
         noise_substrings = [
+            # bannières / hints
             "Ask questions, edit files, or run commands.",
             "Be specific for the best results.",
             "/help for more information.",
             "Installed via Homebrew. Please update with",
+            "Qwen Code update available!",
+            "Type your message",
             "auto-accept edits",
             "Using: 1 QWEN.md file",
             "Using:",
@@ -488,15 +566,20 @@ class QwenTmuxSession:
                 continue
             low = s.strip().lower()
 
+            # spinners braille
             if s.strip().startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
                 continue
+
+            # ascii art borders
             if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", s.strip()):
                 continue
+
             if any(ns.lower() in low for ns in noise_substrings):
                 continue
 
             cleaned.append(s.strip())
 
+        # keep last assistant block if present
         last_star = None
         for i, ln in enumerate(cleaned):
             if ln.lstrip().startswith("✦"):
@@ -504,40 +587,95 @@ class QwenTmuxSession:
         if last_star is not None:
             cleaned = cleaned[last_star:]
 
-        if len(cleaned) > 80:
-            cleaned = cleaned[-80:]
+        # cap lines
+        if len(cleaned) > 120:
+            cleaned = cleaned[-120:]
 
         out = "\n".join(cleaned).strip()
-        if not out:
-            fallback = [ln.strip() for ln in text.splitlines() if ln.strip()]
-            return "\n".join(fallback[-80:]).strip()
         return out
 
-    def ask(self, text: str, wait_seconds: Optional[float] = None) -> str:
-        if wait_seconds is None:
-            wait_seconds = self.wait_seconds
+    @staticmethod
+    def _fingerprint(s: str) -> str:
+        return hashlib.sha1((s or "").encode("utf-8", errors="ignore")).hexdigest()
 
+    def ask(
+        self,
+        text: str,
+        *,
+        max_wait: float = 90.0,
+        settle_seconds: float = 1.8,
+        poll_interval: float = 0.55,
+        min_wait: float = 1.2,
+    ) -> str:
+        """
+        Envoie un message, puis attend que la sortie "nettoyée" cesse de changer pendant settle_seconds.
+        """
         self._send(text)
 
-        deadline = time.time() + wait_seconds
+        start = time.time()
+        deadline = start + max_wait
+
         buf = ""
         confirms = 0
 
-        while time.time() < deadline:
-            time.sleep(0.8)
-            new = self._get_new_output()
-            if not new:
-                continue
-            buf += "\n" + new
-            confirms = self._auto_confirm(buf, max_confirms=6, confirms_done=confirms)
+        last_clean = ""
+        last_fp = ""
+        last_change = time.time()
 
-        return self._clean_output(buf)
+        # small guard to avoid returning instantly on empty output
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+
+            new = self._get_new_output()
+            if new:
+                buf += "\n" + new
+                confirms = self._auto_confirm(buf, max_confirms=8, confirms_done=confirms)
+
+            clean = self._clean_output(buf)
+            fp = self._fingerprint(clean)
+
+            if fp != last_fp:
+                last_fp = fp
+                last_clean = clean
+                last_change = time.time()
+
+            stable_for = time.time() - last_change
+            elapsed = time.time() - start
+
+            if elapsed >= min_wait and stable_for >= settle_seconds and (last_clean.strip() != ""):
+                break
+
+        # anti "echo prompt": si la sortie est vide ou trop faible, on tente une relance courte
+        if not last_clean.strip():
+            self._send("Ne recopie pas le prompt. Donne uniquement une réponse structurée et actionnable.")
+            time.sleep(0.6)
+            # petite seconde passe de stabilisation
+            extra_buf = ""
+            last_fp = ""
+            last_change = time.time()
+            start2 = time.time()
+            while time.time() - start2 < 12.0:
+                time.sleep(0.5)
+                new2 = self._get_new_output()
+                if new2:
+                    extra_buf += "\n" + new2
+                clean2 = self._clean_output(extra_buf)
+                fp2 = self._fingerprint(clean2)
+                if fp2 != last_fp:
+                    last_fp = fp2
+                    last_clean = clean2
+                    last_change = time.time()
+                if (time.time() - last_change) >= 1.2 and last_clean.strip():
+                    break
+
+        return last_clean.strip()
 
 
 class QwenTmuxLLM:
-    def __init__(self, session_name: str, system_prompt: str = "", wait_seconds: float = 12.0):
-        self.session = QwenTmuxSession(session_name, wait_seconds=wait_seconds)
-        self.system_prompt = system_prompt.strip()
+    def __init__(self, session_name: str, system_prompt: str = "", max_wait: float = 90.0):
+        self.session = QwenTmuxSession(session_name, capture_lines=CAPTURE_LAST_LINES)
+        self.system_prompt = (system_prompt or "").strip()
+        self.max_wait = max_wait
         self._init_done = False
 
     def _ensure_init(self):
@@ -549,14 +687,23 @@ class QwenTmuxLLM:
                 f"{self.system_prompt}\n\n"
                 "Règles:\n"
                 "- Réponds en français.\n"
+                "- Ne recopie pas le prompt.\n"
                 "- Donne des étapes concrètes.\n"
-                "- Si tu es bloqué, dis exactement quoi vérifier.\n"
+                "- Si bloqué: dis exactement quoi vérifier.\n",
+                max_wait=min(35.0, self.max_wait),
+                settle_seconds=1.2,
             )
         self._init_done = True
 
     def chat(self, prompt: str) -> str:
         self._ensure_init()
-        return self.session.ask(prompt)
+        return self.session.ask(
+            prompt,
+            max_wait=self.max_wait,
+            settle_seconds=1.8,
+            poll_interval=0.55,
+            min_wait=1.2,
+        )
 
 
 # ==============================================================================
@@ -608,115 +755,68 @@ def git_diff_tool(max_lines: int = 220) -> str:
 # Prompts
 # ==============================================================================
 
-def build_planner_prompt(feature: str, r: int, history: str) -> str:
-    base = dedent(f"""
-    Tu es PLANNER (round {r}) sur le backend Finance Copilot (FastAPI).
-
-    FEATURE:
-    {feature}
-    """).strip()
-
-    if r == 1:
-        base += "\n\n" + dedent("""
-        Ta mission:
-        - Proposer un plan en 5–10 étapes max, concret.
-        - Indiquer les fichiers probables.
-        - Mentionner 1–3 risques.
-
-        Format:
-
-        PLAN
-        1) ...
-        ...
-
-        FICHIERS
-        - ...
-
-        RISQUES
-        - ...
-        """).strip()
-    else:
-        base += "\n\n" + dedent(f"""
-        CONTEXTE (résumé historique):
-        {history}
-
-        Ta mission:
-        - Ajuster le plan pour CE round seulement.
-        - Corriger les dérives si Dev/Test n’avancent pas.
-        """).strip()
-
-    return base
-
-
-def build_dev_prompt(feature: str, r: int, history: str) -> str:
-    return dedent(f"""
-    Tu es DEV (round {r}) dans Finance Copilot (FastAPI/Python).
-
-    FEATURE:
-    {feature}
-
-    HISTORIQUE:
-    {history}
-
-    Contraintes:
-    - Fais des changements minimaux, orientés "feature + test".
-    - Indique les chemins de fichiers à modifier.
-    - Donne des commandes à exécuter.
-    - Si tu dois explorer le repo: propose 2–4 commandes max (rg/ls/cat).
-
-    Format:
-
-    RÉSUMÉ
-    - ...
-
-    MODIFS
-    - fichier: ...
-      ```python
-      ...
-      ```
-
-    COMMANDES
-    - ...
-    """).strip()
-
-
-def build_tester_prompt(feature: str, r: int, history: str) -> str:
-    return dedent(f"""
-    Tu es TESTER/QA (round {r}).
-
-    FEATURE:
-    {feature}
-
-    HISTORIQUE:
-    {history}
-
-    Ta mission:
-    - Proposer des tests pytest concrets (nom de fichier + fonctions).
-    - Inclure 2–3 cas limites.
-    - Dire exactement quoi faire si les imports cassent (PYTHONPATH, conftest, etc.).
-
-    Format:
-
-    TESTS
-    - tests/xxx.py:
-      - test_...
-
-    CAS LIMITES
-    - ...
-
-    RISQUES
-    - ...
-    """).strip()
-
-
 def infer_test_pattern(feature: str, default: str = "health") -> str:
     m = re.search(r"/([a-zA-Z0-9_]+)", feature)
     return m.group(1) if m else default
 
 
 # ==============================================================================
+# Debug/smoke mode helpers (marker)
+# ==============================================================================
+
+def debug_marker_paths(run_id: str) -> Dict[str, Path]:
+    base = BACKEND_DIR / ".qwen_runs" / run_id
+    return {"dir": base, "marker": base / "marker.txt"}
+
+
+def create_marker(run_id: str) -> Path:
+    paths = debug_marker_paths(run_id)
+    paths["dir"].mkdir(parents=True, exist_ok=True)
+    content = f"run_id={run_id}\ncreated_at={datetime.now().isoformat(timespec='seconds')}\n"
+    paths["marker"].write_text(content, encoding="utf-8")
+    return paths["marker"]
+
+
+def build_debug_feature(run_id: str) -> str:
+    paths = debug_marker_paths(run_id)
+    return dedent(f"""
+    MODE DEBUG / SMOKE TEST (run_id={run_id})
+
+    Objectif:
+    - Valider rapidement l'orchestrateur + logs/transcript.
+
+    Contrainte:
+    - Utiliser cet emplacement exact pour les artefacts:
+      - Dossier: {paths['dir']}
+      - Marker:  {paths['marker']}
+
+    Tâches attendues:
+    - PLANNER: justifie pourquoi cet emplacement est bon (artefacts/outillage), et propose 3 règles (gitignore, sécurité, nettoyage).
+    - DEV: crée/valide le fichier marker (si absent), et propose une commande de vérif.
+    - TESTER: propose 2 validations:
+        1) commande shell (test -f ...)
+        2) un test pytest minimal qui échoue si le marker est absent.
+    """).strip()
+
+
+# ==============================================================================
 # AutoGen classic -> tmux driver (ONLY solution)
 # ==============================================================================
+
+def _format_autogen_context(messages: List[Dict[str, Any]], max_msgs: int = 10) -> str:
+    """
+    Transforme l'historique AutoGen en un contexte lisible, sans exploser la taille.
+    """
+    tail = messages[-max_msgs:] if len(messages) > max_msgs else messages
+    parts: List[str] = []
+    for m in tail:
+        role = (m.get("name") or m.get("role") or "unknown").strip()
+        content = (m.get("content") or "").strip()
+        if not content:
+            continue
+        parts.append(f"[{role}]\n{content}\n")
+    return "\n".join(parts).strip()
+
 
 def run_feature_autogen_tmux(
     ctx: RunCtx,
@@ -732,22 +832,22 @@ def run_feature_autogen_tmux(
     planner_llm = QwenTmuxLLM(
         session_name=SESSIONS["planner"],
         system_prompt="Tu es PLANNER, architecte technique. Ultra concret et court.",
-        wait_seconds=wait_planner,
+        max_wait=max(60.0, wait_planner),
     )
     dev_llm = QwenTmuxLLM(
         session_name=SESSIONS["dev"],
         system_prompt="Tu es DEV backend senior. Changements minimaux, testables. Donne des commandes.",
-        wait_seconds=wait_dev,
+        max_wait=max(90.0, wait_dev),
     )
     tester_llm = QwenTmuxLLM(
         session_name=SESSIONS["tester"],
         system_prompt="Tu es TESTER/QA. Propose tests pytest concrets + cas limites. Précis sur imports.",
-        wait_seconds=wait_tester,
+        max_wait=max(75.0, wait_tester),
     )
     qa_llm = QwenTmuxLLM(
         session_name=SESSIONS["qa"],
         system_prompt="Tu es QUALITY_OBSERVER. Rapport: ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS.",
-        wait_seconds=wait_qa,
+        max_wait=max(90.0, wait_qa),
     )
 
     planner = autogen.ConversableAgent(
@@ -775,25 +875,38 @@ def run_feature_autogen_tmux(
         human_input_mode="NEVER",
     )
 
-    # Bind tmux LLM
     planner._tmux_llm = planner_llm  # type: ignore[attr-defined]
     dev._tmux_llm = dev_llm          # type: ignore[attr-defined]
     tester._tmux_llm = tester_llm    # type: ignore[attr-defined]
     qa._tmux_llm = qa_llm            # type: ignore[attr-defined]
 
     def tmux_reply(recipient, messages, sender, config):
-        last = ""
-        if messages:
-            last = (messages[-1].get("content") or "").strip()
-        if not last:
-            last = "(message vide) — répond quand même avec un next step concret."
+        # Contexte AutoGen -> prompt stable
+        ctx_text = _format_autogen_context(messages or [], max_msgs=10)
+        if not ctx_text:
+            ctx_text = feature.strip()
 
-        transcript_append(ctx, recipient.name, "PROMPT", last)
+        prompt = dedent(f"""
+        CONTEXTE (dernier échanges)
+        --------------------------
+        {ctx_text}
+
+        RÈGLES
+        ------
+        - Ne recopie pas le prompt.
+        - Réponds en français.
+        - Réponse courte, structurée, actionnable.
+
+        TA RÉPONSE
+        ----------
+        """).strip()
+
+        transcript_append(ctx, recipient.name, "PROMPT", prompt)
 
         llm = getattr(recipient, "_tmux_llm", None)
         if llm is None:
             _die(f"Agent '{recipient.name}' n'a pas de _tmux_llm attaché.")
-        reply = llm.chat(last)
+        reply = llm.chat(prompt)
 
         transcript_append(ctx, recipient.name, "RESPONSE", reply)
         return True, reply
@@ -805,17 +918,17 @@ def run_feature_autogen_tmux(
             position=0,
         )
 
-    max_turns = max(3, max_rounds * 3)
+    # max_round in autogen is not "turns", so keep it conservative
     groupchat = autogen.GroupChat(
         agents=[planner, dev, tester],
         messages=[],
-        max_round=max_turns,
+        max_round=max(1, int(max_rounds)),
         speaker_selection_method="round_robin",
         allow_repeat_speaker=False,
     )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
-    transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_turns={max_turns}")
+    transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_rounds={max_rounds}")
     planner.initiate_chat(manager, message=feature)
 
     transcript_append(ctx, "Runner", "INFO", "PHASE QA (autogen-tmux): pytest + git")
@@ -869,7 +982,7 @@ def run_feature_autogen_tmux(
 def doctor(ctx: RunCtx, qwen_bin: str) -> None:
     require_module("autogen")  # strict
     require_bin("tmux")
-    require_bin(qwen_bin if os.path.sep in qwen_bin else "qwen")
+    require_executable(qwen_bin)
 
     lines: List[str] = []
     lines.append(f"# Doctor report ({datetime.now().isoformat(timespec='seconds')})")
@@ -931,11 +1044,10 @@ def run_feature(
     wait_tester: float,
     wait_qa: float,
 ):
-    # strict requirements: crash early
     ensure_project_exists()
     ensure_tmux_exists()
     require_module("autogen")
-    require_bin("qwen") if (qwen_bin == "qwen") else None
+    qwen_bin = require_executable(qwen_bin)
 
     ctx = create_run_ctx(runs_dir)
 
@@ -985,45 +1097,6 @@ def run_feature(
 
 
 # ==============================================================================
-# Debug/smoke mode helpers (marker)
-# ==============================================================================
-
-def debug_marker_paths(run_id: str) -> Dict[str, Path]:
-    base = BACKEND_DIR / ".qwen_runs" / run_id
-    return {"dir": base, "marker": base / "marker.txt"}
-
-
-def create_marker(run_id: str) -> Path:
-    paths = debug_marker_paths(run_id)
-    paths["dir"].mkdir(parents=True, exist_ok=True)
-    content = f"run_id={run_id}\ncreated_at={datetime.now().isoformat(timespec='seconds')}\n"
-    paths["marker"].write_text(content, encoding="utf-8")
-    return paths["marker"]
-
-
-def build_debug_feature(run_id: str) -> str:
-    paths = debug_marker_paths(run_id)
-    return dedent(f"""
-    MODE DEBUG / SMOKE TEST (run_id={run_id})
-
-    Objectif:
-    - Valider rapidement l'orchestrateur + logs/transcript.
-
-    Contrainte:
-    - Utiliser cet emplacement exact pour les artefacts:
-      - Dossier: {paths['dir']}
-      - Marker:  {paths['marker']}
-
-    Tâches attendues:
-    - PLANNER: justifie pourquoi cet emplacement est bon (artefacts/outillage), et propose 3 règles (gitignore, sécurité, nettoyage).
-    - DEV: crée/valide le fichier marker (si absent), et propose une commande de vérif.
-    - TESTER: propose 2 validations:
-        1) commande shell (test -f ...)
-        2) un test pytest minimal qui échoue si le marker est absent.
-    """).strip()
-
-
-# ==============================================================================
 # CLI docs (help text)
 # ==============================================================================
 
@@ -1036,7 +1109,7 @@ def usage_text() -> str:
        python3 scripts/qwen_orchestrator.py --rounds 2 --feature "Implémente GET /health"
 
     2) Mode debug
-       python3 scripts/qwen_orchestrator.py --mode debug --rounds 1
+       python3 scripts/qwen_orchestrator.py --mode debug --rounds 1 --restart
 
     3) Management tmux
        python3 scripts/qwen_orchestrator.py --tmux-cmd status
@@ -1048,6 +1121,7 @@ def usage_text() -> str:
     Notes
     -----
     - Aucun fallback: autogen/tmux/qwen doivent être présents sinon erreur.
+    - tmux capture utilise history + join wrap (-J), et history-limit est augmenté.
     - Chaque exécution crée un run_dir:
         {RUNS_DIR_DEFAULT}/YYYYMMDD-HHMMSS/
           - run.json
@@ -1064,8 +1138,7 @@ def usage_text() -> str:
 
 def main():
     ensure_venv_or_reexec()
-    # Strict import at startup (so missing module fails early even before parsing)
-    require_module("autogen")
+    require_module("autogen")  # strict early fail
 
     ap = argparse.ArgumentParser(description="Finance Copilot orchestrator (AutoGen + tmux Qwen Code).", add_help=True)
 
@@ -1085,10 +1158,10 @@ def main():
 
     ap.add_argument("--qwen-bin", type=str, default=(which("qwen") or "qwen"))
 
-    ap.add_argument("--wait-planner", type=float, default=12.0)
-    ap.add_argument("--wait-dev", type=float, default=22.0)
-    ap.add_argument("--wait-tester", type=float, default=16.0)
-    ap.add_argument("--wait-qa", type=float, default=18.0)
+    ap.add_argument("--wait-planner", type=float, default=60.0)
+    ap.add_argument("--wait-dev", type=float, default=90.0)
+    ap.add_argument("--wait-tester", type=float, default=75.0)
+    ap.add_argument("--wait-qa", type=float, default=90.0)
 
     # management commands
     ap.add_argument("--tmux-cmd", type=str, default="",
