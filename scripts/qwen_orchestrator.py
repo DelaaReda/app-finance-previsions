@@ -9,34 +9,35 @@ import json
 import argparse
 import subprocess
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import List, Dict, Any, Callable, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple
+
 
 # ==============================================================================
-# CONFIG
+# CONFIG (overridable via env)
 # ==============================================================================
 
-PROJECT_DIR = Path("/Users/venom/Documents/analyse-financiere").resolve()
-BACKEND_DIR = PROJECT_DIR / "copilot-app" / "backend"
+DEFAULT_PROJECT_DIR = Path("/Users/venom/Documents/analyse-financiere").resolve()
+PROJECT_DIR = Path(os.environ.get("FC_PROJECT_DIR", str(DEFAULT_PROJECT_DIR))).expanduser().resolve()
+
+BACKEND_DIR = Path(os.environ.get("FC_BACKEND_DIR", str(PROJECT_DIR / "copilot-app" / "backend"))).expanduser().resolve()
 BACKEND_SRC = BACKEND_DIR / "src"
 VENV_BIN = BACKEND_DIR / ".venv" / "bin"
 VENV_PY = VENV_BIN / "python3"
 
-# Auto-confirm: toujours actif
 AUTO_CONFIRM = True
 
-SESSIONS = {
-    "planner": "qwen_planner",
-    "dev": "qwen_dev",
-    "tester": "qwen_tester",
-    # si tu veux une session dédiée: "qa": "qwen_qa"
-    "qa": "qwen_tester",
+SESSIONS: Dict[str, str] = {
+    "planner": os.environ.get("FC_SESS_PLANNER", "qwen_planner"),
+    "dev": os.environ.get("FC_SESS_DEV", "qwen_dev"),
+    "tester": os.environ.get("FC_SESS_TESTER", "qwen_tester"),
+    "qa": os.environ.get("FC_SESS_QA", "qwen_qa"),
 }
 
-RUNS_DIR_DEFAULT = PROJECT_DIR / "logs-qwen-runs"
+RUNS_DIR_DEFAULT = Path(os.environ.get("FC_RUNS_DIR", str(PROJECT_DIR / "logs-qwen-runs"))).expanduser().resolve()
 
 
 def now_id() -> str:
@@ -57,10 +58,50 @@ def build_default_path_override() -> str:
 
 DEFAULT_PATH_OVERRIDE = build_default_path_override()
 
+
+# ==============================================================================
+# Strict requirements (NO fallback)
+# ==============================================================================
+
+def _die(msg: str, code: int = 1) -> None:
+    raise RuntimeError(msg)
+
+
+def ensure_venv_or_reexec() -> None:
+    """
+    Si la venv backend existe mais que l'environnement courant n'est pas la venv,
+    on relance le script via VENV_PY. On ne se contente pas de comparer sys.executable
+    (souvent un symlink vers l'interpréteur système) : on vérifie sys.prefix/base_prefix.
+    """
+    if not VENV_PY.exists():
+        return
+
+    venv_root = VENV_BIN.parent.resolve()
+    in_venv = Path(sys.prefix).resolve() == venv_root and getattr(sys, "base_prefix", None) != sys.prefix
+    if in_venv:
+        return
+
+    # Re-exec dans la venv pour garantir les deps (autogen, etc.)
+    os.execv(str(VENV_PY), [str(VENV_PY), *sys.argv])
+
+
+def require_module(name: str) -> Any:
+    try:
+        return __import__(name)
+    except Exception as e:
+        _die(f"Module requis introuvable: '{name}'. Installe-le puis relance. Détail: {e}")
+
+
+def require_bin(bin_name: str) -> str:
+    p = which(bin_name)
+    if not p:
+        _die(f"Binaire requis introuvable: '{bin_name}'. Installe-le (ex: brew install {bin_name}).")
+    return p
+
+
 # ==============================================================================
 # subprocess / tmux helpers
 # ==============================================================================
-
 
 def run(
     cmd: List[str],
@@ -68,6 +109,7 @@ def run(
     env: Optional[Dict[str, str]] = None,
     check: bool = False,
     capture: bool = True,
+    timeout: Optional[int] = None,
 ) -> subprocess.CompletedProcess:
     if capture:
         stdout = subprocess.PIPE
@@ -84,6 +126,7 @@ def run(
         stdout=stdout,
         stderr=stderr,
         check=check,
+        timeout=timeout,
     )
 
 
@@ -98,12 +141,13 @@ def which(bin_name: str) -> Optional[str]:
 
 def ensure_project_exists() -> None:
     if not PROJECT_DIR.exists():
-        raise RuntimeError(f"PROJECT_DIR introuvable: {PROJECT_DIR}")
+        _die(f"PROJECT_DIR introuvable: {PROJECT_DIR}")
+    if not BACKEND_DIR.exists():
+        _die(f"BACKEND_DIR introuvable: {BACKEND_DIR}")
 
 
 def ensure_tmux_exists() -> None:
-    if which("tmux") is None:
-        raise RuntimeError("tmux introuvable. Installe tmux (brew install tmux).")
+    require_bin("tmux")
 
 
 def tmux_start_server() -> None:
@@ -181,15 +225,20 @@ def tmux_send_keys(session: str, text: str) -> None:
 
 
 def tmux_clear_screen(session: str) -> None:
-    # CTRL+L
     tmux_start_server()
     target = tmux_target(session)
     run(["tmux", "send-keys", "-t", target, "C-l"], capture=False)
 
+
+def tmux_clear_history(session: str) -> None:
+    tmux_start_server()
+    target = tmux_target(session)
+    run(["tmux", "clear-history", "-t", target], capture=False)
+
+
 # ==============================================================================
 # Run dirs / transcripts / manifest / snapshots
 # ==============================================================================
-
 
 @dataclass
 class RunCtx:
@@ -237,39 +286,33 @@ def write_manifest(ctx: RunCtx, feature: str, qwen_bin: str, extra: Optional[Dic
 
 def transcript_append(ctx: RunCtx, role: str, kind: str, content: str) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    block = f"\n## [{ts}] {role} — {kind}\n\n```\n{content.rstrip()}\n```\n"
+    block = f"\n## [{ts}] {role} — {kind}\n\n```\n{(content or '').rstrip()}\n```\n"
     with ctx.transcript_path.open("a", encoding="utf-8") as f:
         f.write(block)
 
 
 def snapshot_all(ctx: RunCtx) -> None:
     for sess in sorted(set(SESSIONS.values())):
-        try:
-            snap = tmux_capture(sess)
-            (ctx.snapshots_dir / f"{sess}.txt").write_text(snap, encoding="utf-8")
-        except Exception:
-            pass
+        snap = tmux_capture(sess)
+        (ctx.snapshots_dir / f"{sess}.txt").write_text(snap, encoding="utf-8")
+
 
 # ==============================================================================
 # Logging (tmux raw) + rotation
 # ==============================================================================
 
-
 def rotate_if_too_big(session: str, log_file: Path, max_bytes: int) -> Path:
-    try:
-        if log_file.exists() and log_file.stat().st_size > max_bytes:
-            ts = datetime.now().strftime("%H%M%S")
-            new_file = log_file.parent / f"{session}_{ts}.log"
-            tmux_pipe_pane(session, new_file, force_repipe=True)
-            return new_file
-    except Exception:
-        pass
+    if log_file.exists() and log_file.stat().st_size > max_bytes:
+        ts = datetime.now().strftime("%H%M%S")
+        new_file = log_file.parent / f"{session}_{ts}.log"
+        tmux_pipe_pane(session, new_file, force_repipe=True)
+        return new_file
     return log_file
+
 
 # ==============================================================================
 # Qwen session management
 # ==============================================================================
-
 
 def session_names() -> List[str]:
     return sorted(set(SESSIONS.values()))
@@ -277,12 +320,16 @@ def session_names() -> List[str]:
 
 def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -> str:
     setup_cmds = [f'cd "{str(PROJECT_DIR)}"']
+
     venv_activate = VENV_BIN / "activate"
     if venv_activate.exists():
         setup_cmds.append(f'source "{str(venv_activate)}"')
+
     setup_cmds.append(f'export PATH="{path_override}"')
+
     if auto_confirm:
         setup_cmds.append('export QWEN_CODE_AUTO_CONFIRM=1')
+
     setup_cmds.append(f'{qwen_bin} || exec bash')
     return " && ".join(setup_cmds)
 
@@ -294,6 +341,7 @@ def qwen_start(
     restart: bool,
     ctx: Optional[RunCtx],
     enable_tmux_logs: bool,
+    clean_startup: bool,
 ) -> None:
     ensure_tmux_exists()
     ensure_project_exists()
@@ -309,13 +357,14 @@ def qwen_start(
             continue
         tmux_new_session(sess, bash_cmd)
 
-    # raw logs tmux -> ctx/tmux/<sess>.log
+        if clean_startup:
+            time.sleep(0.2)
+            tmux_send_keys(sess, "clear")
+            tmux_clear_history(sess)
+
     if ctx and enable_tmux_logs:
         for sess in session_names():
-            try:
-                tmux_pipe_pane(sess, ctx.tmux_dir / f"{sess}.log", force_repipe=True)
-            except Exception:
-                pass
+            tmux_pipe_pane(sess, ctx.tmux_dir / f"{sess}.log", force_repipe=True)
 
 
 def qwen_stop(all_sessions: bool = True, session: Optional[str] = None) -> None:
@@ -328,12 +377,20 @@ def qwen_stop(all_sessions: bool = True, session: Optional[str] = None) -> None:
         return
 
     if not session:
-        raise ValueError("qwen_stop: session manquante quand all_sessions=False")
+        _die("qwen_stop: session manquante quand all_sessions=False")
     tmux_kill_session(session)
 
 
-def qwen_restart(qwen_bin: str, path_override: str, auto_confirm: bool, ctx: Optional[RunCtx], enable_tmux_logs: bool) -> None:
-    qwen_start(qwen_bin=qwen_bin, path_override=path_override, auto_confirm=auto_confirm, restart=True, ctx=ctx, enable_tmux_logs=enable_tmux_logs)
+def qwen_restart(qwen_bin: str, path_override: str, auto_confirm: bool, ctx: Optional[RunCtx], enable_tmux_logs: bool, clean_startup: bool) -> None:
+    qwen_start(
+        qwen_bin=qwen_bin,
+        path_override=path_override,
+        auto_confirm=auto_confirm,
+        restart=True,
+        ctx=ctx,
+        enable_tmux_logs=enable_tmux_logs,
+        clean_startup=clean_startup,
+    )
 
 
 def qwen_status() -> str:
@@ -353,10 +410,10 @@ def qwen_attach(role_or_session: str) -> int:
     sess = SESSIONS.get(role_or_session, role_or_session)
     return tmux_attach(sess)
 
+
 # ==============================================================================
 # Qwen tmux backend (chat)
 # ==============================================================================
-
 
 class QwenTmuxSession:
     CONFIRM_RULES: List[Tuple[re.Pattern, str]] = [
@@ -393,14 +450,20 @@ class QwenTmuxSession:
         return confirms_done
 
     @staticmethod
-    def _strip_ansi(s: str) -> str:
-        ansi = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
-        return ansi.sub("", s)
+    def _strip_terminal_noise(s: str) -> str:
+        if not s:
+            return ""
+        s = re.sub(r"\x1b\][^\x07]*\x07", "", s)        # OSC ... BEL
+        s = re.sub(r"\x1b\][^\x1b]*\x1b\\", "", s)      # OSC ... ST
+        s = re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", s)   # CSI
+        s = re.sub(r"\x1B[@-Z\\-_]", "", s)             # other ESC
+        s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", s)  # C0 except \n \t
+        return s
 
     def _clean_output(self, raw: str) -> str:
         if not raw:
             return ""
-        text = self._strip_ansi(raw)
+        text = self._strip_terminal_noise(raw)
 
         noise_substrings = [
             "Ask questions, edit files, or run commands.",
@@ -409,12 +472,13 @@ class QwenTmuxSession:
             "Installed via Homebrew. Please update with",
             "auto-accept edits",
             "Using: 1 QWEN.md file",
+            "Using:",
             "no sandbox",
             "coder-model",
-            "...~//analyse-financiere",
             "(esc to cancel",
             "Mining for more",
             "Caching the essentials",
+            "Initializing...",
         ]
 
         cleaned: List[str] = []
@@ -422,14 +486,15 @@ class QwenTmuxSession:
             s = line.rstrip()
             if not s.strip():
                 continue
-
             low = s.strip().lower()
+
             if s.strip().startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
                 continue
             if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", s.strip()):
                 continue
             if any(ns.lower() in low for ns in noise_substrings):
                 continue
+
             cleaned.append(s.strip())
 
         last_star = None
@@ -493,10 +558,10 @@ class QwenTmuxLLM:
         self._ensure_init()
         return self.session.ask(prompt)
 
+
 # ==============================================================================
 # dev_tools (in-file)
 # ==============================================================================
-
 
 def _python_cmd() -> List[str]:
     if VENV_PY.exists():
@@ -538,98 +603,10 @@ def git_diff_tool(max_lines: int = 220) -> str:
         lines = lines[:max_lines] + ["...[diff tronqué]..."]
     return "\n".join(lines).strip()
 
-# ==============================================================================
-# GroupChat engine
-# ==============================================================================
-
-
-@dataclass
-class ConversationMessage:
-    round_index: int
-    sender: str
-    role_type: str
-    content: str
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-
-class RoleAgent:
-    def __init__(
-        self,
-        name: str,
-        role_type: str,
-        session_name: str,
-        system_prompt: str,
-        wait_seconds: int,
-        ctx: Optional[RunCtx] = None,
-    ):
-        self.name = name
-        self.role_type = role_type
-        self.session_name = session_name
-        self.llm = QwenTmuxLLM(session_name=session_name, system_prompt=system_prompt, wait_seconds=wait_seconds)
-        self.ctx = ctx
-
-    def send(self, prompt: str) -> str:
-        print(f"\n================= {self.name.upper()} – PROMPT =================\n{prompt}\n")
-        if self.ctx:
-            transcript_append(self.ctx, self.name, "PROMPT", prompt)
-
-        reply = self.llm.chat(prompt)
-
-        print(f"\n================= {self.name.upper()} – RÉPONSE =================\n{reply}\n")
-        if self.ctx:
-            transcript_append(self.ctx, self.name, "RESPONSE", reply)
-
-        return reply
-
-
-class GroupChatEngine:
-    def __init__(self, agents: Dict[str, RoleAgent], max_rounds: int, history_chars: int = 6000):
-        self.agents = agents
-        self.max_rounds = max_rounds
-        self.history_chars = history_chars
-        self.history: List[ConversationMessage] = []
-
-    def add(self, r: int, agent: RoleAgent, content: str):
-        self.history.append(ConversationMessage(r, agent.name, agent.role_type, content or ""))
-
-    def history_text(self) -> str:
-        parts: List[str] = []
-        for m in self.history:
-            parts.append(f"[round {m.round_index}][{m.sender}]")
-            parts.append(m.content)
-            parts.append("")
-        full = "\n".join(parts).strip()
-        if len(full) <= self.history_chars:
-            return full
-        return "(Historique tronqué)\n...\n" + full[-self.history_chars:]
-
-    def run(self, feature: str, round_callback: Optional[Callable[[int], None]] = None):
-        for r in range(1, self.max_rounds + 1):
-            print(f"\n==================== ROUND {r} ====================\n")
-
-            planner = self.agents["planner"]
-            dev = self.agents["dev"]
-            tester = self.agents["tester"]
-
-            planner_prompt = build_planner_prompt(feature, r, self.history_text())
-            planner_reply = planner.send(planner_prompt)
-            self.add(r, planner, planner_reply)
-
-            dev_prompt = build_dev_prompt(feature, r, self.history_text())
-            dev_reply = dev.send(dev_prompt)
-            self.add(r, dev, dev_reply)
-
-            tester_prompt = build_tester_prompt(feature, r, self.history_text())
-            tester_reply = tester.send(tester_prompt)
-            self.add(r, tester, tester_reply)
-
-            if round_callback:
-                round_callback(r)
 
 # ==============================================================================
 # Prompts
 # ==============================================================================
-
 
 def build_planner_prompt(feature: str, r: int, history: str) -> str:
     base = dedent(f"""
@@ -736,65 +713,170 @@ def infer_test_pattern(feature: str, default: str = "health") -> str:
     m = re.search(r"/([a-zA-Z0-9_]+)", feature)
     return m.group(1) if m else default
 
+
 # ==============================================================================
-# Debug/smoke mode: marker file
+# AutoGen classic -> tmux driver (ONLY solution)
 # ==============================================================================
 
+def run_feature_autogen_tmux(
+    ctx: RunCtx,
+    feature: str,
+    max_rounds: int,
+    wait_planner: float,
+    wait_dev: float,
+    wait_tester: float,
+    wait_qa: float,
+) -> str:
+    autogen = require_module("autogen")  # strict
 
-def debug_marker_paths(run_id: str) -> Dict[str, Path]:
-    """
-    Choix d'un emplacement stable, pas dans src/:
-    - backend/.qwen_runs/<run_id>/marker.txt
-    """
-    base = BACKEND_DIR / ".qwen_runs" / run_id
-    return {
-        "dir": base,
-        "marker": base / "marker.txt",
-    }
+    planner_llm = QwenTmuxLLM(
+        session_name=SESSIONS["planner"],
+        system_prompt="Tu es PLANNER, architecte technique. Ultra concret et court.",
+        wait_seconds=wait_planner,
+    )
+    dev_llm = QwenTmuxLLM(
+        session_name=SESSIONS["dev"],
+        system_prompt="Tu es DEV backend senior. Changements minimaux, testables. Donne des commandes.",
+        wait_seconds=wait_dev,
+    )
+    tester_llm = QwenTmuxLLM(
+        session_name=SESSIONS["tester"],
+        system_prompt="Tu es TESTER/QA. Propose tests pytest concrets + cas limites. Précis sur imports.",
+        wait_seconds=wait_tester,
+    )
+    qa_llm = QwenTmuxLLM(
+        session_name=SESSIONS["qa"],
+        system_prompt="Tu es QUALITY_OBSERVER. Rapport: ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS.",
+        wait_seconds=wait_qa,
+    )
 
+    planner = autogen.ConversableAgent(
+        name="Planner",
+        system_message="PLANNER (AutoGen) — réponds en français.",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    dev = autogen.ConversableAgent(
+        name="Dev",
+        system_message="DEV (AutoGen) — réponds en français.",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    tester = autogen.ConversableAgent(
+        name="Tester",
+        system_message="TESTER (AutoGen) — réponds en français.",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
+    qa = autogen.ConversableAgent(
+        name="QualityObserver",
+        system_message="QA (AutoGen) — réponds en français.",
+        llm_config=False,
+        human_input_mode="NEVER",
+    )
 
-def create_marker(run_id: str) -> Path:
-    paths = debug_marker_paths(run_id)
-    paths["dir"].mkdir(parents=True, exist_ok=True)
-    content = f"run_id={run_id}\ncreated_at={datetime.now().isoformat(timespec='seconds')}\n"
-    paths["marker"].write_text(content, encoding="utf-8")
-    return paths["marker"]
+    # Bind tmux LLM
+    planner._tmux_llm = planner_llm  # type: ignore[attr-defined]
+    dev._tmux_llm = dev_llm          # type: ignore[attr-defined]
+    tester._tmux_llm = tester_llm    # type: ignore[attr-defined]
+    qa._tmux_llm = qa_llm            # type: ignore[attr-defined]
 
+    def tmux_reply(recipient, messages, sender, config):
+        last = ""
+        if messages:
+            last = (messages[-1].get("content") or "").strip()
+        if not last:
+            last = "(message vide) — répond quand même avec un next step concret."
 
-def build_debug_feature(run_id: str) -> str:
-    paths = debug_marker_paths(run_id)
-    return dedent(f"""
-    MODE DEBUG / SMOKE TEST (run_id={run_id})
+        transcript_append(ctx, recipient.name, "PROMPT", last)
 
-    Objectif:
-    - Valider rapidement l'orchestrateur Qwen(tmux) + logs/transcript.
-    - On veut une action simple, traçable, qui ne dépend pas du backend.
+        llm = getattr(recipient, "_tmux_llm", None)
+        if llm is None:
+            _die(f"Agent '{recipient.name}' n'a pas de _tmux_llm attaché.")
+        reply = llm.chat(last)
 
-    Contrainte:
-    - Utiliser cet emplacement exact pour les artefacts:
-      - Dossier: {paths['dir']}
-      - Marker:  {paths['marker']}
+        transcript_append(ctx, recipient.name, "RESPONSE", reply)
+        return True, reply
 
-    Tâches attendues:
-    - PLANNER: justifie pourquoi cet emplacement est bon (artefacts/outillage), et propose 3 règles (gitignore, sécurité, nettoyage).
-    - DEV: crée/valide le fichier marker (si absent), et propose une commande de vérif.
-    - TESTER: propose 2 validations:
-        1) commande shell (test -f ...)
-        2) un test pytest minimal qui échoue si le marker est absent.
+    for ag in (planner, dev, tester, qa):
+        ag.register_reply(
+            trigger=[autogen.Agent, None],
+            reply_func=tmux_reply,
+            position=0,
+        )
+
+    max_turns = max(3, max_rounds * 3)
+    groupchat = autogen.GroupChat(
+        agents=[planner, dev, tester],
+        messages=[],
+        max_round=max_turns,
+        speaker_selection_method="round_robin",
+        allow_repeat_speaker=False,
+    )
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
+
+    transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_turns={max_turns}")
+    planner.initiate_chat(manager, message=feature)
+
+    transcript_append(ctx, "Runner", "INFO", "PHASE QA (autogen-tmux): pytest + git")
+
+    pg = run_pytest_tool()
+    pattern = infer_test_pattern(feature, default="health")
+    pt = run_specific_tests_tool(pattern)
+    status = git_status_tool()
+    diff = git_diff_tool(max_lines=220)
+
+    qa_prompt = dedent(f"""
+    Contexte: Finance Copilot (FastAPI/Python).
+
+    FEATURE
+    -------
+    {feature}
+
+    PYTEST GLOBAL
+    ------------
+    {pg["output"]}
+
+    PYTEST CIBLÉ (-k {pattern})
+    --------------------------
+    {pt["output"]}
+
+    GIT STATUS
+    ----------
+    {status or "(aucun changement)"}
+
+    GIT DIFF (tronqué)
+    ------------------
+    {diff or "(diff vide)"}
+
+    Fais ton rapport QA + dis si prêt pour merge (avec revue humaine).
     """).strip()
+
+    transcript_append(ctx, "QualityObserver", "PROMPT", qa_prompt)
+    report = qa_llm.chat(qa_prompt)
+    transcript_append(ctx, "QualityObserver", "RESPONSE", report)
+
+    print("\n================= RAPPORT QA FINAL (AutoGen-TMUX) =================\n")
+    print(report)
+
+    return "AutoGen-tmux terminé. Voir transcript.md + snapshots."
+
 
 # ==============================================================================
 # Doctor / cleanup
 # ==============================================================================
 
-
 def doctor(ctx: RunCtx, qwen_bin: str) -> None:
+    require_module("autogen")  # strict
+    require_bin("tmux")
+    require_bin(qwen_bin if os.path.sep in qwen_bin else "qwen")
+
     lines: List[str] = []
     lines.append(f"# Doctor report ({datetime.now().isoformat(timespec='seconds')})")
     lines.append("")
     lines.append(f"- PROJECT_DIR: {PROJECT_DIR} ({'OK' if PROJECT_DIR.exists() else 'MISSING'})")
     lines.append(f"- BACKEND_DIR: {BACKEND_DIR} ({'OK' if BACKEND_DIR.exists() else 'MISSING'})")
-    lines.append(f"- tmux: {which('tmux') or 'MISSING'}")
+    lines.append(f"- tmux: {which('tmux')}")
     lines.append(f"- qwen: {qwen_bin}")
     lines.append(f"- python venv: {VENV_PY} ({'OK' if VENV_PY.exists() else 'MISSING'})")
     lines.append("")
@@ -808,9 +890,6 @@ def doctor(ctx: RunCtx, qwen_bin: str) -> None:
 
 
 def cleanup_runs(runs_dir: Path, keep_last: int = 10) -> int:
-    """
-    Supprime les anciens runs, garde les N derniers.
-    """
     if not runs_dir.exists():
         return 0
     run_dirs = sorted([p for p in runs_dir.iterdir() if p.is_dir()], key=lambda p: p.name)
@@ -832,10 +911,10 @@ def cleanup_runs(runs_dir: Path, keep_last: int = 10) -> int:
             pass
     return n
 
+
 # ==============================================================================
 # Main feature runner
 # ==============================================================================
-
 
 def run_feature(
     feature: str,
@@ -845,14 +924,29 @@ def run_feature(
     qwen_bin: str,
     enable_tmux_logs: bool,
     max_log_mb: int,
-    history_chars: int,
     mode: str,
+    clean_startup: bool,
+    wait_planner: float,
+    wait_dev: float,
+    wait_tester: float,
+    wait_qa: float,
 ):
-    # run context
-    ctx = create_run_ctx(runs_dir)
-    write_manifest(ctx, feature=feature, qwen_bin=qwen_bin, extra={"mode": mode})
+    # strict requirements: crash early
+    ensure_project_exists()
+    ensure_tmux_exists()
+    require_module("autogen")
+    require_bin("qwen") if (qwen_bin == "qwen") else None
 
-    # start sessions + raw logs
+    ctx = create_run_ctx(runs_dir)
+
+    if mode == "debug":
+        marker = create_marker(ctx.run_id)
+        transcript_append(ctx, "Runner", "INFO", f"Marker pre-created: {marker}")
+        feature = build_debug_feature(ctx.run_id)
+        transcript_append(ctx, "Runner", "INFO", "Feature replaced by DEBUG feature.")
+
+    write_manifest(ctx, feature=feature, qwen_bin=qwen_bin, extra={"mode": mode, "engine": "autogen_tmux"})
+
     qwen_start(
         qwen_bin=qwen_bin,
         path_override=DEFAULT_PATH_OVERRIDE,
@@ -860,147 +954,100 @@ def run_feature(
         restart=restart_tmux,
         ctx=ctx,
         enable_tmux_logs=enable_tmux_logs,
+        clean_startup=clean_startup,
     )
 
-    # always snapshot at start (baseline)
     snapshot_all(ctx)
-
-    # if debug mode -> create marker first (optional but useful)
-    if mode == "debug":
-        marker = create_marker(ctx.run_id)
-        transcript_append(ctx, "Runner", "INFO", f"Marker pre-created: {marker}")
-
-        # replace the feature with a deterministic debug feature
-        feature = build_debug_feature(ctx.run_id)
-        transcript_append(ctx, "Runner", "INFO", "Feature replaced by DEBUG feature.")
 
     print(f"🧾 Run dir → {ctx.run_dir}")
     print(f"   transcript: {ctx.transcript_path}")
     if enable_tmux_logs:
         print(f"   tmux logs:  {ctx.tmux_dir}")
 
-    planner_sys = dedent("""
-    Tu es PLANNER, architecte technique.
-    Tu dois être ultra concret et court.
-    """).strip()
+    _ = run_feature_autogen_tmux(
+        ctx=ctx,
+        feature=feature,
+        max_rounds=max_rounds,
+        wait_planner=wait_planner,
+        wait_dev=wait_dev,
+        wait_tester=wait_tester,
+        wait_qa=wait_qa,
+    )
 
-    dev_sys = dedent("""
-    Tu es DEV backend senior.
-    Si tu ne sais pas où modifier, commence par explorer le repo (rg/ls/cat).
-    Donne toujours au moins 1 action concrète.
-    """).strip()
-
-    tester_sys = dedent("""
-    Tu es TESTER/QA.
-    Tu dois être précis sur les chemins et les imports pytest.
-    """).strip()
-
-    qa_sys = dedent("""
-    Tu es QUALITY_OBSERVER.
-    Tu produis un rapport QA structuré: ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS.
-    """).strip()
-
-    agents = {
-        "planner": RoleAgent("Planner", "planner", SESSIONS["planner"], planner_sys, wait_seconds=12, ctx=ctx),
-        "dev": RoleAgent("Dev", "dev", SESSIONS["dev"], dev_sys, wait_seconds=22, ctx=ctx),
-        "tester": RoleAgent("Tester", "tester", SESSIONS["tester"], tester_sys, wait_seconds=16, ctx=ctx),
-    }
-    qa_agent = RoleAgent("QualityObserver", "qa", SESSIONS["qa"], qa_sys, wait_seconds=14, ctx=ctx)
-
-    engine = GroupChatEngine(agents=agents, max_rounds=max_rounds, history_chars=history_chars)
-
-    def after_round(r: int):
-        # rotate tmux logs
-        if enable_tmux_logs:
-            max_bytes = max_log_mb * 1024 * 1024
-            for sess in session_names():
-                lf = ctx.tmux_dir / f"{sess}.log"
-                rotate_if_too_big(sess, lf, max_bytes)
-
-        snapshot_all(ctx)
-        transcript_append(ctx, "Runner", "INFO", f"Fin du round {r}")
-
-    engine.run(feature=feature, round_callback=after_round)
-
-    # QA phase: optional in debug mode (tu peux quand même la garder)
-    transcript_append(ctx, "Runner", "INFO", "PHASE QA automatisée: pytest + git")
-
-    pg = run_pytest_tool()
-    pattern = infer_test_pattern(feature, default="health")
-    pt = run_specific_tests_tool(pattern)
-    status = git_status_tool()
-    diff = git_diff_tool(max_lines=220)
-
-    qa_prompt = dedent(f"""
-    Contexte: Finance Copilot (FastAPI/Python).
-
-    FEATURE
-    -------
-    {feature}
-
-    HISTORIQUE
-    ---------
-    {engine.history_text()}
-
-    PYTEST GLOBAL
-    ------------
-    {pg["output"]}
-
-    PYTEST CIBLÉ (-k {pattern})
-    --------------------------
-    {pt["output"]}
-
-    GIT STATUS
-    ----------
-    {status or "(aucun changement)"}
-
-    GIT DIFF (tronqué)
-    ------------------
-    {diff or "(diff vide)"}
-
-    Fais ton rapport QA + dis si prêt pour merge (avec revue humaine).
-    """).strip()
-
-    report = qa_agent.send(qa_prompt)
-    print("\n================= RAPPORT QA FINAL =================\n")
-    print(report)
+    if enable_tmux_logs:
+        max_bytes = max_log_mb * 1024 * 1024
+        for sess in session_names():
+            lf = ctx.tmux_dir / f"{sess}.log"
+            rotate_if_too_big(sess, lf, max_bytes)
 
     snapshot_all(ctx)
     return ctx
 
+
+# ==============================================================================
+# Debug/smoke mode helpers (marker)
+# ==============================================================================
+
+def debug_marker_paths(run_id: str) -> Dict[str, Path]:
+    base = BACKEND_DIR / ".qwen_runs" / run_id
+    return {"dir": base, "marker": base / "marker.txt"}
+
+
+def create_marker(run_id: str) -> Path:
+    paths = debug_marker_paths(run_id)
+    paths["dir"].mkdir(parents=True, exist_ok=True)
+    content = f"run_id={run_id}\ncreated_at={datetime.now().isoformat(timespec='seconds')}\n"
+    paths["marker"].write_text(content, encoding="utf-8")
+    return paths["marker"]
+
+
+def build_debug_feature(run_id: str) -> str:
+    paths = debug_marker_paths(run_id)
+    return dedent(f"""
+    MODE DEBUG / SMOKE TEST (run_id={run_id})
+
+    Objectif:
+    - Valider rapidement l'orchestrateur + logs/transcript.
+
+    Contrainte:
+    - Utiliser cet emplacement exact pour les artefacts:
+      - Dossier: {paths['dir']}
+      - Marker:  {paths['marker']}
+
+    Tâches attendues:
+    - PLANNER: justifie pourquoi cet emplacement est bon (artefacts/outillage), et propose 3 règles (gitignore, sécurité, nettoyage).
+    - DEV: crée/valide le fichier marker (si absent), et propose une commande de vérif.
+    - TESTER: propose 2 validations:
+        1) commande shell (test -f ...)
+        2) un test pytest minimal qui échoue si le marker est absent.
+    """).strip()
+
+
 # ==============================================================================
 # CLI docs (help text)
 # ==============================================================================
-
 
 def usage_text() -> str:
     return dedent(f"""
     Utilisation rapide
     ==================
 
-    1) Lancer une feature (mode normal)
-       python3 scripts/qwen_orchestrator.py --feature "Implémente GET /health" --rounds 2
+    1) AutoGen -> TMUX (solution unique)
+       python3 scripts/qwen_orchestrator.py --rounds 2 --feature "Implémente GET /health"
 
-    2) Mode debug (smoke test ultra simple + marker)
+    2) Mode debug
        python3 scripts/qwen_orchestrator.py --mode debug --rounds 1
 
-    3) Management tmux/qwen
+    3) Management tmux
        python3 scripts/qwen_orchestrator.py --tmux-cmd status
        python3 scripts/qwen_orchestrator.py --tmux-cmd start
        python3 scripts/qwen_orchestrator.py --tmux-cmd restart
        python3 scripts/qwen_orchestrator.py --tmux-cmd stop --tmux-all
        python3 scripts/qwen_orchestrator.py --tmux-cmd attach --tmux-target dev
 
-    4) Doctor (diagnostic + snapshots)
-       python3 scripts/qwen_orchestrator.py --tmux-cmd doctor
-
-    5) Nettoyer les anciens runs (garde les 10 derniers)
-       python3 scripts/qwen_orchestrator.py --tmux-cmd cleanup --keep-last 10
-
     Notes
     -----
-    - auto-confirm est TOUJOURS actif (QWEN_CODE_AUTO_CONFIRM=1 + règles confirm).
-    - Les logs tmux (pipe-pane) sont "raw" (bruyants). Le fichier transcript.md est "clean".
+    - Aucun fallback: autogen/tmux/qwen doivent être présents sinon erreur.
     - Chaque exécution crée un run_dir:
         {RUNS_DIR_DEFAULT}/YYYYMMDD-HHMMSS/
           - run.json
@@ -1010,30 +1057,38 @@ def usage_text() -> str:
           - doctor_report.md (si doctor)
     """).strip()
 
+
 # ==============================================================================
 # Main
 # ==============================================================================
 
-
 def main():
-    ap = argparse.ArgumentParser(description="Finance Copilot Qwen(tmux) orchestrator + management.", add_help=True)
+    ensure_venv_or_reexec()
+    # Strict import at startup (so missing module fails early even before parsing)
+    require_module("autogen")
+
+    ap = argparse.ArgumentParser(description="Finance Copilot orchestrator (AutoGen + tmux Qwen Code).", add_help=True)
+
     ap.add_argument("--feature", type=str, default=os.environ.get("FC_FEATURE", "").strip(),
                     help="Texte de la feature (sinon FC_FEATURE)")
     ap.add_argument("--rounds", type=int, default=2)
     ap.add_argument("--restart", action="store_true", help="Kill+restart sessions tmux avant de run")
 
-    # run behavior
     ap.add_argument("--mode", type=str, default="normal", choices=["normal", "debug"],
-                    help="normal: feature; debug: smoke test marker + prompts déterministes")
+                    help="normal: feature ; debug: smoke test marker + prompts déterministes")
 
-    # run dirs / logs
     ap.add_argument("--runs-dir", type=str, default=str(RUNS_DIR_DEFAULT))
     ap.add_argument("--no-tmux-logs", action="store_true", help="Désactive pipe-pane tmux raw logs")
     ap.add_argument("--max-log-mb", type=int, default=25, help="Rotation pipe-pane si log > N MB")
-    ap.add_argument("--history-chars", type=int, default=6000, help="Contexte max envoyé aux agents")
 
-    # qwen/tmux
+    ap.add_argument("--no-clean-startup", action="store_true", help="Ne pas clear-history au démarrage des sessions tmux")
+
     ap.add_argument("--qwen-bin", type=str, default=(which("qwen") or "qwen"))
+
+    ap.add_argument("--wait-planner", type=float, default=12.0)
+    ap.add_argument("--wait-dev", type=float, default=22.0)
+    ap.add_argument("--wait-tester", type=float, default=16.0)
+    ap.add_argument("--wait-qa", type=float, default=18.0)
 
     # management commands
     ap.add_argument("--tmux-cmd", type=str, default="",
@@ -1055,76 +1110,76 @@ def main():
     ensure_tmux_exists()
 
     tmux_cmd = (args.tmux_cmd or "").strip().lower()
-    runs_dir = Path(args.runs_dir).resolve()
+    runs_dir = Path(args.runs_dir).expanduser().resolve()
 
-    # ---- management mode
     if tmux_cmd:
-        try:
-            if tmux_cmd == "status":
-                print(qwen_status())
+        if tmux_cmd == "status":
+            print(qwen_status())
+            return
+
+        if tmux_cmd == "start":
+            ctx = create_run_ctx(runs_dir)
+            write_manifest(ctx, feature="(start only)", qwen_bin=args.qwen_bin, extra={"mode": "start"})
+            qwen_start(
+                args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
+                restart=False, ctx=ctx,
+                enable_tmux_logs=not args.no_tmux_logs,
+                clean_startup=not args.no_clean_startup,
+            )
+            print("✅ Qwen sessions started.")
+            print(f"🧾 Run dir → {ctx.run_dir}")
+            return
+
+        if tmux_cmd == "restart":
+            ctx = create_run_ctx(runs_dir)
+            write_manifest(ctx, feature="(restart only)", qwen_bin=args.qwen_bin, extra={"mode": "restart"})
+            qwen_restart(
+                args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
+                ctx=ctx,
+                enable_tmux_logs=not args.no_tmux_logs,
+                clean_startup=not args.no_clean_startup,
+            )
+            print("✅ Qwen sessions restarted.")
+            print(f"🧾 Run dir → {ctx.run_dir}")
+            return
+
+        if tmux_cmd == "stop":
+            if args.tmux_all or not args.tmux_target:
+                qwen_stop(all_sessions=True)
+                print("🛑 Qwen sessions stopped (all).")
                 return
+            sess = SESSIONS.get(args.tmux_target, args.tmux_target)
+            qwen_stop(all_sessions=False, session=sess)
+            print(f"🛑 Qwen session stopped: {sess}")
+            return
 
-            if tmux_cmd == "start":
-                ctx = create_run_ctx(runs_dir)
-                write_manifest(ctx, feature="(start only)", qwen_bin=args.qwen_bin, extra={"mode": "start"})
-                qwen_start(args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM, restart=False,
-                           ctx=ctx, enable_tmux_logs=not args.no_tmux_logs)
-                print("✅ Qwen sessions started.")
-                print(f"🧾 Run dir → {ctx.run_dir}")
-                return
+        if tmux_cmd == "attach":
+            target = args.tmux_target or "dev"
+            sys.exit(qwen_attach(target))
 
-            if tmux_cmd == "restart":
-                ctx = create_run_ctx(runs_dir)
-                write_manifest(ctx, feature="(restart only)", qwen_bin=args.qwen_bin, extra={"mode": "restart"})
-                qwen_restart(args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM, ctx=ctx,
-                             enable_tmux_logs=not args.no_tmux_logs)
-                print("✅ Qwen sessions restarted.")
-                print(f"🧾 Run dir → {ctx.run_dir}")
-                return
+        if tmux_cmd == "doctor":
+            ctx = create_run_ctx(runs_dir)
+            write_manifest(ctx, feature="(doctor)", qwen_bin=args.qwen_bin, extra={"mode": "doctor"})
+            doctor(ctx, qwen_bin=args.qwen_bin)
+            print(f"✅ Doctor report écrit: {ctx.run_dir / 'doctor_report.md'}")
+            print(f"🧾 Snapshots: {ctx.snapshots_dir}")
+            return
 
-            if tmux_cmd == "stop":
-                if args.tmux_all or not args.tmux_target:
-                    qwen_stop(all_sessions=True)
-                    print("🛑 Qwen sessions stopped (all).")
-                    return
-                sess = SESSIONS.get(args.tmux_target, args.tmux_target)
-                qwen_stop(all_sessions=False, session=sess)
-                print(f"🛑 Qwen session stopped: {sess}")
-                return
+        if tmux_cmd == "cleanup":
+            n = cleanup_runs(runs_dir, keep_last=args.keep_last)
+            print(f"✅ Cleanup terminé. Runs supprimés: {n}. (gardés: {args.keep_last})")
+            return
 
-            if tmux_cmd == "attach":
-                target = args.tmux_target or "dev"
-                sys.exit(qwen_attach(target))
+        if tmux_cmd == "clear":
+            target = args.tmux_target or "dev"
+            sess = SESSIONS.get(target, target)
+            tmux_clear_screen(sess)
+            tmux_clear_history(sess)
+            print(f"✅ Clear screen + history envoyé à: {sess}")
+            return
 
-            if tmux_cmd == "doctor":
-                ctx = create_run_ctx(runs_dir)
-                write_manifest(ctx, feature="(doctor)", qwen_bin=args.qwen_bin, extra={"mode": "doctor"})
-                doctor(ctx, qwen_bin=args.qwen_bin)
-                print(f"✅ Doctor report écrit: {ctx.run_dir / 'doctor_report.md'}")
-                print(f"🧾 Snapshots: {ctx.snapshots_dir}")
-                return
+        _die(f"tmux-cmd inconnu: {tmux_cmd} (attendu: status|start|stop|restart|attach|doctor|cleanup|clear)")
 
-            if tmux_cmd == "cleanup":
-                n = cleanup_runs(runs_dir, keep_last=args.keep_last)
-                print(f"✅ Cleanup terminé. Runs supprimés: {n}. (gardés: {args.keep_last})")
-                return
-
-            if tmux_cmd == "clear":
-                target = args.tmux_target or "dev"
-                sess = SESSIONS.get(target, target)
-                tmux_clear_screen(sess)
-                print(f"✅ Clear screen envoyé à: {sess}")
-                return
-
-            print(f"❌ tmux-cmd inconnu: {tmux_cmd}")
-            print("   Attendu: status|start|stop|restart|attach|doctor|cleanup|clear")
-            sys.exit(2)
-
-        except Exception as e:
-            print(f"❌ Erreur management tmux: {e}")
-            sys.exit(1)
-
-    # ---- default: run feature
     feature = args.feature or "Implémente un endpoint GET /health avec test pytest"
 
     ctx = run_feature(
@@ -1135,8 +1190,12 @@ def main():
         qwen_bin=args.qwen_bin,
         enable_tmux_logs=not args.no_tmux_logs,
         max_log_mb=args.max_log_mb,
-        history_chars=args.history_chars,
         mode=args.mode,
+        clean_startup=not args.no_clean_startup,
+        wait_planner=args.wait_planner,
+        wait_dev=args.wait_dev,
+        wait_tester=args.wait_tester,
+        wait_qa=args.wait_qa,
     )
 
     print(f"\n✅ Terminé. Run dir: {ctx.run_dir}")

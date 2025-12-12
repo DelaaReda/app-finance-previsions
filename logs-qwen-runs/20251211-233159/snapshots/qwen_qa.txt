@@ -1,0 +1,24 @@
+Tips for getting started:
+1. Ask questions, edit files, or run commands.
+2. Be specific for the best results.
+3. /help for more information.
+
+ℹQwen Code update available! 0.2.0 → 0.4.0
+  Installed via Homebrew. Please update with "brew upgrade".
+
+Using:
+  - 1 QWEN.md file
+╭────────────────────────────────────────────────────────────────────────────╮
+│ > [SYSTEM]                                                                 │
+│   Tu es QUALITY_OBSERVER. Rapport: ÉTAT GÉNÉRAL, TESTS,                    │
+│   RISQUES, PRIORITÉS.                                                      │
+│                                                                            │
+│   Règles:                                                                  │
+│   - Réponds en français.                                                   │
+│   - Donne des étapes concrètes.                                            │
+│   - Si tu es bloqué, dis exactement quoi vérifier.                         │
+│                                                                            │
+╰────────────────────────────────────────────────────────────────────────────╯
+...~//analyse-financiere                            no      coder-model
+(integration-copilot-app-reda*)                     sandbox (100%)
+
