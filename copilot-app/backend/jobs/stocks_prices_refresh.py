@@ -229,6 +229,25 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
             except Exception:
                 return pd.DataFrame()
 
+        def _load_yahoo_cache(sym: str) -> pd.DataFrame:
+            try:
+                cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "yahoo"
+                fp = cache_dir / f"{sym}.csv"
+                if not fp.exists():
+                    return pd.DataFrame()
+                df = pd.read_csv(fp)
+                if df.empty or "Date" not in df.columns:
+                    return pd.DataFrame()
+                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+                df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+                # Yahoo columns: Open/High/Low/Close/Adj Close/Volume
+                if "Close" not in df.columns and "Adj Close" in df.columns:
+                    df = df.rename(columns={"Adj Close": "Close"})
+                df = df[df.index >= pd.to_datetime(start_date)]
+                return df
+            except Exception:
+                return pd.DataFrame()
+
         # Calculer pour tous les tickers
         results = {}
         errors = {}
@@ -237,7 +256,9 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
             try:
                 logger.debug(f"Fetching prices for {ticker}...")
                 
-                df = _load_stooq_cache(ticker)
+                df = _load_yahoo_cache(ticker)
+                if df is None or df.empty:
+                    df = _load_stooq_cache(ticker)
                 if df is None or df.empty:
                     df = get_price_history(ticker, start=start_date, interval="1d")
                 if df is None or df.empty:

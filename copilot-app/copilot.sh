@@ -105,6 +105,12 @@ refresh_live_data() {
     run_job "jobs/news_ingest.py"
     run_job "jobs/news_sentiment.py"
     run_job "jobs/macro_series_snapshot.py"
+    if [ -x "scripts/fetch_prices_yahoo.sh" ] && [ -n "${YAHOO_COOKIE_FILE:-}" ]; then
+        log " → scripts/fetch_prices_yahoo.sh"
+        if ! ./scripts/fetch_prices_yahoo.sh --cookie "$YAHOO_COOKIE_FILE"; then
+            log_warning "Job échoué: scripts/fetch_prices_yahoo.sh (on continue)"
+        fi
+    fi
     if [ -x "scripts/fetch_prices_stooq.sh" ]; then
         log " → scripts/fetch_prices_stooq.sh"
         if ! ./scripts/fetch_prices_stooq.sh; then
