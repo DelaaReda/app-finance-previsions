@@ -5,6 +5,8 @@ Author: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
 Task: Cache-First Architecture - Pré-calculer stocks prices
 """
 from datetime import datetime, timedelta
+import io
+import subprocess
 import logging
 from pathlib import Path
 import sys
@@ -97,6 +99,56 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                     except Exception:
                         pass  # Continue avec recalcul
         
+        # Helper: stooq CSV fallback (no auth)
+        def _stooq_symbol(sym: str) -> str:
+            s = sym.lower()
+            mapping = {
+                "spy": "spy.us",
+                "qqq": "qqq.us",
+                "aapl": "aapl.us",
+                "msft": "msft.us",
+                "googl": "googl.us",
+                "goog": "goog.us",
+                "amzn": "amzn.us",
+                "nvda": "nvda.us",
+                "meta": "meta.us",
+                "tsla": "tsla.us",
+                "brk.b": "brk.b.us",
+                "unh": "unh.us",
+                "jnj": "jnj.us",
+                "v": "v.us",
+                "pg": "pg.us",
+                "jpm": "jpm.us",
+                "ma": "ma.us",
+                "hd": "hd.us",
+                "dis": "dis.us",
+            }
+            return mapping.get(s, f"{s}.us")
+
+        def _fetch_stooq_prices(sym: str) -> pd.DataFrame:
+            try:
+                stooq_sym = _stooq_symbol(sym)
+                url = f"https://stooq.com/q/d/l/?s={stooq_sym}&i=d"
+                # Use curl via subprocess (more reliable in this environment)
+                res = subprocess.run(
+                    ["curl", "-sS", url],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                )
+                if res.returncode != 0 or not res.stdout:
+                    return pd.DataFrame()
+                df = pd.read_csv(io.StringIO(res.stdout))
+                if df.empty or "Date" not in df.columns or "Close" not in df.columns:
+                    return pd.DataFrame()
+                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+                df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+                df = df[df.index >= pd.to_datetime(start_date)]
+                return df
+            except Exception:
+                return pd.DataFrame()
+
         # Calculer pour tous les tickers
         results = {}
         errors = {}
@@ -106,6 +158,8 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                 logger.debug(f"Fetching prices for {ticker}...")
                 
                 df = get_price_history(ticker, start=start_date, interval="1d")
+                if df is None or df.empty:
+                    df = _fetch_stooq_prices(ticker)
                 if df is None or df.empty:
                     errors[ticker] = "No data"
                     continue
@@ -141,7 +195,18 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                 errors[ticker] = str(e)
                 continue
         
-        # Sauvegarder
+        # Sauvegarder (éviter d'écraser un cache existant si aucun résultat)
+        if not results:
+            cached = load_json("stocks/prices") if not force else None
+            if cached and cached.get("tickers"):
+                logger.warning("No fresh prices fetched, keeping existing cache")
+                return {
+                    "status": "cached",
+                    "count": len(cached.get("tickers", {})),
+                    "errors_count": len(errors),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                }
+
         payload = {
             "tickers": results,
             "range": timeframe,

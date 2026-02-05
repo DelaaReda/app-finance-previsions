@@ -250,7 +250,7 @@ def generate_llm_judge_data() -> bool:
             })
         
         # Save judge data
-        save_json(judge_data, "llm_judge")
+        save_json("llm_judge", judge_data, source=["job:validate_and_generate_data", "llm_judge"])
         logger.info(f"✅ Generated LLM Judge data with {len(judge_data['rows'])} rows")
         return True
         

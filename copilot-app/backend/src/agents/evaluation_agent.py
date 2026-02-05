@@ -20,15 +20,31 @@ HORIZON_TO_DAYS = {"1w": 5, "1m": 21, "1y": 252}
 
 def _latest_forecasts() -> pd.DataFrame:
     parts = sorted(Path('data/forecast').glob('dt=*'))
+    parts += sorted(Path('data/forecast').glob('dt_*'))
     if not parts:
         return pd.DataFrame()
     latest = parts[-1]
     f1 = latest / 'forecasts.parquet'
     f2 = latest / 'final.parquet'
+    f3 = latest / 'forecasts.json'
     if f1.exists():
-        return pd.read_parquet(f1)
+        try:
+            return pd.read_parquet(f1)
+        except Exception:
+            pass
     if f2.exists():
-        return pd.read_parquet(f2)
+        try:
+            return pd.read_parquet(f2)
+        except Exception:
+            pass
+    if f3.exists():
+        try:
+            obj = json.loads(f3.read_text())
+            rows = obj.get("rows") or obj.get("data", {}).get("rows", []) or []
+            if rows:
+                return pd.DataFrame(rows)
+        except Exception:
+            pass
     return pd.DataFrame()
 
 
