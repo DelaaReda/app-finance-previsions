@@ -528,48 +528,79 @@ class QwenTmuxSession:
         return s
 
     def _clean_output(self, raw: str) -> str:
+        """Nettoie la sortie brute de Qwen pour ne garder que la réponse utile."""
         if not raw:
             return ""
+
         text = self._strip_terminal_noise(raw)
+        lines = [line.rstrip() for line in text.splitlines()]
 
         noise_substrings = [
-            "Ask questions, edit files, or run commands.",
-            "Be specific for the best results.",
+            "ask questions, edit files, or run commands.",
+            "be specific for the best results.",
             "/help for more information.",
-            "Installed via Homebrew. Please update with",
-            "Qwen Code update available!",
-            "Type your message",
+            "installed via homebrew. please update with",
+            "qwen code update available!",
+            "type your message",
             "auto-accept edits",
-            "Using: 1 QWEN.md file",
-            "Using:",
+            "using: 1 qwen.md file",
+            "using:",
             "no sandbox",
             "coder-model",
+            "sandbox (",
             "(esc to cancel",
-            "Mining for more",
-            "Caching the essentials",
-            "Initializing...",
+            "mining for more",
+            "caching the essentials",
+            "initializing...",
+            "waiting for user confirmation",
+            "allow execution of:",
+            "yes, allow once",
+            "yes, allow always",
+            "no, suggest changes",
         ]
 
         cleaned: List[str] = []
-        for line in text.splitlines():
-            s = line.rstrip()
-            if not s.strip():
-                continue
-            low = s.strip().lower()
-
-            if s.strip().startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
                 continue
 
-            if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", s.strip()):
+            lower = stripped.lower()
+
+            # Spinners / loading
+            if stripped.startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
                 continue
 
-            if any(ns.lower() in low for ns in noise_substrings):
+            # TUI frames / borders
+            if re.match(r"^[\s┌┐└┘├┤─│╭╮╰╯…·]+$", stripped):
                 continue
 
-            cleaned.append(s.strip())
+            # Status bar / path noise
+            if "...//analyse-financiere" in stripped:
+                continue
+            if "coder-model" in lower and "sandbox" in lower:
+                continue
 
-        if len(cleaned) > 120:
-            cleaned = cleaned[-120:]
+            # Generic UI noise
+            if any(ns in lower for ns in noise_substrings):
+                continue
+
+            cleaned.append(stripped)
+
+        if not cleaned:
+            return ""
+
+        # Keep only the last useful block (often starts with "✦")
+        last_star_idx = None
+        for i, line in enumerate(cleaned):
+            if line.lstrip().startswith("✦"):
+                last_star_idx = i
+        if last_star_idx is not None:
+            cleaned = cleaned[last_star_idx:]
+
+        # Safety: cap output size
+        if len(cleaned) > 40:
+            cleaned = cleaned[-40:]
 
         return "\n".join(cleaned).strip()
 
