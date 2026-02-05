@@ -5,15 +5,18 @@ Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
 Task: DATA-GEN-001 - Create real news generation job
 Uses: Standard library only (urllib + xml.etree.ElementTree)
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
+import os
 from pathlib import Path
 import sys
 import urllib.request
 import urllib.error
+import urllib.parse
 import xml.etree.ElementTree as ET
 import re
 from typing import List, Dict, Any
+from email.utils import parsedate_to_datetime
 import yaml
 
 # Add parent directory to path to import storage
@@ -23,22 +26,12 @@ if backend_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
-# RSS Feed sources (using publicly accessible feeds)
-RSS_SOURCES = [
+# RSS feed sources (base market streams + dynamic ticker feeds)
+BASE_RSS_SOURCES = [
     {
         "name": "Yahoo Finance - Markets",
         "url": "https://finance.yahoo.com/news/rssindex",
         "category": "markets"
-    },
-    {
-        "name": "Yahoo Finance - NVDA",
-        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=NVDA&region=US&lang=en-US",
-        "category": "semiconductors"
-    },
-    {
-        "name": "Yahoo Finance - AAPL",
-        "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=AAPL&region=US&lang=en-US",
-        "category": "mega-cap-tech"
     },
     {
         "name": "MarketWatch - Top Stories",
@@ -109,8 +102,84 @@ TICKER_CONTEXT_PATTERNS = {
     ],
 }
 
+LOOKBACK_DAYS = max(30, int(os.getenv("NEWS_LOOKBACK_DAYS", "90") or "90"))
+MIN_ARTICLES_PER_TICKER = max(5, int(os.getenv("NEWS_MIN_ARTICLES_PER_TICKER", "20") or "20"))
+MAX_ARTICLES_PER_TICKER = max(
+    MIN_ARTICLES_PER_TICKER, int(os.getenv("NEWS_MAX_ARTICLES_PER_TICKER", "60") or "60")
+)
+MAX_TOTAL_ARTICLES = max(100, int(os.getenv("NEWS_MAX_TOTAL_ARTICLES", "600") or "600"))
 
-def extract_tickers(article: Dict[str, Any], known_tickers: set[str], source_name: str = "") -> List[str]:
+
+def _to_utc_iso(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_published_datetime(value: Any) -> datetime | None:
+    """Parse RSS/Atom date values into timezone-aware UTC datetimes."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+
+    # ISO first
+    try:
+        iso_val = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso_val)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        pass
+
+    # RFC822 / news-style timestamps
+    try:
+        dt = parsedate_to_datetime(s)
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def build_dynamic_sources(tickers: List[str]) -> List[Dict[str, Any]]:
+    """Build ticker-specific sources to increase per-ticker coverage over ~3 months."""
+    sources: List[Dict[str, Any]] = []
+    for ticker in tickers:
+        t = ticker.upper().strip()
+        if not t:
+            continue
+        sources.append(
+            {
+                "name": f"Yahoo Finance - {t}",
+                "url": f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={urllib.parse.quote_plus(t)}&region=US&lang=en-US",
+                "category": "ticker",
+                "source_ticker": t,
+            }
+        )
+        # Google News RSS offers wider ticker-specific coverage and typically longer lookback.
+        query = urllib.parse.quote_plus(f"{t} stock when:{LOOKBACK_DAYS}d")
+        sources.append(
+            {
+                "name": f"Google News - {t}",
+                "url": f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en",
+                "category": "ticker",
+                "source_ticker": t,
+            }
+        )
+    return sources
+
+
+def extract_tickers(
+    article: Dict[str, Any],
+    known_tickers: set[str],
+    source_name: str = "",
+    source_ticker: str | None = None,
+) -> List[str]:
     """
     Extract and rank likely tickers from article text.
 
@@ -156,6 +225,8 @@ def extract_tickers(article: Dict[str, Any], known_tickers: set[str], source_nam
     for kt in known_tickers:
         if kt and kt in source_upper:
             bump(kt, 2)
+    if source_ticker:
+        bump(source_ticker.upper(), 2)
 
     ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
     return [ticker for ticker, _ in ranked[:5]]
@@ -354,8 +425,9 @@ def run_news_ingest():
         except Exception:
             load_json = None
         
-        all_articles = []
-        sources_processed = []
+        all_articles: List[Dict[str, Any]] = []
+        sources_processed: List[str] = []
+        seen_uids: set[str] = set()
 
         # Known tickers from forecasts + profiles (pour enrichir l'extraction)
         known_tickers = set(DEFAULT_TICKERS)
@@ -380,9 +452,28 @@ def run_news_ingest():
                             known_tickers.add(t.upper())
             except Exception as e:
                 logger.warning(f"Failed to load profile tickers: {e}")
-        
+
+        target_tickers = sorted(
+            {
+                t
+                for t in known_tickers
+                if isinstance(t, str) and t and re.fullmatch(r"[A-Z]{1,6}", t)
+            }
+        )
+        dynamic_sources = build_dynamic_sources(target_tickers)
+        rss_sources = BASE_RSS_SOURCES + dynamic_sources
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+
+        logger.info(
+            "News ingest config: sources=%d target_tickers=%d lookback_days=%d min_per_ticker=%d",
+            len(rss_sources),
+            len(target_tickers),
+            LOOKBACK_DAYS,
+            MIN_ARTICLES_PER_TICKER,
+        )
+
         # Fetch from each RSS source
-        for source in RSS_SOURCES:
+        for source in rss_sources:
             logger.info(f"Fetching from {source['name']}...")
             
             try:
@@ -402,9 +493,18 @@ def run_news_ingest():
                 
                 # Process each article
                 for article in articles:
+                    # Normalize publication date and enforce 3-month lookback window
+                    pub_dt = parse_published_datetime(article.get("published_at"))
+                    if pub_dt is None:
+                        pub_dt = datetime.now(timezone.utc)
+                    if pub_dt < cutoff_dt:
+                        continue
+
                     # Add metadata
                     article['source'] = source['name']
                     article['category'] = source.get('category', 'general')
+                    article['published_at'] = _to_utc_iso(pub_dt)
+                    article['_published_ts'] = pub_dt.timestamp()
                     
                     # Score article
                     article['score'] = score_article(article)
@@ -414,32 +514,108 @@ def run_news_ingest():
                         article,
                         known_tickers=known_tickers,
                         source_name=source.get("name", ""),
+                        source_ticker=source.get("source_ticker"),
                     )
+                    if not article['tickers'] and source.get("source_ticker"):
+                        article['tickers'] = [str(source["source_ticker"]).upper()]
                     
                     # Add ingestion timestamp
                     article['ingested_at'] = datetime.utcnow().isoformat() + "Z"
-                
-                all_articles.extend(articles)
+
+                    uid = (
+                        article.get("url")
+                        or f"{article.get('title','')}|{article.get('published_at','')}|{article.get('source','')}"
+                    ).strip()
+                    if not uid:
+                        continue
+                    if uid in seen_uids:
+                        continue
+                    seen_uids.add(uid)
+                    article["_uid"] = uid
+                    all_articles.append(article)
+
                 sources_processed.append(source['name'])
-                
-                logger.info(f"✅ Processed {len(articles)} articles from {source['name']}")
+                logger.info(f"✅ Processed {len(articles)} raw articles from {source['name']}")
                 
             except Exception as e:
                 logger.error(f"Error processing source {source['name']}: {e}", exc_info=True)
                 continue
-        
-        # Sort by score (highest first)
-        all_articles.sort(key=lambda x: x.get('score', 0), reverse=True)
-        
-        # Limit to top 100 articles
-        all_articles = all_articles[:100]
-        
+
+        # Sort globally: recency first, then relevance.
+        all_articles.sort(
+            key=lambda a: (a.get("_published_ts", 0), a.get("score", 0)),
+            reverse=True,
+        )
+
+        # Coverage-aware selection to provide enough ticker context for judge.
+        articles_by_ticker: Dict[str, List[Dict[str, Any]]] = {t: [] for t in target_tickers}
+        for article in all_articles:
+            for t in article.get("tickers") or []:
+                if t in articles_by_ticker:
+                    articles_by_ticker[t].append(article)
+
+        selected: List[Dict[str, Any]] = []
+        selected_uids: set[str] = set()
+
+        for ticker in target_tickers:
+            taken = 0
+            for article in articles_by_ticker.get(ticker, []):
+                uid = article.get("_uid")
+                if not uid or uid in selected_uids:
+                    continue
+                selected.append(article)
+                selected_uids.add(uid)
+                taken += 1
+                if taken >= MIN_ARTICLES_PER_TICKER:
+                    break
+
+        for article in all_articles:
+            if len(selected) >= MAX_TOTAL_ARTICLES:
+                break
+            uid = article.get("_uid")
+            if not uid or uid in selected_uids:
+                continue
+            selected.append(article)
+            selected_uids.add(uid)
+
+        # Final cap per ticker to avoid one name monopolizing the feed.
+        per_ticker_counts: Dict[str, int] = {t: 0 for t in target_tickers}
+        balanced_selected: List[Dict[str, Any]] = []
+        for article in selected:
+            article_tickers = [t for t in (article.get("tickers") or []) if t in per_ticker_counts]
+            if article_tickers and all(per_ticker_counts[t] >= MAX_ARTICLES_PER_TICKER for t in article_tickers):
+                continue
+            balanced_selected.append(article)
+            for t in article_tickers:
+                per_ticker_counts[t] += 1
+            if len(balanced_selected) >= MAX_TOTAL_ARTICLES:
+                break
+
+        all_articles = balanced_selected
+
         # Prepare result
+        ticker_coverage: Dict[str, int] = {t: 0 for t in target_tickers}
+        for article in all_articles:
+            for t in article.get("tickers") or []:
+                if t in ticker_coverage:
+                    ticker_coverage[t] += 1
+
+        for article in all_articles:
+            article.pop("_uid", None)
+            article.pop("_published_ts", None)
+
         result = {
             "articles": all_articles,
             "count": len(all_articles),
             "sources": sources_processed,
-            "generated_at": datetime.utcnow().isoformat() + "Z"
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "lookback_days": LOOKBACK_DAYS,
+            "min_articles_per_ticker_target": MIN_ARTICLES_PER_TICKER,
+            "ticker_coverage": ticker_coverage,
+            "ticker_target_met": {
+                t: (ticker_coverage.get(t, 0) >= MIN_ARTICLES_PER_TICKER)
+                for t in target_tickers
+            },
         }
         
         # Save to persistent storage
@@ -450,6 +626,8 @@ def run_news_ingest():
         summary = {
             "processed_count": len(all_articles),
             "sources": sources_processed,
+            "ticker_coverage": ticker_coverage,
+            "target_tickers": target_tickers,
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "status": "completed"
         }

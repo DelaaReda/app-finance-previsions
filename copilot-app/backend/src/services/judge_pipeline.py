@@ -4,7 +4,7 @@ But: scorer news, assembler le payload, valider, parser la réponse LLM, et trac
 
 Contraintes:
 - Pas de cache silencieux, pas de fallback: si une donnée manque, on remonte l'erreur explicitement.
-- Live-only pour ML prior (yfinance), news top-5, macro avec deltas.
+- Live-only pour ML prior (yfinance), news multi-items (jusqu'à 30), macro avec deltas.
 - JSON LLM strict: dernière ligne = JSON obligatoire.
 """
 from __future__ import annotations
@@ -92,7 +92,7 @@ class JudgePayload(BaseModel):
     ticker: str = Field(..., pattern=r"^[A-Z0-9]{1,8}$")
     features: Dict[str, Any]
     phases: Dict[str, Any]
-    news: List[NewsItem] = Field(default_factory=list, max_items=5)
+    news: List[NewsItem] = Field(default_factory=list, max_items=30)
     attachments: Optional[List[Dict[str, Any]]] = None
     locale: str = "fr-FR"
     meta: Dict[str, Any]

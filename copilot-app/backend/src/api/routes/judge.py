@@ -8,6 +8,7 @@ import asyncio
 import os
 import re
 from copy import deepcopy
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 import time
 from typing import Dict, Any, List, Optional
@@ -116,6 +117,12 @@ JUDGE_CACHE_TTL_SECONDS = max(
 JUDGE_CACHE_MAX_ENTRIES = max(
     1, int(os.getenv("JUDGE_CACHE_MAX_ENTRIES", "64") or "64")
 )
+JUDGE_NEWS_ITEMS_PER_TICKER = min(
+    30, max(5, int(os.getenv("JUDGE_NEWS_ITEMS_PER_TICKER", "20") or "20"))
+)
+JUDGE_CHAR_BUDGET = max(
+    800, int(os.getenv("JUDGE_CHAR_BUDGET", "1800") or "1800")
+)
 _JUDGE_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 
 TICKER_NEWS_ALIAS_TERMS: Dict[str, List[str]] = {
@@ -173,7 +180,16 @@ def _normalize_ts_str(ts: Any) -> Optional[str]:
         return None
     try:
         if isinstance(ts, str):
-            return ts
+            raw = ts.strip()
+            if not raw:
+                return None
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except Exception:
+                dt = parsedate_to_datetime(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc).isoformat()
         if isinstance(ts, (int, float)):
             return datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
         if hasattr(ts, "isoformat"):
@@ -779,13 +795,20 @@ async def get_judge_verdicts(
                     return dt
                 except Exception:
                     try:
+                        dt = parsedate_to_datetime(str(ts_val))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return dt
+                    except Exception:
+                        pass
+                    try:
                         dt = datetime.strptime(str(ts_val), "%Y-%m-%d")
                         return dt.replace(tzinfo=timezone.utc)
                     except Exception:
                         return None
 
             def _score_news_items(
-                news_list: List[Dict[str, Any]], cap: int = 5
+                news_list: List[Dict[str, Any]], cap: int = 30
             ) -> List[Dict[str, Any]]:
                 """Rank news by recency then |sentiment|, keep top cap."""
                 scored = []
@@ -868,7 +891,9 @@ async def get_judge_verdicts(
                     or symu in (a.get("symbols") or [])
                 ]
                 if rel:
-                    return _score_news_items(rel, cap=12)
+                    return _score_news_items(
+                        rel, cap=max(JUDGE_NEWS_ITEMS_PER_TICKER + 5, 25)
+                    )
 
                 # Fallback: infer ticker mentions from title/summary for weakly-tagged feeds.
                 alias_terms = TICKER_NEWS_ALIAS_TERMS.get(symu, [])
@@ -881,7 +906,9 @@ async def get_judge_verdicts(
                     if any(term in text for term in alias_terms):
                         rel_fallback.append(a)
                 rel = rel_fallback
-                return _score_news_items(rel, cap=12)
+                return _score_news_items(
+                    rel, cap=max(JUDGE_NEWS_ITEMS_PER_TICKER + 5, 25)
+                )
 
             def _tech_for(sym: str) -> Dict[str, Any]:
                 data = prices_data.get(sym) or {}
@@ -1188,7 +1215,7 @@ async def get_judge_verdicts(
                 model_candidates=candidate_models,
                 timeout=120,  # 120s par appel LLM
                 retries_per_model=1,
-                char_budget=800,
+                char_budget=JUDGE_CHAR_BUDGET,
                 max_tokens=prof.max_tokens if prof else 1200,  # Use profile max_tokens
             )
 
@@ -1374,7 +1401,7 @@ async def get_judge_verdicts(
 
                     # News selection
                     t_news = time.perf_counter()
-                    news_items = _news_for(sym)[:5]  # limiter le volume
+                    news_items = _news_for(sym)[:JUDGE_NEWS_ITEMS_PER_TICKER]
                     met["news_ms"] = (
                         time.perf_counter() - t_news
                     ) * 1000.0
