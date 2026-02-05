@@ -6,6 +6,7 @@ import json
 import logging
 import asyncio
 import os
+from copy import deepcopy
 from pathlib import Path
 import time
 from typing import Dict, Any, List, Optional
@@ -108,8 +109,49 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 JUDGE_VERSION = "v3"
+JUDGE_CACHE_TTL_SECONDS = max(
+    0, int(os.getenv("JUDGE_CACHE_TTL_SECONDS", "120") or "120")
+)
+JUDGE_CACHE_MAX_ENTRIES = max(
+    1, int(os.getenv("JUDGE_CACHE_MAX_ENTRIES", "64") or "64")
+)
+_JUDGE_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 
 router = APIRouter(prefix="/api/judge", tags=["judge"])
+
+
+def _judge_cache_key(
+    *,
+    limit: int,
+    min_confidence: float,
+    ticker: Optional[List[str]],
+    sort_by: Optional[str],
+    sort_order: Optional[str],
+    profile: str,
+) -> str:
+    tickers = sorted({t.upper() for t in (ticker or [])})
+    key_obj = {
+        "v": JUDGE_VERSION,
+        "limit": int(limit),
+        "min_confidence": float(min_confidence),
+        "ticker": tickers,
+        "sort_by": sort_by or "confidence",
+        "sort_order": sort_order or "desc",
+        "profile": profile or "equity_1w",
+    }
+    return json.dumps(key_obj, sort_keys=True, separators=(",", ":"))
+
+
+def _prune_judge_cache() -> None:
+    if len(_JUDGE_RESPONSE_CACHE) <= JUDGE_CACHE_MAX_ENTRIES:
+        return
+    # Evict oldest entries first.
+    old_keys = sorted(
+        _JUDGE_RESPONSE_CACHE.keys(),
+        key=lambda k: _JUDGE_RESPONSE_CACHE[k].get("ts", 0.0),
+    )
+    for key in old_keys[: len(_JUDGE_RESPONSE_CACHE) - JUDGE_CACHE_MAX_ENTRIES]:
+        _JUDGE_RESPONSE_CACHE.pop(key, None)
 
 
 def _normalize_ts_str(ts: Any) -> Optional[str]:
@@ -427,6 +469,40 @@ async def get_judge_verdicts(
     """Get LLM judge verdicts for tickers (never-empty, cached). Supports multiple profiles."""
     logger.info(f"🔍 /api/judge called: limit={limit}, profile={profile}, ticker={ticker}")
     try:
+        cache_key: Optional[str] = None
+        if not debug and JUDGE_CACHE_TTL_SECONDS > 0:
+            cache_key = _judge_cache_key(
+                limit=limit,
+                min_confidence=min_confidence,
+                ticker=ticker,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                profile=profile,
+            )
+            cached_entry = _JUDGE_RESPONSE_CACHE.get(cache_key)
+            if cached_entry and isinstance(cached_entry.get("data"), dict):
+                age_seconds = time.time() - float(cached_entry.get("ts", 0.0))
+                if age_seconds < JUDGE_CACHE_TTL_SECONDS:
+                    cached_data = deepcopy(cached_entry["data"])
+                    source = cached_data.get("source")
+                    if isinstance(source, list):
+                        if "judge_cache_hit" not in source:
+                            source.append("judge_cache_hit")
+                    else:
+                        cached_data["source"] = ["judge_route", "judge_cache_hit"]
+                    cached_data["cache"] = {
+                        "hit": True,
+                        "age_seconds": round(age_seconds, 3),
+                        "ttl_seconds": JUDGE_CACHE_TTL_SECONDS,
+                    }
+                    return {
+                        "ok": True,
+                        "data": cached_data,
+                        "freshness": cached_data.get(
+                            "generated_at", datetime.utcnow().isoformat() + "Z"
+                        ),
+                    }
+                _JUDGE_RESPONSE_CACHE.pop(cache_key, None)
 
         async def compute_judge_verdicts():
             logger.info("🔄 compute_judge_verdicts started")
@@ -2252,9 +2328,19 @@ async def get_judge_verdicts(
                         "raw_answer": full_answer or verdict_text,
                         "generated_at": datetime.utcnow().isoformat() + "Z",
                         "model_version": model_used or "econ_llm_agent",
+                        "provider": (
+                            res.get("provider_raw") or res.get("provider")
+                            if isinstance(res, dict)
+                            else None
+                        ),
                         "source": ["judge_route", "forecasts_llm"],
                         "meta": {
                             "data_timestamps": data_timestamps,
+                            "provider": (
+                                res.get("provider_raw") or res.get("provider")
+                                if isinstance(res, dict)
+                                else None
+                            ),
                         },
                         **(
                             {
@@ -2380,9 +2466,9 @@ async def get_judge_verdicts(
                     try:
                         tv = build_judge_verdict(v, profile=profile)
                         if hasattr(tv, "model_dump"):
-                            typed_verdicts.append(tv.model_dump())
+                            typed_verdicts.append(tv.model_dump(exclude_none=True))
                         elif hasattr(tv, "dict"):
-                            typed_verdicts.append(tv.dict())
+                            typed_verdicts.append(tv.dict(exclude_none=True))
                     except Exception as e:
                         logger.info("verdict_typed_failed", extra={"error": str(e)})
                         continue
@@ -2400,6 +2486,12 @@ async def get_judge_verdicts(
         # Ici on pourrait rebrancher load_or_compute si tu veux du cache :
         # verdicts_data = await load_or_compute("judge_verdicts", compute_judge_verdicts)
         verdicts_data = await compute_judge_verdicts()
+        if cache_key and isinstance(verdicts_data, dict):
+            _JUDGE_RESPONSE_CACHE[cache_key] = {
+                "ts": time.time(),
+                "data": deepcopy(verdicts_data),
+            }
+            _prune_judge_cache()
 
         return {
             "ok": True,

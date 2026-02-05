@@ -351,9 +351,19 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
     """
     llm_dict, raw_answer = _extract_llm_block(row)
 
-    debug_payload = row.get("debug_payload") or {}
-    debug_llm_res = row.get("debug_llm_res")
-    features = debug_payload.get("features") or {}
+    raw_debug_payload = row.get("debug_payload")
+    debug_payload = (
+        raw_debug_payload
+        if isinstance(raw_debug_payload, dict) and raw_debug_payload
+        else None
+    )
+    raw_debug_llm_res = row.get("debug_llm_res")
+    debug_llm_res = (
+        raw_debug_llm_res
+        if isinstance(raw_debug_llm_res, dict) and raw_debug_llm_res
+        else None
+    )
+    features = (debug_payload or {}).get("features") or {}
 
     # --- Ticker / horizon ---
     ticker = row.get("ticker") or features.get("ticker") or "UNKNOWN"
@@ -459,8 +469,13 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
     )
 
     provider = None
-    if isinstance(debug_llm_res, dict):
-        provider = debug_llm_res.get("provider") or provider
+    row_meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    if isinstance(row.get("provider"), str):
+        provider = row.get("provider")
+    if not provider and isinstance(row_meta, dict):
+        provider = row_meta.get("provider")
+    if not provider and isinstance(debug_llm_res, dict):
+        provider = debug_llm_res.get("provider")
 
     source = row.get("source")
     if not isinstance(source, list):
@@ -472,7 +487,7 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         if isinstance(meta_in, dict) and meta_in.get("data_timestamps"):
             data_ts = meta_in.get("data_timestamps")
         else:
-            dp_meta = debug_payload.get("meta") or {}
+            dp_meta = (debug_payload or {}).get("meta") or {}
             if isinstance(dp_meta, dict) and dp_meta.get("data_timestamps"):
                 data_ts = dp_meta.get("data_timestamps")
     except Exception:
