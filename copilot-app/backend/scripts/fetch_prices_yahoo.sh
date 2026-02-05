@@ -90,13 +90,13 @@ cleanup() {
 trap cleanup EXIT
 
 date_to_epoch() {
-  python3 - <<PY
+  python3 - "$1" <<'PY'
 from datetime import datetime, timezone
 import sys
 s = sys.argv[1].strip()
 dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 print(int(dt.timestamp()))
-PY "$1"
+PY
 }
 
 if [[ -z "$END_DATE" ]]; then
@@ -121,13 +121,30 @@ PERIOD2="$(date_to_epoch "$END_DATE")"
 echo "Yahoo historical download:"
 echo "  start=$START_DATE end=$END_DATE interval=$INTERVAL events=$EVENTS"
 
+fetch_crumb() {
+  local c
+  c="$(curl -s -L -c "$COOKIE_FILE" 'https://query1.finance.yahoo.com/v1/test/getcrumb' || true)"
+  if [[ -n "$c" ]]; then
+    echo "$c"
+    return
+  fi
+  c="$(curl -s -L -c "$COOKIE_FILE" 'https://query2.finance.yahoo.com/v1/test/getcrumb' || true)"
+  if [[ -n "$c" ]]; then
+    echo "$c"
+    return
+  fi
+  echo ""
+}
+
 # Get crumb (may require subscription login)
-CRUMB="$(curl -s -c "$COOKIE_FILE" 'https://query1.finance.yahoo.com/v1/test/getcrumb')"
+CRUMB="$(fetch_crumb)"
 if [[ -z "$CRUMB" ]]; then
   # Try parsing from quote history page
   FIRST="${TICKERS[0]}"
-  HTML="$(curl -s -c "$COOKIE_FILE" -b "$COOKIE_FILE" "https://finance.yahoo.com/quote/${FIRST}/history?p=${FIRST}")"
-  CRUMB="$(echo "$HTML" | sed -n 's/.*"CrumbStore":{"crumb":"\\([^"]*\\)".*/\\1/p' | head -n 1 | sed 's/\\\\u002F/\\//g')"
+  HTML="$(curl -s -L -c "$COOKIE_FILE" -b "$COOKIE_FILE" "https://finance.yahoo.com/quote/${FIRST}/history?p=${FIRST}" || true)"
+  if [[ -n "$HTML" ]]; then
+    CRUMB="$(echo "$HTML" | sed -n 's/.*"CrumbStore":{"crumb":"\\([^"]*\\)".*/\\1/p' | head -n 1 | sed 's|\\\\u002F|/|g')"
+  fi
 fi
 
 if [[ -z "$CRUMB" ]]; then
