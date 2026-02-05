@@ -105,6 +105,12 @@ refresh_live_data() {
     run_job "jobs/news_ingest.py"
     run_job "jobs/news_sentiment.py"
     run_job "jobs/macro_series_snapshot.py"
+    if [ -x "scripts/fetch_prices_stooq.sh" ]; then
+        log " → scripts/fetch_prices_stooq.sh"
+        if ! ./scripts/fetch_prices_stooq.sh; then
+            log_warning "Job échoué: scripts/fetch_prices_stooq.sh (on continue)"
+        fi
+    fi
     run_job "jobs/stocks_prices_refresh.py"
     run_job "jobs/judge_enrich.py"
     run_job "jobs/judge_quality_report.py"

@@ -6,7 +6,9 @@ Task: Cache-First Architecture - Pré-calculer stocks prices
 """
 from datetime import datetime, timedelta
 import io
+import json
 import subprocess
+import time
 import logging
 from pathlib import Path
 import sys
@@ -128,8 +130,44 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         def _fetch_stooq_prices(sym: str) -> pd.DataFrame:
             try:
                 stooq_sym = _stooq_symbol(sym)
-                url = f"https://stooq.com/q/d/l/?s={stooq_sym}&i=d"
+                # Prefer stooq.pl (stooq.com can fail DNS in some environments)
+                urls = [
+                    f"https://stooq.pl/q/d/l/?s={stooq_sym}&i=d",
+                    f"https://stooq.com/q/d/l/?s={stooq_sym}&i=d",
+                ]
                 # Use curl via subprocess (more reliable in this environment)
+                df = pd.DataFrame()
+                for url in urls:
+                    res = subprocess.run(
+                        ["curl", "-sS", url],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=20,
+                    )
+                    if res.returncode != 0 or not res.stdout:
+                        continue
+                    try:
+                        df = pd.read_csv(io.StringIO(res.stdout))
+                    except Exception:
+                        df = pd.DataFrame()
+                    if not df.empty:
+                        break
+                if df.empty or "Date" not in df.columns or "Close" not in df.columns:
+                    return pd.DataFrame()
+                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+                df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+                df = df[df.index >= pd.to_datetime(start_date)]
+                return df
+            except Exception:
+                return pd.DataFrame()
+
+        def _fetch_yahoo_chart(sym: str) -> pd.DataFrame:
+            """Fallback to Yahoo chart API (avoids yfinance guce redirects)."""
+            hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]
+            params = f"range={timeframe}&interval=1d&includePrePost=false&events=div%7Csplit"
+            for host in hosts:
+                url = f"https://{host}/v8/finance/chart/{sym}?{params}"
                 res = subprocess.run(
                     ["curl", "-sS", url],
                     check=False,
@@ -138,10 +176,52 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                     timeout=20,
                 )
                 if res.returncode != 0 or not res.stdout:
+                    continue
+                try:
+                    js = json.loads(res.stdout)
+                except Exception:
+                    continue
+                result = (js.get("chart", {}).get("result") or [None])[0]
+                if not result:
+                    continue
+                timestamps = result.get("timestamp") or []
+                indicators = (result.get("indicators", {}).get("quote") or [{}])[0]
+                closes = indicators.get("close") or []
+                if not timestamps or not closes:
+                    continue
+                rows = []
+                for ts, close in zip(timestamps, closes):
+                    if close is None:
+                        continue
+                    try:
+                        dt = datetime.utcfromtimestamp(int(ts))
+                    except Exception:
+                        continue
+                    rows.append({"Date": dt, "Close": float(close)})
+                if not rows:
+                    continue
+                df = pd.DataFrame(rows).set_index("Date").sort_index()
+                df = df[df.index >= pd.to_datetime(start_date)]
+                return df
+            return pd.DataFrame()
+
+        def _load_stooq_cache(sym: str) -> pd.DataFrame:
+            try:
+                cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "stooq"
+                fp = cache_dir / f"{sym}.csv"
+                if not fp.exists():
                     return pd.DataFrame()
-                df = pd.read_csv(io.StringIO(res.stdout))
-                if df.empty or "Date" not in df.columns or "Close" not in df.columns:
+                df = pd.read_csv(fp)
+                if df.empty:
                     return pd.DataFrame()
+                date_col = "Date" if "Date" in df.columns else ("Data" if "Data" in df.columns else None)
+                close_col = "Close" if "Close" in df.columns else ("Zamkniecie" if "Zamkniecie" in df.columns else None)
+                if not date_col or not close_col:
+                    return pd.DataFrame()
+                if date_col != "Date":
+                    df = df.rename(columns={date_col: "Date"})
+                if close_col != "Close":
+                    df = df.rename(columns={close_col: "Close"})
                 df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
                 df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
                 df = df[df.index >= pd.to_datetime(start_date)]
@@ -157,7 +237,11 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
             try:
                 logger.debug(f"Fetching prices for {ticker}...")
                 
-                df = get_price_history(ticker, start=start_date, interval="1d")
+                df = _load_stooq_cache(ticker)
+                if df is None or df.empty:
+                    df = get_price_history(ticker, start=start_date, interval="1d")
+                if df is None or df.empty:
+                    df = _fetch_yahoo_chart(ticker)
                 if df is None or df.empty:
                     df = _fetch_stooq_prices(ticker)
                 if df is None or df.empty:
@@ -189,6 +273,7 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                     "count": len(points),
                     "start_date": start_date,
                 }
+                time.sleep(0.2)
                 
             except Exception as e:
                 logger.warning(f"Failed to fetch prices for {ticker}: {e}")
@@ -197,7 +282,7 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         
         # Sauvegarder (éviter d'écraser un cache existant si aucun résultat)
         if not results:
-            cached = load_json("stocks/prices") if not force else None
+            cached = load_json("stocks/prices")
             if cached and cached.get("tickers"):
                 logger.warning("No fresh prices fetched, keeping existing cache")
                 return {
