@@ -28,9 +28,11 @@
 
 ## Structure active
 - Code backend : `copilot-app/backend/src/...` (API FastAPI, services, analytics).
+- Entrée API unique : `copilot-app/backend/src/api/main.py` (lancement via `copilot-app/backend/run_api.py`).
 - Jobs (ingest/news/macro/judge_enrich) : `copilot-app/backend/jobs/` (lancés par le script).
 - Données (snapshots) : `copilot-app/backend/data/`.
 - Frontend statique : `copilot-app/frontend/app` (fichiers HTML/CSS/JS, pas de build Vite).
+- Anciennes variantes archivées : `copilot-app/backend/legacy-archive/`.
 
 ## Dépendances / env
 - Variables : `copilot-app/backend/.env` (OPEN_ROUTER_API_KEY, clés FRED, etc.).

@@ -33,8 +33,10 @@
 
 ## Où est le code actif
 - Backend : `copilot-app/backend/src/...` (API FastAPI, services, analytics).
+- Entrée API unique : `copilot-app/backend/src/api/main.py` (appelée par `copilot-app/backend/run_api.py`).
 - Jobs de génération (news, macro, judge_enrich…) : `copilot-app/backend/jobs/` (appelés par le script).
 - Données (snapshots) : `copilot-app/backend/data/`.
+- Anciennes variantes/compat : `copilot-app/backend/legacy-archive/`.
 
 ## Tests rapides (manuels)
 - Health : `curl -s http://localhost:8050/api/health`

@@ -408,117 +408,66 @@ def create_app() -> FastAPI:
     # Routes
     register_routes(app)
 
-    # Include dashboard routes
+    # Include modular route packages once (single active API path).
     try:
         from .routes.dashboard import dashboard_router
         app.include_router(dashboard_router, prefix="/api/dashboard")
     except ImportError as e:
         print(f"⚠️  Failed to include dashboard routes: {e}")
 
-    # Include brief routes
     try:
         from .routes.brief_routes import router as brief_router
         app.include_router(brief_router)
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
 
-    # Include quality routes
     try:
         from .routes.quality import router as quality_router
         app.include_router(quality_router)
     except ImportError as e:
         print(f"⚠️  Failed to include quality routes: {e}")
 
-    # Include cache management routes
     try:
         from .routes.cache_routes import router as cache_router
         app.include_router(cache_router)
     except ImportError as e:
         print(f"⚠️  Failed to include cache routes: {e}")
 
-    # Include portfolios/watchlists routes
     try:
         from .routes.portfolios import router as portfolios_router
         app.include_router(portfolios_router)
     except ImportError as e:
         print(f"⚠️  Failed to include portfolios routes: {e}")
 
-    # Include forecasts routes
     try:
         from .routes.forecasts import forecasts_router
         app.include_router(forecasts_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include forecasts routes: {e}")
 
-    # Include forecasts routes
-    try:
-        from .routes.forecasts import forecasts_router
-        app.include_router(forecasts_router, prefix="/api")
-    except ImportError as e:
-        print(f"⚠️  Failed to include forecasts routes: {e}")
-
-    # Include analytics routes
     try:
         from .routes.analytics import router as analytics_router
         app.include_router(analytics_router)
     except ImportError as e:
         print(f"⚠️  Failed to include analytics routes: {e}")
 
-    # Include stocks routes (top, universe, etc.)
     try:
         from .routes.stocks import stocks_router
         app.include_router(stocks_router)
     except ImportError as e:
         print(f"⚠️  Failed to include stocks routes: {e}")
 
-    # Include alerts routes
     try:
         from .routes.alerts import router as alerts_router
         app.include_router(alerts_router)
     except ImportError as e:
         print(f"⚠️  Failed to include alerts routes: {e}")
 
-    # Include judge routes (LLM verdicts)
     try:
         from .routes.judge import judge_router
         app.include_router(judge_router)
     except ImportError as e:
         print(f"⚠️  Failed to include judge routes: {e}")
-
-    # Include legacy macro routes (from api.routes.macro) via compat wrapper
-    try:
-        from .routes.macro_legacy import router as macro_legacy_router
-        app.include_router(macro_legacy_router, prefix="/api")
-    except ImportError as e:
-        print(f"⚠️  Failed to include legacy macro routes: {e}")
-
-    # Include legacy news routes (from api.routes.news*) via compat wrapper
-    try:
-        from .routes.news_legacy import router as news_legacy_router
-        app.include_router(news_legacy_router, prefix="/api")
-    except ImportError as e:
-        print(f"⚠️  Failed to include legacy news routes: {e}")
-
-    # Include forecasts routes
-    try:
-        from api.routes.forecasts import forecasts_router
-        app.include_router(forecasts_router, prefix="/api")
-    except ImportError as e:
-        print(f"⚠️  Failed to include forecasts routes: {e}")
-
-    # Include judge routes
-    try:
-        from .routes.judge import router as judge_router
-        app.include_router(judge_router)
-    except ImportError as e:
-        print(f"⚠️  Failed to include judge routes: {e}")
-
-    # Include stocks routes
-    try:
-        from .routes.stocks import router as stocks_router
-        app.include_router(stocks_router)
-    except ImportError as e:
-        print(f"⚠️  Failed to include stocks routes: {e}")
 
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")
@@ -3719,73 +3668,6 @@ def register_routes(app: FastAPI):
                 "filtered_ticker_count": 0,
                 "error": str(e),
                 "generated_at": datetime.utcnow().isoformat(),
-            })
-
-    @app.get("/api/alerts/legacy")
-    async def alerts(
-        tickers: List[str] = Query([], description="List of tickers to get alerts for"),
-        limit: int = Query(50, ge=1, le=200, description="Max alerts to return")
-    ):
-        """Get market alerts based on technical indicators and news (SMA/RSI/sentiment/news)."""
-        try:
-            from research.alerts import alerts_for_ticker
-            from core.data_access import get_close_series
-            from analytics.phase2_technical import compute_indicators
-            
-            all_alerts = []
-            
-            # If no tickers provided, use default universe
-            tickers_to_check = tickers if tickers else ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
-            
-            for ticker in tickers_to_check:
-                try:
-                    # Get price data
-                    series = get_close_series(ticker)
-                    if series is None or series.empty:
-                        continue
-                    
-                    # Convert series to DataFrame for indicators
-                    df_prices = pd.DataFrame({'Close': series})
-                    df_prices.index.name = 'Date'
-                    
-                    # Calculate technical indicators
-                    df_indicators = compute_indicators(df_prices)
-                    
-                    # Get recent news score (simplified - using last value as placeholder)
-                    recent_news_score = 0.5  # This would typically come from news scoring system
-                    
-                    # Generate alerts for this ticker
-                    ticker_alerts = alerts_for_ticker(df_prices, df_indicators, recent_news_score, ticker.upper())
-                    
-                    for alert in ticker_alerts:
-                        all_alerts.append(alert)
-                        
-                except Exception as e:
-                    # Continue with other tickers if one fails
-                    continue
-            
-            # Sort alerts by severity and limit results
-            severity_order = {"critical": 0, "warning": 1, "info": 2}
-            all_alerts.sort(key=lambda x: severity_order.get(x.get("severity", "info"), 999))
-            
-            # Return top alerts
-            top_alerts = all_alerts[:limit]
-            
-            return _ok({
-                "alerts": top_alerts,
-                "count": len(top_alerts),
-                "total_available": len(all_alerts),
-                "tickers_queried": tickers_to_check,
-                "generated_at": datetime.utcnow().isoformat()
-            })
-            
-        except Exception as e:
-            return _ok({
-                "alerts": [],
-                "count": 0,
-                "message": "Alerts generation fallback (dependency unavailable)",
-                "generated_at": datetime.utcnow().isoformat(),
-                "source": ["alerts_route", "fallback"],
             })
 
     # ====================== VERSIONED NOTES (V1 requirement) =======================
