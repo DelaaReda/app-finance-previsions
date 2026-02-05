@@ -19,6 +19,9 @@ cache/
 artifacts/
 artifacts_phase1/
 logs/
+logs-qwen-runs/
+.qwen_runs/
+copilot-app/backend/.qwen_runs/
 *.log
 *.err
 *.out

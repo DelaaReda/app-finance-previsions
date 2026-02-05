@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - defensive fallback
 
 # Ensure backend paths
 backend_root = Path(__file__).resolve().parents[2]
-for p in (backend_root / "src", backend_root):
+for p in (backend_root, backend_root / "src"):
     p_str = str(p)
     if p_str not in sys.path:
         sys.path.insert(0, p_str)
@@ -25,7 +25,7 @@ for p in (backend_root / "src", backend_root):
 try:
     from services.alert_rules import alert_rules_service
 except ImportError:  # pragma: no cover
-    from backend.services.alert_rules import alert_rules_service  # type: ignore
+    from src.services.alert_rules import alert_rules_service  # type: ignore
 
 try:
     from services.alerts_service import (
