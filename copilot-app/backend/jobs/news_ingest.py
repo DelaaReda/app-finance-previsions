@@ -68,6 +68,98 @@ COMPANY_KEYWORDS = {
     "AMAZON": "AMZN",
 }
 
+# Concept patterns to improve ETF/index/company tagging for generic market headlines.
+TICKER_CONTEXT_PATTERNS = {
+    "SPY": [
+        r"\bS&P\s*500\b",
+        r"\bSP500\b",
+        r"\bSPX\b",
+        r"\bS AND P 500\b",
+    ],
+    "QQQ": [
+        r"\bNASDAQ[-\s]?100\b",
+        r"\bNDX\b",
+    ],
+    "TSLA": [
+        r"\bTESLA\b",
+        r"\bELON MUSK\b",
+        r"\bMUSK\b",
+    ],
+    "AAPL": [
+        r"\bAPPLE\b",
+        r"\bIPHONE\b",
+    ],
+    "GOOGL": [
+        r"\bALPHABET\b",
+        r"\bGOOGLE\b",
+    ],
+    "MSFT": [
+        r"\bMICROSOFT\b",
+    ],
+    "AMZN": [
+        r"\bAMAZON\b",
+    ],
+    "META": [
+        r"\bMETA\b",
+        r"\bFACEBOOK\b",
+    ],
+    "NVDA": [
+        r"\bNVIDIA\b",
+        r"\bNVDA\b",
+    ],
+}
+
+
+def extract_tickers(article: Dict[str, Any], known_tickers: set[str], source_name: str = "") -> List[str]:
+    """
+    Extract and rank likely tickers from article text.
+
+    Ranking weights:
+      - cashtags ($AAPL): strong
+      - explicit ticker symbol in text: strong
+      - company keyword aliases: medium
+      - context patterns (S&P 500 -> SPY, Nasdaq-100 -> QQQ): medium
+      - source hint (feed named "... - AAPL"): weak
+    """
+    text = f"{article.get('title', '')} {article.get('summary', '')}".upper()
+    scores: Dict[str, int] = {}
+
+    def bump(ticker: str, weight: int) -> None:
+        if not ticker:
+            return
+        t = ticker.upper()
+        scores[t] = scores.get(t, 0) + weight
+
+    # Cashtags ($AAPL, $TSLA, ...)
+    for tagged in re.findall(r"\$([A-Z]{1,5})", text):
+        bump(tagged, 8)
+
+    # Direct symbol detection (bounded)
+    for kt in known_tickers:
+        if re.search(rf"\b{re.escape(kt)}\b", text):
+            bump(kt, 6)
+
+    # Company aliases
+    for name, tk in COMPANY_KEYWORDS.items():
+        if name in text:
+            bump(tk, 4)
+
+    # Market context aliases (index names -> ETFs, etc.)
+    for tk, patterns in TICKER_CONTEXT_PATTERNS.items():
+        for pat in patterns:
+            if re.search(pat, text):
+                bump(tk, 3)
+                break
+
+    # Feed source hint
+    source_upper = (source_name or "").upper()
+    for kt in known_tickers:
+        if kt and kt in source_upper:
+            bump(kt, 2)
+
+    ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
+    return [ticker for ticker, _ in ranked[:5]]
+
 def fetch_rss_feed(url: str, timeout: int = 10) -> str:
     """
     Fetch RSS feed content from URL
@@ -318,16 +410,11 @@ def run_news_ingest():
                     article['score'] = score_article(article)
                     article['sentiment'] = detect_sentiment(article)
                     
-                    # Ticker extraction améliorée : $TICKER + détection sur liste connue + mots-clés société
-                    text = (article.get('title', '') + ' ' + article.get('summary', '')).upper()
-                    tickers = set(re.findall(r'\$([A-Z]{1,5})', text))
-                    for kt in known_tickers:
-                        if re.search(rf'\b{re.escape(kt)}\b', text):
-                            tickers.add(kt)
-                    for name, tk in COMPANY_KEYWORDS.items():
-                        if name in text:
-                            tickers.add(tk)
-                    article['tickers'] = list(tickers)[:5]  # Max 5 uniques
+                    article['tickers'] = extract_tickers(
+                        article,
+                        known_tickers=known_tickers,
+                        source_name=source.get("name", ""),
+                    )
                     
                     # Add ingestion timestamp
                     article['ingested_at'] = datetime.utcnow().isoformat() + "Z"

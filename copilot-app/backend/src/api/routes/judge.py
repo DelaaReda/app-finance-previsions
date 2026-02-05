@@ -117,6 +117,18 @@ JUDGE_CACHE_MAX_ENTRIES = max(
 )
 _JUDGE_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 
+TICKER_NEWS_ALIAS_TERMS: Dict[str, List[str]] = {
+    "SPY": ["S&P 500", "SP500", "SPX", "S AND P 500"],
+    "QQQ": ["NASDAQ 100", "NASDAQ-100", "NDX"],
+    "TSLA": ["TESLA", "ELON MUSK", "MUSK"],
+    "AAPL": ["APPLE", "IPHONE"],
+    "GOOGL": ["GOOGLE", "ALPHABET"],
+    "MSFT": ["MICROSOFT"],
+    "AMZN": ["AMAZON"],
+    "META": ["META", "FACEBOOK"],
+    "NVDA": ["NVIDIA"],
+}
+
 router = APIRouter(prefix="/api/judge", tags=["judge"])
 
 
@@ -854,6 +866,20 @@ async def get_judge_verdicts(
                     if symu in (a.get("tickers") or [])
                     or symu in (a.get("symbols") or [])
                 ]
+                if rel:
+                    return _score_news_items(rel, cap=12)
+
+                # Fallback: infer ticker mentions from title/summary for weakly-tagged feeds.
+                alias_terms = TICKER_NEWS_ALIAS_TERMS.get(symu, [])
+                rel_fallback: List[Dict[str, Any]] = []
+                for a in articles:
+                    text = f"{a.get('title', '')} {a.get('summary', '')}".upper()
+                    if re.search(rf"\b{re.escape(symu)}\b", text):
+                        rel_fallback.append(a)
+                        continue
+                    if any(term in text for term in alias_terms):
+                        rel_fallback.append(a)
+                rel = rel_fallback
                 return _score_news_items(rel, cap=12)
 
             def _tech_for(sym: str) -> Dict[str, Any]:
@@ -930,66 +956,111 @@ async def get_judge_verdicts(
             def _macro_snapshot():
                 out: Dict[str, Any] = {}
 
+                def _parse_macro_date(val: Any) -> Optional[datetime]:
+                    if not val:
+                        return None
+                    s = str(val)
+                    if s.endswith("Z"):
+                        s = s[:-1]
+                    try:
+                        if "T" in s:
+                            dt = datetime.fromisoformat(s)
+                        else:
+                            dt = datetime.fromisoformat(f"{s}T00:00:00")
+                    except Exception:
+                        return None
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt
+
                 def last_and_delta(key, win: int = 21):
                     series = macro_series.get(key, {}).get("observations") or []
                     if not series:
-                        return None, None
+                        return None, None, None
                     vals: List[float] = []
+                    dates: List[Optional[str]] = []
                     for s in series:
                         v = s.get("value")
                         if v is None:
                             continue
                         try:
                             vals.append(float(v))
+                            d = s.get("date")
+                            dates.append(str(d) if d else None)
                         except (TypeError, ValueError):
                             continue
                     if not vals:
-                        return None, None
+                        return None, None, None
                     last = vals[-1]
+                    last_date = dates[-1] if dates else None
                     delta = None
                     if len(vals) > win:
                         prev = vals[-1 - win]
                         if prev not in (None, 0):
                             delta = (last - prev) / prev
-                    return last, delta
+                    return last, delta, last_date
 
-                out["vix"], out["vix_delta_1m"] = last_and_delta("VIXCLS", 21)
-                out["us10y"], out["us10y_delta_1m"] = last_and_delta(
+                macro_dates: List[str] = []
+
+                out["vix"], out["vix_delta_1m"], vix_date = last_and_delta("VIXCLS", 21)
+                out["us10y"], out["us10y_delta_1m"], us10y_date = last_and_delta(
                     "DGS10", 21
                 )
-                cpi_last, cpi_delta = last_and_delta("CPIAUCSL", 1)
+                if vix_date:
+                    macro_dates.append(vix_date)
+                if us10y_date:
+                    macro_dates.append(us10y_date)
+
+                cpi_last, cpi_delta, cpi_last_date = last_and_delta("CPIAUCSL", 1)
                 out["cpi_last"] = cpi_last
                 out["cpi_delta_1m"] = cpi_delta
-                if macro_series.get("CPIAUCSL"):
-                    obs = macro_series.get("CPIAUCSL", {}).get(
-                        "observations"
-                    ) or [{}]
-                    out["cpi_last_date"] = obs[-1].get("date")
-                else:
-                    out["cpi_last_date"] = None
+                out["cpi_last_date"] = cpi_last_date
+                if cpi_last_date:
+                    macro_dates.append(cpi_last_date)
 
                 # DXY (broad trade-weighted USD) si dispo
                 for key in ("DTWEXBGS", "DTWEXAFEGS", "DXY"):
-                    val, delta = last_and_delta(key, 21)
+                    val, delta, dxy_date = last_and_delta(key, 21)
                     if val is not None:
                         out["dxy"] = val
                         out["dxy_delta_1m"] = delta
                         out["dxy_series"] = key
+                        out["dxy_last_date"] = dxy_date
+                        if dxy_date:
+                            macro_dates.append(dxy_date)
                         break
 
                 # Commodities (WTI/Brent/Gold) si présents
-                wti, wti_delta = last_and_delta("DCOILWTICO", 21)
-                brent, brent_delta = last_and_delta("DCOILBRENTEU", 21)
-                gold, gold_delta = last_and_delta("GOLDAMGBD228NLBM", 21)
+                wti, wti_delta, wti_date = last_and_delta("DCOILWTICO", 21)
+                brent, brent_delta, brent_date = last_and_delta("DCOILBRENTEU", 21)
+                gold, gold_delta, gold_date = last_and_delta("GOLDAMGBD228NLBM", 21)
                 if wti is not None:
                     out["wti"] = wti
                     out["wti_delta_1m"] = wti_delta
+                    out["wti_last_date"] = wti_date
+                    if wti_date:
+                        macro_dates.append(wti_date)
                 if brent is not None:
                     out["brent"] = brent
                     out["brent_delta_1m"] = brent_delta
+                    out["brent_last_date"] = brent_date
+                    if brent_date:
+                        macro_dates.append(brent_date)
                 if gold is not None:
                     out["gold"] = gold
                     out["gold_delta_1m"] = gold_delta
+                    out["gold_last_date"] = gold_date
+                    if gold_date:
+                        macro_dates.append(gold_date)
+
+                if macro_dates:
+                    latest_dt = max(
+                        (d for d in (_parse_macro_date(v) for v in macro_dates) if d is not None),
+                        default=None,
+                    )
+                    out["latest_date"] = latest_dt.date().isoformat() if latest_dt else None
+                else:
+                    out["latest_date"] = None
                 return out
 
             def _ownership_for(sym: str) -> Dict[str, Any]:
@@ -1334,6 +1405,7 @@ async def get_judge_verdicts(
 
                     # Price features (multi-horizon) from cached price points
                     price_features = {}
+                    price_points = []
                     try:
                         price_points = (
                             prices_data.get(sym, {}).get("points")
@@ -2289,21 +2361,72 @@ async def get_judge_verdicts(
                     except Exception:
                         price_live_ts = None
 
+                    price_history_ts = None
+                    try:
+                        if price_points:
+                            price_history_ts = _normalize_ts_str(price_points[-1][0])
+                    except Exception:
+                        price_history_ts = None
+
                     data_timestamps = {
-                        "macro": macro_ctx.get("cpi_last_date"),
+                        "macro": macro_ctx.get("latest_date") or macro_ctx.get("cpi_last_date"),
+                        "macro_latest": macro_ctx.get("latest_date"),
+                        "macro_cpi": macro_ctx.get("cpi_last_date"),
                         "price_live": price_live_ts,
+                        "price_history": price_history_ts,
                         "news_last": latest_news_ts,
                     }
 
                     # Alerte fraîcheur macro si trop ancien (>90j)
                     try:
-                        if macro_ctx.get("cpi_last_date"):
-                            last_macro = datetime.fromisoformat(str(macro_ctx["cpi_last_date"]) + "T00:00:00+00:00")
+                        macro_ref_date = macro_ctx.get("latest_date") or macro_ctx.get("cpi_last_date")
+                        if macro_ref_date:
+                            last_macro = datetime.fromisoformat(str(macro_ref_date) + "T00:00:00+00:00")
                             age_days = (datetime.now(timezone.utc) - last_macro).days
                             if age_days > 90:
                                 parsed.setdefault("data_needed", []).append(f"macro stale ({age_days}d)")
                     except Exception:
                         pass
+
+                    # Deterministic cleanup of LLM-proposed data_needed.
+                    if isinstance(parsed, dict):
+                        raw_needed = parsed.get("data_needed")
+                        if not isinstance(raw_needed, list):
+                            raw_needed = []
+
+                        has_rsi = feat.get("tech", {}).get("rsi") is not None
+                        has_news = len(news_items) > 0
+                        has_macro = bool(data_timestamps.get("macro"))
+                        has_price_live = bool(data_timestamps.get("price_live"))
+                        has_price_history = bool(data_timestamps.get("price_history"))
+
+                        cleaned_needed: List[str] = []
+                        seen_needed = set()
+                        for item in raw_needed:
+                            txt = str(item).strip()
+                            if not txt:
+                                continue
+                            low = txt.lower()
+
+                            # Drop asks already satisfied by payload/context.
+                            if has_rsi and "rsi" in low:
+                                continue
+                            if has_news and ("news sentiment" in low or "real-time news sentiment" in low):
+                                continue
+                            if has_macro and low in {"macro data", "macro indicators", "latest macro data"}:
+                                continue
+                            if has_price_live and ("real-time price" in low or "prix en temps réel" in low):
+                                continue
+                            if has_price_history and ("price history" in low or "historique prix" in low):
+                                continue
+
+                            key = low
+                            if key in seen_needed:
+                                continue
+                            seen_needed.add(key)
+                            cleaned_needed.append(txt)
+
+                        parsed["data_needed"] = cleaned_needed[:8]
 
                     return {
                         "ticker": sym,
