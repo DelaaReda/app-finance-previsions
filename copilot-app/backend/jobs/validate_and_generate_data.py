@@ -7,13 +7,16 @@ Includes LLM Judge data generation for non-empty pages
 import sys
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import logging
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Max age before forecasts are considered stale (hours)
+FORECASTS_MAX_AGE_HOURS = int(os.getenv("FORECASTS_MAX_AGE_HOURS", "24") or "24")
 
 # Add backend to path
 backend_root = Path(__file__).resolve().parents[1]
@@ -45,6 +48,10 @@ def check_data_file(file_key: str, min_items: int = 1) -> tuple:
         if not rows:
             rows = data.get('risks', [])
         
+        # If tickers dict exists (prices cache)
+        if not rows and isinstance(data.get("tickers"), dict):
+            rows = list(data.get("tickers", {}).values())
+
         # If data is a list directly
         if isinstance(data, list):
             rows = data
@@ -54,6 +61,34 @@ def check_data_file(file_key: str, min_items: int = 1) -> tuple:
     except Exception as e:
         logger.debug(f"Error checking {file_key}: {e}")
         return False, None
+
+
+def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        s = str(ts).strip()
+        if not s:
+            return None
+        if s.endswith("Z"):
+            s = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _is_stale(data: Dict[str, Any], max_age_hours: int) -> bool:
+    if not isinstance(data, dict):
+        return True
+    ts = data.get("freshness") or data.get("generated_at") or data.get("saved_at")
+    dt = _parse_iso(ts)
+    if not dt:
+        return True
+    age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600.0
+    return age_hours > max(1, int(max_age_hours))
 
 def generate_forecasts() -> bool:
     """Generate forecasts data"""
@@ -128,6 +163,17 @@ def generate_market_intelligence() -> bool:
         logger.debug(f"Market intelligence generation not available: {e}")
         return False
 
+def generate_prices() -> bool:
+    """Generate cached stock prices for evaluation"""
+    try:
+        from jobs.stocks_prices_refresh import run_stocks_prices_job
+        result = run_stocks_prices_job(force=True, timeframe="1y")
+        status = (result or {}).get("status")
+        return status in {"completed", "cached"}
+    except Exception as e:
+        logger.error(f"❌ Failed to generate prices: {e}")
+        return False
+
 def generate_brief() -> bool:
     """Generate market brief data"""
     try:
@@ -139,6 +185,16 @@ def generate_brief() -> bool:
         return False
     except Exception as e:
         logger.debug(f"Market brief generation not available: {e}")
+        return False
+
+def generate_judge_quality() -> bool:
+    """Generate judge quality report snapshot"""
+    try:
+        from jobs.judge_quality_report import run_judge_quality_report
+        report = run_judge_quality_report(horizon_days=5, min_samples=20)
+        return bool(report)
+    except Exception as e:
+        logger.error(f"❌ Failed to generate judge quality report: {e}")
         return False
 
 def generate_llm_judge_data() -> bool:
@@ -214,11 +270,13 @@ def validate_and_generate_all() -> Dict[str, Any]:
     }
     
     # Optional but recommended files
-optional_files = {
+    optional_files = {
         "market_intelligence": {"min_items": 0, "generator": generate_market_intelligence},
         "brief_weekly": {"min_items": 0, "generator": generate_brief},
         "brief_daily": {"min_items": 0, "generator": generate_brief},
         "llm_judge": {"min_items": 0, "generator": generate_llm_judge_data},
+        "stocks/prices": {"min_items": 1, "generator": generate_prices},
+        "judge_quality": {"min_items": 0, "generator": generate_judge_quality},
         # Ensure KPIs aren’t empty: persist minimal backtests snapshot
         "backtests": {"min_items": 0, "generator": lambda: __import__('jobs.backtests_simple', fromlist=['run_backtests_simple']).run_backtests_simple()},
     }
@@ -226,6 +284,7 @@ optional_files = {
     results = {
         "validated": {},
         "generated": {},
+        "stale": [],
         "missing": [],
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
@@ -233,6 +292,11 @@ optional_files = {
     # Check required files
     for file_key, config in required_files.items():
         exists, data = check_data_file(file_key, config["min_items"])
+        if file_key == "forecasts" and exists and _is_stale(data or {}, FORECASTS_MAX_AGE_HOURS):
+            logger.warning(f"⚠️  {file_key} is stale (> {FORECASTS_MAX_AGE_HOURS}h), regenerating...")
+            results["stale"].append(file_key)
+            exists = False
+
         results["validated"][file_key] = exists
         
         if not exists:

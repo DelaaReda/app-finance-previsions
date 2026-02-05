@@ -46,6 +46,13 @@ def run_forecasts_job(tickers: List[str] = None) -> Dict[str, Any]:
         # Save to persistent storage using correct format: key, payload, source, version
         logger.info("Saving forecasts to storage...")
         save_json("forecasts", forecasts, source=["job:forecasts", "ml_model", "g4f_llm"])
+        # Also snapshot under data/forecast/dt=YYYYMMDD/forecasts.json for evaluation history
+        try:
+            dt_tag = datetime.utcnow().strftime("%Y%m%d")
+            snapshot_key = f"forecast/dt={dt_tag}/forecasts"
+            save_json(snapshot_key, forecasts, source=["job:forecasts", "snapshot"])
+        except Exception as e:
+            logger.warning(f"Failed to persist forecasts snapshot: {e}")
         
         # Return summary
         # Extract count depending on the structure of forecasts

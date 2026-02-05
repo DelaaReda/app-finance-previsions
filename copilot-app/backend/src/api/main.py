@@ -529,6 +529,13 @@ def create_app() -> FastAPI:
                 except ImportError:
                     run_macro_snapshot_job = None
             try:
+                from jobs.stocks_prices_refresh import run_stocks_prices_job
+            except ImportError:
+                try:
+                    from backend.jobs.stocks_prices_refresh import run_stocks_prices_job
+                except ImportError:
+                    run_stocks_prices_job = None
+            try:
                 from jobs.alerts import run_alerts_job
             except ImportError:
                 try:
@@ -619,6 +626,16 @@ def create_app() -> FastAPI:
             else:
                 series_count = len(macro_data.get("series", {}))
                 logger.info(f"✅ Macro series data found: {series_count} series")
+
+            # Check and generate stocks prices cache if missing
+            prices_data = load_json("stocks/prices") or load_json("stocks/prices.json")
+            if not prices_data or not prices_data.get("tickers"):
+                logger.info("⚠️  No stocks prices cache found, generating in background...")
+                if run_stocks_prices_job:
+                    asyncio.create_task(run_job_async(run_stocks_prices_job, "Stocks prices refresh"))
+            else:
+                prices_count = len(prices_data.get("tickers", {}))
+                logger.info(f"✅ Stocks prices cache found: {prices_count} tickers")
 
             # Check and generate alerts if missing
             alerts_data = load_json("alerts") or load_json("alerts.json")
