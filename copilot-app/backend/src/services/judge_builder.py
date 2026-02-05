@@ -482,6 +482,8 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         source = None
 
     data_ts = None
+    data_quality_score = None
+    backtest_calibration = None
     try:
         meta_in = row.get("meta") or {}
         if isinstance(meta_in, dict) and meta_in.get("data_timestamps"):
@@ -490,8 +492,23 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
             dp_meta = (debug_payload or {}).get("meta") or {}
             if isinstance(dp_meta, dict) and dp_meta.get("data_timestamps"):
                 data_ts = dp_meta.get("data_timestamps")
+        if isinstance(meta_in, dict):
+            dqs = meta_in.get("data_quality_score")
+            if dqs is not None:
+                try:
+                    data_quality_score = max(0.0, min(1.0, float(dqs)))
+                except Exception:
+                    data_quality_score = None
+            if isinstance(meta_in.get("backtest_calibration"), dict):
+                backtest_calibration = meta_in.get("backtest_calibration")
+        if backtest_calibration is None:
+            dp_meta = (debug_payload or {}).get("meta") or {}
+            if isinstance(dp_meta, dict) and isinstance(dp_meta.get("backtest_calibration"), dict):
+                backtest_calibration = dp_meta.get("backtest_calibration")
     except Exception:
         data_ts = None
+        data_quality_score = None
+        backtest_calibration = None
 
     meta = VerdictMeta(
         generated_at=generated_at,
@@ -500,6 +517,8 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         profile=profile,
         source=source,
         data_timestamps=data_ts,
+        data_quality_score=data_quality_score,
+        backtest_calibration=backtest_calibration,
     )
 
     # --- Quant confidence ---

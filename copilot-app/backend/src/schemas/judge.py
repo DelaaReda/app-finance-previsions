@@ -167,6 +167,8 @@ class VerdictMeta(BaseModel):
     profile: Optional[str] = None
     source: Optional[List[str]] = None  # ex: ["judge_route", "forecasts_llm"]
     data_timestamps: Optional[Dict[str, Any]] = None
+    data_quality_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    backtest_calibration: Optional[Dict[str, Any]] = None
 
 
 # ---------- Verdict principal ----------

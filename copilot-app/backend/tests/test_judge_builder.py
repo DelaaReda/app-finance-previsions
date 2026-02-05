@@ -64,3 +64,27 @@ def test_build_judge_verdict_uses_provider_from_row_meta():
     assert verdict.meta.provider == "openrouter"
     assert abs(sum(sc.p for sc in verdict.scenarios) - 1.0) < 1e-9
 
+
+def test_build_judge_verdict_preserves_data_quality_meta():
+    row = {
+        "ticker": "MSFT",
+        "horizon": "1w",
+        "expected_return": 0.02,
+        "confidence": 0.64,
+        "risk_level": "medium",
+        "analysis": {
+            "summary": ["Summary"],
+            "scenarios": [{"name": "base", "p": 65}, {"name": "bear", "p": 35}],
+        },
+        "meta": {
+            "generated_at": "2026-02-05T02:00:00Z",
+            "data_timestamps": {"news_last": "2026-02-05T01:00:00Z"},
+            "data_quality_score": 0.82,
+            "backtest_calibration": {"hit_rate": 0.58, "n_trades": 120},
+        },
+        "generated_at": "2026-02-05T02:00:00Z",
+    }
+
+    verdict = build_judge_verdict(row)
+    assert verdict.meta.data_quality_score == 0.82
+    assert verdict.meta.backtest_calibration == {"hit_rate": 0.58, "n_trades": 120}

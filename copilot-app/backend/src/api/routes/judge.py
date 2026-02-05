@@ -566,6 +566,7 @@ async def get_judge_verdicts(
             forecasts = load_json("forecasts") or {}
             news_feed = load_json("news_feed") or {}
             brief_daily = load_json("brief_daily") or load_json("brief_weekly") or {}
+            backtests = load_json("backtests") or {}
 
             backend_root = Path(__file__).resolve().parents[3]
 
@@ -639,11 +640,45 @@ async def get_judge_verdicts(
                 )
                 return len(articles_local)
 
+            def _backtest_context() -> Dict[str, Any]:
+                """Extract global calibration context from backtests snapshot."""
+                bt = backtests if isinstance(backtests, dict) else {}
+                cand = bt.get("overall_metrics") if isinstance(bt.get("overall_metrics"), dict) else {}
+                if not cand and isinstance(bt.get("results"), dict):
+                    cand = bt.get("results") or {}
+                hit_rate = None
+                n_trades = 0
+                generated_at = None
+                try:
+                    if cand.get("hit_rate") is not None:
+                        hit_rate = float(cand.get("hit_rate"))
+                        hit_rate = max(0.0, min(1.0, hit_rate))
+                except Exception:
+                    hit_rate = None
+                for key in ("n_trades", "total_trades"):
+                    try:
+                        if cand.get(key) is not None:
+                            n_trades = max(n_trades, int(cand.get(key)))
+                    except Exception:
+                        pass
+                generated_at = (
+                    bt.get("generated_at")
+                    or bt.get("saved_at")
+                    or (cand.get("timestamp") if isinstance(cand, dict) else None)
+                )
+                return {
+                    "hit_rate": hit_rate,
+                    "n_trades": n_trades,
+                    "generated_at": generated_at,
+                }
+
             add_trace(
                 "data_loaded",
                 forecasts=_forecasts_count(),
                 news_count=_news_count(),
             )
+            backtest_ctx = _backtest_context()
+            add_trace("backtest_context", **backtest_ctx)
 
             prices_data = _load_prices()
             macro_series = _load_macro()
@@ -2456,6 +2491,190 @@ async def get_judge_verdicts(
 
                         parsed["data_needed"] = cleaned_needed[:8]
 
+                    def _parse_any_dt(ts_val: Any) -> Optional[datetime]:
+                        if not ts_val:
+                            return None
+                        if isinstance(ts_val, datetime):
+                            dt = ts_val
+                        else:
+                            ts_str = _normalize_ts_str(ts_val)
+                            if not ts_str:
+                                return None
+                            try:
+                                dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                            except Exception:
+                                return None
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return dt.astimezone(timezone.utc)
+
+                    now_utc = datetime.now(timezone.utc)
+                    macro_age_days = None
+                    news_age_hours = None
+                    price_live_age_hours = None
+                    price_history_age_days = None
+
+                    try:
+                        macro_ref = data_timestamps.get("macro")
+                        if isinstance(macro_ref, str) and "T" not in macro_ref:
+                            macro_ref = f"{macro_ref}T00:00:00Z"
+                        macro_dt = _parse_any_dt(macro_ref)
+                        if macro_dt:
+                            macro_age_days = max(0.0, (now_utc - macro_dt).total_seconds() / 86400.0)
+                    except Exception:
+                        macro_age_days = None
+                    try:
+                        news_dt = _parse_any_dt(data_timestamps.get("news_last"))
+                        if news_dt:
+                            news_age_hours = max(0.0, (now_utc - news_dt).total_seconds() / 3600.0)
+                    except Exception:
+                        news_age_hours = None
+                    try:
+                        pl_dt = _parse_any_dt(data_timestamps.get("price_live"))
+                        if pl_dt:
+                            price_live_age_hours = max(0.0, (now_utc - pl_dt).total_seconds() / 3600.0)
+                    except Exception:
+                        price_live_age_hours = None
+                    try:
+                        ph_dt = _parse_any_dt(data_timestamps.get("price_history"))
+                        if ph_dt:
+                            price_history_age_days = max(0.0, (now_utc - ph_dt).total_seconds() / 86400.0)
+                    except Exception:
+                        price_history_age_days = None
+
+                    def _score_age_hours(age: Optional[float], good: float, warn: float) -> float:
+                        if age is None:
+                            return 0.0
+                        if age <= good:
+                            return 1.0
+                        if age <= warn:
+                            return 0.65
+                        return 0.25
+
+                    def _score_age_days(age: Optional[float], good: float, warn: float) -> float:
+                        if age is None:
+                            return 0.0
+                        if age <= good:
+                            return 1.0
+                        if age <= warn:
+                            return 0.65
+                        return 0.2
+
+                    news_count = len(news_items)
+                    news_coverage_score = min(1.0, news_count / float(max(1, JUDGE_NEWS_ITEMS_PER_TICKER)))
+                    news_freshness_score = _score_age_hours(news_age_hours, good=24.0, warn=7 * 24.0)
+                    macro_freshness_score = _score_age_days(macro_age_days, good=10.0, warn=45.0)
+
+                    # We tolerate older price history as long as live price is recent.
+                    price_live_score = _score_age_hours(price_live_age_hours, good=24.0, warn=96.0)
+                    price_hist_score = _score_age_days(price_history_age_days, good=14.0, warn=45.0)
+                    price_freshness_score = max(price_live_score, price_hist_score)
+
+                    tech_fields = feat.get("tech", {}) if isinstance(feat.get("tech"), dict) else {}
+                    fund_fields = (
+                        feat.get("fundamentals_enriched")
+                        if isinstance(feat.get("fundamentals_enriched"), dict)
+                        else feat.get("fundamentals", {})
+                    )
+                    tech_ok = sum(
+                        1 for k in ("rsi", "sma20", "sma50", "last") if tech_fields.get(k) is not None
+                    )
+                    fund_ok = sum(
+                        1
+                        for k in ("marketCap", "pe", "sector", "beta", "avgVolume")
+                        if fund_fields.get(k) is not None
+                    )
+                    structure_score = min(1.0, ((tech_ok / 4.0) + (fund_ok / 5.0)) / 2.0)
+
+                    data_quality_score = (
+                        0.25 * news_coverage_score
+                        + 0.15 * news_freshness_score
+                        + 0.20 * macro_freshness_score
+                        + 0.20 * price_freshness_score
+                        + 0.20 * structure_score
+                    )
+                    data_quality_score = max(0.0, min(1.0, float(data_quality_score)))
+
+                    # Confidence calibration from global backtest reliability + data quality.
+                    bt_hit = backtest_ctx.get("hit_rate")
+                    bt_n = int(backtest_ctx.get("n_trades") or 0)
+                    bt_sample_w = max(0.0, min(1.0, bt_n / 120.0))
+                    if bt_hit is not None:
+                        empirical = (0.5 * (1.0 - bt_sample_w)) + (float(bt_hit) * bt_sample_w)
+                    else:
+                        empirical = 0.5
+                    reliability_multiplier = 1.0 + (empirical - 0.5) * 0.6
+                    sample_shrink = 0.8 + 0.2 * bt_sample_w
+                    quality_penalty = 0.35 + (0.65 * data_quality_score)
+
+                    conf_calibrated = conf_final * quality_penalty * reliability_multiplier * sample_shrink
+
+                    # Hard safety gates for weak data.
+                    if data_quality_score < 0.35:
+                        conf_calibrated = min(conf_calibrated, 0.28)
+                    if news_count == 0:
+                        conf_calibrated = min(conf_calibrated, 0.22)
+                    if macro_age_days is not None and macro_age_days > 120:
+                        conf_calibrated = min(conf_calibrated, 0.25)
+                    if price_live_age_hours is not None and price_live_age_hours > 96:
+                        conf_calibrated = min(conf_calibrated, 0.25)
+
+                    conf_final = max(0.05, min(0.95, float(conf_calibrated)))
+
+                    # Enforce minimum risk when data quality is weak.
+                    if data_quality_score < 0.2:
+                        derived_risk = "high"
+                    elif data_quality_score < 0.35 and derived_risk == "low":
+                        derived_risk = "medium"
+
+                    if isinstance(parsed, dict):
+                        needed = parsed.setdefault("data_needed", [])
+                        if not isinstance(needed, list):
+                            needed = []
+                            parsed["data_needed"] = needed
+                        if news_count < max(5, JUDGE_NEWS_ITEMS_PER_TICKER // 2):
+                            needed.append("insufficient_news_coverage")
+                        if macro_age_days is not None and macro_age_days > 90:
+                            needed.append("macro_snapshot_too_old")
+                        if price_live_age_hours is not None and price_live_age_hours > 48:
+                            needed.append("price_live_snapshot_too_old")
+
+                        # Deduplicate while preserving order
+                        seen = set()
+                        dedup_needed: List[str] = []
+                        for item in needed:
+                            sitem = str(item).strip()
+                            if not sitem:
+                                continue
+                            key = sitem.lower()
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            dedup_needed.append(sitem)
+                        parsed["data_needed"] = dedup_needed[:10]
+                        parsed["data_quality"] = {
+                            "score": round(data_quality_score, 4),
+                            "components": {
+                                "news_coverage": round(news_coverage_score, 4),
+                                "news_freshness": round(news_freshness_score, 4),
+                                "macro_freshness": round(macro_freshness_score, 4),
+                                "price_freshness": round(price_freshness_score, 4),
+                                "structure": round(structure_score, 4),
+                            },
+                            "news_count": news_count,
+                            "news_target": JUDGE_NEWS_ITEMS_PER_TICKER,
+                        }
+                        parsed["confidence_calibration"] = {
+                            "base_confidence": round(float(base_conf), 4),
+                            "parsed_confidence": round(float(parsed.get("confidence") or base_conf), 4),
+                            "quality_penalty": round(float(quality_penalty), 4),
+                            "reliability_multiplier": round(float(reliability_multiplier), 4),
+                            "sample_shrink": round(float(sample_shrink), 4),
+                            "backtest_hit_rate": bt_hit,
+                            "backtest_n_trades": bt_n,
+                            "final_confidence": round(float(conf_final), 4),
+                        }
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -2487,6 +2706,12 @@ async def get_judge_verdicts(
                         "source": ["judge_route", "forecasts_llm"],
                         "meta": {
                             "data_timestamps": data_timestamps,
+                            "data_quality_score": round(data_quality_score, 4),
+                            "backtest_calibration": {
+                                "hit_rate": bt_hit,
+                                "n_trades": bt_n,
+                                "sample_weight": round(bt_sample_w, 4),
+                            },
                             "provider": (
                                 res.get("provider_raw") or res.get("provider")
                                 if isinstance(res, dict)
