@@ -97,6 +97,11 @@ try:
     from services.judge_builder import build_judge_verdict  # type: ignore
 except Exception:
     build_judge_verdict = None
+# Judge quality report (rolling validation metrics)
+try:
+    from services.judge_quality import build_judge_quality_report  # type: ignore
+except Exception:
+    build_judge_quality_report = None
 # G4F fallback client
 try:
     from services.g4f_client import call_g4f  # type: ignore
@@ -2912,6 +2917,61 @@ async def get_judge_verdicts(
 
 # Backward compatibility export
 judge_router = router
+
+
+@router.get("/quality")
+async def get_judge_quality(
+    horizon_days: int = Query(
+        5, ge=1, le=30, description="Forecast horizon used for realized-return evaluation"
+    ),
+    min_samples: int = Query(
+        20, ge=1, le=500, description="Minimum samples to consider quality assessment reliable"
+    ),
+):
+    """Rolling quality metrics for judge/forecast predictive performance."""
+    try:
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        if not build_judge_quality_report:
+            return {
+                "ok": True,
+                "data": {
+                    "as_of": now_iso,
+                    "horizon_days": horizon_days,
+                    "min_samples": min_samples,
+                    "overall": {"n": 0, "sample_status": "insufficient"},
+                    "windows": {},
+                    "recommendation": {
+                        "status": "unavailable",
+                        "message": "Judge quality service unavailable in this runtime.",
+                    },
+                },
+                "freshness": now_iso,
+            }
+
+        report = build_judge_quality_report(
+            horizon_days=horizon_days,
+            min_samples=min_samples,
+        )
+        freshness = report.get("as_of") or now_iso
+        return {"ok": True, "data": report, "freshness": freshness}
+    except Exception as e:
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        return {
+            "ok": True,
+            "data": {
+                "as_of": now_iso,
+                "horizon_days": horizon_days,
+                "min_samples": min_samples,
+                "overall": {"n": 0, "sample_status": "insufficient"},
+                "windows": {},
+                "recommendation": {
+                    "status": "error",
+                    "message": "Judge quality computation failed.",
+                },
+                "error": str(e),
+            },
+            "freshness": "error",
+        }
 
 
 @router.get("/options")
