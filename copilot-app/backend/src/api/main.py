@@ -74,6 +74,50 @@ def _clamp_rate(value: str, default: float) -> float:
     return max(0.0, min(1.0, parsed))
 
 
+def _frontend_runtime_config() -> Dict[str, Any]:
+    """
+    Public runtime config consumed by the static frontend.
+    """
+    dsn = os.getenv("FRONTEND_SENTRY_DSN", "").strip() or os.getenv("SENTRY_DSN", "").strip()
+    environment = (
+        os.getenv("SENTRY_ENVIRONMENT")
+        or os.getenv("APP_ENV")
+        or os.getenv("ENVIRONMENT")
+        or ("debug" if DEBUG_MODE else "production")
+    )
+    default_traces_rate = 1.0 if DEBUG_MODE else 0.2
+    release = os.getenv("SENTRY_RELEASE")
+    traces_sample_rate = _clamp_rate(
+        os.getenv("FRONTEND_SENTRY_TRACES_SAMPLE_RATE", os.getenv("SENTRY_TRACES_SAMPLE_RATE", str(default_traces_rate))),
+        default_traces_rate,
+    )
+    replays_session_sample_rate = _clamp_rate(
+        os.getenv("FRONTEND_SENTRY_REPLAYS_SESSION_SAMPLE_RATE", "0.0"),
+        0.0,
+    )
+    replays_on_error_sample_rate = _clamp_rate(
+        os.getenv("FRONTEND_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE", "1.0"),
+        1.0,
+    )
+    return {
+        "sentry": {
+            "enabled": bool(dsn),
+            "dsn": dsn or None,
+            "environment": environment,
+            "release": release,
+            "traces_sample_rate": traces_sample_rate,
+            "replays_session_sample_rate": replays_session_sample_rate,
+            "replays_on_error_sample_rate": replays_on_error_sample_rate,
+            "trace_propagation_targets": [
+                "localhost",
+                "127.0.0.1",
+                "http://localhost:8050",
+                "http://127.0.0.1:8050",
+            ],
+        }
+    }
+
+
 def _init_sentry_once() -> bool:
     """
     Initialize Sentry SDK before FastAPI app creation.
@@ -93,10 +137,16 @@ def _init_sentry_once() -> bool:
         _SENTRY_INITIALIZED = True
         return False
 
-    traces_rate = _clamp_rate(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0"), 1.0)
+    default_traces_rate = 1.0 if DEBUG_MODE else 0.2
+    default_profile_session_rate = 0.2 if DEBUG_MODE else 0.0
+
+    traces_rate = _clamp_rate(os.getenv("SENTRY_TRACES_SAMPLE_RATE", str(default_traces_rate)), default_traces_rate)
     profile_session_rate = _clamp_rate(
-        os.getenv("SENTRY_PROFILE_SESSION_SAMPLE_RATE", os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "1.0")),
-        1.0,
+        os.getenv(
+            "SENTRY_PROFILE_SESSION_SAMPLE_RATE",
+            os.getenv("SENTRY_PROFILES_SAMPLE_RATE", str(default_profile_session_rate)),
+        ),
+        default_profile_session_rate,
     )
     profiles_rate = _clamp_rate(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", str(profile_session_rate)), profile_session_rate)
     profile_lifecycle = os.getenv("SENTRY_PROFILE_LIFECYCLE", "trace")
@@ -759,12 +809,25 @@ def create_app() -> FastAPI:
 
         logger.info("🛑 Shutting down Finance Copilot...")
 
+        stop_scheduler = None
         try:
-            from scheduler.app import stop_scheduler
-            stop_scheduler()
-            logger.info("✅ Scheduler stopped")
-        except Exception as e:
-            logger.error(f"❌ Error stopping scheduler: {e}")
+            from scheduler.app import stop_scheduler as _stop_scheduler
+            stop_scheduler = _stop_scheduler
+        except ImportError:
+            try:
+                from backend.scheduler.app import stop_scheduler as _stop_scheduler
+                stop_scheduler = _stop_scheduler
+            except ImportError:
+                stop_scheduler = None
+
+        if stop_scheduler is None:
+            logger.info("ℹ️  Scheduler stop skipped (module unavailable)")
+        else:
+            try:
+                stop_scheduler()
+                logger.info("✅ Scheduler stopped")
+            except Exception as e:
+                logger.error(f"❌ Error stopping scheduler: {e}")
 
         logger.info("👋 Goodbye!")
 
@@ -884,6 +947,11 @@ def register_routes(app: FastAPI):
             "stocks_freshness_minutes": 5,
             "last_update": datetime.utcnow().isoformat()
         })
+
+    @app.get("/api/frontend/config")
+    async def frontend_config():
+        """Public runtime config for static frontend clients."""
+        return _ok(_frontend_runtime_config())
 
     # ========================= PILLAR 1: MACRO ===========================
 

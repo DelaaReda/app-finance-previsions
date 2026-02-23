@@ -46,8 +46,13 @@
 - Variables env : `.env` à la racine backend (inclut OPEN_ROUTER_API_KEY, clés FRED, etc.).
 - Massive.com (prix historiques via API) : définir `MASSIVE_API_KEY` pour activer la source Massive.
 - Sentry (FastAPI) : définir `SENTRY_DSN` pour activer la capture erreurs/traces.
-  - Optionnel : `SENTRY_SEND_DEFAULT_PII` (défaut `true`), `SENTRY_ENABLE_LOGS` (défaut `true`), `SENTRY_TRACES_SAMPLE_RATE` (défaut `1.0`), `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (défaut `1.0`), `SENTRY_PROFILE_LIFECYCLE` (défaut `trace`).
+  - Optionnel : `SENTRY_SEND_DEFAULT_PII` (défaut `true`), `SENTRY_ENABLE_LOGS` (défaut `true`), `SENTRY_TRACES_SAMPLE_RATE` (défaut `1.0` en debug / `0.2` hors debug), `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (défaut `0.2` en debug / `0.0` hors debug), `SENTRY_PROFILE_LIFECYCLE` (défaut `trace`).
   - Vérification en dev : `GET /sentry-debug` (route active en mode debug).
+  - Frontend statique : `GET /api/frontend/config` expose un payload public (DSN + sampling) consommé par `frontend/app/js/sentry-init.js`.
+    - Variables frontend dédiées : `FRONTEND_SENTRY_DSN`, `FRONTEND_SENTRY_TRACES_SAMPLE_RATE`, `FRONTEND_SENTRY_REPLAYS_SESSION_SAMPLE_RATE`, `FRONTEND_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE`.
+    - Fallback DSN : `FRONTEND_SENTRY_DSN` -> `SENTRY_DSN`.
+    - Propagation traces frontend->backend activée via `trace_propagation_targets`.
+  - Jobs backend (ex: `news_ingest`, `news_sentiment`, `macro_series_snapshot`, `stocks_prices_refresh`, `judge_enrich`, `judge_quality_report`, `validate_and_generate_data`) taggent `job.name` et envoient les exceptions vers Sentry.
   - Runbook debug : `docs/2026-02/SENTRY_DEBUG_RUNBOOK.md`
 - Si un module manque (feedparser, duckdb…), installe dans `.venv` :
   ```bash

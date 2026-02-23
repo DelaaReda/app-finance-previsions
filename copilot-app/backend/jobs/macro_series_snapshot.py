@@ -46,6 +46,21 @@ if str(SRC_DIR) not in sys.path:
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+try:
+    from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
+except Exception:  # pragma: no cover
+    def install_global_excepthook(job_name: str) -> bool:
+        return False
+
+    def init_sentry(component: str) -> bool:
+        return False
+
+    def set_job_context(job_name: str, **context: Any) -> None:
+        return None
+
+    def capture_exception(exc: BaseException, *, job_name: str | None = None, context: Dict[str, Any] | None = None) -> None:
+        return None
+
 # Imports avec gestion d'erreur robuste
 try:
     from core.market_data import get_fred_series  # noqa: E402
@@ -177,12 +192,14 @@ def _gold_fallback_from_yf(max_points: int) -> pd.DataFrame | None:
 
 
 def main(argv: List[str] | None = None) -> int:
+    init_sentry("macro_series_snapshot")
     parser = argparse.ArgumentParser(description="Persist macro series snapshot")
     parser.add_argument("--series", type=str, help="Comma separated list of series IDs to fetch")
     parser.add_argument("--stdout", action="store_true", help="Print the resulting JSON to stdout")
     args = parser.parse_args(argv)
 
     ids = [s.strip() for s in (args.series.split(",") if args.series else DEFAULT_SERIES) if s.strip()]
+    set_job_context("macro_series_snapshot", series_count=len(ids))
     result: Dict[str, Any] = {"series": {}}
     
     # Check if FRED_API_KEY is available
@@ -245,6 +262,11 @@ def main(argv: List[str] | None = None) -> int:
             print(f"   ❌ Erreur lors de la récupération de {series_id}: {e}")
             import traceback
             traceback.print_exc()
+            capture_exception(
+                e,
+                job_name="macro_series_snapshot",
+                context={"series_id": series_id, "stage": "fetch"},
+            )
             failed_series.append(series_id)
             continue
 
@@ -277,8 +299,10 @@ def run_macro_snapshot_job():
         return {"status": "completed" if result == 0 else "failed", "exit_code": result}
     except Exception as e:
         print(f"❌ Error in macro snapshot job: {e}")
+        capture_exception(e, job_name="macro_series_snapshot", context={"stage": "wrapper"})
         return {"status": "error", "error": str(e)}
 
 
 if __name__ == "__main__":
+    install_global_excepthook("macro_series_snapshot")
     raise SystemExit(main())

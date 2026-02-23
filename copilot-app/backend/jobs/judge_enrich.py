@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List
 import logging
+import sys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -18,6 +19,28 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 FORECASTS_PATH = DATA_DIR / "forecasts.json"
 OUTPUT_PATH = DATA_DIR / "judge_features.json"
+
+try:
+    src_path = str(ROOT / "src")
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+except Exception:
+    pass
+
+try:
+    from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
+except Exception:  # pragma: no cover
+    def install_global_excepthook(job_name: str) -> bool:
+        return False
+
+    def init_sentry(component: str) -> bool:
+        return False
+
+    def set_job_context(job_name: str, **context: Any) -> None:
+        return None
+
+    def capture_exception(exc: BaseException, *, job_name: str | None = None, context: Dict[str, Any] | None = None) -> None:
+        return None
 
 
 def _load_forecast_tickers() -> List[str]:
@@ -87,13 +110,16 @@ def _compute_indicators(hist) -> Dict[str, Any]:
 
 
 def run():
+    init_sentry("judge_enrich")
     try:
         import yfinance as yf
     except Exception as e:
         logger.error(f"yfinance not available: {e}")
+        capture_exception(e, job_name="judge_enrich", context={"stage": "import_yfinance"})
         return {"ok": False, "error": "yfinance missing"}
 
     tickers = _load_forecast_tickers()
+    set_job_context("judge_enrich", ticker_count=len(tickers))
     if not tickers:
         logger.warning("No tickers found in forecasts.json")
     features: Dict[str, Any] = {}
@@ -130,13 +156,25 @@ def run():
             logger.info(f"Enriched {t}: tech={tech} fundamentals={fundamentals}")
         except Exception as e:
             logger.warning(f"Failed to enrich {t}: {e}")
+            capture_exception(
+                e,
+                job_name="judge_enrich",
+                context={"stage": "enrich_ticker", "ticker": t},
+            )
 
     payload = {"asof": datetime.utcnow().isoformat() + "Z", "tickers": features}
     OUTPUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
     logger.info(f"Saved enriched judge features -> {OUTPUT_PATH}")
+    if tickers and not features:
+        capture_exception(
+            RuntimeError("judge_enrich produced zero features"),
+            job_name="judge_enrich",
+            context={"ticker_count": len(tickers)},
+        )
     return {"ok": True, "tickers": list(features.keys()), "path": str(OUTPUT_PATH)}
 
 
 if __name__ == "__main__":
+    install_global_excepthook("judge_enrich")
     out = run()
     print(out)

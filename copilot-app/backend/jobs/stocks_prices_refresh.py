@@ -29,6 +29,21 @@ for p in (backend_path, src_path):
 logger = logging.getLogger(__name__)
 
 try:
+    from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
+except Exception:  # pragma: no cover
+    def install_global_excepthook(job_name: str) -> bool:
+        return False
+
+    def init_sentry(component: str) -> bool:
+        return False
+
+    def set_job_context(job_name: str, **context: Any) -> None:
+        return None
+
+    def capture_exception(exc: BaseException, *, job_name: str | None = None, context: Dict[str, Any] | None = None) -> None:
+        return None
+
+try:
     from storage.io import save_json, load_json
 except ImportError:
     logger.warning("storage.io not available, using fallback")
@@ -64,6 +79,8 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         Résultat du job avec statistiques
     """
     logger.info(f"Starting stocks prices refresh job (timeframe: {timeframe})...")
+    init_sentry("stocks_prices_refresh")
+    set_job_context("stocks_prices_refresh", timeframe=timeframe, force=force)
     
     try:
         from core.market_data import get_price_history
@@ -334,6 +351,11 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         
     except Exception as e:
         logger.error(f"❌ Stocks prices job failed: {str(e)}", exc_info=True)
+        capture_exception(
+            e,
+            job_name="stocks_prices_refresh",
+            context={"timeframe": timeframe, "force": force},
+        )
         return {
             "status": "failed",
             "error": str(e),
@@ -344,6 +366,7 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
 if __name__ == "__main__":
     import argparse
     import pandas as pd  # Import pour lttb si nécessaire
+    install_global_excepthook("stocks_prices_refresh")
     parser = argparse.ArgumentParser(description="Refresh stocks prices")
     parser.add_argument("--force", action="store_true", help="Force refresh even if data is recent")
     parser.add_argument("--timeframe", default="1y", help="Timeframe (1y, 6mo, 3mo, etc.)")

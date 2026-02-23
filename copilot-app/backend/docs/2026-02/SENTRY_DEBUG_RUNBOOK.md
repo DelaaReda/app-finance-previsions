@@ -8,17 +8,27 @@ Objectif: debuguer Sentry de facon reproductible, en commencant par des tests si
 - Variables supportees:
   - `SENTRY_DSN` (obligatoire pour activer Sentry)
   - `SENTRY_ENABLE_LOGS` (defaut: `true`)
-  - `SENTRY_TRACES_SAMPLE_RATE` (defaut: `1.0`)
-  - `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (defaut: `1.0`)
+  - `SENTRY_TRACES_SAMPLE_RATE` (defaut: `1.0` en debug / `0.2` hors debug)
+  - `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (defaut: `0.2` en debug / `0.0` hors debug)
   - `SENTRY_PROFILE_LIFECYCLE` (defaut: `trace`)
   - `SENTRY_PROFILES_SAMPLE_RATE` (fallback legacy)
   - `SENTRY_SEND_DEFAULT_PII` (defaut: `true`)
   - `SENTRY_ENVIRONMENT` (optionnel)
   - `SENTRY_RELEASE` (optionnel)
+  - `FRONTEND_SENTRY_DSN` (optionnel, fallback vers `SENTRY_DSN`)
+  - `FRONTEND_SENTRY_TRACES_SAMPLE_RATE` (defaut `SENTRY_TRACES_SAMPLE_RATE` ou `0.2`)
+  - `FRONTEND_SENTRY_REPLAYS_SESSION_SAMPLE_RATE` (defaut `0.0`)
+  - `FRONTEND_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE` (defaut `1.0`)
+  - `trace_propagation_targets` frontend injecte via `/api/frontend/config`
 - Route de verification:
   - `GET /sentry-debug` exposee seulement si:
     - `SENTRY_DSN` est defini
     - mode debug actif (`FINANCE_COPILOT_DEBUG=1`)
+  - `GET /api/frontend/config` expose la config publique frontend (DSN + sampling)
+  - Jobs instrumentes:
+    - `news_ingest`, `news_sentiment`, `macro_series_snapshot`, `stocks_prices_refresh`,
+      `judge_enrich`, `judge_quality_report`, `validate_and_generate_data`
+    - Tags Sentry: `component=job`, `job.name=<nom_du_job>`
 
 ## 2) Ordre de test recommande (test first)
 
@@ -140,24 +150,16 @@ Attendu:
 
 ## 6) Scenarios frontend a tester
 
-Ton frontend est statique (`frontend/app`). Pour capter les erreurs JS:
+Ton frontend est statique (`frontend/app`) et charge deja `js/sentry-init.js`.
 
-1. Ajouter le SDK navigateur dans `index.html` (CDN) ou package build.
-2. Initialiser avec le DSN frontend.
-3. Injecter une erreur test bouton/console.
-
-Exemple minimal:
-
-```html
-<script src="https://browser.sentry-cdn.com/8.43.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
-<script>
-  Sentry.init({
-    dsn: "https://<public_key>@o<org_id>.ingest.us.sentry.io/<project_id>",
-    tracesSampleRate: 0.1,
-    environment: "dev",
-  });
-  window.sentryTest = () => { throw new Error("frontend sentry test"); };
-</script>
+1. Verifier la config publique backend:
+```bash
+curl -s http://127.0.0.1:8050/api/frontend/config | jq
+```
+2. Ouvrir `http://localhost:5173`.
+3. Dans la console navigateur, lancer:
+```js
+triggerFrontendSentryError()
 ```
 
 Attendu:
@@ -184,6 +186,7 @@ Si backend lance sur `8050`:
 
 ```bash
 curl -i http://127.0.0.1:8050/sentry-debug
+curl -s http://127.0.0.1:8050/api/frontend/config | jq
 ```
 
 Attendu:
@@ -204,6 +207,11 @@ Attendu:
 - Pas de route `/sentry-debug`:
   - verifier `FINANCE_COPILOT_DEBUG=1`
   - verifier `SENTRY_DSN` non vide
+
+- Frontend sans telemetry:
+  - verifier `GET /api/frontend/config` -> `data.sentry.enabled=true`
+  - verifier que `frontend/app/js/sentry-init.js` est charge dans `frontend/app/index.html`
+  - verifier la console navigateur pour `[telemetry] Sentry frontend initialized`
 
 ## 10) Checklist incident
 

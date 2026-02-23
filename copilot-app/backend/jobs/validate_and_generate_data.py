@@ -26,6 +26,21 @@ sys.path.insert(0, str(backend_root / "src"))
 # Suppress verbose G4F warnings
 logging.getLogger('g4f').setLevel(logging.ERROR)
 
+try:
+    from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
+except Exception:  # pragma: no cover
+    def install_global_excepthook(job_name: str) -> bool:
+        return False
+
+    def init_sentry(component: str) -> bool:
+        return False
+
+    def set_job_context(job_name: str, **context: Any) -> None:
+        return None
+
+    def capture_exception(exc: BaseException, *, job_name: str | None = None, context: Dict[str, Any] | None = None) -> None:
+        return None
+
 def check_data_file(file_key: str, min_items: int = 1) -> tuple:
     """Check if a data file exists and has minimum required items"""
     try:
@@ -37,16 +52,25 @@ def check_data_file(file_key: str, min_items: int = 1) -> tuple:
         
         # Check for different data structures
         rows = data.get('rows', [])
+        nested_data = data.get('data', {}) if isinstance(data.get('data'), dict) else {}
         if not rows:
-            rows = data.get('data', {}).get('rows', [])
+            rows = nested_data.get('rows', [])
         if not rows:
             rows = data.get('articles', [])
         if not rows:
+            rows = nested_data.get('articles', [])
+        if not rows:
             rows = data.get('series', [])
+        if not rows:
+            rows = nested_data.get('series', [])
         if not rows:
             rows = data.get('signals', [])
         if not rows:
+            rows = nested_data.get('signals', [])
+        if not rows:
             rows = data.get('risks', [])
+        if not rows:
+            rows = nested_data.get('risks', [])
         
         # If tickers dict exists (prices cache)
         if not rows and isinstance(data.get("tickers"), dict):
@@ -261,6 +285,7 @@ def generate_llm_judge_data() -> bool:
 def validate_and_generate_all() -> Dict[str, Any]:
     """Validate all required data files and generate missing ones"""
     logger.info("🔍 Validating all required data files...")
+    init_sentry("validate_and_generate_data")
     
     # Required data files with minimum items
     required_files = {
@@ -288,6 +313,12 @@ def validate_and_generate_all() -> Dict[str, Any]:
         "missing": [],
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+    set_job_context(
+        "validate_and_generate_data",
+        required_count=len(required_files),
+        optional_count=len(optional_files),
+        forecasts_max_age_hours=FORECASTS_MAX_AGE_HOURS,
+    )
     
     # Check required files
     for file_key, config in required_files.items():
@@ -329,8 +360,12 @@ def main():
     print("🚀 Validating and generating all required data files...")
     print(f"📂 Backend root: {backend_root}")
     print(f"⏰ Started at: {datetime.now().isoformat()}\n")
-    
-    results = validate_and_generate_all()
+    init_sentry("validate_and_generate_data")
+    try:
+        results = validate_and_generate_all()
+    except Exception as exc:
+        capture_exception(exc, job_name="validate_and_generate_data", context={"stage": "main"})
+        raise
     
     # Summary
     print(f"\n{'='*60}")
@@ -356,4 +391,5 @@ def main():
         return 1
 
 if __name__ == "__main__":
+    install_global_excepthook("validate_and_generate_data")
     sys.exit(main())

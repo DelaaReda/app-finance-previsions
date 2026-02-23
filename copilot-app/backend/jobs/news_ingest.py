@@ -23,8 +23,26 @@ import yaml
 backend_path = str(Path(__file__).parent.parent)
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
+src_path = str(Path(__file__).parent.parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 logger = logging.getLogger(__name__)
+
+try:
+    from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
+except Exception:  # pragma: no cover
+    def install_global_excepthook(job_name: str) -> bool:
+        return False
+
+    def init_sentry(component: str) -> bool:
+        return False
+
+    def set_job_context(job_name: str, **context: Any) -> None:
+        return None
+
+    def capture_exception(exc: BaseException, *, job_name: str | None = None, context: Dict[str, Any] | None = None) -> None:
+        return None
 
 # RSS feed sources (base market streams + dynamic ticker feeds)
 BASE_RSS_SOURCES = [
@@ -417,6 +435,7 @@ def run_news_ingest():
     Fetches from RSS feeds, processes, scores, and saves to persistent storage
     """
     logger.info("Starting news ingestion job with REAL data generation...")
+    init_sentry("news_ingest")
     
     try:
         from storage.base import save_json
@@ -470,6 +489,12 @@ def run_news_ingest():
             len(target_tickers),
             LOOKBACK_DAYS,
             MIN_ARTICLES_PER_TICKER,
+        )
+        set_job_context(
+            "news_ingest",
+            source_count=len(rss_sources),
+            target_ticker_count=len(target_tickers),
+            lookback_days=LOOKBACK_DAYS,
         )
 
         # Fetch from each RSS source
@@ -637,6 +662,7 @@ def run_news_ingest():
         
     except ImportError as e:
         logger.error(f"Import error in news ingestion job: {str(e)}", exc_info=True)
+        capture_exception(e, job_name="news_ingest", context={"stage": "import"})
         return {
             "processed_count": 0,
             "sources": [],
@@ -646,6 +672,7 @@ def run_news_ingest():
         }
     except Exception as e:
         logger.error(f"News ingestion job failed: {str(e)}", exc_info=True)
+        capture_exception(e, job_name="news_ingest", context={"stage": "run"})
         return {
             "processed_count": 0,
             "sources": [],
@@ -661,5 +688,6 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+    install_global_excepthook("news_ingest")
     result = run_news_ingest()
     print(f"\n✅ Job completed: {result}")
