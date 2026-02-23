@@ -20,6 +20,10 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 import pandas as pd
 from starlette.concurrency import run_in_threadpool
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover
+    sentry_sdk = None
 
 DEBUG_MODE = str(os.getenv("FINANCE_COPILOT_DEBUG", os.getenv("COPILOT_DEBUG", "1"))).lower() in {
     "1",
@@ -52,6 +56,79 @@ def _configure_debug_logging():
     _configure_debug_logging._configured = True  # type: ignore[attr-defined]
 
 logger = logging.getLogger("api.routes")
+_SENTRY_INITIALIZED = False
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _clamp_rate(value: str, default: float) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        return default
+    return max(0.0, min(1.0, parsed))
+
+
+def _init_sentry_once() -> bool:
+    """
+    Initialize Sentry SDK before FastAPI app creation.
+    Returns True when Sentry is enabled, False otherwise.
+    """
+    global _SENTRY_INITIALIZED
+    if _SENTRY_INITIALIZED:
+        return bool(os.getenv("SENTRY_DSN", "").strip())
+
+    dsn = os.getenv("SENTRY_DSN", "").strip()
+    if not dsn:
+        _SENTRY_INITIALIZED = True
+        return False
+
+    if sentry_sdk is None:
+        logger.warning("SENTRY_DSN is set but sentry-sdk is not installed.")
+        _SENTRY_INITIALIZED = True
+        return False
+
+    traces_rate = _clamp_rate(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0"), 1.0)
+    profile_session_rate = _clamp_rate(
+        os.getenv("SENTRY_PROFILE_SESSION_SAMPLE_RATE", os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "1.0")),
+        1.0,
+    )
+    profiles_rate = _clamp_rate(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", str(profile_session_rate)), profile_session_rate)
+    profile_lifecycle = os.getenv("SENTRY_PROFILE_LIFECYCLE", "trace")
+    enable_logs = _env_bool("SENTRY_ENABLE_LOGS", default=True)
+    send_default_pii = _env_bool("SENTRY_SEND_DEFAULT_PII", default=True)
+    environment = (
+        os.getenv("SENTRY_ENVIRONMENT")
+        or os.getenv("APP_ENV")
+        or os.getenv("ENVIRONMENT")
+    )
+    release = os.getenv("SENTRY_RELEASE")
+
+    sentry_sdk.init(
+        dsn=dsn,
+        send_default_pii=send_default_pii,
+        enable_logs=enable_logs,
+        traces_sample_rate=traces_rate,
+        profile_session_sample_rate=profile_session_rate,
+        profile_lifecycle=profile_lifecycle,
+        profiles_sample_rate=profiles_rate,
+        environment=environment,
+        release=release,
+    )
+    _SENTRY_INITIALIZED = True
+    logger.info(
+        "Sentry SDK initialized (env=%s, traces=%s, profile_session=%s, enable_logs=%s)",
+        environment,
+        traces_rate,
+        profile_session_rate,
+        enable_logs,
+    )
+    return True
 
 # ------------------------------ Constants ---------------------------------- #
 MACRO_SERIES_META: Dict[str, Dict[str, Optional[str]]] = {
@@ -364,6 +441,7 @@ def _compute_stock_metrics(ticker: str) -> Dict[str, Any]:
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI app."""
+    sentry_enabled = _init_sentry_once()
     debug_enabled = DEBUG_MODE
     app = FastAPI(
         title="Finance Copilot API",
@@ -392,6 +470,13 @@ def create_app() -> FastAPI:
             except Exception:
                 pass
             return response
+
+    if sentry_enabled and debug_enabled:
+        @app.get("/sentry-debug")
+        async def trigger_sentry_error():
+            # Validation route: should appear in Sentry as an error + trace.
+            division_by_zero = 1 / 0
+            return {"result": division_by_zero}
 
     # CORS middleware (allow React dev server and production origins)
     app.add_middleware(

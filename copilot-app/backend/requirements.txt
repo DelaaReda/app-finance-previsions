@@ -8,3 +8,5 @@ feedparser>=6.0.10
 duckdb>=1.4.3
 pytest>=9.0.2
 yfinance>=0.2.44
+massive>=2.0.3
+sentry-sdk[fastapi]>=2.0.0

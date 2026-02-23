@@ -44,6 +44,11 @@
 
 ## Notes
 - Variables env : `.env` à la racine backend (inclut OPEN_ROUTER_API_KEY, clés FRED, etc.).
+- Massive.com (prix historiques via API) : définir `MASSIVE_API_KEY` pour activer la source Massive.
+- Sentry (FastAPI) : définir `SENTRY_DSN` pour activer la capture erreurs/traces.
+  - Optionnel : `SENTRY_SEND_DEFAULT_PII` (défaut `true`), `SENTRY_ENABLE_LOGS` (défaut `true`), `SENTRY_TRACES_SAMPLE_RATE` (défaut `1.0`), `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (défaut `1.0`), `SENTRY_PROFILE_LIFECYCLE` (défaut `trace`).
+  - Vérification en dev : `GET /sentry-debug` (route active en mode debug).
+  - Runbook debug : `docs/2026-02/SENTRY_DEBUG_RUNBOOK.md`
 - Si un module manque (feedparser, duckdb…), installe dans `.venv` :
   ```bash
   cd copilot-app/backend

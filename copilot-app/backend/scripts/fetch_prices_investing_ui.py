@@ -17,6 +17,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
@@ -164,6 +165,60 @@ def _find_download(page):
         return None
 
 
+def _safe_screenshot(page, path: Path, label: str) -> None:
+    try:
+        page.screenshot(path=str(path), full_page=True)
+        print(f"[debug] screenshot saved: {path.name} ({label})")
+    except Exception as exc:
+        print(f"[debug] screenshot failed ({label}): {exc}")
+
+
+def _find_playwright_executable(headless: bool) -> Optional[Path]:
+    cache_root = Path.home() / "Library" / "Caches" / "ms-playwright"
+    if not cache_root.exists():
+        return None
+
+    if headless:
+        candidates = list(cache_root.glob("chromium_headless_shell-*/chrome-headless-shell-mac-*/chrome-headless-shell"))
+        for path in candidates:
+            if path.exists():
+                return path
+    # Non-headless (or fallback to full chrome)
+    candidates = list(
+        cache_root.glob("chromium-*/chrome-mac-*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
+    )
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def _default_user_data_dir() -> Path:
+    return Path.home() / "Library" / "Application Support" / "investing-playwright-profile"
+
+
+def _launch_browser(p, *, headless: bool, user_data_dir: Optional[Path]) -> tuple:
+    exe_path = _find_playwright_executable(headless)
+    kwargs = {"headless": headless}
+    if exe_path:
+        kwargs["executable_path"] = str(exe_path)
+
+    if user_data_dir:
+        # Persistent context to reuse cookies/session.
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(user_data_dir),
+            accept_downloads=True,
+            **kwargs,
+        )
+        browser = context.browser
+        return browser, context
+
+    # Ephemeral context.
+    browser = p.chromium.launch(**kwargs)
+    context = browser.new_context(accept_downloads=True)
+    return browser, context
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", required=True, help="Investing.com historical data URL")
@@ -173,53 +228,116 @@ def main() -> int:
     parser.add_argument("--output-dir", default="data/price_cache/investing", help="Download output directory")
     parser.add_argument("--headless", action="store_true", help="Run browser headless")
     parser.add_argument("--manual", action="store_true", help="Pause for manual login/selection")
+    parser.add_argument("--debug", action="store_true", help="Enable screenshots + tracing")
+    parser.add_argument("--screenshot-dir", default="", help="Directory for debug artifacts")
+    parser.add_argument(
+        "--user-data-dir",
+        default="",
+        help="Persisted browser profile directory (enables cookie reuse)",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     range_text = _range_str(args.start, args.end)
+    debug_dir: Optional[Path] = None
+    trace_path: Optional[Path] = None
+    if args.debug:
+        debug_dir = Path(args.screenshot_dir) if args.screenshot_dir else output_dir / "_debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        trace_path = debug_dir / "trace.zip"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=args.headless)
-        context = browser.new_context(accept_downloads=True)
-        page = context.new_page()
-        page.goto(args.url, wait_until="domcontentloaded")
-        _maybe_accept_cookies(page)
-
-        if args.manual:
-            print("Manual mode: complete login/selection in the browser, then press Enter here.")
-            input()
-
-        _try_select_daily(page)
-        if _try_set_date_range(page, range_text):
-            _try_apply(page)
-
-        download_btn = _find_download(page)
-        if not download_btn:
-            print("Download button not found. Try --manual to click it yourself.")
-            return 2
+        if args.user_data_dir:
+            if args.user_data_dir.lower() == "default":
+                user_data_dir = _default_user_data_dir()
+            else:
+                user_data_dir = Path(args.user_data_dir).expanduser()
+        else:
+            user_data_dir = None
 
         try:
-            with page.expect_download(timeout=20000) as dl_info:
-                download_btn.click()
-            download = dl_info.value
-        except PlaywrightTimeout:
-            print("Download did not start. Try --manual and click Download yourself.")
-            return 3
+            browser, context = _launch_browser(p, headless=args.headless, user_data_dir=user_data_dir)
+        except Exception as exc:
+            # Retry once with an explicit path if the default executable is missing.
+            try:
+                browser, context = _launch_browser(p, headless=args.headless, user_data_dir=user_data_dir)
+            except Exception:
+                raise exc
+        if args.debug and trace_path:
+            context.tracing.start(screenshots=True, snapshots=True, sources=True)
+            print(f"[debug] tracing enabled: {trace_path}")
 
-        # Save file
-        suggested = download.suggested_filename
-        name = args.ticker.upper() if args.ticker else _guess_name(args.url)
-        out_path = output_dir / f"{name}.csv"
-        # If Yahoo/Investing uses CSV name, keep it too
-        if suggested and suggested.lower().endswith(".csv"):
-            out_path = output_dir / suggested
-        download.save_as(out_path)
-        print(f"Saved: {out_path}")
+        page = context.new_page()
+        try:
+            try:
+                page.goto(args.url, wait_until="domcontentloaded")
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "01_loaded.png", "loaded")
+                _maybe_accept_cookies(page)
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "02_cookies.png", "cookies")
+            except Exception as exc:
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "00_error.png", "goto_error")
+                raise exc
 
-        context.close()
-        browser.close()
-    return 0
+            if args.manual:
+                print("Manual mode: complete login/selection in the browser, then press Enter here.")
+                input()
+
+            _try_select_daily(page)
+            if debug_dir:
+                _safe_screenshot(page, debug_dir / "03_daily.png", "daily")
+            if _try_set_date_range(page, range_text):
+                _try_apply(page)
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "04_date_range.png", "date_range")
+
+            download_btn = _find_download(page)
+            if not download_btn:
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "05_no_download.png", "no_download_button")
+                    try:
+                        html_path = debug_dir / "page.html"
+                        html_path.write_text(page.content(), encoding="utf-8")
+                        print(f"[debug] page html saved: {html_path.name}")
+                    except Exception as exc:
+                        print(f"[debug] failed to save html: {exc}")
+                print("Download button not found. Try --manual to click it yourself.")
+                return 2
+
+            try:
+                with page.expect_download(timeout=20000) as dl_info:
+                    download_btn.click()
+                download = dl_info.value
+            except PlaywrightTimeout:
+                if debug_dir:
+                    _safe_screenshot(page, debug_dir / "06_download_timeout.png", "download_timeout")
+                print("Download did not start. Try --manual and click Download yourself.")
+                return 3
+
+            # Save file
+            suggested = download.suggested_filename
+            name = args.ticker.upper() if args.ticker else _guess_name(args.url)
+            out_path = output_dir / f"{name}.csv"
+            # If Yahoo/Investing uses CSV name, keep it too
+            if suggested and suggested.lower().endswith(".csv"):
+                out_path = output_dir / suggested
+            download.save_as(out_path)
+            print(f"Saved: {out_path}")
+            return 0
+        finally:
+            if args.debug and trace_path:
+                try:
+                    context.tracing.stop(path=str(trace_path))
+                    print(f"[debug] trace saved: {trace_path}")
+                except Exception as exc:
+                    print(f"[debug] trace stop failed: {exc}")
+            context.close()
+            if browser:
+                browser.close()
+    return 1
 
 
 if __name__ == "__main__":

@@ -33,6 +33,24 @@ def _env(name: str) -> Optional[str]:
 # ================= Prices =================
 def get_price_history(ticker: str, start: Optional[str] = None, end: Optional[str] = None, interval: str = "1d") -> Optional[pd.DataFrame]:
     """Fetch OHLCV history using yfinance. Returns DataFrame or None."""
+    # Prefer Massive.com API if key is configured
+    massive_key = _env("MASSIVE_API_KEY") or _env("MASSIVE_KEY")
+    if massive_key:
+        try:
+            from ingestion.massive_client import list_aggs_daily
+            # Massive expects dates; fallback end date to today if missing.
+            start_date = start or "2000-01-01"
+            end_date = end or datetime.utcnow().strftime("%Y-%m-%d")
+            df = list_aggs_daily(ticker, start=start_date, end=end_date)
+            if df is not None and not df.empty:
+                # Ensure expected cols exist
+                for col in ["Open", "High", "Low", "Close", "Volume"]:
+                    if col not in df.columns:
+                        df[col] = pd.NA
+                return df
+        except Exception:
+            # fall back to yfinance below
+            pass
     try:
         import yfinance as yf
         stock = yf.Ticker(ticker)
