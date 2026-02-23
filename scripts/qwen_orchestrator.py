@@ -10,6 +10,7 @@ import argparse
 import subprocess
 import shlex
 import hashlib
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -31,13 +32,6 @@ VENV_PY = VENV_BIN / "python3"
 
 AUTO_CONFIRM = True
 
-SESSIONS: Dict[str, str] = {
-    "planner": os.environ.get("FC_SESS_PLANNER", "qwen_planner"),
-    "dev": os.environ.get("FC_SESS_DEV", "qwen_dev"),
-    "tester": os.environ.get("FC_SESS_TESTER", "qwen_tester"),
-    "qa": os.environ.get("FC_SESS_QA", "qwen_qa"),
-}
-
 RUNS_DIR_DEFAULT = Path(os.environ.get("FC_RUNS_DIR", str(PROJECT_DIR / "logs-qwen-runs"))).expanduser().resolve()
 
 # capture tuning
@@ -46,7 +40,49 @@ TMUX_HISTORY_LIMIT = int(os.environ.get("FC_TMUX_HISTORY_LIMIT", "200000"))
 
 
 def now_id() -> str:
-    return datetime.now().strftime("%Y%m%d-%H%M%S")
+    # millisecond precision to avoid run_id collisions on fast repeated launches
+    return datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+
+
+def parse_role_session_pairs(raw: str) -> Dict[str, str]:
+    """
+    Parse "role=session" pairs separated by comma or semicolon.
+    Example: "planner=qwen_planner;dev=qwen_dev,security=qwen_security"
+    """
+    out: Dict[str, str] = {}
+    txt = (raw or "").strip()
+    if not txt:
+        return out
+    parts = [p.strip() for p in re.split(r"[;,]", txt) if p.strip()]
+    for part in parts:
+        if "=" not in part:
+            continue
+        role, sess = part.split("=", 1)
+        role = role.strip().lower()
+        sess = sess.strip()
+        if not role or not sess:
+            continue
+        if not re.fullmatch(r"[a-z0-9_.-]+", role):
+            continue
+        if not re.fullmatch(r"[a-zA-Z0-9_.:-]+", sess):
+            continue
+        out[role] = sess
+    return out
+
+
+def build_sessions() -> Dict[str, str]:
+    base = {
+        "planner": os.environ.get("FC_SESS_PLANNER", "qwen_planner"),
+        "dev": os.environ.get("FC_SESS_DEV", "qwen_dev"),
+        "tester": os.environ.get("FC_SESS_TESTER", "qwen_tester"),
+        "qa": os.environ.get("FC_SESS_QA", "qwen_qa"),
+    }
+    extra = parse_role_session_pairs(os.environ.get("FC_EXTRA_SESSIONS", ""))
+    base.update(extra)
+    return base
+
+
+SESSIONS: Dict[str, str] = build_sessions()
 
 
 def build_default_path_override() -> str:
@@ -211,7 +247,11 @@ def tmux_list_sessions() -> List[str]:
 
 def tmux_attach(session: str) -> int:
     tmux_start_server()
-    cp = run(["tmux", "attach", "-t", session], capture=False, check=False)
+    if os.environ.get("TMUX"):
+        # Already inside tmux: switch client instead of nested attach.
+        cp = subprocess.run(["tmux", "switch-client", "-t", session], check=False)
+        return cp.returncode
+    cp = subprocess.run(["tmux", "attach", "-t", session], check=False)
     return cp.returncode
 
 
@@ -349,11 +389,22 @@ def session_names() -> List[str]:
     return sorted(set(SESSIONS.values()))
 
 
+def resolve_session(role_or_session: str) -> str:
+    return SESSIONS.get(role_or_session, role_or_session)
+
+
+def apply_session_overrides(raw: str) -> None:
+    overrides = parse_role_session_pairs(raw)
+    if not overrides:
+        return
+    SESSIONS.update(overrides)
+
+
 def _parse_fc_qwen_exports() -> List[str]:
     raw = (os.environ.get("FC_QWEN_EXPORTS") or "").strip()
     if not raw:
         return []
-    parts = [p.strip() for p in raw.split(";") if p.strip()]
+    parts = [p.strip() for p in re.split(r"[;,]", raw) if p.strip()]
     exports: List[str] = []
     for p in parts:
         if "=" not in p:
@@ -361,26 +412,26 @@ def _parse_fc_qwen_exports() -> List[str]:
         k, v = p.split("=", 1)
         k = k.strip()
         v = v.strip()
-        if k:
-            exports.append(f'export {k}="{v}"')
+        if k and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k):
+            exports.append(f"export {k}={shlex.quote(v)}")
     return exports
 
 
 def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -> str:
-    setup_cmds = [f'cd "{str(PROJECT_DIR)}"']
+    setup_cmds = [f"cd {shlex.quote(str(PROJECT_DIR))}"]
 
     venv_activate = VENV_BIN / "activate"
     if venv_activate.exists():
-        setup_cmds.append(f'source "{str(venv_activate)}"')
+        setup_cmds.append(f"source {shlex.quote(str(venv_activate))}")
 
-    setup_cmds.append(f'export PATH="{path_override}"')
+    setup_cmds.append(f"export PATH={shlex.quote(path_override)}")
 
     if auto_confirm:
-        setup_cmds.append('export QWEN_CODE_AUTO_CONFIRM=1')
+        setup_cmds.append("export QWEN_CODE_AUTO_CONFIRM=1")
 
     setup_cmds.extend(_parse_fc_qwen_exports())
 
-    setup_cmds.append(f'{qwen_bin} || exec bash')
+    setup_cmds.append(f"{shlex.quote(qwen_bin)} || exec bash")
     return " && ".join(setup_cmds)
 
 
@@ -451,17 +502,55 @@ def qwen_status() -> str:
     tmux_start_server()
     existing = set(tmux_list_sessions())
     lines: List[str] = []
-    lines.append("Qwen tmux sessions:")
-    for sess in session_names():
-        lines.append(f"  - {sess}: {'UP' if sess in existing else 'DOWN'}")
+    lines.append("Qwen tmux sessions (role -> session):")
+    for role in sorted(SESSIONS.keys()):
+        sess = SESSIONS[role]
+        lines.append(f"  - {role} -> {sess}: {'UP' if sess in existing else 'DOWN'}")
     return "\n".join(lines)
 
 
 def qwen_attach(role_or_session: str) -> int:
     ensure_tmux_exists()
     tmux_start_server()
-    sess = SESSIONS.get(role_or_session, role_or_session)
+    sess = resolve_session(role_or_session)
     return tmux_attach(sess)
+
+
+def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_wait: float = 60.0) -> str:
+    ensure_tmux_exists()
+    tmux_start_server()
+    sess = resolve_session(role_or_session)
+    if not tmux_has_session(sess):
+        _die(f"Session tmux absente: {sess}. Lance d'abord --tmux-cmd start.")
+    llm = QwenTmuxLLM(session_name=sess, system_prompt=system_prompt, max_wait=max(15.0, float(max_wait)))
+    return llm.chat(prompt)
+
+
+def qwen_ping(target: str = "", max_wait: float = 25.0) -> Dict[str, str]:
+    ping_prompt = (
+        "PING ORCHESTRATOR: réponds uniquement avec une ligne courte au format "
+        "'PONG <session_or_role> <timestamp>'."
+    )
+    results: Dict[str, str] = {}
+
+    pairs: List[Tuple[str, str]] = []
+    if target:
+        sess = resolve_session(target)
+        pairs.append((target, sess))
+    else:
+        for role in sorted(SESSIONS.keys()):
+            pairs.append((role, SESSIONS[role]))
+
+    for label, sess in pairs:
+        if not tmux_has_session(sess):
+            results[label] = f"DOWN ({sess})"
+            continue
+        try:
+            reply = qwen_prompt(sess, ping_prompt, system_prompt="", max_wait=max_wait)
+            results[label] = (reply or "").strip() or "(réponse vide)"
+        except Exception as e:
+            results[label] = f"ERROR: {e}"
+    return results
 
 
 # ==============================================================================
@@ -992,7 +1081,14 @@ def run_feature_autogen_tmux(
 # ==============================================================================
 
 def doctor(ctx: RunCtx, qwen_bin: str) -> None:
-    require_module("autogen")  # strict
+    autogen_ok = True
+    autogen_detail = "OK"
+    try:
+        require_module("autogen")
+    except Exception as e:
+        autogen_ok = False
+        autogen_detail = str(e)
+
     require_bin("tmux")
     require_executable(qwen_bin)
 
@@ -1001,6 +1097,9 @@ def doctor(ctx: RunCtx, qwen_bin: str) -> None:
     lines.append("")
     lines.append(f"- PROJECT_DIR: {PROJECT_DIR} ({'OK' if PROJECT_DIR.exists() else 'MISSING'})")
     lines.append(f"- BACKEND_DIR: {BACKEND_DIR} ({'OK' if BACKEND_DIR.exists() else 'MISSING'})")
+    lines.append(f"- autogen: {'OK' if autogen_ok else 'MISSING'}")
+    if not autogen_ok:
+        lines.append(f"  - detail: {autogen_detail}")
     lines.append(f"- tmux: {which('tmux')}")
     lines.append(f"- qwen: {qwen_bin}")
     lines.append(f"- python venv: {VENV_PY} ({'OK' if VENV_PY.exists() else 'MISSING'})")
@@ -1022,15 +1121,7 @@ def cleanup_runs(runs_dir: Path, keep_last: int = 10) -> int:
     n = 0
     for d in to_delete:
         try:
-            for sub in d.rglob("*"):
-                if sub.is_file():
-                    sub.unlink()
-            for sub in sorted([p for p in d.rglob("*") if p.is_dir()], reverse=True):
-                try:
-                    sub.rmdir()
-                except Exception:
-                    pass
-            d.rmdir()
+            shutil.rmtree(d, ignore_errors=False)
             n += 1
         except Exception:
             pass
@@ -1129,13 +1220,18 @@ def usage_text() -> str:
        python3 scripts/qwen_orchestrator.py --tmux-cmd restart
        python3 scripts/qwen_orchestrator.py --tmux-cmd stop --tmux-all
        python3 scripts/qwen_orchestrator.py --tmux-cmd attach --tmux-target dev
+       python3 scripts/qwen_orchestrator.py --tmux-cmd ping
+       python3 scripts/qwen_orchestrator.py --tmux-cmd prompt --tmux-target dev --prompt "Donne 3 TODO backend"
 
     Notes
     -----
-    - Aucun fallback: autogen/tmux/qwen doivent être présents sinon erreur.
+    - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
+    - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
+    - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
+      ex: security=qwen_security,docs=qwen_docs
     - tmux capture utilise history + join wrap (-J), et history-limit est augmenté.
     - Chaque exécution crée un run_dir:
-        {RUNS_DIR_DEFAULT}/YYYYMMDD-HHMMSS/
+        {RUNS_DIR_DEFAULT}/YYYYMMDD-HHMMSS-mmm/
           - run.json
           - transcript.md
           - tmux/*.log (si activé)
@@ -1150,7 +1246,6 @@ def usage_text() -> str:
 
 def main():
     ensure_venv_or_reexec()
-    require_module("autogen")  # strict early fail
 
     ap = argparse.ArgumentParser(description="Finance Copilot orchestrator (AutoGen + tmux Qwen Code).", add_help=True)
 
@@ -1175,17 +1270,23 @@ def main():
     ap.add_argument("--wait-tester", type=float, default=75.0)
     ap.add_argument("--wait-qa", type=float, default=90.0)
 
+    ap.add_argument("--sessions", type=str, default="",
+                    help="Overrides sessions role=session (comma/semicolon separated). Ex: dev=qwen_dev2,security=qwen_sec")
+    ap.add_argument("--prompt", type=str, default="", help="Prompt texte pour tmux-cmd=prompt")
+    ap.add_argument("--system-prompt", type=str, default="", help="System prompt optionnel pour tmux-cmd=prompt")
+
     # management commands
     ap.add_argument("--tmux-cmd", type=str, default="",
-                    help="Commande: status|start|stop|restart|attach|doctor|cleanup|clear")
+                    help="Commande: status|start|stop|restart|attach|doctor|cleanup|clear|ping|prompt")
     ap.add_argument("--tmux-target", type=str, default="",
-                    help="Pour stop/attach/clear: role planner|dev|tester|qa ou nom de session")
+                    help="Pour stop/attach/clear/ping/prompt: role (planner/dev/tester/qa/...) ou nom de session")
     ap.add_argument("--tmux-all", action="store_true", help="Pour stop: stop toutes les sessions")
     ap.add_argument("--keep-last", type=int, default=10, help="Pour cleanup: garder N derniers runs")
 
     ap.add_argument("--print-usage", action="store_true", help="Affiche une doc d'utilisation + exit")
 
     args = ap.parse_args()
+    apply_session_overrides(args.sessions)
 
     if args.print_usage:
         print(usage_text())
@@ -1233,7 +1334,7 @@ def main():
                 qwen_stop(all_sessions=True)
                 print("🛑 Qwen sessions stopped (all).")
                 return
-            sess = SESSIONS.get(args.tmux_target, args.tmux_target)
+            sess = resolve_session(args.tmux_target)
             qwen_stop(all_sessions=False, session=sess)
             print(f"🛑 Qwen session stopped: {sess}")
             return
@@ -1257,13 +1358,34 @@ def main():
 
         if tmux_cmd == "clear":
             target = args.tmux_target or "dev"
-            sess = SESSIONS.get(target, target)
+            sess = resolve_session(target)
             tmux_clear_screen(sess)
             tmux_clear_history(sess)
             print(f"✅ Clear screen + history envoyé à: {sess}")
             return
 
-        _die(f"tmux-cmd inconnu: {tmux_cmd} (attendu: status|start|stop|restart|attach|doctor|cleanup|clear)")
+        if tmux_cmd == "ping":
+            target = args.tmux_target.strip()
+            results = qwen_ping(target=target, max_wait=25.0)
+            print("🏓 Ping results:")
+            for label, value in results.items():
+                print(f"- {label}: {value}")
+            return
+
+        if tmux_cmd == "prompt":
+            target = (args.tmux_target or "dev").strip()
+            if not args.prompt.strip():
+                _die("tmux-cmd=prompt nécessite --prompt \"...\"")
+            reply = qwen_prompt(
+                target,
+                args.prompt.strip(),
+                system_prompt=(args.system_prompt or "").strip(),
+                max_wait=max(args.wait_dev, 20.0),
+            )
+            print(reply if (reply or "").strip() else "(réponse vide)")
+            return
+
+        _die(f"tmux-cmd inconnu: {tmux_cmd} (attendu: status|start|stop|restart|attach|doctor|cleanup|clear|ping|prompt)")
 
     feature = args.feature or "Implémente un endpoint GET /health avec test pytest"
 
