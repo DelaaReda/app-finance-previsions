@@ -453,6 +453,13 @@ def tmux_clear_history(session: str) -> None:
     run(["tmux", "clear-history", "-t", target], capture=False)
 
 
+def tmux_current_command(session: str) -> str:
+    tmux_start_server()
+    target = tmux_target(session)
+    cp = run(["tmux", "display-message", "-p", "-t", target, "#{pane_current_command}"], capture=True)
+    return (cp.stdout or "").strip().lower()
+
+
 # ==============================================================================
 # Run dirs / transcripts / manifest / snapshots
 # ==============================================================================
@@ -594,6 +601,14 @@ def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -
 
     setup_cmds.append(f"export PATH={shlex.quote(path_override)}")
 
+    # qwen-code 0.4.0 can crash in TUI with "Invalid number of stops (< 2)"
+    # when NO_COLOR=1 or TERM=dumb leads to no-color gradient config.
+    if _env_bool("FC_QWEN_SANITIZE_COLOR_ENV", default=True):
+        setup_cmds.append("unset NO_COLOR")
+        setup_cmds.append('if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi')
+        setup_cmds.append('export COLORTERM="${COLORTERM:-truecolor}"')
+        setup_cmds.append('export FORCE_COLOR="${FORCE_COLOR:-1}"')
+
     if auto_confirm:
         setup_cmds.append("export QWEN_CODE_AUTO_CONFIRM=1")
 
@@ -686,14 +701,68 @@ def qwen_attach(role_or_session: str) -> int:
     return tmux_attach(sess)
 
 
+def _looks_like_qwen_banner(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    low = t.lower()
+    if "tips for getting started" in low:
+        return True
+    if "██" in t and len([ln for ln in t.splitlines() if ln.strip()]) <= 12:
+        return True
+    return False
+
+
+def _launch_qwen_in_session(session: str) -> None:
+    cmd = (
+        "unset NO_COLOR; "
+        'if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; '
+        'export COLORTERM="${COLORTERM:-truecolor}"; '
+        'export FORCE_COLOR="${FORCE_COLOR:-1}"; '
+        "qwen"
+    )
+    tmux_send_keys(session, cmd)
+
+
 def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_wait: float = 60.0) -> str:
     ensure_tmux_exists()
     tmux_start_server()
     sess = resolve_session(role_or_session)
     if not tmux_has_session(sess):
         _die(f"Session tmux absente: {sess}. Lance d'abord --tmux-cmd start.")
+
+    fallback_sdk = _env_bool("FC_QWEN_TMUX_FALLBACK_SDK", default=True)
+    cmd = tmux_current_command(sess)
+    if cmd != "qwen":
+        _launch_qwen_in_session(sess)
+        time.sleep(1.6)
+        cmd = tmux_current_command(sess)
+        if cmd != "qwen":
+            if fallback_sdk:
+                return qwen_prompt_sdk(
+                    prompt,
+                    system_prompt=system_prompt,
+                    max_wait=max_wait,
+                    permission_mode=os.environ.get("FC_QWEN_SDK_PERMISSION_MODE", "default"),
+                    model=os.environ.get("FC_QWEN_SDK_MODEL", ""),
+                    debug=_env_bool("FC_QWEN_SDK_DEBUG", default=False),
+                    path_to_qwen_executable=os.environ.get("FC_QWEN_SDK_CLI_PATH", ""),
+                )
+            _die(f"Qwen TUI n'est pas actif dans la session {sess} (pane_current_command={cmd or 'unknown'}).")
+
     llm = QwenTmuxLLM(session_name=sess, system_prompt=system_prompt, max_wait=max(15.0, float(max_wait)))
-    return llm.chat(prompt)
+    reply = llm.chat(prompt)
+    if (not reply.strip() or _looks_like_qwen_banner(reply)) and fallback_sdk:
+        return qwen_prompt_sdk(
+            prompt,
+            system_prompt=system_prompt,
+            max_wait=max_wait,
+            permission_mode=os.environ.get("FC_QWEN_SDK_PERMISSION_MODE", "default"),
+            model=os.environ.get("FC_QWEN_SDK_MODEL", ""),
+            debug=_env_bool("FC_QWEN_SDK_DEBUG", default=False),
+            path_to_qwen_executable=os.environ.get("FC_QWEN_SDK_CLI_PATH", ""),
+        )
+    return reply
 
 
 def qwen_ping(target: str = "", max_wait: float = 25.0) -> Dict[str, str]:
@@ -1566,6 +1635,12 @@ def usage_text() -> str:
       - CLI: utiliser le bundle SDK par défaut (évite les bugs TUI du binaire local)
       - Optionnel: --sdk-path-to-qwen-executable /path/to/qwen
       - utilise --prompt-engine sdk sur tmux-cmd=prompt|ping
+    - Workaround TUI qwen 0.4.0:
+      - le launcher nettoie NO_COLOR/TERM par défaut pour éviter
+        "Invalid number of stops (< 2)"
+      - désactiver ce comportement via FC_QWEN_SANITIZE_COLOR_ENV=0
+      - si la TUI quitte quand même en tmux detached, prompt bascule vers SDK
+        (désactiver via FC_QWEN_TMUX_FALLBACK_SDK=0)
     - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
     - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
     - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
