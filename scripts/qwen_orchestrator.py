@@ -109,6 +109,11 @@ def build_default_path_override() -> str:
 
 
 DEFAULT_PATH_OVERRIDE = build_default_path_override()
+NODE_BIN_DEFAULT = os.environ.get("FC_NODE_BIN", shutil.which("node") or "node")
+SDK_BRIDGE_DEFAULT = Path(
+    os.environ.get("FC_QWEN_SDK_BRIDGE", str(PROJECT_DIR / "scripts" / "qwen_sdk_prompt.mjs"))
+).expanduser().resolve()
+SDK_PERMISSION_MODES = {"default", "plan", "auto-edit", "yolo"}
 
 
 # ==============================================================================
@@ -716,6 +721,125 @@ def qwen_ping(target: str = "", max_wait: float = 25.0) -> Dict[str, str]:
         except Exception as e:
             results[label] = f"ERROR: {e}"
     return results
+
+
+def _parse_json_object_from_output(text: str) -> Dict[str, Any]:
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    for line in reversed(lines):
+        try:
+            parsed = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("Aucun JSON valide trouvé dans la sortie du bridge SDK.")
+
+
+def qwen_prompt_sdk(
+    prompt: str,
+    *,
+    system_prompt: str = "",
+    max_wait: float = 60.0,
+    permission_mode: str = "default",
+    model: str = "",
+    debug: bool = False,
+    path_to_qwen_executable: str = "",
+) -> str:
+    permission_mode = (permission_mode or "default").strip().lower()
+    if permission_mode not in SDK_PERMISSION_MODES:
+        _die(
+            f"permission_mode SDK invalide: {permission_mode}. "
+            f"Valeurs: {', '.join(sorted(SDK_PERMISSION_MODES))}"
+        )
+
+    node_bin = require_executable(NODE_BIN_DEFAULT)
+    bridge = SDK_BRIDGE_DEFAULT
+    if not bridge.exists():
+        _die(
+            f"Bridge SDK introuvable: {bridge}\n"
+            "Crée ce fichier (scripts/qwen_sdk_prompt.mjs) et installe @qwen-code/sdk."
+        )
+
+    sdk_prompt = prompt.strip()
+    if system_prompt.strip():
+        sdk_prompt = (
+            "[SYSTEM]\n"
+            f"{system_prompt.strip()}\n\n"
+            "[USER]\n"
+            f"{prompt.strip()}"
+        )
+
+    cmd: List[str] = [
+        node_bin,
+        str(bridge),
+        "--prompt",
+        sdk_prompt,
+        "--cwd",
+        str(PROJECT_DIR),
+        "--permission-mode",
+        permission_mode,
+        "--timeout-sec",
+        str(max(10.0, float(max_wait))),
+    ]
+    if model.strip():
+        cmd.extend(["--model", model.strip()])
+    if debug:
+        cmd.append("--debug")
+    if path_to_qwen_executable.strip():
+        cmd.extend(["--path-to-qwen-executable", require_executable(path_to_qwen_executable.strip())])
+
+    cp = run(
+        cmd,
+        cwd=PROJECT_DIR,
+        capture=True,
+        timeout=int(max(20.0, float(max_wait) + 45.0)),
+    )
+    out = (cp.stdout or "").strip()
+
+    if cp.returncode != 0:
+        tail = "\n".join((out.splitlines() or [""])[-20:]).strip()
+        _die(f"Bridge SDK en échec (rc={cp.returncode}).\n{tail}")
+
+    try:
+        payload = _parse_json_object_from_output(out)
+    except Exception as e:
+        _die(f"Sortie SDK illisible: {e}\nSortie brute:\n{out[-2000:]}")
+
+    if not payload.get("ok", False):
+        err = str(payload.get("error") or "Erreur inconnue SDK")
+        detail = str(payload.get("detail") or "")
+        msg = f"SDK error: {err}"
+        if detail:
+            msg += f"\n{detail}"
+        _die(msg)
+
+    assistant = str(payload.get("assistant") or "").strip()
+    if assistant:
+        return assistant
+
+    result = payload.get("result")
+    if result is not None:
+        try:
+            return json.dumps(result, ensure_ascii=False, indent=2)
+        except Exception:
+            return str(result)
+
+    return "(réponse vide)"
+
+
+def qwen_ping_sdk(max_wait: float = 25.0, model: str = "", debug: bool = False, qwen_bin: str = "") -> str:
+    ping_prompt = (
+        "PING ORCHESTRATOR: réponds uniquement avec une ligne courte au format "
+        "'PONG sdk <timestamp>'."
+    )
+    return qwen_prompt_sdk(
+        ping_prompt,
+        max_wait=max_wait,
+        permission_mode="default",
+        model=model,
+        debug=debug,
+        path_to_qwen_executable=qwen_bin,
+    )
 
 
 # ==============================================================================
@@ -1424,6 +1548,7 @@ def usage_text() -> str:
        python3 scripts/qwen_orchestrator.py --tmux-cmd attach --tmux-target dev
        python3 scripts/qwen_orchestrator.py --tmux-cmd ping
        python3 scripts/qwen_orchestrator.py --tmux-cmd prompt --tmux-target dev --prompt "Donne 3 TODO backend"
+       python3 scripts/qwen_orchestrator.py --tmux-cmd prompt --prompt-engine sdk --prompt "Donne 3 TODO backend"
 
     Notes
     -----
@@ -1435,6 +1560,12 @@ def usage_text() -> str:
       - ORCH_SENTRY_TRACES_SAMPLE_RATE (défaut: 0.1)
       - ORCH_SENTRY_PROFILE_SESSION_SAMPLE_RATE / ORCH_SENTRY_PROFILES_SAMPLE_RATE (défaut: 0.0)
       - ORCH_SENTRY_ENABLE_LOGS=true|false
+    - Mode prompt SDK (sans nettoyage TUI tmux):
+      - Bridge: {SDK_BRIDGE_DEFAULT}
+      - npm install @qwen-code/sdk (Node >= 20)
+      - CLI: utiliser le bundle SDK par défaut (évite les bugs TUI du binaire local)
+      - Optionnel: --sdk-path-to-qwen-executable /path/to/qwen
+      - utilise --prompt-engine sdk sur tmux-cmd=prompt|ping
     - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
     - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
     - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
@@ -1484,6 +1615,27 @@ def main():
                     help="Overrides sessions role=session (comma/semicolon separated). Ex: dev=qwen_dev2,security=qwen_sec")
     ap.add_argument("--prompt", type=str, default="", help="Prompt texte pour tmux-cmd=prompt")
     ap.add_argument("--system-prompt", type=str, default="", help="System prompt optionnel pour tmux-cmd=prompt")
+    ap.add_argument(
+        "--prompt-engine",
+        type=str,
+        default=os.environ.get("FC_PROMPT_ENGINE", "tmux"),
+        choices=["tmux", "sdk"],
+        help="Moteur pour tmux-cmd=prompt|ping: tmux (par défaut) ou sdk",
+    )
+    ap.add_argument(
+        "--sdk-permission-mode",
+        type=str,
+        default=os.environ.get("FC_QWEN_SDK_PERMISSION_MODE", "default"),
+        help="Mode permissions SDK: default|plan|auto-edit|yolo",
+    )
+    ap.add_argument("--sdk-model", type=str, default=os.environ.get("FC_QWEN_SDK_MODEL", "").strip())
+    ap.add_argument("--sdk-debug", action="store_true", help="Active debug du bridge SDK")
+    ap.add_argument(
+        "--sdk-path-to-qwen-executable",
+        type=str,
+        default=os.environ.get("FC_QWEN_SDK_CLI_PATH", "").strip(),
+        help="Optionnel: chemin qwen CLI pour le SDK (sinon CLI bundle SDK)",
+    )
 
     # management commands
     ap.add_argument("--tmux-cmd", type=str, default="",
@@ -1498,6 +1650,7 @@ def main():
     args = ap.parse_args()
     apply_session_overrides(args.sessions)
     tmux_cmd = (args.tmux_cmd or "").strip().lower()
+    prompt_engine = (args.prompt_engine or "tmux").strip().lower()
 
     init_orchestrator_sentry()
     sentry_set_context(mode=args.mode, tmux_cmd=tmux_cmd or None)
@@ -1506,6 +1659,7 @@ def main():
         data={
             "mode": args.mode,
             "tmux_cmd": tmux_cmd or "(none)",
+            "prompt_engine": prompt_engine,
             "runs_dir": args.runs_dir,
             "restart": bool(args.restart),
         },
@@ -1600,8 +1754,19 @@ def main():
 
         if tmux_cmd == "ping":
             target = args.tmux_target.strip()
-            sentry_add_breadcrumb("tmux_ping", data={"target": target or "(all)"})
-            results = qwen_ping(target=target, max_wait=25.0)
+            sentry_add_breadcrumb("tmux_ping", data={"target": target or "(all)", "engine": prompt_engine})
+            if prompt_engine == "sdk":
+                label = target or "sdk"
+                results = {
+                    label: qwen_ping_sdk(
+                        max_wait=25.0,
+                        model=args.sdk_model,
+                        debug=bool(args.sdk_debug),
+                        qwen_bin=args.sdk_path_to_qwen_executable,
+                    )
+                }
+            else:
+                results = qwen_ping(target=target, max_wait=25.0)
             print("🏓 Ping results:")
             for label, value in results.items():
                 print(f"- {label}: {value}")
@@ -1611,13 +1776,24 @@ def main():
             target = (args.tmux_target or "dev").strip()
             if not args.prompt.strip():
                 _die("tmux-cmd=prompt nécessite --prompt \"...\"")
-            sentry_add_breadcrumb("tmux_prompt", data={"target": target})
-            reply = qwen_prompt(
-                target,
-                args.prompt.strip(),
-                system_prompt=(args.system_prompt or "").strip(),
-                max_wait=max(args.wait_dev, 20.0),
-            )
+            sentry_add_breadcrumb("tmux_prompt", data={"target": target, "engine": prompt_engine})
+            if prompt_engine == "sdk":
+                reply = qwen_prompt_sdk(
+                    args.prompt.strip(),
+                    system_prompt=(args.system_prompt or "").strip(),
+                    max_wait=max(args.wait_dev, 20.0),
+                    permission_mode=args.sdk_permission_mode,
+                    model=args.sdk_model,
+                    debug=bool(args.sdk_debug),
+                    path_to_qwen_executable=args.sdk_path_to_qwen_executable,
+                )
+            else:
+                reply = qwen_prompt(
+                    target,
+                    args.prompt.strip(),
+                    system_prompt=(args.system_prompt or "").strip(),
+                    max_wait=max(args.wait_dev, 20.0),
+                )
             print(reply if (reply or "").strip() else "(réponse vide)")
             return
 
