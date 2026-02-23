@@ -17,6 +17,11 @@ from pathlib import Path
 from textwrap import dedent
 from typing import List, Dict, Any, Optional, Tuple
 
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover
+    sentry_sdk = None
+
 
 # ==============================================================================
 # CONFIG (overridable via env)
@@ -32,7 +37,13 @@ VENV_PY = VENV_BIN / "python3"
 
 AUTO_CONFIRM = True
 
-RUNS_DIR_DEFAULT = Path(os.environ.get("FC_RUNS_DIR", str(PROJECT_DIR / "logs-qwen-runs"))).expanduser().resolve()
+APP_LOG_DIR_DEFAULT = Path(
+    os.environ.get("FC_APP_LOG_DIR", str(PROJECT_DIR / "finance-app"))
+).expanduser().resolve()
+RUNS_SUBDIR_NAME = os.environ.get("FC_RUNS_SUBDIR", "orchestrator-runs")
+RUNS_DIR_DEFAULT = Path(
+    os.environ.get("FC_RUNS_DIR", str(APP_LOG_DIR_DEFAULT / RUNS_SUBDIR_NAME))
+).expanduser().resolve()
 
 # capture tuning
 CAPTURE_LAST_LINES = int(os.environ.get("FC_CAPTURE_LAST_LINES", "4000"))
@@ -98,6 +109,138 @@ def build_default_path_override() -> str:
 
 
 DEFAULT_PATH_OVERRIDE = build_default_path_override()
+
+
+# ==============================================================================
+# Optional Sentry (orchestrator telemetry)
+# ==============================================================================
+
+_SENTRY_INITIALIZED = False
+_SENTRY_ENABLED = False
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _clamp_rate(value: str, default: float) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        return default
+    return max(0.0, min(1.0, parsed))
+
+
+def init_orchestrator_sentry() -> bool:
+    """
+    Initialize Sentry only when a DSN is configured.
+    Priority:
+    - ORCH_SENTRY_DSN
+    - SENTRY_DSN
+    """
+    global _SENTRY_INITIALIZED, _SENTRY_ENABLED
+
+    if _SENTRY_INITIALIZED:
+        return _SENTRY_ENABLED
+
+    dsn = (os.environ.get("ORCH_SENTRY_DSN") or os.environ.get("SENTRY_DSN") or "").strip()
+    if not dsn:
+        _SENTRY_INITIALIZED = True
+        _SENTRY_ENABLED = False
+        return False
+
+    if sentry_sdk is None:
+        print("⚠️  Sentry DSN configuré mais sentry-sdk est absent. `pip install sentry-sdk`", file=sys.stderr)
+        _SENTRY_INITIALIZED = True
+        _SENTRY_ENABLED = False
+        return False
+
+    traces_rate = _clamp_rate(os.environ.get("ORCH_SENTRY_TRACES_SAMPLE_RATE", "0.1"), 0.1)
+    profile_session_rate = _clamp_rate(
+        os.environ.get("ORCH_SENTRY_PROFILE_SESSION_SAMPLE_RATE", os.environ.get("ORCH_SENTRY_PROFILES_SAMPLE_RATE", "0.0")),
+        0.0,
+    )
+    profiles_rate = _clamp_rate(
+        os.environ.get("ORCH_SENTRY_PROFILES_SAMPLE_RATE", str(profile_session_rate)),
+        profile_session_rate,
+    )
+    environment = (
+        os.environ.get("ORCH_SENTRY_ENVIRONMENT")
+        or os.environ.get("SENTRY_ENVIRONMENT")
+        or os.environ.get("APP_ENV")
+        or os.environ.get("ENVIRONMENT")
+        or "development"
+    )
+    release = os.environ.get("ORCH_SENTRY_RELEASE") or os.environ.get("SENTRY_RELEASE")
+    enable_logs = _env_bool("ORCH_SENTRY_ENABLE_LOGS", default=True)
+    send_default_pii = _env_bool("ORCH_SENTRY_SEND_DEFAULT_PII", default=False)
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            traces_sample_rate=traces_rate,
+            profile_session_sample_rate=profile_session_rate,
+            profiles_sample_rate=profiles_rate,
+            profile_lifecycle="trace",
+            enable_logs=enable_logs,
+            send_default_pii=send_default_pii,
+            environment=environment,
+            release=release,
+        )
+    except Exception as e:
+        print(f"⚠️  Impossible d'initialiser Sentry: {e}", file=sys.stderr)
+        _SENTRY_INITIALIZED = True
+        _SENTRY_ENABLED = False
+        return False
+
+    _SENTRY_INITIALIZED = True
+    _SENTRY_ENABLED = True
+    sentry_sdk.set_tag("component", "qwen_orchestrator")
+    sentry_sdk.set_tag("orchestrator.script", "scripts/qwen_orchestrator.py")
+    sentry_sdk.set_tag("orchestrator.project_dir", str(PROJECT_DIR))
+    return True
+
+
+def sentry_set_context(*, run_id: Optional[str] = None, mode: Optional[str] = None, tmux_cmd: Optional[str] = None) -> None:
+    if not _SENTRY_ENABLED or sentry_sdk is None:
+        return
+    if run_id:
+        sentry_sdk.set_tag("orchestrator.run_id", run_id)
+    if mode:
+        sentry_sdk.set_tag("orchestrator.mode", mode)
+    if tmux_cmd:
+        sentry_sdk.set_tag("orchestrator.tmux_cmd", tmux_cmd)
+
+
+def capture_orchestrator_exception(exc: BaseException, *, context: Optional[Dict[str, Any]] = None, flush: bool = True) -> None:
+    if not _SENTRY_ENABLED or sentry_sdk is None:
+        return
+    with sentry_sdk.new_scope() as scope:
+        for key, value in (context or {}).items():
+            scope.set_extra(str(key), value)
+        sentry_sdk.capture_exception(exc)
+    if flush:
+        sentry_sdk.flush(timeout=2.0)
+
+
+def sentry_add_breadcrumb(
+    message: str,
+    *,
+    category: str = "orchestrator",
+    level: str = "info",
+    data: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not _SENTRY_ENABLED or sentry_sdk is None:
+        return
+    sentry_sdk.add_breadcrumb(
+        message=message,
+        category=category,
+        level=level,
+        data=data or {},
+    )
 
 
 # ==============================================================================
@@ -319,6 +462,24 @@ class RunCtx:
     manifest_path: Path
 
 
+def update_latest_run_pointer(runs_dir: Path, run_dir: Path) -> None:
+    """
+    Expose un pointeur stable vers la dernière exécution:
+    - symlink: <runs_dir>/latest
+    - fallback fichier texte: <runs_dir>/latest_run.txt
+    """
+    latest_link = runs_dir / "latest"
+    latest_txt = runs_dir / "latest_run.txt"
+
+    try:
+        if latest_link.exists() or latest_link.is_symlink():
+            latest_link.unlink()
+        latest_link.symlink_to(run_dir.name)
+    except Exception:
+        # En fallback (FS qui bloque les symlinks), on garde un pointeur texte.
+        latest_txt.write_text(str(run_dir) + "\n", encoding="utf-8")
+
+
 def create_run_ctx(runs_dir: Path) -> RunCtx:
     run_id = now_id()
     run_dir = runs_dir / run_id
@@ -327,6 +488,7 @@ def create_run_ctx(runs_dir: Path) -> RunCtx:
     run_dir.mkdir(parents=True, exist_ok=True)
     tmux_dir.mkdir(parents=True, exist_ok=True)
     snapshots_dir.mkdir(parents=True, exist_ok=True)
+    update_latest_run_pointer(runs_dir, run_dir)
 
     return RunCtx(
         run_id=run_id,
@@ -344,6 +506,7 @@ def write_manifest(ctx: RunCtx, feature: str, qwen_bin: str, extra: Optional[Dic
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "feature": feature,
         "project_dir": str(PROJECT_DIR),
+        "runs_dir": str(ctx.run_dir.parent),
         "backend_dir": str(BACKEND_DIR),
         "qwen_bin": qwen_bin,
         "sessions": {k: v for k, v in SESSIONS.items()},
@@ -502,6 +665,8 @@ def qwen_status() -> str:
     tmux_start_server()
     existing = set(tmux_list_sessions())
     lines: List[str] = []
+    lines.append(f"Runs dir: {RUNS_DIR_DEFAULT}")
+    lines.append(f"Latest run pointer: {RUNS_DIR_DEFAULT / 'latest'}")
     lines.append("Qwen tmux sessions (role -> session):")
     for role in sorted(SESSIONS.keys()):
         sess = SESSIONS[role]
@@ -655,6 +820,10 @@ class QwenTmuxSession:
                 continue
 
             lower = stripped.lower()
+            is_error_line = any(
+                marker in lower
+                for marker in ("error", "exception", "traceback", "failed", "invalid", "not found", "denied")
+            )
 
             # Spinners / loading
             if stripped.startswith(("⠋", "⠙", "⠹", "⠸", "⠼", "⠧", "⠏", "⠴", "⠦")):
@@ -671,7 +840,7 @@ class QwenTmuxSession:
                 continue
 
             # Generic UI noise
-            if any(ns in lower for ns in noise_substrings):
+            if (not is_error_line) and any(ns in lower for ns in noise_substrings):
                 continue
 
             cleaned.append(stripped)
@@ -692,6 +861,26 @@ class QwenTmuxSession:
             cleaned = cleaned[-40:]
 
         return "\n".join(cleaned).strip()
+
+    def _fallback_from_pane(self) -> str:
+        """
+        Fallback quand aucun texte utile n'a pu être extrait.
+        On renvoie au minimum les lignes d'erreur visibles dans le pane.
+        """
+        raw = tmux_capture(self.session, last_lines=max(self.capture_lines, 1200))
+        text = self._strip_terminal_noise(raw or "")
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return ""
+
+        err_lines = [
+            ln for ln in lines
+            if any(m in ln.lower() for m in ("error", "exception", "traceback", "failed", "invalid", "not found", "denied"))
+        ]
+        if err_lines:
+            return "\n".join(err_lines[-12:])[:1500].strip()
+
+        return "\n".join(lines[-8:])[:1500].strip()
 
     @staticmethod
     def _fingerprint(s: str) -> str:
@@ -760,6 +949,9 @@ class QwenTmuxSession:
                     last_change = time.time()
                 if (time.time() - last_change) >= 1.2 and last_clean.strip():
                     break
+
+        if not last_clean.strip():
+            last_clean = self._fallback_from_pane()
 
         return last_clean.strip()
 
@@ -1153,6 +1345,16 @@ def run_feature(
     qwen_bin = require_executable(qwen_bin)
 
     ctx = create_run_ctx(runs_dir)
+    sentry_set_context(run_id=ctx.run_id, mode=mode, tmux_cmd="")
+    sentry_add_breadcrumb(
+        "feature_run_started",
+        data={
+            "run_id": ctx.run_id,
+            "mode": mode,
+            "rounds": max_rounds,
+            "runs_dir": str(runs_dir),
+        },
+    )
 
     if mode == "debug":
         marker = create_marker(ctx.run_id)
@@ -1225,6 +1427,14 @@ def usage_text() -> str:
 
     Notes
     -----
+    - Par défaut, les runs sont stockés dans:
+      {RUNS_DIR_DEFAULT}
+      avec un pointeur "latest" vers la dernière exécution.
+    - Sentry orchestrator (optionnel):
+      - ORCH_SENTRY_DSN (ou SENTRY_DSN)
+      - ORCH_SENTRY_TRACES_SAMPLE_RATE (défaut: 0.1)
+      - ORCH_SENTRY_PROFILE_SESSION_SAMPLE_RATE / ORCH_SENTRY_PROFILES_SAMPLE_RATE (défaut: 0.0)
+      - ORCH_SENTRY_ENABLE_LOGS=true|false
     - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
     - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
     - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
@@ -1287,6 +1497,19 @@ def main():
 
     args = ap.parse_args()
     apply_session_overrides(args.sessions)
+    tmux_cmd = (args.tmux_cmd or "").strip().lower()
+
+    init_orchestrator_sentry()
+    sentry_set_context(mode=args.mode, tmux_cmd=tmux_cmd or None)
+    sentry_add_breadcrumb(
+        "main_args_parsed",
+        data={
+            "mode": args.mode,
+            "tmux_cmd": tmux_cmd or "(none)",
+            "runs_dir": args.runs_dir,
+            "restart": bool(args.restart),
+        },
+    )
 
     if args.print_usage:
         print(usage_text())
@@ -1295,16 +1518,18 @@ def main():
     ensure_project_exists()
     ensure_tmux_exists()
 
-    tmux_cmd = (args.tmux_cmd or "").strip().lower()
     runs_dir = Path(args.runs_dir).expanduser().resolve()
 
     if tmux_cmd:
         if tmux_cmd == "status":
+            sentry_add_breadcrumb("tmux_status")
             print(qwen_status())
             return
 
         if tmux_cmd == "start":
             ctx = create_run_ctx(runs_dir)
+            sentry_set_context(run_id=ctx.run_id, mode="start", tmux_cmd="start")
+            sentry_add_breadcrumb("tmux_start", data={"run_id": ctx.run_id})
             write_manifest(ctx, feature="(start only)", qwen_bin=args.qwen_bin, extra={"mode": "start"})
             qwen_start(
                 args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
@@ -1318,6 +1543,8 @@ def main():
 
         if tmux_cmd == "restart":
             ctx = create_run_ctx(runs_dir)
+            sentry_set_context(run_id=ctx.run_id, mode="restart", tmux_cmd="restart")
+            sentry_add_breadcrumb("tmux_restart", data={"run_id": ctx.run_id})
             write_manifest(ctx, feature="(restart only)", qwen_bin=args.qwen_bin, extra={"mode": "restart"})
             qwen_restart(
                 args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
@@ -1331,20 +1558,25 @@ def main():
 
         if tmux_cmd == "stop":
             if args.tmux_all or not args.tmux_target:
+                sentry_add_breadcrumb("tmux_stop_all")
                 qwen_stop(all_sessions=True)
                 print("🛑 Qwen sessions stopped (all).")
                 return
             sess = resolve_session(args.tmux_target)
+            sentry_add_breadcrumb("tmux_stop_one", data={"session": sess})
             qwen_stop(all_sessions=False, session=sess)
             print(f"🛑 Qwen session stopped: {sess}")
             return
 
         if tmux_cmd == "attach":
             target = args.tmux_target or "dev"
+            sentry_add_breadcrumb("tmux_attach", data={"target": target})
             sys.exit(qwen_attach(target))
 
         if tmux_cmd == "doctor":
             ctx = create_run_ctx(runs_dir)
+            sentry_set_context(run_id=ctx.run_id, mode="doctor", tmux_cmd="doctor")
+            sentry_add_breadcrumb("tmux_doctor", data={"run_id": ctx.run_id})
             write_manifest(ctx, feature="(doctor)", qwen_bin=args.qwen_bin, extra={"mode": "doctor"})
             doctor(ctx, qwen_bin=args.qwen_bin)
             print(f"✅ Doctor report écrit: {ctx.run_dir / 'doctor_report.md'}")
@@ -1352,6 +1584,7 @@ def main():
             return
 
         if tmux_cmd == "cleanup":
+            sentry_add_breadcrumb("tmux_cleanup", data={"keep_last": args.keep_last})
             n = cleanup_runs(runs_dir, keep_last=args.keep_last)
             print(f"✅ Cleanup terminé. Runs supprimés: {n}. (gardés: {args.keep_last})")
             return
@@ -1359,6 +1592,7 @@ def main():
         if tmux_cmd == "clear":
             target = args.tmux_target or "dev"
             sess = resolve_session(target)
+            sentry_add_breadcrumb("tmux_clear", data={"session": sess})
             tmux_clear_screen(sess)
             tmux_clear_history(sess)
             print(f"✅ Clear screen + history envoyé à: {sess}")
@@ -1366,6 +1600,7 @@ def main():
 
         if tmux_cmd == "ping":
             target = args.tmux_target.strip()
+            sentry_add_breadcrumb("tmux_ping", data={"target": target or "(all)"})
             results = qwen_ping(target=target, max_wait=25.0)
             print("🏓 Ping results:")
             for label, value in results.items():
@@ -1376,6 +1611,7 @@ def main():
             target = (args.tmux_target or "dev").strip()
             if not args.prompt.strip():
                 _die("tmux-cmd=prompt nécessite --prompt \"...\"")
+            sentry_add_breadcrumb("tmux_prompt", data={"target": target})
             reply = qwen_prompt(
                 target,
                 args.prompt.strip(),
@@ -1388,6 +1624,10 @@ def main():
         _die(f"tmux-cmd inconnu: {tmux_cmd} (attendu: status|start|stop|restart|attach|doctor|cleanup|clear|ping|prompt)")
 
     feature = args.feature or "Implémente un endpoint GET /health avec test pytest"
+    sentry_add_breadcrumb(
+        "feature_entrypoint",
+        data={"feature_preview": feature[:200], "rounds": args.rounds, "mode": args.mode},
+    )
 
     ctx = run_feature(
         feature=feature,
@@ -1414,4 +1654,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:
+        init_orchestrator_sentry()
+        capture_orchestrator_exception(
+            exc,
+            context={
+                "argv": sys.argv,
+                "cwd": os.getcwd(),
+                "project_dir": str(PROJECT_DIR),
+            },
+            flush=True,
+        )
+        raise

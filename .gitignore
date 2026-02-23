@@ -20,6 +20,7 @@ artifacts/
 artifacts_phase1/
 logs/
 logs-qwen-runs/
+finance-app/orchestrator-runs/
 .qwen_runs/
 copilot-app/backend/.qwen_runs/
 *.log
