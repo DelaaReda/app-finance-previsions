@@ -130,6 +130,28 @@ AGENT_MEMORY_MAX_ENTRIES = int(os.environ.get("FC_AGENT_MEMORY_MAX_ENTRIES", "20
 AGENT_MEMORY_PROMPT_ENTRIES = int(os.environ.get("FC_AGENT_MEMORY_PROMPT_ENTRIES", "8"))
 AGENT_MEMORY_PROMPT_CHARS = int(os.environ.get("FC_AGENT_MEMORY_PROMPT_CHARS", "2200"))
 
+ACTIVE_AGENT_BIN = os.environ.get("FC_AGENT_BIN", "qwen").strip() or "qwen"
+ACTIVE_AGENT_CLI_NAME = Path(ACTIVE_AGENT_BIN).name.lower()
+
+
+def _cli_name_from_bin(agent_bin: str) -> str:
+    name = Path((agent_bin or "").strip() or "qwen").name.lower()
+    return name or "qwen"
+
+
+def set_active_agent_cli(agent_bin: str) -> None:
+    global ACTIVE_AGENT_BIN, ACTIVE_AGENT_CLI_NAME
+    ACTIVE_AGENT_BIN = (agent_bin or "").strip() or "qwen"
+    ACTIVE_AGENT_CLI_NAME = _cli_name_from_bin(ACTIVE_AGENT_BIN)
+
+
+def active_agent_cli_name() -> str:
+    return ACTIVE_AGENT_CLI_NAME or "qwen"
+
+
+def is_active_qwen_cli() -> bool:
+    return active_agent_cli_name() == "qwen"
+
 
 def _relpath_or_abs(path: Path) -> str:
     try:
@@ -1007,11 +1029,11 @@ def apply_session_overrides(raw: str) -> None:
     SESSIONS.update(overrides)
 
 
-def _parse_fc_qwen_exports() -> List[str]:
-    raw = (os.environ.get("FC_QWEN_EXPORTS") or "").strip()
-    if not raw:
+def _parse_env_exports(raw: str) -> List[str]:
+    txt = (raw or "").strip()
+    if not txt:
         return []
-    parts = [p.strip() for p in re.split(r"[;,]", raw) if p.strip()]
+    parts = [p.strip() for p in re.split(r"[;,]", txt) if p.strip()]
     exports: List[str] = []
     for p in parts:
         if "=" not in p:
@@ -1024,7 +1046,18 @@ def _parse_fc_qwen_exports() -> List[str]:
     return exports
 
 
+def _parse_agent_exports(agent_cli_name: str) -> List[str]:
+    exports: List[str] = []
+    exports.extend(_parse_env_exports(os.environ.get("FC_AGENT_EXPORTS", "")))
+    if agent_cli_name == "qwen":
+        exports.extend(_parse_env_exports(os.environ.get("FC_QWEN_EXPORTS", "")))
+    if agent_cli_name == "codex":
+        exports.extend(_parse_env_exports(os.environ.get("FC_CODEX_EXPORTS", "")))
+    return exports
+
+
 def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -> str:
+    agent_cli_name = _cli_name_from_bin(qwen_bin)
     setup_cmds = [f"cd {shlex.quote(str(PROJECT_DIR))}"]
 
     venv_activate = VENV_BIN / "activate"
@@ -1035,16 +1068,16 @@ def build_qwen_bash_cmd(qwen_bin: str, path_override: str, auto_confirm: bool) -
 
     # qwen-code 0.4.0 can crash in TUI with "Invalid number of stops (< 2)"
     # when NO_COLOR=1 or TERM=dumb leads to no-color gradient config.
-    if _env_bool("FC_QWEN_SANITIZE_COLOR_ENV", default=True):
+    if agent_cli_name == "qwen" and _env_bool("FC_QWEN_SANITIZE_COLOR_ENV", default=True):
         setup_cmds.append("unset NO_COLOR")
         setup_cmds.append('if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi')
         setup_cmds.append('export COLORTERM="${COLORTERM:-truecolor}"')
         setup_cmds.append('export FORCE_COLOR="${FORCE_COLOR:-1}"')
 
-    if auto_confirm:
+    if agent_cli_name == "qwen" and auto_confirm:
         setup_cmds.append("export QWEN_CODE_AUTO_CONFIRM=1")
 
-    setup_cmds.extend(_parse_fc_qwen_exports())
+    setup_cmds.extend(_parse_agent_exports(agent_cli_name))
 
     setup_cmds.append(f"{shlex.quote(qwen_bin)} || exec bash")
     return " && ".join(setup_cmds)
@@ -1064,6 +1097,7 @@ def qwen_start(
     tmux_start_server()
 
     qwen_bin = require_executable(qwen_bin)
+    set_active_agent_cli(qwen_bin)
 
     if restart:
         qwen_stop(all_sessions=True)
@@ -1120,13 +1154,15 @@ def qwen_status() -> str:
     lines: List[str] = []
     lines.append(f"Runs dir: {RUNS_DIR_DEFAULT}")
     lines.append(f"Latest run pointer: {RUNS_DIR_DEFAULT / 'latest'}")
-    lines.append("Qwen tmux sessions (role -> session):")
+    lines.append(f"Agent CLI actif: {active_agent_cli_name()} ({ACTIVE_AGENT_BIN})")
+    lines.append("Sessions tmux (role -> session):")
     for role in sorted(SESSIONS.keys()):
         sess = SESSIONS[role]
         lines.append(f"  - {role} -> {sess}: {'UP' if sess in existing else 'DOWN'}")
-    extra = sorted(s for s in existing if s.startswith("qwen_") and s not in mapped_sessions)
+    extra_prefix = f"{active_agent_cli_name()}_"
+    extra = sorted(s for s in existing if s.startswith(extra_prefix) and s not in mapped_sessions)
     if extra:
-        lines.append("Autres sessions qwen (non mappées):")
+        lines.append(f"Autres sessions {active_agent_cli_name()} (non mappées):")
         for sess in extra:
             lines.append(f"  - {sess}: UP")
     return "\n".join(lines)
@@ -1175,12 +1211,13 @@ def _looks_like_internal_reasoning(text: str) -> bool:
 
 
 def _launch_qwen_in_session(session: str) -> None:
+    agent_cmd = shlex.quote(ACTIVE_AGENT_BIN)
     cmd = (
         "unset NO_COLOR; "
         'if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; '
         'export COLORTERM="${COLORTERM:-truecolor}"; '
         'export FORCE_COLOR="${FORCE_COLOR:-1}"; '
-        "qwen"
+        f"{agent_cmd}"
     )
     tmux_send_keys(session, cmd)
 
@@ -1192,13 +1229,14 @@ def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_
     if not tmux_has_session(sess):
         _die(f"Session tmux absente: {sess}. Lance d'abord --tmux-cmd start.")
 
-    fallback_sdk = _env_bool("FC_QWEN_TMUX_FALLBACK_SDK", default=True)
+    expected_cmd = active_agent_cli_name()
+    fallback_sdk = is_active_qwen_cli() and _env_bool("FC_QWEN_TMUX_FALLBACK_SDK", default=True)
     cmd = tmux_current_command(sess)
-    if cmd != "qwen":
+    if cmd != expected_cmd:
         _launch_qwen_in_session(sess)
         time.sleep(1.6)
         cmd = tmux_current_command(sess)
-        if cmd != "qwen":
+        if cmd != expected_cmd:
             if fallback_sdk:
                 return qwen_prompt_sdk(
                     prompt,
@@ -1211,7 +1249,10 @@ def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_
                     session_key=f"tmux:{sess}",
                     max_session_turns=int(os.environ.get("FC_QWEN_SDK_MAX_SESSION_TURNS", "-1")),
                 )
-            _die(f"Qwen TUI n'est pas actif dans la session {sess} (pane_current_command={cmd or 'unknown'}).")
+            _die(
+                f"{expected_cmd} TUI n'est pas actif dans la session {sess} "
+                f"(pane_current_command={cmd or 'unknown'})."
+            )
 
     llm = QwenTmuxLLM(session_name=sess, system_prompt=system_prompt, max_wait=max(15.0, float(max_wait)))
     reply = llm.chat(prompt)
@@ -1729,9 +1770,12 @@ class QwenTmuxLLM:
         self._init_done = True
 
     def chat(self, prompt: str) -> str:
-        if self._sdk_fallback:
+        expected_cmd = active_agent_cli_name()
+        sdk_fallback = self._sdk_fallback and is_active_qwen_cli()
+
+        if sdk_fallback:
             cmd = tmux_current_command(self.session.session)
-            if cmd != "qwen":
+            if cmd != expected_cmd:
                 try:
                     return self._chat_via_sdk(prompt)
                 except Exception:
@@ -1745,7 +1789,7 @@ class QwenTmuxLLM:
             poll_interval=0.55,
             min_wait=1.2,
         )
-        if self._sdk_fallback and (
+        if sdk_fallback and (
             not reply.strip()
             or _looks_like_qwen_banner(reply)
             or _looks_like_internal_reasoning(reply)
@@ -2438,6 +2482,7 @@ def doctor(ctx: RunCtx, qwen_bin: str) -> None:
 
     require_bin("tmux")
     require_executable(qwen_bin)
+    agent_name = _cli_name_from_bin(qwen_bin)
 
     lines: List[str] = []
     lines.append(f"# Doctor report ({datetime.now().isoformat(timespec='seconds')})")
@@ -2448,7 +2493,7 @@ def doctor(ctx: RunCtx, qwen_bin: str) -> None:
     if not autogen_ok:
         lines.append(f"  - detail: {autogen_detail}")
     lines.append(f"- tmux: {which('tmux')}")
-    lines.append(f"- qwen: {qwen_bin}")
+    lines.append(f"- agent_cli ({agent_name}): {qwen_bin}")
     lines.append(f"- python venv: {VENV_PY} ({'OK' if VENV_PY.exists() else 'MISSING'})")
     lines.append("")
     lines.append("## Sessions")
@@ -2500,6 +2545,7 @@ def run_feature(
     ensure_tmux_exists()
     require_module("autogen")
     qwen_bin = require_executable(qwen_bin)
+    set_active_agent_cli(qwen_bin)
 
     if with_architect:
         ensure_role_session("architect", "FC_SESS_ARCHITECT", "qwen_architect")
@@ -2531,6 +2577,7 @@ def run_feature(
         extra={
             "mode": mode,
             "engine": "autogen_tmux",
+            "agent_cli": active_agent_cli_name(),
             "with_architect": bool(with_architect),
             "with_manager": bool(with_manager),
             "agent_memory_dir": str(AGENT_MEMORY_DIR),
@@ -2588,6 +2635,7 @@ def usage_text() -> str:
     1) AutoGen -> TMUX (solution unique)
        python3 scripts/qwen_orchestrator.py --rounds 2 --feature "Implémente GET /health"
        python3 scripts/qwen_orchestrator.py --rounds 3 --with-architect --with-manager --feature "..."
+       python3 scripts/qwen_orchestrator.py --agent-bin codex --rounds 2 --feature "Implémente GET /health"
 
     2) Mode debug
        python3 scripts/qwen_orchestrator.py --mode debug --rounds 1 --restart
@@ -2624,7 +2672,7 @@ def usage_text() -> str:
       - désactiver ce comportement via FC_QWEN_SANITIZE_COLOR_ENV=0
       - si la TUI quitte quand même en tmux detached, prompt bascule vers SDK
         (désactiver via FC_QWEN_TMUX_FALLBACK_SDK=0)
-    - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
+    - Pour run de feature: autogen/tmux + CLI agent (qwen/codex) doivent être présents sinon erreur.
     - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
     - SDK memory: getSessionId est persisté dans {SDK_SESSION_STATE_FILE}
       (clé par agent/session), puis réutilisé via --resume pour garder le contexte.
@@ -2660,7 +2708,7 @@ def usage_text() -> str:
 def main():
     ensure_venv_or_reexec()
 
-    ap = argparse.ArgumentParser(description="Finance Copilot orchestrator (AutoGen + tmux Qwen Code).", add_help=True)
+    ap = argparse.ArgumentParser(description="Finance Copilot orchestrator (AutoGen + tmux CLI agents).", add_help=True)
 
     ap.add_argument("--feature", type=str, default=os.environ.get("FC_FEATURE", "").strip(),
                     help="Texte de la feature (sinon FC_FEATURE)")
@@ -2676,7 +2724,18 @@ def main():
 
     ap.add_argument("--no-clean-startup", action="store_true", help="Ne pas clear-history au démarrage des sessions tmux")
 
-    ap.add_argument("--qwen-bin", type=str, default=(which("qwen") or "qwen"))
+    ap.add_argument(
+        "--agent-bin",
+        type=str,
+        default=os.environ.get("FC_AGENT_BIN", "").strip(),
+        help="CLI agent à lancer dans tmux (ex: qwen, codex, /path/to/bin).",
+    )
+    ap.add_argument(
+        "--qwen-bin",
+        type=str,
+        default=(which("qwen") or "qwen"),
+        help="Compat legacy (équivalent à --agent-bin quand --agent-bin est absent).",
+    )
 
     ap.add_argument("--wait-planner", type=float, default=60.0)
     ap.add_argument("--wait-dev", type=float, default=90.0)
@@ -2729,6 +2788,8 @@ def main():
         ensure_role_session("manager", "FC_SESS_MANAGER", "qwen_manager")
     tmux_cmd = (args.tmux_cmd or "").strip().lower()
     prompt_engine = (args.prompt_engine or "tmux").strip().lower()
+    selected_agent_bin = (args.agent_bin or "").strip() or args.qwen_bin
+    set_active_agent_cli(selected_agent_bin)
 
     init_orchestrator_sentry()
     sentry_set_context(mode=args.mode, tmux_cmd=tmux_cmd or None)
@@ -2762,14 +2823,14 @@ def main():
             ctx = create_run_ctx(runs_dir)
             sentry_set_context(run_id=ctx.run_id, mode="start", tmux_cmd="start")
             sentry_add_breadcrumb("tmux_start", data={"run_id": ctx.run_id})
-            write_manifest(ctx, feature="(start only)", qwen_bin=args.qwen_bin, extra={"mode": "start"})
+            write_manifest(ctx, feature="(start only)", qwen_bin=selected_agent_bin, extra={"mode": "start", "agent_cli": active_agent_cli_name()})
             qwen_start(
-                args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
+                selected_agent_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
                 restart=False, ctx=ctx,
                 enable_tmux_logs=not args.no_tmux_logs,
                 clean_startup=not args.no_clean_startup,
             )
-            print("✅ Qwen sessions started.")
+            print(f"✅ {active_agent_cli_name()} sessions started.")
             print(f"🧾 Run dir → {ctx.run_dir}")
             return
 
@@ -2777,14 +2838,14 @@ def main():
             ctx = create_run_ctx(runs_dir)
             sentry_set_context(run_id=ctx.run_id, mode="restart", tmux_cmd="restart")
             sentry_add_breadcrumb("tmux_restart", data={"run_id": ctx.run_id})
-            write_manifest(ctx, feature="(restart only)", qwen_bin=args.qwen_bin, extra={"mode": "restart"})
+            write_manifest(ctx, feature="(restart only)", qwen_bin=selected_agent_bin, extra={"mode": "restart", "agent_cli": active_agent_cli_name()})
             qwen_restart(
-                args.qwen_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
+                selected_agent_bin, DEFAULT_PATH_OVERRIDE, AUTO_CONFIRM,
                 ctx=ctx,
                 enable_tmux_logs=not args.no_tmux_logs,
                 clean_startup=not args.no_clean_startup,
             )
-            print("✅ Qwen sessions restarted.")
+            print(f"✅ {active_agent_cli_name()} sessions restarted.")
             print(f"🧾 Run dir → {ctx.run_dir}")
             return
 
@@ -2792,12 +2853,12 @@ def main():
             if args.tmux_all or not args.tmux_target:
                 sentry_add_breadcrumb("tmux_stop_all")
                 qwen_stop(all_sessions=True)
-                print("🛑 Qwen sessions stopped (all).")
+                print(f"🛑 {active_agent_cli_name()} sessions stopped (all).")
                 return
             sess = resolve_session(args.tmux_target)
             sentry_add_breadcrumb("tmux_stop_one", data={"session": sess})
             qwen_stop(all_sessions=False, session=sess)
-            print(f"🛑 Qwen session stopped: {sess}")
+            print(f"🛑 {active_agent_cli_name()} session stopped: {sess}")
             return
 
         if tmux_cmd == "attach":
@@ -2809,8 +2870,8 @@ def main():
             ctx = create_run_ctx(runs_dir)
             sentry_set_context(run_id=ctx.run_id, mode="doctor", tmux_cmd="doctor")
             sentry_add_breadcrumb("tmux_doctor", data={"run_id": ctx.run_id})
-            write_manifest(ctx, feature="(doctor)", qwen_bin=args.qwen_bin, extra={"mode": "doctor"})
-            doctor(ctx, qwen_bin=args.qwen_bin)
+            write_manifest(ctx, feature="(doctor)", qwen_bin=selected_agent_bin, extra={"mode": "doctor", "agent_cli": active_agent_cli_name()})
+            doctor(ctx, qwen_bin=selected_agent_bin)
             print(f"✅ Doctor report écrit: {ctx.run_dir / 'doctor_report.md'}")
             print(f"🧾 Snapshots: {ctx.snapshots_dir}")
             return
@@ -2834,6 +2895,8 @@ def main():
             target = args.tmux_target.strip()
             sentry_add_breadcrumb("tmux_ping", data={"target": target or "(all)", "engine": prompt_engine})
             if prompt_engine == "sdk":
+                if not is_active_qwen_cli():
+                    _die("prompt-engine=sdk est disponible uniquement avec --agent-bin qwen.")
                 label = target or "sdk"
                 results = {
                     label: qwen_ping_sdk(
@@ -2857,6 +2920,8 @@ def main():
                 _die("tmux-cmd=prompt nécessite --prompt \"...\"")
             sentry_add_breadcrumb("tmux_prompt", data={"target": target, "engine": prompt_engine})
             if prompt_engine == "sdk":
+                if not is_active_qwen_cli():
+                    _die("prompt-engine=sdk est disponible uniquement avec --agent-bin qwen.")
                 reply = qwen_prompt_sdk(
                     args.prompt.strip(),
                     system_prompt=(args.system_prompt or "").strip(),
@@ -2891,7 +2956,7 @@ def main():
         max_rounds=args.rounds,
         restart_tmux=args.restart,
         runs_dir=runs_dir,
-        qwen_bin=args.qwen_bin,
+        qwen_bin=selected_agent_bin,
         enable_tmux_logs=not args.no_tmux_logs,
         max_log_mb=args.max_log_mb,
         mode=args.mode,
