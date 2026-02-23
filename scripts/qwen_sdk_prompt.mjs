@@ -83,6 +83,9 @@ async function main() {
   const debug = Boolean(args.debug);
   const pathToQwenExecutable = String(args["path-to-qwen-executable"] || "").trim();
   const timeoutSec = Math.max(0, Number(args["timeout-sec"] || "0"));
+  const resume = String(args.resume || "").trim();
+  const sessionIdArg = String(args["session-id"] || "").trim();
+  const maxSessionTurns = Number(args["max-session-turns"] || "-1");
 
   const abortController = new AbortController();
   let timer = null;
@@ -105,6 +108,15 @@ async function main() {
   }
   if (pathToQwenExecutable) {
     options.pathToQwenExecutable = pathToQwenExecutable;
+  }
+  if (resume) {
+    options.resume = resume;
+  }
+  if (sessionIdArg) {
+    options.sessionId = sessionIdArg;
+  }
+  if (Number.isFinite(maxSessionTurns) && maxSessionTurns > 0) {
+    options.maxSessionTurns = Math.floor(maxSessionTurns);
   }
 
   const q = query({ prompt, options });

@@ -11,6 +11,8 @@ import subprocess
 import shlex
 import hashlib
 import shutil
+import tempfile
+import inspect
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -44,6 +46,10 @@ RUNS_SUBDIR_NAME = os.environ.get("FC_RUNS_SUBDIR", "orchestrator-runs")
 RUNS_DIR_DEFAULT = Path(
     os.environ.get("FC_RUNS_DIR", str(APP_LOG_DIR_DEFAULT / RUNS_SUBDIR_NAME))
 ).expanduser().resolve()
+AGENT_BUS_MAX_CONTENT_CHARS = int(os.environ.get("FC_AGENT_BUS_MAX_CONTENT_CHARS", "2200"))
+AGENT_EVENTS_MAX_COMMANDS = int(os.environ.get("FC_AGENT_EVENTS_MAX_COMMANDS", "25"))
+AGENT_EVENTS_FILE_LIMIT = int(os.environ.get("FC_AGENT_EVENTS_FILE_LIMIT", "120"))
+AGENT_RESPONSE_SOFT_LIMIT = int(os.environ.get("FC_AGENT_RESPONSE_SOFT_LIMIT", "2600"))
 
 # capture tuning
 CAPTURE_LAST_LINES = int(os.environ.get("FC_CAPTURE_LAST_LINES", "4000"))
@@ -114,6 +120,31 @@ SDK_BRIDGE_DEFAULT = Path(
     os.environ.get("FC_QWEN_SDK_BRIDGE", str(PROJECT_DIR / "scripts" / "qwen_sdk_prompt.mjs"))
 ).expanduser().resolve()
 SDK_PERMISSION_MODES = {"default", "plan", "auto-edit", "yolo"}
+SDK_SESSION_STATE_FILE = Path(
+    os.environ.get("FC_QWEN_SDK_SESSION_STATE_FILE", str(APP_LOG_DIR_DEFAULT / "sdk_sessions.json"))
+).expanduser().resolve()
+AGENT_MEMORY_DIR = Path(
+    os.environ.get("FC_AGENT_MEMORY_DIR", str(APP_LOG_DIR_DEFAULT / "agent-memory"))
+).expanduser().resolve()
+AGENT_MEMORY_MAX_ENTRIES = int(os.environ.get("FC_AGENT_MEMORY_MAX_ENTRIES", "200"))
+AGENT_MEMORY_PROMPT_ENTRIES = int(os.environ.get("FC_AGENT_MEMORY_PROMPT_ENTRIES", "8"))
+AGENT_MEMORY_PROMPT_CHARS = int(os.environ.get("FC_AGENT_MEMORY_PROMPT_CHARS", "2200"))
+
+
+def _relpath_or_abs(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(PROJECT_DIR))
+    except Exception:
+        return str(path.resolve())
+
+
+AGENT_ACTIVITY_IGNORE_PATHS = {
+    _relpath_or_abs(SDK_SESSION_STATE_FILE),
+}
+AGENT_ACTIVITY_IGNORE_PREFIXES = {
+    _relpath_or_abs(RUNS_DIR_DEFAULT),
+    _relpath_or_abs(AGENT_MEMORY_DIR),
+}
 
 
 # ==============================================================================
@@ -438,7 +469,27 @@ def tmux_capture(session: str, last_lines: int = CAPTURE_LAST_LINES) -> str:
 def tmux_send_keys(session: str, text: str) -> None:
     tmux_start_server()
     target = tmux_target(session)
-    run(["tmux", "send-keys", "-t", target, text, "C-m"], capture=False)
+    payload = text or ""
+    # Avoid "Argument list too long" when prompt/context gets large.
+    if len(payload) <= 1200 and "\n" not in payload:
+        run(["tmux", "send-keys", "-t", target, payload, "C-m"], capture=False)
+        return
+
+    buffer_name = f"orchestrator_{int(time.time() * 1000)}"
+    tmp_path: Optional[str] = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
+            tmp.write(payload)
+            tmp_path = tmp.name
+        run(["tmux", "load-buffer", "-b", buffer_name, tmp_path], capture=False)
+        run(["tmux", "paste-buffer", "-d", "-b", buffer_name, "-t", target], capture=False)
+        run(["tmux", "send-keys", "-t", target, "C-m"], capture=False)
+    finally:
+        try:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def tmux_clear_screen(session: str) -> None:
@@ -472,6 +523,10 @@ class RunCtx:
     snapshots_dir: Path
     transcript_path: Path
     manifest_path: Path
+    agent_bus_path: Path
+    agent_board_path: Path
+    events_path: Path
+    activity_summary_path: Path
 
 
 def update_latest_run_pointer(runs_dir: Path, run_dir: Path) -> None:
@@ -509,6 +564,10 @@ def create_run_ctx(runs_dir: Path) -> RunCtx:
         snapshots_dir=snapshots_dir,
         transcript_path=run_dir / "transcript.md",
         manifest_path=run_dir / "run.json",
+        agent_bus_path=run_dir / "agent_bus.jsonl",
+        agent_board_path=run_dir / "agent_board.md",
+        events_path=run_dir / "events.jsonl",
+        activity_summary_path=run_dir / "agent_activity.json",
     )
 
 
@@ -524,6 +583,15 @@ def write_manifest(ctx: RunCtx, feature: str, qwen_bin: str, extra: Optional[Dic
         "sessions": {k: v for k, v in SESSIONS.items()},
         "capture_last_lines": CAPTURE_LAST_LINES,
         "tmux_history_limit": TMUX_HISTORY_LIMIT,
+        "artifacts": {
+            "transcript": str(ctx.transcript_path),
+            "agent_bus": str(ctx.agent_bus_path),
+            "agent_board": str(ctx.agent_board_path),
+            "events": str(ctx.events_path),
+            "agent_activity": str(ctx.activity_summary_path),
+            "snapshots_dir": str(ctx.snapshots_dir),
+            "tmux_dir": str(ctx.tmux_dir),
+        },
     }
     if extra:
         data.update(extra)
@@ -535,6 +603,364 @@ def transcript_append(ctx: RunCtx, role: str, kind: str, content: str) -> None:
     block = f"\n## [{ts}] {role} — {kind}\n\n```\n{(content or '').rstrip()}\n```\n"
     with ctx.transcript_path.open("a", encoding="utf-8") as f:
         f.write(block)
+
+
+def event_append(ctx: RunCtx, event: Dict[str, Any]) -> None:
+    row: Dict[str, Any] = {"ts": datetime.now().isoformat(timespec="milliseconds")}
+    row.update(event)
+    with ctx.events_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _git_lines(args: List[str]) -> List[str]:
+    cp = run(["git", *args], cwd=PROJECT_DIR, capture=True)
+    if cp.returncode != 0:
+        return []
+    return [ln.strip() for ln in (cp.stdout or "").splitlines() if ln.strip()]
+
+
+def _sha1_file(path: Path) -> str:
+    if not path.exists():
+        return "<missing>"
+    if not path.is_file():
+        return "<not-file>"
+    max_bytes = 2_000_000
+    size = path.stat().st_size
+    if size > max_bytes:
+        st = path.stat()
+        return f"<large:{size}:{int(st.st_mtime)}>"
+    h = hashlib.sha1()
+    with path.open("rb") as f:
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def git_dirty_file_signatures(limit: int = AGENT_EVENTS_FILE_LIMIT) -> Dict[str, str]:
+    files: List[str] = []
+    files.extend(_git_lines(["diff", "--name-only"]))
+    files.extend(_git_lines(["diff", "--name-only", "--cached"]))
+    files.extend(_git_lines(["ls-files", "--others", "--exclude-standard"]))
+    uniq = sorted(set(files))
+    if limit > 0:
+        uniq = uniq[: int(limit)]
+
+    out: Dict[str, str] = {}
+    for rel in uniq:
+        full = PROJECT_DIR / rel
+        out[rel] = _sha1_file(full)
+    return out
+
+
+def _changed_files_between(pre: Dict[str, str], post: Dict[str, str]) -> Dict[str, List[str]]:
+    touched: List[str] = []
+    created: List[str] = []
+    deleted: List[str] = []
+    for path in sorted(set(pre.keys()) | set(post.keys())):
+        if path in AGENT_ACTIVITY_IGNORE_PATHS:
+            continue
+        if any(path == pref or path.startswith(pref + "/") for pref in AGENT_ACTIVITY_IGNORE_PREFIXES):
+            continue
+        a = pre.get(path)
+        b = post.get(path)
+        if a == b:
+            continue
+        touched.append(path)
+        if path not in pre and path in post:
+            created.append(path)
+        if path in pre and post.get(path) == "<missing>":
+            deleted.append(path)
+    return {"touched": touched, "created": created, "deleted": deleted}
+
+
+def _delta_text(previous: str, current: str) -> str:
+    old = previous or ""
+    new = current or ""
+    if new.startswith(old):
+        return new[len(old):]
+    tail = old[-2000:]
+    if tail:
+        idx = new.find(tail)
+        if idx != -1:
+            return new[idx + len(tail):]
+    return new
+
+
+def extract_shell_commands(text: str, max_cmds: int = AGENT_EVENTS_MAX_COMMANDS) -> List[str]:
+    lines = [(ln or "").strip() for ln in (text or "").splitlines()]
+    cmds: List[str] = []
+    in_code = False
+    code_lang = ""
+    for ln in lines:
+        if not ln:
+            continue
+        if ln.startswith("```"):
+            fence = ln.strip("`").strip().lower()
+            if in_code:
+                in_code = False
+                code_lang = ""
+            else:
+                in_code = True
+                code_lang = fence
+            continue
+
+        if in_code and code_lang in {"", "bash", "sh", "shell", "zsh"}:
+            if ln.startswith("#"):
+                continue
+            if ln.lower().startswith(("output:", "result:", "expected:")):
+                continue
+            cmds.append(ln)
+            continue
+
+        m = re.match(r"^\$\s+(.+)$", ln)
+        if m:
+            cmds.append(m.group(1).strip())
+            continue
+        m = re.match(r"^(?:run|cmd|command)\s*:\s*(.+)$", ln, flags=re.IGNORECASE)
+        if m:
+            cmds.append(m.group(1).strip())
+            continue
+    if not cmds:
+        return []
+    out: List[str] = []
+    for c in cmds:
+        if c not in out:
+            out.append(c)
+        if len(out) >= max_cmds:
+            break
+    return out
+
+
+def classify_agent_response(text: str) -> Dict[str, Any]:
+    payload = (text or "").strip()
+    low = payload.lower()
+    asks_question = "?" in payload
+    likely_meta = _looks_like_internal_reasoning(payload)
+    has_code_block = "```" in payload
+    too_long = len(payload) > AGENT_RESPONSE_SOFT_LIMIT
+    warnings: List[str] = []
+    if likely_meta:
+        warnings.append("meta_reasoning")
+    if asks_question:
+        warnings.append("asks_question")
+    if too_long:
+        warnings.append("too_long")
+    return {
+        "asks_question": asks_question,
+        "likely_meta": likely_meta,
+        "has_code_block": has_code_block,
+        "too_long": too_long,
+        "warnings": warnings,
+    }
+
+
+def _agent_memory_file(agent_name: str) -> Path:
+    raw = str(agent_name or "agent").strip().lower()
+    safe = re.sub(r"[^a-z0-9_.-]+", "_", raw).strip("_") or "agent"
+    return AGENT_MEMORY_DIR / f"{safe}.jsonl"
+
+
+def append_agent_memory(
+    agent_name: str,
+    *,
+    run_id: str,
+    feature: str,
+    reply: str,
+    commands: List[str],
+    files_touched: List[str],
+    warnings: List[str],
+) -> None:
+    AGENT_MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    mem_file = _agent_memory_file(agent_name)
+    rows: List[Dict[str, Any]] = []
+    if mem_file.exists():
+        for ln in mem_file.read_text(encoding="utf-8").splitlines():
+            if not ln.strip():
+                continue
+            try:
+                row = json.loads(ln)
+            except Exception:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+
+    summary = _compact_bus_content(reply, max_chars=900)
+    row = {
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "run_id": run_id,
+        "feature": _compact_bus_content(feature, max_chars=280),
+        "summary": summary,
+        "commands": commands[: AGENT_EVENTS_MAX_COMMANDS],
+        "files_touched": files_touched[: AGENT_EVENTS_FILE_LIMIT],
+        "warnings": warnings[:20],
+    }
+    rows.append(row)
+    if len(rows) > AGENT_MEMORY_MAX_ENTRIES:
+        rows = rows[-AGENT_MEMORY_MAX_ENTRIES:]
+
+    with mem_file.open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def load_agent_memory_context(
+    agent_name: str,
+    *,
+    max_entries: int = AGENT_MEMORY_PROMPT_ENTRIES,
+    max_chars: int = AGENT_MEMORY_PROMPT_CHARS,
+) -> str:
+    mem_file = _agent_memory_file(agent_name)
+    if not mem_file.exists():
+        return ""
+    rows: List[Dict[str, Any]] = []
+    for ln in mem_file.read_text(encoding="utf-8").splitlines():
+        if not ln.strip():
+            continue
+        try:
+            row = json.loads(ln)
+        except Exception:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    if not rows:
+        return ""
+    tail = rows[-max(1, int(max_entries)):]
+    out: List[str] = []
+    budget = max(300, int(max_chars))
+    for r in tail:
+        ts = str(r.get("ts") or "").strip()
+        summary = str(r.get("summary") or "").strip()
+        commands = r.get("commands") or []
+        files = r.get("files_touched") or []
+        line = f"- [{ts}] {summary}"
+        if commands:
+            line += f" | cmd: {commands[0]}"
+        if files:
+            line += f" | files: {', '.join(files[:2])}"
+        if len(line) > 550:
+            line = line[:550].rstrip() + " ..."
+        if len(line) > budget:
+            break
+        out.append(line)
+        budget -= len(line)
+        if budget <= 0:
+            break
+    return "\n".join(out).strip()
+
+
+def _compact_bus_content(text: str, *, max_chars: int) -> str:
+    content = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not content:
+        return ""
+    content = re.sub(r"\n{3,}", "\n\n", content)
+    limit = max(200, int(max_chars))
+    if len(content) > limit:
+        content = content[:limit].rstrip() + "\n...[tronqué]..."
+    return content
+
+
+def agent_bus_append(ctx: RunCtx, *, sender: str, recipient: str, kind: str, content: str) -> None:
+    kind_norm = (kind or "note").strip().lower() or "note"
+    cap = 420 if kind_norm in {"prompt", "dispatch"} else AGENT_BUS_MAX_CONTENT_CHARS
+    row = {
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "sender": sender,
+        "recipient": recipient,
+        "kind": kind_norm,
+        "content": _compact_bus_content(content, max_chars=cap),
+    }
+    with ctx.agent_bus_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def agent_bus_recent_text(
+    ctx: RunCtx,
+    *,
+    limit: int = 8,
+    exclude_sender: Optional[str] = None,
+    include_kinds: Optional[Tuple[str, ...]] = None,
+) -> str:
+    if not ctx.agent_bus_path.exists():
+        return ""
+    include = {k.strip().lower() for k in (include_kinds or ()) if (k or "").strip()}
+    rows: List[Dict[str, Any]] = []
+    try:
+        for line in ctx.agent_bus_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(row, dict):
+                continue
+            sender = str(row.get("sender") or "")
+            if exclude_sender and sender == exclude_sender:
+                continue
+            kind = str(row.get("kind") or "").strip().lower()
+            if include and kind not in include:
+                continue
+            rows.append(row)
+    except Exception:
+        return ""
+
+    if not rows:
+        return ""
+    tail = rows[-max(1, int(limit)):]
+    parts: List[str] = []
+    for r in tail:
+        content = (r.get("content") or "").strip()
+        if len(content) > 900:
+            content = content[:900].rstrip() + "\n...[tronqué]..."
+        parts.append(
+            f"[{r.get('sender','?')} -> {r.get('recipient','team')} | {r.get('kind','note')}]\n"
+            f"{content}"
+        )
+    return "\n\n".join(parts).strip()
+
+
+def agent_bus_write_board(ctx: RunCtx, *, max_rows: int = 80) -> None:
+    if not ctx.agent_bus_path.exists():
+        return
+    lines: List[str] = []
+    for ln in ctx.agent_bus_path.read_text(encoding="utf-8").splitlines():
+        if ln.strip():
+            lines.append(ln.strip())
+    if not lines:
+        return
+    if len(lines) > max_rows:
+        lines = lines[-max_rows:]
+
+    out: List[str] = ["# Agent Board", ""]
+    for ln in lines:
+        try:
+            row = json.loads(ln)
+        except Exception:
+            continue
+        ts = row.get("ts", "")
+        sender = row.get("sender", "?")
+        recipient = row.get("recipient", "team")
+        kind = row.get("kind", "note")
+        content = (row.get("content") or "").strip()
+        if not content:
+            continue
+        out.append(f"## {ts} — {sender} -> {recipient} ({kind})")
+        out.append("")
+        out.append(content)
+        out.append("")
+
+    ctx.agent_board_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+
+
+def write_agent_activity_summary(ctx: RunCtx, summary: Dict[str, Any]) -> None:
+    ctx.activity_summary_path.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def snapshot_all(ctx: RunCtx) -> None:
@@ -566,6 +992,12 @@ def session_names() -> List[str]:
 
 def resolve_session(role_or_session: str) -> str:
     return SESSIONS.get(role_or_session, role_or_session)
+
+
+def ensure_role_session(role: str, env_name: str, default_session: str) -> str:
+    if role not in SESSIONS or not str(SESSIONS.get(role) or "").strip():
+        SESSIONS[role] = os.environ.get(env_name, default_session)
+    return SESSIONS[role]
 
 
 def apply_session_overrides(raw: str) -> None:
@@ -684,6 +1116,7 @@ def qwen_status() -> str:
     ensure_tmux_exists()
     tmux_start_server()
     existing = set(tmux_list_sessions())
+    mapped_sessions = set(SESSIONS.values())
     lines: List[str] = []
     lines.append(f"Runs dir: {RUNS_DIR_DEFAULT}")
     lines.append(f"Latest run pointer: {RUNS_DIR_DEFAULT / 'latest'}")
@@ -691,6 +1124,11 @@ def qwen_status() -> str:
     for role in sorted(SESSIONS.keys()):
         sess = SESSIONS[role]
         lines.append(f"  - {role} -> {sess}: {'UP' if sess in existing else 'DOWN'}")
+    extra = sorted(s for s in existing if s.startswith("qwen_") and s not in mapped_sessions)
+    if extra:
+        lines.append("Autres sessions qwen (non mappées):")
+        for sess in extra:
+            lines.append(f"  - {sess}: UP")
     return "\n".join(lines)
 
 
@@ -711,6 +1149,29 @@ def _looks_like_qwen_banner(text: str) -> bool:
     if "██" in t and len([ln for ln in t.splitlines() if ln.strip()]) <= 12:
         return True
     return False
+
+
+def _looks_like_internal_reasoning(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    low = t.lower()
+    if not t.lstrip().startswith("✦"):
+        return False
+    markers = (
+        "the user wants me to",
+        "i need to",
+        "i should",
+        "i will",
+        "i'll",
+        "let me ",
+        "je vais",
+        "je dois",
+        "j'ai besoin",
+        "il faut",
+        "je commence",
+    )
+    return any(m in low for m in markers)
 
 
 def _launch_qwen_in_session(session: str) -> None:
@@ -747,6 +1208,8 @@ def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_
                     model=os.environ.get("FC_QWEN_SDK_MODEL", ""),
                     debug=_env_bool("FC_QWEN_SDK_DEBUG", default=False),
                     path_to_qwen_executable=os.environ.get("FC_QWEN_SDK_CLI_PATH", ""),
+                    session_key=f"tmux:{sess}",
+                    max_session_turns=int(os.environ.get("FC_QWEN_SDK_MAX_SESSION_TURNS", "-1")),
                 )
             _die(f"Qwen TUI n'est pas actif dans la session {sess} (pane_current_command={cmd or 'unknown'}).")
 
@@ -761,6 +1224,8 @@ def qwen_prompt(role_or_session: str, prompt: str, system_prompt: str = "", max_
             model=os.environ.get("FC_QWEN_SDK_MODEL", ""),
             debug=_env_bool("FC_QWEN_SDK_DEBUG", default=False),
             path_to_qwen_executable=os.environ.get("FC_QWEN_SDK_CLI_PATH", ""),
+            session_key=f"tmux:{sess}",
+            max_session_turns=int(os.environ.get("FC_QWEN_SDK_MAX_SESSION_TURNS", "-1")),
         )
     return reply
 
@@ -804,6 +1269,51 @@ def _parse_json_object_from_output(text: str) -> Dict[str, Any]:
     raise ValueError("Aucun JSON valide trouvé dans la sortie du bridge SDK.")
 
 
+def _load_sdk_session_state() -> Dict[str, str]:
+    p = SDK_SESSION_STATE_FILE
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for k, v in data.items():
+        ks = str(k or "").strip()
+        vs = str(v or "").strip()
+        if ks and vs:
+            out[ks] = vs
+    return out
+
+
+def _save_sdk_session_state(data: Dict[str, str]) -> None:
+    p = SDK_SESSION_STATE_FILE
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _get_sdk_session_id(session_key: str) -> str:
+    key = (session_key or "").strip()
+    if not key:
+        return ""
+    state = _load_sdk_session_state()
+    return str(state.get(key, "")).strip()
+
+
+def _set_sdk_session_id(session_key: str, session_id: str) -> None:
+    key = (session_key or "").strip()
+    sid = (session_id or "").strip()
+    if not key or not sid:
+        return
+    state = _load_sdk_session_state()
+    if state.get(key) == sid:
+        return
+    state[key] = sid
+    _save_sdk_session_state(state)
+
+
 def qwen_prompt_sdk(
     prompt: str,
     *,
@@ -813,6 +1323,8 @@ def qwen_prompt_sdk(
     model: str = "",
     debug: bool = False,
     path_to_qwen_executable: str = "",
+    session_key: str = "",
+    max_session_turns: int = -1,
 ) -> str:
     permission_mode = (permission_mode or "default").strip().lower()
     if permission_mode not in SDK_PERMISSION_MODES:
@@ -838,6 +1350,8 @@ def qwen_prompt_sdk(
             f"{prompt.strip()}"
         )
 
+    resume_session = _get_sdk_session_id(session_key)
+
     cmd: List[str] = [
         node_bin,
         str(bridge),
@@ -850,6 +1364,10 @@ def qwen_prompt_sdk(
         "--timeout-sec",
         str(max(10.0, float(max_wait))),
     ]
+    if resume_session:
+        cmd.extend(["--resume", resume_session])
+    if int(max_session_turns) > 0:
+        cmd.extend(["--max-session-turns", str(int(max_session_turns))])
     if model.strip():
         cmd.extend(["--model", model.strip()])
     if debug:
@@ -882,6 +1400,10 @@ def qwen_prompt_sdk(
             msg += f"\n{detail}"
         _die(msg)
 
+    payload_session_id = str(payload.get("sessionId") or "").strip()
+    if payload_session_id and session_key.strip():
+        _set_sdk_session_id(session_key, payload_session_id)
+
     assistant = str(payload.get("assistant") or "").strip()
     if assistant:
         return assistant
@@ -896,7 +1418,13 @@ def qwen_prompt_sdk(
     return "(réponse vide)"
 
 
-def qwen_ping_sdk(max_wait: float = 25.0, model: str = "", debug: bool = False, qwen_bin: str = "") -> str:
+def qwen_ping_sdk(
+    max_wait: float = 25.0,
+    model: str = "",
+    debug: bool = False,
+    qwen_bin: str = "",
+    session_key: str = "sdk:ping",
+) -> str:
     ping_prompt = (
         "PING ORCHESTRATOR: réponds uniquement avec une ligne courte au format "
         "'PONG sdk <timestamp>'."
@@ -908,6 +1436,7 @@ def qwen_ping_sdk(max_wait: float = 25.0, model: str = "", debug: bool = False, 
         model=model,
         debug=debug,
         path_to_qwen_executable=qwen_bin,
+        session_key=session_key,
     )
 
 
@@ -1046,7 +1575,7 @@ class QwenTmuxSession:
         for i, line in enumerate(cleaned):
             if line.lstrip().startswith("✦"):
                 last_star_idx = i
-        if last_star_idx is not None:
+        if last_star_idx is not None and not _looks_like_internal_reasoning(cleaned[last_star_idx]):
             cleaned = cleaned[last_star_idx:]
 
         # Safety: cap output size
@@ -1155,6 +1684,32 @@ class QwenTmuxLLM:
         self.system_prompt = (system_prompt or "").strip()
         self.max_wait = max_wait
         self._init_done = False
+        self._sdk_fallback = _env_bool("FC_QWEN_TMUX_FALLBACK_SDK", default=True)
+
+    def _sdk_system_prompt(self) -> str:
+        rules = (
+            "Règles:\n"
+            "- Réponds en français.\n"
+            "- Ne recopie pas le prompt.\n"
+            "- Donne des étapes concrètes.\n"
+            "- Si bloqué: dis exactement quoi vérifier.\n"
+        )
+        if self.system_prompt:
+            return f"{self.system_prompt}\n\n{rules}"
+        return rules
+
+    def _chat_via_sdk(self, prompt: str) -> str:
+        return qwen_prompt_sdk(
+            prompt,
+            system_prompt=self._sdk_system_prompt(),
+            max_wait=self.max_wait,
+            permission_mode=os.environ.get("FC_QWEN_SDK_PERMISSION_MODE", "default"),
+            model=os.environ.get("FC_QWEN_SDK_MODEL", ""),
+            debug=_env_bool("FC_QWEN_SDK_DEBUG", default=False),
+            path_to_qwen_executable=os.environ.get("FC_QWEN_SDK_CLI_PATH", ""),
+            session_key=f"tmux:{self.session.session}",
+            max_session_turns=int(os.environ.get("FC_QWEN_SDK_MAX_SESSION_TURNS", "-1")),
+        )
 
     def _ensure_init(self):
         if self._init_done:
@@ -1174,14 +1729,32 @@ class QwenTmuxLLM:
         self._init_done = True
 
     def chat(self, prompt: str) -> str:
+        if self._sdk_fallback:
+            cmd = tmux_current_command(self.session.session)
+            if cmd != "qwen":
+                try:
+                    return self._chat_via_sdk(prompt)
+                except Exception:
+                    pass
+
         self._ensure_init()
-        return self.session.ask(
+        reply = self.session.ask(
             prompt,
             max_wait=self.max_wait,
             settle_seconds=1.8,
             poll_interval=0.55,
             min_wait=1.2,
         )
+        if self._sdk_fallback and (
+            not reply.strip()
+            or _looks_like_qwen_banner(reply)
+            or _looks_like_internal_reasoning(reply)
+        ):
+            try:
+                return self._chat_via_sdk(prompt)
+            except Exception:
+                return reply
+        return reply
 
 
 # ==============================================================================
@@ -1281,15 +1854,24 @@ def build_debug_feature(run_id: str) -> str:
 # AutoGen classic -> tmux driver (ONLY solution)
 # ==============================================================================
 
-def _format_autogen_context(messages: List[Dict[str, Any]], max_msgs: int = 10) -> str:
+def _format_autogen_context(messages: List[Dict[str, Any]], max_msgs: int = 10, max_chars: int = 5000) -> str:
     tail = messages[-max_msgs:] if len(messages) > max_msgs else messages
     parts: List[str] = []
+    budget = max(1000, int(max_chars))
     for m in tail:
         role = (m.get("name") or m.get("role") or "unknown").strip()
         content = (m.get("content") or "").strip()
         if not content:
             continue
-        parts.append(f"[{role}]\n{content}\n")
+        if len(content) > 1200:
+            content = content[:1200] + "\n...[tronqué]..."
+        block = f"[{role}]\n{content}\n"
+        if len(block) > budget:
+            block = block[:budget] + "\n...[tronqué]...\n"
+        parts.append(block)
+        budget -= len(block)
+        if budget <= 0:
+            break
     return "\n".join(parts).strip()
 
 
@@ -1301,14 +1883,94 @@ def run_feature_autogen_tmux(
     wait_dev: float,
     wait_tester: float,
     wait_qa: float,
+    with_architect: bool = False,
+    with_manager: bool = False,
 ) -> str:
     autogen = require_module("autogen")  # strict
+    agent_bus_append(ctx, sender="Runner", recipient="team", kind="feature", content=feature)
+    event_append(
+        ctx,
+        {
+            "type": "run_start",
+            "run_id": ctx.run_id,
+            "feature": _compact_bus_content(feature, max_chars=1200),
+        },
+    )
+
+    turn_state = {"index": 0}
+    activity_summary: Dict[str, Any] = {
+        "run_id": ctx.run_id,
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "totals": {
+            "turns": 0,
+            "duration_ms_total": 0,
+            "commands_detected": 0,
+            "files_touched_unique": 0,
+            "warnings_total": 0,
+        },
+        "agents": {},
+    }
+    activity_files: set[str] = set()
+
+    def _update_agent_summary(
+        agent_name: str,
+        *,
+        duration_ms: int,
+        commands: List[str],
+        files_touched: List[str],
+        warnings: List[str],
+    ) -> None:
+        ag = activity_summary["agents"].setdefault(
+            agent_name,
+            {
+                "turns": 0,
+                "duration_ms_total": 0,
+                "duration_ms_avg": 0,
+                "commands_detected": 0,
+                "commands_sample": [],
+                "files_touched_unique": [],
+                "warnings_total": 0,
+                "warnings_by_type": {},
+            },
+        )
+        ag["turns"] += 1
+        ag["duration_ms_total"] += int(duration_ms)
+        ag["duration_ms_avg"] = int(ag["duration_ms_total"] / max(1, ag["turns"]))
+        ag["commands_detected"] += len(commands)
+        for cmd in commands:
+            if cmd not in ag["commands_sample"] and len(ag["commands_sample"]) < 25:
+                ag["commands_sample"].append(cmd)
+        for fp in files_touched:
+            if fp not in ag["files_touched_unique"] and len(ag["files_touched_unique"]) < 120:
+                ag["files_touched_unique"].append(fp)
+            activity_files.add(fp)
+        ag["warnings_total"] += len(warnings)
+        for w in warnings:
+            ag["warnings_by_type"][w] = int(ag["warnings_by_type"].get(w, 0)) + 1
+
+        activity_summary["totals"]["turns"] = int(turn_state["index"])
+        activity_summary["totals"]["duration_ms_total"] += int(duration_ms)
+        activity_summary["totals"]["commands_detected"] += len(commands)
+        activity_summary["totals"]["files_touched_unique"] = len(activity_files)
+        activity_summary["totals"]["warnings_total"] += len(warnings)
+        activity_summary["generated_at"] = datetime.now().isoformat(timespec="seconds")
+        write_agent_activity_summary(ctx, activity_summary)
 
     planner_llm = QwenTmuxLLM(
         session_name=SESSIONS["planner"],
         system_prompt="Tu es PLANNER, architecte technique. Ultra concret et court.",
         max_wait=max(60.0, wait_planner),
     )
+    architect_llm = None
+    if with_architect:
+        architect_llm = QwenTmuxLLM(
+            session_name=SESSIONS["architect"],
+            system_prompt=(
+                "Tu es ARCHITECT. Tu challenge le design, les risques, la scalabilité, "
+                "la maintenabilité et la cohérence avec les contraintes."
+            ),
+            max_wait=max(75.0, wait_planner),
+        )
     dev_llm = QwenTmuxLLM(
         session_name=SESSIONS["dev"],
         system_prompt="Tu es DEV backend senior. Changements minimaux, testables. Donne des commandes.",
@@ -1324,6 +1986,16 @@ def run_feature_autogen_tmux(
         system_prompt="Tu es QUALITY_OBSERVER. Rapport: ÉTAT GÉNÉRAL, TESTS, RISQUES, PRIORITÉS.",
         max_wait=max(90.0, wait_qa),
     )
+    manager_llm = None
+    if with_manager:
+        manager_llm = QwenTmuxLLM(
+            session_name=SESSIONS["manager"],
+            system_prompt=(
+                "Tu es DELIVERY_MANAGER. Tu vérifies la conformité à la demande, "
+                "la clarté du livrable, et tu imposes une décision GO/NO-GO."
+            ),
+            max_wait=max(80.0, wait_qa),
+        )
 
     planner = autogen.ConversableAgent(
         name="Planner",
@@ -1331,6 +2003,14 @@ def run_feature_autogen_tmux(
         llm_config=False,
         human_input_mode="NEVER",
     )
+    architect = None
+    if with_architect:
+        architect = autogen.ConversableAgent(
+            name="Architect",
+            system_message="ARCHITECT (AutoGen) — réponds en français, challenge les angles morts.",
+            llm_config=False,
+            human_input_mode="NEVER",
+        )
     dev = autogen.ConversableAgent(
         name="Dev",
         system_message="DEV (AutoGen) — réponds en français.",
@@ -1349,21 +2029,55 @@ def run_feature_autogen_tmux(
         llm_config=False,
         human_input_mode="NEVER",
     )
+    manager = None
+    if with_manager:
+        manager = autogen.ConversableAgent(
+            name="DeliveryManager",
+            system_message="DELIVERY_MANAGER (AutoGen) — réponds en français, décide GO/NO-GO.",
+            llm_config=False,
+            human_input_mode="NEVER",
+        )
 
     planner._tmux_llm = planner_llm  # type: ignore[attr-defined]
+    if architect and architect_llm:
+        architect._tmux_llm = architect_llm  # type: ignore[attr-defined]
     dev._tmux_llm = dev_llm          # type: ignore[attr-defined]
     tester._tmux_llm = tester_llm    # type: ignore[attr-defined]
     qa._tmux_llm = qa_llm            # type: ignore[attr-defined]
+    if manager and manager_llm:
+        manager._tmux_llm = manager_llm  # type: ignore[attr-defined]
 
     def tmux_reply(recipient, messages, sender, config):
+        turn_state["index"] += 1
+        turn_index = int(turn_state["index"])
+        round_index = max(1, int((turn_index - 1) / 3) + 1)
+        started_at = time.time()
+
         ctx_text = _format_autogen_context(messages or [], max_msgs=10)
         if not ctx_text:
             ctx_text = feature.strip()
+        sender_name = getattr(sender, "name", None) or "Runner"
+        recipient_name = getattr(recipient, "name", None) or "Agent"
+        team_board = agent_bus_recent_text(
+            ctx,
+            limit=8,
+            exclude_sender=recipient_name,
+            include_kinds=("feature", "phase", "response", "note", "decision", "qa"),
+        )
+        agent_memory = load_agent_memory_context(recipient_name)
 
         prompt = dedent(f"""
         CONTEXTE (dernier échanges)
         --------------------------
         {ctx_text}
+
+        CANAL ÉQUIPE (messages récents)
+        --------------------------------
+        {team_board or "(vide)"}
+
+        MÉMOIRE AGENT (persistante inter-runs)
+        --------------------------------------
+        {agent_memory or "(vide)"}
 
         RÈGLES
         ------
@@ -1374,18 +2088,163 @@ def run_feature_autogen_tmux(
         TA RÉPONSE
         ----------
         """).strip()
+        if len(prompt) > 12000:
+            prompt = prompt[:12000] + "\n...[prompt tronqué]..."
 
         transcript_append(ctx, recipient.name, "PROMPT", prompt)
+        agent_bus_append(
+            ctx,
+            sender=sender_name,
+            recipient=recipient_name,
+            kind="prompt",
+            content=f"Prompt envoyé à {recipient_name} ({len(prompt)} chars).",
+        )
+        event_append(
+            ctx,
+            {
+                "type": "turn_prompt",
+                "turn": turn_index,
+                "round": round_index,
+                "from": sender_name,
+                "to": recipient_name,
+                "prompt_chars": len(prompt),
+            },
+        )
 
         llm = getattr(recipient, "_tmux_llm", None)
         if llm is None:
             _die(f"Agent '{recipient.name}' n'a pas de _tmux_llm attaché.")
+        pre_sig = git_dirty_file_signatures()
+        sess_name = str(getattr(getattr(llm, "session", None), "session", "") or "")
+        pane_before = tmux_capture(sess_name, last_lines=CAPTURE_LAST_LINES) if sess_name else ""
         reply = llm.chat(prompt)
+        pane_after = tmux_capture(sess_name, last_lines=CAPTURE_LAST_LINES) if sess_name else ""
+        post_sig = git_dirty_file_signatures()
+        file_delta = _changed_files_between(pre_sig, post_sig)
+        delta_text = _delta_text(pane_before, pane_after)
+        commands = extract_shell_commands(delta_text, max_cmds=AGENT_EVENTS_MAX_COMMANDS)
+        if not commands:
+            commands = extract_shell_commands(reply, max_cmds=AGENT_EVENTS_MAX_COMMANDS)
+        duration_ms = int((time.time() - started_at) * 1000)
+        quality = classify_agent_response(reply)
+        rewrite_happened = False
+        rewrite_details: Dict[str, Any] = {}
+        if _env_bool("FC_AGENT_AUTO_REWRITE", default=True):
+            triggers_raw = os.environ.get(
+                "FC_AGENT_AUTO_REWRITE_WARNINGS",
+                "asks_question,too_long,meta_reasoning",
+            )
+            triggers = {x.strip().lower() for x in triggers_raw.split(",") if x.strip()}
+            if any(w in triggers for w in quality["warnings"]):
+                previous_reply = reply
+                previous_quality = dict(quality)
+                rewrite_prompt = dedent(f"""
+                Reformule ta DERNIÈRE réponse immédiatement.
+                Contraintes strictes:
+                - Réponds en français.
+                - Max 5 puces courtes.
+                - Aucune question.
+                - Aucun méta-commentaire.
+                - Si une commande est nécessaire, mets-la dans un bloc bash.
+
+                Réponse à reformuler:
+                { _compact_bus_content(previous_reply, max_chars=1800) }
+
+                Donne uniquement la version finale.
+                """).strip()
+                rewritten = llm.chat(rewrite_prompt)
+                rewritten_quality = classify_agent_response(rewritten)
+
+                def _score(q: Dict[str, Any], txt: str) -> int:
+                    return int(len(q.get("warnings") or [])) * 100 + int(len((txt or "").strip()))
+
+                if _score(rewritten_quality, rewritten) <= _score(previous_quality, previous_reply):
+                    reply = rewritten
+                    quality = rewritten_quality
+                    rewrite_happened = True
+                    rewrite_details = {
+                        "before_warnings": previous_quality.get("warnings") or [],
+                        "after_warnings": quality.get("warnings") or [],
+                        "before_chars": len((previous_reply or "").strip()),
+                        "after_chars": len((reply or "").strip()),
+                    }
+                    rewritten_commands = extract_shell_commands(reply, max_cmds=AGENT_EVENTS_MAX_COMMANDS)
+                    if rewritten_commands:
+                        commands = rewritten_commands
 
         transcript_append(ctx, recipient.name, "RESPONSE", reply)
+        agent_bus_append(
+            ctx,
+            sender=recipient_name,
+            recipient="team",
+            kind="response",
+            content=reply,
+        )
+        event_append(
+            ctx,
+            {
+                "type": "turn_response",
+                "turn": turn_index,
+                "round": round_index,
+                "agent": recipient_name,
+                "duration_ms": duration_ms,
+                "response_chars": len((reply or "").strip()),
+                "commands": commands,
+                "files_touched": file_delta["touched"],
+                "files_created": file_delta["created"],
+                "files_deleted": file_delta["deleted"],
+                "quality": quality,
+                "rewritten": rewrite_happened,
+            },
+        )
+        if rewrite_happened:
+            event_append(
+                ctx,
+                {
+                    "type": "turn_rewrite",
+                    "turn": turn_index,
+                    "round": round_index,
+                    "agent": recipient_name,
+                    **rewrite_details,
+                },
+            )
+        _update_agent_summary(
+            recipient_name,
+            duration_ms=duration_ms,
+            commands=commands,
+            files_touched=file_delta["touched"],
+            warnings=quality["warnings"],
+        )
+        append_agent_memory(
+            recipient_name,
+            run_id=ctx.run_id,
+            feature=feature,
+            reply=reply,
+            commands=commands,
+            files_touched=file_delta["touched"],
+            warnings=quality["warnings"],
+        )
+        event_append(
+            ctx,
+            {
+                "type": "memory_update",
+                "agent": recipient_name,
+                "memory_file": str(_agent_memory_file(recipient_name)),
+                "warnings": quality["warnings"],
+            },
+        )
+        agent_bus_write_board(ctx)
         return True, reply
 
-    for ag in (planner, dev, tester, qa):
+    chat_agents = [planner]
+    if architect is not None:
+        chat_agents.append(architect)
+    chat_agents.extend([dev, tester])
+    if manager is not None:
+        chat_agents.append(manager)
+    reply_agents = list(chat_agents) + [qa]
+
+    for ag in reply_agents:
         ag.register_reply(
             trigger=[autogen.Agent, None],
             reply_func=tmux_reply,
@@ -1395,12 +2254,13 @@ def run_feature_autogen_tmux(
     # --------- FIX: calcul "tours" réellement exécutés ----------
     # On veut au minimum Planner->Dev->Tester (3 tours) par round,
     # et un peu de marge.
-    max_turns = max(6, int(max_rounds) * 3)
+    participants_count = max(2, len(chat_agents))
+    max_turns = max(6, int(max_rounds) * participants_count)
 
     # Certaines versions utilisent max_round (et l'interprètent bizarrement).
     # On le met large pour ne pas couper prématurément.
     groupchat = autogen.GroupChat(
-        agents=[planner, dev, tester],
+        agents=chat_agents,
         messages=[],
         max_round=max_turns,
         speaker_selection_method="round_robin",
@@ -1409,15 +2269,26 @@ def run_feature_autogen_tmux(
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=False)
 
     transcript_append(ctx, "Runner", "INFO", f"AutoGen-tmux kickoff. max_rounds={max_rounds} max_turns={max_turns}")
+    event_append(
+        ctx,
+        {
+            "type": "chat_start",
+            "max_rounds": int(max_rounds),
+            "max_turns": int(max_turns),
+            "participants": [getattr(a, "name", "?") for a in chat_agents],
+        },
+    )
 
-    # --------- FIX: forcer le nombre de tours côté initiate_chat ----------
-    try:
+    # Compat autogen: certaines versions utilisent max_turns, d'autres max_round.
+    init_sig = inspect.signature(planner.initiate_chat)
+    if "max_turns" in init_sig.parameters:
         planner.initiate_chat(manager, message=feature, max_turns=max_turns)
-    except TypeError:
-        # compat versions autogen: max_round au lieu de max_turns
+    else:
         planner.initiate_chat(manager, message=feature, max_round=max_turns)
 
     transcript_append(ctx, "Runner", "INFO", "PHASE QA (autogen-tmux): pytest + git")
+    agent_bus_append(ctx, sender="Runner", recipient="QualityObserver", kind="phase", content="PHASE QA")
+    event_append(ctx, {"type": "qa_phase_start"})
 
     pg = run_pytest_tool()
     pattern = infer_test_pattern(feature, default="health")
@@ -1452,8 +2323,99 @@ def run_feature_autogen_tmux(
     """).strip()
 
     transcript_append(ctx, "QualityObserver", "PROMPT", qa_prompt)
+    agent_bus_append(
+        ctx,
+        sender="Runner",
+        recipient="QualityObserver",
+        kind="prompt",
+        content=qa_prompt,
+    )
     report = qa_llm.chat(qa_prompt)
     transcript_append(ctx, "QualityObserver", "RESPONSE", report)
+    agent_bus_append(
+        ctx,
+        sender="QualityObserver",
+        recipient="team",
+        kind="response",
+        content=report,
+    )
+    agent_bus_write_board(ctx)
+    event_append(
+        ctx,
+        {
+            "type": "qa_phase_done",
+            "report_chars": len((report or "").strip()),
+            "pytest_global_ok": pg.get("ok"),
+            "pytest_target_ok": pt.get("ok"),
+        },
+    )
+    if manager_llm is not None:
+        delivery_prompt = dedent(f"""
+        Tu es DELIVERY_MANAGER.
+        Objectif initial:
+        {feature}
+
+        Rapport QA:
+        {report}
+
+        Donne:
+        1) Décision: GO ou NO-GO
+        2) Top 3 risques bloquants (ou "aucun")
+        3) Actions immédiates (max 5)
+        Réponse concise et finale.
+        """).strip()
+        transcript_append(ctx, "DeliveryManager", "PROMPT", delivery_prompt)
+        agent_bus_append(
+            ctx,
+            sender="Runner",
+            recipient="DeliveryManager",
+            kind="prompt",
+            content=f"Prompt DeliveryManager ({len(delivery_prompt)} chars).",
+        )
+        manager_report = manager_llm.chat(delivery_prompt)
+        transcript_append(ctx, "DeliveryManager", "RESPONSE", manager_report)
+        agent_bus_append(
+            ctx,
+            sender="DeliveryManager",
+            recipient="team",
+            kind="decision",
+            content=manager_report,
+        )
+        quality_manager = classify_agent_response(manager_report)
+        append_agent_memory(
+            "DeliveryManager",
+            run_id=ctx.run_id,
+            feature=feature,
+            reply=manager_report,
+            commands=[],
+            files_touched=[],
+            warnings=quality_manager["warnings"],
+        )
+        event_append(
+            ctx,
+            {
+                "type": "delivery_gate",
+                "response_chars": len((manager_report or "").strip()),
+                "quality": quality_manager,
+            },
+        )
+        _update_agent_summary(
+            "DeliveryManager",
+            duration_ms=0,
+            commands=[],
+            files_touched=[],
+            warnings=quality_manager["warnings"],
+        )
+        agent_bus_write_board(ctx)
+    write_agent_activity_summary(ctx, activity_summary)
+    event_append(
+        ctx,
+        {
+            "type": "run_end",
+            "turns": int(turn_state["index"]),
+            "agents_count": len(activity_summary.get("agents") or {}),
+        },
+    )
 
     print("\n================= RAPPORT QA FINAL (AutoGen-TMUX) =================\n")
     print(report)
@@ -1531,11 +2493,18 @@ def run_feature(
     wait_dev: float,
     wait_tester: float,
     wait_qa: float,
+    with_architect: bool = False,
+    with_manager: bool = False,
 ):
     ensure_project_exists()
     ensure_tmux_exists()
     require_module("autogen")
     qwen_bin = require_executable(qwen_bin)
+
+    if with_architect:
+        ensure_role_session("architect", "FC_SESS_ARCHITECT", "qwen_architect")
+    if with_manager:
+        ensure_role_session("manager", "FC_SESS_MANAGER", "qwen_manager")
 
     ctx = create_run_ctx(runs_dir)
     sentry_set_context(run_id=ctx.run_id, mode=mode, tmux_cmd="")
@@ -1555,7 +2524,18 @@ def run_feature(
         feature = build_debug_feature(ctx.run_id)
         transcript_append(ctx, "Runner", "INFO", "Feature replaced by DEBUG feature.")
 
-    write_manifest(ctx, feature=feature, qwen_bin=qwen_bin, extra={"mode": mode, "engine": "autogen_tmux"})
+    write_manifest(
+        ctx,
+        feature=feature,
+        qwen_bin=qwen_bin,
+        extra={
+            "mode": mode,
+            "engine": "autogen_tmux",
+            "with_architect": bool(with_architect),
+            "with_manager": bool(with_manager),
+            "agent_memory_dir": str(AGENT_MEMORY_DIR),
+        },
+    )
 
     qwen_start(
         qwen_bin=qwen_bin,
@@ -1582,6 +2562,8 @@ def run_feature(
         wait_dev=wait_dev,
         wait_tester=wait_tester,
         wait_qa=wait_qa,
+        with_architect=with_architect,
+        with_manager=with_manager,
     )
 
     if enable_tmux_logs:
@@ -1605,6 +2587,7 @@ def usage_text() -> str:
 
     1) AutoGen -> TMUX (solution unique)
        python3 scripts/qwen_orchestrator.py --rounds 2 --feature "Implémente GET /health"
+       python3 scripts/qwen_orchestrator.py --rounds 3 --with-architect --with-manager --feature "..."
 
     2) Mode debug
        python3 scripts/qwen_orchestrator.py --mode debug --rounds 1 --restart
@@ -1643,6 +2626,14 @@ def usage_text() -> str:
         (désactiver via FC_QWEN_TMUX_FALLBACK_SDK=0)
     - Pour run de feature: autogen/tmux/qwen doivent être présents sinon erreur.
     - Pour management tmux (status/start/stop/attach/ping/prompt): autogen n'est pas requis.
+    - SDK memory: getSessionId est persisté dans {SDK_SESSION_STATE_FILE}
+      (clé par agent/session), puis réutilisé via --resume pour garder le contexte.
+    - Mémoire agent persistante (inter-runs) dans:
+      {AGENT_MEMORY_DIR}
+      injectée dans les prompts sous "MÉMOIRE AGENT".
+    - Rôles avancés optionnels:
+      --with-architect --with-manager
+      (sessions: architect={SESSIONS.get('architect','qwen_architect')} manager={SESSIONS.get('manager','qwen_manager')})
     - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
       ex: security=qwen_security,docs=qwen_docs
     - tmux capture utilise history + join wrap (-J), et history-limit est augmenté.
@@ -1650,9 +2641,15 @@ def usage_text() -> str:
         {RUNS_DIR_DEFAULT}/YYYYMMDD-HHMMSS-mmm/
           - run.json
           - transcript.md
+          - agent_bus.jsonl
+          - agent_board.md
+          - events.jsonl (tours, durées, commandes détectées, fichiers touchés)
+          - agent_activity.json (résumé par agent)
           - tmux/*.log (si activé)
           - snapshots/*.txt
           - doctor_report.md (si doctor)
+    - Analyse des runs:
+      python3 scripts/analyze_orchestrator_runs.py --limit 10
     """).strip()
 
 
@@ -1685,6 +2682,8 @@ def main():
     ap.add_argument("--wait-dev", type=float, default=90.0)
     ap.add_argument("--wait-tester", type=float, default=75.0)
     ap.add_argument("--wait-qa", type=float, default=90.0)
+    ap.add_argument("--with-architect", action="store_true", help="Ajoute l'agent Architect au groupchat")
+    ap.add_argument("--with-manager", action="store_true", help="Ajoute DeliveryManager (groupchat + gate final)")
 
     ap.add_argument("--sessions", type=str, default="",
                     help="Overrides sessions role=session (comma/semicolon separated). Ex: dev=qwen_dev2,security=qwen_sec")
@@ -1724,6 +2723,10 @@ def main():
 
     args = ap.parse_args()
     apply_session_overrides(args.sessions)
+    if args.with_architect:
+        ensure_role_session("architect", "FC_SESS_ARCHITECT", "qwen_architect")
+    if args.with_manager:
+        ensure_role_session("manager", "FC_SESS_MANAGER", "qwen_manager")
     tmux_cmd = (args.tmux_cmd or "").strip().lower()
     prompt_engine = (args.prompt_engine or "tmux").strip().lower()
 
@@ -1838,6 +2841,7 @@ def main():
                         model=args.sdk_model,
                         debug=bool(args.sdk_debug),
                         qwen_bin=args.sdk_path_to_qwen_executable,
+                        session_key=f"sdk:{label}",
                     )
                 }
             else:
@@ -1861,6 +2865,8 @@ def main():
                     model=args.sdk_model,
                     debug=bool(args.sdk_debug),
                     path_to_qwen_executable=args.sdk_path_to_qwen_executable,
+                    session_key=f"sdk:{target}",
+                    max_session_turns=int(os.environ.get("FC_QWEN_SDK_MAX_SESSION_TURNS", "-1")),
                 )
             else:
                 reply = qwen_prompt(
@@ -1894,6 +2900,8 @@ def main():
         wait_dev=args.wait_dev,
         wait_tester=args.wait_tester,
         wait_qa=args.wait_qa,
+        with_architect=bool(args.with_architect),
+        with_manager=bool(args.with_manager),
     )
 
     print(f"\n✅ Terminé. Run dir: {ctx.run_dir}")

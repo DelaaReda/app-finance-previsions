@@ -21,6 +21,8 @@ artifacts_phase1/
 logs/
 logs-qwen-runs/
 finance-app/orchestrator-runs/
+finance-app/agent-memory/
+finance-app/sdk_sessions.json
 .qwen_runs/
 copilot-app/backend/.qwen_runs/
 *.log
