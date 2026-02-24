@@ -2974,6 +2974,75 @@ async def get_judge_quality(
         }
 
 
+@router.get("/quality/history")
+async def get_judge_quality_history(
+    horizon_days: int = Query(
+        5, ge=1, le=30, description="Forecast horizon used for quality snapshots"
+    ),
+    min_samples: int = Query(
+        20, ge=1, le=500, description="Minimum samples used in the quality run"
+    ),
+    limit: int = Query(90, ge=1, le=1000, description="Maximum number of points returned"),
+):
+    """Historical snapshots of judge quality metrics for one (horizon, min_samples) scope."""
+    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    try:
+        payload = load_json("judge_quality_tracking") or {}
+        points = payload.get("points") if isinstance(payload, dict) else []
+        points = points if isinstance(points, list) else []
+
+        def _safe_int(value: Any, default: int = 0) -> int:
+            try:
+                if isinstance(value, bool):
+                    return default
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        filtered = [
+            p
+            for p in points
+            if isinstance(p, dict)
+            and _safe_int(p.get("horizon_days"), -1) == int(horizon_days)
+            and _safe_int(p.get("min_samples"), -1) == int(min_samples)
+        ]
+        filtered.sort(key=lambda p: str(p.get("as_of") or ""))
+        filtered = filtered[-int(limit) :]
+        latest = filtered[-1] if filtered else None
+
+        return {
+            "ok": True,
+            "data": {
+                "as_of": now_iso,
+                "scope": {
+                    "horizon_days": int(horizon_days),
+                    "min_samples": int(min_samples),
+                },
+                "count": len(filtered),
+                "latest": latest,
+                "points": filtered,
+            },
+            "freshness": (latest or {}).get("as_of", now_iso),
+        }
+    except Exception as e:
+        return {
+            "ok": True,
+            "data": {
+                "as_of": now_iso,
+                "scope": {
+                    "horizon_days": int(horizon_days),
+                    "min_samples": int(min_samples),
+                },
+                "count": 0,
+                "latest": None,
+                "points": [],
+                "error": str(e),
+                "message": "Judge quality history unavailable; fallback returned.",
+            },
+            "freshness": "error",
+        }
+
+
 @router.get("/options")
 async def get_judge_options():
     """Options for judge UI (never-empty)."""

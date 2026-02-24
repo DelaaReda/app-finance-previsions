@@ -19,6 +19,10 @@
   ```bash
   curl -s 'http://localhost:8050/api/judge?limit=1' | jq
   ```
+- Historique qualité judge (snapshots quotidiens) :
+  ```bash
+  curl -s 'http://localhost:8050/api/judge/quality/history?horizon_days=5&min_samples=20&limit=30' | jq
+  ```
 - Docs API :
   - http://localhost:8050/docs
 
@@ -34,13 +38,14 @@
 ## Où est le code actif
 - Backend : `copilot-app/backend/src/...` (API FastAPI, services, analytics).
 - Entrée API unique : `copilot-app/backend/src/api/main.py` (appelée par `copilot-app/backend/run_api.py`).
-- Jobs de génération (news, macro, judge_enrich…) : `copilot-app/backend/jobs/` (appelés par le script).
+- Jobs de génération (news, macro, data_quality_gate, judge_enrich…) : `copilot-app/backend/jobs/` (appelés par le script).
 - Données (snapshots) : `copilot-app/backend/data/`.
 - Anciennes variantes/compat : `copilot-app/backend/legacy-archive/`.
 
 ## Tests rapides (manuels)
 - Health : `curl -s http://localhost:8050/api/health`
 - Judge : `curl -s 'http://localhost:8050/api/judge?limit=1'`
+- Judge quality history : `curl -s 'http://localhost:8050/api/judge/quality/history?horizon_days=5&min_samples=20&limit=30'`
 
 ## Notes
 - Variables env : `.env` à la racine backend (inclut OPEN_ROUTER_API_KEY, clés FRED, etc.).

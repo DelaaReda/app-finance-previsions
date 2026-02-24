@@ -18,8 +18,9 @@ backend_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "src"))
 
-from storage.io import save_json  # noqa: E402
+from storage.io import load_json, save_json  # noqa: E402
 from src.services.judge_quality import build_judge_quality_report  # noqa: E402
+from src.services.judge_quality_tracking import build_tracking_payload  # noqa: E402
 try:
     from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception  # noqa: E402
 except Exception:  # pragma: no cover
@@ -51,6 +52,15 @@ def run_judge_quality_report(
         "judge_quality",
         report,
         source=["job:judge_quality_report", "judge_metrics"],
+    )
+    tracking_payload = build_tracking_payload(
+        existing=load_json("judge_quality_tracking"),
+        report=report,
+    )
+    save_json(
+        "judge_quality_tracking",
+        tracking_payload,
+        source=["job:judge_quality_report", "judge_metrics_tracking"],
     )
     return report
 
