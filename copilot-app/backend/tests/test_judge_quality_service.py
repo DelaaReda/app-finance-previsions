@@ -84,3 +84,32 @@ def test_judge_quality_report_handles_no_evaluable_rows():
     assert report["overall"]["sample_status"] == "insufficient"
     assert report["recommendation"]["status"] == "insufficient_sample"
 
+
+def test_judge_quality_report_normalizes_ticker_aliases():
+    now = datetime(2026, 2, 5, 0, 0, tzinfo=timezone.utc)
+    start = now - timedelta(days=70)
+    prices = {
+        "BRK.B": _make_price_series(start, 80, 100.0, 1.0),
+    }
+    rows = [
+        {
+            "ticker": "BRK-B",
+            "timestamp": (now - timedelta(days=40)).isoformat().replace("+00:00", "Z"),
+            "direction": "up",
+            "expected_return": 0.02,
+            "confidence": 0.70,
+        },
+    ]
+
+    report = build_judge_quality_report_from_data(
+        rows=rows,
+        prices_by_ticker=prices,
+        horizon_days=5,
+        window_days=(60,),
+        min_samples=1,
+        now_utc=now,
+    )
+
+    assert report["coverage"]["with_price_series"] == 1
+    assert report["overall"]["n"] == 1
+    assert report["coverage"]["evaluated_tickers"] == ["BRK.B"]

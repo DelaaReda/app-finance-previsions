@@ -29,6 +29,12 @@ if src_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+from core.ticker_normalization import (
+    is_canonical_ticker,
+    normalize_ticker,
+    normalize_tickers,
+)
+
 try:
     from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
 except Exception:  # pragma: no cover
@@ -64,7 +70,19 @@ BASE_RSS_SOURCES = [
 ]
 
 # Univers par défaut et mapping mots-clés -> ticker (pour mieux tagger les news)
-DEFAULT_TICKERS = {"SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "GOOG", "NVDA", "TSLA", "META", "AMZN"}
+DEFAULT_TICKERS = {
+    "SPY",
+    "QQQ",
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "GOOG",
+    "NVDA",
+    "TSLA",
+    "META",
+    "AMZN",
+    "BRK.B",
+}
 COMPANY_KEYWORDS = {
     "NVIDIA": "NVDA",
     "NVDIA": "NVDA",
@@ -77,6 +95,8 @@ COMPANY_KEYWORDS = {
     "META": "META",
     "FACEBOOK": "META",
     "AMAZON": "AMZN",
+    "BERKSHIRE HATHAWAY": "BRK.B",
+    "BERKSHIRE": "BRK.B",
 }
 
 # Concept patterns to improve ETF/index/company tagging for generic market headlines.
@@ -168,7 +188,7 @@ def build_dynamic_sources(tickers: List[str]) -> List[Dict[str, Any]]:
     """Build ticker-specific sources to increase per-ticker coverage over ~3 months."""
     sources: List[Dict[str, Any]] = []
     for ticker in tickers:
-        t = ticker.upper().strip()
+        t = normalize_ticker(ticker)
         if not t:
             continue
         sources.append(
@@ -212,9 +232,9 @@ def extract_tickers(
     scores: Dict[str, int] = {}
 
     def bump(ticker: str, weight: int) -> None:
-        if not ticker:
+        t = normalize_ticker(ticker)
+        if not t:
             return
-        t = ticker.upper()
         scores[t] = scores.get(t, 0) + weight
 
     # Cashtags ($AAPL, $TSLA, ...)
@@ -244,7 +264,7 @@ def extract_tickers(
         if kt and kt in source_upper:
             bump(kt, 2)
     if source_ticker:
-        bump(source_ticker.upper(), 2)
+        bump(source_ticker, 2)
 
     ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
     return [ticker for ticker, _ in ranked[:5]]
@@ -455,7 +475,7 @@ def run_news_ingest():
                 fc = load_json("forecasts") or {}
                 rows = fc.get("rows") or fc.get("data", {}).get("rows", []) or []
                 for r in rows:
-                    t = (r.get("ticker") or r.get("symbol") or "").upper()
+                    t = normalize_ticker(r.get("ticker") or r.get("symbol"))
                     if t:
                         known_tickers.add(t)
             except Exception:
@@ -468,16 +488,14 @@ def run_news_ingest():
                     cfg = yaml.safe_load(p.read_text()) or {}
                     for t in cfg.get("tickers", []) or []:
                         if isinstance(t, str):
-                            known_tickers.add(t.upper())
+                            normalized = normalize_ticker(t)
+                            if normalized:
+                                known_tickers.add(normalized)
             except Exception as e:
                 logger.warning(f"Failed to load profile tickers: {e}")
 
         target_tickers = sorted(
-            {
-                t
-                for t in known_tickers
-                if isinstance(t, str) and t and re.fullmatch(r"[A-Z]{1,6}", t)
-            }
+            t for t in normalize_tickers(known_tickers) if is_canonical_ticker(t)
         )
         dynamic_sources = build_dynamic_sources(target_tickers)
         rss_sources = BASE_RSS_SOURCES + dynamic_sources
@@ -542,7 +560,8 @@ def run_news_ingest():
                         source_ticker=source.get("source_ticker"),
                     )
                     if not article['tickers'] and source.get("source_ticker"):
-                        article['tickers'] = [str(source["source_ticker"]).upper()]
+                        fallback_ticker = normalize_ticker(str(source["source_ticker"]))
+                        article['tickers'] = [fallback_ticker] if fallback_ticker else []
                     
                     # Add ingestion timestamp
                     article['ingested_at'] = datetime.utcnow().isoformat() + "Z"

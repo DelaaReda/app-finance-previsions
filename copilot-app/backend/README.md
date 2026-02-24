@@ -49,6 +49,9 @@
 
 ## Notes
 - Variables env : `.env` à la racine backend (inclut OPEN_ROUTER_API_KEY, clés FRED, etc.).
+- Contrat de normalisation ticker (source unique) : `src/core/ticker_normalization.py`
+  - Canonique: `ABC` ou `ABC.X` (ex: `BRK.B`)
+  - Variantes acceptées: `BRK-B`, `BRK/B`, `NYSE:BRK.B`, `AAPL.US`, `$AAPL`
 - Massive.com (prix historiques via API) : définir `MASSIVE_API_KEY` pour activer la source Massive.
 - Sentry (FastAPI) : définir `SENTRY_DSN` pour activer la capture erreurs/traces.
   - Optionnel : `SENTRY_SEND_DEFAULT_PII` (défaut `true`), `SENTRY_ENABLE_LOGS` (défaut `true`), `SENTRY_TRACES_SAMPLE_RATE` (défaut `1.0` en debug / `0.2` hors debug), `SENTRY_PROFILE_SESSION_SAMPLE_RATE` (défaut `0.2` en debug / `0.0` hors debug), `SENTRY_PROFILE_LIFECYCLE` (défaut `trace`).

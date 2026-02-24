@@ -44,6 +44,8 @@ except Exception:  # pragma: no cover
     load_json = None
     save_json = None
 
+from core.ticker_normalization import normalize_ticker
+
 
 SENTIMENT_TO_SCORE = {
     "positive": 1.0,
@@ -76,7 +78,11 @@ def run_news_sentiment_analysis(filters: Dict[str, Any] | None = None) -> Dict[s
 
     requested_tickers = []
     if filters and isinstance(filters.get("tickers"), list):
-        requested_tickers = [str(t).upper() for t in filters.get("tickers", []) if str(t).strip()]
+        requested_tickers = [
+            t
+            for t in (normalize_ticker(str(raw)) for raw in filters.get("tickers", []))
+            if t
+        ]
     requested_ticker_set = set(requested_tickers)
     set_job_context("news_sentiment", requested_ticker_count=len(requested_tickers))
 
@@ -111,7 +117,7 @@ def run_news_sentiment_analysis(filters: Dict[str, Any] | None = None) -> Dict[s
         for article in articles:
             tickers = article.get("tickers") or []
             if requested_ticker_set:
-                tickers = [t for t in tickers if str(t).upper() in requested_ticker_set]
+                tickers = [t for t in tickers if normalize_ticker(str(t)) in requested_ticker_set]
             if not tickers:
                 continue
             sentiment_label = str(article.get("sentiment", "neutral")).lower()
@@ -123,7 +129,9 @@ def run_news_sentiment_analysis(filters: Dict[str, Any] | None = None) -> Dict[s
                 sentiment_value = SENTIMENT_TO_SCORE.get(sentiment_label, 0.0)
 
             for raw_ticker in tickers:
-                ticker = str(raw_ticker).upper()
+                ticker = normalize_ticker(str(raw_ticker))
+                if not ticker:
+                    continue
                 item = agg[ticker]
                 item["ticker"] = ticker
                 item["article_count"] += 1

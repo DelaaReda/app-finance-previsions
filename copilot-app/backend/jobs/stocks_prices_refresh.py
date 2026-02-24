@@ -66,6 +66,8 @@ except ImportError:
         import json
         return json.loads(filepath.read_text())
 
+from core.ticker_normalization import normalize_ticker, normalize_tickers
+
 
 def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[str, Any]:
     """
@@ -86,10 +88,10 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         from core.market_data import get_price_history
         
         # Liste des tickers par défaut
-        DEFAULT_STOCKS_UNIVERSE = [
+        DEFAULT_STOCKS_UNIVERSE = normalize_tickers([
             "SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META",
             "TSLA", "BRK.B", "UNH", "JNJ", "V", "PG", "JPM", "MA", "HD", "DIS"
-        ]
+        ])
         
         # Convert timeframe to days
         timeframe_map = {
@@ -120,7 +122,10 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         
         # Helper: stooq CSV fallback (no auth)
         def _stooq_symbol(sym: str) -> str:
-            s = sym.lower()
+            normalized = normalize_ticker(sym)
+            if not normalized:
+                return ""
+            s = normalized.lower()
             mapping = {
                 "spy": "spy.us",
                 "qqq": "qqq.us",
@@ -147,6 +152,8 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         def _fetch_stooq_prices(sym: str) -> pd.DataFrame:
             try:
                 stooq_sym = _stooq_symbol(sym)
+                if not stooq_sym:
+                    return pd.DataFrame()
                 # Prefer stooq.pl (stooq.com can fail DNS in some environments)
                 urls = [
                     f"https://stooq.pl/q/d/l/?s={stooq_sym}&i=d",
@@ -224,8 +231,11 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
 
         def _load_stooq_cache(sym: str) -> pd.DataFrame:
             try:
+                normalized = normalize_ticker(sym)
+                if not normalized:
+                    return pd.DataFrame()
                 cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "stooq"
-                fp = cache_dir / f"{sym}.csv"
+                fp = cache_dir / f"{normalized}.csv"
                 if not fp.exists():
                     return pd.DataFrame()
                 df = pd.read_csv(fp)
@@ -248,8 +258,11 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
 
         def _load_yahoo_cache(sym: str) -> pd.DataFrame:
             try:
+                normalized = normalize_ticker(sym)
+                if not normalized:
+                    return pd.DataFrame()
                 cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "yahoo"
-                fp = cache_dir / f"{sym}.csv"
+                fp = cache_dir / f"{normalized}.csv"
                 if not fp.exists():
                     return pd.DataFrame()
                 df = pd.read_csv(fp)
@@ -271,19 +284,22 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
         
         for ticker in DEFAULT_STOCKS_UNIVERSE:
             try:
+                normalized_ticker = normalize_ticker(ticker)
+                if not normalized_ticker:
+                    continue
                 logger.debug(f"Fetching prices for {ticker}...")
                 
-                df = _load_yahoo_cache(ticker)
+                df = _load_yahoo_cache(normalized_ticker)
                 if df is None or df.empty:
-                    df = _load_stooq_cache(ticker)
+                    df = _load_stooq_cache(normalized_ticker)
                 if df is None or df.empty:
-                    df = get_price_history(ticker, start=start_date, interval="1d")
+                    df = get_price_history(normalized_ticker, start=start_date, interval="1d")
                 if df is None or df.empty:
-                    df = _fetch_yahoo_chart(ticker)
+                    df = _fetch_yahoo_chart(normalized_ticker)
                 if df is None or df.empty:
-                    df = _fetch_stooq_prices(ticker)
+                    df = _fetch_stooq_prices(normalized_ticker)
                 if df is None or df.empty:
-                    errors[ticker] = "No data"
+                    errors[normalized_ticker] = "No data"
                     continue
                 
                 # Extract Close prices as series
@@ -304,7 +320,7 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                         step = len(points) // 1000
                         points = points[::max(1, step)]
                 
-                results[ticker] = {
+                results[normalized_ticker] = {
                     "range": timeframe,
                     "interval": "1d",
                     "points": points,
@@ -315,7 +331,7 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                 
             except Exception as e:
                 logger.warning(f"Failed to fetch prices for {ticker}: {e}")
-                errors[ticker] = str(e)
+                errors[normalize_ticker(ticker) or ticker] = str(e)
                 continue
         
         # Sauvegarder (éviter d'écraser un cache existant si aucun résultat)

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from storage.io import load_json
+from core.ticker_normalization import normalize_ticker
 
 
 @dataclass
@@ -150,7 +151,10 @@ def _load_prices_points() -> Dict[str, List[Tuple[datetime, float]]]:
             parsed.append((ts, px))
         if parsed:
             parsed.sort(key=lambda x: x[0])
-            out[str(ticker).upper()] = parsed
+            normalized = normalize_ticker(str(ticker))
+            if not normalized:
+                continue
+            out[normalized] = parsed
     return out
 
 
@@ -256,7 +260,7 @@ def _evaluate_rows(
         if not isinstance(row, dict):
             continue
         coverage["total_rows"] += 1
-        ticker = str(row.get("ticker") or row.get("symbol") or "").upper().strip()
+        ticker = normalize_ticker(str(row.get("ticker") or row.get("symbol") or ""))
         if not ticker:
             continue
 
@@ -425,4 +429,3 @@ def build_judge_quality_report(
         min_samples=min_samples,
         baseline_lookback_days=baseline_lookback_days,
     )
-

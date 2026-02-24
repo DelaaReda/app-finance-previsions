@@ -27,6 +27,8 @@ try:
 except Exception:
     pass
 
+from core.ticker_normalization import normalize_tickers
+
 try:
     from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
 except Exception:  # pragma: no cover
@@ -47,8 +49,10 @@ def _load_forecast_tickers() -> List[str]:
     try:
         obj = json.loads(FORECASTS_PATH.read_text())
         rows = obj.get("rows") or obj.get("data", {}).get("rows", []) or []
-        tickers = sorted({(r.get("ticker") or r.get("symbol") or "").upper() for r in rows if r.get("ticker") or r.get("symbol")})
-        return [t for t in tickers if t]
+        tickers = normalize_tickers(
+            (r.get("ticker") or r.get("symbol") or "") for r in rows if r.get("ticker") or r.get("symbol")
+        )
+        return sorted(tickers)
     except Exception as e:
         logger.warning(f"Cannot load forecasts.json: {e}")
         return []

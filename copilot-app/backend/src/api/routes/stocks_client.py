@@ -21,6 +21,8 @@ try:
 except Exception:  # pragma: no cover - very defensive
     load_json = lambda key: None  # type: ignore
 
+from core.ticker_normalization import normalize_ticker, normalize_tickers
+
 router = APIRouter(tags=["stocks"])
 
 
@@ -34,9 +36,12 @@ async def get_stocks_prices(
     interval: str = Query("1d", description="Interval (only 1d supported by snapshot)"),
     downsample: int = Query(1000, ge=10, le=5000, description="Max points"),
 ):
+    normalized_ticker = normalize_ticker(ticker)
+    if not normalized_ticker:
+        normalized_ticker = ticker.upper()
     data = load_json("stocks/prices") or {}
     tickers = (data.get("tickers") or {}) if isinstance(data, dict) else {}
-    entry = tickers.get(ticker.upper()) or tickers.get(ticker)
+    entry = tickers.get(normalized_ticker) or tickers.get(ticker)
 
     points_resp: List[Dict[str, Any]] = []
     if entry and isinstance(entry, dict):
@@ -49,7 +54,7 @@ async def get_stocks_prices(
             points_resp = [{"timestamp": int(ts), "value": float(val)} for ts, val in pts if ts is not None and val is not None]
 
     payload = {
-        "ticker": ticker.upper(),
+        "ticker": normalized_ticker,
         "interval": interval,
         "points": points_resp,
         "count": len(points_resp),
@@ -65,15 +70,18 @@ async def get_stocks_universe():
     data = load_json("stocks/prices") or {}
     tickers_map = data.get("tickers") if isinstance(data, dict) else None
     tickers = sorted(list(tickers_map.keys())) if isinstance(tickers_map, dict) else []
-    return {"ok": True, "data": {"tickers": [t.upper() for t in tickers], "count": len(tickers)}}
+    return {"ok": True, "data": {"tickers": normalize_tickers(tickers), "count": len(tickers)}}
 
 
 @router.get("/stocks/{ticker}")
 async def get_ticker_detail(ticker: str):
+    normalized_ticker = normalize_ticker(ticker)
+    if not normalized_ticker:
+        normalized_ticker = ticker.upper()
     # Derive last price from prices snapshot
     data = load_json("stocks/prices") or {}
     tickers = (data.get("tickers") or {}) if isinstance(data, dict) else {}
-    entry = tickers.get(ticker.upper()) or tickers.get(ticker)
+    entry = tickers.get(normalized_ticker) or tickers.get(ticker)
 
     last_price = None
     last_ts = None
@@ -85,7 +93,7 @@ async def get_ticker_detail(ticker: str):
             last_ts = int(ts) if ts is not None else None
 
     resp = {
-        "ticker": ticker.upper(),
+        "ticker": normalized_ticker,
         "last_price": last_price,
         "date": _now() if last_ts is None else datetime.utcfromtimestamp(last_ts).isoformat() + "Z",
         "indicators": {"rsi": None, "sma20": None, "macd": None},
@@ -99,7 +107,7 @@ async def search_stocks(q: str = Query("", description="Query string"), limit: i
     # Very basic search over universe list (no mocks)
     data = load_json("stocks/prices") or {}
     tickers_map = data.get("tickers") if isinstance(data, dict) else {}
-    universe = [t.upper() for t in (tickers_map.keys() if isinstance(tickers_map, dict) else [])]
+    universe = normalize_tickers(tickers_map.keys() if isinstance(tickers_map, dict) else [])
     qn = (q or "").strip().upper()
     results: List[Dict[str, Any]] = []
     for t in universe:
@@ -114,7 +122,6 @@ async def search_stocks(q: str = Query("", description="Query string"), limit: i
 async def stocks_meta(tickers: Optional[str] = Query(None, description="Comma separated tickers")):
     items: List[Dict[str, Any]] = []
     if tickers:
-        for t in [x.strip().upper() for x in tickers.split(",") if x.strip()]:
+        for t in normalize_tickers(x.strip() for x in tickers.split(",") if x.strip()):
             items.append({"ticker": t})
     return {"ok": True, "data": {"items": items}}
-

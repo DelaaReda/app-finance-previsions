@@ -40,6 +40,8 @@ except ImportError:
         import json
         return json.loads(filepath.read_text())
 
+from core.ticker_normalization import normalize_ticker, normalize_tickers
+
 
 def run_stocks_metrics_job(force: bool = False) -> Dict[str, Any]:
     """
@@ -61,10 +63,10 @@ def run_stocks_metrics_job(force: bool = False) -> Dict[str, Any]:
         from datetime import timedelta
         
         # Liste des tickers par défaut
-        DEFAULT_STOCKS_UNIVERSE = [
+        DEFAULT_STOCKS_UNIVERSE = normalize_tickers([
             "SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META",
             "TSLA", "BRK.B", "UNH", "JNJ", "V", "PG", "JPM", "MA", "HD", "DIS"
-        ]
+        ])
         
         # Charger depuis cache si disponible et récent
         if not force:
@@ -92,15 +94,18 @@ def run_stocks_metrics_job(force: bool = False) -> Dict[str, Any]:
         
         for ticker in DEFAULT_STOCKS_UNIVERSE:
             try:
+                normalized_ticker = normalize_ticker(ticker)
+                if not normalized_ticker:
+                    continue
                 logger.debug(f"Computing metrics for {ticker}...")
                 
                 # Calculer métriques de base
-                ticker_upper = ticker.upper()
+                ticker_upper = normalized_ticker
                 lookback_start = (datetime.utcnow() - timedelta(days=120)).strftime("%Y-%m-%d")
                 df_prices = get_price_history(ticker_upper, start=lookback_start, interval="1d")
                 
                 if df_prices is None or df_prices.empty or ("Close" not in df_prices.columns and len(df_prices.columns) == 0):
-                    errors[ticker] = "No price data"
+                    errors[ticker_upper] = "No price data"
                     continue
                 
                 # Extraire métriques de base
@@ -125,7 +130,7 @@ def run_stocks_metrics_job(force: bool = False) -> Dict[str, Any]:
                     if len(returns) > 0:
                         risk = float(returns.std() * (252 ** 0.5)) * 100  # Annualized volatility
                 
-                metrics[ticker] = {
+                metrics[ticker_upper] = {
                     "ticker": ticker_upper,
                     "price": last_price,
                     "change_1d": change_1d,
@@ -137,7 +142,7 @@ def run_stocks_metrics_job(force: bool = False) -> Dict[str, Any]:
                 
             except Exception as e:
                 logger.warning(f"Failed to compute metrics for {ticker}: {e}")
-                errors[ticker] = str(e)
+                errors[normalize_ticker(ticker) or ticker] = str(e)
                 continue
         
         # Sauvegarder
@@ -177,4 +182,3 @@ if __name__ == "__main__":
     
     result = run_stocks_metrics_job(force=args.force)
     print(f"Result: {result}")
-

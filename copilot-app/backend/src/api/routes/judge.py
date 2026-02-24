@@ -35,6 +35,7 @@ except Exception:  # pragma: no cover
 
 
 from storage.io import load_json
+from core.ticker_normalization import normalize_ticker, normalize_tickers
 
 try:
     from services.cache_layer import load_or_compute
@@ -154,7 +155,7 @@ def _judge_cache_key(
     sort_order: Optional[str],
     profile: str,
 ) -> str:
-    tickers = sorted({t.upper() for t in (ticker or [])})
+    tickers = sorted(normalize_tickers(ticker or []))
     key_obj = {
         "v": JUDGE_VERSION,
         "limit": int(limit),
@@ -733,12 +734,12 @@ async def get_judge_verdicts(
 
             # Filter by profile tickers if profile is loaded
             if prof and getattr(prof, "tickers", None):
-                prof_tickers = {t.upper() for t in (prof.tickers or [])}
+                prof_tickers = set(normalize_tickers(prof.tickers or []))
                 before = len(rows_sorted)
                 rows_sorted = [
                     r
                     for r in rows_sorted
-                    if (r.get("ticker") or r.get("symbol") or "").upper() in prof_tickers
+                    if normalize_ticker(r.get("ticker") or r.get("symbol") or "") in prof_tickers
                 ]
                 logger.info(
                     "Filtered to %d rows from profile %s (from %d)",
@@ -755,12 +756,12 @@ async def get_judge_verdicts(
 
             # Filter by explicit ticker query parameter
             if ticker:
-                ticker_set = {t.upper() for t in ticker}
+                ticker_set = set(normalize_tickers(ticker))
                 before = len(rows_sorted)
                 rows_sorted = [
                     r
                     for r in rows_sorted
-                    if (r.get("ticker") or r.get("symbol") or "").upper() in ticker_set
+                    if normalize_ticker(r.get("ticker") or r.get("symbol") or "") in ticker_set
                 ]
                 logger.info(
                     "Filtered to %d rows from ticker param %s (from %d)",
@@ -1263,7 +1264,7 @@ async def get_judge_verdicts(
 
             async def _process_row(r):
                 async with sem:
-                    sym = (r.get("ticker") or r.get("symbol") or "").upper()
+                    sym = normalize_ticker(r.get("ticker") or r.get("symbol") or "")
                     if not sym:
                         return None
                     if debug:
@@ -2739,11 +2740,11 @@ async def get_judge_verdicts(
 
             # Filtering and stats
             if ticker:
-                ticker_list = [t.upper() for t in ticker]
+                ticker_list = normalize_tickers(ticker)
                 verdicts = [
                     v
                     for v in verdicts
-                    if v.get("ticker", "").upper() in ticker_list
+                    if normalize_ticker(v.get("ticker", "")) in ticker_list
                 ]
 
             confidence_filtered = [
