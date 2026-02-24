@@ -5,7 +5,7 @@ Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
 """
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add backend to path for imports
 backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up 2 levels to backend/
@@ -13,6 +13,10 @@ sys.path.insert(0, backend_root)
 
 from core.data_quality import run_quality_audit, run_quality_gate
 from storage.io import save_json
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def run_data_quality_job():
@@ -27,12 +31,13 @@ def run_data_quality_job():
         audit_results = run_quality_audit()
         
         # Save results to persistent storage
-        save_json("quality_report", {
+        result_payload = {
             "audit_results": audit_results,
-            "job_execution_time": datetime.utcnow().isoformat() + "Z",
+            "job_execution_time": _utc_now_iso(),
             "job_type": "data_quality_audit",
             "task_id": "FC-DATA-007"
-        }, source=["quality_job", "data_validation", "fc-data-007"])
+        }
+        save_json("quality_report", result_payload, source=["quality_job", "data_validation", "fc-data-007"])
         
         print(f"Data quality job completed successfully.")
         print(f"  Files checked: {audit_results['summary']['total_files_checked']}")
@@ -41,7 +46,7 @@ def run_data_quality_job():
         print(f"  Overall quality: {audit_results['summary']['overall_quality_score']:.2f}%")
         print(f"  Degraded domains: {', '.join(audit_results['summary']['degraded_domains'])}")
         
-        return audit_results
+        return result_payload
         
     except Exception as e:
         print(f"Error in data quality job: {str(e)}")
@@ -55,12 +60,12 @@ def run_data_quality_job():
                     "files_failed": 0,
                     "overall_quality_score": 0.0,
                     "degraded_domains": [],
-                    "checked_at": datetime.utcnow().isoformat() + "Z"
+                    "checked_at": _utc_now_iso()
                 },
                 "checks": {},
                 "degraded_flag": True
             },
-            "job_execution_time": datetime.utcnow().isoformat() + "Z",
+            "job_execution_time": _utc_now_iso(),
             "job_type": "data_quality_audit_fallback",
             "task_id": "FC-DATA-007",
             "error": str(e),
