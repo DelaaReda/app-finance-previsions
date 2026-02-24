@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ "${BYPASS_GUARDS:-0}" = "1" ] && echo "⚠️  Git guards bypassed (BYPASS_GUARDS=1)" && exit 0
+
+echo "🔎 pre-commit: running local quality guards..."
+
+# Only inspect staged files
+staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged_files" ] && exit 0
+
+# Block obvious placeholder / junk markers
+blocked_regex='(TODO\(agent\)|FIXME|XXX|TEMPORARY_HACK|console\.log\("debug"\)|\[WIP\]|WIP:)'
+if echo "$staged_files" | grep -E '\.(py|js|ts|tsx|sh)$' >/dev/null; then
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    if git show ":$f" | grep -En "$blocked_regex" >/dev/null 2>&1; then
+      echo "❌ Blocked: '$f' contains WIP/TODO/FIXME/debug markers"
+      echo "   Remove placeholders before commit (or BYPASS_GUARDS=1 for emergency)."
+      exit 1
+    fi
+  done <<< "$(echo "$staged_files" | grep -E '\.(py|js|ts|tsx|sh)$' || true)"
+fi
+
+# Python syntax check on staged python files
+py_files="$(echo "$staged_files" | grep -E '\.py$' || true)"
+if [ -n "$py_files" ]; then
+  echo "🐍 pre-commit: python syntax check"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    python3 -m py_compile "$f"
+  done <<< "$py_files"
+fi
+
+# Shell syntax check on staged shell scripts
+sh_files="$(echo "$staged_files" | grep -E '\.sh$' || true)"
+if [ -n "$sh_files" ]; then
+  echo "🐚 pre-commit: shell syntax check"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    bash -n "$f"
+  done <<< "$sh_files"
+fi
+
+echo "✅ pre-commit passed"

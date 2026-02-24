@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[ "${BYPASS_GUARDS:-0}" = "1" ] && exit 0
+
+msg_file="$1"
+msg="$(head -n1 "$msg_file" | tr -d '\r')"
+
+# Conventional-ish commit style to keep agent commits readable
+if ! echo "$msg" | grep -Eq '^(feat|fix|chore|docs|refactor|test|perf|build|ci|revert)(\([a-z0-9._-]+\))?: .{8,}$'; then
+  echo "❌ Invalid commit message format"
+  echo "   Expected: type(scope): short summary"
+  echo "   Example : feat(api): stabilize health and prices endpoints"
+  exit 1
+fi
+
+# Block vague auto-generated messages
+if echo "$msg" | grep -Eiq '^(update|changes|misc|tmp|wip|test)$'; then
+  echo "❌ Commit message too vague"
+  exit 1
+fi
+
+exit 0

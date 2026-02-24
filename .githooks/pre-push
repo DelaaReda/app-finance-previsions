@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
-# Git pre-push hook - blocks push if smoke test fails
+# Git pre-push hook - blocks push if basic quality + smoke checks fail
 # Implements wait loop (no timeout command) for macOS compatibility
 
 set -euo pipefail
 
-[ "${BYPASS_SMOKE:-0}" = "1" ] && echo "⚠️  Smoke test bypassed (BYPASS_SMOKE=1)" && exit 0
+[ "${BYPASS_GUARDS:-0}" = "1" ] && echo "⚠️  Push guards bypassed (BYPASS_GUARDS=1)" && exit 0
 
-echo "🧪 Running smoke tests before push..."
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$current_branch" = "main" ] || [ "$current_branch" = "master" ]; then
+  echo "❌ Direct push to $current_branch is blocked. Push from a feature branch."
+  exit 1
+fi
+
+echo "🧪 Running pre-push guards..."
+
+# Ensure workspace is clean enough (no unstaged changes) to avoid pushing accidental state
+if ! git diff --quiet; then
+  echo "❌ Unstaged changes detected. Commit or stash before push."
+  exit 1
+fi
 
 # Wait for backend if needed (wait loop - no timeout command for macOS)
 echo "⏳ Waiting for backend health check (/api/health)..."
@@ -18,24 +30,19 @@ while [ $attempt -le $max_attempts ]; do
         echo "✅ Backend is healthy"
         break
     fi
-    
+
     if [ $attempt -eq $max_attempts ]; then
         echo "❌ Backend did not become healthy within 30 seconds"
         echo "💡 Make sure backend is running: ./finance-copilot.sh start"
         exit 1
     fi
-    
+
     echo "⏳ Backend not ready, waiting... ($attempt/$max_attempts)"
     sleep 2
     attempt=$((attempt + 1))
 done
 
 # Run smoke test
-if ./scripts/smoke.sh; then
-    echo "✅ All smoke tests passed - proceeding with push"
-    exit 0
-else
-    echo "❌ Smoke tests failed - push blocked"
-    echo "💡 Fix the issues before pushing or bypass with: BYPASS_SMOKE=1 git push"
-    exit 1
-fi
+./scripts/smoke.sh
+
+echo "✅ All pre-push guards passed - proceeding with push"

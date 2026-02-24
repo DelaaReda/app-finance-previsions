@@ -43,3 +43,10 @@ Une tâche est DONE seulement si:
 - Si >4h: split obligatoire
 - Pas de refacto large sans ticket dédié
 - Pas de suppression; déplacement vers `legacy/` uniquement
+
+## Git Guardrails (mandatory)
+- Installer hooks: `./scripts/install-git-hooks.sh`
+- `pre-commit`: bloque marqueurs WIP/TODO/FIXME/debug + check syntaxe py/sh
+- `commit-msg`: impose format explicite (`type(scope): summary`)
+- `pre-push`: bloque push sur main/master, exige workspace propre, health + smoke
+- Bypass d'urgence: `BYPASS_GUARDS=1 ...` (doit rester exceptionnel)
