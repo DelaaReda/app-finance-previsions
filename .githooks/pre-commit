@@ -22,6 +22,16 @@ if echo "$staged_files" | grep -E '\.(py|js|ts|tsx|sh)$' >/dev/null; then
   done <<< "$(echo "$staged_files" | grep -E '\.(py|js|ts|tsx|sh)$' || true)"
 fi
 
+# Block edits in legacy zones unless explicitly allowed
+legacy_touched="$(echo "$staged_files" | grep -E '^(legacy/|copilot-app/backend/legacy-archive/)' || true)"
+if [ -n "$legacy_touched" ] && [ "${ALLOW_LEGACY_EDIT:-0}" != "1" ]; then
+  echo "❌ Legacy files modified. This is blocked by default."
+  echo "   Files:"
+  echo "$legacy_touched" | sed 's/^/   - /'
+  echo "   If intentional, rerun with ALLOW_LEGACY_EDIT=1 and reference a ticket in commit message."
+  exit 1
+fi
+
 # Python syntax check on staged python files
 py_files="$(echo "$staged_files" | grep -E '\.py$' || true)"
 if [ -n "$py_files" ]; then

@@ -46,7 +46,7 @@ Une tâche est DONE seulement si:
 
 ## Git Guardrails (mandatory)
 - Installer hooks: `./scripts/install-git-hooks.sh`
-- `pre-commit`: bloque marqueurs WIP/TODO/FIXME/debug + check syntaxe py/sh
+- `pre-commit`: bloque marqueurs WIP/TODO/FIXME/debug + check syntaxe py/sh + bloque édition legacy par défaut
 - `commit-msg`: impose format explicite (`type(scope): summary`)
 - `pre-push`: bloque push sur main/master, exige workspace propre, health + smoke
 - Bypass d'urgence: `BYPASS_GUARDS=1 ...` (doit rester exceptionnel)
