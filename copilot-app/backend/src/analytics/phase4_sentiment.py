@@ -23,6 +23,7 @@ import time
 import json
 import hashlib
 import html
+from urllib.parse import urlparse
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -157,6 +158,13 @@ def fetch_yf_news(ticker: str, max_items: int = 40) -> List[NewsItem]:
     return out
 
 
+def _safe_rss_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("RSS URL must be https")
+    return url
+
+
 def fetch_rss(url: str, ticker_hint: Optional[str] = None, max_items: int = 50) -> List[NewsItem]:
     """
     Parser RSS minimaliste (sans dépendances) — fonctionne pour flux ATOM/RSS simples.
@@ -165,7 +173,8 @@ def fetch_rss(url: str, ticker_hint: Optional[str] = None, max_items: int = 50) 
     items: List[NewsItem] = []
     try:
         import urllib.request
-        data = urllib.request.urlopen(url, timeout=15).read().decode("utf-8", errors="ignore")
+        safe_url = _safe_rss_url(url)
+        data = urllib.request.urlopen(safe_url, timeout=15).read().decode("utf-8", errors="ignore")
     except Exception:
         return items
 

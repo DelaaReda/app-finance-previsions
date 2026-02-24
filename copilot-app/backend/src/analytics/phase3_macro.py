@@ -26,6 +26,7 @@ import math
 import time
 import urllib.request
 import warnings
+from urllib.parse import urlparse
 import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple, Any
@@ -46,6 +47,15 @@ def _warn_and_log(msg: str):
 
 def _isfinite(x):
     return isinstance(x, (int, float)) and math.isfinite(x)
+
+
+def _safe_https_url(url: str, allowed_hosts: Optional[set[str]] = None) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("Only https URLs with explicit host are allowed")
+    if allowed_hosts and parsed.hostname.lower() not in allowed_hosts:
+        raise ValueError(f"Host not allowed: {parsed.hostname}")
+    return url
 
 def _clean_non_finite(d, path="root", missing=None):
     """
@@ -266,10 +276,12 @@ def _fred_csv(series_id: str, start: Optional[str] = None) -> pd.Series:
         url += f"&startdate={start}"
 
     txt = None
+    safe_url = _safe_https_url(url, allowed_hosts={"fred.stlouisfed.org"})
+
     # 1) Try requests with User-Agent (plus fiable derrière certains proxies)
     try:
         import requests
-        r = requests.get(url, headers={"User-Agent": "AF/1.0 (+macro_phase3)"}, timeout=20)
+        r = requests.get(safe_url, headers={"User-Agent": "AF/1.0 (+macro_phase3)"}, timeout=20)
         if r.status_code == 200 and r.text and not r.text.lstrip().startswith("<"):
             txt = r.text
     except Exception:
@@ -278,7 +290,7 @@ def _fred_csv(series_id: str, start: Optional[str] = None) -> pd.Series:
     # 2) Fallback urllib
     if txt is None:
         try:
-            with urllib.request.urlopen(url, timeout=20) as resp:
+            with urllib.request.urlopen(safe_url, timeout=20) as resp:
                 raw = resp.read()
             txt = raw.decode("utf-8", errors="ignore")
         except Exception:

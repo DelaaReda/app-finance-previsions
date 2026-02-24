@@ -13,6 +13,7 @@ import json
 from dataclasses import asdict
 import logging
 import math
+import re
 
 from fastapi import FastAPI, Query, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -923,7 +924,7 @@ def register_routes(app: FastAPI):
             # If storage module isn't available, skip backtests update
             pass
         
-        return _ok({
+        health_payload = {
             "status": "up",
             "backend_up": True,
             "timestamp": datetime.utcnow().isoformat(),
@@ -935,7 +936,16 @@ def register_routes(app: FastAPI):
                 "brief_weekly": "data/brief_weekly.json",
                 "backtests": "data/backtests.json"
             }
-        })
+        }
+
+        # Backward-compatible shape for existing tests/clients + enriched payload.
+        return {
+            **health_payload,
+            "ok": True,
+            "status": "ok",
+            "version": "1.0.0",
+            "data": health_payload,
+        }
 
     @app.get("/api/freshness")
     async def data_freshness():
@@ -3652,14 +3662,26 @@ def register_routes(app: FastAPI):
                 hmap = {"short": "1w", "medium": "1m", "long": "1y"}
                 ds_horizons = [hmap.get(h, h) for h in horizons] if horizons else []
 
-                # Build WHERE filters
+                def _safe_sql_token(value: str, *, max_len: int = 16) -> str:
+                    if not isinstance(value, str):
+                        return ""
+                    v = value.strip()[:max_len]
+                    return v if re.fullmatch(r"[A-Za-z0-9_.-]+", v) else ""
+
+                # Build WHERE filters (whitelisted values only)
                 where = ["1=1"]
-                if ds_horizons:
-                    hvals = ",".join([f"'{h}'" for h in ds_horizons])
+                safe_horizons = [_safe_sql_token(h, max_len=8) for h in ds_horizons]
+                safe_horizons = [h for h in safe_horizons if h]
+                if safe_horizons:
+                    hvals = ",".join([f"'{h}'" for h in safe_horizons])
                     where.append(f"horizon IN ({hvals})")
-                if tickers:
-                    tvals = ",".join([f"'{t}'" for t in tickers])
+
+                safe_tickers = [_safe_sql_token(t, max_len=12).upper() for t in (tickers or [])]
+                safe_tickers = [t for t in safe_tickers if t]
+                if safe_tickers:
+                    tvals = ",".join([f"'{t}'" for t in safe_tickers])
                     where.append(f"ticker IN ({tvals})")
+
                 predicate = " AND ".join(where)
 
                 # Prefer final_score, fallback to expected_return

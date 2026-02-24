@@ -1,0 +1,12 @@
+{
+  "semgrep_findings": 22,
+  "gitleaks_findings": 911,
+  "trivy": {
+    "vuln": 0,
+    "misconfig": 0,
+    "secret": 0
+  },
+  "osv_vulns": 6,
+  "grype_matches": 0,
+  "grype_severity": {}
+}

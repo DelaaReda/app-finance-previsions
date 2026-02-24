@@ -1,0 +1,7 @@
+[
+  {
+    "file": "copilot-app/backend/requirements.txt",
+    "code": 1,
+    "stdout": "The virtual environment was not created successfully because ensurepip is not\navailable.  On Debian/Ubuntu systems, you need to install the python3-venv\npackage using the following command.\n\n    apt install python3.12-venv\n\nYou may need to use sudo with that command.  After installing the python3-venv\npackage, recreate your virtual environment.\n\nFailing command: /tmp/tmpqw53ber5/bin/python3\n\n"
+  }
+]

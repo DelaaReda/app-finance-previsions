@@ -1,0 +1,55 @@
+scripts/qwen_orchestrator.py:312:def ensure_venv_or_reexec() -> None:
+scripts/qwen_orchestrator.py:350:    return subprocess.run(
+scripts/qwen_orchestrator.py:453:        cp = subprocess.run(["tmux", "switch-client", "-t", session], check=False)
+scripts/qwen_orchestrator.py:455:    cp = subprocess.run(["tmux", "attach", "-t", session], check=False)
+scripts/qwen_orchestrator.py:654:    h = hashlib.sha1()
+scripts/qwen_orchestrator.py:1650:        return hashlib.sha1((s or "").encode("utf-8", errors="ignore")).hexdigest()
+scripts/qwen_orchestrator.py:2709:    ensure_venv_or_reexec()
+copilot-app/backend/src/analytics/phase4_sentiment.py:62:        return hashlib.sha1(base.encode("utf-8")).hexdigest()
+copilot-app/backend/src/analytics/phase4_sentiment.py:377:        h = hashlib.md5(it.title.lower().encode()).hexdigest()[:10]
+copilot-app/backend/src/services/cache_service.py:50:            params_hash = hashlib.md5(params_str.encode()).hexdigest()[:8]  # Short hash
+copilot-app/backend/src/tools/git_patcher.py:10:    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=cwd)
+copilot-app/backend/src/tools/make.py:15:    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=cwd)
+copilot-app/backend/jobs/stocks_prices_refresh.py:165:                    res = subprocess.run(
+copilot-app/backend/jobs/stocks_prices_refresh.py:195:                res = subprocess.run(
+copilot-app/backend/jobs/validate_and_generate_data.py:153:            result = subprocess.run(
+copilot-app/backend/jobs/validate_and_generate_data.py:176:            result = subprocess.run(
+copilot-app/backend/src/pipelines/news/extract_events_v1.py:89:    return hashlib.sha1(base.encode()).hexdigest()
+copilot-app/backend/src/pipelines/news/to_silver_v2.py:133:        h = int(hashlib.md5(token.encode("utf-8")).hexdigest(), 16)
+copilot-app/backend/src/pipelines/news/to_silver_v2.py:251:    hash_text = hashlib.sha1((text + str(published) + str(domain)).encode("utf-8")).hexdigest()
+copilot-app/backend/src/ingestion/finnews_fixed.py:169:            "id": entry.get("id") or entry.get("link") or f"{hashlib.md5((title + link).encode()).hexdigest()}",
+copilot-app/backend/src/ingestion/financials_ownership_client.py:84:def _sha1(s: str) -> str:
+copilot-app/backend/src/ingestion/financials_ownership_client.py:85:    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
+copilot-app/backend/src/ingestion/financials_ownership_client.py:88:    return CACHE_DIR / f"{_sha1(key)}.cache"
+copilot-app/backend/src/ingestion/financial_news_ingest.py:151:                        unique_id = hashlib.md5(f"{title}{link}{pub_date}".encode()).hexdigest()
+copilot-app/backend/src/ingestion/macro_derivatives_client.py:64:def _sha1(s: str) -> str:
+copilot-app/backend/src/ingestion/macro_derivatives_client.py:65:    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
+copilot-app/backend/src/ingestion/macro_derivatives_client.py:68:    return CACHE_DIR / f"{_sha1(url)}.cache"
+copilot-app/backend/src/ingestion/finviz_client.py:70:def _sha1(s: str) -> str:
+copilot-app/backend/src/ingestion/finviz_client.py:71:    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
+copilot-app/backend/src/ingestion/finviz_client.py:74:    return CACHE_DIR / f"{_sha1(url)}.html"
+copilot-app/backend/src/ingestion/finviz.py:51:def _sha1(s: str) -> str:
+copilot-app/backend/src/ingestion/finviz.py:52:    return hashlib.sha1(s.encode("utf-8", errors="ignore")).hexdigest()
+copilot-app/backend/src/ingestion/finviz.py:145:            item["_id"] = _sha1(f"{item['source']}|{item['title']}|{item['published']}|{item['link']}")
+copilot-app/backend/src/ingestion/finviz.py:208:            item["_id"] = _sha1(f"{item['source']}|{item['title']}|{item['published']}|{item['link']}")
+copilot-app/backend/src/ingestion/finviz.py:278:                rec["_id"] = _sha1(f"{rec['source']}|{rec.get('ticker')}|{rec['summary']}|{rec['published']}")
+copilot-app/backend/src/ingestion/finviz.py:319:                item["_id"] = _sha1(f"{item['source']}|{item['summary']}|{item['published']}")
+copilot-app/backend/src/ingestion/finviz.py:392:                    item["_id"] = _sha1(f"{item['source']}|{item['summary']}|{item['published']}")
+copilot-app/backend/src/ingestion/finviz.py:437:        item["_id"] = _sha1(f"{item['source']}|{ticker}|{len(metrics)}")
+copilot-app/backend/src/ingestion/finviz.py:487:                item["_id"] = _sha1(f"{item['source']}|{item['holder']}|{item['summary']}")
+copilot-app/backend/src/research/rag_store.py:28:        return hashlib.md5(text.encode()).hexdigest()[:16]
+copilot-app/backend/src/core/memory_cache.py:134:            args_key = hashlib.md5(str((args, kwargs)).encode()).hexdigest()
+copilot-app/backend/src/core/memory_cache.py:167:    params_hash = hashlib.md5(params_str.encode()).hexdigest()
+copilot-app/backend/legacy-archive/dash_app/pages/observability.py:134:        out = subprocess.run(["bash", script], capture_output=True, text=True, timeout=45)
+copilot-app/backend/legacy-archive/dash_app/pages/devtools.py:29:    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+copilot-app/backend/legacy-archive/dash_app/pages/llm_judge.py:259:        out = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
+copilot-app/backend/legacy-archive/dash_app/pages/llm_summary.py:115:        p = subprocess.Popen(["make", "llm-summary-run"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+copilot-app/backend/legacy-archive/dash_app/api.py:294:                    out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+copilot-app/backend/legacy-archive/dash_app/api.py:301:                out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+copilot-app/backend/legacy-archive/dash_app/api.py:308:            out1 = subprocess.run(cmd_ctx, capture_output=True, text=True, timeout=180)
+copilot-app/backend/legacy-archive/dash_app/api.py:330:                    out2 = subprocess.run(
+copilot-app/backend/legacy-archive/dash_app/api.py:346:                out2 = subprocess.run(
+copilot-app/backend/legacy-archive/dash_app/api.py:362:            out2 = subprocess.run(
+copilot-app/backend/legacy-archive/apps/pages/5_Observability.py:136:                    out = subprocess.run(["bash", script], capture_output=True, text=True, env=env, timeout=45)
+copilot-app/backend/legacy-archive/apps/pages/5_Observability.py:162:                    out = subprocess.run(["bash", script], capture_output=True, text=True, env=env, timeout=45)
+copilot-app/backend/legacy-archive/apps/pages/5_Observability.py:184:                    out = subprocess.run(["bash", script], capture_output=True, text=True, timeout=30)

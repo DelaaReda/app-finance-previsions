@@ -18,6 +18,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlparse
 
 # Optional API keys (read from env; do NOT hardcode)
 OPEN_ROUTER_API_KEY = os.getenv("OPEN_ROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")
@@ -44,6 +45,19 @@ SUPPORTED_MODEL_PATTERNS = ()  # accept any model name (broadest set)
 BLOCKED_MODEL_PATTERNS = ()    # no hard block; we rely on probe results
 MAX_STORED_MODELS = int(os.getenv("G4F_WORKING_MAX_STORED", "64"))
 ALLOWED_SHORT_PREFIXES = ()  # allow even bare names from the working list
+ALLOWED_REMOTE_HOSTS = {
+    "raw.githubusercontent.com",
+    "githubusercontent.com",
+}
+
+
+def _validate_remote_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme}")
+    if not parsed.hostname or parsed.hostname.lower() not in ALLOWED_REMOTE_HOSTS:
+        raise ValueError(f"Untrusted host: {parsed.hostname}")
+    return url
 
 
 def _now_iso() -> str:
@@ -191,7 +205,7 @@ def build_working_from_models_txt(url: str = DEFAULT_MODELS_TXT_URL, limit: int 
     """
     import urllib.request
     try:
-        raw = urllib.request.urlopen(url, timeout=10).read().decode("utf-8", errors="ignore")
+        raw = urllib.request.urlopen(_validate_remote_url(url), timeout=10).read().decode("utf-8", errors="ignore")
         lines = [ln.split("(", 1)[0].strip() for ln in raw.splitlines() if ln.strip()]
         models_with_src = _filter_econ_models(lines, limit=limit)
         probes = []
@@ -215,7 +229,7 @@ def build_working_from_test_results(url: str = TEST_RESULTS_JSON_URL, limit: int
     except Exception:
         g4f_chat_once = None
     try:
-        raw = urllib.request.urlopen(url, timeout=10).read().decode("utf-8", errors="ignore")
+        raw = urllib.request.urlopen(_validate_remote_url(url), timeout=10).read().decode("utf-8", errors="ignore")
         data = json.loads(raw)
         items = data.get("working_models") or data.get("models") or []
         models: List[ModelProbe] = []
@@ -262,7 +276,7 @@ async def refresh_async(limit: int = 8, refresh_verified: bool = True, concurren
     # 0bis) Inject working/test_results.json premium subset
     try:
         import urllib.request
-        raw = urllib.request.urlopen(TEST_RESULTS_JSON_URL, timeout=10).read().decode("utf-8", errors="ignore")
+        raw = urllib.request.urlopen(_validate_remote_url(TEST_RESULTS_JSON_URL), timeout=10).read().decode("utf-8", errors="ignore")
         data = json.loads(raw)
         items = data.get("working_models") or data.get("models") or []
         for it in items:
@@ -586,7 +600,7 @@ def merge_from_remote(url: Optional[str] = None) -> Path:
     import urllib.request
     url = url or DEFAULT_REMOTE_URL
     try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
+        with urllib.request.urlopen(_validate_remote_url(url), timeout=20) as resp:
             content = resp.read().decode("utf-8", errors="ignore")
     except Exception:
         # No change if fetch fails
@@ -629,7 +643,7 @@ def merge_from_working_results(url: Optional[str] = None, limit: int = 64) -> Pa
     url = url or DEFAULT_WORKING_RESULTS_URL
     premium_providers = {"openrouter", "openrouterai", "deepinfra", "deep-infra"}
     try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
+        with urllib.request.urlopen(_validate_remote_url(url), timeout=20) as resp:
             content = resp.read().decode("utf-8", errors="ignore")
     except Exception:
         return WORKING_PATH
