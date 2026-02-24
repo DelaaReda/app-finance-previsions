@@ -75,9 +75,9 @@ generate_initial_data() {
     log "Les données seront disponibles progressivement (voir /tmp/data_generation.log)"
 }
 
-# Rafraîchir les snapshots critiques (news, sentiment, judge_enrich, macro)
+# Rafraîchir les snapshots critiques (news, sentiment, macro, quality_gate, judge_enrich)
 refresh_live_data() {
-    log "Rafraîchissement des données (news, sentiment, judge_enrich, macro)..."
+    log "Rafraîchissement des données (news, sentiment, macro, quality_gate, judge_enrich)..."
     cd "$BACKEND_DIR"
 
     PY=""
@@ -118,7 +118,53 @@ refresh_live_data() {
         fi
     fi
     run_job "jobs/stocks_prices_refresh.py"
-    run_job "jobs/judge_enrich.py"
+
+    local quality_gate_ok=true
+    log " → jobs/data_quality_gate.py"
+    if ! "$PY" "jobs/data_quality_gate.py"; then
+        quality_gate_ok=false
+        log_warning "Job échoué: jobs/data_quality_gate.py (judge_enrich ignoré)"
+    else
+        if ! "$PY" - <<'PY'
+import json
+import sys
+from pathlib import Path
+
+report_path = Path("data/quality_report.json")
+if not report_path.exists():
+    print("quality_report_missing")
+    sys.exit(2)
+
+try:
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+except Exception:
+    print("quality_report_invalid")
+    sys.exit(2)
+
+audit = payload.get("audit_results") if isinstance(payload, dict) else {}
+if not isinstance(audit, dict):
+    audit = {}
+summary = audit.get("summary")
+if not isinstance(summary, dict):
+    summary = payload.get("summary") if isinstance(payload, dict) and isinstance(payload.get("summary"), dict) else {}
+
+degraded = audit.get("degraded_flag")
+if degraded is None and isinstance(payload, dict):
+    degraded = payload.get("degraded_flag")
+if degraded is None:
+    degraded = int(summary.get("files_failed") or 0) > 0
+
+sys.exit(1 if degraded else 0)
+PY
+        then
+            quality_gate_ok=false
+            log_warning "Quality gate en mode degradé: judge_enrich ignoré pour éviter garbage in."
+        fi
+    fi
+
+    if [ "$quality_gate_ok" = true ]; then
+        run_job "jobs/judge_enrich.py"
+    fi
     run_job "jobs/judge_quality_report.py"
 
     log_success "Rafraîchissement des données terminé."
