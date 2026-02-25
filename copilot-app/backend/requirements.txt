@@ -1,6 +1,6 @@
 fastapi>=0.116.1
 uvicorn[standard]>=0.24.0
-starlette>=0.47.2
+starlette>=0.52.1
 requests>=2.32.4
 pandas>=2.0.0
 apscheduler>=3.10.0
