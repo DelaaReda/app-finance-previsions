@@ -3,10 +3,10 @@
 Use this file to continue work between cron runs without restarting from zero.
 
 ## Last run checkpoint
-- last_run_at: 2026-02-24 20:50 America/New_York
+- last_run_at: 2026-02-24 21:05 America/New_York
 - status: IN_PROGRESS
-- current_phase: dispatch_batch01_launch_packet_finalized
-- next_action: Lancer Batch-01 via commande orchestrator verrouillée, exiger artefact gate `batch-01-<timestamp>.md` avec VERDICT signé QA, puis déclencher Batch-02 (T-A2.2 + T-A3.1) uniquement sur PASS explicite.
+- current_phase: dispatch_batch01_gate_enforcement_active
+- next_action: Vérifier/obtenir artefact `finance-app/openclaw-gates/batch-01-<timestamp>.md` avec sections complètes + `VERDICT` signé QA; si PASS ouvrir Batch-02 séquentiel (T-A2.2 puis T-A3.1), sinon appliquer correctif minimal ciblé et relancer Batch-01.
 
 ## Progress ledger
 - [x] Repo analysis baseline completed
@@ -33,3 +33,4 @@ Use this file to continue work between cron runs without restarting from zero.
 - 2026-02-24 20:20 America/New_York — Passage en phase `dispatch_batch01_locked`; critères de stabilité health/stocks renforcés et template d’évidence unifié imposé avant tout passage Batch-02.
 - 2026-02-24 20:35 America/New_York — Passage en phase `dispatch_batch01_execution_brief_ready`; ajout d’un brief d’exécution Batch-01 et d’une carte Batch-02 conditionnelle pour continuité sans redémarrage.
 - 2026-02-24 20:50 America/New_York — Passage en phase `dispatch_batch01_launch_packet_finalized`; formalisation du paquet de lancement (commande + preuve + escalade BLOCKED) et verrou d’ouverture Batch-02 sur VERDICT QA PASS.
+- 2026-02-24 21:05 America/New_York — Passage en phase `dispatch_batch01_gate_enforcement_active`; ajout d’un durcissement de gate (VERDICT obligatoire, correctif minimal en cas BLOCKED, ouverture Batch-02 uniquement après PASS signé QA).

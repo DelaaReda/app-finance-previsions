@@ -233,6 +233,19 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
 - **Responsabilité**: contrôler complétude DELTA/EVIDENCE/RISKS/NEXT + VERDICT.
 - **Escalade**: tout artefact incomplet = `BLOCKED` automatique.
 
+## Delta orchestration inter-epics (cycle 21:05)
+
+### Décision de phase
+- **EPIC A**: `EXECUTION_GATED` (Batch-01 doit produire verdict signé)
+- **EPIC B**: `HARD_HOLD` (reste bloqué tant que G-A != ALLOW_B1)
+- **EPIC C**: `GATE_ENFORCEMENT_ACTIVE` (autorité de validation du format et verdict)
+
+### Règle de passage renforcée
+- Passage A -> B uniquement si artefact Batch-01 contient simultanément:
+  - sections `DELTA/EVIDENCE/RISKS/NEXT`
+  - ligne `VERDICT: PASS`
+  - signature/relecture QA explicite
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
 - 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).
@@ -240,3 +253,4 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
 - 2026-02-24 20:20 America/New_York — Passage en orchestration stricte par epic: A en EXEC_NOW, B en HOLD_STRICT dépendant de G-A, C en enforcement de preuves obligatoires.
 - 2026-02-24 20:35 America/New_York — Renforcement de readiness: A en RUNNING_ON_APPROVAL, B verrouillé strictement par Gate G-A, C établi comme autorité de verdict avant tout lot suivant.
 - 2026-02-24 20:50 America/New_York — Ajout d’une coordination inter-epics de lancement: A en LAUNCH_NOW, B en PREP_ONLY conditionné à G-A, C en autorité VERIFY_AND_SIGN avec blocage automatique des artefacts incomplets.
+- 2026-02-24 21:05 America/New_York — Renforcement inter-epics: A en `EXECUTION_GATED`, B en `HARD_HOLD`, C en `GATE_ENFORCEMENT_ACTIVE`; passage A->B conditionné à artefact complet + VERDICT PASS + validation QA explicite.

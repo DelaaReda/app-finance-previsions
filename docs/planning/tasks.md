@@ -353,9 +353,27 @@ VERDICT_ATTENDU: PASS|BLOCKED
 - Batch-02 est exécuté en séquence stricte `T-A2.2` puis `T-A3.1`.
 - Si `T-A2.2` est BLOCKED, ne pas lancer `T-A3.1`.
 
+## Delta tâches agents qwen (cycle 21:05)
+
+### Contrôle qualité lot (ajout)
+- **Nouvelle exigence commune Batch-01/Batch-02**:
+  - inclure `VERDICT: PASS|BLOCKED`
+  - inclure `BLOCKER_ID` (ou `NONE`)
+  - inclure `NEXT_ACTION_UNIQUE`
+
+### Patch minimal policy (ajout)
+- En cas `BLOCKED`, l’agent `dev` doit proposer un patch minimal ciblé sur le fichier fautif listé dans `BLOCKER_ID`.
+- Interdiction d’ouvrir des fichiers hors scope de la tâche sans justification QA.
+
+### Evidence quality gate (ajout)
+- Toute commande de test listée dans la tâche doit avoir soit:
+  1) sortie utile incluse dans l’artefact, soit
+  2) motif documenté de non-exécution.
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
 - 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.
 - 2026-02-24 20:35 America/New_York — Ajout d’un runbook de lot (Batch-01 immédiat, Batch-02 conditionnel), règle d’activation explicite via artefact gate, et template d’assignation standardisé pour agents qwen.
 - 2026-02-24 20:50 America/New_York — Préparation du pack Batch-02 avec cartes d’assignation complètes pour T-A2.2/T-A3.1 et règle de séquencement bloquant.
+- 2026-02-24 21:05 America/New_York — Ajout d’exigences communes d’artefacts (VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE), politique de patch minimal en cas BLOCKED, et gate qualité des preuves pour toutes commandes de test listées.

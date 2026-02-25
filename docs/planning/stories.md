@@ -281,9 +281,20 @@
 2. Story A3 (news contract)
 3. QA signe `PASS|BLOCKED` pour le lot
 
+## Delta stories exécution (cycle 21:05)
+
+### Story A1/A2 — verrou de clôture lot
+- Ajout d’un critère commun: la story n’est pas `DONE` tant que le verdict QA n’est pas matérialisé dans l’artefact de lot.
+- Ajout d’une règle de reprise: en cas `BLOCKED`, appliquer un correctif minimal sur la story fautive uniquement (pas de refactor transverse).
+
+### Story A3 — condition d’ouverture durcie
+- Activation autorisée uniquement après preuve explicite que `T-A2.2` est PASS en Batch-02.
+- Si `T-A2.2` est BLOCKED, A3 repasse en `HOLD` automatiquement.
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
 - 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).
 - 2026-02-24 20:20 America/New_York — Durcissement incrémental des stories A1/A2 (stabilité multi-appels et preuves structurées) + précondition QA explicite avant ouverture Story A3.
 - 2026-02-24 20:35 America/New_York — Ajout d’un brief de dispatch exécutable pour A1/A2 (rôles + commandes de preuve obligatoires) et carte de reprise A3 strictement conditionnée au verdict PASS Batch-01.
 - 2026-02-24 20:50 America/New_York — Préparation incrémentale de Batch-02: ordre imposé Story A2->A3, critères additionnels multi-ticker/news et preuves minimales pour signature QA.
+- 2026-02-24 21:05 America/New_York — Durcissement stories: clôture A1/A2 soumise à matérialisation QA dans l’artefact de lot, reprise en patch minimal sur BLOCKED, et activation A3 conditionnée à PASS explicite de T-A2.2.

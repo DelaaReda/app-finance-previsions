@@ -232,6 +232,21 @@ python3 scripts/qwen_orchestrator.py \
 - **Contenu**: `T-A2.2` + `T-A3.1`
 - **Sortie attendue**: mêmes sections de preuve, plus impact sur contrat backend documenté.
 
+## 15) Delta continuité & escalade (cycle 21:05)
+
+### État de continuité
+- Le plan reste en **mode exécution incrémentale**: aucun redémarrage de cadrage.
+- Le verrou prioritaire reste **Batch-01 (`T-A1.1` + `T-A2.1`)** avec signature QA obligatoire.
+
+### Prochaine action opératoire (immédiate)
+1. Vérifier présence d’un artefact `finance-app/openclaw-gates/batch-01-<timestamp>.md`.
+2. Si absent: lancer la commande Batch-01 verrouillée (manager+architect, rounds=2).
+3. Si présent mais `VERDICT: BLOCKED`: corriger uniquement le point bloquant puis relancer Batch-01.
+4. Si présent avec `VERDICT: PASS`: ouvrir Batch-02 (`T-A2.2` puis `T-A3.1`) sans élargir le scope.
+
+### Critère anti-dérive ajouté
+- Toute sortie agent sans section `VERDICT:` explicite est automatiquement considérée **NON VALIDE**.
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
 - 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
@@ -239,3 +254,4 @@ python3 scripts/qwen_orchestrator.py \
 - 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01 (commande orchestrator prête), gate PASS durci en 4 conditions et règle de pré-activation stricte pour Batch-02.
 - 2026-02-24 20:35 America/New_York — Ajout d’un brief d’exécution Batch-01 prêt à l’emploi (gates entrée/sortie/blocage) et d’une carte Batch-02 pré-remplie strictement conditionnelle au verdict PASS QA.
 - 2026-02-24 20:50 America/New_York — Finalisation du packet de lancement Batch-01 (commande, QA gate, escalade BLOCKED) et verrou formel d’activation Batch-02 sur PASS QA.
+- 2026-02-24 21:05 America/New_York — Ajout du delta de continuité/exécution: escalade explicite selon présence/absence d’artefact Batch-01, règle anti-dérive sur VERDICT obligatoire, et chemin séquentiel conditionnel vers Batch-02.
