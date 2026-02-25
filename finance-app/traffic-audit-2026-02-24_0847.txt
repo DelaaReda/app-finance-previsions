@@ -1,0 +1,42 @@
+=== Traffic Monitor ===
+Time: Tue Feb 24 08:47:11 EST 2026
+
+=== External ESTABLISHED TCP ===
+- Code\x20H(96611): 40.71.11.167:443, 52.168.117.170:443, 140.82.114.22:443, 13.107.246.40:443, 20.85.130.105:443, 104.18.3.115:443
+- Codex\x20(983): 172.64.155.209:443, 172.64.150.28:443
+- ChatGPT(56561): 104.18.39.21:443, 104.18.39.85:443
+- codex(1015): 172.64.155.209:443
+- WhatsApp(10063): 31.13.66.51:443
+- Google(68567): 142.251.179.188:5228
+- Code\x20H(72741): 172.64.150.28:443
+- chrome_cr(96609): 4.153.25.230:443
+
+=== LISTEN TCP (non-loopback only) ===
+COMMAND     PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+Code\x20H 72741 venom   48u  IPv6 0xd754fb2c4df2f1ee      0t0  TCP *:63132 (LISTEN)
+Code\x20H 72741 venom   74u  IPv6 0x83648450b10dc713      0t0  TCP *:63155 (LISTEN)
+
+=== Top Talkers (3s window) ===
+- mDNSResponder.500: in=4904572 out=1101654 total=6006226
+- chrome_crashpad.96609: in=40736 out=2100579 total=2141315
+- Code Helper.96611: in=206930 out=906270 total=1113200
+- Codex Helper.983: in=167610 out=750003 total=917613
+- Microsoft Edge .49734: in=531241 out=1322 total=532563
+- codex.1015: in=11237 out=428659 total=439896
+- com.avast.Antiv.80649: in=108526 out=115516 total=224042
+- Google Chrome H.68567: in=55949 out=120745 total=176694
+- com.avast.filte.78589: in=61966 out=14217 total=76183
+- ChatGPT.56561: in=31780 out=37386 total=69166
+- com.avast.daemo.78409: in=38516 out=18512 total=57028
+- Python.77900: in=40953 out=10605 total=51558
+
+=== Firewall ===
+Firewall is enabled. (State = 1)
+Firewall has block all state set to disabled.
+Firewall stealth mode is off
+
+=== Suggested actions ===
+- Kill non-loopback listeners you don't need: lsof -nP -iTCP -sTCP:LISTEN
+- Stop OpenClaw gateway: openclaw gateway stop
+- Stop WhatsApp desktop if not needed.
+- Quit VS Code to drop its dynamic *:<port> listeners.

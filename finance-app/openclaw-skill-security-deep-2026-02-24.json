@@ -1,0 +1,707 @@
+{
+  "summary": {
+    "skills_analyzed": 19,
+    "tooling": {
+      "clawhub_vt_gate_inference": true,
+      "bandit": true,
+      "pip_audit": true,
+      "safety": true,
+      "secret_regex_scan": true,
+      "static_rule_scan": true,
+      "shell_hardening_checks": true
+    },
+    "risk_buckets": {
+      "HIGH": 1,
+      "MEDIUM": 8,
+      "LOW": 10
+    },
+    "flagged_by_vt": 9,
+    "bandit_findings_total": 26,
+    "secret_hits_total": 0
+  },
+  "skills": [
+    {
+      "name": "senior-architect",
+      "slug": "senior-architect",
+      "path": "/Users/venom/.openclaw/workspace/skills/senior-architect",
+      "version": "1.0.0",
+      "file_count": 9,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"senior-architect\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving senior-architect\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/architecture_diagram_generator.py",
+          "line": 122
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/architecture_diagram_generator.py",
+          "line": 158
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/architecture_diagram_generator.py",
+          "line": 169
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/architecture_diagram_generator.py",
+          "line": 180
+        },
+        {
+          "test_id": "B112",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Continue detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/dependency_analyzer.py",
+          "line": 301
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/dependency_analyzer.py",
+          "line": 326
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/project_architect.py",
+          "line": 224
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/project_architect.py",
+          "line": 265
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/project_architect.py",
+          "line": 327
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/senior-architect/scripts/project_architect.py",
+          "line": 438
+        }
+      ],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 25,
+      "risk_level": "HIGH"
+    },
+    {
+      "name": "task-status",
+      "slug": "task-status",
+      "path": "/Users/venom/.openclaw/workspace/skills/task-status",
+      "version": "1.0.0",
+      "file_count": 10,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"task-status\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving task-status\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/monitor_task.py",
+          "line": 51
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status.py",
+          "line": 110
+        },
+        {
+          "test_id": "B404",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Consider possible security implications associated with the subprocess module.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status.py",
+          "line": 121
+        },
+        {
+          "test_id": "B603",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "subprocess call - check for execution of untrusted input.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status.py",
+          "line": 139
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status_with_logging.py",
+          "line": 139
+        },
+        {
+          "test_id": "B404",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Consider possible security implications associated with the subprocess module.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status_with_logging.py",
+          "line": 153
+        },
+        {
+          "test_id": "B603",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "subprocess call - check for execution of untrusted input.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/send_status_with_logging.py",
+          "line": 171
+        },
+        {
+          "test_id": "B404",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Consider possible security implications associated with the subprocess module.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/test_send_status.py",
+          "line": 7
+        },
+        {
+          "test_id": "B603",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "subprocess call - check for execution of untrusted input.",
+          "file": "/Users/venom/.openclaw/workspace/skills/task-status/scripts/test_send_status.py",
+          "line": 37
+        }
+      ],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 24,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "codex-quota",
+      "slug": "codex-quota",
+      "path": "/Users/venom/.openclaw/workspace/skills/codex-quota",
+      "version": "1.2.1",
+      "file_count": 5,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"codex-quota\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving codex-quota\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [
+        {
+          "test_id": "B404",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Consider possible security implications associated with the subprocess module.",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 138
+        },
+        {
+          "test_id": "B607",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Starting a process with a partial executable path",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 142
+        },
+        {
+          "test_id": "B603",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "subprocess call - check for execution of untrusted input.",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 142
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 175
+        },
+        {
+          "test_id": "B110",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Try, Except, Pass detected.",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 270
+        },
+        {
+          "test_id": "B108",
+          "severity": "MEDIUM",
+          "confidence": "MEDIUM",
+          "text": "Probable insecure usage of temp file/directory.",
+          "file": "/Users/venom/.openclaw/workspace/skills/codex-quota/codex-quota.py",
+          "line": 274
+        }
+      ],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 23,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "codex-orchestration",
+      "slug": "codex-orchestration",
+      "path": "/Users/venom/.openclaw/workspace/skills/codex-orchestration",
+      "version": "2.0.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"codex-orchestration\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving codex-orchestration\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "commit-analyzer",
+      "slug": "commit-analyzer",
+      "path": "/Users/venom/.openclaw/workspace/skills/commit-analyzer",
+      "version": "0.1.0",
+      "file_count": 5,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"commit-analyzer\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving commit-analyzer\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "cto-advisor",
+      "slug": "cto-advisor",
+      "path": "/Users/venom/.openclaw/workspace/skills/cto-advisor",
+      "version": "1.0.0",
+      "file_count": 8,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"cto-advisor\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving cto-advisor\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "prompt-log",
+      "slug": "prompt-log",
+      "path": "/Users/venom/.openclaw/workspace/skills/prompt-log",
+      "version": "0.1.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"prompt-log\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving prompt-log\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "receiving-code-review",
+      "slug": "receiving-code-review",
+      "path": "/Users/venom/.openclaw/workspace/skills/receiving-code-review",
+      "version": "0.1.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"receiving-code-review\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving receiving-code-review\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "unfuck-my-git-state",
+      "slug": "unfuck-my-git-state",
+      "path": "/Users/venom/.openclaw/workspace/skills/unfuck-my-git-state",
+      "version": "0.2.1",
+      "file_count": 10,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": true,
+        "install_ok": false,
+        "raw": "\u26a0\ufe0f  Warning: \"unfuck-my-git-state\" is flagged as suspicious by VirusTotal Code Insight.\n   This skill may contain risky patterns (crypto keys, external APIs, eval, etc.)\n   Review the skill code before use.\n\n\n- Resolving unfuck-my-git-state\nError: Use --force to install suspicious skills in non-interactive mode"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 15,
+      "risk_level": "MEDIUM"
+    },
+    {
+      "name": "api-tester",
+      "slug": "api-tester",
+      "path": "/Users/venom/.openclaw/workspace/skills/api-tester",
+      "version": "1.0.0",
+      "file_count": 6,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving api-tester\n\u2714 OK. Installed api-tester -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-n3o5fsmk/skills/api-tester"
+      },
+      "static_hits": [
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/api-tester/index.js",
+          "line": 103
+        },
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/api-tester/scripts/test.js",
+          "line": 15
+        },
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/api-tester/scripts/test.js",
+          "line": 29
+        }
+      ],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 6,
+      "risk_score_total": 6,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "e2e-testing-patterns",
+      "slug": "e2e-testing-patterns",
+      "path": "/Users/venom/.openclaw/workspace/skills/e2e-testing-patterns",
+      "version": "1.0.0",
+      "file_count": 4,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving e2e-testing-patterns\n\u2714 OK. Installed e2e-testing-patterns -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-kxnaaovt/skills/e2e-testing-patterns"
+      },
+      "static_hits": [
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/e2e-testing-patterns/SKILL.md",
+          "line": 100
+        },
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/e2e-testing-patterns/SKILL.md",
+          "line": 428
+        }
+      ],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 4,
+      "risk_score_total": 4,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "debug-pro",
+      "slug": "debug-pro",
+      "path": "/Users/venom/.openclaw/workspace/skills/debug-pro",
+      "version": "1.0.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving debug-pro\n\u2714 OK. Installed debug-pro -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-wme5dsw0/skills/debug-pro"
+      },
+      "static_hits": [
+        {
+          "severity": "MEDIUM",
+          "rule": "sudo_usage",
+          "file": "/Users/venom/.openclaw/workspace/skills/debug-pro/SKILL.md",
+          "line": 109
+        }
+      ],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 2,
+      "risk_score_total": 2,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "finance-po-orchestrator",
+      "slug": "finance-po-orchestrator",
+      "path": "/Users/venom/.openclaw/workspace/skills/finance-po-orchestrator",
+      "version": null,
+      "file_count": 1,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": false,
+        "raw": "- Resolving finance-po-orchestrator\n\u2716 Skill not found\nError: Skill not found"
+      },
+      "static_hits": [
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/finance-po-orchestrator/SKILL.md",
+          "line": 62
+        }
+      ],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 2,
+      "risk_score_total": 2,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "test-runner",
+      "slug": "test-runner",
+      "path": "/Users/venom/.openclaw/workspace/skills/test-runner",
+      "version": "1.0.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving test-runner\n\u2714 OK. Installed test-runner -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-qu28b7r3/skills/test-runner"
+      },
+      "static_hits": [
+        {
+          "severity": "MEDIUM",
+          "rule": "http_url",
+          "file": "/Users/venom/.openclaw/workspace/skills/test-runner/SKILL.md",
+          "line": 148
+        }
+      ],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 2,
+      "risk_score_total": 2,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "playwright-mcp",
+      "slug": "playwright-mcp",
+      "path": "/Users/venom/.openclaw/workspace/skills/playwright-mcp",
+      "version": "1.0.0",
+      "file_count": 4,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving playwright-mcp\n\u2714 OK. Installed playwright-mcp -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-gko16uln/skills/playwright-mcp"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [
+        {
+          "test_id": "B404",
+          "severity": "LOW",
+          "confidence": "HIGH",
+          "text": "Consider possible security implications associated with the subprocess module.",
+          "file": "/Users/venom/.openclaw/workspace/skills/playwright-mcp/examples.py",
+          "line": 8
+        }
+      ],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 1,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "backend-patterns",
+      "slug": "backend-patterns",
+      "path": "/Users/venom/.openclaw/workspace/skills/backend-patterns",
+      "version": "0.1.2",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving backend-patterns\n\u2714 OK. Installed backend-patterns -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-_09ne7zg/skills/backend-patterns"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 0,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "conventional-commits",
+      "slug": "conventional-commits",
+      "path": "/Users/venom/.openclaw/workspace/skills/conventional-commits",
+      "version": "1.0.1",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving conventional-commits\n\u2714 OK. Installed conventional-commits -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-4m7b0not/skills/conventional-commits"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 0,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "git-summary",
+      "slug": "git-summary",
+      "path": "/Users/venom/.openclaw/workspace/skills/git-summary",
+      "version": "1.0.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving git-summary\n\u2714 OK. Installed git-summary -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-2i65cu_s/skills/git-summary"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 0,
+      "risk_level": "LOW"
+    },
+    {
+      "name": "multi-factor-strategy",
+      "slug": "multi-factor-strategy",
+      "path": "/Users/venom/.openclaw/workspace/skills/multi-factor-strategy",
+      "version": "1.0.0",
+      "file_count": 3,
+      "vt_check": {
+        "status": "ok",
+        "flagged_suspicious": false,
+        "install_ok": true,
+        "raw": "- Resolving multi-factor-strategy\n\u2714 OK. Installed multi-factor-strategy -> /var/folders/13/pxz701_955bg9gkhqtcz_k1c0000gn/T/clawhub-vt-h8lkzdgg/skills/multi-factor-strategy"
+      },
+      "static_hits": [],
+      "secret_hits": [],
+      "bandit": [],
+      "pip_audit": [],
+      "safety": [],
+      "shell_lints": [],
+      "risk_score_static": 0,
+      "risk_score_total": 0,
+      "risk_level": "LOW"
+    }
+  ]
+}
