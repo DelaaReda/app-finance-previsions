@@ -186,6 +186,22 @@
 - **ON_HOLD**: Story B1, Story B2 (attente lock contrats API)
 - **PARALLEL_PREP**: Story C1 (template de rapport + structure d’artefacts)
 
+## Cartes de dispatch stories (delta 20:05)
+
+### Dispatch Card — Story A1 (à envoyer au planner/dev/tester)
+- Objectif: figer un contrat health rétro-compatible
+- In: shape stable + test dédié
+- Out: observabilité avancée
+- Vérifications obligatoires: curl health + pytest test_health
+- Evidence minimale: JSON réponse + sortie pytest + verdict PASS/BLOCKED
+
+### Dispatch Card — Story A2 (à envoyer après A1 dans le même lot)
+- Objectif: rendre le contrat mono ticker exploitable UI
+- In: ticker/points/count/timestamp + absence de 500
+- Out: multi-ticker et perf
+- Vérifications obligatoires: curl SPY + 5 appels consécutifs sans 500
+- Evidence minimale: payload SPY + trace boucle + verdict PASS/BLOCKED
+
 ## Story C1 — Gate de régression MVP compact
 
 - **Objectif**: créer un gate simple PASS/BLOCKED avant livraison.
@@ -213,3 +229,4 @@
 
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
+- 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).

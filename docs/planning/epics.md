@@ -175,6 +175,17 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
   - État: `PARALLEL_PREP`
   - Action autorisée: préparer gabarit rapport gate sous `finance-app/openclaw-gates/`
 
+## Matrice de gate inter-epics (delta 20:05)
+- **Gate G-A (EPIC A -> EPIC B)**
+  - Conditions PASS: T-A1.1 + T-A2.1 validées avec preuves
+  - Bloqueurs: absence de tests verts ou payload non conforme
+  - Décision: `ALLOW_B1` ou `HOLD_B`
+- **Gate G-C (EPIC A/B -> EPIC C final)**
+  - Conditions PASS: endpoints MVP stables + smoke exploitable
+  - Bloqueurs: artefacts incomplets (`DELTA/EVIDENCE/RISKS/NEXT` manquants)
+  - Décision: `RUN_FINAL_GATE` ou `BLOCKED_FIX_FIRST`
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
 - 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).
+- 2026-02-24 20:05 America/New_York — Ajout d’une matrice de gate inter-epics (G-A, G-C) pour clarifier décisions ALLOW/HOLD/BLOCKED pendant le dispatch qwen.

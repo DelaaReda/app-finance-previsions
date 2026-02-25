@@ -234,6 +234,16 @@
   - absence de section EVIDENCE
   - test non exécuté
   - contrat API modifié sans test mis à jour
+- **Chemin artefact obligatoire**:
+  - `finance-app/openclaw-gates/batch-01-<timestamp>.md`
+  - contenu minimal: `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`
+
+### Handoff checklist QA (delta 20:05)
+- [ ] Scope IN respecté pour chaque tâche du batch
+- [ ] Au moins 1 commande de test exécutée par tâche
+- [ ] Évidence textuelle copiée dans artefact gate
+- [ ] Verdict explicite `PASS` ou `BLOCKED`
+- [ ] Prochaine action unique définie
 
 ## Ordonnancement recommandé
 1. T-A1.1
@@ -247,3 +257,4 @@
 
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
+- 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.

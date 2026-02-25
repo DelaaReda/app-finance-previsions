@@ -126,6 +126,31 @@ cd /home/venom/analyse-financiere
   - `/api/stocks/prices?ticker=SPY` conforme
   - artefacts déposés dans `finance-app/openclaw-gates/`
 
+#### Prompt opératoire Batch-01 (qwen)
+```text
+Objectif: livrer T-A1.1 et T-A2.1 sans élargir le scope.
+In-scope: normalisation contrat /api/health et /api/stocks/prices (mono ticker).
+Out-of-scope: multi-ticker, news, forecasts, copilot ask, refactor global.
+Pré-requis: backend local up, tests backend exécutables.
+Fichiers cibles: main.py + tests ciblés uniquement.
+Plan: implémenter -> tester -> produire preuves.
+Acceptation testable:
+1) GET /api/health = 200, ok=true, data.timestamp présent
+2) pytest tests/test_health.py vert
+3) GET /api/stocks/prices?ticker=SPY = 200, clés ticker/points/count/timestamp présentes
+4) aucun 500 sur 5 appels successifs stocks mono
+Commandes de test:
+- curl health
+- pytest test_health.py
+- curl stocks mono
+- boucle 5x curl stocks mono
+Évidences attendues:
+- extraits JSON health/stocks
+- sortie pytest
+- verdict final PASS|BLOCKED + raison
+Format réponse: DELTA / EVIDENCE / RISKS / NEXT
+```
+
 ### Batch-02 (conditionnel)
 - **Précondition**: Batch-01 PASS
 - **Contenu**: `T-A2.2` + préparation `T-A3.1`
@@ -134,3 +159,4 @@ cd /home/venom/analyse-financiere
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
 - 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
+- 2026-02-24 20:05 America/New_York — Ajout d’un prompt opératoire Batch-01 prêt à injecter aux agents qwen, avec scope strict, critères testables et format de preuves obligatoire.
