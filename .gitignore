@@ -19,17 +19,17 @@ cache/
 artifacts/
 artifacts_phase1/
 logs/
-logs-qwen-runs/
-finance-app/orchestrator-runs/
-finance-app/agent-memory/
-finance-app/sdk_sessions.json
-.qwen_runs/
-copilot-app/backend/.qwen_runs/
 *.log
 *.err
 *.out
 *.stderr.txt
 *.stdout.txt
+
+# Keep Codex tmux/session work traces visible in git status
+# (some legacy folders still include "qwen" in their name)
+!logs-codex-runs/**/*.log
+!logs-qwen-runs/**/*.log
+!finance-app/orchestrator-runs/**/*.log
 
 # Node / JS
 node_modules/
