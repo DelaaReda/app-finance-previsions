@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "updated_at": null,
+  "items": [
+    {
+      "id": "BATCH-01",
+      "title": "Stabiliser contrats API MVP",
+      "state": "READY",
+      "priority": "P0",
+      "owner_role": "planner",
+      "blocker_id": "NONE",
+      "next_action": "DISPATCH_BATCH01",
+      "depends_on": [],
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ]
+    },
+    {
+      "id": "BATCH-02",
+      "title": "Contrats multi-ticker + news",
+      "state": "BLOCKED",
+      "priority": "P1",
+      "owner_role": "qa",
+      "blocker_id": "BATCH01_ARTIFACT_MISSING",
+      "next_action": "WAIT_BATCH01_PASS",
+      "depends_on": [
+        "BATCH-01"
+      ],
+      "evidence_required": [
+        "VERDICT: PASS"
+      ]
+    }
+  ]
+}
