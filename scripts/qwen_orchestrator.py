@@ -1846,6 +1846,40 @@ def git_diff_tool(max_lines: int = 220) -> str:
     return "\n".join(lines).strip()
 
 
+def run_codex_independent_review(feature: str, qa_report: str, timeout_sec: int = 180) -> Dict[str, str]:
+    """
+    Reviewer indépendant via instance Codex non-interactive.
+    Retourne {ok, output}.
+    """
+    codex_bin = require_bin("codex")
+    prompt = dedent(f"""
+    Independent Review Gate (Codex)
+
+    Feature objective:
+    {feature}
+
+    QA report from execution team:
+    {qa_report}
+
+    Task:
+    - Review uncommitted changes as an independent reviewer.
+    - Decide GO or BLOCKED.
+    - If BLOCKED, list exact blocking issues and minimal fixes.
+    - Keep response concise and auditable.
+    """).strip()
+
+    cp = run(
+        [codex_bin, "review", "--uncommitted", prompt],
+        cwd=PROJECT_DIR,
+        capture=True,
+        timeout=max(60, int(timeout_sec)),
+    )
+    out = (cp.stdout or "").strip()
+    if len(out) > 9000:
+        out = out[:9000] + "\n...[output tronqué]..."
+    return {"ok": "true" if cp.returncode == 0 else "false", "output": out}
+
+
 # ==============================================================================
 # Prompts
 # ==============================================================================
@@ -1929,6 +1963,7 @@ def run_feature_autogen_tmux(
     wait_qa: float,
     with_architect: bool = False,
     with_manager: bool = False,
+    with_codex_reviewer: bool = False,
 ) -> str:
     autogen = require_module("autogen")  # strict
     agent_bus_append(ctx, sender="Runner", recipient="team", kind="feature", content=feature)
@@ -2451,6 +2486,64 @@ def run_feature_autogen_tmux(
             warnings=quality_manager["warnings"],
         )
         agent_bus_write_board(ctx)
+
+    if with_codex_reviewer:
+        transcript_append(ctx, "CodexReviewer", "INFO", "Independent review gate started (codex review --uncommitted).")
+        agent_bus_append(
+            ctx,
+            sender="Runner",
+            recipient="CodexReviewer",
+            kind="phase",
+            content="Independent reviewer phase via Codex instance.",
+        )
+        started = time.time()
+        try:
+            codex_result = run_codex_independent_review(feature=feature, qa_report=report, timeout_sec=int(max(wait_qa, 120)))
+            codex_reply = codex_result.get("output", "").strip()
+            codex_ok = codex_result.get("ok", "false") == "true"
+        except Exception as e:
+            codex_reply = f"BLOCKED\nIndependent Codex reviewer failed: {e}"
+            codex_ok = False
+
+        duration_ms = int((time.time() - started) * 1000)
+        transcript_append(ctx, "CodexReviewer", "RESPONSE", codex_reply)
+        agent_bus_append(
+            ctx,
+            sender="CodexReviewer",
+            recipient="team",
+            kind="decision",
+            content=codex_reply,
+        )
+        codex_quality = classify_agent_response(codex_reply)
+        append_agent_memory(
+            "CodexReviewer",
+            run_id=ctx.run_id,
+            feature=feature,
+            reply=codex_reply,
+            commands=["codex review --uncommitted"],
+            files_touched=[],
+            warnings=codex_quality["warnings"],
+        )
+        event_append(
+            ctx,
+            {
+                "type": "independent_review_gate",
+                "reviewer": "codex",
+                "ok": codex_ok,
+                "duration_ms": duration_ms,
+                "response_chars": len((codex_reply or "").strip()),
+                "quality": codex_quality,
+            },
+        )
+        _update_agent_summary(
+            "CodexReviewer",
+            duration_ms=duration_ms,
+            commands=["codex review --uncommitted"],
+            files_touched=[],
+            warnings=codex_quality["warnings"],
+        )
+        agent_bus_write_board(ctx)
+
     write_agent_activity_summary(ctx, activity_summary)
     event_append(
         ctx,
@@ -2540,10 +2633,13 @@ def run_feature(
     wait_qa: float,
     with_architect: bool = False,
     with_manager: bool = False,
+    with_codex_reviewer: bool = False,
 ):
     ensure_project_exists()
     ensure_tmux_exists()
     require_module("autogen")
+    if with_codex_reviewer:
+        require_bin("codex")
     qwen_bin = require_executable(qwen_bin)
     set_active_agent_cli(qwen_bin)
 
@@ -2580,6 +2676,7 @@ def run_feature(
             "agent_cli": active_agent_cli_name(),
             "with_architect": bool(with_architect),
             "with_manager": bool(with_manager),
+            "with_codex_reviewer": bool(with_codex_reviewer),
             "agent_memory_dir": str(AGENT_MEMORY_DIR),
         },
     )
@@ -2611,6 +2708,7 @@ def run_feature(
         wait_qa=wait_qa,
         with_architect=with_architect,
         with_manager=with_manager,
+        with_codex_reviewer=with_codex_reviewer,
     )
 
     if enable_tmux_logs:
@@ -2634,7 +2732,7 @@ def usage_text() -> str:
 
     1) AutoGen -> TMUX (solution unique)
        python3 scripts/qwen_orchestrator.py --rounds 2 --feature "Implémente GET /health"
-       python3 scripts/qwen_orchestrator.py --rounds 3 --with-architect --with-manager --feature "..."
+       python3 scripts/qwen_orchestrator.py --rounds 3 --with-architect --with-manager --with-codex-reviewer --feature "..."
        python3 scripts/qwen_orchestrator.py --agent-bin codex --rounds 2 --feature "Implémente GET /health"
 
     2) Mode debug
@@ -2680,8 +2778,9 @@ def usage_text() -> str:
       {AGENT_MEMORY_DIR}
       injectée dans les prompts sous "MÉMOIRE AGENT".
     - Rôles avancés optionnels:
-      --with-architect --with-manager
+      --with-architect --with-manager --with-codex-reviewer
       (sessions: architect={SESSIONS.get('architect','qwen_architect')} manager={SESSIONS.get('manager','qwen_manager')})
+      --with-codex-reviewer lance une revue indépendante via `codex review --uncommitted`
     - Tu peux ajouter des rôles custom via FC_EXTRA_SESSIONS ou --sessions:
       ex: security=qwen_security,docs=qwen_docs
     - tmux capture utilise history + join wrap (-J), et history-limit est augmenté.
@@ -2743,6 +2842,7 @@ def main():
     ap.add_argument("--wait-qa", type=float, default=90.0)
     ap.add_argument("--with-architect", action="store_true", help="Ajoute l'agent Architect au groupchat")
     ap.add_argument("--with-manager", action="store_true", help="Ajoute DeliveryManager (groupchat + gate final)")
+    ap.add_argument("--with-codex-reviewer", action="store_true", help="Ajoute un reviewer indépendant via `codex review --uncommitted`")
 
     ap.add_argument("--sessions", type=str, default="",
                     help="Overrides sessions role=session (comma/semicolon separated). Ex: dev=qwen_dev2,security=qwen_sec")
@@ -2967,6 +3067,7 @@ def main():
         wait_qa=args.wait_qa,
         with_architect=bool(args.with_architect),
         with_manager=bool(args.with_manager),
+        with_codex_reviewer=bool(args.with_codex_reviewer),
     )
 
     print(f"\n✅ Terminé. Run dir: {ctx.run_dir}")
