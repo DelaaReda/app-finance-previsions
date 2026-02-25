@@ -1,0 +1,34 @@
+[START] 2026-02-23T23:40:04-0500 monitoring 10h
+\n[2026-02-23T23:40:04-0500] cycle
+Runs dir: /Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs
+Latest run pointer: /Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/latest
+Agent CLI actif: qwen (/opt/homebrew/bin/qwen)
+Sessions tmux (role -> session):
+  - dev -> qwen_dev: UP
+  - planner -> qwen_planner: UP
+  - qa -> qwen_qa: UP
+  - tester -> qwen_tester: UP
+Autres sessions qwen (non mappées):
+  - qwen_architect: UP
+  - qwen_manager: UP
+# Orchestrator Run Analysis
+
+- runs analysés: 1
+- turns: 13
+- warnings: 5
+- commandes détectées: 0
+- fichiers touchés détectés: 3
+- réponses réécrites automatiquement: 4
+- tours lents (>45000ms): 0
+- réponses longues (>3000 chars): 0
+
+## Top Slow Turns
+
+## Top Long Responses
+
+## Recommendations
+- Rewrite auto actif: calibrer les triggers pour réduire encore le bruit sans sur-coût.
+- Forcer format 'commandes exécutables' pour Dev/Tester si la tâche le demande.
+{"ok":true,"data":{"status":"up","backend_up":true,"timestamp":"2026-02-24T04:40:05.327073","version":"0.1.0","last_updates":{"forecasts":"2026-02-23T11:57:17.641358Z","news":"2026-02-24T03:45:20.310384","brief_weekly":"2026-02-24T03:43:27.714354"},"data_paths":{"forecasts":"data/forecasts.json","news":"data/news_feed.json","brief_weekly":"data/brief_weekly.json","backtests":"data/backtests.json"}}}
+[OK] no anomaly
+\n[2026-02-24T00:00:05-0500] cycle

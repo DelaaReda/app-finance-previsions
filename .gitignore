@@ -25,11 +25,16 @@ logs/
 *.stderr.txt
 *.stdout.txt
 
-# Keep Codex tmux/session work traces visible in git status
+# Keep Codex session artifacts visible in git status
 # (some legacy folders still include "qwen" in their name)
 !logs-codex-runs/**/*.log
 !logs-qwen-runs/**/*.log
 !finance-app/orchestrator-runs/**/*.log
+
+# Ignore raw tmux pane dumps (very large, blocks GitHub push)
+logs-codex-runs/**/tmux/*.log
+logs-qwen-runs/**/tmux/*.log
+finance-app/orchestrator-runs/**/tmux/*.log
 
 # Node / JS
 node_modules/

@@ -1,0 +1,90 @@
+{
+  "run_id": "20260223-233749-734",
+  "generated_at": "2026-02-23T23:51:03",
+  "totals": {
+    "turns": 59,
+    "duration_ms_total": 426471,
+    "commands_detected": 0,
+    "files_touched_unique": 6,
+    "warnings_total": 23
+  },
+  "agents": {
+    "Architect": {
+      "turns": 12,
+      "duration_ms_total": 45592,
+      "duration_ms_avg": 3799,
+      "commands_detected": 0,
+      "commands_sample": [],
+      "files_touched_unique": [
+        "SECURITY_AUDIT_REPORT.md",
+        "copilot-app/backend/.env.example"
+      ],
+      "warnings_total": 9,
+      "warnings_by_type": {
+        "too_long": 7,
+        "meta_reasoning": 2
+      }
+    },
+    "Dev": {
+      "turns": 12,
+      "duration_ms_total": 110034,
+      "duration_ms_avg": 9169,
+      "commands_detected": 0,
+      "commands_sample": [],
+      "files_touched_unique": [
+        "scripts/monitor_qwen_10h.sh",
+        "SECURITY_ALLOWLIST.md",
+        "SECURITY_REPORT.md"
+      ],
+      "warnings_total": 4,
+      "warnings_by_type": {
+        "too_long": 2,
+        "meta_reasoning": 1,
+        "asks_question": 1
+      }
+    },
+    "Tester": {
+      "turns": 12,
+      "duration_ms_total": 85601,
+      "duration_ms_avg": 7133,
+      "commands_detected": 0,
+      "commands_sample": [],
+      "files_touched_unique": [
+        "scripts/monitor_qwen_10h.sh"
+      ],
+      "warnings_total": 1,
+      "warnings_by_type": {
+        "asks_question": 1
+      }
+    },
+    "DeliveryManager": {
+      "turns": 12,
+      "duration_ms_total": 82095,
+      "duration_ms_avg": 6841,
+      "commands_detected": 0,
+      "commands_sample": [],
+      "files_touched_unique": [],
+      "warnings_total": 2,
+      "warnings_by_type": {
+        "asks_question": 2
+      }
+    },
+    "Planner": {
+      "turns": 11,
+      "duration_ms_total": 103149,
+      "duration_ms_avg": 9377,
+      "commands_detected": 0,
+      "commands_sample": [],
+      "files_touched_unique": [
+        "scripts/monitor_qwen_10h.sh",
+        "finance-app/openclaw-skill-audit.json"
+      ],
+      "warnings_total": 7,
+      "warnings_by_type": {
+        "meta_reasoning": 2,
+        "asks_question": 2,
+        "too_long": 3
+      }
+    }
+  }
+}

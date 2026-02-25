@@ -1,0 +1,34 @@
+{
+  "run_id": "20260223-233749-734",
+  "timestamp": "2026-02-23T23:37:49",
+  "feature": "Audit sécurité du projet analyse-financiere, installer uniquement composants/skills sûrs (allowlist), vérifier provenance/dépendances/config, durcir permissions et exécution, produire rapport actionnable avec rollback.",
+  "project_dir": "/Users/venom/Documents/analyse-financiere",
+  "runs_dir": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs",
+  "backend_dir": "/Users/venom/Documents/analyse-financiere/copilot-app/backend",
+  "qwen_bin": "/opt/homebrew/bin/qwen",
+  "sessions": {
+    "planner": "qwen_planner",
+    "dev": "qwen_dev",
+    "tester": "qwen_tester",
+    "qa": "qwen_qa",
+    "architect": "qwen_architect",
+    "manager": "qwen_manager"
+  },
+  "capture_last_lines": 4000,
+  "tmux_history_limit": 200000,
+  "artifacts": {
+    "transcript": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/transcript.md",
+    "agent_bus": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/agent_bus.jsonl",
+    "agent_board": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/agent_board.md",
+    "events": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/events.jsonl",
+    "agent_activity": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/agent_activity.json",
+    "snapshots_dir": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/snapshots",
+    "tmux_dir": "/Users/venom/Documents/analyse-financiere/finance-app/orchestrator-runs/20260223-233749-734/tmux"
+  },
+  "mode": "normal",
+  "engine": "autogen_tmux",
+  "agent_cli": "qwen",
+  "with_architect": true,
+  "with_manager": true,
+  "agent_memory_dir": "/Users/venom/Documents/analyse-financiere/finance-app/agent-memory"
+}

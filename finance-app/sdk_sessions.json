@@ -1,0 +1,8 @@
+{
+  "tmux:qwen_tester": "88e390ae-1474-4e16-8090-799ab8a61f44",
+  "tmux:qwen_planner": "dc0291ea-3725-4085-ba52-de1049b7defc",
+  "tmux:qwen_qa": "3af58125-ac33-406d-a881-12ac6c95d873",
+  "tmux:qwen_dev": "3ff4a925-34a8-42f0-a8c2-8f85bdef6ddd",
+  "tmux:qwen_architect": "b9086106-e70b-4ab2-9eeb-ed44dc70dbf5",
+  "tmux:qwen_manager": "1fcc6def-f167-4c0b-8a8b-7a67a042554d"
+}
