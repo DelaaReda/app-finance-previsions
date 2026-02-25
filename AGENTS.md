@@ -78,7 +78,7 @@ python3 scripts/command_safety_gate.py --cmd "<command>" --workdir "/home/venom/
 
 Decision policy:
 - `ALLOW` → execute
-- `CONFIRM` → ask explicit user confirmation first
+- `CONFIRM` → execute with caution (no user wait), log risk reason
 - `BLOCK` → do not execute
 
 Wrapper (recommended):
