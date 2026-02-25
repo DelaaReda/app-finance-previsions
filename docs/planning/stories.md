@@ -260,8 +260,30 @@
 - **Activation**: uniquement après artefact Batch-01 avec `VERDICT: PASS`
 - **Préparation autorisée**: cadrage test contract `items/count` + alias `articles`
 
+## Delta stories (cycle 20:50)
+
+### Story A2 (Batch-02 prep) — extension conditionnelle
+- **Activation**: après `VERDICT: PASS` de Batch-01.
+- **Objectif additionnel**: verrouiller contrat multi-ticker via tests formels (`T-A2.2`).
+- **Acceptance additionnelle**:
+  - réponse multi ticker avec map stable
+  - test dédié vert, sans 500 sur input incomplet
+
+### Story A3 (Batch-02 prep) — carte exécutable
+- **Activation**: enchaînée à A2.2 dans le même lot conditionnel.
+- **Scope IN**: normalisation `items/count` + alias `articles`.
+- **Evidence minimale**:
+  - payload `news/feed` normalisé
+  - preuve test ou check contract
+
+### Ordre imposé en Batch-02
+1. Story A2 (multi-ticker contract)
+2. Story A3 (news contract)
+3. QA signe `PASS|BLOCKED` pour le lot
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
 - 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).
 - 2026-02-24 20:20 America/New_York — Durcissement incrémental des stories A1/A2 (stabilité multi-appels et preuves structurées) + précondition QA explicite avant ouverture Story A3.
 - 2026-02-24 20:35 America/New_York — Ajout d’un brief de dispatch exécutable pour A1/A2 (rôles + commandes de preuve obligatoires) et carte de reprise A3 strictement conditionnée au verdict PASS Batch-01.
+- 2026-02-24 20:50 America/New_York — Préparation incrémentale de Batch-02: ordre imposé Story A2->A3, critères additionnels multi-ticker/news et preuves minimales pour signature QA.

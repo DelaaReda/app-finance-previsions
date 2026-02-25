@@ -311,8 +311,51 @@ DEPENDANCES: <liste>
 VERDICT_ATTENDU: PASS|BLOCKED
 ```
 
+## Delta dispatch tâches (cycle 20:50)
+
+### Pack Batch-02 (préparé, verrouillé)
+
+#### T-A2.2 — carte d’assignation prête
+```text
+[TASK_ID] T-A2.2
+OBJECTIF: valider contrat multi-ticker /api/stocks/prices
+SCOPE_IN: tests tickers=SPY,QQQ; test input incomplet; absence de 500
+SCOPE_OUT: optimisation perf; refactor endpoint
+PREREQUIS: VERDICT PASS Batch-01
+FICHIERS_CIBLES: copilot-app/backend/tests/test_stocks_prices_contract.py
+PLAN_IMPLEMENTATION: écrire tests -> exécuter -> corriger si rouge -> re-run vert
+ACCEPTANCE_TESTABLE: pytest vert; map multi-ticker stable; cas incomplet non bloquant
+COMMANDES_TEST: cd copilot-app/backend && .venv/bin/pytest -q tests/test_stocks_prices_contract.py
+EVIDENCES_ATTENDUES: sortie pytest + payload multi-ticker de référence
+RISQUES: fixtures data divergentes
+DEPENDANCES: T-A2.1
+VERDICT_ATTENDU: PASS|BLOCKED
+```
+
+#### T-A3.1 — carte d’assignation prête
+```text
+[TASK_ID] T-A3.1
+OBJECTIF: normaliser le contrat /api/news/feed
+SCOPE_IN: items/count + alias articles + fallback contrôlé
+SCOPE_OUT: ranking news avancé
+PREREQUIS: VERDICT PASS Batch-01
+FICHIERS_CIBLES: copilot-app/backend/src/api/main.py; copilot-app/backend/src/api/services/news_service.py
+PLAN_IMPLEMENTATION: normaliser mapping -> garder compat alias -> valider payload
+ACCEPTANCE_TESTABLE: items non nul; count cohérent; aucune 500 en nominal
+COMMANDES_TEST: curl -sS "http://localhost:8050/api/news/feed?limit=5" | jq
+EVIDENCES_ATTENDUES: payload normalisé + verdict QA
+RISQUES: qualité variable des entrées news
+DEPENDANCES: T-A1.1
+VERDICT_ATTENDU: PASS|BLOCKED
+```
+
+### Règle de lot
+- Batch-02 est exécuté en séquence stricte `T-A2.2` puis `T-A3.1`.
+- Si `T-A2.2` est BLOCKED, ne pas lancer `T-A3.1`.
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
 - 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.
 - 2026-02-24 20:35 America/New_York — Ajout d’un runbook de lot (Batch-01 immédiat, Batch-02 conditionnel), règle d’activation explicite via artefact gate, et template d’assignation standardisé pour agents qwen.
+- 2026-02-24 20:50 America/New_York — Préparation du pack Batch-02 avec cartes d’assignation complètes pour T-A2.2/T-A3.1 et règle de séquencement bloquant.

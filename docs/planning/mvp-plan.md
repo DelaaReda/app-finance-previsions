@@ -204,9 +204,38 @@ Le batch est **PASS** seulement si les 4 conditions sont vraies:
 - **Objectif**: étendre le contrat backend sans ouvrir le frontend
 - **Règle de scope**: aucune implémentation UI tant que Gate G-A n’est pas confirmé
 
+## 14) Delta lancement & continuité (cycle 20:50)
+
+### Packet de lancement Batch-01 (final)
+- **Commande recommandée**:
+
+```bash
+python3 scripts/qwen_orchestrator.py \
+  --agent-bin qwen \
+  --rounds 2 \
+  --with-manager \
+  --with-architect \
+  --feature "Batch-01 MVP final: exécuter T-A1.1 + T-A2.1, produire DELTA/EVIDENCE/RISKS/NEXT/VERDICT, déposer finance-app/openclaw-gates/batch-01-<timestamp>.md"
+```
+
+- **Critères QA de validation (obligatoires)**:
+  1. `pytest tests/test_health.py` vert
+  2. 3 appels health consécutifs cohérents
+  3. 5 appels stocks SPY sans 500 avec clés attendues
+  4. artefact gate horodaté + `VERDICT: PASS|BLOCKED`
+
+### Règle d’escalade explicite
+- Si un seul critère échoue: verdict immédiat `BLOCKED`, correction ciblée, puis relance Batch-01 (pas d’ouverture Batch-02).
+
+### Carte Batch-02 (prête mais verrouillée)
+- **Activation stricte**: uniquement si artefact Batch-01 contient `VERDICT: PASS` signé QA.
+- **Contenu**: `T-A2.2` + `T-A3.1`
+- **Sortie attendue**: mêmes sections de preuve, plus impact sur contrat backend documenté.
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
 - 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
 - 2026-02-24 20:05 America/New_York — Ajout d’un prompt opératoire Batch-01 prêt à injecter aux agents qwen, avec scope strict, critères testables et format de preuves obligatoire.
 - 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01 (commande orchestrator prête), gate PASS durci en 4 conditions et règle de pré-activation stricte pour Batch-02.
 - 2026-02-24 20:35 America/New_York — Ajout d’un brief d’exécution Batch-01 prêt à l’emploi (gates entrée/sortie/blocage) et d’une carte Batch-02 pré-remplie strictement conditionnelle au verdict PASS QA.
+- 2026-02-24 20:50 America/New_York — Finalisation du packet de lancement Batch-01 (commande, QA gate, escalade BLOCKED) et verrou formel d’activation Batch-02 sur PASS QA.
