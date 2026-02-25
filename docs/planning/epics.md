@@ -153,3 +153,28 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
 - `finance-app/orchestrator-runs/<run_id>/transcript.md`
 - `events.jsonl` + `agent_activity.json`
 - Rapport gate dans `finance-app/openclaw-gates/`
+
+---
+
+## Statut d’exécution recommandé (delta)
+
+- **EPIC A**: READY_FOR_EXECUTION (priorité P0)
+- **EPIC B**: READY_BLOCKED_BY_A (priorité P1)
+- **EPIC C**: IN_PREP (priorité P0.5, en parallèle de A pour le gate)
+
+## Dispatch readiness (delta 19:50)
+
+- **EPIC A**
+  - Batch actif: `Batch-01`
+  - Tâches ouvertes immédiates: `T-A1.1`, `T-A2.1`
+  - Condition de progression: preuves PASS + aucun 500 nominal
+- **EPIC B**
+  - État: `HOLD_UNTIL_A_CONTRACT_LOCK`
+  - Préparation autorisée: revue mapping UI cible sans implémentation
+- **EPIC C**
+  - État: `PARALLEL_PREP`
+  - Action autorisée: préparer gabarit rapport gate sous `finance-app/openclaw-gates/`
+
+## Changelog
+- 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
+- 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).

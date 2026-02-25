@@ -179,6 +179,13 @@
 
 ---
 
+## Queue de stories (delta incrémental)
+
+- **RUN_NOW**: Story A1, Story A2
+- **RUN_NEXT_IF_PASS**: Story A3
+- **ON_HOLD**: Story B1, Story B2 (attente lock contrats API)
+- **PARALLEL_PREP**: Story C1 (template de rapport + structure d’artefacts)
+
 ## Story C1 — Gate de régression MVP compact
 
 - **Objectif**: créer un gate simple PASS/BLOCKED avant livraison.
@@ -203,3 +210,6 @@
 - **Evidences attendues**: fichier de gate + logs de commandes.
 - **Risques**: faux positifs si données snapshots périmées.
 - **Dépendances**: A1..A5, B1..B2.
+
+## Changelog
+- 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.

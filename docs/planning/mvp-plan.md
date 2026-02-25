@@ -100,3 +100,37 @@ cd /home/venom/analyse-financiere
 - Rollback applicatif: `git revert <commit>` sur lot story
 - Rollback runtime: redémarrage clean via `./finance-copilot.sh restart`
 - Rollback data: conserver snapshots existants `copilot-app/backend/data/*.json` (pas de suppression destructive)
+
+## 10) Delta de pilotage (cycle cron en cours)
+
+- Priorité immédiate: verrouiller d’abord **A1/A2** pour figer le contrat backend consommé par B1.
+- Lot de dispatch recommandé (qwen):
+  1. `planner` — cadrage T-A1.1 + T-A2.1 (DoR explicite)
+  2. `dev` — implémentation backend ciblée
+  3. `tester` — tests contrat + smoke endpoint
+  4. `qa` — vérification des preuves et verdict PASS/BLOCKED
+- Gate de sortie du lot: aucun 500 sur health/stocks + tests dédiés verts + artefacts déposés.
+
+## 11) Batch d'exécution qwen (delta incrémental)
+
+### Batch-01 (à lancer maintenant)
+- **Objectif**: verrouiller le contrat backend minimal pour débloquer l’intégration UI.
+- **Contenu**: `T-A1.1` + `T-A2.1`
+- **Sortie attendue (obligatoire)**:
+  - DELTA (fichiers + comportement)
+  - EVIDENCE (commandes + sorties utiles)
+  - RISKS (risques résiduels)
+  - NEXT (prochaine action unique)
+- **Gate PASS Batch-01**:
+  - `/api/health` conforme + test dédié vert
+  - `/api/stocks/prices?ticker=SPY` conforme
+  - artefacts déposés dans `finance-app/openclaw-gates/`
+
+### Batch-02 (conditionnel)
+- **Précondition**: Batch-01 PASS
+- **Contenu**: `T-A2.2` + préparation `T-A3.1`
+- **Objectif**: figer contrat multi-tickers et ouvrir la normalisation news
+
+## Changelog
+- 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
+- 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.

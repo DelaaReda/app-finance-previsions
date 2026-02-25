@@ -221,6 +221,20 @@
 
 ---
 
+## Pack de dispatch qwen (delta incrémental)
+
+### Batch-01
+- **Tâches**: `T-A1.1`, `T-A2.1`
+- **Instruction commune agents**:
+  - livrer strictement le scope IN
+  - joindre commandes exactes exécutées
+  - joindre preuves minimales (payload JSON + sortie tests)
+  - terminer avec verdict `PASS` ou `BLOCKED` motivé
+- **Blocage immédiat si**:
+  - absence de section EVIDENCE
+  - test non exécuté
+  - contrat API modifié sans test mis à jour
+
 ## Ordonnancement recommandé
 1. T-A1.1
 2. T-A2.1 → T-A2.2
@@ -230,3 +244,6 @@
 6. T-B1.1 → T-B1.2
 7. T-B2.1
 8. T-C1.1 → T-C1.2
+
+## Changelog
+- 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
