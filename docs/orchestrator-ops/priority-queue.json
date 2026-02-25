@@ -5,7 +5,7 @@
     {
       "id": "BATCH-01",
       "title": "Stabiliser contrats API MVP",
-      "state": "READY",
+      "state": "IN_SPRINT",
       "priority": "P0",
       "owner_role": "planner",
       "blocker_id": "NONE",
