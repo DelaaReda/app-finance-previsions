@@ -7,6 +7,8 @@ Task: Cache-First Architecture - Pré-calculer stocks prices
 from datetime import datetime, timedelta
 import io
 import json
+import os
+import platform
 import subprocess
 import time
 import logging
@@ -27,6 +29,20 @@ for p in (backend_path, src_path):
     sys.path.insert(0, p)
 
 logger = logging.getLogger(__name__)
+
+
+def _legacy_price_cache_dir(source: str) -> Path:
+    return Path(__file__).resolve().parents[1] / "data" / "price_cache" / source
+
+
+def _price_cache_dir(source: str) -> Path:
+    """Resolve cache directory with a macOS-safe default outside Documents."""
+    configured_root = os.getenv("PRICE_CACHE_ROOT", "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser() / source
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Caches" / "analyse-financiere" / "price_cache" / source
+    return _legacy_price_cache_dir(source)
 
 try:
     from core.sentry_runtime import install_global_excepthook, init_sentry, set_job_context, capture_exception
@@ -234,25 +250,30 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                 normalized = normalize_ticker(sym)
                 if not normalized:
                     return pd.DataFrame()
-                cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "stooq"
-                fp = cache_dir / f"{normalized}.csv"
-                if not fp.exists():
-                    return pd.DataFrame()
-                df = pd.read_csv(fp)
-                if df.empty:
-                    return pd.DataFrame()
-                date_col = "Date" if "Date" in df.columns else ("Data" if "Data" in df.columns else None)
-                close_col = "Close" if "Close" in df.columns else ("Zamkniecie" if "Zamkniecie" in df.columns else None)
-                if not date_col or not close_col:
-                    return pd.DataFrame()
-                if date_col != "Date":
-                    df = df.rename(columns={date_col: "Date"})
-                if close_col != "Close":
-                    df = df.rename(columns={close_col: "Close"})
-                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-                df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
-                df = df[df.index >= pd.to_datetime(start_date)]
-                return df
+                cache_dirs = [_price_cache_dir("stooq")]
+                legacy_dir = _legacy_price_cache_dir("stooq")
+                if legacy_dir not in cache_dirs:
+                    cache_dirs.append(legacy_dir)
+                for cache_dir in cache_dirs:
+                    fp = cache_dir / f"{normalized}.csv"
+                    if not fp.exists():
+                        continue
+                    df = pd.read_csv(fp)
+                    if df.empty:
+                        continue
+                    date_col = "Date" if "Date" in df.columns else ("Data" if "Data" in df.columns else None)
+                    close_col = "Close" if "Close" in df.columns else ("Zamkniecie" if "Zamkniecie" in df.columns else None)
+                    if not date_col or not close_col:
+                        continue
+                    if date_col != "Date":
+                        df = df.rename(columns={date_col: "Date"})
+                    if close_col != "Close":
+                        df = df.rename(columns={close_col: "Close"})
+                    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+                    df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+                    df = df[df.index >= pd.to_datetime(start_date)]
+                    return df
+                return pd.DataFrame()
             except Exception:
                 return pd.DataFrame()
 
@@ -261,20 +282,25 @@ def run_stocks_prices_job(force: bool = False, timeframe: str = "1y") -> Dict[st
                 normalized = normalize_ticker(sym)
                 if not normalized:
                     return pd.DataFrame()
-                cache_dir = Path(__file__).resolve().parents[1] / "data" / "price_cache" / "yahoo"
-                fp = cache_dir / f"{normalized}.csv"
-                if not fp.exists():
-                    return pd.DataFrame()
-                df = pd.read_csv(fp)
-                if df.empty or "Date" not in df.columns:
-                    return pd.DataFrame()
-                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-                df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
-                # Yahoo columns: Open/High/Low/Close/Adj Close/Volume
-                if "Close" not in df.columns and "Adj Close" in df.columns:
-                    df = df.rename(columns={"Adj Close": "Close"})
-                df = df[df.index >= pd.to_datetime(start_date)]
-                return df
+                cache_dirs = [_price_cache_dir("yahoo")]
+                legacy_dir = _legacy_price_cache_dir("yahoo")
+                if legacy_dir not in cache_dirs:
+                    cache_dirs.append(legacy_dir)
+                for cache_dir in cache_dirs:
+                    fp = cache_dir / f"{normalized}.csv"
+                    if not fp.exists():
+                        continue
+                    df = pd.read_csv(fp)
+                    if df.empty or "Date" not in df.columns:
+                        continue
+                    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+                    df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+                    # Yahoo columns: Open/High/Low/Close/Adj Close/Volume
+                    if "Close" not in df.columns and "Adj Close" in df.columns:
+                        df = df.rename(columns={"Adj Close": "Close"})
+                    df = df[df.index >= pd.to_datetime(start_date)]
+                    return df
+                return pd.DataFrame()
             except Exception:
                 return pd.DataFrame()
 

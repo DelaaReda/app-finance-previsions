@@ -85,20 +85,7 @@ curl_cffi==0.13.0         # ⚠️ Curl impersonation - usage à auditer
 
 **Problèmes critiques:**
 
-```bash
-# ❌ Clés API exposées en clair dans .env
-FRED_API_KEY=63bcdd7052a9d5f2339d2a631b4f1f5a
-OPEN_ROUTER_API_KEY=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
-OPEN_ROUTER_API_KEY_2=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
-CODESTRAL_API_KEY=ke9FS0lL2t9heYqxde3lXolMEkQkL1UU
-GROK_API_KEY=<REDACTED_GROK_API_KEY>
-SENTRY_AUTH_TOKEN=<REDACTED_SENTRY_AUTH_TOKEN>
 
-# ❌ Clé FRED exposée
-FRED_API_KEY=63bcdd7052a9d5f2339d2a631b4f1f5a
-
-# ⚠️ Secret Key non sécurisée
-SECRET_KEY=your-secret-key-here-change-in-production
 ```
 
 ### 3.2 Actions requises (URGENT)

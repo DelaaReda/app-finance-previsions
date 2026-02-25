@@ -13,6 +13,8 @@ Example:
 from __future__ import annotations
 
 import argparse
+import os
+import platform
 import re
 import sys
 from datetime import datetime
@@ -197,6 +199,15 @@ def _default_user_data_dir() -> Path:
     return Path.home() / "Library" / "Application Support" / "investing-playwright-profile"
 
 
+def _default_price_cache_dir() -> Path:
+    configured_root = os.getenv("PRICE_CACHE_ROOT", "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser() / "investing"
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Caches" / "analyse-financiere" / "price_cache" / "investing"
+    return Path("data/price_cache/investing")
+
+
 def _launch_browser(p, *, headless: bool, user_data_dir: Optional[Path]) -> tuple:
     exe_path = _find_playwright_executable(headless)
     kwargs = {"headless": headless}
@@ -220,12 +231,13 @@ def _launch_browser(p, *, headless: bool, user_data_dir: Optional[Path]) -> tupl
 
 
 def main() -> int:
+    default_output_dir = str(_default_price_cache_dir())
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", required=True, help="Investing.com historical data URL")
     parser.add_argument("--start", required=True, help="Start date YYYY-MM-DD")
     parser.add_argument("--end", required=True, help="End date YYYY-MM-DD")
     parser.add_argument("--ticker", default="", help="Ticker symbol for output filename")
-    parser.add_argument("--output-dir", default="data/price_cache/investing", help="Download output directory")
+    parser.add_argument("--output-dir", default=default_output_dir, help="Download output directory")
     parser.add_argument("--headless", action="store_true", help="Run browser headless")
     parser.add_argument("--manual", action="store_true", help="Pause for manual login/selection")
     parser.add_argument("--debug", action="store_true", help="Enable screenshots + tracing")

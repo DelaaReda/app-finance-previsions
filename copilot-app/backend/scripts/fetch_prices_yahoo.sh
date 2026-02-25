@@ -3,7 +3,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-OUT_DIR="$BACKEND_DIR/data/price_cache/yahoo"
+
+resolve_price_cache_root() {
+  # On macOS, avoid writing into Documents (can trigger AV protected-folder alerts).
+  if [[ -n "${PRICE_CACHE_ROOT:-}" ]]; then
+    printf '%s\n' "$PRICE_CACHE_ROOT"
+    return
+  fi
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    printf '%s\n' "$HOME/Library/Caches/analyse-financiere/price_cache"
+    return
+  fi
+  printf '%s\n' "$BACKEND_DIR/data/price_cache"
+}
+
+CACHE_ROOT="$(resolve_price_cache_root)"
+OUT_DIR="$CACHE_ROOT/yahoo"
 mkdir -p "$OUT_DIR"
 
 DEFAULT_TICKERS=(
