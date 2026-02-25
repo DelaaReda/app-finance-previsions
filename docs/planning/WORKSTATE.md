@@ -3,10 +3,10 @@
 Use this file to continue work between cron runs without restarting from zero.
 
 ## Last run checkpoint
-- last_run_at: 2026-02-24 22:10 America/New_York
+- last_run_at: 2026-02-24 22:15 America/New_York
 - status: IN_PROGRESS
 - current_phase: dispatch_batch01_artifact_missing_blocking_batch02
-- next_action: Artefact `finance-app/openclaw-gates/batch-01-<timestamp>.md` toujours introuvable (répertoire contient uniquement `gate-*.json`); exiger génération Batch-01 avec DELTA/EVIDENCE/RISKS/NEXT/VERDICT + BLOCKER_ID/NEXT_ACTION_UNIQUE. Garder Batch-02 fermé tant que `VERDICT: PASS` signé QA n’est pas présent.
+- next_action: Artefact `finance-app/openclaw-gates/batch-01-<timestamp>.md` toujours introuvable (listing actuel: `gate-20260224-191619.json`, `gate-20260224-191848.json`, `gate-20260224-192411.json`, `gate-20260224-192452.json`); exiger génération Batch-01 avec DELTA/EVIDENCE/RISKS/NEXT/VERDICT + BLOCKER_ID/NEXT_ACTION_UNIQUE. Garder Batch-02 fermé tant que `VERDICT: PASS` signé QA n’est pas présent.
 
 ## Progress ledger
 - [x] Repo analysis baseline completed
@@ -36,4 +36,5 @@ Use this file to continue work between cron runs without restarting from zero.
 - 2026-02-24 21:05 America/New_York — Passage en phase `dispatch_batch01_gate_enforcement_active`; ajout d’un durcissement de gate (VERDICT obligatoire, correctif minimal en cas BLOCKED, ouverture Batch-02 uniquement après PASS signé QA).
 - 2026-02-24 21:20 America/New_York — Vérification incrémentale effectuée: aucun artefact `batch-01-*.md` trouvé dans `finance-app/openclaw-gates/`; phase mise à jour en blocage artefact. NO_DELTA: `mvp-plan.md`, `epics.md`, `stories.md`, `tasks.md`.
 - 2026-02-24 22:05 America/New_York — Revue de qualité des artefacts cron appliquée: dépendances epics/stories/tasks corrigées et commandes de test rendues exécutables sur VM sans venv pré-existante.
-- 2026-02-24 22:10 America/New_York — Vérification incrémentale: aucun artefact `batch-01-*.md` détecté dans `finance-app/openclaw-gates/` (seulement `gate-*.json`), blocage Batch-02 maintenu. NO_DELTA: `mvp-plan.md`, `epics.md`, `stories.md`, `tasks.md`. 
+- 2026-02-24 22:10 America/New_York — Vérification incrémentale: aucun artefact `batch-01-*.md` détecté dans `finance-app/openclaw-gates/` (seulement `gate-*.json`), blocage Batch-02 maintenu. NO_DELTA: `mvp-plan.md`, `epics.md`, `stories.md`, `tasks.md`.
+- 2026-02-24 22:15 America/New_York — Vérification incrémentale relancée: toujours aucun artefact `batch-01-*.md` (présents: `gate-20260224-191619.json`, `gate-20260224-191848.json`, `gate-20260224-192411.json`, `gate-20260224-192452.json`). Batch-02 reste fermé selon règle QA PASS signé. NO_DELTA: `mvp-plan.md`, `epics.md`, `stories.md`, `tasks.md`.
