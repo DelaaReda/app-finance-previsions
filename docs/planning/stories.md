@@ -1,0 +1,205 @@
+# User Stories MVP (détaillées)
+
+## Story A1 — Contrat santé & observabilité minimale
+
+- **Objectif**: fiabiliser `/api/health` comme source de vérité runtime.
+- **Scope IN**: structure réponse stable, champs minimum (`ok`, `status`, `data.timestamp`, `data.last_updates`).
+- **Scope OUT**: observabilité avancée (traces distribuées, métriques infra).
+- **Prérequis**: backend démarre localement.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/tests/test_health.py`
+- **Plan implémentation**:
+  1. Formaliser shape unique de réponse health.
+  2. Supprimer ambiguïtés (`status` top-level vs `data.status`) si nécessaire via compat contrôlée.
+  3. Ajouter tests de contrat.
+- **Critères d’acceptation testables**:
+  - `GET /api/health` retourne 200 et `ok=true`.
+  - `data.last_updates` existe (objet, vide autorisé).
+  - Test dédié passe en local.
+- **Commandes de test**:
+  - `curl -sS http://localhost:8050/api/health | jq`
+  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_health.py`
+- **Evidences attendues**: sortie curl + test vert.
+- **Risques**: clients historiques dépendants d’anciens champs.
+- **Dépendances**: aucune.
+
+---
+
+## Story A2 — Normaliser `/api/stocks/prices`
+
+- **Objectif**: unifier les réponses mono/multi ticker sans surprise côté UI.
+- **Scope IN**: shape explicite, erreurs paramètre claires, downsample robuste.
+- **Scope OUT**: nouvelle source de marché externe.
+- **Prérequis**: snapshots prix disponibles ou fallback fonctionnel.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/core/downsample.py`
+  - `copilot-app/backend/tests/` (nouveau test stocks)
+- **Plan implémentation**:
+  1. Documenter contrat mono ticker et multi ticker.
+  2. Ajouter test paramétrique pour `ticker` vs `tickers`.
+  3. Vérifier gestion absence data.
+- **Critères d’acceptation testables**:
+  - Mono ticker: payload contient `ticker`, `points`, `count`.
+  - Multi ticker: payload contient `tickers` map.
+  - Requête invalide renvoie `ok=true` + message d’erreur contrôlé (pas 500).
+- **Commandes de test**:
+  - `curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq`
+  - `curl -sS "http://localhost:8050/api/stocks/prices?tickers=SPY&tickers=QQQ" | jq`
+- **Evidences attendues**: exemples de payload mono/multi.
+- **Risques**: incohérence historique de schéma côté frontend.
+- **Dépendances**: Story B1.
+
+---
+
+## Story A3 — Normaliser `/api/news/feed`
+
+- **Objectif**: garantir liste d’articles exploitable avec métadonnées minimales.
+- **Scope IN**: normalisation `title/url/published_at/source/tickers/score`, limite, fallback.
+- **Scope OUT**: moteur de ranking news avancé.
+- **Prérequis**: `news_feed.json` accessible ou service news actif.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/api/services/news_service.py`
+  - `copilot-app/backend/tests/` (nouveau test news)
+- **Plan implémentation**:
+  1. Fixer format final `items` (+ alias `articles` compat).
+  2. Tester filtrage `tickers`, `limit`.
+  3. Valider comportement never-empty contrôlé.
+- **Critères d’acceptation testables**:
+  - `count` cohérent avec items renvoyés.
+  - Chaque item a `title` et `url` (vides tolérés mais clé présente).
+  - Aucun 500 en absence de news.
+- **Commandes de test**:
+  - `curl -sS "http://localhost:8050/api/news/feed?limit=5" | jq`
+  - `curl -sS "http://localhost:8050/api/news/feed?tickers=AAPL&limit=5" | jq`
+- **Evidences attendues**: payload normalisé + test automatisé.
+- **Risques**: qualité variable des sources upstream.
+- **Dépendances**: Story C1.
+
+---
+
+## Story A4 — Route `/api/forecasts` unique et stable
+
+- **Objectif**: éviter conflit route commentée/main vs router dédié.
+- **Scope IN**: confirmer source de vérité `api/routes/forecasts.py`, contrat de sortie stable.
+- **Scope OUT**: refonte modèle de prévision.
+- **Prérequis**: router forecasts importé au boot.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/routes/forecasts.py`
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/tests/` (nouveau test forecasts)
+- **Plan implémentation**:
+  1. Vérifier branchement router et tags.
+  2. Standardiser champs réponse (`rows/items/count/source`).
+  3. Ajouter test de contrat.
+- **Critères d’acceptation testables**:
+  - `GET /api/forecasts` renvoie 200 en local.
+  - Contrat stable documenté dans test.
+- **Commandes de test**:
+  - `curl -sS "http://localhost:8050/api/forecasts" | jq`
+- **Evidences attendues**: preuve endpoint + test passe.
+- **Risques**: doublons logiques legacy.
+- **Dépendances**: Story A1.
+
+---
+
+## Story A5 — Durcir `/api/copilot/ask`
+
+- **Objectif**: réponse robuste même sans sources RAG ou sans LLM configuré.
+- **Scope IN**: validations input, erreurs contrôlées, métadonnées qualité.
+- **Scope OUT**: amélioration profonde du moteur RAG.
+- **Prérequis**: modules `research.rag_store` et `research.llm_client` importables.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/research/llm_client.py`
+  - `copilot-app/backend/tests/` (nouveau test copilot ask)
+- **Plan implémentation**:
+  1. Encadrer les exceptions avec messages actionnables.
+  2. Garantir présence `answer`, `sources`, `confidence`.
+  3. Ajouter tests cas nominal + cas sans sources.
+- **Critères d’acceptation testables**:
+  - POST valide retourne `ok=true` + `answer` string.
+  - Cas sans source n’explose pas.
+- **Commandes de test**:
+  - `curl -sS -X POST "http://localhost:8050/api/copilot/ask" -H 'Content-Type: application/json' -d '{"question":"TL;DR marché","max_sources":3}' | jq`
+- **Evidences attendues**: payload incluant `sources_count`/`quality_status`.
+- **Risques**: dépendances externes LLM indisponibles.
+- **Dépendances**: Story C1.
+
+---
+
+## Story B1 — Wiring frontend des vues MVP vers API
+
+- **Objectif**: brancher sections clés UI sur endpoints réels.
+- **Scope IN**: appels fetch MVP, mapping payload vers UI, loading states.
+- **Scope OUT**: refonte totale `app.js`.
+- **Prérequis**: Stories A1–A4 stabilisées.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/index.html`
+- **Plan implémentation**:
+  1. Créer couche d’accès API minimale (helpers fetch).
+  2. Mapper réponses health/news/forecasts/stocks.
+  3. Garder fallback mock seulement en dernier recours.
+- **Critères d’acceptation testables**:
+  - Chargement initial déclenche appels réseau API.
+  - Données affichées sans crash JS.
+- **Commandes de test**:
+  - Ouvrir `http://localhost:5173` puis vérifier onglets MVP.
+- **Evidences attendues**: capture réseau + screenshot sections remplies.
+- **Risques**: dette technique importante dans `app.js`.
+- **Dépendances**: EPIC A.
+
+---
+
+## Story B2 — Badge fallback simulé + gestion erreurs UI
+
+- **Objectif**: rendre visible l’usage de mocks et éviter confusion utilisateur.
+- **Scope IN**: badge `Données simulées`, messaging erreur/empty.
+- **Scope OUT**: redesign complet composants.
+- **Prérequis**: B1 branchée.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/style.css`
+  - `copilot-app/frontend/app/mockData.js`
+- **Plan implémentation**:
+  1. Détecter origine donnée (api/mock).
+  2. Afficher badge sur widgets concernés.
+  3. Normaliser messages erreur.
+- **Critères d’acceptation testables**:
+  - En mode fallback, badge visible.
+  - En mode API, badge absent.
+- **Commandes de test**:
+  - Test manuel navigateur (mode API dispo / indispo).
+- **Evidences attendues**: deux captures (API réel vs fallback).
+- **Risques**: détection source incomplète selon modules.
+- **Dépendances**: B1.
+
+---
+
+## Story C1 — Gate de régression MVP compact
+
+- **Objectif**: créer un gate simple PASS/BLOCKED avant livraison.
+- **Scope IN**: health + 5 endpoints + smoke + sanity frontend.
+- **Scope OUT**: suite E2E exhaustive.
+- **Prérequis**: stories A/B principales intégrées.
+- **Fichiers cibles**:
+  - `skills/finance-regression-gate/` (si enrichissement)
+  - `finance-app/openclaw-gates/`
+  - `docs/planning/tasks.md` (matrice run)
+- **Plan implémentation**:
+  1. Définir checklist exécutable unique.
+  2. Produire rapport horodaté (markdown/json).
+  3. Marquer PASS/BLOCKED avec causes.
+- **Critères d’acceptation testables**:
+  - Gate produit un verdict unique et actionnable.
+  - Rapport contient commandes + résultats + anomalies.
+- **Commandes de test**:
+  - `./finance-copilot.sh restart`
+  - `./scripts/smoke.sh`
+  - commandes `curl` MVP
+- **Evidences attendues**: fichier de gate + logs de commandes.
+- **Risques**: faux positifs si données snapshots périmées.
+- **Dépendances**: A1..A5, B1..B2.

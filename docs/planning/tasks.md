@@ -1,0 +1,232 @@
+# Tasks détaillées orientées exécution par agents qwen
+
+## Convention de dispatch
+- **Rôles qwen**: planner, dev, tester, qa
+- **Taille cible**: 2-4h / tâche
+- **Format sortie obligatoire**: DELTA / EVIDENCE / RISKS / NEXT
+
+---
+
+## T-A1.1 — Verrouiller contrat `/api/health`
+- **Objectif**: réponse health stable et rétro-compatible.
+- **Scope IN**: normalisation shape + tests.
+- **Scope OUT**: ajout observabilité avancée.
+- **Prérequis**: backend bootable.
+- **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/tests/test_health.py`
+- **Plan implémentation**:
+  1. Définir schéma attendu (top-level + data).
+  2. Harmoniser champs `status`.
+  3. Ajuster/ajouter tests.
+- **Critères d’acceptation testables**:
+  - Endpoint renvoie 200 + `ok=true`.
+  - `data.timestamp` présent.
+- **Commandes de test**:
+  - `curl -sS http://localhost:8050/api/health | jq`
+  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_health.py`
+- **Evidences attendues**: payload health + pytest vert.
+- **Risques**: clients dépendants anciens champs.
+- **Dépendances**: aucune.
+
+## T-A2.1 — Unifier réponse mono ticker `/api/stocks/prices`
+- **Objectif**: contrat UI-friendly pour 1 ticker.
+- **Scope IN**: champs `ticker, points, count, timestamp`.
+- **Scope OUT**: provider data externe.
+- **Prérequis**: snapshot `stocks/prices` ou fallback actif.
+- **Fichiers cibles**: `copilot-app/backend/src/api/main.py`
+- **Plan implémentation**:
+  1. Vérifier mapping mono ticker.
+  2. Garantir présence clés même si vide.
+- **Critères d’acceptation testables**:
+  - Requête `ticker=SPY` renvoie schéma conforme.
+- **Commandes de test**:
+  - `curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq`
+- **Evidences attendues**: JSON de référence stocké dans artefact.
+- **Risques**: data manquante selon environnement.
+- **Dépendances**: T-A1.1.
+
+## T-A2.2 — Tester multi ticker `/api/stocks/prices`
+- **Objectif**: valider payload map multi-tickers.
+- **Scope IN**: tests de contrat + cas erreur input.
+- **Scope OUT**: optimisation perfs.
+- **Prérequis**: T-A2.1.
+- **Fichiers cibles**: `copilot-app/backend/tests/test_stocks_prices_contract.py` (nouveau)
+- **Plan implémentation**:
+  1. Ajouter tests `tickers=SPY,QQQ`.
+  2. Ajouter test paramètre manquant.
+- **Critères d’acceptation testables**:
+  - Tests passent.
+  - Aucun 500 en cas input incomplet.
+- **Commandes de test**:
+  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_stocks_prices_contract.py`
+- **Evidences attendues**: rapport pytest.
+- **Risques**: divergence selon fixtures data.
+- **Dépendances**: T-A2.1.
+
+## T-A3.1 — Normaliser `news_feed` items
+- **Objectif**: items news exploitables et homogènes.
+- **Scope IN**: mapping title/url/source/date/tickers/score.
+- **Scope OUT**: scoring algorithmique news.
+- **Prérequis**: endpoint existant.
+- **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/src/api/services/news_service.py`
+- **Plan implémentation**:
+  1. Unifier format `items`.
+  2. Garder alias `articles` pour compat.
+- **Critères d’acceptation testables**:
+  - `items` non nul, `count` cohérent.
+- **Commandes de test**:
+  - `curl -sS "http://localhost:8050/api/news/feed?limit=5" | jq`
+- **Evidences attendues**: 1 payload exemple normalisé.
+- **Risques**: variabilité schema source raw news.
+- **Dépendances**: T-A1.1.
+
+## T-A3.2 — Tests contrat `news_feed`
+- **Objectif**: figer le contrat minimal dans des tests.
+- **Scope IN**: tests items/limit/filter tickers.
+- **Scope OUT**: perf tests.
+- **Prérequis**: T-A3.1.
+- **Fichiers cibles**: `copilot-app/backend/tests/test_news_feed_contract.py` (nouveau)
+- **Plan implémentation**:
+  1. Ecrire tests nominal + edge cases.
+  2. Valider non-régression.
+- **Critères d’acceptation testables**:
+  - pytest vert.
+- **Commandes de test**:
+  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_news_feed_contract.py`
+- **Evidences attendues**: rapport pytest.
+- **Risques**: dépendance aux fixtures runtime.
+- **Dépendances**: T-A3.1.
+
+## T-A4.1 — Confirmer route unique `/api/forecasts`
+- **Objectif**: éviter ambiguïtés d’implémentation forecasts.
+- **Scope IN**: route active unique via router.
+- **Scope OUT**: calcul des scores forecast.
+- **Prérequis**: boot backend OK.
+- **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/src/api/routes/forecasts.py`
+- **Plan implémentation**:
+  1. Vérifier include_router.
+  2. Supprimer incohérences commentaire/code.
+- **Critères d’acceptation testables**:
+  - `GET /api/forecasts` stable (10 appels sans 500).
+- **Commandes de test**:
+  - `for i in {1..10}; do curl -sS http://localhost:8050/api/forecasts >/dev/null; done; echo OK`
+- **Evidences attendues**: log boucle OK + payload exemple.
+- **Risques**: dépendance data forecasts périmée.
+- **Dépendances**: T-A1.1.
+
+## T-A5.1 — Hardening `/api/copilot/ask`
+- **Objectif**: robustesse cas sans source/LLM indisponible.
+- **Scope IN**: erreurs contrôlées, champs qualité.
+- **Scope OUT**: amélioration modèle LLM.
+- **Prérequis**: modules research importables.
+- **Fichiers cibles**: `copilot-app/backend/src/api/main.py`
+- **Plan implémentation**:
+  1. Encadrer try/except avec messages déterministes.
+  2. Garantir shape de fallback.
+- **Critères d’acceptation testables**:
+  - Réponse toujours avec `answer` + `sources`.
+- **Commandes de test**:
+  - `curl -sS -X POST "http://localhost:8050/api/copilot/ask" -H 'Content-Type: application/json' -d '{"question":"Etat marché"}' | jq`
+- **Evidences attendues**: payload nominal/fallback.
+- **Risques**: latence ou indisponibilité provider LLM.
+- **Dépendances**: T-A1.1.
+
+## T-B1.1 — Créer couche API frontend minimale
+- **Objectif**: centraliser fetch MVP.
+- **Scope IN**: helper fetch + timeout + gestion erreurs.
+- **Scope OUT**: migration framework frontend.
+- **Prérequis**: contrats API A stabilisés.
+- **Fichiers cibles**: `copilot-app/frontend/app/app.js`
+- **Plan implémentation**:
+  1. Ajouter wrapper `fetchJson`.
+  2. Mapper endpoints MVP.
+- **Critères d’acceptation testables**:
+  - Les appels MVP passent via wrapper unique.
+- **Commandes de test**:
+  - Test manuel navigateur + Network tab.
+- **Evidences attendues**: extrait code + capture réseau.
+- **Risques**: side-effects sur fonctions legacy.
+- **Dépendances**: T-A2.1, T-A3.1, T-A4.1, T-A5.1.
+
+## T-B1.2 — Brancher widgets MVP aux données API
+- **Objectif**: afficher health/news/forecasts/stocks réels.
+- **Scope IN**: mapping payload -> render.
+- **Scope OUT**: redesign complet UI.
+- **Prérequis**: T-B1.1.
+- **Fichiers cibles**: `copilot-app/frontend/app/app.js`, `copilot-app/frontend/app/index.html`
+- **Plan implémentation**:
+  1. Identifier widgets MVP.
+  2. Injecter data API et loading states.
+- **Critères d’acceptation testables**:
+  - Widgets affichent data API lorsque backend up.
+- **Commandes de test**:
+  - Ouvrir `http://localhost:5173` + refresh hard.
+- **Evidences attendues**: screenshots widgets remplis.
+- **Risques**: couplage DOM fragile.
+- **Dépendances**: T-B1.1.
+
+## T-B2.1 — Badge « Données simulées »
+- **Objectif**: transparence utilisateur fallback.
+- **Scope IN**: badge visible par composant fallback.
+- **Scope OUT**: système de feature flags global.
+- **Prérequis**: B1 en place.
+- **Fichiers cibles**: `copilot-app/frontend/app/app.js`, `copilot-app/frontend/app/style.css`
+- **Plan implémentation**:
+  1. Ajouter booléen `isMockSource` par bloc.
+  2. Rendre badge conditionnel.
+- **Critères d’acceptation testables**:
+  - Badge visible quand backend down ou data absente.
+- **Commandes de test**:
+  - Stop backend puis reload UI.
+- **Evidences attendues**: captures backend up/down.
+- **Risques**: faux positifs de fallback.
+- **Dépendances**: T-B1.2.
+
+## T-C1.1 — Script gate MVP PASS/BLOCKED
+- **Objectif**: une commande de gate unique.
+- **Scope IN**: health + 4 endpoints + copilot ask + smoke.
+- **Scope OUT**: tests perfs.
+- **Prérequis**: tâches A/B principales.
+- **Fichiers cibles**: `skills/finance-regression-gate/` ou `scripts/` + `finance-app/openclaw-gates/`
+- **Plan implémentation**:
+  1. Écrire script gate idempotent.
+  2. Générer rapport markdown/json horodaté.
+- **Critères d’acceptation testables**:
+  - Sortie claire PASS/BLOCKED.
+  - Rapport créé sous `finance-app/openclaw-gates/`.
+- **Commandes de test**:
+  - `./finance-copilot.sh restart`
+  - `bash <script_gate>.sh`
+- **Evidences attendues**: rapport gate + code retour shell.
+- **Risques**: dépendances externes ponctuellement indisponibles.
+- **Dépendances**: A1..A5, B1..B2.
+
+## T-C1.2 — Runbook qwen orchestration MVP
+- **Objectif**: standardiser dispatch/monitoring des tâches.
+- **Scope IN**: prompts par rôle, cadence check, format preuves.
+- **Scope OUT**: auto-remédiation complète.
+- **Prérequis**: orchestrator opérationnel.
+- **Fichiers cibles**: `docs/planning/mvp-plan.md`, `docs/planning/tasks.md`, `scripts/qwen_orchestrator.py` (si nécessaire)
+- **Plan implémentation**:
+  1. Définir commandes standards dispatch.
+  2. Définir fréquence check run artifacts.
+  3. Ajouter section BLOCKED handling.
+- **Critères d’acceptation testables**:
+  - Un run complet produit `transcript.md`, `events.jsonl`, `agent_activity.json`.
+- **Commandes de test**:
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status`
+  - `python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator-runs --limit 3`
+- **Evidences attendues**: résumé exécution + run_id auditable.
+- **Risques**: saturation context/token selon prompts.
+- **Dépendances**: T-C1.1.
+
+---
+
+## Ordonnancement recommandé
+1. T-A1.1
+2. T-A2.1 → T-A2.2
+3. T-A3.1 → T-A3.2
+4. T-A4.1
+5. T-A5.1
+6. T-B1.1 → T-B1.2
+7. T-B2.1
+8. T-C1.1 → T-C1.2
