@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import re
 from dataclasses import dataclass, asdict
@@ -11,6 +13,7 @@ BLOCK_PATTERNS = [
     (r"wget\s+[^|\n]+\|\s*(bash|sh)", "remote script execution via wget pipe"),
     (r"\brm\s+-rf\s+/(\s|$)", "dangerous root wipe"),
     (r"\bmkfs\b|\bdd\s+if=", "disk-destructive command"),
+    (r"\b(base64\s+(-d|--decode)|openssl\s+base64\s+-d)\b", "explicit base64 decode in command"),
 ]
 
 CONFIRM_PATTERNS = [
@@ -23,7 +26,14 @@ CONFIRM_PATTERNS = [
     (r"\.env|~/.ssh|auth\.json|id_rsa|token|api[_-]?key", "possible secret exposure surface"),
 ]
 
+MALICIOUS_IOC_PATTERNS = [
+    (r"\b91\.92\.242\.30\b", "known malicious IOC IP detected"),
+]
+
 WORKSPACE = "/home/venom/analyse-financiere"
+
+B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?![A-Za-z0-9+/=])")
+
 
 @dataclass
 class Decision:
@@ -31,6 +41,21 @@ class Decision:
     risk_score: int
     requires_confirmation: bool
     reasons: list[str]
+
+
+def _decode_base64_candidates(text: str) -> list[str]:
+    decoded_hits: list[str] = []
+    for m in B64_TOKEN_RE.finditer(text):
+        token = m.group(1)
+        try:
+            pad = "=" * ((4 - len(token) % 4) % 4)
+            raw = base64.b64decode(token + pad, validate=True)
+            s = raw.decode("utf-8", errors="ignore").strip()
+            if s:
+                decoded_hits.append(s)
+        except (binascii.Error, ValueError):
+            continue
+    return decoded_hits
 
 
 def assess(cmd: str, workdir: str | None) -> Decision:
@@ -47,6 +72,29 @@ def assess(cmd: str, workdir: str | None) -> Decision:
         if re.search(pat, low):
             reasons.append(f"CONFIRM: {reason}")
             score += 15
+
+    for pat, reason in MALICIOUS_IOC_PATTERNS:
+        if re.search(pat, low):
+            reasons.append(f"BLOCK: {reason}")
+            score += 80
+
+    decoded_payloads = _decode_base64_candidates(cmd)
+    for payload in decoded_payloads:
+        p = payload.lower()
+        if re.search(r"\b(curl|wget)\b", p) and re.search(r"\b(bash|sh)\b", p):
+            reasons.append("BLOCK: decoded base64 payload contains remote shell execution pattern")
+            score += 80
+        elif re.search(r"https?://", p) and re.search(r"\b(bash|sh\s+-c)\b", p):
+            reasons.append("BLOCK: decoded base64 payload contains URL + shell execution")
+            score += 80
+        elif re.search(r"https?://", p):
+            reasons.append("CONFIRM: decoded base64 payload contains outbound URL")
+            score += 20
+
+        for pat, reason in MALICIOUS_IOC_PATTERNS:
+            if re.search(pat, p):
+                reasons.append(f"BLOCK: {reason} (found in decoded payload)")
+                score += 80
 
     wd = workdir or WORKSPACE
     if not wd.startswith(WORKSPACE):
