@@ -278,7 +278,41 @@ NEXT:
 VERDICT: PASS|BLOCKED
 ```
 
+## Delta runbook tâches (cycle 20:35)
+
+### Lot prêt à exécution immédiate (Batch-01)
+1. **T-A1.1**
+   - Owner: `dev`
+   - QA gate: `tester` valide commandes, `qa` signe verdict
+2. **T-A2.1**
+   - Owner: `dev`
+   - QA gate: stabilité 5x obligatoire avant verdict
+
+### Lot conditionnel suivant (Batch-02)
+1. **T-A2.2** (tests multi-ticker)
+2. **T-A3.1** (normalisation news)
+
+**Règle d’activation Batch-02**: présence de `VERDICT: PASS` dans `finance-app/openclaw-gates/batch-01-<timestamp>.md`.
+
+### Template d’assignation agent (copier-coller)
+```text
+[TASK_ID] <id>
+OBJECTIF: <objectif court>
+SCOPE_IN: <liste>
+SCOPE_OUT: <liste>
+PREREQUIS: <liste>
+FICHIERS_CIBLES: <liste>
+PLAN_IMPLEMENTATION: <3-5 étapes>
+ACCEPTANCE_TESTABLE: <points vérifiables>
+COMMANDES_TEST: <commandes exactes>
+EVIDENCES_ATTENDUES: <artefacts + extraits>
+RISQUES: <liste>
+DEPENDANCES: <liste>
+VERDICT_ATTENDU: PASS|BLOCKED
+```
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
 - 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.
+- 2026-02-24 20:35 America/New_York — Ajout d’un runbook de lot (Batch-01 immédiat, Batch-02 conditionnel), règle d’activation explicite via artefact gate, et template d’assignation standardisé pour agents qwen.

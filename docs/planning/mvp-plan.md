@@ -184,8 +184,29 @@ Le batch est **PASS** seulement si les 4 conditions sont vraies:
 - Ouvrir `T-A2.2` + préparation `T-A3.1` en conservant le même format de preuve.
 - Si une condition échoue: statut `BLOCKED`, pas de démarrage Batch-02.
 
+## 13) Delta exécution lot suivant (cycle 20:35)
+
+### Brief d’exécution verrouillé — Batch-01 (run immédiat)
+- **Owner qwen/manager**: faire exécuter `T-A1.1` puis `T-A2.1` dans le même run.
+- **Gate d’entrée**:
+  1. Backend up (`/api/health` répond)
+  2. Branche propre sur le scope backend MVP
+- **Gate de sortie (PASS)**:
+  1. Preuves commandes incluses (health + pytest + stocks mono + boucle stabilité)
+  2. Artefact présent: `finance-app/openclaw-gates/batch-01-<timestamp>.md`
+  3. Verdict QA explicite: `PASS`
+- **Gate de blocage (BLOCKED)**:
+  - test non exécuté, section evidence manquante, ou contrat JSON incomplet
+
+### Carte Batch-02 (pré-remplie, conditionnelle)
+- **Activation**: uniquement après PASS Batch-01
+- **Contenu**: `T-A2.2` (multi ticker contract tests) + `T-A3.1` (normalisation news feed)
+- **Objectif**: étendre le contrat backend sans ouvrir le frontend
+- **Règle de scope**: aucune implémentation UI tant que Gate G-A n’est pas confirmé
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
 - 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
 - 2026-02-24 20:05 America/New_York — Ajout d’un prompt opératoire Batch-01 prêt à injecter aux agents qwen, avec scope strict, critères testables et format de preuves obligatoire.
 - 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01 (commande orchestrator prête), gate PASS durci en 4 conditions et règle de pré-activation stricte pour Batch-02.
+- 2026-02-24 20:35 America/New_York — Ajout d’un brief d’exécution Batch-01 prêt à l’emploi (gates entrée/sortie/blocage) et d’une carte Batch-02 pré-remplie strictement conditionnelle au verdict PASS QA.

@@ -240,7 +240,28 @@
 ### Story A3 (RUN_NEXT_IF_PASS)
 - **Précondition renforcée**: ne démarre que si artefact Batch-01 contient un verdict PASS signé QA.
 
+## Delta dispatch prêt agents qwen (cycle 20:35)
+
+### Story A1 — brief agent exécutable
+- **Rôle principal**: dev
+- **Rôles support**: tester, qa
+- **Commande de preuve obligatoire**:
+  - `for i in {1..3}; do curl -sS http://localhost:8050/api/health | jq -c '{ok,status,ts:.data.timestamp}'; done`
+- **Condition DONE**: 3 réponses cohérentes + test health vert + verdict QA PASS
+
+### Story A2 — brief agent exécutable
+- **Rôle principal**: dev
+- **Rôles support**: tester, qa
+- **Commande de preuve obligatoire**:
+  - `for i in {1..5}; do curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq -c '{ok,ticker,count,has_points:(.data.points!=null),has_ts:(.data.timestamp!=null)}'; done`
+- **Condition DONE**: 5 réponses sans 500 + clés présentes + verdict QA PASS
+
+### Story A3 — carte de reprise conditionnelle
+- **Activation**: uniquement après artefact Batch-01 avec `VERDICT: PASS`
+- **Préparation autorisée**: cadrage test contract `items/count` + alias `articles`
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
 - 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).
 - 2026-02-24 20:20 America/New_York — Durcissement incrémental des stories A1/A2 (stabilité multi-appels et preuves structurées) + précondition QA explicite avant ouverture Story A3.
+- 2026-02-24 20:35 America/New_York — Ajout d’un brief de dispatch exécutable pour A1/A2 (rôles + commandes de preuve obligatoires) et carte de reprise A3 strictement conditionnée au verdict PASS Batch-01.

@@ -200,8 +200,25 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
 - **Action active**: garantir un template gate unique dans `finance-app/openclaw-gates/`
 - **Contrôle**: rejeter tout lot sans bloc `DELTA/EVIDENCE/RISKS/NEXT/VERDICT`
 
+## Delta readiness epics (cycle 20:35)
+
+### EPIC A — état opérationnel renforcé
+- **Execution mode**: `RUNNING_ON_APPROVAL`
+- **Batch autorisé**: Batch-01 uniquement
+- **Condition de fermeture EPIC-A/lot**: artefact gate + PASS QA signé
+
+### EPIC B — garde-fou renforcé
+- **Execution mode**: `LOCKED_BY_GATE_G-A`
+- **Travail permis**: préparation mapping payloads/documentation
+- **Travail interdit**: modifications runtime UI
+
+### EPIC C — rôle de contrôle qualité explicite
+- **Execution mode**: `GATE_AUTHORITY`
+- **Livrable attendu**: validation formelle du verdict PASS/BLOCKED avant ouverture du lot suivant
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
 - 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).
 - 2026-02-24 20:05 America/New_York — Ajout d’une matrice de gate inter-epics (G-A, G-C) pour clarifier décisions ALLOW/HOLD/BLOCKED pendant le dispatch qwen.
 - 2026-02-24 20:20 America/New_York — Passage en orchestration stricte par epic: A en EXEC_NOW, B en HOLD_STRICT dépendant de G-A, C en enforcement de preuves obligatoires.
+- 2026-02-24 20:35 America/New_York — Renforcement de readiness: A en RUNNING_ON_APPROVAL, B verrouillé strictement par Gate G-A, C établi comme autorité de verdict avant tout lot suivant.
