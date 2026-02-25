@@ -255,6 +255,30 @@
 7. T-B2.1
 8. T-C1.1 → T-C1.2
 
+## Delta tâches qwen (cycle 20:20)
+
+### T-A1.1 — commandes de test renforcées
+- Ajouter boucle stabilité:
+  - `for i in {1..3}; do curl -sS http://localhost:8050/api/health | jq -c '{ok,status,ts:.data.timestamp}'; done`
+- Critère additionnel: 3/3 réponses exploitables, sans clé absente.
+
+### T-A2.1 — commandes de test renforcées
+- Ajouter vérification robuste des clés:
+  - `for i in {1..5}; do curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq -c '{ok,ticker,count,has_points:(.data.points!=null),has_ts:(.data.timestamp!=null)}'; done`
+- Critère additionnel: 5/5 réponses sans erreur serveur.
+
+### Template d’évidence obligatoire (toutes tâches Batch-01)
+```text
+DELTA:
+EVIDENCE:
+- cmd:
+  output:
+RISKS:
+NEXT:
+VERDICT: PASS|BLOCKED
+```
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
+- 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.

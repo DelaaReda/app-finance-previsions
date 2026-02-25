@@ -185,7 +185,23 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
   - Bloqueurs: artefacts incomplets (`DELTA/EVIDENCE/RISKS/NEXT` manquants)
   - Décision: `RUN_FINAL_GATE` ou `BLOCKED_FIX_FIRST`
 
+## Delta orchestration par epic (cycle 20:20)
+
+### EPIC A (P0) — mode EXEC_NOW
+- **Lot autorisé**: Batch-01 (`T-A1.1` + `T-A2.1`)
+- **Critère de fermeture lot**: verdict QA PASS avec artefact gate auditable
+- **Escalade BLOCKED**: si test health échoue ou contrat SPY incomplet
+
+### EPIC B (P1) — mode HOLD_STRICT
+- **Règle**: aucune implémentation frontend tant que Gate G-A != `ALLOW_B1`
+- **Travail autorisé**: préparation mapping payloads uniquement (sans commit code runtime)
+
+### EPIC C (P0.5) — mode EVIDENCE_ENFORCER
+- **Action active**: garantir un template gate unique dans `finance-app/openclaw-gates/`
+- **Contrôle**: rejeter tout lot sans bloc `DELTA/EVIDENCE/RISKS/NEXT/VERDICT`
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
 - 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).
 - 2026-02-24 20:05 America/New_York — Ajout d’une matrice de gate inter-epics (G-A, G-C) pour clarifier décisions ALLOW/HOLD/BLOCKED pendant le dispatch qwen.
+- 2026-02-24 20:20 America/New_York — Passage en orchestration stricte par epic: A en EXEC_NOW, B en HOLD_STRICT dépendant de G-A, C en enforcement de preuves obligatoires.

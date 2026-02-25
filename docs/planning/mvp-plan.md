@@ -156,7 +156,36 @@ Format réponse: DELTA / EVIDENCE / RISKS / NEXT
 - **Contenu**: `T-A2.2` + préparation `T-A3.1`
 - **Objectif**: figer contrat multi-tickers et ouvrir la normalisation news
 
+## 12) Delta d’exécution immédiat (cycle 20:20)
+
+### Batch-01 — paquet de dispatch verrouillé
+- **Objectif unique**: fermer `T-A1.1` + `T-A2.1` avec verdict QA auditable.
+- **Scope IN**: health contract + stocks mono ticker contract.
+- **Scope OUT**: multi-ticker (`T-A2.2`), news, forecasts, copilot ask, UI.
+- **Commande dispatch recommandée**:
+
+```bash
+python3 scripts/qwen_orchestrator.py \
+  --agent-bin qwen \
+  --rounds 2 \
+  --with-manager \
+  --with-architect \
+  --feature "Batch-01 MVP: livrer T-A1.1 + T-A2.1; produire DELTA/EVIDENCE/RISKS/NEXT + VERDICT; déposer artefact finance-app/openclaw-gates/batch-01-<timestamp>.md"
+```
+
+### Gate de sortie renforcé (anti-faux PASS)
+Le batch est **PASS** seulement si les 4 conditions sont vraies:
+1. `pytest tests/test_health.py` vert
+2. `GET /api/health` conforme (`ok=true`, `data.timestamp`)
+3. `GET /api/stocks/prices?ticker=SPY` conforme (`ticker/points/count/timestamp`)
+4. artefact gate présent avec sections complètes + verdict explicite
+
+### Pré-activation Batch-02 (si PASS)
+- Ouvrir `T-A2.2` + préparation `T-A3.1` en conservant le même format de preuve.
+- Si une condition échoue: statut `BLOCKED`, pas de démarrage Batch-02.
+
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
 - 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
 - 2026-02-24 20:05 America/New_York — Ajout d’un prompt opératoire Batch-01 prêt à injecter aux agents qwen, avec scope strict, critères testables et format de preuves obligatoire.
+- 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01 (commande orchestrator prête), gate PASS durci en 4 conditions et règle de pré-activation stricte pour Batch-02.

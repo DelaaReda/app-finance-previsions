@@ -227,6 +227,20 @@
 - **Risques**: faux positifs si données snapshots périmées.
 - **Dépendances**: A1..A5, B1..B2.
 
+## Delta stories prêtes qwen (cycle 20:20)
+
+### Story A1 — compléments d’acceptation qwen
+- **Critère ajouté**: exécuter 3 appels consécutifs health sans variation de schéma.
+- **Evidence attendue ajoutée**: extrait compact des 3 réponses + timestamp run.
+
+### Story A2 — compléments d’acceptation qwen
+- **Critère ajouté**: boucle 5x sur `ticker=SPY` sans 500 ni clé manquante.
+- **Evidence attendue ajoutée**: tableau texte `run_i -> status_code -> keys_present`.
+
+### Story A3 (RUN_NEXT_IF_PASS)
+- **Précondition renforcée**: ne démarre que si artefact Batch-01 contient un verdict PASS signé QA.
+
 ## Changelog
 - 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
 - 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).
+- 2026-02-24 20:20 America/New_York — Durcissement incrémental des stories A1/A2 (stabilité multi-appels et preuves structurées) + précondition QA explicite avant ouverture Story A3.
