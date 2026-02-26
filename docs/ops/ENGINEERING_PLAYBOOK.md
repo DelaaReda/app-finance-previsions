@@ -39,6 +39,47 @@ Per task, require:
 - Output must contain `PASS` or `BLOCKED`.
   - Recommended wrapper: `bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-<id>-<timestamp>.md`
 
+## OpenClaw Tooling Fast-Lane (Dev/QA)
+Use tooling aggressively to reduce cycle time, but keep proofs in `EVIDENCE`.
+
+### Web + Browser (research and QA reproduction)
+- Runtime availability (current baseline):
+  - `browser.enabled=true`
+  - `tools.web.search.enabled=true`
+  - `tools.web.fetch.enabled=true`
+- Verification commands:
+  - `openclaw config get browser.enabled`
+  - `openclaw config get tools.web.search.enabled`
+  - `openclaw config get tools.web.fetch.enabled`
+  - `openclaw config get browser.cdpUrl`
+- Expected usage:
+  - `analyst`/`architect`: spec & dependency research
+  - `dev`/`backend_engineer`/`frontend_engineer`: doc lookup + implementation validation
+  - `tester`/`qa`: browser-based repro and verification
+
+### High-value skills/tools for delivery
+- `api-tester`: API checks and contract probes
+- `test-runner`: targeted test execution loops
+- `playwright-mcp`: browser regression/smoke
+- `finance-regression-gate`: release-grade regression proof
+- `debug-pro`: root-cause acceleration
+- `tmux` + `codex-orchestration`: role-runner and orchestration support
+
+Check availability quickly:
+- `openclaw skills check`
+- `bash scripts/dev_qa_tooling_check.sh` (preflight unique tooling+gates rapides)
+
+Preflight policy:
+- Avant d'activer un nouveau role cron ou de lancer un cycle QA complet, exiger `VERDICT: PASS` sur `scripts/dev_qa_tooling_check.sh`.
+- Si `DEV_QA_TOOLING_BLOCKERS` contient `workboard_validate=queue_closed_with_open_tasks`, corriger d'abord la coherence queue/workboard (reopen stream ou fermer les tasks residuelles).
+
+### Evidence requirement when tools are used
+When web/browser/skills are used in a task, add at minimum:
+- `tools_used=<comma_list>`
+- `cmd=<executed_command_or_SKIP(reason)>`
+- `tests_run=<suite:PASS|FAIL|SKIP(reason)>`
+- `review_ref=<independent_review_ref>`
+
 ---
 
 ## Agent Roles (minimum set)

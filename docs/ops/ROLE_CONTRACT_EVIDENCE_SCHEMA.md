@@ -29,6 +29,11 @@ Toujours presentes:
 - `tests_run=<name:PASS|FAIL|SKIP,...>`
 - `proof_manifest=<path>` (vnext: manifeste YAML par task)
 - `review_ref=<path_or_run_id>` (review independante)
+- `tools_used=<comma_list>` (ex: `web.search,web.fetch,playwright-mcp`)
+- `web_ref=<url_or_doc_ref>` (si recherche/navigation web effectuee)
+- `browser_ref=<trace_or_session_ref>` (si verification browser/cdp)
+- `tooling_check=<PASS|BLOCKED>` (etat preflight `scripts/dev_qa_tooling_check.sh`)
+- `tooling_ref=<path_or_run_ref>` (log ou trace du preflight outillage)
 
 ## Exigences par `task_update` (enforcement progressif)
 Les exigences ci-dessous sont `SHOULD` en phase 1 et deviennent `MUST` (au moins pour `complete`) en phase 2.
@@ -44,6 +49,7 @@ Les exigences ci-dessous sont `SHOULD` en phase 1 et deviennent `MUST` (au moins
   - `blocker_id`, `owner_role`, `eta_utc`
 - `analysis_only`:
   - `analysis_refs=<paths>` (ou `analysis_refs=SKIP(no_ready)` si pertinent)
+  - si usage web/browser: `tools_used` + `web_ref`/`browser_ref`
 
 ## Notes pratiques
 - Les scripts gate utilisent souvent une normalisation en uppercase; `planner_artifact=` et `PLANNER_ARTIFACT=` sont equivalentes.

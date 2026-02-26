@@ -16,7 +16,7 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 ### Delivery
 | Role | Mandat | Output attendu |
 |---|---|---|
-| `planner` | choisir/proposer l’item READY suivant | plan + priorite + `PLANNER_ARTIFACT=` |
+| `planner` | mentor de conformite vision (valider READY/IN_PROGRESS vs vision produit) | verdict conformite + regle verifiee + `PLANNER_ARTIFACT=` |
 | `dev` | implementer l’item READY | patch/commande + `DEV_ARTIFACT=` + `cmd=` |
 | `tester` | verifier execution/tests | tests + `TESTER_ARTIFACT=` + `cmd=` |
 | `qa` | verdict gate final | verdict + `QA_ARTIFACT=` + `cmd=` |

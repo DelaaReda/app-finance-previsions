@@ -11,7 +11,7 @@ from copy import deepcopy
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Awaitable, Callable, Literal, Tuple
 
 from fastapi import APIRouter, Query, HTTPException
 from statistics import stdev
@@ -98,6 +98,10 @@ try:
     from services.judge_builder import build_judge_verdict  # type: ignore
 except Exception:
     build_judge_verdict = None
+try:
+    from schemas.judge import JudgeResponse  # type: ignore
+except Exception:
+    JudgeResponse = None  # type: ignore
 # Judge quality report (rolling validation metrics)
 try:
     from services.judge_quality import build_judge_quality_report  # type: ignore
@@ -129,7 +133,30 @@ JUDGE_NEWS_ITEMS_PER_TICKER = min(
 JUDGE_CHAR_BUDGET = max(
     800, int(os.getenv("JUDGE_CHAR_BUDGET", "1800") or "1800")
 )
+JUDGE_ALLOW_DEBUG_FULL = str(os.getenv("JUDGE_ALLOW_DEBUG_FULL", "0")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+JUDGE_DEBUG_ANSWER_SNIPPET_CHARS = max(
+    200, int(os.getenv("JUDGE_DEBUG_ANSWER_SNIPPET_CHARS", "600") or "600")
+)
+JUDGE_DEBUG_QUESTION_SNIPPET_CHARS = max(
+    100, int(os.getenv("JUDGE_DEBUG_QUESTION_SNIPPET_CHARS", "240") or "240")
+)
 _JUDGE_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_JUDGE_INFLIGHT: Dict[str, asyncio.Task] = {}
+_JUDGE_INFLIGHT_LOCK = asyncio.Lock()
+
+JudgeSortBy = Literal[
+    "confidence",
+    "expected_return",
+    "score",
+    "risk_level",
+    "timestamp",
+]
+JudgeSortOrder = Literal["asc", "desc"]
 
 TICKER_NEWS_ALIAS_TERMS: Dict[str, List[str]] = {
     "SPY": ["S&P 500", "SP500", "SPX", "S AND P 500"],
@@ -178,6 +205,84 @@ def _prune_judge_cache() -> None:
     )
     for key in old_keys[: len(_JUDGE_RESPONSE_CACHE) - JUDGE_CACHE_MAX_ENTRIES]:
         _JUDGE_RESPONSE_CACHE.pop(key, None)
+
+
+def _append_source_tag(data: Dict[str, Any], tag: str) -> None:
+    source = data.get("source")
+    if isinstance(source, list):
+        if tag not in source:
+            source.append(tag)
+        return
+    data["source"] = ["judge_route", tag]
+
+
+def _truncate_str(value: Any, max_chars: int) -> str:
+    txt = str(value or "")
+    if len(txt) <= max_chars:
+        return txt
+    return f"{txt[:max_chars]}…"
+
+
+def _sanitize_debug_payload(payload: Any) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    news = payload.get("news")
+    attachments = payload.get("attachments")
+    features = payload.get("features")
+    return {
+        "question_excerpt": _truncate_str(
+            payload.get("question"), JUDGE_DEBUG_QUESTION_SNIPPET_CHARS
+        ),
+        "locale": payload.get("locale"),
+        "meta": payload.get("meta") if isinstance(payload.get("meta"), dict) else {},
+        "feature_keys": sorted(list(features.keys())) if isinstance(features, dict) else [],
+        "news_count": len(news) if isinstance(news, list) else 0,
+        "attachment_count": len(attachments) if isinstance(attachments, list) else 0,
+    }
+
+
+def _sanitize_debug_llm_res(res: Any) -> Dict[str, Any]:
+    if not isinstance(res, dict):
+        return {}
+    return {
+        "ok": res.get("ok"),
+        "provider": res.get("provider_raw") or res.get("provider"),
+        "model": res.get("model"),
+        "usage": res.get("usage") if isinstance(res.get("usage"), dict) else {},
+        "answer_excerpt": _truncate_str(
+            res.get("answer"), JUDGE_DEBUG_ANSWER_SNIPPET_CHARS
+        ),
+    }
+
+
+def _sanitize_verdict_for_public(verdict: Dict[str, Any], *, keep_raw: bool) -> Dict[str, Any]:
+    public_row = deepcopy(verdict)
+    if not keep_raw:
+        public_row.pop("raw_answer", None)
+    return public_row
+
+
+async def _compute_singleflight(
+    cache_key: str,
+    compute_fn: Callable[[], Awaitable[Dict[str, Any]]],
+) -> Tuple[Dict[str, Any], bool]:
+    """Compute once per cache_key and let concurrent callers await the same task."""
+    is_leader = False
+    async with _JUDGE_INFLIGHT_LOCK:
+        task = _JUDGE_INFLIGHT.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(compute_fn())
+            _JUDGE_INFLIGHT[cache_key] = task
+            is_leader = True
+    try:
+        result = await task
+        return result, is_leader
+    finally:
+        if is_leader:
+            async with _JUDGE_INFLIGHT_LOCK:
+                current = _JUDGE_INFLIGHT.get(cache_key)
+                if current is task:
+                    _JUDGE_INFLIGHT.pop(cache_key, None)
 
 
 def _normalize_ts_str(ts: Any) -> Optional[str]:
@@ -484,7 +589,10 @@ def _macro_profile(macro: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("")
+@router.get(
+    "",
+    response_model=JudgeResponse if JudgeResponse is not None else None,
+)
 async def get_judge_verdicts(
     limit: int = Query(20, ge=1, le=100, description="Limite de résultats (1-100)"),
     min_confidence: float = Query(
@@ -493,17 +601,24 @@ async def get_judge_verdicts(
     ticker: Optional[List[str]] = Query(
         None, description="Filtre par ticker (plusieurs autorisés)"
     ),
-    sort_by: Optional[str] = Query(
+    sort_by: JudgeSortBy = Query(
         "confidence",
         description="Tri par: confidence, expected_return, score, risk_level, timestamp",
     ),
-    sort_order: Optional[str] = Query("desc", description="Ordre de tri: asc, desc"),
+    sort_order: JudgeSortOrder = Query("desc", description="Ordre de tri: asc, desc"),
     profile: str = Query("equity_1w", description="Judge profile: equity_1w, sector_regime, etc"),
     debug: bool = Query(False, description="Active les traces et le payload LLM dans la réponse"),
+    debug_full: bool = Query(
+        False,
+        description="Inclut le payload debug complet (reserve admin; necessite JUDGE_ALLOW_DEBUG_FULL=1).",
+    ),
 ):
     """Get LLM judge verdicts for tickers (never-empty, cached). Supports multiple profiles."""
     logger.info(f"🔍 /api/judge called: limit={limit}, profile={profile}, ticker={ticker}")
     try:
+        debug_full_enabled = bool(debug and debug_full and JUDGE_ALLOW_DEBUG_FULL)
+        if debug and debug_full and not JUDGE_ALLOW_DEBUG_FULL:
+            logger.info("judge_debug_full_requested_but_not_allowed")
         cache_key: Optional[str] = None
         if not debug and JUDGE_CACHE_TTL_SECONDS > 0:
             cache_key = _judge_cache_key(
@@ -519,12 +634,7 @@ async def get_judge_verdicts(
                 age_seconds = time.time() - float(cached_entry.get("ts", 0.0))
                 if age_seconds < JUDGE_CACHE_TTL_SECONDS:
                     cached_data = deepcopy(cached_entry["data"])
-                    source = cached_data.get("source")
-                    if isinstance(source, list):
-                        if "judge_cache_hit" not in source:
-                            source.append("judge_cache_hit")
-                    else:
-                        cached_data["source"] = ["judge_route", "judge_cache_hit"]
+                    _append_source_tag(cached_data, "judge_cache_hit")
                     cached_data["cache"] = {
                         "hit": True,
                         "age_seconds": round(age_seconds, 3),
@@ -558,6 +668,8 @@ async def get_judge_verdicts(
                     pass
 
             add_trace("debug_start", limit=limit, profile=profile, ticker=ticker)
+            if debug and debug_full and not debug_full_enabled:
+                add_trace("debug_full_denied", reason="set JUDGE_ALLOW_DEBUG_FULL=1")
 
             if _LLM_IMPORT_ERROR or not EconomicAnalyst or not EconomicInput:
                 logger.error(f"❌ LLM import error: {_LLM_IMPORT_ERROR}")
@@ -791,8 +903,8 @@ async def get_judge_verdicts(
                     "filters_applied": {
                         "min_confidence": min_confidence,
                         "tickers": ticker,
-                        "sort_by": sort_by,
-                        "sort_order": sort_order,
+                        "sort_by": str(sort_by),
+                        "sort_order": str(sort_order),
                         "limit": limit,
                     },
                     "generated_at": now_iso,
@@ -2726,8 +2838,12 @@ async def get_judge_verdicts(
                         },
                         **(
                             {
-                                "debug_payload": payload,
-                                "debug_llm_res": res,
+                                "debug_payload": payload
+                                if debug_full_enabled
+                                else _sanitize_debug_payload(payload),
+                                "debug_llm_res": res
+                                if debug_full_enabled
+                                else _sanitize_debug_llm_res(res),
                             }
                             if debug
                             else {}
@@ -2821,10 +2937,15 @@ async def get_judge_verdicts(
             )
 
             now_iso = datetime.utcnow().isoformat() + "Z"
+            include_raw_llm = bool(debug and debug_full_enabled)
+            public_limited_verdicts = [
+                _sanitize_verdict_for_public(v, keep_raw=include_raw_llm)
+                for v in limited_verdicts
+            ]
 
             response_obj = {
-                "verdicts": limited_verdicts,
-                "count": len(limited_verdicts),
+                "verdicts": public_limited_verdicts,
+                "count": len(public_limited_verdicts),
                 "stats": {
                     "total_verdicts": total_verdicts,
                     "high_confidence_count": high_conf_count,
@@ -2834,8 +2955,8 @@ async def get_judge_verdicts(
                 "filters_applied": {
                     "min_confidence": min_confidence,
                     "tickers": ticker,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order,
+                    "sort_by": str(sort_by),
+                    "sort_order": str(sort_order),
                     "limit": limit,
                 },
                 "generated_at": now_iso,
@@ -2855,6 +2976,11 @@ async def get_judge_verdicts(
                         logger.info("verdict_typed_failed", extra={"error": str(e)})
                         continue
 
+            if typed_verdicts and not include_raw_llm:
+                for tv in typed_verdicts:
+                    if isinstance(tv, dict):
+                        tv.pop("raw_answer", None)
+
             # On ne garde qu'une seule clé pour la liste finale : verdicts typés si dispo.
             if typed_verdicts:
                 response_obj["verdicts"] = typed_verdicts
@@ -2867,13 +2993,37 @@ async def get_judge_verdicts(
 
         # Ici on pourrait rebrancher load_or_compute si tu veux du cache :
         # verdicts_data = await load_or_compute("judge_verdicts", compute_judge_verdicts)
-        verdicts_data = await compute_judge_verdicts()
-        if cache_key and isinstance(verdicts_data, dict):
+        cache_leader = False
+        singleflight_waiter = False
+        if cache_key:
+            verdicts_data, cache_leader = await _compute_singleflight(
+                cache_key, compute_judge_verdicts
+            )
+            singleflight_waiter = not cache_leader
+        else:
+            verdicts_data = await compute_judge_verdicts()
+
+        if cache_key and cache_leader and isinstance(verdicts_data, dict):
             _JUDGE_RESPONSE_CACHE[cache_key] = {
                 "ts": time.time(),
                 "data": deepcopy(verdicts_data),
             }
             _prune_judge_cache()
+
+        if singleflight_waiter and isinstance(verdicts_data, dict):
+            verdicts_data = deepcopy(verdicts_data)
+            _append_source_tag(verdicts_data, "judge_singleflight_wait")
+            cache_meta = verdicts_data.get("cache")
+            if not isinstance(cache_meta, dict):
+                cache_meta = {}
+            cache_meta.update(
+                {
+                    "hit": False,
+                    "singleflight_waiter": True,
+                    "ttl_seconds": JUDGE_CACHE_TTL_SECONDS,
+                }
+            )
+            verdicts_data["cache"] = cache_meta
 
         return {
             "ok": True,
@@ -2899,8 +3049,8 @@ async def get_judge_verdicts(
                 "filters_applied": {
                     "min_confidence": min_confidence,
                     "tickers": ticker,
-                    "sort_by": sort_by,
-                    "sort_order": sort_order,
+                    "sort_by": str(sort_by),
+                    "sort_order": str(sort_order),
                     "limit": limit,
                 },
                 "generated_at": now_iso,

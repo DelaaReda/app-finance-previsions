@@ -71,7 +71,7 @@ class NewsItem(BaseModel):
     ts: Optional[str]
     source: Optional[str]
     summary: Optional[str] = Field(None, max_length=300)
-    tickers: List[str] = Field(default_factory=list, max_items=20)
+    tickers: List[str] = Field(default_factory=list, max_length=20)
     age_hours: Optional[float] = None
 
 class PhaseScores(BaseModel):
@@ -92,7 +92,7 @@ class JudgePayload(BaseModel):
     ticker: str = Field(..., pattern=r"^[A-Z0-9]{1,8}$")
     features: Dict[str, Any]
     phases: Dict[str, Any]
-    news: List[NewsItem] = Field(default_factory=list, max_items=30)
+    news: List[NewsItem] = Field(default_factory=list, max_length=30)
     attachments: Optional[List[Dict[str, Any]]] = None
     locale: str = "fr-FR"
     meta: Dict[str, Any]

@@ -61,13 +61,13 @@ Forecast-first constraint:
 - Epic 7: `TV7-MACRO-01..06`
 - Epic 8: `TV8-COST-01..06`
 - Epic 9: `TV9-LOOP-01..06`
-- Epic 10: `TV10-DATA-01..06`
+- Epic 10: `TV10-DATA-01..07`
 - Epic 11: `TV11-UX-01..06`
 - Epic 12: `TV12-ALRT-01..06`
-- Epic 13: `TV13-OPS-01..06`
-- Epic 14: `TV14-SHIP-01..06`
-- Epic 15: `TV15-ML-01..06`
-- Epic 16: `TV16-FF-01..06`
+- Epic 13: `TV13-OPS-01..09`
+- Epic 14: `TV14-SHIP-01..07`
+- Epic 15: `TV15-ML-01..07`
+- Epic 16: `TV16-FF-01..10`
 
 Reference:
 - `docs/planning/tasks.md` (`Vision Task Pack - Sprint W10`, `Code-Audit Advance Pack`, `Full Epic Decomposition - All Epics`)

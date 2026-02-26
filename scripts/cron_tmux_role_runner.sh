@@ -40,6 +40,9 @@ CODEX_EXEC_FALLBACK="${TMUX_ROLE_CODEX_EXEC_FALLBACK:-1}"
 CODEX_EXEC_MODEL="${TMUX_ROLE_CODEX_MODEL:-gpt-5.3-codex}"
 CODEX_NO_ALT_SCREEN="${TMUX_ROLE_CODEX_NO_ALT_SCREEN:-1}"
 CODEX_EXEC_RESUME="${TMUX_ROLE_CODEX_EXEC_RESUME:-0}"
+CODEX_SEARCH_ENABLED="${TMUX_ROLE_CODEX_SEARCH_ENABLED:-1}"
+CODEX_SANDBOX_MODE="${TMUX_ROLE_CODEX_SANDBOX_MODE:-danger-full-access}"
+CODEX_APPROVAL_POLICY="${TMUX_ROLE_CODEX_APPROVAL_POLICY:-never}"
 ROLE_ALLOW_FILE_EDITS="${TMUX_ROLE_ALLOW_FILE_EDITS:-auto}"
 ALLOW_WORKBOARD_ONLY_DELIVERY="${TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY:-0}"
 mkdir -p "$STATE_DIR" "$TRACE_DIR"
@@ -87,6 +90,17 @@ fi
 if ! [[ "$CODEX_EXEC_RESUME" =~ ^[01]$ ]]; then
   CODEX_EXEC_RESUME=0
 fi
+if ! [[ "$CODEX_SEARCH_ENABLED" =~ ^[01]$ ]]; then
+  CODEX_SEARCH_ENABLED=1
+fi
+case "$CODEX_SANDBOX_MODE" in
+  read-only|workspace-write|danger-full-access) ;;
+  *) CODEX_SANDBOX_MODE="danger-full-access" ;;
+esac
+case "$CODEX_APPROVAL_POLICY" in
+  untrusted|on-failure|on-request|never) ;;
+  *) CODEX_APPROVAL_POLICY="never" ;;
+esac
 if [[ "$ROLE_ALLOW_FILE_EDITS" != "0" && "$ROLE_ALLOW_FILE_EDITS" != "1" && "$ROLE_ALLOW_FILE_EDITS" != "auto" ]]; then
   ROLE_ALLOW_FILE_EDITS="auto"
 fi
@@ -188,6 +202,35 @@ else:
 PY
 }
 
+runtime_workboard_role_has_in_progress() {
+  if [[ ! -f "$WORKBOARD_FILE" ]]; then
+    echo "0"
+    return 0
+  fi
+  python3 - "$WORKBOARD_FILE" "$ROLE" <<'PY' 2>/dev/null || echo "0"
+import json
+import sys
+from pathlib import Path
+
+board_path = Path(sys.argv[1])
+role = sys.argv[2]
+try:
+    board = json.loads(board_path.read_text(encoding="utf-8"))
+except Exception:
+    print("0")
+    raise SystemExit(0)
+
+for task in board.get("tasks", []):
+    if str(task.get("role", "")) != role:
+        continue
+    if str(task.get("state", "")).upper() == "IN_PROGRESS":
+        print("1")
+        break
+else:
+    print("0")
+PY
+}
+
 runtime_source_version() {
   local path="$1"
   local prefix="$2"
@@ -216,12 +259,18 @@ RUNTIME_WORKBOARD_ROLE_HAS_WORK="$(runtime_workboard_role_has_work)"
 if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" =~ ^[01]$ ]]; then
   RUNTIME_WORKBOARD_ROLE_HAS_WORK="0"
 fi
+RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="$(runtime_workboard_role_has_in_progress)"
+if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" =~ ^[01]$ ]]; then
+  RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="0"
+fi
 RUNTIME_QUEUE_VERSION="$(runtime_source_version "docs/orchestrator-ops/priority-queue.json" "queue")"
 RUNTIME_WORKBOARD_VERSION="$(runtime_source_version "$WORKBOARD_FILE" "workboard")"
 # Auto-delivery roles only run in write/delivery mode when there is an actual READY item.
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   if [[ "$RUNTIME_QUEUE_HAS_READY" != "1" ]]; then
-    if [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" == "1" && "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" == "1" ]]; then
+    if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" ]]; then
+      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+    elif [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" == "1" && "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" == "1" ]]; then
       ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
     else
       ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
@@ -250,11 +299,28 @@ target_session_name() {
 }
 
 agent_launch_command() {
-  if [[ "${AGENT_BIN_NAME,,}" == "codex" && "$CODEX_NO_ALT_SCREEN" == "1" ]]; then
-    printf '%s --no-alt-screen' "$AGENT_BIN"
-  else
+  if [[ "${AGENT_BIN_NAME,,}" != "codex" ]]; then
     printf '%s' "$AGENT_BIN"
+    return 0
   fi
+  local cmd="$AGENT_BIN"
+  if [[ "$CODEX_NO_ALT_SCREEN" == "1" ]]; then
+    cmd="${cmd} --no-alt-screen"
+  fi
+  cmd="${cmd} --sandbox ${CODEX_SANDBOX_MODE} -a ${CODEX_APPROVAL_POLICY}"
+  if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+    cmd="${cmd} --search"
+  fi
+  printf '%s' "$cmd"
+}
+
+build_codex_global_args() {
+  local -a args=()
+  args+=(--sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
+  if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+    args+=(--search)
+  fi
+  printf '%s\n' "${args[@]}"
 }
 
 health_roles() {
@@ -496,7 +562,7 @@ enforce_role_delivery_contract() {
   local tmp=""
   tmp="$(mktemp)"
   cat > "$tmp"
-  python3 - "$ROLE" "$source" "$tmp" "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" "$RUNTIME_QUEUE_VERSION" "$RUNTIME_WORKBOARD_VERSION" <<'PY'
+  python3 - "$ROLE" "$source" "$tmp" "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" "$RUNTIME_QUEUE_VERSION" "$RUNTIME_WORKBOARD_VERSION" <<'PY'
 import json
 import re
 import sys
@@ -508,8 +574,9 @@ source = sys.argv[2]
 payload_path = Path(sys.argv[3])
 allow_file_edits = sys.argv[4] == "1"
 workboard_role_has_work = sys.argv[5] == "1"
-runtime_queue_version = sys.argv[6]
-runtime_workboard_version = sys.argv[7]
+workboard_role_has_in_progress = sys.argv[6] == "1"
+runtime_queue_version = sys.argv[7]
+runtime_workboard_version = sys.argv[8]
 text = payload_path.read_text(encoding="utf-8", errors="ignore")
 
 keys = [
@@ -674,12 +741,43 @@ if lock_check != "ok":
         f"role={role}; source={source}; required=lock_check=ok in EVIDENCE",
     )
 
+if allow_file_edits and workboard_role_has_in_progress and task_update in {"analysis_only", "none_no_ready", "none_no_signal"}:
+    emit_blocked(
+        "IN_PROGRESS_NO_RESUME",
+        f"role={role}; source={source}; task_update={task_update}; required=claim|complete|blocked|handoff when workboard_in_progress=1",
+    )
+
 has_artifact_marker = required_marker in values.get("EVIDENCE", "").upper() or bool(evidence_kv.get(required_artifact_key))
 if not has_artifact_marker:
     emit_blocked(
         "ROLE_ARTIFACT_MISSING",
         f"role={role}; source={source}; required_marker={required_marker}",
     )
+
+role_required_evidence_keys = {
+    "planner": ("vision_rule", "conformance"),
+}
+required_evidence_keys = role_required_evidence_keys.get(role, tuple())
+if required_evidence_keys:
+    missing_required = [k for k in required_evidence_keys if not evidence_kv.get(k, "").strip()]
+    if missing_required:
+        emit_blocked(
+            "ROLE_MENTOR_EVIDENCE_MISSING",
+            f"role={role}; source={source}; missing={','.join(missing_required)}; required={','.join(required_evidence_keys)}",
+        )
+
+if role == "planner":
+    conformance = evidence_kv.get("conformance", "").strip().upper()
+    if conformance not in {"PASS", "WARN", "BLOCKED"}:
+        emit_blocked(
+            "PLANNER_CONFORMANCE_INVALID",
+            f"role={role}; source={source}; conformance={conformance or 'missing'}; allowed=PASS,WARN,BLOCKED",
+        )
+    if (queue_has_ready or workboard_role_has_in_progress) and not evidence_kv.get("task_id", "").strip():
+        emit_blocked(
+            "PLANNER_TASK_ID_MISSING",
+            f"role={role}; source={source}; required=task_id when queue_ready=1 or workboard_in_progress=1",
+        )
 
 if not evidence_kv.get("queue_version", "").strip():
     values["EVIDENCE"] = append_evidence(values.get("EVIDENCE", ""), f"queue_version={runtime_queue_version}")
@@ -1170,9 +1268,11 @@ build_prompt() {
     planner)
       cat <<'PROMPT'
 ROLE=planner.
-Read docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, and finance-app/openclaw-gates.
+Read docs/planning/PRODUCT_VISION.md, docs/planning/epics.md, docs/planning/tasks.md, docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, and finance-app/openclaw-gates.
 Do not modify files.
-Obligatoire: EVIDENCE doit contenir planner_artifact=<fichier_ou_preuve_planification>.
+Role mentor: valider que le travail READY/IN_PROGRESS est conforme a la vision produit (forecast-first, prevision API->UI visible, decision en 2-3 clics, cout runtime raisonnable).
+Analyser au moins un task READY/IN_PROGRESS par tick et publier un verdict de conformite avec regle explicite.
+Obligatoire: EVIDENCE doit contenir planner_artifact=<preuve_mentor>, task_id=<task>, vision_rule=<regle_verifiee>, conformance=<PASS|WARN|BLOCKED>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -1455,11 +1555,11 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready> et lock_check=ok. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready> et lock_check=ok. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. N'invente pas de blocker historique non présent dans queue_states."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
-  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode analyse: n'édite pas de fichiers et ne déclenche pas d'actions externes. Si aucune tâche n'est READY, utilise task_update=analysis_only."
+  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode analyse: n'édite pas de fichiers et ne déclenche pas d'actions externes. Si queue_has_ready=0 et workboard_role_has_in_progress=0, utilise task_update=analysis_only."
 fi
 
 build_runtime_context() {
@@ -1473,6 +1573,7 @@ build_runtime_context() {
   local workstate_hint=""
   local parallel_hint=""
   local workboard_role_has_work=""
+  local workboard_role_has_in_progress=""
   local agent_memory_hint=""
   local self_last_contract_hint=""
   local peer_contracts_hint_text=""
@@ -1498,6 +1599,7 @@ build_runtime_context() {
     parallel_hint="$(python3 scripts/parallel_workstream.py status --role "$ROLE" --compact --limit 3 2>/dev/null | tr '\n' '; ' | tr -s ' ' | cut -c1-380)"
   fi
   workboard_role_has_work="${RUNTIME_WORKBOARD_ROLE_HAS_WORK:-0}"
+  workboard_role_has_in_progress="${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}"
   agent_memory_hint="$(compact_file_tail "${ROLE_MEMORY_DIR}/${ROLE}.md" 24 420)"
   self_last_contract_hint="$(read_last_contract_hint "$LAST_CONTRACT_FILE" "self" | cut -c1-420)"
   peer_contracts_hint_text="$(peer_contracts_hint)"
@@ -1506,7 +1608,7 @@ build_runtime_context() {
   team_iteration_tail="$(compact_file_tail "$TEAM_ITER_FILE" 8 260)"
   trace_tail="$(compact_file_tail "$TRACE_FILE" 8 280)"
 
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs' \
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs' \
     "${now_iso:-unknown}" \
     "${queue_states:-none}" \
     "${queue_has_ready:-0}" \
@@ -1518,6 +1620,7 @@ build_runtime_context() {
     "${workstate_hint:-none}" \
     "${parallel_hint:-none}" \
     "${workboard_role_has_work:-0}" \
+    "${workboard_role_has_in_progress:-0}" \
     "${agent_memory_hint:-none}" \
     "${self_last_contract_hint:-none}" \
     "${peer_contracts_hint_text:-none}" \
@@ -1637,8 +1740,14 @@ codex_exec_prompt_once() {
   local sid_new=""
   local msg=""
   local used_resume=0
+  local -a codex_cmd=()
 
   prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick")"
+  while IFS= read -r token; do
+    [[ -z "$token" ]] && continue
+    codex_cmd+=("$token")
+  done < <(build_codex_global_args)
+
   if [[ "$CODEX_EXEC_RESUME" == "1" ]]; then
     allow_resume=1
     session_id="$(read_codex_session_id)"
@@ -1649,7 +1758,7 @@ codex_exec_prompt_once() {
   if [[ "$allow_resume" -eq 1 && -n "$session_id" ]]; then
     used_resume=1
     set +e
-    output="$(timeout "${timeout_seconds}" codex exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
     if [[ $rc -ne 0 ]] && printf '%s\n' "$output" | rg -qi 'session.*not found|unknown session|invalid session|no such session'; then
@@ -1660,7 +1769,7 @@ codex_exec_prompt_once() {
 
   if [[ -z "$session_id" ]]; then
     set +e
-    output="$(timeout "${timeout_seconds}" codex exec --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
   fi
@@ -1678,7 +1787,7 @@ codex_exec_prompt_once() {
     # Resume can occasionally return an empty content turn; retry once on a fresh thread.
     clear_codex_session_id
     set +e
-    output="$(timeout "${timeout_seconds}" codex exec --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
     sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"

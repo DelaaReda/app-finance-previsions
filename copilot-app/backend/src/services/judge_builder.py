@@ -408,8 +408,8 @@ def build_judge_verdict(row: Dict[str, Any], profile: Optional[str] = None) -> J
         confidence = 0.0
 
     # --- Risk level ---
-    risk_level = row.get("risk_level", "medium")
-    if risk_level not in ("low", "medium", "high"):
+    risk_level = str(row.get("risk_level", "medium") or "medium").strip().lower()
+    if risk_level not in ("low", "medium", "high", "critical"):
         risk_level = "medium"
 
     # --- Summary / lists principales ---

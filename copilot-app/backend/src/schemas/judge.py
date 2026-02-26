@@ -199,8 +199,8 @@ class JudgeVerdict(BaseModel):
         default=None, description="Expected return brut avant mélange ml_prior"
     )
 
-    risk_level: Literal["low", "medium", "high"] = Field(
-        ..., description="Niveau de risque agrégé (low/medium/high)"
+    risk_level: Literal["low", "medium", "high", "critical"] = Field(
+        ..., description="Niveau de risque agrégé (low/medium/high/critical)"
     )
 
     # Confiance
@@ -302,7 +302,9 @@ class JudgeStats(BaseModel):
 class JudgeFiltersApplied(BaseModel):
     min_confidence: float
     tickers: Optional[List[str]] = None
-    sort_by: Optional[str] = None
+    sort_by: Optional[
+        Literal["confidence", "expected_return", "score", "risk_level", "timestamp"]
+    ] = "confidence"
     sort_order: Optional[Literal["asc", "desc"]] = "desc"
     limit: int
 
@@ -314,9 +316,14 @@ class JudgeData(BaseModel):
     filters_applied: JudgeFiltersApplied
     generated_at: datetime
     source: Optional[List[str]] = None
+    cache: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+    debug_pipeline: Optional[List[Dict[str, Any]]] = None
+    verdicts_raw: Optional[List[Dict[str, Any]]] = None
 
 
 class JudgeResponse(BaseModel):
     ok: bool
     data: JudgeData
-    freshness: datetime
+    freshness: str

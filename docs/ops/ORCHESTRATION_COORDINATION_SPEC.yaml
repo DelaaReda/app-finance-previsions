@@ -1,11 +1,17 @@
 spec:
   id: "openclaw-parallel-orchestration-coordination"
-  version: "1.1.0"
+  version: "1.1.1"
   status: "active"
   language: "fr"
   generated_at_utc: "2026-02-26T00:00:00Z"
-  updated_at_utc: "2026-02-26T19:20:00Z"
+  updated_at_utc: "2026-02-26T23:10:00Z"
   change_log:
+    - date_utc: "2026-02-26"
+      version: "1.1.1"
+      changes:
+        - "Ajoute workboard_role_has_in_progress au runtime context obligatoire."
+        - "Documente le profil codex delivery (search web + sandbox full-access + approval never)."
+        - "Ajoute la matrice tooling OpenClaw (web/browser/skills) pour accelerer dev et QA."
     - date_utc: "2026-02-26"
       version: "1.1.0"
       changes:
@@ -175,6 +181,9 @@ baseline_actuelle:
       TMUX_ROLE_CODEX_EXEC_RESUME: 1
       TMUX_ROLE_CODEX_EXEC_FALLBACK: 1
       TMUX_ROLE_CODEX_MODEL: "gpt-5.3-codex"
+      TMUX_ROLE_CODEX_SEARCH_ENABLED: 1
+      TMUX_ROLE_CODEX_SANDBOX_MODE: "danger-full-access"
+      TMUX_ROLE_CODEX_APPROVAL_POLICY: "never"
       PROMPT_TIMEOUT_SECONDS: 55
       RETRY_PROMPT_TIMEOUT_SECONDS: 30
       TMUX_ROLE_RECOVERY_THRESHOLD: 2
@@ -183,6 +192,36 @@ baseline_actuelle:
       timeoutSeconds: 480
       thinking: "high"
       delivery_mode: "none"
+
+  tooling_capabilities:
+    web_and_browser:
+      browser_enabled: true
+      web_search_enabled: true
+      web_fetch_enabled: true
+      expected_usage:
+        - "analyst/architect: recherche exigences et contraintes"
+        - "dev/backend/frontend: lookup docs + verification implementation"
+        - "tester/qa: reproduction et verification browser"
+    core_delivery_skills:
+      - "api-tester"
+      - "test-runner"
+      - "playwright-mcp"
+      - "finance-regression-gate"
+      - "debug-pro"
+      - "tmux"
+      - "codex-orchestration"
+    evidence_recommendation:
+      - "tools_used=<comma_list>"
+      - "web_ref=<url_or_doc_ref>"
+      - "browser_ref=<trace_or_session_ref>"
+      - "tooling_check=<PASS|BLOCKED>"
+      - "tooling_ref=<path_or_run_ref>"
+    tooling_preflight:
+      command: "bash scripts/dev_qa_tooling_check.sh"
+      pass_condition: "VERDICT: PASS"
+      usage_rule: "requis avant activation graduelle d'un nouveau role cron et avant QA finale batch"
+      fail_fast_on:
+        - "INV-QUEUE-CLOSED-WITH-OPEN-TASKS"
 
 execution_model:
   tick_lifecycle:
@@ -215,6 +254,7 @@ execution_model:
       - "workstate_hint"
       - "parallel_hint"
       - "workboard_role_has_work"
+      - "workboard_role_has_in_progress"
       - "agent_memory"
       - "self_last_contract"
       - "peer_contracts"
@@ -424,6 +464,22 @@ coordination_and_ordination:
       remediation:
         - "de-bottleneck via reassignment/WIP reduction"
         - "escalation admin-agents si repetition >=2 ticks"
+    - id: "INV-INPROGRESS-STALE"
+      severity: "WARN"
+      rule: "une task IN_PROGRESS ne doit pas rester sans progression au-dela du SLA stale (default 4h)"
+      detection: "python3 scripts/parallel_workstream.py validate --in-progress-stale-seconds <sec>"
+      owner: "scrum_master"
+      remediation:
+        - "reclaim_or_close de la task stale"
+        - "si cause technique: blocker explicite sur la task (raison verifiable)"
+    - id: "INV-QUEUE-CLOSED-WITH-OPEN-TASKS"
+      severity: "WARN"
+      rule: "un stream marque PASS/CLOSED dans la queue ne doit plus avoir de tasks READY/IN_PROGRESS/REVIEW/BLOCKED dans le workboard"
+      detection: "python3 scripts/parallel_workstream.py validate"
+      owner: "scrum_master"
+      remediation:
+        - "reopen le stream dans priority-queue si du travail reste a livrer"
+        - "sinon cloturer/archiver les tasks restantes du workboard"
 
 conflict_prevention:
   locking_mechanisms:
@@ -439,7 +495,8 @@ conflict_prevention:
 
   queue_first_delivery_gate:
     rule:
-      MUST: "roles editables restent en read-only tant que queue_has_ready=0"
+      MUST: "roles editables restent en read-only quand queue_has_ready=0 ET workboard_role_has_in_progress=0"
+      MUST_override: "si workboard_role_has_in_progress=1, la reprise delivery est autorisee pour fermer/mettre a jour la task en cours"
       MAY_override: "TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY=1 pour mode exceptionnel"
     objective: "eviter le codage hors priorites et les sorties fictives"
 
@@ -541,6 +598,10 @@ proofs_of_delivery:
 delivery_quality_gates:
   objective: "augmenter la qualite des livraisons via gates simples, reproductibles et tracables"
   gates:
+    - id: "GATE-00-TOOLING-READINESS"
+      MUST: "le preflight outillage dev/qa doit etre PASS avant scale-up parallel ou QA finale"
+      command: "bash scripts/dev_qa_tooling_check.sh"
+      evidence_hint: "tooling_check=PASS; tooling_ref=<run_or_log_ref>"
     - id: "GATE-01-COMMAND-SAFETY"
       MUST: "toute commande shell executee pour livraison doit passer par scripts/exec_safe.sh"
       implementation_ref: "scripts/exec_safe.sh + scripts/command_safety_gate.py"
@@ -947,11 +1008,13 @@ organizational_model:
 
   role_charters:
     planner:
-      mission: "decomposer la demande en streams/lots executable"
+      mission: "mentor de conformite vision: verifier que le travail READY/IN_PROGRESS respecte la vision produit"
       entry_criteria:
         - "priority queue disponible"
+        - "vision produit explicite disponible (PRODUCT_VISION + epics/tasks)"
       exit_criteria:
-        - "streams explicitement relies a owners et deps"
+        - "au moins un verdict de conformite task-level publie avec regle verifiee"
+        - "si non-conformite: correction unique proposee et owner cible"
     analyst:
       mission: "clarifier exigences fonctionnelles et donnees"
       entry_criteria:

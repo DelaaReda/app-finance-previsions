@@ -53,7 +53,7 @@ ACTIVE_STATES = {STATE_IN_PROGRESS, STATE_REVIEW}
 READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY}
 
 ROLE_CATALOG: Dict[str, Dict[str, object]] = {
-    "planner": {"wip_limit": 2, "can_edit": False, "focus": "roadmap and dispatch"},
+    "planner": {"wip_limit": 2, "can_edit": False, "focus": "vision conformance mentoring and dispatch hygiene"},
     "analyst": {"wip_limit": 3, "can_edit": False, "focus": "requirements and assumptions"},
     "architect": {"wip_limit": 2, "can_edit": False, "focus": "constraints and design"},
     "backend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "api and backend impl"},
@@ -762,6 +762,7 @@ def validate_board(
     close_sla_seconds: int,
     proof_root: Path,
     require_proof_manifest: bool,
+    in_progress_stale_seconds: int,
 ) -> Tuple[List[str], List[str]]:
     errors: List[str] = []
     warnings: List[str] = []
@@ -854,6 +855,29 @@ def validate_board(
             f"INV-READY-SYNC:owner=scrum_master:queue_ready=0:board_ready={len(ready_tasks)}:sample={sample}:remediation=sync-priority"
         )
 
+    # INV-QUEUE-CLOSED-WITH-OPEN-TASKS (WARN): stream marked PASS/CLOSED in queue while actionable tasks remain.
+    actionable_states = {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
+    stream_open_tasks: Dict[str, List[str]] = {}
+    for task in tasks:
+        state = str(task.get("state", ""))
+        if state not in actionable_states:
+            continue
+        stream_id = str(task.get("stream_id", "")).strip().upper()
+        if not stream_id:
+            continue
+        stream_open_tasks.setdefault(stream_id, []).append(str(task.get("id", "")))
+
+    for stream_id, task_ids in sorted(stream_open_tasks.items()):
+        queue_state = queue_states.get(stream_id, "")
+        if queue_state not in {"PASS", "CLOSED"}:
+            continue
+        sample = ",".join([tid for tid in task_ids if tid][:5]) or "none"
+        warnings.append(
+            "INV-QUEUE-CLOSED-WITH-OPEN-TASKS:"
+            f"stream={stream_id}:queue_state={queue_state}:open_tasks={len(task_ids)}:sample={sample}:"
+            "owner=scrum_master:remediation=reopen_queue_or_close_workboard_tasks"
+        )
+
     now = datetime.now(timezone.utc)
     for handoff in board.get("handoffs", []):
         task_ref = str(handoff.get("task_id", ""))
@@ -885,6 +909,19 @@ def validate_board(
                 warnings.append(
                     f"INV-HANDOFF-SLA:CLOSE_OVERDUE_AFTER_ACK:handoff={hid}:age={ack_age}s:owner=scrum_master:remediation=handoff-close_or_reassign"
                 )
+
+    for task in tasks:
+        if str(task.get("state", "")) != STATE_IN_PROGRESS:
+            continue
+        tid = str(task.get("id", ""))
+        ref_time = _parse_utc(str(task.get("updated_at", ""))) or _parse_utc(str(task.get("started_at", "")))
+        if ref_time is None:
+            continue
+        age_seconds = int((now - ref_time).total_seconds())
+        if age_seconds > in_progress_stale_seconds:
+            warnings.append(
+                f"INV-INPROGRESS-STALE:task={tid}:age={age_seconds}s:owner=scrum_master:remediation=reclaim_or_close"
+            )
 
     return errors, warnings
 
@@ -1100,6 +1137,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_p.add_argument("--proof-root", default=str(DEFAULT_PROOF_ROOT), help="Proof manifest root directory")
     validate_p.add_argument("--require-proof-manifest", action="store_true", help="Block when DONE tasks have no proof manifest")
     validate_p.add_argument("--strict-warn", action="store_true", help="Treat warnings as blocking")
+    validate_p.add_argument("--in-progress-stale-seconds", type=int, default=14400, help="Warn on stale IN_PROGRESS tasks")
 
     sla_p = sub.add_parser("enforce-sla", help="Evaluate/apply handoff SLA ownership and escalation")
     sla_p.add_argument("--ack-sla-seconds", type=int, default=900)
@@ -1250,6 +1288,7 @@ def main() -> int:
                 close_sla_seconds=max(1, int(args.close_sla_seconds)),
                 proof_root=Path(str(args.proof_root)),
                 require_proof_manifest=bool(args.require_proof_manifest),
+                in_progress_stale_seconds=max(1, int(args.in_progress_stale_seconds)),
             )
             if errors or (warnings and bool(args.strict_warn)):
                 print("VALIDATE_BLOCKED")

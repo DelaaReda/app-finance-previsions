@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T17:46:46Z",
+  "updated_at": "2026-02-26T18:29:21Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -90,7 +90,7 @@
       "source_state": "PASS",
       "state": "IN_PROGRESS",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T06:33:32Z"
+      "updated_at": "2026-02-26T18:29:21Z"
     }
   ],
   "tasks": [
@@ -453,20 +453,29 @@
       "code": "ARCH",
       "title": "Contrats multi-ticker + news [ARCH]",
       "role": "architect",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ANALYSIS"
       ],
-      "assignee": "",
+      "assignee": "architect",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml"
+      ],
+      "notes": [
+        "tooling preflight dev_qa + contrat evidence web/browser/skills aligne",
+        "cmd=bash scripts/dev_qa_tooling_check.sh;tests_run=dev_qa_tooling_check:PASS,validate_parallel_plumbing:PASS;review_ref=docs/ops/ADMIN_TEAM_CHAT.md;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T17:42:57Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T18:13:35Z",
+      "started_at": "2026-02-26T18:09:01Z",
+      "completed_at": "2026-02-26T18:13:35Z",
+      "last_idempotency_key": "IK-fa933fc62bb2",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml"
+      ]
     },
     {
       "id": "BATCH-02-QA_PREP",
@@ -501,7 +510,7 @@
       "code": "TEST_PLAN",
       "title": "Contrats multi-ticker + news [TEST_PLAN]",
       "role": "tester",
-      "state": "IN_PROGRESS",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [],
       "assignee": "tester",
@@ -510,7 +519,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T06:33:32Z",
+      "updated_at": "2026-02-26T18:29:21Z",
       "started_at": "2026-02-26T06:33:32Z",
       "completed_at": ""
     },
@@ -550,7 +559,7 @@
       "code": "INFRA",
       "title": "Contrats multi-ticker + news [INFRA]",
       "role": "infra_engineer",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
@@ -561,7 +570,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T18:13:35Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -571,7 +580,7 @@
       "code": "BACKEND",
       "title": "Contrats multi-ticker + news [BACKEND]",
       "role": "backend_engineer",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
@@ -582,7 +591,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T18:13:35Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -592,7 +601,7 @@
       "code": "FRONTEND",
       "title": "Contrats multi-ticker + news [FRONTEND]",
       "role": "frontend_engineer",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
@@ -603,7 +612,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T18:13:35Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1261,6 +1270,43 @@
         "handoff_id": "none",
         "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml",
         "idempotency_key": "IK-roleflow-b01-scrum"
+      }
+    },
+    {
+      "at": "2026-02-26T18:04:14Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": "READ_ONLY_SANDBOX_PERMISSION_DENIED"
+      }
+    },
+    {
+      "at": "2026-02-26T18:09:01Z",
+      "kind": "claim",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-02-ARCH"
+      }
+    },
+    {
+      "at": "2026-02-26T18:13:35Z",
+      "kind": "complete",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-02-ARCH",
+        "artifact": "docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml",
+        "idempotency_key": "IK-fa933fc62bb2"
+      }
+    },
+    {
+      "at": "2026-02-26T18:29:21Z",
+      "kind": "unblock",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": ""
       }
     }
   ]

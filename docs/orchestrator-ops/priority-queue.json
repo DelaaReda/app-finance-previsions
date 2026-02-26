@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T01:20:42Z",
+  "updated_at": "2026-02-26T18:29:14Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -26,15 +26,15 @@
     {
       "id": "BATCH-02",
       "title": "Contrats multi-ticker + news",
-      "state": "PASS",
+      "state": "READY",
       "priority": "P1",
-      "owner_role": "qa",
+      "owner_role": "planner",
       "blocker_id": "NONE",
-      "dispatch_authorized": false,
-      "gate_reference": "BATCH-02 PASS (QA signoff artifact)",
-      "qa_signoff": "YES",
-      "qa_signoff_artifact": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
-      "next_action": "PREPARE_NEXT_PRIORITY_BATCH",
+      "dispatch_authorized": true,
+      "gate_reference": "BATCH-02 reopened from PASS because workboard has active tasks (2026-02-26)",
+      "qa_signoff": "NO",
+      "qa_signoff_artifact": "",
+      "next_action": "DISPATCH_BATCH02_REOPENED_AND_RESUME_ROLE_LANES",
       "depends_on": [
         "BATCH-01"
       ],

@@ -381,6 +381,7 @@ This section is the active product-priority lens for upcoming sprints.
   - training dataset and feature contract are versioned and reproducible
   - walk-forward backtests validate minimum robustness on MVP horizons
   - runtime forecasts expose explicit model provenance and calibrated confidence
+  - nominal runtime path is backed by a real model artifact/version (not snapshot-only heuristic)
   - core UI surfaces display these forecasts and provenance without hidden fallback
 
 ### Epic 16 (P0) - Forecast Delivery Contract (API -> UI)
@@ -388,5 +389,7 @@ This section is the active product-priority lens for upcoming sprints.
 - Done when:
   - forecast contract is unified across `/api/forecasts`, `/api/decision/brief`, `/api/judge`, `/api/copilot/ask`
   - decision UI surfaces (cards/brief/judge/ask) render forecast fields + provenance with no hidden fallback
+  - placeholder/mock payloads are removed from core decision flows in nominal mode
+  - quality status surfaced in UI is derived from live probes, not static fixtures
   - end-to-end tests prove API payload -> UI rendering on core flows
   - release gate blocks if one core flow misses forecast payload or provenance visibility
