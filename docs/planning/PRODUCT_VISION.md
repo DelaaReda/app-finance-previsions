@@ -24,12 +24,18 @@ Expected value:
 - Save 3-10 hours/week of manual research.
 - Detect directional shifts earlier (risk-on/risk-off, sector rotation, geopolitics).
 
+## Non-negotiable value edge
+- The core differentiator is **data-driven forecasts**, not generic summaries.
+- If forecasts are not generated from measurable data/model pipelines and shown clearly in UI, the product fails its core value.
+- Every decision surface must expose forecast provenance (`source=model|fallback`, `updated_at`, confidence context).
+
 ## Product principles
 - Decision support first, not auto-trading.
 - Actionable output over raw data dumps.
 - Freshness target over perfect precision.
 - Low-cost runtime by default (g4f/free providers first).
 - Explicit confidence + evidence for each recommendation.
+- Forecast-first rule: API and UI must prioritize model/data-based prediction output on every decision flow.
 
 ## Runtime and cost constraints
 - Runtime AI: prefer g4f/free providers + cheap fallbacks.
@@ -78,6 +84,8 @@ Per asset/sector card:
   - `Freshness SLA`: >= 90% of key tiles updated within 10 minutes.
 - KPI 2:
   - `Coverage SLA`: >= 90% of MVP universe has direction+confidence+action available at each refresh cycle.
+- KPI 3:
+  - `Forecast Provenance Coverage`: >= 95% of decision outputs expose `source/model_version/updated_at` (or explicit degraded fallback).
 
 ## Priority epics (product order)
 - P0 - Epic 1: Data Freshness and Signal Reliability Foundation

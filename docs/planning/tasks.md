@@ -36,6 +36,14 @@
 - Si une modification traverse 2 périmètres, elle doit être split selon les `Dependencies` existantes (pas de fusion opportuniste).
 - Toute exception cross-scope doit être signalée dans `EVIDENCE` et validée par `qa` avant merge batch.
 
+### Invariants forecast-first (valeur produit non-negociable)
+
+- Valeur differenciante MVP: les APIs doivent produire des previsions data-driven actionnables, pas seulement de l'affichage de donnees brutes.
+- Contrat forecast minimal attendu sur les surfaces decision: `action|direction`, `confidence`, `horizon`, `why`, `risk_flag`, `generated_at`, `freshness_status`.
+- Toute tache UI liee au flux principal doit afficher explicitement la prevision issue de l'API reelle (etat nominal + degraded), sans chemin mock en nominal.
+- Toute tache QA/gate doit bloquer (`BLOCKED`) si la preuve "prevision backend -> affichage UI -> evidence gate" est absente.
+- Les taches non-fonctionnelles (ops/securite/cout) doivent expliciter leur impact direct sur la fiabilite, latence ou disponibilite du pipeline de prevision.
+
 ### Mode co-édition multi-agents (fichiers modifiés en parallèle)
 
 - `docs/planning/tasks.md` est le board commun unique pour les tâches (pas de définition de tâches dans les autres docs).
@@ -170,6 +178,7 @@
   - Clients LLM fallback: `copilot-app/backend/src/services/g4f_client.py`, `copilot-app/backend/src/services/codestral_client.py`, `copilot-app/backend/src/services/groq_client.py`.
   - Working models list (g4f): `copilot-app/backend/src/agents/g4f_model_watcher.py` + endpoint debug `GET /api/llm/providers/working` (déjà présent dans `main.py`).
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS** (checklist copy-paste par endpoint):
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Avant de créer du code, **chercher** un helper existant (normalisation tickers, cache TTL, downsample, storage loader) et le réutiliser.
   - Garder un contrat stable: `ok/data` + champs standard `generated_at`, `freshness|timestamp`, `source[]`, `filters_applied`, `stats`, `warnings` (même si vide).
   - Ajouter un flag `debug=true` (query) qui:
@@ -188,6 +197,7 @@
 - **Prérequis**: backend bootable.
 - **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/tests/test_health.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le pattern Judge: enveloppe `ok/data` + `generated_at` + `source[]` (même si `/api/health` est simple).
   - Aligner les clés storage sur le reste du backend: préférer `storage.io.load_json("forecasts")`, `load_json("news_feed")`, `load_json("brief_weekly")`, `load_json("backtests")` (éviter les variantes `"*.json"` si pas nécessaires).
   - Ne pas renommer des clés existantes: ajouter des alias (ex: `timestamp`/`generated_at`) pour préserver compat client/tests.
@@ -213,6 +223,7 @@
 - **Prérequis**: snapshot `stocks/prices` ou fallback actif.
 - **Fichiers cibles**: `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser la normalisation existante: `core/ticker_normalization.py` (pas de parsing custom des tickers).
   - Réutiliser le cache TTL déjà en place (`_response_cache_key/_get/_set` + `STOCKS_PRICES_CACHE_TTL_SECONDS`) au lieu d'introduire un nouveau cache.
   - Réutiliser le downsampling existant (`_downsample_points` / `core.downsample.lttb`) pour garder un payload UI léger.
@@ -236,6 +247,7 @@
 - **Prérequis**: T-A2.1.
 - **Fichiers cibles**: `copilot-app/backend/tests/test_stocks_prices_contract.py` (nouveau)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les mêmes invariants que Judge: "never-empty" (pas de 500), `ok/data`, et clés stables (`count`, `timestamp|freshness`, `source[]`, `filters_applied`, `stats`, `warnings`).
   - Éviter les appels réseau dans les tests (pas de dépendance FRED/YFinance): baser le test sur la shape + fallback contract (payload vide acceptable, mais structure obligatoire).
 - **Plan implémentation**:
@@ -258,6 +270,7 @@
 - **Prérequis**: endpoint existant.
 - **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/src/api/services/news_service.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les helpers existants de normalisation (timestamps, `source[]`, filtrage fenêtre) au lieu de recoder un mapping.
   - Réutiliser `core/ticker_normalization.py` via la résolution tickers déjà utilisée côté `/api/news/feed` (éviter les filtres tickers fragiles).
   - Conserver l'alias compat `articles` (en plus de `items`) tant que le frontend n'est pas migré.
@@ -281,6 +294,7 @@
 - **Prérequis**: T-A3.1.
 - **Fichiers cibles**: `copilot-app/backend/tests/test_news_feed_contract.py` (nouveau)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Tester le contrat (shape) avant le contenu: `ok`, `data.items`, `data.count`, `data.generated_at`, `data.source[]`.
   - Ajouter un test `tickers=SPY,QQQ` qui accepte le fallback "filter relaxed" (warning) mais refuse un 500.
 - **Plan implémentation**:
@@ -302,6 +316,7 @@
 - **Prérequis**: boot backend OK.
 - **Fichiers cibles**: `copilot-app/backend/src/api/main.py`, `copilot-app/backend/src/api/routes/forecasts.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Prendre `/api/judge` comme modèle: un seul chemin "source of truth" + cache TTL + `debug=true` pour bypass cache et traces.
   - Réutiliser `src/core/response.ok/err` (routes modulaires) et harmoniser l'enveloppe (`ok/data`) avec `main.py` si nécessaire, au lieu de créer une 3e variante.
   - S'assurer que `/api/forecasts` lit les mêmes sources que Judge (`storage.io.load_json("forecasts")`) pour éviter des divergences "forecasts.json" vs "forecasts".
@@ -324,6 +339,7 @@
 - **Prérequis**: modules research importables.
 - **Fichiers cibles**: `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le client existant `copilot-app/backend/src/research/llm_client.py` (`ask_llm`) et aligner son fallback sur le pattern Judge (toujours `answer` non vide + `sources[]` + `generated_at` + `source[]`).
   - Si un fallback g4f est requis, préférer `services/g4f_client.call_g4f` (sélection modèle/provider + retour normalisé) plutôt que des appels g4f inline.
   - Ajouter un mode `debug` (query/body) qui expose `model/provider` + `citations` et garde le nominal compact.
@@ -346,6 +362,7 @@
 - **Prérequis**: contrats API A stabilisés.
 - **Fichiers cibles**: `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le pattern backend Judge: toutes les réponses sont `ok/data` (et potentiellement `source[]`, `freshness`). Le wrapper `fetchJson` doit normaliser ces champs sans "adapter" au cas par cas.
   - Réutiliser les IDs DOM + fonctions existantes dans `app.js` (pas de rewrite UI). Objectif: brancher, pas redesign.
 - **Plan implémentation**:
@@ -367,6 +384,7 @@
 - **Prérequis**: T-B1.1.
 - **Fichiers cibles**: `copilot-app/frontend/app/app.js`, `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les widgets existants (ne pas en recréer):
     - `copilot-app/frontend/app/components/widgets/kpi-cards-pro.html`
     - `copilot-app/frontend/app/components/widgets/forecast-scenarios.html`
@@ -393,6 +411,7 @@
 - **Prérequis**: B1 en place.
 - **Fichiers cibles**: `copilot-app/frontend/app/app.js`, `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser les champs backend standard (`source[]`, `warnings[]`, `freshness`) pour décider du badge au lieu d'heuristiques fragiles.
   - Le badge doit être par-widget (pas un global) pour refléter les dégradations partielles (pattern Judge: contract never-empty + warnings).
 - **Plan implémentation**:
@@ -414,6 +433,7 @@
 - **Prérequis**: tâches A/B principales.
 - **Fichiers cibles**: `skills/finance-regression-gate/` ou `scripts/` + `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les gates existants (`scripts/backend_regression_gate.sh`, `scripts/run_delivery_gate.sh`) et compléter plutôt que créer un nouveau framework.
   - Les checks doivent consommer les endpoints via le contrat `ok/data` et remonter les `source[]/warnings[]` (pattern Judge) dans l'artefact final.
 - **Plan implémentation**:
@@ -444,6 +464,7 @@
   - `scripts/validate_roles_sequential.sh`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Référencer explicitement le modèle Judge (section "Modèle de référence: Judge API") pour les conventions de contrat/caching/debug sur tous les endpoints du runbook.
   - Standardiser la collecte d'évidences: pour chaque endpoint, capturer un payload JSON + mentionner `source[]` et `freshness` dans l'artefact.
 - **Plan implémentation**:
@@ -669,6 +690,7 @@ Execution rule:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/forecasts.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -692,6 +714,7 @@ Execution rule:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/services/news_service.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -713,6 +736,7 @@ Execution rule:
   - `scripts/`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -736,6 +760,7 @@ Execution rule:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/schemas.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -757,6 +782,7 @@ Execution rule:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -780,6 +806,7 @@ Execution rule:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/data/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -801,6 +828,7 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -824,6 +852,7 @@ Execution rule:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -845,6 +874,7 @@ Execution rule:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -880,15 +910,18 @@ Execution rule:
 
 - TV3-JUDGE-01 - Multi-provider opinion collector (g4f-first).
   - INTEGRATION-APP-EENGINEER-RECOMMENDATIONS:
+    - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
     - Réutiliser le pattern `/api/judge` (cache TTL + debug bypass + Pydantic + JSON strict) comme squelette de l'endpoint.
     - g4f: réutiliser `services/g4f_client.call_g4f` + la liste `tested_g4f_models*_*.json` (pas d'appel g4f inline).
     - Réutiliser `agents/g4f_model_watcher.py` + `GET /api/llm/providers/working` pour piloter le choix des modèles/latences.
 - TV3-JUDGE-02 - Judge arbitration output (`final_action`, `confidence_delta`, `conflict_mode`).
   - INTEGRATION-APP-EENGINEER-RECOMMENDATIONS:
+    - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
     - Réutiliser `services/judge_builder.py` + `schemas/judge.py` pour figer un contrat canonique (et éviter une 2e shape "judge-like").
     - Conserver `source[]/warnings[]/generated_at` et exposer explicitement `fallback_used` quand une étape LLM échoue (pattern Judge).
 - TV5-ASK-01 - Ask Copilot deep analysis with grounded context.
   - INTEGRATION-APP-EENGINEER-RECOMMENDATIONS:
+    - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
     - Réutiliser `research/llm_client.ask_llm` (OpenAI->g4f->fallback) et aligner la réponse sur l'enveloppe Judge (`ok/data`, `sources[]`, `generated_at`, `source[]`).
     - Éviter d'introduire une nouvelle logique de RAG: s'appuyer sur `rag_store`/chunks existants et stabiliser le contrat + tests.
 
@@ -928,6 +961,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/mockData.js`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les widgets existants (référence: `copilot-app/frontend/app/components/widgets/`) et limiter le travail à "wiring + states" (pas de nouveaux composants).
   - Réutiliser le loader `componentLoader.js` et garder `index.html` comme inventaire de widgets chargés.
   - Propager des métadonnées backend standard vers l'UI (`source[]`, `freshness`, `warnings[]`) pour rendre le dégradé visible (pattern Judge).
@@ -950,6 +984,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/index.html`
   - `docs/planning/tasks.md` (notes de dispatch si besoin)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
   - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
   - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
@@ -968,6 +1003,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Normaliser strictement la shape `ok/data/error` et remonter les champs utiles sans les renommer (éviter des adapters widget-spécifiques).
   - Respecter le contrat backend "never-empty": si `ok=true` mais `data` partiel, l'UI doit afficher un état `degraded` plutôt que casser.
 - **Commandes de test**:
@@ -992,6 +1028,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/mockData.js` (désactivation partielle ciblée)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les widgets déjà présents: `kpi-cards-pro.html`, `forecast-scenarios.html`, `news-feed.html` (pas de nouveaux layouts).
   - Garder un fallback explicite par widget (badge + message) au lieu de masquer silencieusement les erreurs (pattern Judge: `warnings[]` + `source[]`).
 - **Commandes de test**:
@@ -1012,6 +1049,7 @@ Source audit (2026-02-26):
   - `copilot-app/backend/tests/` (si tests API supplémentaires nécessaires)
   - artefact de preuve dans `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
   - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
   - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
@@ -1037,6 +1075,7 @@ Source audit (2026-02-26):
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
   - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
   - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
@@ -1054,6 +1093,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/components/widgets/llm-judge.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le backend existant plutôt que créer un nouvel endpoint: `/api/llm/judge/run` (run) + `/api/llm/providers/working` (inventaire g4f).
   - S'inspirer du contrat typé Judge (`schemas/judge.py` + `services/judge_builder.py`) si on doit stabiliser les champs affichés côté UI.
   - Remplacer les étapes statiques "GPT-5/Claude/Gemini" par un rendu data-driven (afficher `model/provider` réellement utilisés et la provenance `source[]/fallback`).
@@ -1075,6 +1115,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/components/widgets/llm-judge.html`
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Calquer les états sur Judge API: `debug=false` nominal (cache/fast) vs `debug=true` (traces) et exposer `fallback_used` si présent.
   - Garder le contrat minimal: `consensus`, `confidence`, `models[]`, `reasons[]`, `warnings[]`, `source[]`.
 - **Evidence attendue**:
@@ -1093,6 +1134,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser `fetchJson` (TV-ADV-01-D1) pour tous les calls, sans exception.
   - Logger en debug uniquement (console) les champs `model/provider` et `source[]` pour faciliter le support sans bruit en nominal.
 - **Commandes de test**:
@@ -1112,6 +1154,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/components/widgets/llm-judge.html`
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser la structure DOM existante (`#judgeQuestion`, `#judgeProcessing`, `#judgeResult`) et enrichir le rendu, pas de nouveau widget.
   - Afficher un badge explicite `runtime|fallback` en se basant sur `source[]` et/ou `warnings[]` (pattern Judge).
 - **Commandes de test**:
@@ -1128,6 +1171,7 @@ Source audit (2026-02-26):
   - vérification absence de blocage JS
 - **Scope OUT**: test cross-browser complet.
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le contrat /api/judge et le composant widget Judge existant comme source unique du verdict UI.
   - Eviter toute shape parallele de donnees Judge; ajouter seulement des champs compatibles en extension.
   - Valider le wiring runtime avec preuves reseau/console et fallback explicite en cas dindisponibilite provider.
@@ -1150,6 +1194,7 @@ Source audit (2026-02-26):
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le contrat /api/judge et le composant widget Judge existant comme source unique du verdict UI.
   - Eviter toute shape parallele de donnees Judge; ajouter seulement des champs compatibles en extension.
   - Valider le wiring runtime avec preuves reseau/console et fallback explicite en cas dindisponibilite provider.
@@ -1166,6 +1211,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1188,6 +1234,7 @@ Source audit (2026-02-26):
   - définir règles d’ordre/cadence (debounce/cooldown)
 - **Scope OUT**: auto-refresh intelligent avancé.
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1205,6 +1252,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1225,6 +1273,7 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1239,6 +1288,7 @@ Source audit (2026-02-26):
   - vérifier changement visible de timestamps
   - vérifier cas erreur endpoint (degraded visible)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1261,6 +1311,7 @@ Source audit (2026-02-26):
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
   - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
   - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
@@ -1278,6 +1329,7 @@ Source audit (2026-02-26):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/services/snapshot_loader.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser `storage.io.load_json("<key>")` et les helpers timestamp (ex: `_to_utc_iso`) au lieu de chemins absolus.
   - Harmoniser les clés de fraîcheur avec Judge (`generated_at`, `freshness`, `last_update`, `data_timestamps`) pour que le frontend puisse afficher `fresh/stale/degraded` sans logique spéciale.
 - **Acceptation testable**:
@@ -1296,6 +1348,7 @@ Source audit (2026-02-26):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/research/versioned_notes.py` (ou storage dédié)
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le pattern "never-empty + source[] + generated_at" (Judge) pour éviter de casser le frontend quand l'historique est vide.
   - Stockage: préférer une solution déjà présente (ex: `versioned_notes.py` ou `storage.io`) plutôt qu'une nouvelle DB.
 - **Acceptation testable**:
@@ -1314,6 +1367,7 @@ Source audit (2026-02-26):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/dashboard.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser un seul module (source of truth) et faire pointer l'autre vers lui (import/adapter), plutôt que maintenir 2 implémentations divergentes.
   - Garder l'enveloppe `ok/data` et exposer `generated_at` + `source[]` pour que l'UI puisse tracer l'origine (pattern Judge).
 - **Acceptation testable**:
@@ -1334,6 +1388,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py` ou `copilot-app/backend/src/api/routes/recommendations.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les briques existantes au lieu d'appeler des providers LLM directement:
     - signaux/forecasts existants,
     - `GET /api/news/feed` normalisé,
@@ -1361,6 +1416,7 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Standardiser les assertions shape via le pattern Judge: vérifier `ok`, `data`, `generated_at`, `source[]`, et accepter `warnings[]` sans fail.
   - Garder les tests offline-friendly (pas d'appels externes requis).
 - **Acceptation testable**:
@@ -1382,6 +1438,7 @@ Source audit (2026-02-26):
   - `copilot-app/backend/src/schemas/judge.py`
   - `copilot-app/backend/src/api/routes/portfolios.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Préserver le contrat Judge (schémas + builder) pendant la migration: aucune rename de champs sans alias + tests.
   - Réutiliser les shims de compat déjà présents dans `schemas/judge.py` (v1/v2) et faire des changements incrémentaux pour éviter de casser l'environnement runtime.
 - **Acceptation testable**:
@@ -1402,6 +1459,7 @@ Source audit (2026-02-26):
   - `scripts/run_delivery_gate.sh`
   - `docs/scrum/sprint-next.md`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les mêmes métriques que les endpoints exposent déjà (`freshness`, `source[]`, `warnings[]`) plutôt que recalculer dans le gate.
   - Exiger une preuve UI liée aux endpoints réels (Judge/Signals/News/Forecasts), pas une capture d'un état mock.
 - **Acceptation testable**:
@@ -1431,6 +1489,29 @@ Task ID policy:
   - `sed -nE 's/^#{2,6}[[:space:]]+((T-[A-Z0-9.]+|TV[0-9A-Z-]+)).*/\1/p' docs/planning/tasks.md | sort | uniq -cd`
   - expected output: empty (no duplicate IDs).
 
+Forecast-first mandatory overrides (all relevant tasks):
+
+- API requirement:
+  - forecast-bearing endpoints must return model/data provenance fields at minimum:
+    - `source` (`model|fallback`)
+    - `updated_at`
+    - calibrated `confidence`
+    - explicit degraded/fallback warning when model path is unavailable
+- UI requirement:
+  - decision cards/brief/ask/judge screens must display forecast values and provenance explicitly
+  - hidden fallback behavior is forbidden
+- Gate requirement:
+  - if a core user flow returns only heuristic/non-data forecast without explicit degraded state -> `VERDICT: BLOCKED`
+
+Forecast-first rebaseline on existing tasks (no new IDs):
+
+- `TV2-SIGNAL-01..06`: must output model/data forecast provenance and calibrated confidence
+- `TV4-UI-01..07`: must render forecast output + provenance visibly in decision UI
+- `TV-ADV-07`: decision brief endpoint must include a primary forecast block from data/model pipeline
+- `TV5-ASK-01..06`: answers must reference current forecast payloads, not generic commentary only
+- `TV14-SHIP-06`: final go/no-go must fail if forecast-first criteria are unmet
+- `TV15-ML-01..06`: canonical data-driven forecasting pipeline track
+
 UI-first dispatch lane (recommended order):
 
 1. `TV-ADV-01-D2`
@@ -1459,6 +1540,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/forecasts.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -1479,6 +1561,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -1498,6 +1581,7 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
   - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
   - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
@@ -1520,6 +1604,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -1540,6 +1625,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -1560,6 +1646,7 @@ UI-first dispatch lane (recommended order):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
   - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
   - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
@@ -1582,6 +1669,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1602,6 +1690,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/schemas/judge.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1621,6 +1710,7 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1641,6 +1731,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/components/widgets/llm-judge.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1661,6 +1752,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1681,6 +1773,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
   - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
   - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
@@ -1704,6 +1797,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -1724,6 +1818,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -1743,6 +1838,7 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -1763,6 +1859,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/style.css`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
   - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
   - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
@@ -1785,6 +1882,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/copilot.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1805,6 +1903,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/context.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1825,6 +1924,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1845,6 +1945,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1865,6 +1966,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/services/judge_pipeline.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1885,6 +1987,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
   - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
   - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
@@ -1907,6 +2010,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/schemas/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -1926,6 +2030,7 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/portfolios.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -1946,6 +2051,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -1966,6 +2072,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -1986,6 +2093,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -2006,6 +2114,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
   - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
   - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
@@ -2028,6 +2137,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/context.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2048,6 +2158,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2068,6 +2179,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/routes/context.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2089,6 +2201,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2109,6 +2222,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2129,6 +2243,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
   - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
   - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
@@ -2151,6 +2266,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2171,6 +2287,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `scripts/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2191,6 +2308,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/services/judge_pipeline.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2211,6 +2329,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2231,6 +2350,7 @@ UI-first dispatch lane (recommended order):
   - `scripts/`
   - `docs/ops/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2251,6 +2371,7 @@ UI-first dispatch lane (recommended order):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
   - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
   - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
@@ -2273,6 +2394,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2293,6 +2415,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/recommendations.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2313,6 +2436,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2334,6 +2458,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2354,6 +2479,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2374,6 +2500,7 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
   - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
   - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
@@ -2397,6 +2524,7 @@ Basic-ready criteria (minimum functional baseline):
 - Mandatory user flow PASS:
   - open app -> get daily brief in <=3 clicks,
   - forecasts returned by model/data pipeline (not only heuristic fallback),
+  - forecast provenance (`source/model_version/updated_at`) visible in UI on core decision surfaces,
   - run Judge and Ask with grounded answers,
   - see freshness/degraded/runtime status clearly,
   - complete gate with no critical blockers.
@@ -2404,6 +2532,7 @@ Basic-ready criteria (minimum functional baseline):
 ### Epic 10 - Data Source Reliability and Ingestion Automation
 
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser le modèle Judge (section `Modèle de référence: Judge API`) pour standardiser `ok/data`, `generated_at`, `freshness`, `source[]`, `warnings[]` sur tous les endpoints d'ingestion/health.
   - Réutiliser les briques existantes avant d'ajouter du code:
     - loaders `storage.io.load_json(...)`,
@@ -2424,6 +2553,7 @@ Basic-ready criteria (minimum functional baseline):
   - `docs/ops/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2444,6 +2574,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2464,6 +2595,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2484,6 +2616,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/tests/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2504,6 +2637,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2524,6 +2658,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
   - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
   - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
@@ -2534,6 +2669,7 @@ Basic-ready criteria (minimum functional baseline):
 ### Epic 11 - UX Workflow and Personal Settings Basics
 
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les widgets HTML existants (`copilot-app/frontend/app/components/widgets/`) + le loader (`js/utils/componentLoader.js`) au lieu de créer de nouveaux composants.
   - Les features UX doivent se brancher sur les adaptateurs API (`fetchJson`) et afficher les métadonnées backend (`source[]`, `freshness`, `warnings[]`) pour éviter l'illusion "mock".
   - Toute nouvelle UI (drawer/actions/shortcuts) doit préserver les IDs DOM existants quand possible (éviter de casser `app.js`).
@@ -2551,6 +2687,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2571,6 +2708,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2591,6 +2729,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2610,6 +2749,7 @@ Basic-ready criteria (minimum functional baseline):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2630,6 +2770,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/backend/src/api/routes/portfolios.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2650,6 +2791,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
   - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
   - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
@@ -2672,6 +2814,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/routes/alerts.py`
   - `copilot-app/backend/src/schemas/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2692,6 +2835,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2712,6 +2856,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2732,6 +2877,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/recommendations.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2752,6 +2898,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2772,6 +2919,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
   - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
   - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
@@ -2794,6 +2942,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2814,6 +2963,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `scripts/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2834,6 +2984,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `copilot-app/backend/src/api/routes/portfolios.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2854,6 +3005,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `docs/ops/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2874,6 +3026,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `docs/ops/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2894,6 +3047,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
   - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
   - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
@@ -2916,6 +3070,7 @@ Basic-ready criteria (minimum functional baseline):
   - `docs/scrum/`
   - `docs/planning/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -2936,6 +3091,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -2956,6 +3112,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `docs/ops/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -2977,6 +3134,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/`
   - `copilot-app/frontend/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -2997,6 +3155,7 @@ Basic-ready criteria (minimum functional baseline):
   - `docs/ops/`
   - `scripts/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -3017,6 +3176,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
   - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
   - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
@@ -3039,6 +3199,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/data/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Réutiliser les flux ingestion normalisés (Epic 10) pour éviter des datasets ad hoc.
   - Versionner le schéma dataset pour empêcher les breaks silencieux.
   - Conserver le mapping direct vers le contrat signal (`direction/confidence/action`).
@@ -3059,6 +3220,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/`
   - `copilot-app/backend/src/core/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Garder un pipeline déterministe (seed fixe, split explicite).
   - Produire un artefact modèle local simple (pas d’infra externe requise).
   - Tracer métriques clés utilisées ensuite pour le gate.
@@ -3079,6 +3241,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/core/`
   - `scripts/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Éviter toute fuite temporelle (train < test strictement).
   - Utiliser les mêmes horizons et actifs que l’univers MVP.
   - Publier les résultats dans un format lisible par gate.
@@ -3099,6 +3262,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/forecasts.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Conserver contrat API stable (`ok/data`, freshness, source[], warnings[]).
   - Exposer `source=model` vs `source=fallback` de manière explicite.
   - Réutiliser cache TTL existant sans masquer la fraîcheur d’inférence.
@@ -3119,6 +3283,7 @@ Basic-ready criteria (minimum functional baseline):
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Appliquer des seuils simples et explicites pour réduire les faux niveaux de confiance.
   - Si drift détecté, réduire confidence et activer un warning utilisateur.
   - Aligner ces warnings avec les badges UI dégradés existants.
@@ -3139,6 +3304,7 @@ Basic-ready criteria (minimum functional baseline):
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
   - Vérifier explicitement la provenance `source=model` sur un échantillon MVP.
   - Bloquer si backtest ou calibration est absent/invalide.
   - Inclure preuve lisible pour décision GO/NO-GO produit.
@@ -3153,4 +3319,5 @@ Basic-ready criteria (minimum functional baseline):
 - 2026-02-26 America/New_York - Added Epic 7/8/9 tasks: macro-geopolitical radar, cost governance, and decision learning loop.
 - 2026-02-26 America/New_York - Added continuous delivery loop and Epic 10/11/12/13/14 task decomposition toward basic-ready MVP.
 - 2026-02-26 America/New_York - Added INTEGRATION-APP-EENGINEER-RECOMMENDATIONS to all remaining task IDs (123/123 coverage) to detail architecture per existing task without creating new backlog items.
+- 2026-02-26 America/New_York - Reoriented architecture to forecast-first value: global invariants now require data-driven forecast outputs from APIs and explicit UI/gate evidence; requirement propagated across all INTEGRATION-APP-EENGINEER-RECOMMENDATIONS blocks.
 - 2026-02-26 America/New_York - Added Epic 15 data-driven forecasting core (dataset, training, backtest, inference, calibration, QA gate).

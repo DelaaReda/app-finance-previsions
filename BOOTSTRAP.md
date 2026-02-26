@@ -34,6 +34,9 @@ But utilisateur:
 - réduire fortement le temps de veille/recherche
 - conserver un coût runtime faible
 
+Différenciateur non négociable:
+- fournir des **prévisions data-driven** (API + UI), pas seulement des résumés textuels.
+
 Contraintes:
 - personal-first (single user)
 - low-cost runtime (providers gratuits/faible coût priorisés)

@@ -267,6 +267,12 @@ bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp
 
 This section is the active product-priority lens for upcoming sprints.
 
+### Forecast-first guardrail (global, mandatory)
+- Release is invalid if forecast APIs are not data/model-driven on core flows.
+- Every decision-facing API must expose forecast provenance and freshness (`source`, `updated_at`, confidence context, fallback visibility).
+- UI must render forecast output clearly on decision cards/brief (no hidden fallback, no generic-only answers).
+- Gate rule: any flow returning only heuristic/non-data forecast without explicit degraded state => `BLOCKED`.
+
 ### Epic 1 (P0) - Data Freshness and Signal Reliability Foundation
 - Goal: keep market/context tiles fresh enough for daily decision making.
 - Done when:
@@ -280,6 +286,7 @@ This section is the active product-priority lens for upcoming sprints.
   - decision contract exists and is stable for MVP universe
   - short (1-3d) and swing (1-2w) horizons are both available
   - no silent schema drift between backend and frontend
+  - forecast provenance (`source/model_version/updated_at`) is present or explicit degraded fallback
 
 ### Epic 3 (P0) - Multi-Model Consensus and Judge
 - Goal: aggregate multiple low-cost model opinions into one final decision signal.
@@ -294,6 +301,7 @@ This section is the active product-priority lens for upcoming sprints.
   - user can reach daily brief in <= 3 interactions
   - card UI shows action, confidence, rationale, freshness
   - degraded data state is visible (no hidden mock-like behavior)
+  - forecast provenance is visible on core decision cards
 
 ### Epic 5 (P1) - Ask Copilot Deep Analysis
 - Goal: answer tactical questions with grounded market context.
@@ -301,6 +309,7 @@ This section is the active product-priority lens for upcoming sprints.
   - question flow returns concise action-oriented answer + evidence
   - answer includes market regime context + risk caveat
   - latency remains practical for daily use
+  - answers reference current forecast payloads (not generic-only synthesis)
 
 ### Epic 6 (P2) - Portfolio Adaptation Layer
 - Goal: align recommendations to user portfolio focus and risk posture.
@@ -371,3 +380,4 @@ This section is the active product-priority lens for upcoming sprints.
   - training dataset and feature contract are versioned and reproducible
   - walk-forward backtests validate minimum robustness on MVP horizons
   - runtime forecasts expose explicit model provenance and calibrated confidence
+  - core UI surfaces display these forecasts and provenance without hidden fallback

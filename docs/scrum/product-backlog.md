@@ -8,9 +8,12 @@ Source alignment:
 
 ## Prioritization Rule
 Order by:
-1. User decision impact (time saved + action clarity)
+1. Forecast value impact (data-driven prediction quality + visibility in UI)
 2. Reliability risk reduction
 3. Effort/cost efficiency
+
+Forecast-first constraint:
+- A feature is not considered high-value if it does not improve or expose data-driven forecasts.
 
 ## Backlog Items (active)
 
