@@ -8,12 +8,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from dataclasses import asdict
 import logging
 import math
 import re
+import time
+from copy import deepcopy
+from email.utils import parsedate_to_datetime
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Query, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -204,6 +208,17 @@ if not DEFAULT_STOCKS_UNIVERSE:
 STOCKS_CACHE_TTL_MINUTES = int(os.getenv("STOCKS_CACHE_TTL_MINUTES", "15") or "15")
 STOCKS_CACHE_TTL = timedelta(minutes=max(5, STOCKS_CACHE_TTL_MINUTES))
 _STOCKS_METRICS_CACHE: Dict[str, Dict[str, Any]] = {}
+RESPONSE_CACHE_MAX_ENTRIES = max(
+    32, int(os.getenv("RESPONSE_CACHE_MAX_ENTRIES", "128") or "128")
+)
+STOCKS_PRICES_CACHE_TTL_SECONDS = max(
+    0, int(os.getenv("STOCKS_PRICES_CACHE_TTL_SECONDS", "120") or "120")
+)
+NEWS_FEED_CACHE_TTL_SECONDS = max(
+    0, int(os.getenv("NEWS_FEED_CACHE_TTL_SECONDS", "90") or "90")
+)
+_STOCKS_PRICES_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_NEWS_FEED_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 # Import data access layer
@@ -302,6 +317,259 @@ def _parse_csv_list(value: Optional[str]) -> List[str]:
     if not value:
         return []
     return [item.strip().upper() for item in value.split(",") if item.strip()]
+
+
+def _utc_now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _response_cache_key(namespace: str, payload: Dict[str, Any]) -> str:
+    return f"{namespace}:{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
+
+
+def _normalize_source_tags(source: Any, fallback: Optional[List[str]] = None) -> List[str]:
+    tags: List[str] = []
+    if isinstance(source, list):
+        for item in source:
+            text = str(item).strip()
+            if text:
+                tags.append(text)
+    elif isinstance(source, str):
+        text = source.strip()
+        if text:
+            tags.append(text)
+    if not tags:
+        tags = list(fallback or [])
+    deduped: List[str] = []
+    seen = set()
+    for tag in tags:
+        if tag not in seen:
+            deduped.append(tag)
+            seen.add(tag)
+    return deduped
+
+
+def _prune_response_cache(cache_store: Dict[str, Dict[str, Any]]) -> None:
+    if len(cache_store) <= RESPONSE_CACHE_MAX_ENTRIES:
+        return
+    old_keys = sorted(cache_store.keys(), key=lambda key: cache_store[key].get("ts", 0.0))
+    for key in old_keys[: len(cache_store) - RESPONSE_CACHE_MAX_ENTRIES]:
+        cache_store.pop(key, None)
+
+
+def _response_cache_get(
+    cache_store: Dict[str, Dict[str, Any]],
+    key: str,
+    ttl_seconds: int,
+    cache_hit_tag: str,
+) -> Optional[Dict[str, Any]]:
+    if ttl_seconds <= 0:
+        return None
+    entry = cache_store.get(key)
+    if not entry or not isinstance(entry.get("data"), dict):
+        return None
+    age_seconds = time.time() - float(entry.get("ts", 0.0))
+    if age_seconds >= ttl_seconds:
+        cache_store.pop(key, None)
+        return None
+    cached_data = deepcopy(entry["data"])
+    source = _normalize_source_tags(cached_data.get("source"), fallback=[cache_hit_tag])
+    if cache_hit_tag not in source:
+        source.append(cache_hit_tag)
+    cached_data["source"] = source
+    cached_data["cache"] = {
+        "hit": True,
+        "age_seconds": round(age_seconds, 3),
+        "ttl_seconds": ttl_seconds,
+    }
+    return cached_data
+
+
+def _response_cache_set(
+    cache_store: Dict[str, Dict[str, Any]],
+    key: str,
+    payload: Dict[str, Any],
+) -> None:
+    cache_store[key] = {"ts": time.time(), "data": deepcopy(payload)}
+    _prune_response_cache(cache_store)
+
+
+def _normalize_requested_tickers(
+    ticker: Optional[str],
+    tickers: Optional[List[str]],
+) -> List[str]:
+    raw_values: List[str] = []
+    if ticker:
+        raw_values.append(ticker)
+    if tickers:
+        raw_values.extend([str(item) for item in tickers])
+
+    normalized: List[str] = []
+    seen = set()
+    for value in raw_values:
+        parts = re.split(r"[,\s;]+", str(value).strip().upper())
+        for token in parts:
+            if not token or token in seen:
+                continue
+            normalized.append(token)
+            seen.add(token)
+    return normalized
+
+
+def _downsample_points(points: Any, threshold: int) -> List[Any]:
+    points_list = points if isinstance(points, list) else []
+    if len(points_list) <= threshold:
+        return points_list
+    try:
+        return lttb(points_list, threshold=threshold)
+    except Exception:
+        step = max(1, len(points_list) // threshold)
+        return points_list[::step]
+
+
+def _parse_time_window_to_timedelta(window: str) -> timedelta:
+    token = (window or "").strip().lower()
+    match = re.match(r"^(\d+)\s*([hdwmy])$", token)
+    if not match:
+        return timedelta(days=7)
+    value = int(match.group(1))
+    unit = match.group(2)
+    if unit == "h":
+        return timedelta(hours=value)
+    if unit == "d":
+        return timedelta(days=value)
+    if unit == "w":
+        return timedelta(weeks=value)
+    if unit == "m":
+        return timedelta(days=value * 30)
+    if unit == "y":
+        return timedelta(days=value * 365)
+    return timedelta(days=7)
+
+
+def _coerce_utc_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, (int, float)):
+            dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
+        elif isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except Exception:
+                dt = parsedate_to_datetime(raw)
+        else:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _to_utc_iso(value: Any) -> Optional[str]:
+    dt = _coerce_utc_datetime(value)
+    if dt is None:
+        return None
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _normalize_news_article(article: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(article, dict):
+        return None
+
+    title = str(article.get("title") or article.get("headline") or "(sans titre)").strip()
+    url = str(article.get("url") or article.get("link") or "").strip()
+    source = article.get("source") or article.get("publisher")
+    if not source and url:
+        try:
+            source = urlparse(url).netloc.split(":")[0]
+        except Exception:
+            source = None
+    source_text = str(source).strip() if source else "unknown"
+
+    ticker_values: List[str] = []
+    raw_tickers = article.get("tickers")
+    if isinstance(raw_tickers, list):
+        ticker_values = [str(item).strip().upper() for item in raw_tickers if str(item).strip()]
+    elif isinstance(raw_tickers, str):
+        ticker_values = [token.strip().upper() for token in re.split(r"[,\s]+", raw_tickers) if token.strip()]
+    fallback_ticker = article.get("ticker") or article.get("symbol")
+    if fallback_ticker:
+        ticker_values.append(str(fallback_ticker).strip().upper())
+
+    deduped_tickers: List[str] = []
+    seen = set()
+    for token in ticker_values:
+        if token and token not in seen:
+            deduped_tickers.append(token)
+            seen.add(token)
+
+    raw_score = article.get("score")
+    if raw_score is None:
+        raw_score = article.get("relevance_score")
+    if raw_score is None:
+        raw_score = article.get("sentiment_score")
+    score = None
+    try:
+        if raw_score is not None:
+            score = float(raw_score)
+    except Exception:
+        score = None
+
+    published_raw = (
+        article.get("pubDate")
+        or article.get("published_at")
+        or article.get("published")
+        or article.get("date")
+        or article.get("timestamp")
+    )
+    published_dt = _coerce_utc_datetime(published_raw)
+    published_at = _to_utc_iso(published_raw)
+
+    return {
+        "title": title,
+        "url": url,
+        "published_at": published_at,
+        "date": published_at,
+        "source": source_text,
+        "tickers": deduped_tickers,
+        "score": score,
+        "summary": article.get("summary"),
+        "sentiment": article.get("sentiment"),
+        "_published_dt": published_dt,
+    }
+
+
+def _extract_news_items(payload: Any) -> List[Dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    items = payload.get("items") or payload.get("articles")
+    if not isinstance(items, list):
+        nested = payload.get("data")
+        if isinstance(nested, dict):
+            items = nested.get("items") or nested.get("articles")
+    if not isinstance(items, list):
+        return []
+    normalized: List[Dict[str, Any]] = []
+    for article in items:
+        item = _normalize_news_article(article)
+        if item:
+            normalized.append(item)
+    return normalized
+
+
+def _strip_internal_news_fields(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    for item in items:
+        normalized = {key: value for key, value in item.items() if not key.startswith("_")}
+        cleaned.append(normalized)
+    return cleaned
 
 
 def _infer_frequency(index: pd.Index) -> Optional[str]:
@@ -1129,143 +1397,266 @@ def register_routes(app: FastAPI):
         interval: str = Query("1d", description="Interval: 1d, 1wk, 1mo"),
         downsample: int = Query(1000, ge=100, le=10000, description="Max points (LTTB)")
     ):
-        """Get stock prices - reads from pre-computed data."""
+        """Get stock prices with judge-style response caching and stable metadata."""
+        now_iso = _utc_now_iso()
+        warnings: List[str] = []
+        filters_applied: Dict[str, Any] = {
+            "ticker": ticker,
+            "tickers": tickers,
+            "timeframe": timeframe,
+            "interval": interval,
+            "downsample": downsample,
+        }
         try:
             from storage.io import load_json
-            
-            # Determine which tickers to process
-            tickers_to_process = []
-            if ticker:
-                tickers_to_process = [ticker.upper()]
-            elif tickers and len(tickers) > 0:
-                tickers_to_process = [t.upper() for t in tickers]
-            else:
-                return _ok({
-                    "tickers": {},
-                    "range": timeframe,
+
+            tickers_to_process = _normalize_requested_tickers(ticker, tickers)
+            if not tickers_to_process:
+                tickers_to_process = DEFAULT_STOCKS_UNIVERSE[: min(6, len(DEFAULT_STOCKS_UNIVERSE))]
+                warnings.append("no_ticker_provided_default_universe_used")
+            filters_applied["resolved_tickers"] = tickers_to_process
+
+            cache_key = _response_cache_key(
+                "stocks_prices_v2",
+                {
+                    "tickers": sorted(tickers_to_process),
+                    "timeframe": timeframe,
                     "interval": interval,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "error": "Either 'ticker' or 'tickers' parameter must be provided"
-                })
-            
-            # Load from pre-computed stocks prices
-            prices_data = load_json("stocks/prices")
-            
-            if prices_data and "tickers" in prices_data:
-                cached_tickers = prices_data.get("tickers", {})
-                results = {}
-                
-                for ticker_symbol in tickers_to_process:
-                    if ticker_symbol in cached_tickers:
-                        ticker_data = cached_tickers[ticker_symbol]
-                        points = ticker_data.get("points", [])
-                        
-                        # Downsample if needed
-                        if len(points) > downsample:
-                            try:
-                                from core.downsample import lttb
-                                points = lttb(points, threshold=downsample)
-                            except ImportError:
-                                # Si lttb n'est pas disponible, prendre un échantillon
-                                step = len(points) // downsample
-                                points = points[::max(1, step)]
-                        
-                        results[ticker_symbol] = {
-                            "range": ticker_data.get("range", timeframe),
-                            "interval": ticker_data.get("interval", interval),
-                            "points": points,
-                            "count": len(points),
-                            "start_date": ticker_data.get("start_date"),
-                            "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
-                        }
+                    "downsample": int(downsample),
+                },
+            )
+            cached_payload = _response_cache_get(
+                _STOCKS_PRICES_RESPONSE_CACHE,
+                cache_key,
+                STOCKS_PRICES_CACHE_TTL_SECONDS,
+                "stocks_prices_cache_hit",
+            )
+            if cached_payload:
+                if warnings:
+                    cached_warnings = cached_payload.get("warnings")
+                    if isinstance(cached_warnings, list):
+                        for warning in warnings:
+                            if warning not in cached_warnings:
+                                cached_warnings.append(warning)
                     else:
-                        results[ticker_symbol] = {"error": f"No cached data for {ticker_symbol}"}
-                # If a single ticker was requested, return the shape expected by the UI (StockPriceData)
-                if len(tickers_to_process) == 1:
-                    t = tickers_to_process[0]
-                    entry = results.get(t, {})
-                    return _ok({
-                        "ticker": t,
-                        "interval": entry.get("interval", interval),
-                        "points": entry.get("points", []),
-                        "count": entry.get("count", 0),
+                        cached_payload["warnings"] = warnings
+                return _ok(cached_payload)
+
+            prices_data = load_json("stocks/prices") or load_json("stocks/prices.json") or {}
+            cached_tickers = prices_data.get("tickers", {}) if isinstance(prices_data, dict) else {}
+            freshness = (
+                prices_data.get("freshness")
+                if isinstance(prices_data, dict)
+                else None
+            ) or (
+                prices_data.get("generated_at")
+                if isinstance(prices_data, dict)
+                else None
+            ) or (
+                prices_data.get("last_update")
+                if isinstance(prices_data, dict)
+                else None
+            )
+            freshness_iso = _to_utc_iso(freshness) or now_iso
+
+            results: Dict[str, Dict[str, Any]] = {}
+            source_tags: List[str] = ["stocks_prices_route"]
+            missing_tickers: List[str] = []
+            snapshot_hits = 0
+            live_hits = 0
+
+            for ticker_symbol in tickers_to_process:
+                ticker_data = (
+                    cached_tickers.get(ticker_symbol)
+                    if isinstance(cached_tickers, dict)
+                    else None
+                )
+                if isinstance(ticker_data, dict):
+                    points = _downsample_points(ticker_data.get("points"), downsample)
+                    results[ticker_symbol] = {
+                        "range": ticker_data.get("range", timeframe),
+                        "interval": ticker_data.get("interval", interval),
+                        "points": points,
+                        "count": len(points),
+                        "start_date": ticker_data.get("start_date"),
+                        "timestamp": freshness_iso,
                         "source": "stocks/prices_snapshot",
-                        "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
-                    })
+                    }
+                    snapshot_hits += 1
                 else:
-                    # Multi-ticker payload
-                    return _ok({
-                        "tickers": results,
+                    missing_tickers.append(ticker_symbol)
+
+            if snapshot_hits > 0:
+                source_tags.append("stocks_prices_snapshot")
+
+            if missing_tickers:
+                timeframe_map = {
+                    "1d": 1,
+                    "5d": 5,
+                    "1mo": 30,
+                    "3mo": 90,
+                    "6mo": 180,
+                    "1y": 365,
+                    "2y": 730,
+                    "5y": 1825,
+                    "max": 3650,
+                }
+                days_back = timeframe_map.get(timeframe, 365)
+                start_date = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                for ticker_symbol in missing_tickers:
+                    try:
+                        df = get_price_history(ticker_symbol, start=start_date, interval=interval)
+                    except Exception:
+                        df = None
+                    if df is None or df.empty:
+                        results[ticker_symbol] = {
+                            "range": timeframe,
+                            "interval": interval,
+                            "points": [],
+                            "count": 0,
+                            "start_date": start_date,
+                            "timestamp": now_iso,
+                            "source": "unavailable",
+                            "error": f"No data for {ticker_symbol}",
+                        }
+                        continue
+                    series = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
+                    points = [
+                        (int(ts.timestamp()), float(value))
+                        for ts, value in series.items()
+                        if not pd.isna(value)
+                    ]
+                    points = _downsample_points(points, downsample)
+                    results[ticker_symbol] = {
                         "range": timeframe,
                         "interval": interval,
-                        "timestamp": prices_data.get("freshness", datetime.utcnow().isoformat())
-                    })
-            
-            # Fallback: compute on the fly (legacy behavior)
-            from core.market_data import get_price_history
-            
-            timeframe_map = {
-                "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
-                "1y": 365, "2y": 730, "5y": 1825
+                        "points": points,
+                        "count": len(points),
+                        "start_date": start_date,
+                        "timestamp": now_iso,
+                        "source": "market_data_live",
+                    }
+                    live_hits += 1
+                if live_hits > 0:
+                    source_tags.append("stocks_prices_live")
+                if live_hits < len(missing_tickers):
+                    warnings.append("partial_data_some_tickers_missing")
+
+            if snapshot_hits == 0 and live_hits == 0:
+                source_tags.append("stocks_prices_empty")
+
+            points_total = sum(
+                int(entry.get("count", 0))
+                for entry in results.values()
+                if isinstance(entry, dict)
+            )
+            tickers_with_data = sum(
+                1
+                for entry in results.values()
+                if isinstance(entry, dict) and int(entry.get("count", 0)) > 0
+            )
+            errors_count = sum(
+                1
+                for entry in results.values()
+                if isinstance(entry, dict) and bool(entry.get("error"))
+            )
+
+            payload_base = {
+                "range": timeframe,
+                "interval": interval,
+                "timestamp": freshness_iso,
+                "freshness": freshness_iso,
+                "last_update": freshness_iso,
+                "generated_at": now_iso,
+                "source": source_tags,
+                "filters_applied": filters_applied,
+                "stats": {
+                    "requested_tickers": len(tickers_to_process),
+                    "tickers_with_data": tickers_with_data,
+                    "errors_count": errors_count,
+                    "points_total": points_total,
+                    "snapshot_hits": snapshot_hits,
+                    "live_hits": live_hits,
+                },
+                "warnings": warnings,
             }
-            days_back = timeframe_map.get(timeframe, 365)
-            start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-            
-            results = {}
-            for ticker_symbol in tickers_to_process:
-                df = get_price_history(ticker_symbol, start=start_date, interval=interval)
-                if df is None or df.empty:
-                    results[ticker_symbol] = {"error": f"No data for {ticker_symbol}"}
-                    continue
-                
-                series = df['Close'] if 'Close' in df.columns else df.iloc[:, 0]
-                points = [(int(ts.timestamp()), float(val))
-                         for ts, val in series.items()
-                         if not pd.isna(val)]
-                
-                if len(points) > downsample:
-                    try:
-                        from core.downsample import lttb
-                        points = lttb(points, threshold=downsample)
-                    except ImportError:
-                        step = len(points) // downsample
-                        points = points[::max(1, step)]
-                
-                results[ticker_symbol] = {
-                    "range": timeframe,
-                    "interval": interval,
-                    "points": points,
-                    "count": len(points),
-                    "start_date": start_date,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-            
-            # Single ticker vs multi ticker response for UI compatibility
+
             if len(tickers_to_process) == 1:
-                t = tickers_to_process[0]
-                entry = results.get(t, {})
-                return _ok({
-                    "ticker": t,
+                symbol = tickers_to_process[0]
+                entry = results.get(symbol, {})
+                response_payload = {
+                    "ticker": symbol,
                     "interval": entry.get("interval", interval) or interval,
                     "points": entry.get("points", []),
                     "count": entry.get("count", 0),
-                    "source": "market_data_live",
-                    "timestamp": datetime.utcnow().isoformat()
-                })
+                    "source": source_tags,
+                    "timestamp": entry.get("timestamp", freshness_iso),
+                    "range": entry.get("range", timeframe) or timeframe,
+                    **payload_base,
+                }
             else:
-                return _ok({
+                response_payload = {
                     "tickers": results,
-                    "range": timeframe,
-                    "interval": interval,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
+                    **payload_base,
+                }
+
+            _response_cache_set(_STOCKS_PRICES_RESPONSE_CACHE, cache_key, response_payload)
+            return _ok(response_payload)
+
         except Exception as e:
+            fallback_tickers = _normalize_requested_tickers(ticker, tickers)
+            if not fallback_tickers:
+                fallback_tickers = DEFAULT_STOCKS_UNIVERSE[: min(6, len(DEFAULT_STOCKS_UNIVERSE))]
+                warnings.append("no_ticker_provided_default_universe_used")
+            filters_applied["resolved_tickers"] = fallback_tickers
+            source_tags = ["stocks_prices_route", "critical_error_fallback"]
+            if len(fallback_tickers) == 1:
+                symbol = fallback_tickers[0]
+                return _ok({
+                    "ticker": symbol,
+                    "interval": interval,
+                    "points": [],
+                    "count": 0,
+                    "range": timeframe,
+                    "timestamp": now_iso,
+                    "freshness": now_iso,
+                    "last_update": now_iso,
+                    "generated_at": now_iso,
+                    "source": source_tags,
+                    "filters_applied": filters_applied,
+                    "stats": {
+                        "requested_tickers": 1,
+                        "tickers_with_data": 0,
+                        "errors_count": 1,
+                        "points_total": 0,
+                        "snapshot_hits": 0,
+                        "live_hits": 0,
+                    },
+                    "warnings": warnings,
+                    "error": str(e),
+                    "message": "stocks/prices failed, returning fallback payload (never-empty contract).",
+                })
             return _ok({
                 "tickers": {},
                 "range": timeframe,
                 "interval": interval,
-                "timestamp": datetime.utcnow().isoformat(),
-                "error": str(e)
+                "timestamp": now_iso,
+                "freshness": now_iso,
+                "last_update": now_iso,
+                "generated_at": now_iso,
+                "source": source_tags,
+                "filters_applied": filters_applied,
+                "stats": {
+                    "requested_tickers": len(fallback_tickers),
+                    "tickers_with_data": 0,
+                    "errors_count": len(fallback_tickers) or 1,
+                    "points_total": 0,
+                    "snapshot_hits": 0,
+                    "live_hits": 0,
+                },
+                "warnings": warnings,
+                "error": str(e),
+                "message": "stocks/prices failed, returning fallback payload (never-empty contract).",
             })
 
     # Alias for UI call path: map /api/stocks/top to the existing implementation
@@ -1992,104 +2383,241 @@ def register_routes(app: FastAPI):
         tickers: Optional[List[str]] = Query(None, description="Optional tickers filter"),
         since: str = Query("7d", description="1h, 6h, 1d, 3d, 7d, 14d, 30d, 90d"),
         region: str = Query("all", description="Region filter (unused in v1)"),
-        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum composite score (unused in v1)"),
+        score_min: float = Query(0.0, ge=0.0, le=1.0, description="Minimum score filter"),
         limit: int = Query(50, ge=1, le=400, description="Max 400 articles to keep payload reasonable")
     ):
+        now_iso = _utc_now_iso()
+        requested_tickers = _normalize_requested_tickers(None, tickers)
+        filters_applied: Dict[str, Any] = {
+            "tickers": tickers,
+            "resolved_tickers": requested_tickers,
+            "since": since,
+            "region": region,
+            "score_min": score_min,
+            "limit": limit,
+        }
         try:
-            # Prefer service which uses persisted data + never-empty
-            from .services.news_service import get_news_feed as _get_news_feed
-            svc = await _get_news_feed(tickers=tickers, q=None, limit=limit, window="last_week")
-            # If service returned empty, attempt direct file load (legacy structure has top-level 'articles')
-            try_direct = False
+            cache_key = _response_cache_key(
+                "news_feed_v2",
+                {
+                    "tickers": sorted(requested_tickers),
+                    "since": (since or "7d").strip().lower(),
+                    "region": (region or "all").strip().lower(),
+                    "score_min": float(score_min),
+                    "limit": int(limit),
+                },
+            )
+            cached_payload = _response_cache_get(
+                _NEWS_FEED_RESPONSE_CACHE,
+                cache_key,
+                NEWS_FEED_CACHE_TTL_SECONDS,
+                "news_feed_cache_hit",
+            )
+            if cached_payload:
+                return _ok(cached_payload)
+
+            source_tags: List[str] = ["news_feed_route"]
+            warnings: List[str] = []
+            normalized_items: List[Dict[str, Any]] = []
+            freshness: Optional[str] = None
+            last_update: Optional[str] = None
+
+            # 1) Service path first.
+            try:
+                from .services.news_service import get_news_feed as _get_news_feed
+
+                fetch_limit = min(400, max(limit * 3, limit))
+                svc = await _get_news_feed(
+                    tickers=requested_tickers or None,
+                    q=None,
+                    limit=fetch_limit,
+                    window="last_week",
+                )
+            except Exception as svc_error:
+                svc = {"ok": False, "error": str(svc_error)}
+
             if isinstance(svc, dict) and svc.get("ok") is True:
                 data_block = svc.get("data") or {}
-                items = (data_block.get("items") or data_block.get("articles") or []) if isinstance(data_block, dict) else []
-                if isinstance(items, list) and len(items) > 0:
-                    # Normalize shape for frontend expectations
-                    norm_items = []
-                    for a in items:
-                        if not isinstance(a, dict):
-                            continue
-                        title = a.get("title") or a.get("headline") or "(sans titre)"
-                        url = a.get("url") or a.get("link") or ""
-                        published = a.get("pubDate") or a.get("published_at") or a.get("date") or a.get("timestamp")
-                        source = a.get("source") or a.get("publisher")
-                        if not source and isinstance(url, str) and url:
-                            try:
-                                from urllib.parse import urlparse
-                                netloc = urlparse(url).netloc
-                                source = netloc.split(':')[0]
-                            except Exception:
-                                source = None
-                        norm_items.append({
-                            "title": title,
-                            "url": url,
-                            "published_at": published,
-                            "source": source,
-                            "tickers": a.get("tickers") or [],
-                            "score": a.get("score") or a.get("relevance_score") or a.get("sentiment_score"),
-                        })
-                    items_out = norm_items[:limit]
-                    return _ok({
-                        "items": items_out,
-                        "articles": items_out,  # compat with legacy hooks expecting 'articles'
-                        "count": len(norm_items),
-                        "freshness": data_block.get("freshness") or data_block.get("generated_at"),
-                        "last_update": data_block.get("freshness") or data_block.get("generated_at"),
-                        "source": svc.get("source") or data_block.get("source"),
-                    })
-                try_direct = True
-            else:
-                try_direct = True
+                if isinstance(data_block, dict):
+                    normalized_items = _extract_news_items(data_block)
+                    freshness = data_block.get("freshness") or data_block.get("generated_at")
+                    last_update = data_block.get("last_update") or data_block.get("generated_at")
+                    source_tags.extend(
+                        _normalize_source_tags(
+                            svc.get("source") or data_block.get("source"),
+                            fallback=["news_service"],
+                        )
+                    )
 
-            if try_direct:
+            # 2) Fallback to direct persisted feed.
+            if not normalized_items:
                 from storage.io import load_json
+
                 news_data = load_json("news_feed") or load_json("news_feed.json") or {}
-                payload = news_data.get("payload") or news_data
-                # Normalize to items list
-                if isinstance(payload, dict) and ("articles" in payload or (isinstance(payload.get("data"), dict) and "articles" in payload.get("data", {}))):
-                    items = payload.get("articles") or payload.get("data", {}).get("articles", [])
-                    # Normalize each article to ensure title/source fields are present
-                    norm_items = []
-                    for a in items:
-                        if not isinstance(a, dict):
+                payload = news_data.get("payload") if isinstance(news_data, dict) else None
+                if payload is None:
+                    payload = news_data
+                normalized_items = _extract_news_items(payload)
+                if normalized_items:
+                    source_tags.append("news_feed_storage_fallback")
+                if isinstance(payload, dict):
+                    freshness = freshness or payload.get("freshness") or payload.get("generated_at")
+                    last_update = last_update or payload.get("last_update") or payload.get("generated_at")
+                    source_tags.extend(
+                        _normalize_source_tags(payload.get("source"), fallback=["news_feed_storage"])
+                    )
+                if isinstance(news_data, dict):
+                    freshness = (
+                        freshness
+                        or news_data.get("freshness")
+                        or news_data.get("generated_at")
+                    )
+                    last_update = (
+                        last_update
+                        or news_data.get("last_update")
+                        or news_data.get("generated_at")
+                    )
+                    source_tags.extend(_normalize_source_tags(news_data.get("source")))
+
+            since_delta = _parse_time_window_to_timedelta(since)
+            cutoff_dt = datetime.now(timezone.utc) - since_delta
+
+            filtered_window_score: List[Dict[str, Any]] = []
+            for item in normalized_items:
+                published_dt = item.get("_published_dt")
+                if isinstance(published_dt, datetime) and published_dt < cutoff_dt:
+                    continue
+                score_value = item.get("score")
+                if score_value is not None:
+                    try:
+                        if float(score_value) < float(score_min):
                             continue
-                        title = a.get("title") or a.get("headline") or "(sans titre)"
-                        url = a.get("url") or a.get("link") or ""
-                        published = a.get("pubDate") or a.get("published_at") or a.get("date") or a.get("timestamp")
-                        source = a.get("source") or a.get("publisher")
-                        if not source and isinstance(url, str) and url:
-                            try:
-                                from urllib.parse import urlparse
-                                netloc = urlparse(url).netloc
-                                source = netloc.split(':')[0]
-                            except Exception:
-                                source = None
-                        norm_items.append({
-                            "title": title,
-                            "url": url,
-                            "published_at": published,
-                            "source": source,
-                            "tickers": a.get("tickers") or [],
-                            "score": a.get("score") or a.get("relevance_score") or a.get("sentiment_score"),
-                        })
-                    if tickers:
-                        filtered = [a for a in norm_items if any(t.upper() in [x.upper() for x in (a.get("tickers") or [])] for t in tickers)]
-                        # Never-empty behavior: if filtering removes everything (common when feed lacks per-article tickers),
-                        # fall back to the unfiltered head up to limit
-                        norm_items = filtered if filtered else norm_items
-                    items = norm_items[:limit]
-                    return _ok({
-                        "items": items,
-                        "articles": items,  # compat with legacy hooks expecting 'articles'
-                        "count": len(items),
-                        "freshness": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
-                        "last_update": payload.get("generated_at") or payload.get("data", {}).get("generated_at") or news_data.get("generated_at"),
-                        "source": news_data.get("source") or payload.get("source")
-                    })
-                return _ok(payload)
+                    except Exception:
+                        pass
+                filtered_window_score.append(item)
+
+            def _sort_key(article: Dict[str, Any]) -> datetime:
+                dt = article.get("_published_dt")
+                if isinstance(dt, datetime):
+                    return dt
+                return datetime.fromtimestamp(0, tz=timezone.utc)
+
+            filtered_window_score = sorted(
+                filtered_window_score,
+                key=_sort_key,
+                reverse=True,
+            )
+
+            filtered_tickers = filtered_window_score
+            if requested_tickers:
+                requested_set = set(requested_tickers)
+                strict_match = [
+                    item
+                    for item in filtered_window_score
+                    if requested_set.intersection(
+                        {str(token).strip().upper() for token in (item.get("tickers") or [])}
+                    )
+                ]
+                if strict_match:
+                    filtered_tickers = strict_match
+                else:
+                    filtered_tickers = filtered_window_score
+                    warnings.append("ticker_filter_relaxed_no_matches")
+
+            if not filtered_tickers and normalized_items:
+                filtered_tickers = sorted(normalized_items, key=_sort_key, reverse=True)
+                warnings.append("time_or_score_filter_relaxed_no_matches")
+
+            limited_items = filtered_tickers[:limit]
+            cleaned_items = _strip_internal_news_fields(limited_items)
+            source_tags = _normalize_source_tags(source_tags, fallback=["news_feed_route"])
+            if not cleaned_items:
+                source_tags = _normalize_source_tags(source_tags + ["news_feed_empty"])
+
+            source_counter: Dict[str, int] = {}
+            ticker_universe = set()
+            scored_values: List[float] = []
+            latest_published: Optional[datetime] = None
+            for raw_item in limited_items:
+                source_name = str(raw_item.get("source") or "").strip() or "unknown"
+                source_counter[source_name] = source_counter.get(source_name, 0) + 1
+                for token in raw_item.get("tickers") or []:
+                    upper = str(token).strip().upper()
+                    if upper:
+                        ticker_universe.add(upper)
+                score_value = raw_item.get("score")
+                if isinstance(score_value, (int, float)):
+                    scored_values.append(float(score_value))
+                published_dt = raw_item.get("_published_dt")
+                if isinstance(published_dt, datetime):
+                    if latest_published is None or published_dt > latest_published:
+                        latest_published = published_dt
+
+            freshness_iso = _to_utc_iso(freshness) or _to_utc_iso(latest_published) or now_iso
+            last_update_iso = _to_utc_iso(last_update) or freshness_iso
+            avg_score = (
+                round(sum(scored_values) / len(scored_values), 6)
+                if scored_values
+                else None
+            )
+            top_sources = [
+                {"source": name, "count": count}
+                for name, count in sorted(source_counter.items(), key=lambda x: x[1], reverse=True)[:5]
+            ]
+
+            response_payload = {
+                "items": cleaned_items,
+                "articles": cleaned_items,
+                "count": len(cleaned_items),
+                "total": len(filtered_tickers),
+                "freshness": freshness_iso,
+                "last_update": last_update_iso,
+                "generated_at": now_iso,
+                "source": source_tags,
+                "filters_applied": filters_applied,
+                "stats": {
+                    "raw_count": len(normalized_items),
+                    "post_window_score_count": len(filtered_window_score),
+                    "post_ticker_count": len(filtered_tickers),
+                    "returned_count": len(cleaned_items),
+                    "sources_count": len(source_counter),
+                    "unique_tickers": len(ticker_universe),
+                    "avg_score": avg_score,
+                    "latest_published_at": _to_utc_iso(latest_published),
+                    "top_sources": top_sources,
+                },
+                "warnings": warnings,
+            }
+
+            _response_cache_set(_NEWS_FEED_RESPONSE_CACHE, cache_key, response_payload)
+            return _ok(response_payload)
+
         except Exception as e:
-            return _ok({"articles": [], "count": 0, "error": str(e)})
+            return _ok({
+                "items": [],
+                "articles": [],
+                "count": 0,
+                "total": 0,
+                "freshness": now_iso,
+                "last_update": now_iso,
+                "generated_at": now_iso,
+                "source": ["news_feed_route", "critical_error_fallback"],
+                "filters_applied": filters_applied,
+                "stats": {
+                    "raw_count": 0,
+                    "post_window_score_count": 0,
+                    "post_ticker_count": 0,
+                    "returned_count": 0,
+                    "sources_count": 0,
+                    "unique_tickers": 0,
+                    "avg_score": None,
+                    "latest_published_at": None,
+                    "top_sources": [],
+                },
+                "warnings": [],
+                "error": str(e),
+                "message": "news/feed failed, returning fallback payload (never-empty contract).",
+            })
 
     # ====================== RECOMMENDATIONS =======================
     @app.get("/api/recommendations/daily")

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKDIR="/home/venom/analyse-financiere"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+GATE_SCRIPT="${SCRIPT_DIR}/command_safety_gate.py"
 FORCE_CONFIRM=0
 
 while [[ $# -gt 0 ]]; do
@@ -23,7 +25,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 CMD="$*"
-GATE_JSON="$(python3 /home/venom/analyse-financiere/scripts/command_safety_gate.py --cmd "$CMD" --workdir "$WORKDIR")"
+GATE_JSON="$(python3 "$GATE_SCRIPT" --cmd "$CMD" --workdir "$WORKDIR")"
 DECISION="$(printf '%s' "$GATE_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["decision"])')"
 
 echo "$GATE_JSON"

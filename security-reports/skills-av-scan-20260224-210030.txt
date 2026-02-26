@@ -1,0 +1,5 @@
+skill_av_scan
+target=/home/venom/.openclaw/workspace/skills
+timestamp=20260224-210030
+engine=none
+no av engine installed (clamav/yara missing)

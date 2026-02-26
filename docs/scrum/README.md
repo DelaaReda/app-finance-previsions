@@ -18,6 +18,7 @@ A story can enter sprint only if it has:
 3. Acceptance criteria (testable)
 4. Dependencies
 5. Estimated effort (S/M/L)
+6. Référence technique claire (si API/endpoint: `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`)
 
 ## Definition of Done (DoD)
 A story is DONE only if:

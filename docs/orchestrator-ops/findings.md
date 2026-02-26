@@ -1,4 +1,0 @@
-# Orchestrator Ops
-
-## Changelog
-- Initialized.

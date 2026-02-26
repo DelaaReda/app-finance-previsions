@@ -1,4 +1,4 @@
-# Epics MVP — orientées exécution agents qwen
+# Epics MVP — orientées exécution agents codex (OpenClaw)
 
 ## EPIC A — Stabiliser les contrats API MVP
 
@@ -25,7 +25,7 @@ Garantir des réponses cohérentes, testables et stables sur les 5 endpoints MVP
 - `copilot-app/backend/tests/` (nouveaux tests endpoint)
 
 ### Dépendances
-- EPIC C (quality gate) pour verrouillage final
+- Aucune dépendance bloquante (EPIC socle)
 
 ### Risques
 - Régressions liées aux fallbacks historiques
@@ -45,7 +45,7 @@ curl -sS "http://localhost:8050/api/news/feed?limit=5" | jq
 curl -sS "http://localhost:8050/api/forecasts" | jq
 curl -sS -X POST "http://localhost:8050/api/copilot/ask" -H 'Content-Type: application/json' \
   -d '{"question":"Vue rapide du marché","max_sources":3}' | jq
-cd copilot-app/backend && .venv/bin/pytest -q
+cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q
 ```
 
 ### Evidences attendues
@@ -107,10 +107,10 @@ Rendre l’UI MVP utilisable sans dépendre implicitement des mocks.
 
 ---
 
-## EPIC C — Industrialiser qualité et exécution multi-agents qwen
+## EPIC C — Industrialiser qualité et exécution (codex/OpenClaw)
 
 ### Objectif
-Rendre l’exécution des stories reproductible via qwen orchestrator avec preuves systématiques.
+Rendre l’exécution des stories reproductible via OpenClaw (codex-only) avec preuves systématiques.
 
 ### Scope IN
 - Templates de dispatch story/tâche
@@ -122,12 +122,15 @@ Rendre l’exécution des stories reproductible via qwen orchestrator avec preuv
 - Observabilité SRE avancée
 
 ### Prérequis
-- `scripts/qwen_orchestrator.py` opérationnel
-- Rôles tmux/agent disponibles (planner/dev/tester/qa)
+- `openclaw` opérationnel côté runtime
+- Rôles tmux/agent disponibles (au minimum: planner/dev/tester/qa)
+- Spec + preuves alignées (`docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`)
 
 ### Fichiers cibles
-- `scripts/qwen_orchestrator.py` (si ajustements prompts/guardrails)
-- `scripts/analyze_orchestrator_runs.py`
+- `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
+- `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+- `scripts/validate_roles_sequential.sh`
+- `scripts/run_delivery_gate.sh`
 - `finance-app/openclaw-gates/` (artefacts)
 - `docs/planning/*.md`
 
@@ -139,20 +142,20 @@ Rendre l’exécution des stories reproductible via qwen orchestrator avec preuv
 - Preuves incomplètes ou non auditables
 
 ### Critères d’acceptation testables
-1. Chaque story exécutée produit un bloc: DELTA, EVIDENCE, RISKS, NEXT.
+1. Chaque rôle exécuté produit un contrat complet (8 clés) avec `EVIDENCE` exploitable.
 2. Un gate unique donne verdict PASS/BLOCKED pour le MVP.
-3. Les artefacts de run sont traçables par run_id horodaté.
+3. Les artefacts sont traçables par batch/horodatage et vérifiables par script.
 
 ### Commandes de test
 ```bash
-python3 scripts/qwen_orchestrator.py --tmux-cmd status
-python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator-runs --limit 5
+bash scripts/preflight_dispatch.sh
+SEQUENTIAL_VALIDATE_TIMEOUT_SECONDS=480000 bash scripts/validate_roles_sequential.sh --roles planner,dev,tester,qa --strict-ready-chain --chain-target BATCH-XX
+bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp>.md
 ```
 
 ### Evidences attendues
-- `finance-app/orchestrator-runs/<run_id>/transcript.md`
-- `events.jsonl` + `agent_activity.json`
 - Rapport gate dans `finance-app/openclaw-gates/`
+- Rapport `validate_roles_sequential` dans `logs-codex-runs/role-runner/`
 
 ---
 
@@ -249,8 +252,9 @@ python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator
 ## Changelog
 - 2026-02-24 19:46 America/New_York — Ajout d’un statut d’exécution incrémental par epic (priorités et dépendances de lancement).
 - 2026-02-24 19:50 America/New_York — Ajout readiness de dispatch par epic (Batch-01 actif, B en hold dépendant du lock contrat A, C en préparation parallèle).
-- 2026-02-24 20:05 America/New_York — Ajout d’une matrice de gate inter-epics (G-A, G-C) pour clarifier décisions ALLOW/HOLD/BLOCKED pendant le dispatch qwen.
+- 2026-02-24 20:05 America/New_York — Ajout d’une matrice de gate inter-epics (G-A, G-C) pour clarifier décisions ALLOW/HOLD/BLOCKED pendant le dispatch.
 - 2026-02-24 20:20 America/New_York — Passage en orchestration stricte par epic: A en EXEC_NOW, B en HOLD_STRICT dépendant de G-A, C en enforcement de preuves obligatoires.
 - 2026-02-24 20:35 America/New_York — Renforcement de readiness: A en RUNNING_ON_APPROVAL, B verrouillé strictement par Gate G-A, C établi comme autorité de verdict avant tout lot suivant.
 - 2026-02-24 20:50 America/New_York — Ajout d’une coordination inter-epics de lancement: A en LAUNCH_NOW, B en PREP_ONLY conditionné à G-A, C en autorité VERIFY_AND_SIGN avec blocage automatique des artefacts incomplets.
 - 2026-02-24 21:05 America/New_York — Renforcement inter-epics: A en `EXECUTION_GATED`, B en `HARD_HOLD`, C en `GATE_ENFORCEMENT_ACTIVE`; passage A->B conditionné à artefact complet + VERDICT PASS + validation QA explicite.
+- 2026-02-24 22:05 America/New_York — Correction cohérence de dépendances: EPIC A rendu indépendant (socle), suppression cycle implicite A<->C; commande pytest rendue auto-bootstrap.

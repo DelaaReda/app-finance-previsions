@@ -42,6 +42,10 @@
 - Données (snapshots) : `copilot-app/backend/data/`.
 - Anciennes variantes/compat : `copilot-app/backend/legacy-archive/`.
 
+## Référence exemple (bonnes pratiques endpoint)
+- Guide standard endpoint/API (contrat, cache, fallback, observabilité, tests):
+  - `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
+
 ## Tests rapides (manuels)
 - Health : `curl -s http://localhost:8050/api/health`
 - Judge : `curl -s 'http://localhost:8050/api/judge?limit=1'`

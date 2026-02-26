@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260225-000240",
+  "status": "PASS",
+  "backend_url": "http://127.0.0.1:8050",
+  "frontend_url": "http://127.0.0.1:5173",
+  "checks": {
+    "health": "DRY_RUN",
+    "prices": "DRY_RUN",
+    "news": "DRY_RUN",
+    "forecasts": "DRY_RUN",
+    "judge_quality": "DRY_RUN",
+    "frontend_root": "DRY_RUN"
+  }
+}

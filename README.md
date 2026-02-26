@@ -34,6 +34,12 @@
 - Frontend statique : `copilot-app/frontend/app` (fichiers HTML/CSS/JS, pas de build Vite).
 - Anciennes variantes archivées : `copilot-app/backend/legacy-archive/`.
 
+## Référence bonnes pratiques (exemple)
+- Standard endpoints/API (contrat stable, cache, fallback, tests):  
+  `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
+- Gouvernance d'exécution globale (gates/process):  
+  `docs/ops/ENGINEERING_PLAYBOOK.md`
+
 ## Dépendances / env
 - Variables : `copilot-app/backend/.env` (OPEN_ROUTER_API_KEY, clés FRED, etc.).
 - Installer manquants (ex : feedparser, duckdb) :
@@ -45,6 +51,9 @@
 ## Tests rapides (manuels)
 - Health : `curl -s http://localhost:8050/api/health`
 - Judge : `curl -s 'http://localhost:8050/api/judge?limit=1' | jq`
+- Gate backend standard (agents) :
+  - sans checks live : `./scripts/backend_regression_gate.sh --no-live`
+  - avec checks live : `./scripts/backend_regression_gate.sh`
 
 ## Notes
 - Pas de build frontend : le script sert directement `frontend/app` via `python -m http.server 5173`.

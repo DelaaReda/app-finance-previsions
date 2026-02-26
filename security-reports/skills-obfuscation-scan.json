@@ -1,0 +1,62 @@
+[
+  {
+    "file": "skill-vetting/SKILL.md",
+    "type": "eval_exec",
+    "offset": 3623
+  },
+  {
+    "file": "skill-vetting/SKILL.md",
+    "type": "eval_exec",
+    "offset": 3630
+  },
+  {
+    "file": "skill-vetting/ARCHITECTURE.md",
+    "type": "eval_exec",
+    "offset": 6580
+  },
+  {
+    "file": "skill-vetting/scripts/scan.py",
+    "type": "eval_exec",
+    "offset": 506
+  },
+  {
+    "file": "skill-vetting/scripts/scan.py",
+    "type": "eval_exec",
+    "offset": 568
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 67
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 76
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 104
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 121
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 643
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 4318
+  },
+  {
+    "file": "skill-vetting/references/patterns.md",
+    "type": "eval_exec",
+    "offset": 4325
+  }
+]

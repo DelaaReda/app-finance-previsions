@@ -3,6 +3,12 @@
 ## Objective
 Ship fast **without** shipping garbage.
 
+## Reference Example (API)
+- Endpoint/API reference guide:
+  - `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
+- Usage rule:
+  - Any endpoint change should align with this guide (contract, cache, fallback, tests).
+
 ## Mandatory 4-Gate Pipeline
 No batch can be marked DONE unless all gates pass.
 
@@ -21,13 +27,14 @@ Per task, require:
 - evidence captured
 
 ### Gate 3 — Independent Codex Review
-- Run independent reviewer with Codex (separate from qwen execution team).
+- Run independent reviewer with Codex (separate from the delivery role that authored the change).
 - Required output: `GO` or `BLOCKED` + minimal fix list.
 - If `BLOCKED`, task cannot move forward.
 
 ### Gate 4 — Regression Gate
 - Run finance regression gate before release verdict.
 - Output must contain `PASS` or `BLOCKED`.
+  - Recommended wrapper: `bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-<id>-<timestamp>.md`
 
 ---
 
@@ -55,6 +62,9 @@ Every task/batch response must include:
 - `BLOCKER_ID: <id|NONE>`
 - `NEXT_ACTION_UNIQUE`
 
+Evidence schema reference (recommended):
+- `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+
 ---
 
 ## Batching Policy
@@ -74,14 +84,18 @@ Track weekly:
 
 ---
 
-## Orchestrator Command (recommended)
+## Orchestration Commands (codex-only, recommended)
 ```bash
-python3 scripts/qwen_orchestrator.py \
-  --rounds 3 \
-  --with-architect \
-  --with-manager \
-  --with-codex-reviewer \
-  --feature "<batch objective + acceptance criteria>"
+# 1) Preflight (queue + health + batch prerequisites)
+bash scripts/preflight_dispatch.sh
+
+# 2) Controlled chain (planner -> dev -> tester -> qa) for a given batch id
+# Example:
+# bash scripts/validate_roles_sequential.sh --roles planner,dev,tester,qa --strict-ready-chain --chain-target BATCH-02
+
+# 3) Final artifact gate (verifies required sections + review evidence)
+# Example:
+# bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-02-<timestamp>.md
 ```
 
 Artifact path required:

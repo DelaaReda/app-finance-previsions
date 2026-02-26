@@ -1,9 +1,19 @@
-# Tasks détaillées orientées exécution par agents qwen
+# Tasks détaillées orientées exécution par agents codex (OpenClaw)
+
+## Gate Status (source of truth)
+- `BATCH-01`: `PASS` (QA signoff already present)
+  - artifact: `finance-app/openclaw-gates/batch-01-20260225-000127.md`
+  - keys: `QA_SIGNOFF: YES`, `VERDICT: PASS`, `BLOCKER_ID: NONE`
+- `BATCH-02`: `PASS` (QA signoff now present)
+  - artifact: `finance-app/openclaw-gates/batch-02-20260225-202042.md`
+  - keys: `QA_SIGNOFF: YES`, `VERDICT: PASS`, `BLOCKER_ID: NONE`
+- If a runtime role output reports `QA_PASS_SIGNATURE_UNVERIFIED`, re-check the artifact above before keeping the blocker.
 
 ## Convention de dispatch
-- **Rôles qwen**: planner, dev, tester, qa
+- **Rôles (core chain)**: planner, dev, tester, qa
 - **Taille cible**: 2-4h / tâche
-- **Format sortie obligatoire**: DELTA / EVIDENCE / RISKS / NEXT
+- **Format sortie obligatoire (contrat)**: STATUS / DELTA / EVIDENCE / RISKS / NEXT / VERDICT / BLOCKER_ID / NEXT_ACTION_UNIQUE
+- **EVIDENCE**: suivre `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md` (kv `key=value;...`)
 
 ---
 
@@ -22,7 +32,7 @@
   - `data.timestamp` présent.
 - **Commandes de test**:
   - `curl -sS http://localhost:8050/api/health | jq`
-  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_health.py`
+  - `cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q tests/test_health.py`
 - **Evidences attendues**: payload health + pytest vert.
 - **Risques**: clients dépendants anciens champs.
 - **Dépendances**: aucune.
@@ -57,7 +67,7 @@
   - Tests passent.
   - Aucun 500 en cas input incomplet.
 - **Commandes de test**:
-  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_stocks_prices_contract.py`
+  - `cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q tests/test_stocks_prices_contract.py`
 - **Evidences attendues**: rapport pytest.
 - **Risques**: divergence selon fixtures data.
 - **Dépendances**: T-A2.1.
@@ -91,7 +101,7 @@
 - **Critères d’acceptation testables**:
   - pytest vert.
 - **Commandes de test**:
-  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_news_feed_contract.py`
+  - `cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q tests/test_news_feed_contract.py`
 - **Evidences attendues**: rapport pytest.
 - **Risques**: dépendance aux fixtures runtime.
 - **Dépendances**: T-A3.1.
@@ -198,30 +208,40 @@
   - `bash <script_gate>.sh`
 - **Evidences attendues**: rapport gate + code retour shell.
 - **Risques**: dépendances externes ponctuellement indisponibles.
-- **Dépendances**: A1..A5, B1..B2.
+- **Dépendances**: A1..A2 (gate initial), puis A3..A5 et B1..B2 pour le gate final.
 
-## T-C1.2 — Runbook qwen orchestration MVP
+## T-C1.2 — Runbook orchestration MVP (codex/OpenClaw)
 - **Objectif**: standardiser dispatch/monitoring des tâches.
 - **Scope IN**: prompts par rôle, cadence check, format preuves.
 - **Scope OUT**: auto-remédiation complète.
-- **Prérequis**: orchestrator opérationnel.
-- **Fichiers cibles**: `docs/planning/mvp-plan.md`, `docs/planning/tasks.md`, `scripts/qwen_orchestrator.py` (si nécessaire)
+- **Prérequis**: OpenClaw opérationnel (cron + runner tmux).
+- **Fichiers cibles**:
+  - `docs/planning/mvp-plan.md`
+  - `docs/planning/tasks.md`
+  - `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
+  - `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+  - `scripts/preflight_dispatch.sh`
+  - `scripts/validate_roles_sequential.sh`
+  - `scripts/run_delivery_gate.sh`
 - **Plan implémentation**:
-  1. Définir commandes standards dispatch.
-  2. Définir fréquence check run artifacts.
-  3. Ajouter section BLOCKED handling.
+  1. Préflight (états + santé soft).
+  2. Exécution séquentielle stricte par batch (planner->dev->tester->qa).
+  3. Publication artefact de preuve + `run_delivery_gate`.
 - **Critères d’acceptation testables**:
-  - Un run complet produit `transcript.md`, `events.jsonl`, `agent_activity.json`.
+  - Un batch produit: contrats (8 clés) + un artefact `openclaw-gates/` gateable.
 - **Commandes de test**:
-  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status`
-  - `python3 scripts/analyze_orchestrator_runs.py --runs-dir finance-app/orchestrator-runs --limit 3`
-- **Evidences attendues**: résumé exécution + run_id auditable.
+  - `bash scripts/preflight_dispatch.sh`
+  - `SEQUENTIAL_VALIDATE_TIMEOUT_SECONDS=480000 bash scripts/validate_roles_sequential.sh --roles planner,dev,tester,qa --strict-ready-chain --chain-target BATCH-XX`
+  - `bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp>.md`
+- **Evidences attendues**:
+  - `finance-app/openclaw-gates/batch-XX-<timestamp>.md`
+  - `logs-codex-runs/role-runner/sequential-validate-*.jsonl`
 - **Risques**: saturation context/token selon prompts.
 - **Dépendances**: T-C1.1.
 
 ---
 
-## Pack de dispatch qwen (delta incrémental)
+## Pack de dispatch (delta incrémental)
 
 ### Batch-01
 - **Tâches**: `T-A1.1`, `T-A2.1`
@@ -229,14 +249,14 @@
   - livrer strictement le scope IN
   - joindre commandes exactes exécutées
   - joindre preuves minimales (payload JSON + sortie tests)
-  - terminer avec verdict `PASS` ou `BLOCKED` motivé
+  - terminer avec contrat complet (8 clés) et verdict `PASS|BLOCKED` motivé
 - **Blocage immédiat si**:
   - absence de section EVIDENCE
   - test non exécuté
   - contrat API modifié sans test mis à jour
 - **Chemin artefact obligatoire**:
   - `finance-app/openclaw-gates/batch-01-<timestamp>.md`
-  - contenu minimal: `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`
+  - contenu minimal: `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`
 
 ### Handoff checklist QA (delta 20:05)
 - [ ] Scope IN respecté pour chaque tâche du batch
@@ -255,7 +275,7 @@
 7. T-B2.1
 8. T-C1.1 → T-C1.2
 
-## Delta tâches qwen (cycle 20:20)
+## Delta tâches (cycle 20:20)
 
 ### T-A1.1 — commandes de test renforcées
 - Ajouter boucle stabilité:
@@ -269,13 +289,14 @@
 
 ### Template d’évidence obligatoire (toutes tâches Batch-01)
 ```text
+STATUS:
 DELTA:
-EVIDENCE:
-- cmd:
-  output:
+EVIDENCE: task_update=...;lock_check=ok;stream_id=<BATCH-ID>;task_id=<...>;cmd=...;tests_run=...
 RISKS:
 NEXT:
 VERDICT: PASS|BLOCKED
+BLOCKER_ID: NONE|...
+NEXT_ACTION_UNIQUE:
 ```
 
 ## Delta runbook tâches (cycle 20:35)
@@ -325,7 +346,7 @@ PREREQUIS: VERDICT PASS Batch-01
 FICHIERS_CIBLES: copilot-app/backend/tests/test_stocks_prices_contract.py
 PLAN_IMPLEMENTATION: écrire tests -> exécuter -> corriger si rouge -> re-run vert
 ACCEPTANCE_TESTABLE: pytest vert; map multi-ticker stable; cas incomplet non bloquant
-COMMANDES_TEST: cd copilot-app/backend && .venv/bin/pytest -q tests/test_stocks_prices_contract.py
+COMMANDES_TEST: cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q tests/test_stocks_prices_contract.py
 EVIDENCES_ATTENDUES: sortie pytest + payload multi-ticker de référence
 RISQUES: fixtures data divergentes
 DEPENDANCES: T-A2.1
@@ -353,7 +374,7 @@ VERDICT_ATTENDU: PASS|BLOCKED
 - Batch-02 est exécuté en séquence stricte `T-A2.2` puis `T-A3.1`.
 - Si `T-A2.2` est BLOCKED, ne pas lancer `T-A3.1`.
 
-## Delta tâches agents qwen (cycle 21:05)
+## Delta tâches (cycle 21:05)
 
 ### Contrôle qualité lot (ajout)
 - **Nouvelle exigence commune Batch-01/Batch-02**:
@@ -371,9 +392,11 @@ VERDICT_ATTENDU: PASS|BLOCKED
   2) motif documenté de non-exécution.
 
 ## Changelog
-- 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch qwen Batch-01 avec règles de preuve et conditions de blocage immédiat.
+- 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
 - 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.
-- 2026-02-24 20:35 America/New_York — Ajout d’un runbook de lot (Batch-01 immédiat, Batch-02 conditionnel), règle d’activation explicite via artefact gate, et template d’assignation standardisé pour agents qwen.
+- 2026-02-24 20:35 America/New_York — Ajout d’un runbook de lot (Batch-01 immédiat, Batch-02 conditionnel), règle d’activation explicite via artefact gate, et template d’assignation standardisé.
 - 2026-02-24 20:50 America/New_York — Préparation du pack Batch-02 avec cartes d’assignation complètes pour T-A2.2/T-A3.1 et règle de séquencement bloquant.
 - 2026-02-24 21:05 America/New_York — Ajout d’exigences communes d’artefacts (VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE), politique de patch minimal en cas BLOCKED, et gate qualité des preuves pour toutes commandes de test listées.
+- 2026-02-24 22:05 America/New_York — Alignement tâches sur environnement VM: commandes pytest auto-bootstrap + dépendances C1 réalignées pour éviter cycle avec lot A.
+- 2026-02-26 14:10 America/New_York — Alignement complet sur orchestration codex-only/OpenClaw: suppression des mentions legacy et adoption du runbook `preflight_dispatch` + `validate_roles_sequential` + `run_delivery_gate`.

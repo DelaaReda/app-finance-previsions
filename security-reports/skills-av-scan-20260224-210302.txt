@@ -1,0 +1,4 @@
+skill_av_scan
+target=/home/venom/.openclaw/workspace/skills
+timestamp=20260224-210302
+engine=clamav

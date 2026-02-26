@@ -7,6 +7,7 @@ import binascii
 import json
 import re
 from dataclasses import dataclass, asdict
+from pathlib import Path
 
 BLOCK_PATTERNS = [
     (r"curl\s+[^|\n]+\|\s*(bash|sh)", "remote script execution via curl pipe"),
@@ -30,7 +31,7 @@ MALICIOUS_IOC_PATTERNS = [
     (r"\b91\.92\.242\.30\b", "known malicious IOC IP detected"),
 ]
 
-WORKSPACE = "/home/venom/analyse-financiere"
+WORKSPACE = str(Path(__file__).resolve().parent.parent)
 
 B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?![A-Za-z0-9+/=])")
 
@@ -96,8 +97,8 @@ def assess(cmd: str, workdir: str | None) -> Decision:
                 reasons.append(f"BLOCK: {reason} (found in decoded payload)")
                 score += 80
 
-    wd = workdir or WORKSPACE
-    if not wd.startswith(WORKSPACE):
+    wd = str(Path(workdir).expanduser().resolve()) if workdir else WORKSPACE
+    if wd != WORKSPACE and not wd.startswith(f"{WORKSPACE}/"):
         reasons.append("CONFIRM: workdir outside approved workspace")
         score += 25
 

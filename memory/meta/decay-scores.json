@@ -1,11 +1,44 @@
 {
   "version": 1,
-  "updated_at": "2026-02-25T00:26:42.121779+00:00",
+  "updated_at": "2026-02-25T00:28:05.258177+00:00",
   "weights": {
     "decision": 1.0,
     "todo": 0.8,
     "risk": 0.9,
     "note": 0.6
   },
-  "items": {}
+  "items": {
+    "[decision] On garde le syst\u00e8me m\u00e9moire actuel avec cognitive-light.": {
+      "tag": "decision",
+      "count": 1,
+      "last_seen": "2026-02-25T00:28:05.258155+00:00",
+      "sources": [
+        "memory/2026-02-24-tagtest.md#1"
+      ]
+    },
+    "[todo] Ajouter des tags dans les prochains journaux.": {
+      "tag": "todo",
+      "count": 1,
+      "last_seen": "2026-02-25T00:28:05.258172+00:00",
+      "sources": [
+        "memory/2026-02-24-tagtest.md#2"
+      ]
+    },
+    "[risk] Le front est down tant que smoke non relanc\u00e9.": {
+      "tag": "risk",
+      "count": 1,
+      "last_seen": "2026-02-25T00:28:05.258174+00:00",
+      "sources": [
+        "memory/2026-02-24-tagtest.md#3"
+      ]
+    },
+    "[note] Evidence path: /tmp/a.log": {
+      "tag": "note",
+      "count": 1,
+      "last_seen": "2026-02-25T00:28:05.258175+00:00",
+      "sources": [
+        "memory/2026-02-24-tagtest.md#4"
+      ]
+    }
+  }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/venom/analyse-financiere"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
 
 echo "== PREFLIGHT DISPATCH =="
@@ -19,7 +19,7 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 # 3) gate artifact requirement for Batch-02
-if rg -n '"id"\s*:\s*"BATCH-02"[\s\S]*"state"\s*:\s*"(RUNNING|QA_REVIEW|PASS|CLOSED)"' docs/orchestrator-ops/priority-queue.json -U >/dev/null 2>&1; then
+if rg -n '"id"\s*:\s*"BATCH-02"[\s\S]*"state"\s*:\s*"(IN_SPRINT|RUNNING|QA_REVIEW|PASS|CLOSED)"' docs/orchestrator-ops/priority-queue.json -U >/dev/null 2>&1; then
   latest_batch01="$(ls -1t finance-app/openclaw-gates/batch-01-*.md 2>/dev/null | head -n 1 || true)"
   if [[ -z "$latest_batch01" ]]; then
     echo "BLOCKED: Batch-02 cannot start without batch-01 PASS artifact"

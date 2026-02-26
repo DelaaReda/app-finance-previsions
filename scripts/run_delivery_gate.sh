@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKDIR="/home/venom/analyse-financiere"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$WORKDIR"
 
 ARTIFACT_PATH="${1:-}"

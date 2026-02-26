@@ -1,0 +1,1187 @@
+{
+  "errors": [],
+  "generated_at": "2026-02-24T23:54:55Z",
+  "metrics": {
+    "./copilot-app/backend/src/agents/g4f_model_watcher.py": {
+      "CONFIDENCE.HIGH": 15,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 6,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 16,
+      "SEVERITY.MEDIUM": 5,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 676,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "./copilot-app/backend/src/analytics/phase3_macro.py": {
+      "CONFIDENCE.HIGH": 3,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 2,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 839,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "./copilot-app/backend/src/analytics/phase4_sentiment.py": {
+      "CONFIDENCE.HIGH": 4,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 2,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 1,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 452,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "./copilot-app/backend/src/api/main.py": {
+      "CONFIDENCE.HIGH": 14,
+      "CONFIDENCE.LOW": 3,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 14,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 3689,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "./copilot-app/backend/src/data/news_service.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 5,
+      "CONFIDENCE.MEDIUM": 1,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 6,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 363,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "_totals": {
+      "CONFIDENCE.HIGH": 36,
+      "CONFIDENCE.LOW": 8,
+      "CONFIDENCE.MEDIUM": 7,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 2,
+      "SEVERITY.LOW": 33,
+      "SEVERITY.MEDIUM": 16,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 6019,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": [
+    {
+      "code": "207     try:\n208         raw = urllib.request.urlopen(_validate_remote_url(url), timeout=10).read().decode(\"utf-8\", errors=\"ignore\")\n209         lines = [ln.split(\"(\", 1)[0].strip() for ln in raw.splitlines() if ln.strip()]\n",
+      "col_offset": 14,
+      "end_col_offset": 75,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 208,
+      "line_range": [
+        208
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "231     try:\n232         raw = urllib.request.urlopen(_validate_remote_url(url), timeout=10).read().decode(\"utf-8\", errors=\"ignore\")\n233         data = json.loads(raw)\n",
+      "col_offset": 14,
+      "end_col_offset": 75,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 232,
+      "line_range": [
+        232
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "278         import urllib.request\n279         raw = urllib.request.urlopen(_validate_remote_url(TEST_RESULTS_JSON_URL), timeout=10).read().decode(\"utf-8\", errors=\"ignore\")\n280         data = json.loads(raw)\n",
+      "col_offset": 14,
+      "end_col_offset": 93,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 279,
+      "line_range": [
+        279
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "289             cand.append({\"model\": m, \"__source\": \"test_results\"})\n290     except Exception:\n291         pass\n292     if source in ('verified', 'both'):\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 290,
+      "line_range": [
+        290,
+        291
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "298     if not cand:\n299         cand = [{\"model\": m, \"pass_rate\": None, \"hint\": None, \"__source\": None} for m in _static_candidates()[:limit]]\n300 \n",
+      "col_offset": 29,
+      "end_col_offset": 40,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 299,
+      "line_range": [
+        299
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "390         # degrade gracefully\n391         return [{\"model\": m, \"pass_rate\": None, \"hint\": None} for m in _static_candidates()[:limit]]\n392 \n",
+      "col_offset": 29,
+      "end_col_offset": 40,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 391,
+      "line_range": [
+        391
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "411                     prov, model = s.split('|', 1)\n412                     out.append({\"model\": model.strip(), \"hint\": prov.strip(), \"pass_rate\": None})\n413                 else:\n",
+      "col_offset": 78,
+      "end_col_offset": 89,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 412,
+      "line_range": [
+        412
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "413                 else:\n414                     out.append({\"model\": s, \"hint\": None, \"pass_rate\": None})\n415         except Exception:\n",
+      "col_offset": 58,
+      "end_col_offset": 69,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 414,
+      "line_range": [
+        414
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "414                     out.append({\"model\": s, \"hint\": None, \"pass_rate\": None})\n415         except Exception:\n416             pass\n417     # 2) g4f introspection (best-effort)\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 415,
+      "line_range": [
+        415,
+        416
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "430                             cand.extend(str(k) for k in val.keys())\n431                     except Exception:\n432                         continue\n433             cand = [c for c in cand if c and isinstance(c, str)]\n",
+      "col_offset": 20,
+      "end_col_offset": 32,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 431,
+      "line_range": [
+        431,
+        432
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "439             for m in ordered:\n440                 out.append({\"model\": m, \"hint\": None, \"pass_rate\": None})\n441         except Exception:\n",
+      "col_offset": 54,
+      "end_col_offset": 65,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 440,
+      "line_range": [
+        440
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "440                 out.append({\"model\": m, \"hint\": None, \"pass_rate\": None})\n441         except Exception:\n442             pass\n443     # clip\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 441,
+      "line_range": [
+        441,
+        442
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "514     if not merged:\n515         merged = [{\"model\": m, \"pass_rate\": None, \"hint\": None, \"__source\": None} for m in _static_candidates()[:limit]]\n516     out: List[ModelProbe] = []\n",
+      "col_offset": 31,
+      "end_col_offset": 42,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'None'",
+      "line_number": 515,
+      "line_range": [
+        515
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "543                 return []\n544     except Exception:\n545         pass\n546     rows = obj.get(\"models\") or []\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 544,
+      "line_range": [
+        544,
+        545
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "574                     models.append(ModelProbe(model=model, ok=True, provider=provider, latency_s=None, pass_rate=None))\n575     except Exception:\n576         pass\n577     if not models:\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 575,
+      "line_range": [
+        575,
+        576
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "602     try:\n603         with urllib.request.urlopen(_validate_remote_url(url), timeout=20) as resp:\n604             content = resp.read().decode(\"utf-8\", errors=\"ignore\")\n",
+      "col_offset": 13,
+      "end_col_offset": 74,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 603,
+      "line_range": [
+        603
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "645     try:\n646         with urllib.request.urlopen(_validate_remote_url(url), timeout=20) as resp:\n647             content = resp.read().decode(\"utf-8\", errors=\"ignore\")\n",
+      "col_offset": 13,
+      "end_col_offset": 74,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 646,
+      "line_range": [
+        646
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "729             )\n730         except Exception:\n731             continue\n732     if not probes:\n",
+      "col_offset": 8,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 730,
+      "line_range": [
+        730,
+        731
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "741         merge_from_working_results()\n742     except Exception:\n743         pass\n744     models = load_working_models(max_age_hours=max_age_hours)\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 742,
+      "line_range": [
+        742,
+        743
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "749         prune_working_models()\n750     except Exception:\n751         pass\n752     try:\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 750,
+      "line_range": [
+        750,
+        751
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "753         refresh(limit=limit, refresh_verified=True)\n754     except Exception:\n755         # ignore refresh errors \u2013 we'll fall back shortly\n756         pass\n757     models = load_working_models(max_age_hours=max_age_hours * 2)\n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "./copilot-app/backend/src/agents/g4f_model_watcher.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 754,
+      "line_range": [
+        754,
+        755,
+        756
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "292         try:\n293             with urllib.request.urlopen(safe_url, timeout=20) as resp:\n294                 raw = resp.read()\n",
+      "col_offset": 17,
+      "end_col_offset": 61,
+      "filename": "./copilot-app/backend/src/analytics/phase3_macro.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 293,
+      "line_range": [
+        293
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "398                     frames.append(h[[col]].rename(columns={col: t}))\n399         except Exception:\n400             pass\n401         time.sleep(0.1)\n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "./copilot-app/backend/src/analytics/phase3_macro.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 399,
+      "line_range": [
+        399,
+        400
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "814                 betas = np.linalg.lstsq(xx, yi.values, rcond=None)[0][1:]\n815             except Exception:\n816                 continue\n817         out.loc[yi.index[-1], cols] = betas\n",
+      "col_offset": 12,
+      "end_col_offset": 24,
+      "filename": "./copilot-app/backend/src/analytics/phase3_macro.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 815,
+      "line_range": [
+        815,
+        816
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "62         base = f\"{self.ticker}|{self.title}|{self.source}|{self.url}\"\n63         return hashlib.sha1(base.encode(\"utf-8\")).hexdigest()\n64 \n",
+      "col_offset": 15,
+      "end_col_offset": 49,
+      "filename": "./copilot-app/backend/src/analytics/phase4_sentiment.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 327,
+        "link": "https://cwe.mitre.org/data/definitions/327.html"
+      },
+      "issue_severity": "HIGH",
+      "issue_text": "Use of weak SHA1 hash for security. Consider usedforsecurity=False",
+      "line_number": 63,
+      "line_range": [
+        63
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b324_hashlib.html",
+      "test_id": "B324",
+      "test_name": "hashlib"
+    },
+    {
+      "code": "176         safe_url = _safe_rss_url(url)\n177         data = urllib.request.urlopen(safe_url, timeout=15).read().decode(\"utf-8\", errors=\"ignore\")\n178     except Exception:\n",
+      "col_offset": 15,
+      "end_col_offset": 59,
+      "filename": "./copilot-app/backend/src/analytics/phase4_sentiment.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 22,
+        "link": "https://cwe.mitre.org/data/definitions/22.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.",
+      "line_number": 177,
+      "line_range": [
+        177
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/blacklists/blacklist_calls.html#b310-urllib-urlopen",
+      "test_id": "B310",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "385     for it in out:\n386         h = hashlib.md5(it.title.lower().encode()).hexdigest()[:10]\n387         if h in titles:\n",
+      "col_offset": 12,
+      "end_col_offset": 50,
+      "filename": "./copilot-app/backend/src/analytics/phase4_sentiment.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 327,
+        "link": "https://cwe.mitre.org/data/definitions/327.html"
+      },
+      "issue_severity": "HIGH",
+      "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
+      "line_number": 386,
+      "line_range": [
+        386
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b324_hashlib.html",
+      "test_id": "B324",
+      "test_name": "hashlib"
+    },
+    {
+      "code": "504                 items.extend(fetch_rss(u, ticker_hint=ticker, max_items=max_items))\n505             except Exception:\n506                 pass\n507             time.sleep(0.1)\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/analytics/phase4_sentiment.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 505,
+      "line_range": [
+        505,
+        506
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "520                 )\n521             except Exception:\n522                 pass\n523             return response\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 521,
+      "line_range": [
+        521,
+        522
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "621             logger.setLevel(logging.INFO)\n622         except Exception:\n623             pass\n624 \n",
+      "col_offset": 8,
+      "end_col_offset": 16,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 622,
+      "line_range": [
+        622,
+        623
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1000                         points.append({\"date\": date_str, \"value\": float(val)})\n1001                     except Exception:\n1002                         continue\n1003 \n",
+      "col_offset": 20,
+      "end_col_offset": 32,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 1001,
+      "line_range": [
+        1001,
+        1002
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "1484                                                 change_pct = ((last_price - prev) / prev) * 100\n1485                             except Exception:\n1486                                 pass\n1487 \n",
+      "col_offset": 28,
+      "end_col_offset": 36,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1485,
+      "line_range": [
+        1485,
+        1486
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "1915                 }\n1916             except Exception:\n1917                 pass  # Use None values if scoring fails\n1918             \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 1916,
+      "line_range": [
+        1916,
+        1917
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "2284                     results.append(item)\n2285                 except Exception:\n2286                     continue\n2287 \n",
+      "col_offset": 16,
+      "end_col_offset": 28,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 2285,
+      "line_range": [
+        2285,
+        2286
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "2889                 logger.error(f\"Error in LLM judge endpoint: {e}\")\n2890             except Exception:\n2891                 pass\n2892             # Always return a valid response structure to maintain never-empty guarantee\n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 2890,
+      "line_range": [
+        2890,
+        2891
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3341                                     r1 = float(closes[-1]); r0 = float(closes[-2])\n3342                                 except Exception:\n3343                                     continue\n3344                             else:\n",
+      "col_offset": 32,
+      "end_col_offset": 44,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 3342,
+      "line_range": [
+        3342,
+        3343
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "3357                                     hits += 1\n3358                         except Exception:\n3359                             continue\n3360                     hit_rate_rt = (hits / total) if total > 0 else 0.0\n",
+      "col_offset": 24,
+      "end_col_offset": 36,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 3358,
+      "line_range": [
+        3358,
+        3359
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "3371                     }\n3372                 except Exception:\n3373                     pass\n3374 \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3372,
+      "line_range": [
+        3372,
+        3373
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3536                 try:\n3537                     cnt_row = _qp(f\"select count(*) as cnt, count(distinct ticker) as nt from read_parquet('{fpat}')\")\n3538                     if cnt_row and len(cnt_row) > 0:\n",
+      "col_offset": 36,
+      "end_col_offset": 108,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3537,
+      "line_range": [
+        3537
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "3544                             tickers_count = parquet_tickers_count\n3545                         hz_rows = _qp(f\"select distinct horizon from read_parquet('{fpat}')\")\n3546                         parquet_horizons = sorted([str(r['horizon']) for r in hz_rows if r.get('horizon') is not None])\n",
+      "col_offset": 40,
+      "end_col_offset": 83,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3545,
+      "line_range": [
+        3545
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "3548                             horizons_list = parquet_horizons\n3549                 except Exception:\n3550                     pass  # Fallback to JSON data already loaded\n3551             except ImportError:\n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3549,
+      "line_range": [
+        3549,
+        3550
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3581                                         news_count += 1\n3582                                 except Exception:\n3583                                     pass\n3584                 # Capture last update if present\n",
+      "col_offset": 32,
+      "end_col_offset": 40,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3582,
+      "line_range": [
+        3582,
+        3583
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3610                     last_macro_dt = macro.get(\"updated_at\") or macro.get(\"generated_at\") or macro.get(\"freshness\")\n3611             except Exception:\n3612                 pass\n3613 \n",
+      "col_offset": 12,
+      "end_col_offset": 20,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 3611,
+      "line_range": [
+        3611,
+        3612
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "3679                 try:\n3680                     rows = _qp(f\"SELECT ticker, final_score, expected_return FROM read_parquet('{fpat}') WHERE {predicate}\")\n3681                 except Exception:\n",
+      "col_offset": 33,
+      "end_col_offset": 96,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 3680,
+      "line_range": [
+        3680
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "4138                                 )\n4139                     except Exception as e:\n4140                         continue\n4141             \n",
+      "col_offset": 20,
+      "end_col_offset": 32,
+      "filename": "./copilot-app/backend/src/api/main.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Continue detected.",
+      "line_number": 4139,
+      "line_range": [
+        4139,
+        4140
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b112_try_except_continue.html",
+      "test_id": "B112",
+      "test_name": "try_except_continue"
+    },
+    {
+      "code": "127         # Build query\n128         query = f\"\"\"\n129         SELECT \n130             id,\n131             title,\n132             url,\n133             source_domain,\n134             source_tier,\n135             published_at,\n136             lang,\n137             tickers,\n138             topics,\n139             sentiment,\n140             quality,\n141             relevance,\n142             summary,\n143             substr(text, 1, 500) as text_preview\n144         FROM read_parquet('{pattern}')\n145         WHERE parent_id IS NULL  -- Only non-duplicates\n146         \"\"\"\n147         params: List[Any] = []\n",
+      "col_offset": 20,
+      "end_col_offset": 27,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 128,
+      "line_range": [
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "231         \n232         query = f\"\"\"\n233         SELECT * \n234         FROM read_parquet('{pattern}')\n235         WHERE 1=1\n236         \"\"\"\n237         params: List[Any] = []\n",
+      "col_offset": 20,
+      "end_col_offset": 27,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 232,
+      "line_range": [
+        232,
+        233,
+        234,
+        235,
+        236
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "293         try:\n294             df = self.conn.execute(f\"\"\"\n295                 SELECT DISTINCT ticker \n296                 FROM read_parquet('{pattern}')\n297                 ORDER BY ticker\n298             \"\"\").df()\n299             \n",
+      "col_offset": 39,
+      "end_col_offset": 35,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 294,
+      "line_range": [
+        294,
+        295,
+        296,
+        297,
+        298
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "331             # Get overall stats\n332             stats_query = f\"\"\"\n333             SELECT \n334                 MIN(published_at) as min_date,\n335                 MAX(published_at) as max_date,\n336                 COUNT(*) as total_articles,\n337                 COUNT(DISTINCT source_domain) as unique_sources\n338             FROM read_parquet('{pattern}')\n339             {where_clause}\n340             \"\"\"\n341             \n",
+      "col_offset": 30,
+      "end_col_offset": 31,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 332,
+      "line_range": [
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339,
+        340
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "366             # Get unique tickers count\n367             tickers_query = f\"\"\"\n368             SELECT COUNT(DISTINCT ticker) as unique_tickers\n369             FROM (\n370                 SELECT unnest(tickers) as ticker\n371                 FROM read_parquet('{pattern}')\n372                 {where_clause}\n373             )\n374             \"\"\"\n375             \n",
+      "col_offset": 32,
+      "end_col_offset": 35,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 367,
+      "line_range": [
+        367,
+        368,
+        369,
+        370,
+        371,
+        372,
+        373,
+        374
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "379             # Get top tickers\n380             top_tickers_query = f\"\"\"\n381             SELECT \n382                 ticker,\n383                 COUNT(*) as article_count\n384             FROM (\n385                 SELECT unnest(tickers) as ticker\n386                 FROM read_parquet('{pattern}')\n387                 {where_clause}\n388             )\n389             GROUP BY ticker\n390             ORDER BY article_count DESC\n391             LIMIT 10\n392             \"\"\"\n393             \n",
+      "col_offset": 36,
+      "end_col_offset": 35,
+      "filename": "./copilot-app/backend/src/data/news_service.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 380,
+      "line_range": [
+        380,
+        381,
+        382,
+        383,
+        384,
+        385,
+        386,
+        387,
+        388,
+        389,
+        390,
+        391,
+        392
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.3/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    }
+  ]
+}

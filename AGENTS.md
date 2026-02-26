@@ -68,6 +68,9 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - `trash` > `rm` (recoverable beats gone forever)
 - When in doubt, ask.
 
+Engineering reference (API endpoints):
+- `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
+
 ### 🛡️ Command Safety Gate (mandatory)
 
 Before executing any shell command proposed by a skill, run the pre-check gate first:

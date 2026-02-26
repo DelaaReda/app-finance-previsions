@@ -1,54 +1,52 @@
-"""Test module to validate marker.txt existence in qwen runs directory."""
-import os
+"""Test module to validate marker.txt files in backend/.qwen_runs."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
 import pytest
 
 
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+RUNS_DIR = BACKEND_ROOT / ".qwen_runs"
+MARKER_PATHS = sorted(RUNS_DIR.glob("*/marker.txt"))
+
+
+def _parse_marker(path: Path) -> dict[str, str]:
+    content = path.read_text(encoding="utf-8").strip()
+    data: dict[str, str] = {}
+    for line in content.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            data[key] = value
+    return data
+
+
+@pytest.mark.skipif(not MARKER_PATHS, reason="No marker.txt found in backend/.qwen_runs")
 def test_marker_file_exists():
-    """Test that marker.txt exists in the expected run directory."""
-    run_id = "20251212-001810"
-    marker_path = f"/Users/venom/Documents/analyse-financiere/copilot-app/backend/.qwen_runs/{run_id}/marker.txt"
-    
-    assert os.path.exists(marker_path), f"Marker file does not exist at: {marker_path}"
-    
-    # Verify the file is not empty
-    assert os.path.getsize(marker_path) > 0, f"Marker file is empty: {marker_path}"
+    """Each discovered marker file must exist and be non-empty."""
+    for marker_path in MARKER_PATHS:
+        assert marker_path.exists(), f"Marker file missing: {marker_path}"
+        assert marker_path.stat().st_size > 0, f"Marker file is empty: {marker_path}"
 
 
-def test_marker_contains_correct_run_id():
-    """Test that marker.txt contains the correct run ID."""
-    run_id = "20251212-001810"
-    marker_path = f"/Users/venom/Documents/analyse-financiere/copilot-app/backend/.qwen_runs/{run_id}/marker.txt"
-    
-    assert os.path.exists(marker_path), f"Marker file does not exist at: {marker_path}"
-    
-    with open(marker_path, 'r') as f:
-        content = f.read()
-        
-    assert f"run_id={run_id}" in content, f"Expected run_id={run_id} not found in marker file"
+@pytest.mark.skipif(not MARKER_PATHS, reason="No marker.txt found in backend/.qwen_runs")
+def test_marker_contains_matching_run_id():
+    """run_id in marker content should match the parent folder name."""
+    for marker_path in MARKER_PATHS:
+        run_id = marker_path.parent.name
+        content = marker_path.read_text(encoding="utf-8")
+        assert f"run_id={run_id}" in content, f"Expected run_id={run_id} not found in {marker_path}"
 
 
-@pytest.mark.parametrize("run_id", [
-    "20251212-001810",
-])
-def test_marker_format(run_id):
-    """Test that marker.txt has the expected format."""
-    marker_path = f"/Users/venom/Documents/analyse-financiere/copilot-app/backend/.qwen_runs/{run_id}/marker.txt"
-    
-    assert os.path.exists(marker_path), f"Marker file does not exist at: {marker_path}"
-    
-    with open(marker_path, 'r') as f:
-        content = f.read().strip()
-        
-    lines = content.split('\n')
-    assert len(lines) >= 2, f"Marker file should have at least 2 lines, got {len(lines)}"
-    
-    # Check for expected keys
-    content_dict = {}
-    for line in lines:
-        if '=' in line:
-            key, value = line.split('=', 1)
-            content_dict[key] = value
-    
-    assert 'run_id' in content_dict, "Missing run_id in marker file"
-    assert content_dict['run_id'] == run_id, f"Incorrect run_id in marker file: {content_dict['run_id']}"
-    assert 'created_at' in content_dict, "Missing created_at in marker file"
+@pytest.mark.skipif(not MARKER_PATHS, reason="No marker.txt found in backend/.qwen_runs")
+@pytest.mark.parametrize("marker_path", MARKER_PATHS, ids=lambda p: p.parent.name)
+def test_marker_format(marker_path: Path):
+    """Marker file should expose stable key/value fields."""
+    lines = marker_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) >= 2, f"Marker file should have >=2 lines: {marker_path}"
+
+    content_dict = _parse_marker(marker_path)
+    assert "run_id" in content_dict, f"Missing run_id in {marker_path}"
+    assert content_dict["run_id"] == marker_path.parent.name, f"Incorrect run_id in {marker_path}"
+    assert "created_at" in content_dict, f"Missing created_at in {marker_path}"

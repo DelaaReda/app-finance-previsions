@@ -7,6 +7,7 @@ from pathlib import Path
 
 VALID = {
     "READY",
+    "IN_SPRINT",
     "RUNNING",
     "QA_REVIEW",
     "PASS",
@@ -14,11 +15,12 @@ VALID = {
     "CLOSED",
 }
 ALLOWED_TRANSITIONS = {
-    "READY": {"RUNNING", "BLOCKED"},
+    "READY": {"IN_SPRINT", "RUNNING", "BLOCKED"},
+    "IN_SPRINT": {"RUNNING", "BLOCKED"},
     "RUNNING": {"QA_REVIEW", "BLOCKED"},
     "QA_REVIEW": {"PASS", "BLOCKED"},
     "PASS": {"CLOSED"},
-    "BLOCKED": {"READY", "RUNNING", "CLOSED"},
+    "BLOCKED": {"READY", "IN_SPRINT", "RUNNING", "CLOSED"},
     "CLOSED": set(),
 }
 
@@ -52,7 +54,7 @@ def main() -> int:
       bid = it.get("id")
       state = it.get("state")
       deps = it.get("depends_on", []) or []
-      if state in {"RUNNING", "QA_REVIEW", "PASS", "CLOSED"}:
+      if state in {"IN_SPRINT", "RUNNING", "QA_REVIEW", "PASS", "CLOSED"}:
           for d in deps:
               dep = next((x for x in items if x.get("id") == d), None)
               if dep and dep.get("state") not in {"PASS", "CLOSED"}:

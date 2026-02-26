@@ -1,0 +1,1774 @@
+# Session: 2026-02-25 - OpenClaw cron optimization
+
+- Audited OpenClaw gateway and cron scheduler directly via `openclaw` CLI.
+- Confirmed scheduler active with 4 jobs and recurring runs.
+- Identified key friction in recent runs:
+  - queue state mismatch (`IN_SPRINT` rejected by validator/preflight),
+  - cadence pressure and rate-limit errors on planner loop,
+  - residual hardcoded paths in monitoring script.
+- Applied runtime cron tuning:
+  - `finance-mvp-backlog-planner-20m` -> every 20 minutes, anti-noise/no-commit guardrails.
+  - `orchestrator-agent-watchdog-10m` -> every 15 minutes, anti-noise/no-commit guardrails.
+  - `orchestrator-improvement-loop-60m` -> every 60 minutes, ROI-only anti-noise guardrails.
+- Applied script fixes:
+  - `scripts/validate_batch_state.py`: added `IN_SPRINT` as valid/active state.
+  - `scripts/preflight_dispatch.sh`: dynamic root path + `IN_SPRINT` support in Batch-02 gate check.
+  - `scripts/monitor_qwen_10h.sh`: dynamic root, configurable duration/interval/log dir, portable mtime detection.
+- Validation checks:
+  - `python3 scripts/validate_batch_state.py` => `VERDICT: PASS`
+  - `bash scripts/preflight_dispatch.sh` => `VERDICT: PASS` (health still soft warning DOWN)
+  - quick monitor run with `/tmp` log dir completed successfully.
+- Remaining operational blocker: tmux role sessions are currently DOWN (`qwen_planner/dev/tester/qa`).
+
+## Session: 2026-02-25 - Exemplary agent workflow baseline
+
+- Hardened backend test reproducibility for agents:
+  - added `copilot-app/backend/pytest.ini` (`testpaths = tests`);
+  - added `copilot-app/backend/tests/conftest.py` to normalize import paths (`src`, backend root).
+- Fixed dependency gap blocking health tests:
+  - added `httpx>=0.27.0` to `copilot-app/backend/requirements.txt`.
+- Removed non-portable CI blocker:
+  - rewrote `tests/test_marker_validation.py` to stop using hardcoded macOS absolute paths and validate discovered marker files dynamically.
+- Added standardized execution gate for backend work:
+  - new `scripts/backend_regression_gate.sh` with:
+    - deterministic pytest run,
+    - optional live endpoint checks (`/api/health`, `/api/stocks/prices`, `/api/news/feed`),
+    - retry/timeout logic to reduce false negatives.
+- Updated guidance so agents follow one reproducible path:
+  - `AGENT_WORKFLOW.md` (Golden Path section),
+  - `README.md` (explicit backend gate commands).
+- Validation evidence:
+  - `./scripts/backend_regression_gate.sh --no-live` => `VERDICT: PASS` (`28 passed`);
+  - `./scripts/backend_regression_gate.sh` => `VERDICT: PASS` + `health=UP`, `stocks_prices=OK`, `news_feed=OK`.
+
+## Session: 2026-02-25 - Qwen orchestrator exemplary profile
+
+- Upgraded `scripts/qwen_orchestrator.py` with `--execution-profile exemplary`.
+- Added strict response-contract support by role:
+  - sections required per agent (`PLAN/DELTA/TEST_PLAN/...`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`);
+  - automatic detection of missing sections in quality classifier (`missing_sections` warning).
+- Strengthened auto-rewrite loop:
+  - configurable max passes (`FC_AGENT_AUTO_REWRITE_MAX_PASSES`);
+  - exemplary mode forces stricter rewrite behavior and prioritizes missing-section fixes.
+- Added mandatory exemplary preflight gates before agent dispatch:
+  - `scripts/validate_batch_state.py`,
+  - `scripts/preflight_dispatch.sh`,
+  - `scripts/backend_regression_gate.sh --no-live`.
+- Exemplary preflight is blocking by default; run exits early with explicit failed gate list.
+- QA/Delivery prompts now include explicit output contracts in exemplary mode.
+- Validation checks executed:
+  - `python3 -m py_compile scripts/qwen_orchestrator.py` OK,
+  - `scripts/qwen_orchestrator.py --help` exposes `--execution-profile`,
+  - direct preflight invocation via module import returned `ok=True` with all checks passing.
+
+## Session: 2026-02-25 - OpenClaw update + Tavily security review
+
+- Updated OpenClaw from `2026.2.23` to `2026.2.24` using global npm install.
+- Reinstalled gateway systemd unit so service now runs the updated binary path:
+  - `ExecStart=/usr/bin/node /home/venom/.npm-global/lib/node_modules/openclaw/dist/index.js gateway --port 18789`
+- Restart + smoke checks all green:
+  - `openclaw --version` => `2026.2.24`
+  - `openclaw status --deep` => gateway reachable, app `2026.2.24`, WhatsApp linked
+  - `openclaw cron list` => 4 jobs, status `ok`
+  - `openclaw doctor` => no channel security warning; 4 orphan transcripts flagged
+- Investigated Tavily skill alert (`security audit --deep`):
+  - `tavily-search` provenance confirmed from `clawhub.ai`, owner `arun-8687`, version `1.0.0`
+  - local file hashes match registry metadata exactly (`SKILL.md`, `scripts/search.mjs`, `scripts/extract.mjs`)
+  - code reads only `TAVILY_API_KEY` and calls only `https://api.tavily.com/search` + `/extract`
+  - verdict: likely heuristic false positive (env+network pattern), not a detected backdoor
+  - keep skill enabled with guardrails (scoped API key, rotation, monitor outbound host)
+
+## Session: 2026-02-25 - Dev exemplaire mode request
+
+- User explicitly requested a stricter "work like a real developer" operating style.
+- Updated `AGENT_WORKFLOW.md` to a concrete default dev loop:
+  - Definition of Ready + Definition of Done
+  - mandatory delivery cycle (scope -> implement -> validate -> prove -> escalate)
+  - explicit response template with `STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE`
+  - escalation rules and stronger execution guardrails
+- Stored long-term preference in `MEMORY.md` for future sessions.
+
+## Session: 2026-02-25 - qwen_orchestrator aligned with OpenClaw cron
+
+- Hardened `scripts/qwen_orchestrator.py` for cron-friendly watchdog use:
+  - added structured status contract (`VERDICT`, `BLOCKER_ID`, required roles) with:
+    - `--tmux-cmd status --status-format text|compact|json`
+    - `--tmux-cmd health` (compact + strict non-zero on blocked)
+    - `--status-core-roles planner,dev,tester,qa` override
+    - `--status-strict` to force non-zero exit when required roles are down
+  - added lightweight startup path: skip backend venv re-exec for tmux management commands (`status/health/start/stop/restart/attach/doctor/cleanup/clear/ping/prompt`) to reduce cron friction.
+  - reduced strict path dependency for tmux commands by validating project root only (not backend dir) before command dispatch.
+- Validation:
+  - `python3 -m py_compile scripts/qwen_orchestrator.py` => PASS
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status` => PASS + required roles all UP
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status --status-format json` => valid JSON payload
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health` => `VERDICT: PASS`
+  - strict failure path tested with missing role override => exit code `22`.
+- Updated OpenClaw cron runtime job `orchestrator-agent-watchdog-20m` payload to use:
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner,dev,tester,qa`
+  instead of generic `--tmux-cmd status`.
+- Forced test run executed:
+  - `openclaw cron run dfd61f17-206f-4feb-ab14-6ae4ce54f04c --expect-final --timeout 120000` => `ok:true`
+  - `openclaw cron runs --id ... --limit 1` summary shows `VERDICT: PASS`, `BLOCKER_ID: NONE`, roles `up=4/4`.
+
+## Session: 2026-02-25 - Live orchestrator monitoring (recent logs only)
+
+- Triggered fresh orchestration checks from current session (not historical analysis):
+  - attempted full run: `python3 scripts/qwen_orchestrator.py --mode debug --execution-profile exemplary --rounds 1`
+    - blocked immediately: missing Python module `autogen`.
+  - generated fresh doctor artifacts:
+    - run: `finance-app/orchestrator-runs/20260224-235111-818`
+
+## Session: 2026-02-25 - Cron tmux runner without qwen_orchestrator
+
+- User request enforced: no `qwen_orchestrator.py` dependency in cron execution path.
+- Replaced `scripts/cron_tmux_role_runner.sh` with tmux-native logic:
+  - direct session start/readiness/restart via `tmux`,
+  - direct prompt injection/capture loop,
+  - recovery and health snapshot without orchestrator calls,
+  - freshness guard (`NEXT_ACTION_UNIQUE` tick suffix) to reduce stale captures.
+- `scripts/cron_tmux_role_turn.sh` converted to compatibility wrapper that delegates to `cron_tmux_role_runner.sh`.
+- Validation:
+  - `bash -n scripts/cron_tmux_role_runner.sh` PASS,
+  - `rg -n 'qwen_orchestrator\.py' scripts/cron_tmux_role_runner.sh scripts/cron_tmux_role_turn.sh` => no match,
+  - manual run (`planner`, short timeout) returns contract output with fallback checkpoint and tmux health snapshot.
+- Residual weakness unchanged: codex tmux replies are still often unparseable/timeout, causing fallback outputs (throughput issue, not orchestrator dependency).
+
+## Session: 2026-02-25 - Admin team playbook alignment audit
+
+- Verified publication and integration of:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`
+  - links from `docs/ops/CRON_STRATEGY.md` and `docs/ops/TMUX_CRON_OPERATIONS.md`
+  - watchdog log entry in `docs/orchestrator-ops/agent-watchdog.md`.
+- Confirmed runtime cron payload policy is compliant:
+  - all active jobs call `bash scripts/cron_tmux_role_runner.sh <role>`
+  - no `qwen_orchestrator.py` present in `payload.message`.
+- Corrected stale runtime values in docs to match actual cron snapshot:
+  - cadence: `5/7/9/11/20/25/30` minutes,
+  - `thinking=high`,
+  - `timeoutSeconds=240` all jobs,
+  - runner env baseline `PROMPT_TIMEOUT_SECONDS=55`, `RETRY_PROMPT_TIMEOUT_SECONDS=20`, codex/tmux defaults.
+- Aligned guardrails wording:
+  - structured output contract now explicitly lists all 8 keys,
+  - runbook force-run validation timeout aligned to `240000`.
+
+## Session: 2026-02-25 - Admin agents ownership naming
+
+- User assigned explicit responsibility: assistant becomes admin agents lead.
+- Official operational name aligned: `AgentSentinel`.
+- Governance notes anchored in:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` (owner section + operating notes).
+- Durable memory updated with this identity in `MEMORY.md`.
+    - `doctor_report.md` confirms `autogen: MISSING`, tmux sessions present.
+  - restart run with fresh tmux logs:
+    - run: `finance-app/orchestrator-runs/20260224-235246-458`
+    - tmux logs show active Qwen Code startup banners in all four role sessions.
+- Improvements implemented based on these fresh logs:
+  1. **health/status correctness**: readiness now checks child processes under tmux panes, not only `pane_current_command` (which was `bash` despite active `node ... qwen-code/cli.js`).
+  2. **prompt/ping fallback logic**: avoid premature SDK fallback when tmux child process is actually ready.
+  3. **ping signal quality**: non-PONG replies now flagged as `INVALID_REPLY` instead of silently treated as OK.
+- Post-fix verification:
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health` => `VERDICT: PASS | ready=4/4 | sessions=4/4`
+  - latest watchdog cron run summary reports PASS with `orchestrator ready=4/4`.
+- Remaining blockers observed:
+  - feature-mode orchestrator still blocked until Python `autogen` dependency is installed.
+  - SDK fallback path still unavailable unless Node package `@qwen-code/sdk` is installed (currently returns module-not-found when forced).
+
+## Session: 2026-02-25 - Cron log monitoring + stabilization tuning
+
+- Audited live cron history (`openclaw cron runs`) and raw scheduler store (`~/.openclaw/cron/jobs.json`).
+- Measured baseline from logs (before tuning):
+  - `finance-mvp-backlog-planner`: 16 runs, 25% errors historically, avg `~32.6k` tokens/run, avg `~76s`.
+  - `orchestrator-agent-watchdog`: 6 runs, 0% errors, 50% `NO_DELTA`, avg `~26.6k` tokens/run.
+  - `orchestrator-improvement-loop`: 1 run, `~44.5k` tokens, `~94s`.
+- Applied runtime cron tuning (OpenClaw):
+  - `orchestrator-agent-watchdog-20m` -> `orchestrator-agent-watchdog-30m` (`every 30m`) + `thinking=low`.
+  - `orchestrator-improvement-loop-180m` -> `orchestrator-improvement-loop-360m` (`every 6h`) + `thinking=low`.
+  - `finance-mvp-backlog-planner-45m`: kept cadence, set `thinking=low`.
+  - `orchestrator-nightly-roi`: set `thinking=low`.
+- Validation runs after tuning:
+  - planner (`09d...`) forced run => `durationMs=11410`, `total_tokens=14021`, `status=ok`.
+  - watchdog (`dfd...`) forced run => `durationMs=20882`, `total_tokens=15650`, `status=ok`.
+  - improvement (`36b...`) forced run => `durationMs=12300`, `total_tokens=18183`, `status=ok`.
+- Result: significant drop in token/latency on planner and improvement-loop while preserving healthy verdicts.
+
+## Session: 2026-02-25 - High-frequency cron mode (user requested)
+
+- User requested very frequent monitoring cadence.
+- Updated OpenClaw cron schedules to high-frequency profile:
+  - `orchestrator-agent-watchdog-5m` => every 5 minutes (`thinking=low`).
+  - `finance-mvp-backlog-planner-10m` => every 10 minutes (`thinking=low`).
+  - `orchestrator-improvement-loop-60m` => every 60 minutes (`thinking=low`).
+  - `orchestrator-nightly-roi` unchanged at 22:30 ET (`thinking=low` preserved).
+- Verification:
+  - `openclaw cron list` confirms the new cadence and jobs are `ok`.
+
+## Session: 2026-02-25 - Thinking policy override (user requested)
+
+- User requested to remove `thinking low` and force maximal reasoning.
+- Applied `thinking=max` on all 4 active cron jobs while keeping high-frequency cadence.
+- Verified each job payload now contains `"thinking": "max"`.
+
+## Session: 2026-02-25 - End-to-end test sweep
+
+- Ran full smoke checks after SDK install + cron retuning.
+- SDK / CLI:
+  - `npm ls @qwen-code/sdk --depth=0` => `@qwen-code/sdk@0.1.5`
+  - dynamic import test => `SDK_IMPORT_OK`
+  - `qwen --version` => `0.10.6`
+  - `node scripts/qwen_sdk_prompt.mjs --prompt ...` => `ok:true`, assistant/result=`PONG`
+- Orchestrator / gates:
+  - `python3 -m py_compile scripts/qwen_orchestrator.py` => PASS
+  - `bash scripts/preflight_dispatch.sh` => `VERDICT: PASS` (`health=UP`)
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health ...` => `VERDICT: PASS` (`ready=4/4`)
+  - `bash scripts/backend_regression_gate.sh --no-live` => `30 passed` (`VERDICT: PASS`)
+- Cron runtime:
+  - all 4 jobs enabled with requested cadence and `thinking=max`
+  - latest runs status checked via `openclaw cron runs --id ... --limit 1`.
+
+## Session: 2026-02-25 - Blocker resolved (`BATCH01_ARTIFACT_MISSING`)
+
+- Created gate artifact:
+  - `finance-app/openclaw-gates/batch-01-20260225-000127.md`
+  - includes required sections `DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE`
+  - verdict set to `PASS`, blocker to `NONE`.
+- Execution evidence captured before sign-off:
+  - `bash scripts/preflight_dispatch.sh` => `VERDICT: PASS` (`health=UP`)
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health ...` => `VERDICT: PASS` (`ready=4/4`)
+  - live checks: `/api/health` and `/api/stocks/prices?ticker=SPY` => `ok=true`
+  - backend targeted tests => `7 passed`
+- Delivery gate verification:
+  - `bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-01-20260225-000127.md` => PASS
+- Queue and state alignment applied:
+  - `docs/orchestrator-ops/priority-queue.json`: `BATCH-01=PASS`, `BATCH-02=READY`, `blocker_id=NONE`
+  - `docs/planning/WORKSTATE.md`, `docs/orchestrator-ops/WORKSTATE.md`, `docs/scrum/sprint-current.md` updated.
+- Runtime confirmation:
+  - forced planner cron run now reports `BATCH-01=PASS`, `BATCH-02=READY`, `BLOCKER_ID: NONE`.
+
+## Session: 2026-02-25 - Cron direct-role refactor (no orchestrator/tmux dependency)
+
+- Rollback backup created:
+  - `/home/venom/.openclaw/cron/jobs.json.backup-20260225-001024`
+- Replaced previous 4 jobs with direct-role jobs (still high-frequency, `thinking=max`):
+  - `planner-direct-5m` (id `09d...`) — reads queue/workstate/gates only.
+  - `dev-direct-7m` (id `dfd...`) — reads tasks/stories/queue only.
+  - `tester-direct-9m` (id `36b...`) — reads backend tests/tasks/queue only.
+  - `qa-direct-11m` (id `454...`) — reads gates/queue/sprint only.
+- Hard constraints in all prompts:
+  - no `qwen_orchestrator.py`
+  - no `tmux`
+  - no file edits (`write/edit/git` forbidden).
+- Forced run verification (all 4 jobs):
+  - `openclaw cron run <id> --expect-final` => `ok:true` for all.
+  - `openclaw cron runs --id <id> --limit 1` => `status=ok` for planner/dev/tester/qa.
+
+## Session: 2026-02-25 - Multi-agent team expansion (architect/analyst/engineers)
+
+- Extended `scripts/qwen_orchestrator.py` to support richer specialist teams beyond core `planner/dev/tester/qa`.
+- Added specialist roles and defaults:
+  - `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_engineer`, `security_engineer`, `devops_engineer`
+  - with dedicated env/session mapping (`FC_SESS_*` + default `qwen_*` session names).
+- Added role selection controls:
+  - `--team-profile core|architecture|engineering|full`
+  - `--specialists <csv>`
+  - `--with-architect` kept as backward-compatible legacy switch.
+- Orchestration flow now instantiates selected specialists dynamically in AutoGen groupchat with role-specific system prompts and contracts.
+- Status/health compatibility preserved for OpenClaw cron:
+  - default required roles remain `planner,dev,tester,qa`;
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner,dev,tester,qa` remains `VERDICT: PASS`.
+- Validation evidence:
+  - `python3 -m py_compile scripts/qwen_orchestrator.py` => PASS
+  - `python3 scripts/qwen_orchestrator.py --help` shows new flags (`--team-profile`, `--specialists`)
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status --team-profile engineering --status-format compact ...` => PASS with extended role inventory.
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd start --team-profile architecture --specialists security --no-clean-startup` => sessions specialists démarrées.
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd status --team-profile architecture --specialists security --status-format compact ...` => `ready=7/7`.
+  - feature run still blocked until dependency install:
+    - `python3 scripts/qwen_orchestrator.py --mode debug --rounds 1 --team-profile architecture --specialists backend-engineer` => `ModuleNotFoundError: autogen`.
+
+## Session: 2026-02-25 - OpenClaw cron migration to tmux role sessions (7 jobs)
+
+- User decision updated during execution: switch to **separate cron jobs by role** using tmux context persistence.
+- Safety backup created before migration:
+  - `~/.openclaw/cron/backups/jobs.json.20260225-002023.pre-tmux-7roles.bak`
+- Final active cron set (enabled_count=7):
+  - `planner-tmux-5m` (`09d045db-b12a-4486-a743-57b761d52e50`)
+  - `dev-tmux-7m` (`dfd61f17-206f-4feb-ab14-6ae4ce54f04c`)
+  - `tester-tmux-9m` (`36bed423-e965-4a19-a43a-c8ffbff751d8`)
+  - `qa-tmux-11m` (`454dc361-14bb-4f71-8ca2-ec86708c503f`)
+  - `architect-tmux-13m` (`bde5885a-388f-4fe4-a8b7-a146521d9e9d`)
+  - `po-tmux-15m` (`44f08bd9-b9c0-4ab5-8882-cc91d402c8db`)
+  - `scrum-master-tmux-17m` (`8e5b1bd7-f319-48d8-b8f7-c906c024135f`)
+- Duplicate jobs created by concurrent session were detected and disabled:
+  - disabled IDs: `e7ce28c7-de45-410a-9d32-125a9b499940`, `6668afed-4959-441a-b3c0-67a25c6addde`, `88de35d3-c89e-4367-a733-dc74fd596ae1`, `0c4f938a-5faa-4968-9043-af2982b6cb12`, `e7814286-ec84-4396-bbb9-c491d0294d7c`.
+- All 7 active jobs now use role runner command style:
+  - `bash scripts/cron_tmux_role_runner.sh <role>`
+  - `thinking=low`, `timeoutSeconds=180`, `sessionTarget=isolated`, `delivery.mode=none`.
+- Runner hardening:
+  - updated `scripts/cron_tmux_role_runner.sh` with strict system prompt + deterministic 8-key normalizer.
+  - if tmux answer is noisy/unparseable, runner now emits explicit structured fallback (`TMUX_REPLY_UNPARSEABLE`) instead of hanging.
+- Current health snapshot from jobs state:
+  - all 7 active jobs have `lastStatus=ok`, `consecutiveErrors=0`.
+
+## Session: 2026-02-25 - Docs sync + live cron monitoring (multi-session context)
+
+- User request: improve docs only and monitor current cron behavior while 2 other agent sessions are active.
+- Live monitoring snapshot (from `openclaw cron list` + per-job `openclaw cron runs --limit 5`):
+  - 7 tmux role jobs active and currently `ok`.
+  - transient failures observed in recent window:
+    - `qa-tmux-11m`: 1 timeout/5
+    - `architect-tmux-13m`: 1 timeout/5
+  - multiple summaries include terminal noise (`clear`, prompt fragments), reducing parser reliability.
+  - job IDs changed during concurrent edits, confirming multi-session churn risk.
+- Documentation improvements applied:
+  - added `docs/ops/TMUX_CRON_OPERATIONS.md` (active profile + monitoring checklist + anti-conflict protocol).
+  - updated `docs/ops/CRON_STRATEGY.md` to reflect active 7-role tmux profile.
+  - updated `docs/ops/DIRECT_CRON_METHODOLOGY.md` as fallback-only profile.
+  - logged monitoring evidence/actions in `docs/orchestrator-ops/agent-watchdog.md` and `docs/orchestrator-ops/WORKSTATE.md`.
+
+## Session: 2026-02-25 - Sleep logs verification + cron hardening
+
+- User asked to verify logs and apply improvements.
+- Sleep/power logs check:
+  - `journalctl` (since 05:16 ET) shows no actual suspend/resume transition.
+  - only admin traces remain: `systemctl mask ... sleep/suspend/hibernate` and one blocked test `systemctl start suspend.target`.
+  - conclusion: VM-side sleep disable is effective.
+- Cron anomalies check (last 10 runs per role):
+  - no active scheduler errors on most roles; old `BLOCKED` summaries remain in history.
+  - recurring quality issue remains `tmux_unparseable` fallback in summaries.
+  - one historical timeout still visible on `po` window.
+- Improvements applied (runtime):
+  - increased timeout to `240s` for:
+    - `qa-tmux-11m` (`454dc361-14bb-4f71-8ca2-ec86708c503f`)
+    - `architect-tmux-13m` (`bde5885a-388f-4fe4-a8b7-a146521d9e9d`)
+    - `po-tmux-15m` (`44f08bd9-b9c0-4ab5-8882-cc91d402c8db`)
+  - backup created before edit:
+    - `~/.openclaw/cron/jobs.json.backup-*-before-timeout-tune`
+- Verification runs:
+  - forced runs completed `ok` for `qa`, `architect`, `po` with updated timeout profile.
+  - observed durations stayed under the new ceiling (`qa ~96s`, `architect ~153s`, `po ~40s`).
+
+## Session: 2026-02-25 - Admin documentation for machine restarts
+
+- Added a dedicated runbook for other admin agents:
+  - `docs/ops/ADMIN_POST_RESTART_RUNBOOK.md`
+- Runbook covers:
+  - mandatory post-restart checks (gateway + cron + timeout profile),
+  - sleep-disable verification/remediation (`systemd mask`, `logind`, `gsettings`),
+  - cron timeout remediation (`qa/architect/po => 240`),
+  - required logging trail updates after intervention.
+- Linked from:
+  - `docs/ops/TMUX_CRON_OPERATIONS.md`
+  - `docs/ops/CRON_STRATEGY.md`
+
+## Session: 2026-02-25 - Admin codex baseline policy
+
+- Added `docs/ops/ADMIN_CODEX_BASELINE.md` to force a single admin policy:
+  - `TMUX_ROLE_AGENT_BIN=codex` mandatory for all role crons.
+  - `TMUX_ROLE_AGENT_BIN=qwen` explicitly treated as drift.
+- Included:
+  - fast verification commands,
+  - standard remediation template (`openclaw cron edit --message ...`),
+  - post-fix validation and logging obligations.
+- Cross-linked from restart and cron strategy docs.
+
+## Session: 2026-02-25 - Log verification + cleanup for tmux debug
+
+- Verified logging paths are functional for investigations:
+  - `finance-app/orchestrator-runs/latest/run.json` updates (`agent_cli=codex` confirmed).
+  - `finance-app/orchestrator-runs/latest/tmux/*.log` updates in live runs.
+  - `~/.openclaw/cron/runs/*.jsonl` receives new cron events.
+- Cleared active log confusion by moving old orchestrator run dirs out of active scope:
+  - archive path: `finance-app/orchestrator-runs-archive/20260225-062812`
+  - additional archive window after new run: `finance-app/orchestrator-runs-archive/20260225-062933`
+  - active `finance-app/orchestrator-runs` reduced from `5.7G` to about `5.6M`.
+- Added reusable maintenance script:
+  - `scripts/cleanup_runtime_logs.sh`
+  - default policy: keep recent 15 run dirs, archive the rest, trim cron ledgers only if above retention.
+
+## Session: 2026-02-25 - Cron logs audit + hardening (recent runs only)
+
+- Audited OpenClaw cron logs on the 7 tmux role jobs with focus on latest runs (`openclaw cron list`, `openclaw cron runs --id ... --limit ...`, raw `~/.openclaw/cron/runs/*.jsonl`, and per-run session JSONL).
+- Confirmed recurrent failure mode behind `NO_VERDICT`: cron agent returns empty stdout when runner emits only stderr (syntax/startup errors), so summaries appear empty despite `status=ok`.
+- Hardened `scripts/cron_tmux_role_runner.sh`:
+  - startup is now non-blocking and role-targeted (`--tmux-cmd start --tmux-target <role>`), with captured startup diagnostics;
+  - fallback evidence now includes startup markers (`startup_rc/startup_err` or `startup_skipped=1`);
+  - timeout profile in runtime currently set via cron envs (`PROMPT_TIMEOUT_SECONDS=35`, `RETRY_PROMPT_TIMEOUT_SECONDS=15`, `TMUX_ROLE_RECOVERY_THRESHOLD=2`, `SKIP_RETRY_ON_TIMEOUT=1`) and reflected in evidence tags.
+- Live validation after fixes:
+  - direct runner checks (`planner`, `po`, `qa`) return strict 8-key output with fallback evidence;
+  - forced cron runs validated for `planner`, `po`, `qa`, `architect` (`openclaw cron run ... --expect-final` => `ok:true`).
+- Current cron profile observed in runtime:
+  - planner 5m, dev 7m, tester 9m, qa 11m, architect 20m, po 25m, scrum-master 30m,
+  - all `thinking=low`, `timeoutSeconds=120`, isolated sessions.
+- Final snapshot at end of session: latest run for each role reports `status=ok` + `VERDICT: GO_WITH_CAUTION` (no `NO_VERDICT` in final check).
+- Important operational note: concurrent edits from another active session were observed repeatedly during this cycle (payload/schedule/runner changes), causing intermittent transient breakages while testing.
+
+### Update (same session)
+
+- Observed repeated concurrent edits from another active session while validating, causing transient runner syntax failures and intermittent `NO_VERDICT` runs.
+- Added runner hardening so startup is role-targeted/non-blocking and startup diagnostics are included in fallback evidence (`startup_rc/startup_err` or `startup_skipped=1`).
+- Raised cron `timeoutSeconds` for all 7 jobs from 120 to 180 to remove scheduler-side timeouts on long ticks (notably scrum).
+- Forced re-runs after hardening:
+  - planner, tester, qa, po, architect, scrum_master all returned `status=ok` with `VERDICT: GO_WITH_CAUTION` in latest snapshots.
+
+## Session: 2026-02-25 - Logs verification + tmux cron optimization pass
+
+- User requested: verify logs and apply runtime improvements.
+- Findings from live logs (`journalctl` + `openclaw cron runs/list`):
+  - gateway contention still present (`lane wait exceeded`), but queue depth now mostly low after cadence update;
+  - recurrent role output issue persists as `tmux_unparseable=1` fallback;
+  - one stale `runningAtMs` lock on `scrum-master` was observed after timeout.
+- Changes applied:
+  - `scripts/configure_tmux_role_crons.sh`
+    - standardized timeout profile: `timeoutSeconds=120`;
+    - kept 7 role jobs with reduced strategic cadence (`architect=20m`, `po=25m`, `scrum=30m`);
+    - cron payload now pins role runtime envs:
+      - `TMUX_ROLE_AGENT_BIN=qwen`
+      - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
+      - `PROMPT_TIMEOUT_SECONDS=55`
+      - `RETRY_PROMPT_TIMEOUT_SECONDS=20`
+      - `TMUX_ROLE_RECOVERY_THRESHOLD=2`
+      - `SKIP_RETRY_ON_TIMEOUT=1`.
+  - `scripts/cron_tmux_role_runner.sh`
+    - aligned default agent bin to `qwen` (fallback to `codex` only if `qwen` missing);
+    - retry path now supports `sdk` engine and default retry mode is `sdk`;
+    - parser now accepts `:` and `=` key separators;
+    - fallback evidence enriched with compact raw previews (`raw_primary`, `raw_retry`) for diagnostics.
+- Operational remediation:
+  - restarted `openclaw-gateway.service` once to clear stale cron `already-running` lock;
+  - post-restart scheduler recovered and `scrum-master` state returned to `lastStatus=ok`.
+- Validation:
+  - `bash -n` checks passed on modified scripts;
+  - cron list confirms all 7 jobs carry updated payload env + timeout profile.
+
+### Update: ADMIN_CODEX_BASELINE applied
+
+- User added `docs/ops/ADMIN_CODEX_BASELINE.md` and requested alignment.
+- Enforced codex baseline end-to-end:
+  - `scripts/configure_tmux_role_crons.sh` now defaults `ROLE_AGENT_BIN=codex`.
+  - `scripts/cron_tmux_role_runner.sh` now defaults `TMUX_ROLE_AGENT_BIN=codex` (fallback to `qwen` only if `codex` unavailable).
+  - Re-applied cron configuration; all 7 jobs now include `TMUX_ROLE_AGENT_BIN=codex` in `payload.message`.
+- Compliance checks:
+  - `rg 'TMUX_ROLE_AGENT_BIN=qwen' /home/venom/.openclaw/cron/jobs.json` => no matches.
+  - `jq '.jobs[].payload.message' /home/venom/.openclaw/cron/jobs.json` => all roles pinned to codex baseline pattern.
+
+### Update: codex/no-sdk/high confirmed
+
+- User clarified constraints:
+  - no SDK path for codex role runs,
+  - cron thinking level must be high.
+- Applied:
+  - `scripts/configure_tmux_role_crons.sh`: default retry engine set to `tmux`, cron thinking set to `high`.
+  - `scripts/cron_tmux_role_runner.sh`: forced guard so `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk` auto-downgrades to `tmux` when `TMUX_ROLE_AGENT_BIN!=qwen`.
+  - `docs/ops/ADMIN_CODEX_BASELINE.md` updated to codex+tmux retry pattern and `--thinking high` remediation command.
+- Runtime validation:
+  - all 7 jobs now carry `TMUX_ROLE_AGENT_BIN=codex`, `TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux`, `thinking=high`.
+  - direct runner check shows `retry_mode=tmux` (no sdk path used).
+
+## Session: 2026-02-25 - Audit productivité tmux/cron (quantifié)
+
+- User requested deep analysis of current strategy efficiency.
+- Current runtime observed:
+  - cron scheduler enabled, 7 jobs role-based active.
+  - current payload profile: `TMUX_ROLE_AGENT_BIN=codex`, retry `tmux`, `thinking=high`, timeout `240s`.
+- Quant metrics (last 10 runs per role = 70 runs):
+  - errors/timeouts: `5/70` (`7.1%`)
+  - `fallback_mode=checkpoint`: `43/70` (`61.4%`)
+  - `tmux_unparseable=1`: `43/70` (`61.4%`)
+  - `DELTA: NO_DELTA`: `55/70` (`78.6%`)
+  - useful proxy (ok + delta utile + parseable + non-blocked): `7/70` (`10.0%`)
+- tmux evidence:
+  - live pane captures and latest run tmux logs mostly show Codex splash/tips + `clear`, no structured output lines.
+  - latest run (`finance-app/orchestrator-runs/20260225-064517-570`) has `status_tok=0` and `blocker_tok=0` on all role logs.
+- Critical strategic weakness confirmed in orchestrator:
+  - role auto-recovery uses `--tmux-cmd restart --tmux-target <role>`, but restart path is global (all sessions), not targeted.
+  - `qwen_start()` loops over `session_names()` and applies `clear`/history reset when clean startup is enabled.
+  - result: repeated context wipes on recovery.
+- Restart churn evidence:
+  - `finance-app/orchestrator-runs`: 24 recent run dirs, 22 in mode `restart`, average gap ~115s.
+
+## Session: 2026-02-25 - Clean-only tmux logs policy
+
+- Added `scripts/clean_tmux_logs.sh` to sanitize tmux logs into `*.clean.log`:
+  - strips ANSI/TUI noise,
+  - keeps compact debug signal (structured keys/errors/recovery),
+  - writes explicit marker when no signal: `NO_DEBUG_SIGNAL`.
+- Added strict mode `--purge-raw` to remove raw `*.log` files after clean generation.
+- Applied clean + purge on active runs:
+  - `find finance-app/orchestrator-runs -type f -path '*/tmux/*.log' ! -name '*.clean.log' | wc -l` => `0`.
+- Hardened runtime behavior:
+  - `scripts/cron_tmux_role_runner.sh` now calls `clean_tmux_logs.sh --mode compact --purge-raw` on each tick (success/retry/fallback paths) to prevent raw log re-accumulation.
+- Documentation updated:
+  - `docs/ops/TMUX_CRON_OPERATIONS.md` includes clean-only command and strict policy note.
+
+### Update (same day): keep per-iteration logs, clean by default
+
+- User clarified to keep logs for each iteration (no destructive purge loop).
+- Applied:
+  - `scripts/qwen_orchestrator.py`: tmux `pipe-pane` now streams through `scripts/tmux_log_clean_stream.py` (ANSI/control noise stripped at source).
+  - `scripts/cron_tmux_role_runner.sh`: auto sanitize is now optional and disabled by default (`TMUX_ROLE_AUTO_SANITIZE_LOGS=0`), no `--purge-raw` in normal flow.
+  - `docs/ops/TMUX_CRON_OPERATIONS.md`: updated to retention-friendly clean stream policy.
+- Validation:
+  - `python3 -m py_compile scripts/qwen_orchestrator.py scripts/tmux_log_clean_stream.py` => PASS.
+  - `find .../tmux/*.log | rg '\\x1b'` => no ANSI escape sequences detected.
+
+### Update - Admin Codex baseline applied
+
+- New ops doc detected: `docs/ops/ADMIN_CODEX_BASELINE.md`.
+- Enforced cron role baseline across all 7 jobs:
+  - `TMUX_ROLE_AGENT_BIN=codex`
+  - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
+  - `PROMPT_TIMEOUT_SECONDS=55`
+  - `RETRY_PROMPT_TIMEOUT_SECONDS=20`
+  - `TMUX_ROLE_RECOVERY_THRESHOLD=2`
+  - `SKIP_RETRY_ON_TIMEOUT=1`
+- Backup created before remediation:
+  - `/home/venom/.openclaw/cron/jobs.json.backup-20260225-062224-before-codex-baseline-auto`
+- Validation:
+  - no `TMUX_ROLE_AGENT_BIN=qwen` remaining in `~/.openclaw/cron/jobs.json`
+  - forced runs executed on planner/qa; scheduler returns `ok:true`.
+- Runner hardening kept:
+  - codex default agent bin, explicit bin availability guard,
+  - defensive `STRUCTURED` init to avoid unbound-variable edge cases in strict shell mode.
+
+## Session: 2026-02-25 - "fais tout sauf 2" (items non-2 finalisés)
+
+- Implemented remaining baseline hardening around admin concurrency:
+  - `scripts/configure_tmux_role_crons.sh` now routes all `openclaw cron list/add/edit` calls through `scripts/cron_admin_lock.sh`.
+  - `docs/ops/ADMIN_CODEX_BASELINE.md` updated to require lock usage for verify/remediation/validation commands.
+- Lock validation:
+  - `scripts/cron_admin_lock.sh -- echo ADMIN_LOCK_OK` => PASS
+  - `scripts/cron_admin_lock.sh -- openclaw cron list --json` => PASS (`total=7`)
+- Runtime profile re-validated:
+  - all 7 jobs still pinned to `TMUX_ROLE_AGENT_BIN=codex`, `TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux`, `thinking=high`, `timeoutSeconds=240`.
+- Fresh productivity audit (last 10 runs per role = 70 runs):
+  - `ok=65`, `error=5`
+  - `fallback_mode=checkpoint=44` (`62.9%`)
+  - `tmux_unparseable=44` (`62.9%`)
+  - `DELTA: NO_DELTA=53` (`75.7%`)
+  - `blocked=11` (mainly `TMUX_REPLY_UNPARSEABLE` / `TMUX_RESPONSE_UNSTRUCTURED`)
+- tmux reality check:
+  - all cron role sessions alive with codex child processes.
+  - pane captures still dominated by Codex banner + `clear`, little structured role output.
+- Forced run check:
+  - planner force-run request returned `already-running` (scheduler lock working as expected).
+  - qa force-run executed to completion (`ok:true`) but summary remained checkpoint fallback (`GO_WITH_CAUTION`).
+
+## Session: 2026-02-25 - Plan admin équipe (cron + logs + skills)
+
+- Added `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` as team reference for admin collaboration.
+- Focus areas covered:
+  - lock/backup/edit/validate protocol for cron changes,
+  - strict cron payload policy (`runner only`, no direct `qwen_orchestrator.py` in payload),
+  - codex baseline enforcement (`codex/tmux/high`),
+  - clean log retention per iteration/run,
+  - OpenClaw skills leverage for agent operations (`command-safety-gate`, `codex-orchestration`, `task-orchestrator`, `codex-monitor`, `agent-council`).
+- Linked from:
+  - `docs/ops/CRON_STRATEGY.md`
+  - `docs/ops/TMUX_CRON_OPERATIONS.md`
+- Team trace updated:
+  - `docs/orchestrator-ops/agent-watchdog.md` new entry at `2026-02-25 07:05 America/New_York`.
+
+### Update: owner admin app + optimisation roles
+
+- User requested explicit ownership and optimisation posture.
+- `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` now states:
+  - owner principal: `AdminApp-Codex` (alias historique `AgentSentinel`)
+  - optimisation roles assigned: `Cron Reliability`, `Signal Quality`, `Clean Logging`, `Policy Drift`, `Skill Leverage`.
+- `docs/orchestrator-ops/agent-watchdog.md` updated with timestamped governance note (`2026-02-25 07:11 America/New_York`).
+
+## Session: 2026-02-25 - Responsable admin agents (nom + notes)
+
+- User request: assign a clear owner identity for admin agents and document operational notes.
+- User clarification: role must be framed as admin agents ownership (not "admin OpenClaw").
+- Operational name formalized: `AgentSentinel`.
+- Notes added in `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`:
+  - mission primary focus (stable/auditable crons),
+  - one-change-per-intervention rule,
+  - minimal monitoring routine per admin cycle,
+  - escalation thresholds (`tmux_unparseable`, `NO_DELTA`, errors/timeouts),
+  - strict intervention discipline (`lock -> backup -> edit -> force-run -> journal`).
+- Long-term memory updated in `MEMORY.md` under `Admin agents ownership`.
+
+## Session: 2026-02-25 - Tri-admin mandate (names + shared iteration)
+
+- User mandate: run as 3 admins working together with explicit names and shared progress on the same docs.
+- Canonical admin names set:
+  - `adminapp-codex`
+  - `admin-agents`
+  - `clawsentinel`
+- Governance updated in shared docs:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` now defines tri-admin model, signature format, shared-file policy, and per-iteration discipline.
+  - `docs/ops/CRON_STRATEGY.md` and `docs/ops/TMUX_CRON_OPERATIONS.md` now reference the named triad and signed-iteration requirement.
+  - `docs/orchestrator-ops/agent-watchdog.md` now includes a signed tri-admin iteration block.
+- Runtime efficiency snapshot used for tri-admin decisioning (last 70 runs):
+  - `ok=65`, `err=5`, `fallback=51`, `tmux_unparseable=51`, `NO_DELTA=57`.
+  - escalation condition remains active due high unparseable/no-delta ratios.
+
+### Update - names fixed per user mandate
+
+- User clarified exact tri-admin names to use in docs:
+  - `adminapp-codex`
+  - `admin-agents`
+  - `clawsentinel`
+- Shared docs updated to enforce signed entries and single-place coordination:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`
+  - `docs/ops/CRON_STRATEGY.md`
+  - `docs/ops/TMUX_CRON_OPERATIONS.md`
+  - `docs/orchestrator-ops/agent-watchdog.md`
+  - `docs/planning/WORKSTATE.md`
+
+## Session: 2026-02-25 - Tri-admin runtime iteration (single change + alignment)
+
+- User requested:
+  - run next tri-admin iteration,
+  - verify what other admins wrote and align shared docs.
+- Pre-change snapshot (last 70 finished runs):
+  - `ok=67`, `err=3`, `fallback=52`, `tmux_unparseable=52`, `NO_DELTA=59`.
+- Found alignment drift from other admin notes:
+  - legacy naming in `docs/ops/OPENCLAW_ADMIN_NOTES.md` (`ClawSentinel`) vs active triad names.
+- Alignment actions:
+  - updated `docs/ops/OPENCLAW_ADMIN_NOTES.md` to tri-admin naming and marked as legacy pointer to `ADMIN_TEAM_CRON_PLAYBOOK.md`.
+  - added signed tri-admin iteration entries in:
+    - `docs/orchestrator-ops/agent-watchdog.md`
+    - `docs/planning/WORKSTATE.md`
+- Single runtime change applied (one variable only):
+  - `RETRY_PROMPT_TIMEOUT_SECONDS: 20 -> 30` in payload message on all 7 role jobs.
+  - protocol used: lock claim -> backup `jobs.json` -> edits -> force-run validation.
+  - backup created: `/home/venom/.openclaw/cron/jobs.json.backup-20260225-073454-retry30-triadmin`.
+- Validation:
+  - payload audit confirms 7/7 jobs now include `RETRY_PROMPT_TIMEOUT_SECONDS=30`.
+  - forced runs executed:
+    - `planner`, `dev`, `architect`, `po` => `ran:true`.
+    - `qa`, `scrum_master` => `already-running` at trigger time (scheduler lock respected).
+  - observed post-change runs include `t_retry=30` on active role windows (`dev`, `scrum_master`), confirming new payload effective.
+- Post-change snapshot (same 70-run window method, short horizon):
+  - `ok=67`, `err=3`, `fallback=50`, `tmux_unparseable=48`, `NO_DELTA=59`.
+  - early signal improved on fallback/unparseable; still above target thresholds.
+
+### Update - short observation window after change
+
+- Additional post-change window (`runAt>=1772022929000`):
+  - `runs=9`, `ok=9`, `err=0`, `fallback=2`, `tmux_unparseable=0`, `NO_DELTA=6`.
+- Interpretation:
+  - short-horizon quality improved (especially parseability),
+  - structural `NO_DELTA` issue remains and must be addressed via MVP evidence-producing role cycles.
+
+## Session: 2026-02-25 - Tri-admin sync protocol + live cron efficiency snapshot
+
+- User requested strict team mode for 3 admins on shared docs with per-iteration progress.
+- Documentation tightened:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`
+    - explicit canonical names block,
+    - anti-dispersion rule (same shared files only),
+    - mandatory 3-line iteration template (`adminapp-codex/admin-agents/clawsentinel`).
+  - `docs/orchestrator-ops/agent-watchdog.md`
+    - new signed tri-admin iteration entry at `2026-02-25 07:33 America/New_York`.
+- Live cron verification (7 role jobs):
+  - profile remains `TMUX_ROLE_AGENT_BIN=codex`, `TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux`, `thinking=high`, `timeoutSeconds=240`.
+  - status snapshot over 8 recent runs/job:
+    - `ok=53/56` (~94.6%)
+    - `NO_DELTA=48/56` (~85.7%)
+    - `tmux_unparseable=47/56` (~83.9%)
+    - `VERDICT: BLOCKED=3/56` (~5.4%)
+- Conclusion:
+  - scheduler reliability is good,
+  - agent signal quality is the current bottleneck to MVP throughput.
+
+### Update - concurrent admin edit observed (cron lock)
+
+- During live verification, admin lock was briefly busy (`ADMIN_LOCK_BUSY`) indicating active concurrent cron edits by another admin session.
+- No competing edit was forced from this session (coordination-first behavior respected).
+- Post-lock snapshot:
+  - all 7 jobs still `lastStatus=ok`, `thinking=high`, `timeoutSeconds=240`.
+  - partial parameter drift observed on retry timeout:
+    - `planner/dev/tester/qa = RETRY_PROMPT_TIMEOUT_SECONDS=30`
+    - `architect/po/scrum_master = RETRY_PROMPT_TIMEOUT_SECONDS=20`
+- Logged into `docs/orchestrator-ops/agent-watchdog.md` at `2026-02-25 07:36 America/New_York` with action to normalize in one signed intervention.
+
+## Session: 2026-02-25 - Tri-admin single-place enforcement + runner parse fix
+
+- Tri-admin collaboration rule enforced with explicit shared-place workflow:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` updated (names, signature format, shared files flow).
+  - new primary iteration board: `docs/ops/ADMIN_TEAM_ITERATIONS.md` (3 signed lines per iteration).
+  - references updated in `docs/ops/CRON_STRATEGY.md` and `docs/ops/TMUX_CRON_OPERATIONS.md`.
+- Runtime efficiency hardening applied:
+  - fixed parse bug in `scripts/cron_tmux_role_runner.sh` (heredoc stdin issue causing false unparseable/fallback).
+  - added codex reliability path (`codex exec` / `codex exec resume`) with per-role session state.
+  - payload evidence now reports `signal_unparseable` + `output_channel`.
+- Cron payload baseline re-applied across all 7 jobs using `scripts/configure_tmux_role_crons.sh`:
+  - `TMUX_ROLE_NO_DELTA_THRESHOLD=12`
+  - `TMUX_ROLE_CODEX_EXEC_FALLBACK=1`
+  - `TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex`
+  - baseline preserved: runner-only, `thinking=high`, `timeoutSeconds=240`.
+- Validation:
+  - direct runner tests (`planner`, `dev`) now return structured 8-key outputs (non-fallback).
+  - forced scheduler runs (`planner/dev/tester/qa`) returned `ok:true` with structured summaries.
+
+## Session: 2026-02-25 - Documentation only (analyse + intentions tri-admin)
+
+- User request: "juste documenter l'analyse et ce qu'on souhaite faire" en mode 3 admins.
+- No runtime change executed in this step; documentation sync only.
+- Current snapshot read from `~/.openclaw/cron/jobs.json`:
+  - 7 role jobs all `lastStatus=ok`, `consecutiveErrors=0`.
+  - baseline runtime stable and unified: `codex/tmux/high/240` with `RETRY_PROMPT_TIMEOUT_SECONDS=30` on all roles.
+- Shared documentation updated:
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` -> new `Iteration 02` with 3 signed lines (`adminapp-codex`, `admin-agents`, `clawsentinel`) covering analysis + next intended actions.
+  - `docs/orchestrator-ops/agent-watchdog.md` -> changelog entry `2026-02-25 08:02 America/New_York` mirroring the same tri-admin analysis.
+- Intended next move (documented, not executed here):
+  - hold runtime config steady for an observation window,
+  - focus next optimization on reducing `NO_DELTA` through evidence-producing MVP actions, not infra churn.
+
+## Session: 2026-02-25 - Chat tri-admin activé (coordination continue)
+
+- User request: work with the 3 admins, document everything, keep a shared chat.
+- Implemented a persistent shared chat:
+  - `docs/ops/ADMIN_TEAM_CHAT.md`
+  - includes signed messages from `adminapp-codex`, `admin-agents`, `clawsentinel`.
+- Governance update:
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` now enforces execution order:
+    - `chat -> iterations -> watchdog -> memory`
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` updated with `Iteration 03` (chat rollout).
+  - `docs/orchestrator-ops/agent-watchdog.md` updated with matching tri-admin entry at `2026-02-25 08:05 America/New_York`.
+- Runtime note:
+  - no cron/runtime change performed in this step (documentation + team coordination only).
+
+## Session: 2026-02-25 - Continuation tri-admin (working with others)
+
+- User request: continue working with the two other admins and document all actions.
+- Coordination action:
+  - posted new messages in shared chat `docs/ops/ADMIN_TEAM_CHAT.md` (08:08 EST) for the 3 admins.
+- Monitoring snapshot (no runtime change):
+  - data source: `openclaw cron list --json` + last 8 runs per role.
+  - consolidated metrics:
+    - `total=56`, `ok=54`, `no_delta=43`, `unparseable=26`, `blocked=9`.
+  - runtime baseline remains aligned:
+    - `TMUX_ROLE_AGENT_BIN=codex`
+    - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux`
+    - `thinking=high`
+    - `timeoutSeconds=240`
+    - `RETRY_PROMPT_TIMEOUT_SECONDS=30`
+- Shared docs updated for team continuity:
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` -> `Iteration 04`
+  - `docs/orchestrator-ops/agent-watchdog.md` -> entry `2026-02-25 08:08 America/New_York`
+- Intended next move (documented):
+  - keep runtime stable for one more window,
+  - focus tri-admin effort on converting `NO_DELTA` cycles into MVP-evidence-producing role outputs.
+
+## Session: 2026-02-25 - Admin-agents log audit (recent only, no runtime edit)
+
+- Scope executed:
+  - validated shared tri-admin loop in place (`chat -> iterations -> watchdog -> memory`).
+  - collected recent run evidence from `~/.openclaw/cron/runs/*.jsonl` (`tail -n 6` per role, 42 runs total).
+  - checked tmux live sessions via `tmux ls` and cross-checked watchdog command `python3 scripts/qwen_orchestrator.py --tmux-cmd health`.
+- Recent KPI snapshot (42 runs):
+  - `ok=40`, `err=2`, `NO_DELTA=32`, `tmux_unparseable/signal_unparseable=17`, `qa_gate_wait=14`.
+  - average `durationMs ~= 82468`; average `total_tokens ~= 15457`.
+- Role-level weak points (same window):
+  - `tester`: `blocked=4/6`, `NO_DELTA=6/6`.
+  - `scrum_master`: `tmux_unparseable=5/6`, `err=1/6`, highest avg duration.
+  - `po`: `err=1/6`, `tmux_unparseable=3/6`.
+- Monitoring inconsistency detected:
+  - `qwen_orchestrator --tmux-cmd health` returned `ready=0/4`.
+  - `tmux ls` shows active cron sessions (`qwen_planner_cron`, `qwen_dev_cron`, `qwen_tester_cron`, `qwen_qa_cron`, etc.).
+  - likely cause: session naming mismatch between orchestrator defaults (`qwen_planner/dev/tester/qa`) and cron session names (`qwen_*_cron`).
+- Documentation updates completed in this step:
+  - `docs/ops/ADMIN_TEAM_CHAT.md` (INTENT + BLOCKER + DONE from `admin-agents`).
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` (Iteration 04 tri-admin with `PENDING_SYNC` where needed).
+  - `docs/orchestrator-ops/agent-watchdog.md` (signed tri-admin lines for 08:08 EST).
+- Runtime note:
+  - no cron payload/schedule/script change executed in this step.
+- Concurrency hygiene:
+  - parallel writes from other admins detected in chat/iterations at the same timestamp window,
+  - duplicate section title in iterations was normalized to `Iteration 05 (parallel entry)` without deleting peer content.
+
+## Session: 2026-02-25 - Monitoring blocker fix (adminapp-codex)
+
+- Context:
+  - tri-admin blocker reported in shared chat:
+    - `qwen_orchestrator --tmux-cmd health` => `ready=0/4` while tmux had active `qwen_*_cron` sessions.
+- Root cause identified:
+  - `scripts/qwen_orchestrator.py` status mapping expected default sessions (`qwen_planner/dev/tester/qa`) and did not resolve `_cron` aliases.
+  - readiness process detection was too tied to active CLI default and missed mixed codex/qwen runtime.
+- Fix applied (minimal patch):
+  - added session alias resolver (`configured` <-> `_cron`) in `qwen_status_payload`.
+  - added mixed-runtime readiness support for codex + qwen process names/tokens.
+  - preserved existing behavior; change scoped to status/health evaluation.
+- Validation evidence:
+  - before: `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact`
+    - `VERDICT: BLOCKED | ... ready=0/4`
+  - after:
+    - `VERDICT: PASS | BLOCKER_ID: NONE | ready=4/4 | sessions=4/4 | required_missing=none`
+  - planner role payload now shows alias resolution:
+    - `session=qwen_planner_cron`, `configured_session=qwen_planner`, `ready=true`, `ready_source=child_process+alias_session`.
+- Shared docs synced:
+  - `docs/ops/ADMIN_TEAM_CHAT.md` -> DONE entry (`08:22 EST`).
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` -> `Iteration 06`.
+  - `docs/orchestrator-ops/agent-watchdog.md` -> entry `2026-02-25 08:22 America/New_York`.
+
+## Session: 2026-02-25 - Main agent forced to gpt-5.2 + xhigh
+
+- User request: ensure main agent is on `gpt-5.2` with extra-high reasoning.
+- Verified current config keys, then forced values explicitly:
+  - `openclaw config set agents.defaults.model.primary openai-codex/gpt-5.2`
+  - `openclaw config set agents.defaults.thinkingDefault xhigh`
+- Restarted gateway to apply:
+  - `openclaw gateway restart`
+- Post-restart verification:
+  - `openclaw config get agents.defaults.model.primary` => `openai-codex/gpt-5.2`
+  - `openclaw config get agents.defaults.thinkingDefault` => `xhigh`
+  - `openclaw status` => gateway reachable/running, overview shows `default gpt-5.2`.
+- Team sync:
+  - `docs/ops/ADMIN_TEAM_CHAT.md` updated with DONE line at `08:28 EST`.
+
+## Session: 2026-02-25 - Admin-agents continuation (with other admins)
+
+- User direction: continue tri-admin collaboration (`adminapp-codex`, `admin-agents`, `clawsentinel`) with full trace.
+- Snapshot re-check executed (recent only):
+  - from `~/.openclaw/cron/runs/*.jsonl` (`tail -n 6` by role, 42 runs):
+    - `ok=40`, `err=2`, `NO_DELTA=29`, `tmux_unparseable=13`, `blocked=11`, `qa_gate_wait=16`.
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner,dev,tester,qa`:
+    - `VERDICT: PASS`, `ready=4/4`, `BLOCKER_ID: NONE`.
+  - `tmux ls` confirms active `qwen_*_cron` sessions.
+- Main-agent scope verification (owner request alignment):
+  - `openclaw agents list --json` => `main.model = openai-codex/gpt-5.2-codex`.
+  - `openclaw config get agents.defaults.thinkingDefault --json` => `"high"`.
+  - distinction documented: main agent config changed, cron payload baseline unchanged.
+- Documentation updates performed in required order (`chat -> iterations -> watchdog -> memory`):
+  - `docs/ops/ADMIN_TEAM_CHAT.md` (admin-agents INFO + DONE, 08:22 EST).
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` (Iteration 06 tri-admin signed block with pending sync placeholders).
+  - `docs/orchestrator-ops/agent-watchdog.md` (tri-admin signed lines for 08:22 EST).
+  - `docs/planning/WORKSTATE.md` (shared tri-admin progress @ 08:22 EST).
+
+## Session: 2026-02-25 - Clarification scope main agent (owner request)
+
+- Owner clarification received: model/thinking request targets OpenClaw **main agent** only, not cron role jobs.
+- Main agent configuration enforced and verified in `/home/venom/.openclaw/openclaw.json`:
+  - `agents.defaults.model.primary = openai-codex/gpt-5.2-codex`
+  - `agents.defaults.thinkingDefault = high`
+  - `agents.defaults.models` normalized to `openai-codex/gpt-5.2-codex`.
+- Gateway restarted and healthy:
+  - `systemctl --user restart openclaw-gateway.service`
+  - `systemctl --user is-active openclaw-gateway.service` => `active`.
+- Mis-scoped cron model change was rolled back immediately:
+  - cron payload model restored on all 7 jobs to `TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex`.
+
+### Update - Main agent model exact value (owner correction)
+
+- Owner requested exact model name without `-codex` suffix.
+- Updated main agent config in `/home/venom/.openclaw/openclaw.json` to:
+  - `agents.defaults.model.primary = openai-codex/gpt-5.2`
+  - `agents.defaults.thinkingDefault = high`
+  - `agents.defaults.models = {"openai-codex/gpt-5.2": {}}`
+- Restarted service and validated effective values:
+  - `systemctl --user is-active openclaw-gateway.service` => `active`
+  - `openclaw config get agents.defaults.model.primary` => `openai-codex/gpt-5.2`
+  - `openclaw config get agents.defaults.thinkingDefault` => `high`
+
+### Update - Main agent set to gpt-5.2 + xhigh
+
+- Final owner requirement applied on main agent:
+  - `agents.defaults.model.primary = openai-codex/gpt-5.2`
+  - `agents.defaults.thinkingDefault = xhigh` (extra high)
+- Verification:
+  - `openclaw config get agents.defaults.model.primary` => `openai-codex/gpt-5.2`
+  - `openclaw config get agents.defaults.thinkingDefault` => `xhigh`
+  - `openclaw agents list --json` => `main.model = openai-codex/gpt-5.2`
+- Runtime state:
+  - `systemctl --user is-active openclaw-gateway.service` => `active`.
+
+## Session: 2026-02-25 - Gouvernance operationnelle directeur->admins->delivery
+
+- Modele officiel confirme:
+  - main (WhatsApp) = Directeur operationnel.
+  - main delegue uniquement aux admins.
+  - flux descendant: main -> admins -> equipe.
+  - flux montant: equipe -> admins -> main.
+  - toute demande hors circuit est redirigee vers les admins.
+- Documentation publiee:
+  - docs/ops/OPERATIONAL_GOVERNANCE.md (source normative)
+  - docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md (chaine de commandement + routage)
+  - docs/ops/CRON_STRATEGY.md (modele tri-admin aligne)
+
+### Update - Directeur operationnel (main) + cron clawsentinel continuity
+
+- Gouvernance confirmée et appliquée:
+  - flux descendant: `main -> admins -> equipe livraison`.
+  - flux montant: `equipe -> admins -> main`.
+  - aucune instruction directe du main vers l’equipe livraison.
+- Continuité admin `clawsentinel` attachée en cron OpenClaw:
+  - job: `clawsentinel-tmux-13m`
+  - id: `25756cb4-57f1-41c7-83d4-66fd67a0164d`
+  - schedule: `every 13m`, `thinking=high`, `timeoutSeconds=240`, `delivery=none`
+  - payload: `bash scripts/cron_tmux_role_runner.sh clawsentinel`
+- Runtime readiness:
+  - session tmux stable `clawsentinel` active.
+  - force-run du job cron => `ok:true` avec summary READY orienté `BATCH-02:DISPATCH_BATCH02`.
+
+## Session: 2026-02-25 - Gouvernance operationnelle consolidee (doc-only)
+
+- Directive reconfirmee:
+  - `main` (Directeur operationnel WhatsApp) ne delegue qu'aux admins.
+  - circuit obligatoire: `main -> admins -> equipe` (descendant) et `equipe -> admins -> main` (montant).
+- Normalisation documentaire appliquee sans changement runtime:
+  - `docs/ops/OPERATIONAL_GOVERNANCE.md` declare source normative unique;
+  - `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md` deduplique et aligne la chaine de commandement;
+  - `docs/ops/CRON_STRATEGY.md` et `docs/ops/TMUX_CRON_OPERATIONS.md` renforcent le gate de routage.
+- Tracabilite admin completee:
+  - `docs/ops/ADMIN_TEAM_CHAT.md` (entree 09:04 EST),
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md` (Iteration 12),
+  - `docs/orchestrator-ops/agent-watchdog.md` (changelog 09:04 EST),
+  - `memory/2026-02-25.md` (cette entree).
+
+## Session: 2026-02-25 - Diagnostic WhatsApp "ne repond pas"
+
+- Incident observe en direct: message utilisateur `[openclaw] ⚠️ ⏰ Cron failed: gateway timeout after 60000ms`.
+- Verification runtime:
+  - `openclaw status --deep` => gateway UP, WhatsApp linked (meme numero), service actif.
+  - `journalctl --user -u openclaw-gateway.service` => nombreuses alertes `lane wait exceeded: lane=cron`.
+- Correlation forte charge cron:
+  - 10 jobs actifs, plusieurs en `running` simultane.
+  - payloads lourds (`thinking=high`, `timeoutSeconds=240`) avec durees recentes ~114s a ~240s.
+  - erreurs repetes sur certains jobs: `cron: job execution timed out` (ex: `qa-tmux-11m`, `scrum-master-tmux-30m`).
+- Effet sur WhatsApp:
+  - inbound bien recu, mais reponse retardee (ex: inbound 09:06:43 -> send 09:09:20 EST).
+  - le timeout 60000ms vient de l'appel cron/outil qui attend trop peu vs file cron surchargee.
+- Conclusion: ce n'est pas un probleme de lien WhatsApp; c'est une saturation intermittente de la lane cron qui degrade la latence de reponse.
+
+## Pre-VM restart snapshot (2026-02-25 09:13:47 EST)
+- Reason: reboot VM to add CPU/RAM.
+- Snapshot dir (outside git): /home/venom/.openclaw/snapshots/vm-restart-20260225-091238-EST
+- Captured: openclaw status + cron list json + key config + tmux scrollbacks (adminapp_codex_sync, admin-agents-sync-0845, clawsentinel) + orchestrator health + app status + git state + role-state files.
+- Post-reboot quick restore:
+  1) openclaw status
+  2) tmux ls (sessions will be recreated by cron ticks)
+  3) if missing, run: bash scripts/adminapp_codex_cron_tick.sh ; bash scripts/admin_agents_tmux_tick.sh ; python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact
+
+## Session: 2026-02-25 - VM restart continuity automation (snapshot + restore)
+
+- Added reusable scripts:
+  - `scripts/admin_vm_snapshot.sh`
+  - `scripts/admin_vm_restore.sh`
+- Goal: avoid admin restart from scratch after VM reboot (CPU/RAM upgrade path).
+- Snapshot automation now captures:
+  - OpenClaw status/deep/doctor, gateway service status, model/thinking keys.
+  - Cron list JSON, per-job recent runs, jobs.json, cron run ledgers (tail), role-state files.
+  - tmux inventory + pane scrollback captures.
+  - recent OpenClaw sessions (`sessions.json` + recent jsonl files).
+  - admin continuity docs (chat/iterations/watchdog/handoffs + memory files).
+- Restore automation now performs:
+  - role-state restore to `~/.openclaw/cron/role-state`,
+  - gateway health check/restart if needed,
+  - relaunch/prewarm admin sessions (`adminapp_codex_sync`, `admin-agents-sync-cron`, `clawsentinel`) and core role sessions,
+  - inject resume packet + handoff context into tmux sessions,
+  - run admin continuity ticks (`adminapp_codex_cron_tick.sh`, `admin_agents_tmux_tick.sh`).
+- Validation:
+  - `bash -n scripts/admin_vm_snapshot.sh` PASS
+  - `bash -n scripts/admin_vm_restore.sh` PASS
+  - `bash scripts/admin_vm_restore.sh --dry-run` PASS
+- New snapshot created for reboot:
+  - `/home/venom/.openclaw/snapshots/vm-restart-20260225-091754-EST`
+  - resume packet: `/home/venom/.openclaw/snapshots/vm-restart-20260225-091754-EST/resume/ADMIN_RESUME_PACKET.md`
+  - latest pointer: `/home/venom/.openclaw/snapshots/vm-restart-latest`
+
+## Session: 2026-02-25 - Revalidation director plan relaunch (adminapp-codex)
+
+- Snapshot continuity revalidated:
+  - requested snapshot `vm-restart-20260225-091238-EST` is present and complete.
+  - newer snapshots also exist: `vm-restart-20260225-091644-EST`, `vm-restart-20260225-091754-EST`.
+  - canonical pointer after reboot: `/home/venom/.openclaw/snapshots/vm-restart-latest` -> `vm-restart-20260225-091754-EST`.
+- Restore plan revalidated:
+  - `scripts/admin_vm_restore.sh --dry-run` confirms relaunch/prewarm for admin sessions and role sessions.
+  - restore plan includes role-state restoration + gateway check + admin ticks.
+- Role relaunch proof (simulation without reboot):
+  - `ADMINAPP_TMUX_SESSION=adminapp_codex_recovery_test bash scripts/adminapp_codex_cron_tick.sh` recreated tmux session automatically.
+  - tmux env in recreated session confirms `ADMIN_ROLE=adminapp-codex`.
+- Runtime proof:
+  - `openclaw cron runs --id fbccac5b-1028-4c9a-b021-c1998d3bad97 --limit 3` shows recurring `status=ok`.
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact` => `VERDICT: PASS | ready=4/4`.
+
+## Session: 2026-02-25 - Revalidation reboot director plan (admin-agents)
+
+- Revalidated restart continuity snapshot paths and content:
+  -  (legacy flat layout, expected files all present)
+  -  (v2 structured layout, same data preserved)
+  - symlink  points to .
+- Verified memory trace contains snapshot references and resume packet path.
+- Executed restart runbook commands successfully:
+  - OpenClaw status
+
+Overview
+┌─────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Item            │ Value                                                                                             │
+├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Dashboard       │ http://127.0.0.1:18789/                                                                           │
+│ OS              │ linux 6.17.0-14-generic (arm64) · node 22.22.0                                                    │
+│ Tailscale       │ off                                                                                               │
+│ Channel         │ stable (default)                                                                                  │
+│ Update          │ pnpm · npm latest 2026.2.24                                                                       │
+│ Gateway         │ local · ws://127.0.0.1:18789 (local loopback) · reachable 45ms · auth token · venom-Apple-        │
+│                 │ Virtualization-Generic-Platform (192.168.64.9) app 2026.2.24 linux 6.17.0-14-generic              │
+│ Gateway service │ systemd installed · enabled · running (pid 394115, state active)                                  │
+│ Node service    │ systemd not installed                                                                             │
+│ Agents          │ 1 · no bootstrap files · sessions 477 · default main active just now                              │
+│ Memory          │ 32 files · 285 chunks · sources memory, sessions · plugin memory-core · vector ready · fts ready  │
+│                 │ · cache on (360)                                                                                  │
+│ Probes          │ enabled                                                                                           │
+│ Events          │ none                                                                                              │
+│ Heartbeat       │ 30m (main)                                                                                        │
+│ Last heartbeat  │ skipped · 7m ago ago · unknown                                                                    │
+│ Sessions        │ 477 active · default gpt-5.2 (272k ctx) · ~/.openclaw/agents/main/sessions/sessions.json          │
+└─────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Security audit
+Summary: 0 critical · 1 warn · 1 info
+  WARN Reverse proxy headers are not trusted
+    gateway.bind is loopback and gateway.trustedProxies is empty. If you expose the Control UI through a reverse proxy, configure trusted proxies so local-client c…
+    Fix: Set gateway.trustedProxies to your proxy IPs or keep the Control UI local-only.
+Full report: openclaw security audit
+Deep probe: openclaw security audit --deep
+
+Channels
+┌──────────┬─────────┬────────┬───────────────────────────────────────────────────────────────────────────────────────┐
+│ Channel  │ Enabled │ State  │ Detail                                                                                │
+├──────────┼─────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────┤
+│ WhatsApp │ ON      │ OK     │ linked · +14389799898 · auth 4m ago · accounts 1                                      │
+└──────────┴─────────┴────────┴───────────────────────────────────────────────────────────────────────────────────────┘
+
+Sessions
+┌───────────────────────────────────────────────┬────────┬──────────┬──────────────┬──────────────────────────────────┐
+│ Key                                           │ Kind   │ Age      │ Model        │ Tokens                           │
+├───────────────────────────────────────────────┼────────┼──────────┼──────────────┼──────────────────────────────────┤
+│ agent:main:cron:dfd61f17-206f-4…              │ direct │ just now │ gpt-5.2      │ 17k/272k (6%) · 🗄️ 459% cached   │
+│ agent:main:cron:dfd61f17-206f-4…              │ direct │ just now │ gpt-5.2      │ 17k/272k (6%) · 🗄️ 459% cached   │
+│ agent:main:whatsapp:direct:+143…              │ direct │ just now │ gpt-5.2      │ 149k/272k (55%) · 🗄️ 816% cached │
+│ agent:main:cron:454dc361-14bb-4…              │ direct │ 2m ago   │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 281% cached   │
+│ agent:main:cron:454dc361-14bb-4…              │ direct │ 2m ago   │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 281% cached   │
+│ agent:main:cron:09d045db-b12a-4…              │ direct │ 4m ago   │ gpt-5.2      │ 13k/272k (5%) · 🗄️ 276% cached   │
+│ agent:main:cron:09d045db-b12a-4…              │ direct │ 4m ago   │ gpt-5.2      │ 13k/272k (5%) · 🗄️ 276% cached   │
+│ agent:main:cron:fbccac5b-1028-4…              │ direct │ 5m ago   │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 287% cached   │
+│ agent:main:cron:fbccac5b-1028-4…              │ direct │ 5m ago   │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 287% cached   │
+│ agent:main:cron:8e5b1bd7-f319-4…              │ direct │ 7m ago   │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 273% cached   │
+└───────────────────────────────────────────────┴────────┴──────────┴──────────────┴──────────────────────────────────┘
+
+Health
+┌──────────┬───────────┬──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Item     │ Status    │ Detail                                                                                       │
+├──────────┼───────────┼──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Gateway  │ reachable │ 7ms                                                                                          │
+│ WhatsApp │ LINKED    │ linked (auth age 4m)                                                                         │
+└──────────┴───────────┴──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+FAQ: https://docs.openclaw.ai/faq
+Troubleshooting: https://docs.openclaw.ai/troubleshooting
+
+Next steps:
+  Need to share?      openclaw status --all
+  Need to debug live? openclaw logs --follow
+  Need to test channels? openclaw status --deep
+  - {
+  "jobs": [
+    {
+      "id": "25756cb4-57f1-41c7-83d4-66fd67a0164d",
+      "name": "clawsentinel-tmux-13m",
+      "description": "ClawSentinel safety/quality tmux loop",
+      "enabled": true,
+      "createdAtMs": 1772027852703,
+      "updatedAtMs": 1772028055635,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 780000,
+        "anchorMs": 1772027852703
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh clawsentinel",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772028644787,
+        "lastRunAtMs": 1772027864787,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 190848,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "runningAtMs": 1772029104992
+      }
+    },
+    {
+      "id": "dfd61f17-206f-4feb-ab14-6ae4ce54f04c",
+      "name": "dev-tmux-7m",
+      "description": "Dev tmux context loop",
+      "enabled": true,
+      "createdAtMs": 1771990215305,
+      "updatedAtMs": 1772028477264,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 420000,
+        "anchorMs": 1772025712827
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh dev",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772028711644,
+        "lastRunAtMs": 1772028291644,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 185620,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false,
+        "runningAtMs": 1772029347436
+      }
+    },
+    {
+      "id": "09d045db-b12a-4486-a743-57b761d52e50",
+      "name": "planner-tmux-5m",
+      "description": "Planner tmux context loop",
+      "enabled": true,
+      "createdAtMs": 1771979462389,
+      "updatedAtMs": 1772028712876,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 300000,
+        "anchorMs": 1772025703697
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh planner",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772028862120,
+        "lastRunAtMs": 1772028562120,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 150756,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false,
+        "runningAtMs": 1772029104993
+      }
+    },
+    {
+      "id": "838deae5-fa39-4052-b31d-66013faccee0",
+      "name": "admin-agents-supervisor-15m",
+      "description": "Admin-agents tmux supervision tick (continuity)",
+      "enabled": true,
+      "createdAtMs": 1772027639222,
+      "updatedAtMs": 1772028223933,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772027639222
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: bash scripts/admin_agents_tmux_tick.sh",
+        "model": "openai-codex/gpt-5.2",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772028968227,
+        "lastRunAtMs": 1772028068227,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 131627,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false,
+        "runningAtMs": 1772029104992
+      }
+    },
+    {
+      "id": "454dc361-14bb-4f71-8ca2-ec86708c503f",
+      "name": "qa-tmux-11m",
+      "description": "QA tmux context loop",
+      "enabled": true,
+      "createdAtMs": 1771990080738,
+      "updatedAtMs": 1772028561898,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 660000,
+        "anchorMs": 1772025731224
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh qa",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772028981890,
+        "lastRunAtMs": 1772028321890,
+        "lastRunStatus": "error",
+        "lastStatus": "error",
+        "lastDurationMs": 240008,
+        "lastDeliveryStatus": "not-requested",
+        "consecutiveErrors": 1,
+        "runningAtMs": 1772029227423
+      }
+    },
+    {
+      "id": "44f08bd9-b9c0-4ab5-8882-cc91d402c8db",
+      "name": "po-tmux-25m",
+      "description": "Product Owner tmux backlog loop (lower cadence)",
+      "enabled": true,
+      "createdAtMs": 1771996880716,
+      "updatedAtMs": 1772027793481,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500000,
+        "anchorMs": 1772025750475
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh po",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772029141342,
+        "lastRunAtMs": 1772027641342,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 152139,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "36bed423-e965-4a19-a43a-c8ffbff751d8",
+      "name": "tester-tmux-9m",
+      "description": "Tester tmux context loop",
+      "enabled": true,
+      "createdAtMs": 1771989959662,
+      "updatedAtMs": 1772028952897,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 540000,
+        "anchorMs": 1772025722059
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh tester",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772029252876,
+        "lastRunAtMs": 1772028712876,
+        "lastRunStatus": "error",
+        "lastStatus": "error",
+        "lastDurationMs": 240021,
+        "lastDeliveryStatus": "not-requested",
+        "consecutiveErrors": 1,
+        "lastError": "cron: job execution timed out"
+      }
+    },
+    {
+      "id": "fbccac5b-1028-4c9a-b021-c1998d3bad97",
+      "name": "adminapp-codex-sync-5m",
+      "description": "AdminApp Codex tmux continuity + cron health tick",
+      "enabled": true,
+      "createdAtMs": 1772027673698,
+      "updatedAtMs": 1772029104765,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 300000,
+        "anchorMs": 1772027861823
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: bash scripts/adminapp_codex_cron_tick.sh",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772029380389,
+        "lastRunAtMs": 1772029080389,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 24376,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "bde5885a-388f-4fe4-a8b7-a146521d9e9d",
+      "name": "architect-tmux-20m",
+      "description": "Architect tmux context loop (lower cadence)",
+      "enabled": true,
+      "createdAtMs": 1771996872869,
+      "updatedAtMs": 1772028832110,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1200000,
+        "anchorMs": 1772025740658
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh architect",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772029807731,
+        "lastRunAtMs": 1772028607731,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 224379,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "8e5b1bd7-f319-48d8-b8f7-c906c024135f",
+      "name": "scrum-master-tmux-30m",
+      "description": "Scrum Master tmux flow loop (lower cadence)",
+      "enabled": true,
+      "createdAtMs": 1771996880685,
+      "updatedAtMs": 1772029080389,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1800000,
+        "anchorMs": 1772025759931
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh scrum_master",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1772030752897,
+        "lastRunAtMs": 1772028952897,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 127492,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    }
+  ],
+  "total": 10,
+  "offset": 0,
+  "limit": 10,
+  "hasMore": false,
+  "nextOffset": null
+}
+  - admin-agents-sync-0845: 1 windows (created Wed Feb 25 08:46:28 2026)
+adminapp_codex_sync: 1 windows (created Wed Feb 25 08:37:41 2026)
+bash: 1 windows (created Wed Feb 25 08:46:05 2026)
+codex_probe: 1 windows (created Wed Feb 25 07:32:03 2026)
+qwen_analyst: 1 windows (created Wed Feb 25 00:07:41 2026)
+qwen_analyst_cron: 1 windows (created Wed Feb 25 07:01:04 2026)
+qwen_architect: 1 windows (created Wed Feb 25 00:07:41 2026)
+qwen_architect_cron: 1 windows (created Wed Feb 25 07:27:56 2026)
+qwen_dev_cron: 1 windows (created Wed Feb 25 08:37:05 2026)
+qwen_manager: 1 windows (created Wed Feb 25 00:17:43 2026)
+qwen_manager_cron: 1 windows (created Wed Feb 25 07:01:04 2026)
+qwen_planner_cron: 1 windows (created Wed Feb 25 08:38:12 2026)
+qwen_po: 1 windows (created Wed Feb 25 00:17:26 2026)
+qwen_po_cron: 1 windows (created Wed Feb 25 07:32:34 2026)
+qwen_qa_cron: 1 windows (created Wed Feb 25 08:50:34 2026)
+qwen_scrum_master: 1 windows (created Wed Feb 25 00:17:26 2026)
+qwen_scrum_master_cron: 1 windows (created Wed Feb 25 07:01:05 2026)
+qwen_security_engineer: 1 windows (created Wed Feb 25 00:07:41 2026)
+qwen_tester_cron: 1 windows (created Wed Feb 25 08:40:14 2026)
+  - STATUS: IN_PROGRESS
+DELTA: errors_detected
+EVIDENCE: jobs_total=10; ok=8; running=0; pending=0; error=2; timed_out=1; unhealthy=qa-tmux-11m:error,tester-tmux-9m:error
+RISKS: certains jobs cron en erreur récente
+NEXT: prioriser force-run ciblé sur les jobs en erreur puis vérifier la récupération
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: CRON_ERRORS_PRESENT
+NEXT_ACTION_UNIQUE: ADMINAPP_CRON_TICK_20260225092241
+  - status=OK role=admin-agents session=admin-agents-sync-0845 target=admin-agents-sync-0845:0.0 tick=20260225T142241Z
+  - VERDICT: PASS | BLOCKER_ID: NONE | ready=4/4 | sessions=4/4 | required_missing=none (, ).
+- Simulated post-restart relaunch for admin-agents role on isolated test fallback session:
+  - status=OK role=admin-agents session=admin-agents-restart-test-fallback target=admin-agents-restart-test-fallback:0.0 tick=20260225T142245Z
+  - role session created + Codex prompt injected; continuity confirmed.
+  - test session removed afterward.
+- Result: director restart plan revalidated as operational for admin-agents continuity.
+
+## Session: 2026-02-25 - Revalidation summary (clean)
+
+- Director restart plan validated end-to-end for `admin-agents`.
+- Snapshot continuity confirmed on both:
+  - `/home/venom/.openclaw/snapshots/vm-restart-20260225-091238-EST` (flat layout)
+  - `/home/venom/.openclaw/snapshots/vm-restart-20260225-091754-EST` (structured v2, pointed by `vm-restart-latest`)
+- Recovery command path tested successfully:
+  - `openclaw status --deep`
+  - `openclaw cron list --json`
+  - `tmux ls`
+  - `bash scripts/adminapp_codex_cron_tick.sh`
+  - `bash scripts/admin_agents_tmux_tick.sh`
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact`
+- Relance simulation (post-restart style) passed:
+  - temporary session auto-created via `scripts/admin_agents_tmux_tick.sh` fallback mode,
+  - role prompt injected, continuity maintained,
+  - temporary test session removed afterward.
+
+## Post-VM restart restore (2026-02-25 09:32:58 EST)
+- Restore run: active
+OpenClaw status
+
+Overview
+┌─────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Item            │ Value                                                                                             │
+├─────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Dashboard       │ http://127.0.0.1:18789/                                                                           │
+│ OS              │ linux 6.17.0-14-generic (arm64) · node 22.22.0                                                    │
+│ Tailscale       │ off                                                                                               │
+│ Channel         │ stable (default)                                                                                  │
+│ Update          │ available · pnpm · npm update 2026.2.24                                                           │
+│ Gateway         │ local · ws://127.0.0.1:18789 (local loopback) · reachable 19ms · auth token · venom-Apple-        │
+│                 │ Virtualization-Generic-Platform (192.168.64.9) app 2026.2.24 linux 6.17.0-14-generic              │
+│ Gateway service │ systemd installed · enabled · running (pid 1226, state active)                                    │
+│ Node service    │ systemd not installed                                                                             │
+│ Agents          │ 1 · no bootstrap files · sessions 484 · default main active 1m ago                                │
+│ Memory          │ 32 files · 285 chunks · sources memory, sessions · plugin memory-core · vector ready · fts ready  │
+│                 │ · cache on (360)                                                                                  │
+│ Probes          │ enabled                                                                                           │
+│ Events          │ none                                                                                              │
+│ Heartbeat       │ 30m (main)                                                                                        │
+│ Last heartbeat  │ none                                                                                              │
+│ Sessions        │ 484 active · default gpt-5.2 (272k ctx) · ~/.openclaw/agents/main/sessions/sessions.json          │
+└─────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Security audit
+Summary: 0 critical · 1 warn · 1 info
+  WARN Reverse proxy headers are not trusted
+    gateway.bind is loopback and gateway.trustedProxies is empty. If you expose the Control UI through a reverse proxy, configure trusted proxies so local-client c…
+    Fix: Set gateway.trustedProxies to your proxy IPs or keep the Control UI local-only.
+Full report: openclaw security audit
+Deep probe: openclaw security audit --deep
+
+Channels
+┌──────────┬─────────┬────────┬───────────────────────────────────────────────────────────────────────────────────────┐
+│ Channel  │ Enabled │ State  │ Detail                                                                                │
+├──────────┼─────────┼────────┼───────────────────────────────────────────────────────────────────────────────────────┤
+│ WhatsApp │ ON      │ OK     │ linked · +14389799898 · auth 2m ago · accounts 1                                      │
+└──────────┴─────────┴────────┴───────────────────────────────────────────────────────────────────────────────────────┘
+
+Sessions
+┌─────────────────────────────────────────────────┬────────┬─────────┬──────────────┬─────────────────────────────────┐
+│ Key                                             │ Kind   │ Age     │ Model        │ Tokens                          │
+├─────────────────────────────────────────────────┼────────┼─────────┼──────────────┼─────────────────────────────────┤
+│ agent:main:whatsapp:direct:+143…                │ direct │ 1m ago  │ gpt-5.2      │ 151k/272k (55%) · 🗄️ 99% cached │
+│ agent:main:cron:bde5885a-388f-4…                │ direct │ 2m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 287% cached  │
+│ agent:main:cron:bde5885a-388f-4…                │ direct │ 2m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 287% cached  │
+│ agent:main:cron:dfd61f17-206f-4…                │ direct │ 4m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 811% cached  │
+│ agent:main:cron:dfd61f17-206f-4…                │ direct │ 4m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 811% cached  │
+│ agent:main:cron:fbccac5b-1028-4…                │ direct │ 6m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 288% cached  │
+│ agent:main:cron:fbccac5b-1028-4…                │ direct │ 6m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 288% cached  │
+│ agent:main:cron:25756cb4-57f1-4…                │ direct │ 6m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 471% cached  │
+│ agent:main:cron:25756cb4-57f1-4…                │ direct │ 6m ago  │ gpt-5.2      │ 16k/272k (6%) · 🗄️ 471% cached  │
+│ agent:main:cron:09d045db-b12a-4…                │ direct │ 7m ago  │ gpt-5.2      │ 13k/272k (5%) · 🗄️ 276% cached  │
+└─────────────────────────────────────────────────┴────────┴─────────┴──────────────┴─────────────────────────────────┘
+
+Health
+┌──────────┬───────────┬──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Item     │ Status    │ Detail                                                                                       │
+├──────────┼───────────┼──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Gateway  │ reachable │ 4ms                                                                                          │
+│ WhatsApp │ LINKED    │ linked (auth age 2m)                                                                         │
+└──────────┴───────────┴──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+FAQ: https://docs.openclaw.ai/faq
+Troubleshooting: https://docs.openclaw.ai/troubleshooting
+
+Update available (npm 2026.2.24). Run: openclaw update
+
+Next steps:
+  Need to share?      openclaw status --all
+  Need to debug live? openclaw logs --follow
+  Need to test channels? openclaw status --deep
+ID                                   Name                     Schedule                         Next       Last       Status    Target    Agent     
+dfd61f17-206f-4feb-ab14-6ae4ce54f04c dev-tmux-7m              every 7m                         4m ago     11m ago    ok        isolated  default
+bde5885a-388f-4fe4-a8b7-a146521d9e9d architect-tmux-20m       every 20m                        3m ago     23m ago    running   isolated  default
+454dc361-14bb-4f71-8ca2-ec86708c503f qa-tmux-11m              every 11m                        2m ago     13m ago    ok        isolated  default
+09d045db-b12a-4486-a743-57b761d52e50 planner-tmux-5m          every 5m                         2m ago     15m ago    ok        isolated  default
+fbccac5b-1028-4c9a-b021-c1998d3bad97 adminapp-codex-sync-5m   every 5m                         <1m ago    6m ago     ok        isolated  default
+36bed423-e965-4a19-a43a-c8ffbff751d8 tester-tmux-9m           every 9m                         in <1m     21m ago    error     isolated  default
+44f08bd9-b9c0-4ab5-8882-cc91d402c8db po-tmux-25m              every 25m                        in 4m      39m ago    ok        isolated  default
+838deae5-fa39-4052-b31d-66013faccee0 admin-agents-supervis... every 15m                        in 6m      9m ago     ok        isolated  default
+25756cb4-57f1-41c7-83d4-66fd67a0164d clawsentinel-tmux-13m    every 13m                        in 7m      6m ago     ok        isolated  default
+8e5b1bd7-f319-48d8-b8f7-c906c024135f scrum-master-tmux-30m    every 30m                        in 13m     17m ago    ok        isolated  default
+RESTORE_OK
+snapshot_dir=/home/venom/.openclaw/snapshots/vm-restart-20260225-092829-EST
+role_state_restored=1
+gateway_status=active
+sessions_hint=tmux attach -t adminapp_codex_sync | tmux attach -t admin-agents-sync-cron | tmux attach -t clawsentinel
+- Gateway: active (OpenClaw 2026.2.24)
+- tmux sessions recreated: adminapp_codex_sync, admin-agents-sync-cron, clawsentinel + qwen_*_cron prewarmed
+- Orchestrator health: PASS ready=4/4
+- Finance Copilot: backend UP, frontend DOWN
+- Cron note: tester-tmux-9m lastStatus=error (timeout)
+- Snapshot pointer: /home/venom/.openclaw/snapshots/vm-restart-latest
+
+## Session: 2026-02-25 - Verification post-redemarrage (manual check)
+
+- Verification time: 2026-02-25 09:49-09:53 EST.
+- Boot timestamp confirmed:
+  - `uptime -s` => `2026-02-25 09:30:49`
+  - `who -b` => `system boot 2026-02-25 09:30`
+- Core services after reboot:
+  - `openclaw-gateway.service` enabled+active since `09:30:58`.
+  - `finance-backend.service` enabled+active since `09:30:58`.
+- Runtime status now:
+  - OpenClaw `2026.2.24`, gateway reachable, WhatsApp linked.
+  - tmux sessions restored/present: `adminapp_codex_sync`, `admin-agents-sync-cron`, `clawsentinel`, plus `qwen_*_cron`.
+  - cron inventory: 10 jobs enabled, all `lastStatus=ok` at verification tick.
+- API/frontend state:
+  - backend health OK on `http://127.0.0.1:8050/api/health`.
+  - frontend not listening on `:4173` or `:3000` (DOWN).
+- Restore workflow check:
+  - latest snapshot pointer: `/home/venom/.openclaw/snapshots/vm-restart-20260225-092829-EST`.
+  - `bash scripts/admin_vm_restore.sh --dry-run` shows expected sequence:
+    role-state copy, gateway check, openclaw status/cron check, tmux session prewarm, admin ticks.
+- Automation note:
+  - no dedicated user systemd timer for restore script.
+  - user crontab contains `scripts/auto_recover_tmux_roles.sh` every 10 minutes.
+
+## Session: 2026-02-25 - Orchestrator hardening (load + signal hygiene)
+
+- Trigger: user requested orchestrator-style diagnosis and immediate corrective actions.
+- Root problems confirmed:
+  - cron lane saturation risk with high aggregate cadence pressure,
+  - noisy fallback evidence polluting blocker parsing,
+  - duplicate/non-monotonic iteration numbering in tri-admin ledger.
+- Applied code changes:
+  - `scripts/cron_tmux_role_runner.sh`
+    - added `sanitize_evidence_fragment()` to neutralize contract keys inside `EVIDENCE` fragments,
+    - sanitized `raw_primary/raw_retry/raw_codex/startup/recovery` fragments before fallback output assembly.
+  - `scripts/configure_tmux_role_crons.sh`
+    - rebalanced role cadences and names:
+      - planner `12m`, dev `15m`, tester `15m`, qa `20m`,
+      - architect `25m`, po `30m`, scrum `30m`,
+      - clawsentinel `25m` (added to baseline script).
+  - `docs/ops/ADMIN_TEAM_ITERATIONS.md`
+    - normalized iteration headings to unique monotonic sequence (`01` -> `16`).
+- Runtime cron changes applied:
+  - executed `bash scripts/configure_tmux_role_crons.sh` (lock + backup preserved by script),
+  - updated admin monitor cadence:
+    - `adminapp-codex-sync-5m` -> `adminapp-codex-sync-10m`.
+- Validation snapshot:
+  - `openclaw cron list` shows all target jobs with new schedule names/cadences.
+  - `python3 scripts/qwen_orchestrator.py --tmux-cmd health ...` => `VERDICT: PASS`, `ready=4/4`.
+  - post-change load estimate:
+    - `TOTAL_UTIL_EST=89.8%` (down from prior overloaded state >100%).
+
+## Session: 2026-02-25 - Doc/runtime alignment pass
+
+- Verification time: 2026-02-25 11:17 EST.
+- Live runtime check:
+  - `openclaw status --deep`: gateway reachable, WhatsApp linked, no active runtime incident.
+  - `openclaw cron list --json`: 10 jobs enabled, schedule aligned to rebalanced cadence, `lastStatus=ok` with expected transient `running` states.
+  - `logs-qwen-runs/role-recovery.log` keeps changing on schedule; latest observed entry at `2026-02-25T11:20:01-0500`.
+- Alignment updates:
+  - `docs/ops/CRON_STRATEGY.md` updated to current cadence (`12/15/15/20/25/25/30/30` + admin `10/15`).
+  - `docs/ops/TMUX_CRON_OPERATIONS.md` snapshot and runtime profile updated to current 10-job layout.
+  - `MEMORY.md` long-term cron profile updated to current job names/cadence and watchdog model.
+- Residual concerns after alignment:
+  - worktree remains very noisy (`git status` shows many unrelated modified/untracked files),
+  - backend remains UP but frontend service is still DOWN (no listener on `:4173`/`:3000` in latest restart checks).
+
+## Session: 2026-02-25 - tmux codex live troubleshooting monitor
+
+- User request: near real-time visibility into tmux cron sessions, with codex-only enforcement (no qwen runtime dependency).
+- Runtime migration applied:
+  - role session naming switched to `codex_*_cron` in `scripts/cron_tmux_role_runner.sh`,
+  - stale `qwen_*_cron` sessions removed, active tmux role sessions now codex-named,
+  - `auto_recover_tmux_roles.sh` rewritten to tmux/codex-native logic (no `qwen_orchestrator.py`).
+- Codex-only hardening:
+  - `cron_tmux_role_runner.sh` now enforces `codex` binary and launches role sessions with `--no-alt-screen`.
+  - `admin_vm_restore.sh` and `admin_agents_tmux_tick.sh` updated to start codex as `codex --no-alt-screen`.
+- New observability tool:
+  - added `scripts/tmux_codex_live_monitor.sh` with:
+    - `follow --engine capture` (default): near-real-time session state stream,
+    - optional `follow --engine pipe` for raw pane stream,
+    - auto-tail of per-role runner traces (`logs-codex-runs/role-runner/<role>.live.log`).
+- Runner trace instrumentation:
+  - `cron_tmux_role_runner.sh` now writes timestamped lifecycle checkpoints (`primary/retry/codex_fallback/checkpoint`) into `logs-codex-runs/role-runner/<role>.live.log`.
+- Validation:
+  - live command test showed rolling trace events during planner run (`primary timeout -> retry timeout -> codex_fallback`),
+  - monitor output now shows both tmux frame updates and role-runner execution transitions in near real-time.
+  - compatibility check restored: `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner,dev,tester,qa` now passes against `codex_*_cron` sessions (alias resolver extended).
+
+## Session: 2026-02-25 - Stabilisation tmux role runner (lock + stall abort)
+
+- Objectif: réduire les timeouts cron et éviter les chevauchements de runs par rôle.
+- Changements appliqués:
+  - scripts/cron_tmux_role_runner.sh
+    - ajout d un verrou non bloquant par rôle (<role>.run.lock) avec sortie structurée LOCK_SKIP si lock occupé;
+    - ajout d un abort précoce si capture tmux figée (TMUX_ROLE_STALL_ABORT_SECONDS, défaut 18s), tracé via prompt_stall_abort.
+  - scripts/configure_tmux_role_crons.sh
+    - timeout cron agent augmenté à 300s (au lieu de 240s),
+    - propagation TMUX_ROLE_STALL_ABORT_SECONDS=18 dans les payloads,
+    - durcissement du message cron: interdiction explicite des actions send/message/delivery.
+- Runtime appliqué: bash scripts/configure_tmux_role_crons.sh (8 jobs rôle édités).
+- Validations:
+  - test lock: sortie immédiate BLOCKER_ID: RUN_LOCK_BUSY + DELTA: LOCK_SKIP;
+  - run direct dev: duration_s=45 (avant ~120-240s); traces prompt_stall_abort visibles;
+  - force-run cron dev: ok avec durationMs=99051, lastStatus=ok, consecutiveErrors=0;
+  - force-run cron clawsentinel: ok.
+- État final observé:
+  - openclaw cron list: plus d erreur active, jobs en ok ou running.
+
+## Session: 2026-02-25 - Stabilisation tmux role runner (lock + stall abort)
+
+- Objectif: réduire les timeouts cron et éviter les chevauchements de runs par rôle.
+- Changements appliqués:
+  - Usage: scripts/cron_tmux_role_runner.sh <planner|dev|tester|qa|architect|po|scrum_master|clawsentinel>
+    - ajout d'un verrou non bloquant par rôle () avec sortie structurée  si lock occupé;
+    - ajout d'un abort précoce si capture tmux figée (, défaut 18s), traçé via .
+  - {
+  "id": "09d045db-b12a-4486-a743-57b761d52e50",
+  "name": "planner-tmux-12m",
+  "description": "Planner tmux context loop (rebalanced cadence)",
+  "enabled": true,
+  "createdAtMs": 1771979462389,
+  "updatedAtMs": 1772041081284,
+  "schedule": {
+    "kind": "every",
+    "everyMs": 720000,
+    "anchorMs": 1772041081284
+  },
+  "sessionTarget": "isolated",
+  "wakeMode": "now",
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex bash scripts/cron_tmux_role_runner.sh planner",
+    "thinking": "high",
+    "timeoutSeconds": 300
+  },
+## Session: 2026-02-25 - Bascule cron en mode sequentiel
+
+- Demande utilisateur: debug orchestration avec activation role par role.
+- Actions runtime:
+  - desactivation des 8 jobs role (planner, dev, tester, qa, architect, po, scrum, clawsentinel),
+  - reactivation de planner uniquement,
+  - conservation des 2 jobs admin actifs (adminapp-codex-sync, admin-agents-supervisor).
+- Validation:
+  - force-run planner ok,
+  - dernier run planner: status ok, durationMs 56079, verdict PASS,
+  - snapshot jobs actifs: planner + 2 admins uniquement.
+
+## Session: 2026-02-25 - Sequenciel role dev (phase 2)
+
+- Bascule effectuée: planner désactivé, dev activé (admins conservés).
+- Snapshot jobs actifs: dev + adminapp-codex-sync + admin-agents-supervisor.
+- Force-run dev exécuté et validé:
+  - runAtMs=1772043323522
+  - durationMs=66589
+  - status=ok
+  - verdict FEU_VERT, blocker_id AUCUN, consecutiveErrors=0.
+- Signal runtime:
+  - tmux primaire/retry restent en timeout/stall-abort,
+  - sortie finale toujours via codex_fallback, mais avec latence contenue (<70s).
+
+## Session: 2026-02-25 - Sequenciel role tester (phase 3)
+
+- Bascule effectuée: dev désactivé, tester activé (admins conservés).
+- Snapshot jobs actifs: tester + adminapp-codex-sync + admin-agents-supervisor.
+- Force-run tester exécuté et validé:
+  - runAtMs=1772043744969
+  - durationMs=62745
+  - status=ok
+  - verdict READY, blocker_id NONE, consecutiveErrors=0.
+- Signal runtime:
+  - tmux primaire/retry restent en timeout/stall-abort,
+  - sortie finale via codex_fallback avec latence contenue (~63s).
+
+## Session: 2026-02-25 - Sequenciel role qa (phase 4) + backlog global
+
+- Bascule effectuée: tester désactivé, qa activé (admins conservés).
+- Snapshot jobs actifs: qa + adminapp-codex-sync + admin-agents-supervisor.
+- Force-run qa exécuté et validé:
+  - runAtMs=1772043881016
+  - durationMs=75057
+  - status=ok
+  - verdict PASS, blocker_id NONE, consecutiveErrors=0.
+- Signal runtime:
+  - tmux primaire/retry restent en timeout/stall-abort,
+  - sortie finale via codex_fallback avec latence contenue (~75s).
+- Améliorations globales consignées dans docs/orchestrator-ops/improvements.md:
+  - codex_exec primary,
+  - orchestration mode scriptable (sequential/parallel),
+  - logs JSONL structurés,
+  - SLO/alerting par rôle,
+  - fallback adaptatif plus tôt.

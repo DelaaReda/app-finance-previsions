@@ -1,0 +1,4 @@
+version: 1
+schema_ref: "docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml#event_and_message_schemas"
+messages: []
+

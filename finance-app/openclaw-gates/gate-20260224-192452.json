@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260224-192452",
+  "status": "FAIL",
+  "backend_url": "http://127.0.0.1:8050",
+  "frontend_url": "http://127.0.0.1:5173",
+  "checks": {
+    "health": "000",
+    "prices": "000",
+    "news": "000",
+    "forecasts": "000",
+    "judge_quality": "000",
+    "frontend_root": "000"
+  }
+}

@@ -8,9 +8,14 @@
 - **Socle tests actuel**: `copilot-app/backend/tests/*`, smoke script `scripts/smoke.sh`
 - **Risque principal**: contrat API/UI non stabilisé (formes de payload variables + fallback silencieux)
 
+## Orchestration (source normative)
+
+- Spec: `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
+- Schéma EVIDENCE: `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+
 ## 2) Objectif MVP (reconfirmé)
 
-Livrer un MVP local **fiable, démontrable, et exécutable par agents qwen** sur 5 endpoints:
+Livrer un MVP local **fiable, démontrable, et exécutable par agents codex (OpenClaw)** sur 5 endpoints:
 - `GET /api/health`
 - `GET /api/stocks/prices`
 - `GET /api/news/feed`
@@ -27,10 +32,10 @@ avec UI statique consommant ces endpoints sans crash.
 2. **EPIC B — Intégration frontend MVP sans dépendance mock cachée**
    - Brancher les vues MVP sur API réelle.
    - Afficher explicitement les fallbacks simulés.
-3. **EPIC C — Quality gate & orchestration qwen**
+3. **EPIC C — Quality gate & orchestration (codex/OpenClaw)**
    - Pipeline d’exécution standardisé (DoR/DoD, preuves, runbook, gating).
 
-## 4) Séquencement recommandé (agents qwen)
+## 4) Séquencement recommandé (agents codex/OpenClaw)
 
 ### Vague 1 (jour 1)
 - A1. Contrats API (`/health`, `/stocks/prices`, `/news/feed`, `/copilot/ask`)
@@ -43,7 +48,7 @@ avec UI statique consommant ces endpoints sans crash.
 - C2. Ajout gate backend/frontend compact et artefacts de preuve
 
 ### Vague 3 (jour 3)
-- C3. Stabilisation exécution multi-agents qwen (prompts, rôles, runbook)
+- C3. Stabilisation exécution multi-agents codex (rôles, runbook, preuves)
 - Durcissement final + revue des écarts ouverts
 
 ## 5) Definition of Ready (DoR) pour toute story
@@ -81,7 +86,8 @@ curl -sS -X POST "http://localhost:8050/api/copilot/ask" \
 
 # 4. Tests backend ciblés
 cd copilot-app/backend
-.venv/bin/pytest -q tests/test_health.py tests/test_ticker_normalization.py
+([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && \
+  .venv/bin/pytest -q tests/test_health.py tests/test_ticker_normalization.py
 
 # 5. Smoke existant
 cd /home/venom/analyse-financiere
@@ -104,154 +110,63 @@ cd /home/venom/analyse-financiere
 ## 10) Delta de pilotage (cycle cron en cours)
 
 - Priorité immédiate: verrouiller d’abord **A1/A2** pour figer le contrat backend consommé par B1.
-- Lot de dispatch recommandé (qwen):
+- Lot de dispatch recommandé (codex/OpenClaw):
   1. `planner` — cadrage T-A1.1 + T-A2.1 (DoR explicite)
   2. `dev` — implémentation backend ciblée
   3. `tester` — tests contrat + smoke endpoint
   4. `qa` — vérification des preuves et verdict PASS/BLOCKED
 - Gate de sortie du lot: aucun 500 sur health/stocks + tests dédiés verts + artefacts déposés.
 
-## 11) Batch d'exécution qwen (delta incrémental)
+## 11) Exécution par batch (codex/OpenClaw)
 
-### Batch-01 (à lancer maintenant)
-- **Objectif**: verrouiller le contrat backend minimal pour débloquer l’intégration UI.
-- **Contenu**: `T-A1.1` + `T-A2.1`
-- **Sortie attendue (obligatoire)**:
-  - DELTA (fichiers + comportement)
-  - EVIDENCE (commandes + sorties utiles)
-  - RISKS (risques résiduels)
-  - NEXT (prochaine action unique)
-- **Gate PASS Batch-01**:
-  - `/api/health` conforme + test dédié vert
-  - `/api/stocks/prices?ticker=SPY` conforme
-  - artefacts déposés dans `finance-app/openclaw-gates/`
+Règle: pas d’orchestrateur legacy. La boucle d’exécution est pilotée par OpenClaw (`cron_tmux_role_runner.sh`) et les gates (`preflight_dispatch`, `validate_roles_sequential`, `run_delivery_gate`).
 
-#### Prompt opératoire Batch-01 (qwen)
+### Runbook (pour un `<BATCH-ID>`)
+
+1. Préflight (bloquant sur états invalides):
+
+```bash
+bash scripts/preflight_dispatch.sh
+```
+
+2. Exécution séquentielle stricte (core chain):
+
+```bash
+SEQUENTIAL_VALIDATE_TIMEOUT_SECONDS=480000 \
+  bash scripts/validate_roles_sequential.sh \
+    --roles planner,dev,tester,qa \
+    --strict-ready-chain \
+    --chain-target "<BATCH-ID>"
+```
+
+3. Artefact de preuve (obligatoire) + gate:
+
+```bash
+# Exemple: finance-app/openclaw-gates/batch-03-20260226-2359.md
+bash scripts/run_delivery_gate.sh "finance-app/openclaw-gates/batch-<NN>-<timestamp>.md"
+```
+
+Artefact requis: sections `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`.
+
+### Brief opératoire (template)
+
 ```text
-Objectif: livrer T-A1.1 et T-A2.1 sans élargir le scope.
-In-scope: normalisation contrat /api/health et /api/stocks/prices (mono ticker).
-Out-of-scope: multi-ticker, news, forecasts, copilot ask, refactor global.
-Pré-requis: backend local up, tests backend exécutables.
-Fichiers cibles: main.py + tests ciblés uniquement.
-Plan: implémenter -> tester -> produire preuves.
-Acceptation testable:
-1) GET /api/health = 200, ok=true, data.timestamp présent
-2) pytest tests/test_health.py vert
-3) GET /api/stocks/prices?ticker=SPY = 200, clés ticker/points/count/timestamp présentes
-4) aucun 500 sur 5 appels successifs stocks mono
-Commandes de test:
-- curl health
-- pytest test_health.py
-- curl stocks mono
-- boucle 5x curl stocks mono
-Évidences attendues:
-- extraits JSON health/stocks
-- sortie pytest
-- verdict final PASS|BLOCKED + raison
-Format réponse: DELTA / EVIDENCE / RISKS / NEXT
+Objectif: livrer le batch sans élargir le scope.
+In-scope: uniquement les tasks du batch courant.
+Out-of-scope: tout refactor global non requis par le batch.
+Pré-requis: backend local up (si pertinent), tests exécutables.
+Plan: implémenter -> tester -> produire preuves -> QA verdict.
+Format sortie (contrat): STATUS / DELTA / EVIDENCE / RISKS / NEXT / VERDICT / BLOCKER_ID / NEXT_ACTION_UNIQUE
+EVIDENCE (kv): task_update=...;lock_check=ok;stream_id=<BATCH-ID>;task_id=<...>;cmd=...;tests_run=...
 ```
-
-### Batch-02 (conditionnel)
-- **Précondition**: Batch-01 PASS
-- **Contenu**: `T-A2.2` + préparation `T-A3.1`
-- **Objectif**: figer contrat multi-tickers et ouvrir la normalisation news
-
-## 12) Delta d’exécution immédiat (cycle 20:20)
-
-### Batch-01 — paquet de dispatch verrouillé
-- **Objectif unique**: fermer `T-A1.1` + `T-A2.1` avec verdict QA auditable.
-- **Scope IN**: health contract + stocks mono ticker contract.
-- **Scope OUT**: multi-ticker (`T-A2.2`), news, forecasts, copilot ask, UI.
-- **Commande dispatch recommandée**:
-
-```bash
-python3 scripts/qwen_orchestrator.py \
-  --agent-bin qwen \
-  --rounds 2 \
-  --with-manager \
-  --with-architect \
-  --feature "Batch-01 MVP: livrer T-A1.1 + T-A2.1; produire DELTA/EVIDENCE/RISKS/NEXT + VERDICT; déposer artefact finance-app/openclaw-gates/batch-01-<timestamp>.md"
-```
-
-### Gate de sortie renforcé (anti-faux PASS)
-Le batch est **PASS** seulement si les 4 conditions sont vraies:
-1. `pytest tests/test_health.py` vert
-2. `GET /api/health` conforme (`ok=true`, `data.timestamp`)
-3. `GET /api/stocks/prices?ticker=SPY` conforme (`ticker/points/count/timestamp`)
-4. artefact gate présent avec sections complètes + verdict explicite
-
-### Pré-activation Batch-02 (si PASS)
-- Ouvrir `T-A2.2` + préparation `T-A3.1` en conservant le même format de preuve.
-- Si une condition échoue: statut `BLOCKED`, pas de démarrage Batch-02.
-
-## 13) Delta exécution lot suivant (cycle 20:35)
-
-### Brief d’exécution verrouillé — Batch-01 (run immédiat)
-- **Owner qwen/manager**: faire exécuter `T-A1.1` puis `T-A2.1` dans le même run.
-- **Gate d’entrée**:
-  1. Backend up (`/api/health` répond)
-  2. Branche propre sur le scope backend MVP
-- **Gate de sortie (PASS)**:
-  1. Preuves commandes incluses (health + pytest + stocks mono + boucle stabilité)
-  2. Artefact présent: `finance-app/openclaw-gates/batch-01-<timestamp>.md`
-  3. Verdict QA explicite: `PASS`
-- **Gate de blocage (BLOCKED)**:
-  - test non exécuté, section evidence manquante, ou contrat JSON incomplet
-
-### Carte Batch-02 (pré-remplie, conditionnelle)
-- **Activation**: uniquement après PASS Batch-01
-- **Contenu**: `T-A2.2` (multi ticker contract tests) + `T-A3.1` (normalisation news feed)
-- **Objectif**: étendre le contrat backend sans ouvrir le frontend
-- **Règle de scope**: aucune implémentation UI tant que Gate G-A n’est pas confirmé
-
-## 14) Delta lancement & continuité (cycle 20:50)
-
-### Packet de lancement Batch-01 (final)
-- **Commande recommandée**:
-
-```bash
-python3 scripts/qwen_orchestrator.py \
-  --agent-bin qwen \
-  --rounds 2 \
-  --with-manager \
-  --with-architect \
-  --feature "Batch-01 MVP final: exécuter T-A1.1 + T-A2.1, produire DELTA/EVIDENCE/RISKS/NEXT/VERDICT, déposer finance-app/openclaw-gates/batch-01-<timestamp>.md"
-```
-
-- **Critères QA de validation (obligatoires)**:
-  1. `pytest tests/test_health.py` vert
-  2. 3 appels health consécutifs cohérents
-  3. 5 appels stocks SPY sans 500 avec clés attendues
-  4. artefact gate horodaté + `VERDICT: PASS|BLOCKED`
-
-### Règle d’escalade explicite
-- Si un seul critère échoue: verdict immédiat `BLOCKED`, correction ciblée, puis relance Batch-01 (pas d’ouverture Batch-02).
-
-### Carte Batch-02 (prête mais verrouillée)
-- **Activation stricte**: uniquement si artefact Batch-01 contient `VERDICT: PASS` signé QA.
-- **Contenu**: `T-A2.2` + `T-A3.1`
-- **Sortie attendue**: mêmes sections de preuve, plus impact sur contrat backend documenté.
-
-## 15) Delta continuité & escalade (cycle 21:05)
-
-### État de continuité
-- Le plan reste en **mode exécution incrémentale**: aucun redémarrage de cadrage.
-- Le verrou prioritaire reste **Batch-01 (`T-A1.1` + `T-A2.1`)** avec signature QA obligatoire.
-
-### Prochaine action opératoire (immédiate)
-1. Vérifier présence d’un artefact `finance-app/openclaw-gates/batch-01-<timestamp>.md`.
-2. Si absent: lancer la commande Batch-01 verrouillée (manager+architect, rounds=2).
-3. Si présent mais `VERDICT: BLOCKED`: corriger uniquement le point bloquant puis relancer Batch-01.
-4. Si présent avec `VERDICT: PASS`: ouvrir Batch-02 (`T-A2.2` puis `T-A3.1`) sans élargir le scope.
-
-### Critère anti-dérive ajouté
-- Toute sortie agent sans section `VERDICT:` explicite est automatiquement considérée **NON VALIDE**.
 
 ## Changelog
-- 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch qwen avec gate de sortie.
-- 2026-02-24 19:50 America/New_York — Ajout du plan de lots qwen Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
-- 2026-02-24 20:05 America/New_York — Ajout d’un prompt opératoire Batch-01 prêt à injecter aux agents qwen, avec scope strict, critères testables et format de preuves obligatoire.
-- 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01 (commande orchestrator prête), gate PASS durci en 4 conditions et règle de pré-activation stricte pour Batch-02.
-- 2026-02-24 20:35 America/New_York — Ajout d’un brief d’exécution Batch-01 prêt à l’emploi (gates entrée/sortie/blocage) et d’une carte Batch-02 pré-remplie strictement conditionnelle au verdict PASS QA.
-- 2026-02-24 20:50 America/New_York — Finalisation du packet de lancement Batch-01 (commande, QA gate, escalade BLOCKED) et verrou formel d’activation Batch-02 sur PASS QA.
+- 2026-02-24 19:46 America/New_York — Ajout du delta de pilotage MVP: priorisation du lot A1/A2 et séquence de dispatch avec gate de sortie.
+- 2026-02-24 19:50 America/New_York — Ajout du plan de lots Batch-01/Batch-02 avec critères PASS explicites et artefacts attendus.
+- 2026-02-24 20:05 America/New_York — Ajout d’un brief opératoire Batch-01 (scope strict, critères testables, format de preuves).
+- 2026-02-24 20:20 America/New_York — Verrouillage du paquet de dispatch Batch-01, gate PASS durci et règle de pré-activation stricte pour Batch-02.
+- 2026-02-24 20:35 America/New_York — Ajout d’un brief d’exécution Batch-01 (gates entrée/sortie/blocage) et d’une carte Batch-02 strictement conditionnelle au verdict PASS QA.
+- 2026-02-24 20:50 America/New_York — Finalisation du packet de lancement Batch-01 (preuves + escalade BLOCKED) et verrou formel d’activation Batch-02 sur PASS QA.
 - 2026-02-24 21:05 America/New_York — Ajout du delta de continuité/exécution: escalade explicite selon présence/absence d’artefact Batch-01, règle anti-dérive sur VERDICT obligatoire, et chemin séquentiel conditionnel vers Batch-02.
+- 2026-02-24 22:05 America/New_York — Durcissement qualité doc cron: commandes de tests backend rendues auto-bootstrap (`python3 -m venv ...`) pour exécution reproductible sur VM neuve.
+- 2026-02-26 14:10 America/New_York — Alignement complet sur orchestration codex-only/OpenClaw: suppression des commandes legacy et remplacement par `preflight_dispatch` + `validate_roles_sequential` + `run_delivery_gate`.

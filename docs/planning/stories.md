@@ -19,7 +19,7 @@
   - Test dédié passe en local.
 - **Commandes de test**:
   - `curl -sS http://localhost:8050/api/health | jq`
-  - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_health.py`
+  - `cd copilot-app/backend && ([ -x .venv/bin/pytest ] || (python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)) && .venv/bin/pytest -q tests/test_health.py`
 - **Evidences attendues**: sortie curl + test vert.
 - **Risques**: clients historiques dépendants d’anciens champs.
 - **Dépendances**: aucune.
@@ -43,13 +43,13 @@
 - **Critères d’acceptation testables**:
   - Mono ticker: payload contient `ticker`, `points`, `count`.
   - Multi ticker: payload contient `tickers` map.
-  - Requête invalide renvoie `ok=true` + message d’erreur contrôlé (pas 500).
+  - Requête invalide renvoie `ok=false` + message d’erreur contrôlé (pas 500).
 - **Commandes de test**:
   - `curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq`
   - `curl -sS "http://localhost:8050/api/stocks/prices?tickers=SPY&tickers=QQQ" | jq`
 - **Evidences attendues**: exemples de payload mono/multi.
 - **Risques**: incohérence historique de schéma côté frontend.
-- **Dépendances**: Story B1.
+- **Dépendances**: Story A1.
 
 ---
 
@@ -76,7 +76,7 @@
   - `curl -sS "http://localhost:8050/api/news/feed?tickers=AAPL&limit=5" | jq`
 - **Evidences attendues**: payload normalisé + test automatisé.
 - **Risques**: qualité variable des sources upstream.
-- **Dépendances**: Story C1.
+- **Dépendances**: Story A1.
 
 ---
 
@@ -126,7 +126,7 @@
   - `curl -sS -X POST "http://localhost:8050/api/copilot/ask" -H 'Content-Type: application/json' -d '{"question":"TL;DR marché","max_sources":3}' | jq`
 - **Evidences attendues**: payload incluant `sources_count`/`quality_status`.
 - **Risques**: dépendances externes LLM indisponibles.
-- **Dépendances**: Story C1.
+- **Dépendances**: Story A1.
 
 ---
 
@@ -205,7 +205,7 @@
 ## Story C1 — Gate de régression MVP compact
 
 - **Objectif**: créer un gate simple PASS/BLOCKED avant livraison.
-- **Scope IN**: health + 5 endpoints + smoke + sanity frontend.
+- **Scope IN**: health + endpoints MVP (5 au total, copilot ask inclus) + smoke + sanity frontend.
 - **Scope OUT**: suite E2E exhaustive.
 - **Prérequis**: stories A/B principales intégrées.
 - **Fichiers cibles**:
@@ -225,22 +225,22 @@
   - commandes `curl` MVP
 - **Evidences attendues**: fichier de gate + logs de commandes.
 - **Risques**: faux positifs si données snapshots périmées.
-- **Dépendances**: A1..A5, B1..B2.
+- **Dépendances**: A1..A2 (gate initial), puis A3..A5 et B1..B2 pour le gate final.
 
-## Delta stories prêtes qwen (cycle 20:20)
+## Delta stories prêtes (cycle 20:20)
 
-### Story A1 — compléments d’acceptation qwen
+### Story A1 — compléments d’acceptation
 - **Critère ajouté**: exécuter 3 appels consécutifs health sans variation de schéma.
 - **Evidence attendue ajoutée**: extrait compact des 3 réponses + timestamp run.
 
-### Story A2 — compléments d’acceptation qwen
+### Story A2 — compléments d’acceptation
 - **Critère ajouté**: boucle 5x sur `ticker=SPY` sans 500 ni clé manquante.
 - **Evidence attendue ajoutée**: tableau texte `run_i -> status_code -> keys_present`.
 
 ### Story A3 (RUN_NEXT_IF_PASS)
 - **Précondition renforcée**: ne démarre que si artefact Batch-01 contient un verdict PASS signé QA.
 
-## Delta dispatch prêt agents qwen (cycle 20:35)
+## Delta dispatch prêt agents (cycle 20:35)
 
 ### Story A1 — brief agent exécutable
 - **Rôle principal**: dev
@@ -292,9 +292,11 @@
 - Si `T-A2.2` est BLOCKED, A3 repasse en `HOLD` automatiquement.
 
 ## Changelog
-- 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch qwen sans redémarrer le cadrage.
+- 2026-02-24 19:50 America/New_York — Ajout d’une queue de stories incrémentale (RUN_NOW/RUN_NEXT/ON_HOLD/PARALLEL_PREP) pour guider le dispatch sans redémarrer le cadrage.
+- 2026-02-26 14:10 America/New_York — Alignement wording orchestration: suppression des mentions legacy dans les deltas stories (référence codex-only/OpenClaw).
 - 2026-02-24 20:05 America/New_York — Ajout de cartes de dispatch prêtes à l’envoi pour Story A1/A2 (objectif, scope, vérifications, preuves minimales).
 - 2026-02-24 20:20 America/New_York — Durcissement incrémental des stories A1/A2 (stabilité multi-appels et preuves structurées) + précondition QA explicite avant ouverture Story A3.
 - 2026-02-24 20:35 America/New_York — Ajout d’un brief de dispatch exécutable pour A1/A2 (rôles + commandes de preuve obligatoires) et carte de reprise A3 strictement conditionnée au verdict PASS Batch-01.
 - 2026-02-24 20:50 America/New_York — Préparation incrémentale de Batch-02: ordre imposé Story A2->A3, critères additionnels multi-ticker/news et preuves minimales pour signature QA.
 - 2026-02-24 21:05 America/New_York — Durcissement stories: clôture A1/A2 soumise à matérialisation QA dans l’artefact de lot, reprise en patch minimal sur BLOCKED, et activation A3 conditionnée à PASS explicite de T-A2.2.
+- 2026-02-24 22:05 America/New_York — Correction dépendances stories (suppression cycles A2<->B1 et A3/A5<->C1), clarification C1 (5 endpoints total) et sémantique erreur (`ok=false` en requête invalide).

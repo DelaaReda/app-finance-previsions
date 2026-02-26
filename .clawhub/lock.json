@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "cognitive-memory": {
+      "version": "1.0.8",
+      "installedAt": 1771981660464
+    },
+    "agentlens": {
+      "version": "1.0.0",
+      "installedAt": 1771981661972
+    },
+    "buildlog": {
+      "version": "1.0.1",
+      "installedAt": 1771981663152
+    },
+    "smart-auto-updater": {
+      "version": "1.0.0",
+      "installedAt": 1771981664545
+    },
+    "docker-essentials": {
+      "version": "1.0.0",
+      "installedAt": 1771981666001
+    },
+    "joko-orchestrator": {
+      "version": "2.0.0",
+      "installedAt": 1771981667104
+    },
+    "cc-godmode": {
+      "version": "5.11.3",
+      "installedAt": 1771981668831
+    },
+    "google-weather": {
+      "version": "1.2.0",
+      "installedAt": 1771981670100
+    },
+    "ontology": {
+      "version": "0.1.2",
+      "installedAt": 1771981674721
+    },
+    "tavily-search": {
+      "version": "1.0.0",
+      "installedAt": 1771981850822
+    },
+    "humanizer": {
+      "version": "1.0.0",
+      "installedAt": 1771982939148
+    },
+    "frontend-design": {
+      "version": "1.0.0",
+      "installedAt": 1771989386390
+    }
+  }
+}
