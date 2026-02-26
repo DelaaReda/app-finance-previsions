@@ -1056,6 +1056,11 @@ Execution rule:
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
   - `docs/scrum/sprint-next.md`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
+  - Seuils par tache: appliquer le profil RELEASE-GATE (section Matrice de seuils dacceptation) ; tout seuil mandatory en echec => BLOCKED.
+  - Le gate doit verifier explicitement la chaine complete API forecast -> rendu UI -> evidence artefactee.
+  - Le gate doit echouer si `source=model|fallback` et `model_version` ne sont pas tracables sur les surfaces core.
 - **Acceptation testable**:
   - artefact final signé QA avec verdict et blocker_id.
 - **Commandes de test**:
@@ -3733,3 +3738,4 @@ Basic-ready criteria (minimum functional baseline):
 - 2026-02-26 America/New_York - Reoriented architecture to forecast-first value: global invariants now require data-driven forecast outputs from APIs and explicit UI/gate evidence; requirement propagated across all INTEGRATION-APP-EENGINEER-RECOMMENDATIONS blocks.
 - 2026-02-26 America/New_York - Added Epic 15 data-driven forecasting core (dataset, training, backtest, inference, calibration, QA gate).
 - 2026-02-26 America/New_York - Added Epic 16 forecast delivery contract (`TV16-FF-01..06`) to enforce API->UI mapping and release blocking evidence.
+- 2026-02-26 America/New_York - Added architecture-owned threshold matrix (per task profile) and linked each task integration block to a mandatory threshold profile (`Seuils par tache`) to enforce objective PASS/BLOCKED decisions.

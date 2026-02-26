@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-01-BATCH-01-BACKEND-20260226T174453Z-116"
+stream_id: "BATCH-01"
+task_id: "BATCH-01-BACKEND"
+role: "backend_engineer"
+produced_at_utc: "2026-02-26T17:44:53Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+execution:
+  commands:
+    - cmd: "python3 -m py_compile scripts/parallel_workstream.py"
+      rc: "0"
+      started_at_utc: "2026-02-26T17:44:53Z"
+      ended_at_utc: "2026-02-26T17:44:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+  artifacts:
+    - "docs/orchestrator-ops/roleflow/20260226-pilot/backend-batch-01-backend.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "backend_engineer"
+  reviewer_agent: "qa"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-roleflow-b01-backend"
+  review_ref: "roleflow-pilot-backend"
+  note: "backend_pilot_code_change_done"

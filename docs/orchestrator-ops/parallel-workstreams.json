@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T17:45:52Z",
+  "updated_at": "2026-02-26T17:46:46Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -79,9 +79,9 @@
       "title": "Stabiliser contrats API MVP",
       "priority": "P0",
       "source_state": "PASS",
-      "state": "READY",
+      "state": "DONE",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T17:45:52Z"
+      "updated_at": "2026-02-26T17:46:46Z"
     },
     {
       "id": "BATCH-02",
@@ -395,20 +395,29 @@
       "code": "PO_REVIEW",
       "title": "Stabiliser contrats API MVP [PO_REVIEW]",
       "role": "po",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-QA_EXEC"
       ],
-      "assignee": "",
+      "assignee": "po",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/po-batch-01-po-review.md"
+      ],
+      "notes": [
+        "po_review_pilot_pass",
+        "cmd=python3 scripts/parallel_workstream.py status --role po --compact;tests_run=SKIP(po_value_review_only);review_ref=roleflow-pilot-po;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T17:45:52Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:46:09Z",
+      "started_at": "2026-02-26T17:45:59Z",
+      "completed_at": "2026-02-26T17:46:09Z",
+      "last_idempotency_key": "IK-roleflow-b01-po",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml"
+      ]
     },
     {
       "id": "BATCH-02-ANALYSIS",
@@ -700,20 +709,29 @@
       "code": "SENTINEL_CHECK",
       "title": "Stabiliser contrats API MVP [SENTINEL_CHECK]",
       "role": "clawsentinel",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-QA_EXEC"
       ],
-      "assignee": "",
+      "assignee": "clawsentinel",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/clawsentinel-batch-01-sentinel.md"
+      ],
+      "notes": [
+        "sentinel_check_pilot_pass",
+        "cmd=python3 scripts/parallel_workstream.py enforce-sla;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-sentinel;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T17:45:52Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:46:30Z",
+      "started_at": "2026-02-26T17:46:14Z",
+      "completed_at": "2026-02-26T17:46:30Z",
+      "last_idempotency_key": "IK-roleflow-b01-sentinel",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml"
+      ]
     },
     {
       "id": "BATCH-01-SCRUM_REVIEW",
@@ -721,20 +739,29 @@
       "code": "SCRUM_REVIEW",
       "title": "Stabiliser contrats API MVP [SCRUM_REVIEW]",
       "role": "scrum_master",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-PLAN"
       ],
-      "assignee": "",
+      "assignee": "scrum_master",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/scrum-batch-01-review.md"
+      ],
+      "notes": [
+        "scrum_review_pilot_closed",
+        "cmd=python3 scripts/parallel_workstream.py status --compact;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-scrum;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T17:43:49Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:46:46Z",
+      "started_at": "2026-02-26T17:46:35Z",
+      "completed_at": "2026-02-26T17:46:46Z",
+      "last_idempotency_key": "IK-roleflow-b01-scrum",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml"
+      ]
     },
     {
       "id": "BATCH-02-PLAN",
@@ -1171,6 +1198,69 @@
         "handoff_id": "none",
         "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml",
         "idempotency_key": "IK-roleflow-b01-qaexec"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:59Z",
+      "kind": "claim",
+      "details": {
+        "role": "po",
+        "task_id": "BATCH-01-PO_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:09Z",
+      "kind": "complete",
+      "details": {
+        "role": "po",
+        "task_id": "BATCH-01-PO_REVIEW",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/po-batch-01-po-review.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml",
+        "idempotency_key": "IK-roleflow-b01-po"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:14Z",
+      "kind": "claim",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-01-SENTINEL_CHECK"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:30Z",
+      "kind": "complete",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-01-SENTINEL_CHECK",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/clawsentinel-batch-01-sentinel.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml",
+        "idempotency_key": "IK-roleflow-b01-sentinel"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:35Z",
+      "kind": "claim",
+      "details": {
+        "role": "scrum_master",
+        "task_id": "BATCH-01-SCRUM_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:46Z",
+      "kind": "complete",
+      "details": {
+        "role": "scrum_master",
+        "task_id": "BATCH-01-SCRUM_REVIEW",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/scrum-batch-01-review.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml",
+        "idempotency_key": "IK-roleflow-b01-scrum"
       }
     }
   ]
