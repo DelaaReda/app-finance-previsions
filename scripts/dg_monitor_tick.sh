@@ -21,18 +21,22 @@ error_jobs="$(printf '%s' "$cron_json" | jq -r '[.jobs[]? | select(.state.lastSt
 unhealthy="$(printf '%s' "$cron_json" \
   | jq -r '[.jobs[]? | select((.state.lastStatus!=null) and (.state.lastStatus!="ok") and (.state.lastStatus!="running")) | "\(.name):\(.state.lastStatus)" ] | if length==0 then "none" else join(",") end' 2>/dev/null || echo 'unknown')"
 
-# Orchestrator health (core roles)
-orch_health="$(python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g' || true)"
-if [[ -z "$orch_health" ]]; then
-  orch_health="VERDICT: UNKNOWN"
+# Cron manager summary (includes stale detection)
+cron_mgr_summary="$(bash scripts/cron_run_manager.sh status --stale-threshold 330 2>/dev/null | tail -n 1 || true)"
+[[ -n "$cron_mgr_summary" ]] || cron_mgr_summary="CRON_STATUS_SUMMARY unknown"
+
+# App status (backend/frontend) — strip ANSI color codes
+raw_app_status="$(./finance-copilot.sh status 2>/dev/null || true)"
+raw_app_status="$(printf '%s\n' "$raw_app_status" | sed -r 's/\x1B\[[0-9;]*[mK]//g')"
+backend_line="$(printf '%s\n' "$raw_app_status" | rg -m1 'Backend' | tr -s ' ' | sed 's/^ *//')"
+frontend_line="$(printf '%s\n' "$raw_app_status" | rg -m1 'Frontend' | tr -s ' ' | sed 's/^ *//')"
+if [[ -n "$backend_line" || -n "$frontend_line" ]]; then
+  app_compact="${backend_line:-Backend:?} | ${frontend_line:-Frontend:?}"
+else
+  app_compact="app_status=unknown"
 fi
 
-# App status (backend/frontend)
-app_status="$(./finance-copilot.sh status 2>/dev/null | rg -o 'Backend\s*:.*|Frontend\s*:.*' -n || true)"
-app_compact="$(printf '%s\n' "$app_status" | tr '\n' ' ' | sed 's/  */ /g')"
-[[ -n "$app_compact" ]] || app_compact="app_status=unknown"
-
-line="DG_TICK ts_local=\"$now_local\" ts_utc=$now_iso cron_total=$total_jobs ok=$ok_jobs running=$running_jobs error=$error_jobs unhealthy=$unhealthy orch=\"$orch_health\" app=\"$app_compact\""
+line="DG_TICK ts_local=\"$now_local\" ts_utc=$now_iso cron_total=$total_jobs ok=$ok_jobs running=$running_jobs error=$error_jobs unhealthy=$unhealthy cron_mgr=\"$cron_mgr_summary\" app=\"$app_compact\""
 
 printf '%s\n' "$line"
 
