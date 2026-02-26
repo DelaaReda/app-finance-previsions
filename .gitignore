@@ -50,6 +50,7 @@ docs/orchestrator-ops/*.lock
 .cache/
 .claude/
 .codacy/
+.trash/
 .locks/
 # Secrets / credentials (never commit)
 .env

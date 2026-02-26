@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-02-BATCH-02-DEV-20260226T195619Z-628"
+stream_id: "BATCH-02"
+task_id: "BATCH-02-DEV"
+role: "dev"
+produced_at_utc: "2026-02-26T19:56:19Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+execution:
+  commands:
+    - cmd: "bash -n scripts/cron_tmux_role_runner.sh && python3 -m py_compile scripts/parallel_workstream.py"
+      rc: "0"
+      started_at_utc: "2026-02-26T19:56:19Z"
+      ended_at_utc: "2026-02-26T19:56:19Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "parallel_workstream_validate:PASS;dev_qa_tooling_check:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "scripts/cron_tmux_role_runner.sh"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "adminapp-codex"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-c23e60ebda58"
+  review_ref: "admin-hardening-20260226-dev-lane"
+  note: "dev_lane_hardening_applied_for_delivery_gating_and_prompt_contract"

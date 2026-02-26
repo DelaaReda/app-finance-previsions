@@ -255,10 +255,18 @@ def _sanitize_debug_llm_res(res: Any) -> Dict[str, Any]:
     }
 
 
-def _sanitize_verdict_for_public(verdict: Dict[str, Any], *, keep_raw: bool) -> Dict[str, Any]:
+def _sanitize_verdict_for_public(
+    verdict: Dict[str, Any],
+    *,
+    keep_raw: bool,
+    keep_debug_fields: bool,
+) -> Dict[str, Any]:
     public_row = deepcopy(verdict)
     if not keep_raw:
         public_row.pop("raw_answer", None)
+    if not keep_debug_fields:
+        public_row.pop("debug_payload", None)
+        public_row.pop("debug_llm_res", None)
     return public_row
 
 
@@ -592,6 +600,7 @@ def _macro_profile(macro: Dict[str, Any]) -> Dict[str, Any]:
 @router.get(
     "",
     response_model=JudgeResponse if JudgeResponse is not None else None,
+    response_model_exclude_none=True,
 )
 async def get_judge_verdicts(
     limit: int = Query(20, ge=1, le=100, description="Limite de résultats (1-100)"),
@@ -615,6 +624,13 @@ async def get_judge_verdicts(
 ):
     """Get LLM judge verdicts for tickers (never-empty, cached). Supports multiple profiles."""
     logger.info(f"🔍 /api/judge called: limit={limit}, profile={profile}, ticker={ticker}")
+    logger.info(
+        "judge_debug_flags debug=%r (%s) debug_full=%r (%s)",
+        debug,
+        type(debug).__name__,
+        debug_full,
+        type(debug_full).__name__,
+    )
     try:
         debug_full_enabled = bool(debug and debug_full and JUDGE_ALLOW_DEBUG_FULL)
         if debug and debug_full and not JUDGE_ALLOW_DEBUG_FULL:
@@ -2939,7 +2955,11 @@ async def get_judge_verdicts(
             now_iso = datetime.utcnow().isoformat() + "Z"
             include_raw_llm = bool(debug and debug_full_enabled)
             public_limited_verdicts = [
-                _sanitize_verdict_for_public(v, keep_raw=include_raw_llm)
+                _sanitize_verdict_for_public(
+                    v,
+                    keep_raw=include_raw_llm,
+                    keep_debug_fields=bool(debug),
+                )
                 for v in limited_verdicts
             ]
 
@@ -2976,10 +2996,14 @@ async def get_judge_verdicts(
                         logger.info("verdict_typed_failed", extra={"error": str(e)})
                         continue
 
-            if typed_verdicts and not include_raw_llm:
+            if typed_verdicts:
                 for tv in typed_verdicts:
                     if isinstance(tv, dict):
-                        tv.pop("raw_answer", None)
+                        if not include_raw_llm:
+                            tv.pop("raw_answer", None)
+                        if not debug:
+                            tv.pop("debug_payload", None)
+                            tv.pop("debug_llm_res", None)
 
             # On ne garde qu'une seule clé pour la liste finale : verdicts typés si dispo.
             if typed_verdicts:

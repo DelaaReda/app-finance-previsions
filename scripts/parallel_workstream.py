@@ -87,12 +87,34 @@ STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
     TemplateStep("INFRA", "infra_engineer", ("ARCH",)),
     TemplateStep("BACKEND", "backend_engineer", ("ARCH",)),
     TemplateStep("FRONTEND", "frontend_engineer", ("ARCH",)),
-    TemplateStep("INTEGRATION", "integrator", ("BACKEND", "FRONTEND", "INFRA", "DATA")),
+    TemplateStep("DEV", "dev", ("ARCH",)),
+    TemplateStep("INTEGRATION", "integrator", ("BACKEND", "FRONTEND", "INFRA", "DATA", "DEV")),
     TemplateStep("QA_EXEC", "qa", ("INTEGRATION", "QA_PREP", "TEST_PLAN")),
     TemplateStep("SENTINEL_CHECK", "clawsentinel", ("QA_EXEC",)),
     TemplateStep("SCRUM_REVIEW", "scrum_master", ("PLAN",)),
     TemplateStep("PO_REVIEW", "po", ("QA_EXEC", "SENTINEL_CHECK")),
 )
+
+DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
+    "BACKEND": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md.",
+    ],
+    "FRONTEND": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components.",
+    ],
+    "INTEGRATION": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh.",
+    ],
+    "DEV": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests.",
+    ],
+    "TEST_PLAN": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses.",
+    ],
+    "QA_EXEC": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found.",
+    ],
+}
 
 
 def now_iso() -> str:
@@ -231,7 +253,12 @@ def load_board(path: Path) -> dict:
     data.setdefault("version", 1)
     data.setdefault("updated_at", now_iso())
     data.setdefault("sprint", {"id": "S-UNSET", "goal": ""})
-    data.setdefault("roles", ROLE_CATALOG)
+    roles = data.get("roles", {})
+    if not isinstance(roles, dict):
+        roles = {}
+    for role_name, role_cfg in ROLE_CATALOG.items():
+        roles.setdefault(role_name, role_cfg)
+    data["roles"] = roles
     data.setdefault("streams", [])
     data.setdefault("tasks", [])
     data.setdefault("handoffs", [])
@@ -303,9 +330,37 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
 
     for step in STREAM_TEMPLATE:
         tid = task_id(stream_id, step.code)
-        if tid in tasks:
-            continue
         deps = [task_id(stream_id, dep) for dep in step.deps]
+        default_notes = DEFAULT_STEP_NOTES.get(step.code, [])
+        if tid in tasks:
+            existing = tasks[tid]
+            expected_title = f"{title} [{step.code}]"
+            updated = False
+            if str(existing.get("title", "")) != expected_title:
+                existing["title"] = expected_title
+                updated = True
+            if str(existing.get("role", "")) != step.role:
+                existing["role"] = step.role
+                updated = True
+            if str(existing.get("priority", "")) != priority:
+                existing["priority"] = priority
+                updated = True
+            current_deps = [dep for dep in existing.get("depends_on", []) if dep]
+            if str(existing.get("state", "")) != STATE_DONE and current_deps != deps:
+                existing["depends_on"] = deps
+                updated = True
+            if default_notes:
+                notes = existing.get("notes")
+                if not isinstance(notes, list):
+                    notes = []
+                for note in default_notes:
+                    if note not in notes:
+                        notes.append(note)
+                        updated = True
+                existing["notes"] = notes
+            if updated:
+                existing["updated_at"] = now_iso()
+            continue
         init_state = STATE_READY if not deps else STATE_WAITING_DEP
         board.setdefault("tasks", []).append(
             {
@@ -320,7 +375,7 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
                 "assignee": "",
                 "blocked_reason": "",
                 "artifacts": [],
-                "notes": [],
+                "notes": list(default_notes) if default_notes else [],
                 "handoff_to": "",
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
@@ -328,6 +383,7 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
                 "completed_at": "",
             }
         )
+        tasks[tid] = board["tasks"][-1]
         created += 1
     return created
 

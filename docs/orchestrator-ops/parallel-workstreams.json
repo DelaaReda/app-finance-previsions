@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T18:29:21Z",
+  "updated_at": "2026-02-26T20:16:47Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -71,6 +71,11 @@
       "wip_limit": 2,
       "can_edit": false,
       "focus": "anti-drift and safety"
+    },
+    "dev": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-cutting implementation and debt"
     }
   },
   "streams": [
@@ -87,10 +92,10 @@
       "id": "BATCH-02",
       "title": "Contrats multi-ticker + news",
       "priority": "P1",
-      "source_state": "PASS",
+      "source_state": "READY",
       "state": "IN_PROGRESS",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T18:29:21Z"
+      "updated_at": "2026-02-26T20:16:47Z"
     }
   ],
   "tasks": [
@@ -510,16 +515,20 @@
       "code": "TEST_PLAN",
       "title": "Contrats multi-ticker + news [TEST_PLAN]",
       "role": "tester",
-      "state": "READY",
+      "state": "WAITING_DEP",
       "priority": "P1",
-      "depends_on": [],
+      "depends_on": [
+        "BATCH-02-PLAN"
+      ],
       "assignee": "tester",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses."
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T18:29:21Z",
+      "updated_at": "2026-02-26T20:16:47Z",
       "started_at": "2026-02-26T06:33:32Z",
       "completed_at": ""
     },
@@ -588,10 +597,12 @@
       "assignee": "",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md."
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T18:13:35Z",
+      "updated_at": "2026-02-26T20:16:47Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -609,10 +620,12 @@
       "assignee": "",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components."
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T18:13:35Z",
+      "updated_at": "2026-02-26T20:16:47Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -628,15 +641,18 @@
         "BATCH-02-BACKEND",
         "BATCH-02-FRONTEND",
         "BATCH-02-INFRA",
-        "BATCH-02-DATA"
+        "BATCH-02-DATA",
+        "BATCH-02-DEV"
       ],
       "assignee": "",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh."
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T20:16:47Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -656,10 +672,12 @@
       "assignee": "",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found."
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T20:16:47Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -672,7 +690,8 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "depends_on": [
-        "BATCH-02-QA_EXEC"
+        "BATCH-02-QA_EXEC",
+        "BATCH-02-SENTINEL_CHECK"
       ],
       "assignee": "",
       "blocked_reason": "",
@@ -680,7 +699,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T19:29:57Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -832,6 +851,37 @@
       "updated_at": "2026-02-26T06:06:13Z",
       "started_at": "",
       "completed_at": ""
+    },
+    {
+      "id": "BATCH-02-DEV",
+      "stream_id": "BATCH-02",
+      "code": "DEV",
+      "title": "Contrats multi-ticker + news [DEV]",
+      "role": "dev",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ARCH"
+      ],
+      "assignee": "dev",
+      "blocked_reason": "",
+      "artifacts": [
+        "scripts/cron_tmux_role_runner.sh"
+      ],
+      "notes": [
+        "dev_lane_hardening_applied_for_delivery_gating_and_prompt_contract",
+        "cmd=bash -n scripts/cron_tmux_role_runner.sh && python3 -m py_compile scripts/parallel_workstream.py;tests_run=parallel_workstream_validate:PASS;dev_qa_tooling_check:PASS;review_ref=admin-hardening-20260226-dev-lane;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T19:29:57Z",
+      "updated_at": "2026-02-26T20:16:47Z",
+      "started_at": "2026-02-26T19:48:44Z",
+      "completed_at": "2026-02-26T19:56:19Z",
+      "last_idempotency_key": "IK-c23e60ebda58",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml"
+      ]
     }
   ],
   "handoffs": [
@@ -1307,6 +1357,44 @@
       "details": {
         "task_id": "BATCH-02-TEST_PLAN",
         "reason": ""
+      }
+    },
+    {
+      "at": "2026-02-26T18:54:47Z",
+      "kind": "unblock",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": ""
+      }
+    },
+    {
+      "at": "2026-02-26T19:29:57Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 1
+      }
+    },
+    {
+      "at": "2026-02-26T19:48:44Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-02-DEV"
+      }
+    },
+    {
+      "at": "2026-02-26T19:56:19Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-02-DEV",
+        "artifact": "scripts/cron_tmux_role_runner.sh",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
+        "idempotency_key": "IK-c23e60ebda58"
       }
     }
   ]

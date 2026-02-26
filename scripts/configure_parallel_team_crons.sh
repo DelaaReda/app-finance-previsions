@@ -190,6 +190,30 @@ trace_for_role() {
   esac
 }
 
+timeout_seconds_for_role() {
+  local role="$1"
+  case "$role" in
+    architect)
+      printf '%s\n' "${PARALLEL_CRON_TIMEOUT_ARCHITECT_SECONDS:-240}"
+      ;;
+    *)
+      printf '%s\n' "$TIMEOUT_SECONDS"
+      ;;
+  esac
+}
+
+thinking_level_for_role() {
+  local role="$1"
+  case "$role" in
+    architect)
+      printf '%s\n' "${PARALLEL_CRON_THINKING_ARCHITECT:-low}"
+      ;;
+    *)
+      printf '%s\n' "$THINKING_LEVEL"
+      ;;
+  esac
+}
+
 message_for_role() {
   local role="$1"
   local allow_edits="$2"
@@ -218,6 +242,8 @@ upsert_job() {
   local every="$2"
   local allow_edits="$3"
   local desc="$4"
+  local role_timeout=""
+  local role_thinking=""
   local name=""
   local agent_id=""
   local id=""
@@ -225,6 +251,14 @@ upsert_job() {
 
   name="$(job_name_for_role "$role")"
   agent_id="$(agent_for_role "$role")"
+  role_timeout="$(timeout_seconds_for_role "$role")"
+  role_thinking="$(thinking_level_for_role "$role")"
+  if [[ -z "$role_thinking" ]]; then
+    role_thinking="$THINKING_LEVEL"
+  fi
+  if ! [[ "$role_timeout" =~ ^[0-9]+$ ]] || [[ "$role_timeout" -lt 60 ]]; then
+    role_timeout="$TIMEOUT_SECONDS"
+  fi
   msg="$(message_for_role "$role" "$allow_edits")"
   id="$(find_job_id_by_name "$name" || true)"
 
@@ -239,11 +273,11 @@ upsert_job() {
       --description "$desc" \
       --agent "$agent_id" \
       --every "$every" \
-      --thinking "$THINKING_LEVEL" \
+      --thinking "$role_thinking" \
       --session isolated \
       --no-deliver \
       --wake now \
-      --timeout-seconds "$TIMEOUT_SECONDS" \
+      --timeout-seconds "$role_timeout" \
       --message "$msg" >/dev/null
   else
     openclaw cron add \
@@ -251,11 +285,11 @@ upsert_job() {
       --description "$desc" \
       --agent "$agent_id" \
       --every "$every" \
-      --thinking "$THINKING_LEVEL" \
+      --thinking "$role_thinking" \
       --session isolated \
       --no-deliver \
       --wake now \
-      --timeout-seconds "$TIMEOUT_SECONDS" \
+      --timeout-seconds "$role_timeout" \
       --message "$msg" >/dev/null
     id="$(find_job_id_by_name "$name" || true)"
   fi
@@ -264,7 +298,7 @@ upsert_job() {
     openclaw cron enable "$id" >/dev/null 2>&1 || true
   fi
 
-  echo "APPLIED role=${role} name=${name} agent=${agent_id} id=${id:-unknown} every=${every} allow_file_edits=${allow_edits}"
+  echo "APPLIED role=${role} name=${name} agent=${agent_id} id=${id:-unknown} every=${every} allow_file_edits=${allow_edits} timeout=${role_timeout} thinking=${role_thinking}"
 }
 
 upsert_stale_sweep_job() {
@@ -366,6 +400,14 @@ map_tmp="$(mktemp)"
     id="$(printf '%s' "$cron_json" | jq -r --arg n "$name" '.jobs[]? | select(.name==$n) | .id' | head -n 1)"
     session_name="$(session_for_role "$role" || true)"
     trace_file="$(trace_for_role "$role" || true)"
+    role_timeout="$(timeout_seconds_for_role "$role")"
+    role_thinking="$(thinking_level_for_role "$role")"
+    if [[ -z "$role_thinking" ]]; then
+      role_thinking="$THINKING_LEVEL"
+    fi
+    if [[ ! "$role_timeout" =~ ^[0-9]+$ ]] || [[ "$role_timeout" -lt 60 ]]; then
+      role_timeout="$TIMEOUT_SECONDS"
+    fi
     lane="$(jq -r --arg r "$role" '.roles[]? | select(.role==$r) | .lane // ""' "$TOPOLOGY_FILE" 2>/dev/null | head -n 1 || true)"
     agent_id="$(agent_for_role "$role")"
     wip_limit="$(jq -r --arg r "$role" '.roles[]? | select(.role==$r) | .wip_limit // 0' "$TOPOLOGY_FILE" 2>/dev/null | head -n 1 || true)"
@@ -391,10 +433,12 @@ map_tmp="$(mktemp)"
       --arg session_name "$session_name" \
       --arg trace_file "$trace_file" \
       --arg lane "$lane" \
+      --arg role_thinking "$role_thinking" \
+      --argjson role_timeout "$role_timeout" \
       --argjson wip_limit "$wip_limit" \
       --argjson provisioned "$provisioned" \
       --argjson allow_file_edits "$allow_edits" \
-      '{role:$role,id:$id,name:$name,agent_id:$agent_id,every:$every,lane:$lane,wip_limit:$wip_limit,allow_file_edits:$allow_file_edits,provisioned:$provisioned,session_name:$session_name,trace_file:$trace_file}'
+      '{role:$role,id:$id,name:$name,agent_id:$agent_id,every:$every,thinking:$role_thinking,timeout_seconds:$role_timeout,lane:$lane,wip_limit:$wip_limit,allow_file_edits:$allow_file_edits,provisioned:$provisioned,session_name:$session_name,trace_file:$trace_file}'
   done
 
   echo '  ],'

@@ -16,7 +16,7 @@
 
 ## Sprint Board (snapshot)
 - BACKLOG: B1, B2
-- READY: none
+- READY: BATCH-02 (reopened)
 - IN_SPRINT: none
 - IN_REVIEW: none
 - BLOCKED: none
@@ -26,7 +26,10 @@
 - Source of truth artifact: `finance-app/openclaw-gates/batch-01-20260225-000127.md`.
 - QA signoff already present: `QA_SIGNOFF: YES`.
 - Batch-02 signoff artifact: `finance-app/openclaw-gates/batch-02-20260225-202042.md` (`QA_SIGNOFF: YES`).
-- Queue state aligned: `BATCH-01=PASS`, `BATCH-02=PASS`, `blocker_id=NONE`.
+- Queue state current (source of truth: `docs/orchestrator-ops/priority-queue.json`):
+  - `BATCH-01=PASS`
+  - `BATCH-02=READY` (reopened) avec `next_action=DISPATCH_BATCH02_REOPENED_AND_RESUME_ROLE_LANES`
+- Note: un gate `PASS` (Batch-02) peut exister tout en ayant une ré-ouverture `READY` côté queue pour reprise de lanes / correctifs.
 - Any runtime message `QA_PASS_SIGNATURE_UNVERIFIED` should be treated as stale context and revalidated against this artifact first.
 
 ## Daily Standup Format

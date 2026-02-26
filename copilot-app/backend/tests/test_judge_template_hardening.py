@@ -112,3 +112,75 @@ def test_judge_debug_sanitizer_hides_raw_llm_fields():
     assert len(sanitized["answer_excerpt"]) <= (
         judge_route.JUDGE_DEBUG_ANSWER_SNIPPET_CHARS + 1
     )
+
+
+def test_judge_public_sanitizer_hides_raw_and_debug_fields_when_not_requested():
+    row = {
+        "ticker": "AAPL",
+        "raw_answer": "secret",
+        "debug_payload": {"foo": 1},
+        "debug_llm_res": {"raw": "sensitive"},
+    }
+    sanitized = judge_route._sanitize_verdict_for_public(
+        row,
+        keep_raw=False,
+        keep_debug_fields=False,
+    )
+    assert "raw_answer" not in sanitized
+    assert "debug_payload" not in sanitized
+    assert "debug_llm_res" not in sanitized
+
+
+def test_judge_response_model_excludes_none_debug_fields(monkeypatch):
+    judge_route._JUDGE_RESPONSE_CACHE.clear()
+
+    async def _fake_singleflight(_cache_key, _compute_fn):
+        return (
+            {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "horizon": "1w",
+                        "expected_return": 0.01,
+                        "risk_level": "medium",
+                        "confidence": 0.61,
+                        "summary": ["Synthetic verdict for contract test"],
+                        "meta": {
+                            "generated_at": "2026-02-26T00:00:00Z",
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 0,
+                    "avg_confidence": 0.61,
+                    "generated_at": "2026-02-26T00:00:00Z",
+                },
+                "filters_applied": {
+                    "min_confidence": 0.3,
+                    "tickers": ["AAPL"],
+                    "sort_by": "confidence",
+                    "sort_order": "desc",
+                    "limit": 1,
+                },
+                "generated_at": "2026-02-26T00:00:00Z",
+                "source": ["judge_route", "tests"],
+            },
+            True,
+        )
+
+    monkeypatch.setattr(judge_route, "_compute_singleflight", _fake_singleflight)
+    client = _client()
+    resp = client.get("/api/judge?limit=1&ticker=AAPL&debug=false")
+    assert resp.status_code == 200
+    payload = resp.json()
+    data = payload["data"]
+    verdict = data["verdicts"][0]
+
+    assert "debug_pipeline" not in data
+    assert "verdicts_raw" not in data
+    assert "raw_answer" not in verdict
+    assert "debug_payload" not in verdict
+    assert "debug_llm_res" not in verdict

@@ -290,7 +290,7 @@ contracts:
         kv_separator: "="
         case_insensitive: true
         MUST_contain:
-          - "task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready>"
+          - "task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>"
           - "lock_check=ok"
           - "queue_version=<checksum_or_version>"
           - "workboard_version=<checksum_or_version>"

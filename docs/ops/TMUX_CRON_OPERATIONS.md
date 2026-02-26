@@ -73,6 +73,26 @@ Run this checklist in order:
    - missing structured fields (`STATUS`, `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`)
 4. If IDs changed unexpectedly, treat previous monitoring links as stale and refresh from `openclaw cron list`.
 
+## Quick controls (new)
+For day-to-day runtime operations, use `scripts/cron_run_manager.sh`:
+
+1. Runtime snapshot:
+   - `bash scripts/cron_run_manager.sh status --stale-threshold 330`
+2. Pause / Resume one job:
+   - `bash scripts/cron_run_manager.sh pause --job planner`
+   - `bash scripts/cron_run_manager.sh resume --job planner`
+3. Stop one active run cleanly (disable + session/process stop + re-enable):
+   - `bash scripts/cron_run_manager.sh stop-run --job planner --reason manual_intervention`
+4. Trigger one job immediately (non-blocking by default):
+   - `bash scripts/cron_run_manager.sh run-now --job planner`
+   - `bash scripts/cron_run_manager.sh run-now --job planner --expect-final --timeout 300000`
+5. Restart one job run (stop + run-now):
+   - `bash scripts/cron_run_manager.sh restart --job planner --reason manual_restart`
+6. Read latest run summaries:
+   - `bash scripts/cron_run_manager.sh last-summary --job planner --limit 3`
+7. Sweep stale scheduler states:
+   - `bash scripts/cron_run_manager.sh recover-stale --dry-run --threshold 330`
+
 ## Debug log sanitation
 Current default behavior:
 - tmux pane logs are cleaned at stream time via `scripts/tmux_log_clean_stream.py`

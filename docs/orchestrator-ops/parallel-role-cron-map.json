@@ -1,11 +1,11 @@
 {
-  "generatedAtUtc": "2026-02-26T11:01:08Z",
+  "generatedAtUtc": "2026-02-26T18:43:39Z",
   "thinking": "high",
   "timeoutSeconds": 480,
   "roles": [
     {
       "role": "planner",
-      "id": "81310c68-e9e7-4a85-bd3c-a7234e685f2d",
+      "id": "f4044d88-8305-4a0d-8baf-14438a4acce3",
       "name": "planner-tmux-loop",
       "agent_id": "planner",
       "every": "12m",
@@ -18,7 +18,7 @@
     },
     {
       "role": "analyst",
-      "id": "d744f394-7a03-4a43-a7b4-f88b73b2bb05",
+      "id": "a1926f84-8e2d-4a7f-8ca0-a04a249e1574",
       "name": "analyst-tmux-loop",
       "agent_id": "analyst",
       "every": "14m",
@@ -31,7 +31,7 @@
     },
     {
       "role": "architect",
-      "id": "5d943c14-f03f-48c5-af2e-2554850632a5",
+      "id": "a80a9f91-75db-4fc9-9258-f61e241e2a38",
       "name": "architect-tmux-loop",
       "agent_id": "architect",
       "every": "18m",
@@ -44,7 +44,7 @@
     },
     {
       "role": "backend_engineer",
-      "id": "c05d5f7e-4daf-48e7-a6a4-bab31839dd07",
+      "id": "649c158f-ed3c-4443-b064-25d5dd2ca54d",
       "name": "backend-engineer-tmux-loop",
       "agent_id": "backend_engineer",
       "every": "12m",
@@ -57,7 +57,7 @@
     },
     {
       "role": "frontend_engineer",
-      "id": "9dc56a33-786a-4158-a61f-431016c98452",
+      "id": "c2fe6923-ca77-4baf-a94c-263b50df6d02",
       "name": "frontend-engineer-tmux-loop",
       "agent_id": "frontend_engineer",
       "every": "12m",
@@ -70,7 +70,7 @@
     },
     {
       "role": "data_analyst",
-      "id": "55d59382-996d-4291-bd07-58047f65fe54",
+      "id": "1f9be612-73fb-4f61-a060-3fdfbda92b8a",
       "name": "data-analyst-tmux-loop",
       "agent_id": "data_analyst",
       "every": "17m",
@@ -83,7 +83,7 @@
     },
     {
       "role": "infra_engineer",
-      "id": "4ae54781-37a5-4d76-8110-7c6edcc4f2b4",
+      "id": "0300740a-835f-409b-9c30-f55ba0bc3f97",
       "name": "infra-engineer-tmux-loop",
       "agent_id": "infra_engineer",
       "every": "20m",
@@ -96,7 +96,7 @@
     },
     {
       "role": "integrator",
-      "id": "e393741f-78b0-461b-89b3-af9d58742e9f",
+      "id": "42e690e3-d308-4507-932c-204003bdbbec",
       "name": "integrator-tmux-loop",
       "agent_id": "integrator",
       "every": "15m",
@@ -109,7 +109,7 @@
     },
     {
       "role": "dev",
-      "id": "0a39d655-01e4-43aa-822f-75d6f64adcf3",
+      "id": "1d083a70-3b95-4568-b8ef-c846bc69f105",
       "name": "dev-tmux-loop",
       "agent_id": "dev",
       "every": "16m",
@@ -122,7 +122,7 @@
     },
     {
       "role": "tester",
-      "id": "94042f90-aec7-4828-b24f-fa5adc1bd2da",
+      "id": "2ea3df94-ae7f-469e-8989-3cabfc3c4af5",
       "name": "tester-tmux-loop",
       "agent_id": "tester",
       "every": "15m",
@@ -135,7 +135,7 @@
     },
     {
       "role": "qa",
-      "id": "98004fba-0873-400c-8158-a1a2db626843",
+      "id": "355d2ba2-bab3-4412-9e60-34406d1208a7",
       "name": "qa-tmux-loop",
       "agent_id": "qa",
       "every": "20m",
@@ -148,7 +148,7 @@
     },
     {
       "role": "po",
-      "id": "bf3edf97-86dd-42b5-8691-7bdb9048cefb",
+      "id": "5a34a9aa-e33d-4309-9c57-cb06f26ba5a4",
       "name": "po-tmux-loop",
       "agent_id": "po",
       "every": "30m",
@@ -161,7 +161,7 @@
     },
     {
       "role": "scrum_master",
-      "id": "1f0d2ceb-c20c-4441-a5a4-def8a0c6adb9",
+      "id": "1391e0e6-a440-464e-b225-ea27412ef5c3",
       "name": "scrum-master-tmux-loop",
       "agent_id": "scrum_master",
       "every": "15m",
@@ -174,7 +174,7 @@
     },
     {
       "role": "clawsentinel",
-      "id": "cd75ac2f-2a58-4778-b244-d386b4cc1e33",
+      "id": "82e40138-0d2a-435b-b351-00e97965976e",
       "name": "clawsentinel-tmux-loop",
       "agent_id": "clawsentinel",
       "every": "25m",
@@ -189,7 +189,7 @@
   "utility_jobs": [
     {
       "name": "stale-sweep-autoheal-7m",
-      "id": "5541bb49-16c3-4886-9e20-99255aa8fcfa",
+      "id": "78f78192-da0c-4121-82b4-3397493d6eb6",
       "agent_id": "adminapp-codex",
       "every": "7m",
       "thinking": "low",

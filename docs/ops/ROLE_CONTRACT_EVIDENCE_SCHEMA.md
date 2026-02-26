@@ -13,7 +13,7 @@ Exemple:
 
 ## Clés minimales (baseline)
 Toujours presentes:
-- `task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready>`
+- `task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>`
 - `lock_check=ok`
 - `<role>_artifact=<path_or_proof>` (au minimum 1 artefact role-specifique)
 - `queue_version=<checksum_or_version>`
