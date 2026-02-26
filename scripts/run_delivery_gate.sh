@@ -19,7 +19,7 @@ if [[ ! -f "$ARTIFACT_PATH" ]]; then
   exit 10
 fi
 
-echo "== DELIVERY GATE v1 =="
+echo "== DELIVERY GATE v1.1 =="
 echo "artifact=$ARTIFACT_PATH"
 
 # Gate 1: required sections in artifact
@@ -48,6 +48,36 @@ if ! rg -n "(CodexReviewer|codex review --uncommitted|independent_review_gate)" 
     echo "BLOCKED: missing independent Codex reviewer evidence"
     exit 13
   fi
+fi
+
+# Gate 3b: machine-readable review contract
+# Accept kv in EVIDENCE (review_ref/review_verdict) or explicit REVIEW_* sections.
+review_ref_ok=0
+review_verdict_ok=0
+if rg -n "(review_ref=|^REVIEW_REF\\s*:)" "$ARTIFACT_PATH" -i >/dev/null 2>&1; then
+  review_ref_ok=1
+fi
+if rg -n "(review_verdict=(GO|BLOCKED|PASS)|^REVIEW_VERDICT\\s*:\\s*(GO|BLOCKED|PASS))" "$ARTIFACT_PATH" -i >/dev/null 2>&1; then
+  review_verdict_ok=1
+fi
+if [[ "$review_ref_ok" -ne 1 || "$review_verdict_ok" -ne 1 ]]; then
+  LATEST_TRANSCRIPT="${LATEST_TRANSCRIPT:-$(ls -1dt finance-app/orchestrator-runs/*/transcript.md 2>/dev/null | head -n 1 || true)}"
+  if [[ -n "$LATEST_TRANSCRIPT" ]]; then
+    if [[ "$review_ref_ok" -ne 1 ]] && rg -n "(review_ref=|^REVIEW_REF\\s*:)" "$LATEST_TRANSCRIPT" -i >/dev/null 2>&1; then
+      review_ref_ok=1
+    fi
+    if [[ "$review_verdict_ok" -ne 1 ]] && rg -n "(review_verdict=(GO|BLOCKED|PASS)|^REVIEW_VERDICT\\s*:\\s*(GO|BLOCKED|PASS))" "$LATEST_TRANSCRIPT" -i >/dev/null 2>&1; then
+      review_verdict_ok=1
+    fi
+  fi
+fi
+if [[ "$review_ref_ok" -ne 1 ]]; then
+  echo "BLOCKED: missing review_ref evidence (EVIDENCE kv or REVIEW_REF section)"
+  exit 14
+fi
+if [[ "$review_verdict_ok" -ne 1 ]]; then
+  echo "BLOCKED: missing review_verdict evidence (GO|BLOCKED|PASS)"
+  exit 15
 fi
 
 # Gate 4: regression gate

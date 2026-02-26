@@ -9,6 +9,10 @@ _Learn about the person you're helping. Update this as you go._
 - **Notes:**
   - Prefers a vision-first product process.
   - Wants the assistant to run as "VISION PRODUCT CLARIFIER": analyze first, then ask clarification questions, then structure epics/priorities/sprints.
+  - Initial product target is personal use (single user), not public launch.
+  - Wants to save significant weekly research time on finance/markets.
+  - Prefers low runtime cost and relies on free/low-cost AI providers for backend inference.
+  - Uses OpenAI Pro budget mainly to accelerate development workflow.
 
 ## Context
 

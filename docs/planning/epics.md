@@ -258,3 +258,72 @@ bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp
 - 2026-02-24 20:50 America/New_York — Ajout d’une coordination inter-epics de lancement: A en LAUNCH_NOW, B en PREP_ONLY conditionné à G-A, C en autorité VERIFY_AND_SIGN avec blocage automatique des artefacts incomplets.
 - 2026-02-24 21:05 America/New_York — Renforcement inter-epics: A en `EXECUTION_GATED`, B en `HARD_HOLD`, C en `GATE_ENFORCEMENT_ACTIVE`; passage A->B conditionné à artefact complet + VERDICT PASS + validation QA explicite.
 - 2026-02-24 22:05 America/New_York — Correction cohérence de dépendances: EPIC A rendu indépendant (socle), suppression cycle implicite A<->C; commande pytest rendue auto-bootstrap.
+- 2026-02-26 America/New_York — Added vision-clarifier epic set focused on personal low-cost decision workflow (`docs/planning/PRODUCT_VISION.md`).
+- 2026-02-26 America/New_York — Extended vision epic set with Epic 7/8/9 (macro radar, cost governance, decision learning loop).
+
+## Delta vision-clarifier (2026-02-26)
+
+This section is the active product-priority lens for upcoming sprints.
+
+### Epic 1 (P0) - Data Freshness and Signal Reliability Foundation
+- Goal: keep market/context tiles fresh enough for daily decision making.
+- Done when:
+  - key data surfaces refreshed <= 10 minutes for >= 90% of cycles
+  - cache strategy prevents UI stalls and backend overload
+  - fallback paths are explicit and auditable
+
+### Epic 2 (P0) - Forecast Engine (Asset/Sector)
+- Goal: generate consistent `direction + confidence + action` per target asset/sector.
+- Done when:
+  - decision contract exists and is stable for MVP universe
+  - short (1-3d) and swing (1-2w) horizons are both available
+  - no silent schema drift between backend and frontend
+
+### Epic 3 (P0) - Multi-Model Consensus and Judge
+- Goal: aggregate multiple low-cost model opinions into one final decision signal.
+- Done when:
+  - at least 3 model/provider opinions are merged per decision cycle
+  - judge output is deterministic in shape and includes confidence/risk notes
+  - disagreement handling is explicit (conflict mode + reduced confidence)
+
+### Epic 4 (P1) - Decision Cockpit Frontend (2-3 Click Workflow)
+- Goal: allow user to open app and get "what to do today" quickly.
+- Done when:
+  - user can reach daily brief in <= 3 interactions
+  - card UI shows action, confidence, rationale, freshness
+  - degraded data state is visible (no hidden mock-like behavior)
+
+### Epic 5 (P1) - Ask Copilot Deep Analysis
+- Goal: answer tactical questions with grounded market context.
+- Done when:
+  - question flow returns concise action-oriented answer + evidence
+  - answer includes market regime context + risk caveat
+  - latency remains practical for daily use
+
+### Epic 6 (P2) - Portfolio Adaptation Layer
+- Goal: align recommendations to user portfolio focus and risk posture.
+- Done when:
+  - watchlist-centric prioritization exists
+  - user can tune aggressiveness (conservative/neutral/aggressive)
+  - portfolio action summary is generated daily
+
+### Epic 7 (P2) - Geopolitical and Macro Impact Radar
+- Goal: surface macro/geopolitical shocks fast enough to influence same-day decisions.
+- Done when:
+  - top geopolitical/macro events are ingested with severity and freshness metadata
+  - each event maps to impacted assets/sectors in the MVP universe
+  - decision brief shows explicit macro risk caveats when regime shifts occur
+
+### Epic 8 (P1) - Cost Governance and Runtime Efficiency
+- Goal: keep daily decision workflow low-cost and resilient despite provider instability.
+- Done when:
+  - free/low-cost providers are primary route by policy
+  - cost and fallback metrics are measured per critical AI endpoint
+  - delivery gate blocks releases when cost/runtime guardrails are violated
+
+### Epic 9 (P2) - Decision Journal and Learning Loop
+- Goal: improve recommendation quality over time from recorded decisions and outcomes.
+- Done when:
+  - every daily brief decision can be logged with rationale/confidence/sources
+  - short-horizon outcomes (1d/1w) are attached to decisions
+  - recommendation output includes explicit feedback-weight adjustments

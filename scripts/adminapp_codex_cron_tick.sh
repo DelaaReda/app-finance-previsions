@@ -24,8 +24,14 @@ PRIORITY_QUEUE_FILE="${ADMINAPP_PRIORITY_QUEUE_FILE:-docs/orchestrator-ops/prior
 OPENCLAW_BIN="${ADMINAPP_OPENCLAW_BIN:-}"
 RUNNING_STALE_SECONDS="${ADMINAPP_RUNNING_STALE_SECONDS:-330}"
 STALE_SWEEP_SCRIPT="${ADMINAPP_STALE_SWEEP_SCRIPT:-scripts/stale_cron_sweep.sh}"
+CIRCUIT_BREAKER_SCRIPT="${ADMINAPP_CIRCUIT_BREAKER_SCRIPT:-scripts/orchestration_circuit_breaker.sh}"
+CIRCUIT_BREAKER_ERROR_THRESHOLD="${ADMINAPP_CIRCUIT_BREAKER_ERROR_THRESHOLD:-3}"
 
 mkdir -p "$STATE_DIR"
+
+if ! [[ "$CIRCUIT_BREAKER_ERROR_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$CIRCUIT_BREAKER_ERROR_THRESHOLD" -lt 1 ]]; then
+  CIRCUIT_BREAKER_ERROR_THRESHOLD=3
+fi
 
 read_file_or_empty() {
   local path="$1"
@@ -407,6 +413,27 @@ if [[ "$AUTO_EXEC_ENABLED" == "1" && "$stale_running_jobs" -gt 0 ]]; then
   fi
 fi
 
+circuit_breaker_triggered=0
+circuit_breaker_result="none"
+circuit_breaker_details="none"
+if [[ "$AUTO_EXEC_ENABLED" == "1" && -x "$CIRCUIT_BREAKER_SCRIPT" ]]; then
+  if [[ "$error_jobs" -ge "$CIRCUIT_BREAKER_ERROR_THRESHOLD" ]]; then
+    set +e
+    cb_out="$(bash "$CIRCUIT_BREAKER_SCRIPT" --error-threshold "$CIRCUIT_BREAKER_ERROR_THRESHOLD" --target-mode paused --apply 2>&1)"
+    cb_rc=$?
+    set -e
+    circuit_breaker_triggered=1
+    circuit_breaker_details="$(printf '%s' "$cb_out" | tail -n 1 | tr '\n' ' ' | tr -s ' ' | cut -c1-240)"
+    if [[ "$cb_rc" -eq 1 ]]; then
+      circuit_breaker_result="done"
+    elif [[ "$cb_rc" -eq 2 ]]; then
+      circuit_breaker_result="failed"
+    else
+      circuit_breaker_result="noop"
+    fi
+  fi
+fi
+
 queue_ready_items=0
 if [[ -f "$PRIORITY_QUEUE_FILE" ]]; then
   queue_ready_items="$(jq '[.items[]? | select((.state // "") == "READY")] | length' "$PRIORITY_QUEUE_FILE" 2>/dev/null || echo 0)"
@@ -427,8 +454,15 @@ admin_agents_issue="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*d
 admin_agents_action_id="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_id=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_action_owner="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_owner=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_action_scope="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_scope=\([^ ]*\).*/\1/p' | head -n 1)"
+admin_action_id_missing=0
 if printf '%s\n' "$admin_agents_last_summary" | rg -q 'status=(BLOCKED|ERROR|WARN)'; then
   admin_agents_blocked=1
+fi
+if [[ -z "$admin_agents_action_id" ]]; then
+  admin_agents_action_id="none"
+fi
+if [[ "$admin_agents_blocked" -eq 1 && "$admin_agents_action_id" == "none" ]]; then
+  admin_action_id_missing=1
 fi
 if [[ -z "$admin_agents_action_owner" ]]; then
   admin_agents_action_owner="none"
@@ -504,6 +538,14 @@ if [[ "$error_jobs" -ge 3 ]]; then
   risks="dégradation multi-jobs, risque de non-livraison MVP"
   next="ouvrir intervention admin immédiate (lock+backup+fix+validation)"
 fi
+if [[ "$circuit_breaker_triggered" -eq 1 ]]; then
+  verdict="BLOCKED"
+  status="BLOCKED"
+  delta="circuit_breaker_triggered"
+  blocker_id="ORCHESTRATION_CIRCUIT_BREAKER"
+  risks="circuit breaker active suite erreur cron multi-jobs"
+  next="stabiliser erreurs puis reactiver graduellement (admins-only -> sequential -> parallel)"
+fi
 if [[ "$stale_running_jobs" -ge 3 ]]; then
   verdict="BLOCKED"
   status="BLOCKED"
@@ -519,6 +561,14 @@ if [[ "$admin_agents_blocked" -eq 1 ]]; then
   blocker_id="ADMIN_AGENTS_ATTENTION_REQUIRED"
   risks="admin-agents a remonte un signal de qualite/efficacite"
   next="lire le dernier summary admin-agents, appliquer la next_action puis revalider"
+  if [[ "$admin_action_id_missing" -eq 1 ]]; then
+    verdict="BLOCKED"
+    status="BLOCKED"
+    delta="admin_signal_contract_invalid"
+    blocker_id="ADMIN_SIGNAL_ACTION_ID_MISSING"
+    risks="signal admin-agents sans action_id, dedupe/routage non fiables"
+    next="faire corriger le contrat admin-agents (action_id/action_owner/action_scope obligatoires)"
+  fi
   if [[ "$admin_action_owner_external" -eq 1 ]]; then
     reset_action_stall_counter
     delta="admin_handoff_external_owner"
@@ -620,7 +670,7 @@ printf '%s\n' "$alert_fingerprint" > "$LAST_ALERT_FILE"
 
 echo "STATUS: ${status}"
 echo "DELTA: ${delta}"
-echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
+echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; circuit_breaker_triggered=${circuit_breaker_triggered}; circuit_breaker_result=${circuit_breaker_result}; circuit_breaker_details=${circuit_breaker_details}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_id_missing=${admin_action_id_missing}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
 echo "RISKS: ${risks}"
 echo "NEXT: ${next}"
 echo "VERDICT: ${verdict}"

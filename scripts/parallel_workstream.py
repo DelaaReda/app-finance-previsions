@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import random
 import sys
@@ -20,12 +21,18 @@ from typing import Dict, Iterable, List, Tuple
 
 DEFAULT_BOARD = Path("docs/orchestrator-ops/parallel-workstreams.json")
 DEFAULT_PRIORITY_QUEUE = Path("docs/orchestrator-ops/priority-queue.json")
+DEFAULT_PROOF_ROOT = Path("docs/orchestrator-ops/proofs")
 
 
 @contextmanager
 def board_lock(board_path: Path):
     """Global board lock to keep multi-role writes deterministic."""
-    lock_path = Path(f"{board_path}.lock")
+    board_text = str(board_path or "").strip()
+    # Defensive: avoid creating weird "..lock" when board_path is empty (Path("") -> ".").
+    if board_text in {"", ".", "./"}:
+        board_path = DEFAULT_BOARD
+        board_text = str(board_path)
+    lock_path = Path(f"{board_text}.lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_fh:
         fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
@@ -54,6 +61,7 @@ ROLE_CATALOG: Dict[str, Dict[str, object]] = {
     "data_analyst": {"wip_limit": 2, "can_edit": True, "focus": "data quality and metrics"},
     "infra_engineer": {"wip_limit": 2, "can_edit": True, "focus": "infra and ci/cd"},
     "integrator": {"wip_limit": 2, "can_edit": True, "focus": "cross-team integration"},
+    "dev": {"wip_limit": 2, "can_edit": True, "focus": "cross-cutting implementation and debt"},
     "tester": {"wip_limit": 3, "can_edit": True, "focus": "test automation and checks"},
     "qa": {"wip_limit": 3, "can_edit": True, "focus": "quality gate and validation"},
     "po": {"wip_limit": 2, "can_edit": False, "focus": "scope and value"},
@@ -99,6 +107,116 @@ def priority_rank(value: str) -> int:
 
 def task_id(stream_id: str, code: str) -> str:
     return f"{stream_id}-{code}"
+
+
+def _normalize_verdict(value: str) -> str:
+    token = (value or "").strip().upper()
+    if token in {"GO", "PASS"}:
+        return "PASS"
+    if token in {"BLOCKED", "FAIL"}:
+        return "BLOCKED"
+    if token == "GO_WITH_CAUTION":
+        return "GO_WITH_CAUTION"
+    return "GO_WITH_CAUTION"
+
+
+def _tests_result(value: str) -> str:
+    token = (value or "").strip().upper()
+    if "FAIL" in token:
+        return "FAIL"
+    if token.startswith("SKIP(") or token.startswith("SKIP"):
+        return "SKIP"
+    return "PASS"
+
+
+def _yaml_quote(value: str) -> str:
+    text = str(value or "")
+    text = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f"\"{text}\""
+
+
+def _auto_idempotency_key(role: str, task_id_value: str, handoff_to: str) -> str:
+    seed = f"{role}|{task_id_value}|{handoff_to}|{now_iso()}|{random.randint(1000,9999)}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
+    return f"IK-{digest}"
+
+
+def _write_proof_manifest(
+    proof_root: Path,
+    task: dict,
+    role: str,
+    artifact: str,
+    note: str,
+    handoff_to: str,
+    handoff_id: str,
+    cmd: str,
+    tests_run: str,
+    review_ref: str,
+    reviewer_role: str,
+    review_verdict: str,
+    idempotency_key: str,
+) -> str:
+    stream_id_value = str(task.get("stream_id", "UNSET")).strip() or "UNSET"
+    task_id_value = str(task.get("id", "UNKNOWN")).strip() or "UNKNOWN"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    suffix = random.randint(100, 999)
+    manifest_dir = proof_root / stream_id_value / task_id_value
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / f"{stamp}-{suffix}.yaml"
+
+    cmd_value = (cmd or "").strip() or "SKIP(no_cmd_recorded)"
+    tests_value = (tests_run or "").strip() or "SKIP(no_tests_recorded)"
+    rc_value = "0" if not cmd_value.upper().startswith("SKIP(") else "SKIP(reasoned)"
+    review_ref_value = (review_ref or "").strip() or "none"
+    reviewer_value = (reviewer_role or "").strip() or "none"
+    verdict_value = _normalize_verdict(review_verdict)
+    tests_result = _tests_result(tests_value)
+    artifact_value = (artifact or "").strip() or "none"
+    note_value = (note or "").strip() or "none"
+    proof_id = f"PRF-{stream_id_value}-{task_id_value}-{stamp}-{suffix}"
+    produced = now_iso()
+    handoff_to_value = (handoff_to or "").strip() or "none"
+    handoff_id_value = (handoff_id or "").strip() or "none"
+
+    lines = [
+        f"proof_id: {_yaml_quote(proof_id)}",
+        f"stream_id: {_yaml_quote(stream_id_value)}",
+        f"task_id: {_yaml_quote(task_id_value)}",
+        f"role: {_yaml_quote(role)}",
+        f"produced_at_utc: {_yaml_quote(produced)}",
+        "inputs:",
+        f"  queue_snapshot_ref: {_yaml_quote(str(DEFAULT_PRIORITY_QUEUE))}",
+        f"  workboard_snapshot_ref: {_yaml_quote(str(DEFAULT_BOARD))}",
+        f"  prior_contract_ref: {_yaml_quote(f'/home/venom/.openclaw/cron/role-state/{role}.last_contract')}",
+        "execution:",
+        "  commands:",
+        f"    - cmd: {_yaml_quote(cmd_value)}",
+        f"      rc: {_yaml_quote(rc_value)}",
+        f"      started_at_utc: {_yaml_quote(produced)}",
+        f"      ended_at_utc: {_yaml_quote(produced)}",
+        "validations:",
+        "  tests:",
+        f"    - name: {_yaml_quote('targeted')}",
+        f"      result: {_yaml_quote(tests_result)}",
+        f"      evidence: {_yaml_quote(tests_value)}",
+        "outputs:",
+        f"  role_contract_ref: {_yaml_quote(f'/home/venom/.openclaw/cron/role-state/{role}.last_contract')}",
+        "  artifacts:",
+        f"    - {_yaml_quote(artifact_value)}",
+        "handoff:",
+        f"  to_role: {_yaml_quote(handoff_to_value)}",
+        f"  handoff_id: {_yaml_quote(handoff_id_value)}",
+        "signoff:",
+        f"  producer_agent: {_yaml_quote(role)}",
+        f"  reviewer_agent: {_yaml_quote(reviewer_value)}",
+        f"  qa_verdict: {_yaml_quote(verdict_value)}",
+        "meta:",
+        f"  idempotency_key: {_yaml_quote(idempotency_key)}",
+        f"  review_ref: {_yaml_quote(review_ref_value)}",
+        f"  note: {_yaml_quote(note_value)}",
+    ]
+    manifest_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(manifest_path)
 
 
 def load_board(path: Path) -> dict:
@@ -335,7 +453,21 @@ def claim_task(board: dict, role: str, task_id_override: str | None = None) -> d
     return chosen
 
 
-def complete_task(board: dict, role: str, task_id_value: str, artifact: str, note: str, handoff_to: str) -> dict:
+def complete_task(
+    board: dict,
+    role: str,
+    task_id_value: str,
+    artifact: str,
+    note: str,
+    handoff_to: str,
+    proof_root: Path,
+    cmd: str,
+    tests_run: str,
+    review_ref: str,
+    reviewer_role: str,
+    review_verdict: str,
+    idempotency_key: str,
+) -> dict:
     tasks = task_index(board)
     task = tasks.get(task_id_value)
     if task is None:
@@ -346,6 +478,14 @@ def complete_task(board: dict, role: str, task_id_value: str, artifact: str, not
 
     if str(task.get("state", "")) not in {STATE_IN_PROGRESS, STATE_READY, STATE_REVIEW}:
         raise SystemExit(f"COMPLETE_ERROR: invalid_state={task.get('state')} task={task_id_value}")
+
+    deps = [dep for dep in task.get("depends_on", []) if dep]
+    not_done = [dep for dep in deps if str(tasks.get(dep, {}).get("state", "")) != STATE_DONE]
+    if not_done:
+        raise SystemExit(f"COMPLETE_ERROR: deps_not_done={','.join(not_done)} task={task_id_value}")
+
+    effective_idempotency = (idempotency_key or "").strip() or _auto_idempotency_key(role, task_id_value, handoff_to)
+    task["last_idempotency_key"] = effective_idempotency
 
     task["state"] = STATE_DONE
     task["completed_at"] = now_iso()
@@ -368,11 +508,37 @@ def complete_task(board: dict, role: str, task_id_value: str, artifact: str, not
                 "to_role": handoff_to,
                 "status": "OPEN",
                 "note": note,
+                "idempotency_key": effective_idempotency,
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
             }
         )
         task["handoff_to"] = handoff_to
+
+    manifest_path = _write_proof_manifest(
+        proof_root=proof_root,
+        task=task,
+        role=role,
+        artifact=artifact,
+        note=note,
+        handoff_to=handoff_to,
+        handoff_id=handoff_id,
+        cmd=cmd,
+        tests_run=tests_run,
+        review_ref=review_ref,
+        reviewer_role=reviewer_role,
+        review_verdict=review_verdict,
+        idempotency_key=effective_idempotency,
+    )
+    task.setdefault("proof_manifests", []).append(manifest_path)
+    note_kv = (
+        f"cmd={(cmd or '').strip() or 'SKIP(no_cmd_recorded)'};"
+        f"tests_run={(tests_run or '').strip() or 'SKIP(no_tests_recorded)'};"
+        f"review_ref={(review_ref or '').strip() or 'none'};"
+        f"review_verdict={_normalize_verdict(review_verdict)};"
+        f"proof_manifest={manifest_path}"
+    )
+    task.setdefault("notes", []).append(note_kv)
 
     append_event(
         board,
@@ -383,6 +549,8 @@ def complete_task(board: dict, role: str, task_id_value: str, artifact: str, not
             "artifact": artifact,
             "handoff_to": handoff_to or "none",
             "handoff_id": handoff_id or "none",
+            "proof_manifest": manifest_path,
+            "idempotency_key": effective_idempotency,
         },
     )
     recompute_states(board)
@@ -421,6 +589,82 @@ def handoff_update(board: dict, handoff_id: str, status: str, actor_role: str) -
     return handoff
 
 
+def enforce_handoff_sla(board: dict, ack_sla_seconds: int, close_sla_seconds: int, apply: bool) -> dict:
+    now = datetime.now(timezone.utc)
+    tasks = task_index(board)
+    summary = {
+        "open_total": 0,
+        "ack_total": 0,
+        "ack_overdue": 0,
+        "close_overdue": 0,
+        "escalated": 0,
+        "blocked_tasks": 0,
+    }
+
+    for handoff in board.get("handoffs", []):
+        status = str(handoff.get("status", "")).upper()
+        if status not in {"OPEN", "ACK"}:
+            continue
+        created = _parse_utc(str(handoff.get("created_at", ""))) or _parse_utc(str(handoff.get("updated_at", "")))
+        if created is None:
+            continue
+        age_seconds = int((now - created).total_seconds())
+        hid = str(handoff.get("id", ""))
+        task_ref = str(handoff.get("task_id", ""))
+
+        if status == "OPEN":
+            summary["open_total"] += 1
+            if age_seconds > ack_sla_seconds:
+                summary["ack_overdue"] += 1
+                if apply:
+                    handoff["sla_state"] = "ACK_OVERDUE"
+                    handoff["owner"] = "scrum_master"
+                    handoff["updated_at"] = now_iso()
+                    append_event(
+                        board,
+                        "handoff_sla_escalation",
+                        {"handoff_id": hid, "severity": "WARN", "reason": "ACK_OVERDUE", "owner": "scrum_master"},
+                    )
+                    summary["escalated"] += 1
+            if age_seconds > close_sla_seconds:
+                summary["close_overdue"] += 1
+                if apply:
+                    handoff["sla_state"] = "CLOSE_OVERDUE"
+                    handoff["owner"] = "scrum_master"
+                    handoff["updated_at"] = now_iso()
+                    append_event(
+                        board,
+                        "handoff_sla_escalation",
+                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE", "owner": "scrum_master"},
+                    )
+                    summary["escalated"] += 1
+                    task = tasks.get(task_ref)
+                    if task is not None and str(task.get("state", "")) in {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW}:
+                        task["state"] = STATE_BLOCKED
+                        task["blocked_reason"] = f"handoff_close_sla_exceeded:{hid}"
+                        task["updated_at"] = now_iso()
+                        summary["blocked_tasks"] += 1
+        elif status == "ACK":
+            summary["ack_total"] += 1
+            ack_at = _parse_utc(str(handoff.get("updated_at", ""))) or created
+            ack_age = int((now - ack_at).total_seconds())
+            if ack_age > close_sla_seconds:
+                summary["close_overdue"] += 1
+                if apply:
+                    handoff["sla_state"] = "CLOSE_OVERDUE_AFTER_ACK"
+                    handoff["owner"] = "scrum_master"
+                    handoff["updated_at"] = now_iso()
+                    append_event(
+                        board,
+                        "handoff_sla_escalation",
+                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE_AFTER_ACK", "owner": "scrum_master"},
+                    )
+                    summary["escalated"] += 1
+    if apply:
+        recompute_states(board)
+    return summary
+
+
 def _parse_utc(value: str) -> datetime | None:
     raw = (value or "").strip()
     if not raw:
@@ -457,7 +701,52 @@ def _artifact_ref_exists(raw: str) -> bool:
     return path.exists()
 
 
-def validate_board(board: dict, queue_path: Path, ack_sla_seconds: int, close_sla_seconds: int) -> Tuple[List[str], List[str]]:
+def _manifest_required_keys_present(text: str) -> List[str]:
+    required = [
+        "proof_id:",
+        "stream_id:",
+        "task_id:",
+        "role:",
+        "produced_at_utc:",
+        "execution:",
+        "outputs:",
+        "signoff:",
+    ]
+    upper = text.upper()
+    missing = []
+    for key in required:
+        if key.upper() not in upper:
+            missing.append(key.rstrip(":"))
+    return missing
+
+
+def _validate_manifest_file(manifest_path: Path) -> List[str]:
+    issues: List[str] = []
+    if not manifest_path.exists():
+        issues.append(f"MANIFEST_NOT_FOUND:{manifest_path}")
+        return issues
+    try:
+        text = manifest_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception as exc:
+        issues.append(f"MANIFEST_READ_ERROR:{manifest_path}:{exc}")
+        return issues
+    missing = _manifest_required_keys_present(text)
+    if missing:
+        issues.append(f"MANIFEST_MISSING_KEYS:{manifest_path}:{','.join(missing)}")
+    verdict_match = "QA_VERDICT:" in text.upper()
+    if not verdict_match:
+        issues.append(f"MANIFEST_MISSING_QA_VERDICT:{manifest_path}")
+    return issues
+
+
+def validate_board(
+    board: dict,
+    queue_path: Path,
+    ack_sla_seconds: int,
+    close_sla_seconds: int,
+    proof_root: Path,
+    require_proof_manifest: bool,
+) -> Tuple[List[str], List[str]]:
     errors: List[str] = []
     warnings: List[str] = []
     tasks = board.get("tasks", [])
@@ -509,6 +798,27 @@ def validate_board(board: dict, queue_path: Path, ack_sla_seconds: int, close_sl
                     warnings.append(
                         f"INV-DONE-PROOF-WARN:MISSING_CMD_TEST_EVIDENCE:task={tid}:owner=qa:remediation=add_cmd_tests_or_skip_reason"
                     )
+            manifests = [str(p).strip() for p in task.get("proof_manifests", []) if str(p).strip()]
+            if not manifests:
+                msg = f"INV-DONE-PROOF-MANIFEST:task={tid}:owner=qa:remediation=attach_proof_manifest"
+                if require_proof_manifest:
+                    errors.append(msg)
+                else:
+                    warnings.append(msg)
+            else:
+                for manifest_raw in manifests:
+                    manifest_path = Path(manifest_raw)
+                    if not manifest_path.is_absolute():
+                        candidate = (Path(".") / manifest_path).resolve()
+                        if candidate.exists():
+                            manifest_path = candidate
+                        else:
+                            manifest_path = (proof_root / manifest_path.name).resolve()
+                    for issue in _validate_manifest_file(manifest_path):
+                        if "MISSING_KEYS" in issue or "MISSING_QA_VERDICT" in issue:
+                            errors.append(f"INV-DONE-PROOF:{tid}:{issue}")
+                        else:
+                            warnings.append(f"INV-DONE-PROOF-WARN:{tid}:{issue}")
 
     # INV-READY-SYNC (WARN): queue/workboard drift signal.
     ready_tasks = [str(task.get("id", "")) for task in tasks if str(task.get("state", "")) == STATE_READY]
@@ -525,6 +835,8 @@ def validate_board(board: dict, queue_path: Path, ack_sla_seconds: int, close_sl
         hid = str(handoff.get("id", ""))
         if task_ref and task_ref not in idx:
             errors.append(f"HANDOFF_TASK_MISSING:{hid}:{task_ref}")
+        if not str(handoff.get("idempotency_key", "")).strip():
+            warnings.append(f"HANDOFF_IDEMPOTENCY_MISSING:handoff={hid}:owner=scrum_master:remediation=attach_idempotency_key")
         status = str(handoff.get("status", "")).upper()
         created_at = _parse_utc(str(handoff.get("created_at", ""))) or _parse_utc(str(handoff.get("updated_at", "")))
         if created_at is None:
@@ -669,6 +981,32 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
     )
 
 
+def replay_events(board: dict, limit: int, kind_filter: str, role_filter: str) -> None:
+    events = board.get("events", [])
+    if not isinstance(events, list):
+        print("REPLAY_EMPTY reason=events_not_list")
+        return
+    selected: List[dict] = []
+    for event in events:
+        kind = str(event.get("kind", "")).strip()
+        if kind_filter and kind_filter != kind:
+            continue
+        details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
+        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip()
+        if role_filter and role_filter != actor:
+            continue
+        selected.append(event)
+    if limit > 0:
+        selected = selected[-limit:]
+    for idx, event in enumerate(selected, start=1):
+        at = str(event.get("at", "unknown"))
+        kind = str(event.get("kind", "unknown"))
+        details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
+        ref = str(details.get("task_id") or details.get("handoff_id") or details.get("stream_id") or "none")
+        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "none")
+        print(f"REPLAY idx={idx} at={at} kind={kind} actor={actor} ref={ref} details={json.dumps(details, ensure_ascii=True, separators=(',',':'))}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Parallel workstream plumbing for multi-role delivery")
     parser.add_argument("--board", default=str(DEFAULT_BOARD), help="Path to board JSON file")
@@ -698,6 +1036,13 @@ def build_parser() -> argparse.ArgumentParser:
     done_p.add_argument("--artifact", default="")
     done_p.add_argument("--note", default="")
     done_p.add_argument("--handoff-to", default="")
+    done_p.add_argument("--exec-cmd", dest="exec_cmd", default="", help="Executed command evidence or SKIP(reason)")
+    done_p.add_argument("--tests-run", default="", help="Test evidence or SKIP(reason)")
+    done_p.add_argument("--review-ref", default="", help="Independent review reference")
+    done_p.add_argument("--reviewer-role", default="", help="Independent reviewer role/agent")
+    done_p.add_argument("--review-verdict", default="GO_WITH_CAUTION", help="Review verdict GO|BLOCKED|PASS")
+    done_p.add_argument("--idempotency-key", default="", help="Stable idempotency key for completion/handoff")
+    done_p.add_argument("--proof-root", default=str(DEFAULT_PROOF_ROOT), help="Proof manifest root directory")
 
     block_p = sub.add_parser("block", help="Mark task BLOCKED")
     block_p.add_argument("--task", required=True)
@@ -718,11 +1063,23 @@ def build_parser() -> argparse.ArgumentParser:
     context_p.add_argument("--role", required=True)
     context_p.add_argument("--limit", type=int, default=3, help="Max ids/events in context")
 
+    replay_p = sub.add_parser("replay", help="Deterministic replay of board events for audit/postmortem")
+    replay_p.add_argument("--limit", type=int, default=50, help="Max events to print (tail)")
+    replay_p.add_argument("--kind", default="", help="Filter by event kind")
+    replay_p.add_argument("--role", default="", help="Filter by role/actor")
+
     validate_p = sub.add_parser("validate", help="Validate board consistency + coordination invariants")
     validate_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path for drift checks")
     validate_p.add_argument("--ack-sla-seconds", type=int, default=900, help="SLA for OPEN handoff ACK")
     validate_p.add_argument("--close-sla-seconds", type=int, default=3600, help="SLA for OPEN handoff CLOSE")
+    validate_p.add_argument("--proof-root", default=str(DEFAULT_PROOF_ROOT), help="Proof manifest root directory")
+    validate_p.add_argument("--require-proof-manifest", action="store_true", help="Block when DONE tasks have no proof manifest")
     validate_p.add_argument("--strict-warn", action="store_true", help="Treat warnings as blocking")
+
+    sla_p = sub.add_parser("enforce-sla", help="Evaluate/apply handoff SLA ownership and escalation")
+    sla_p.add_argument("--ack-sla-seconds", type=int, default=900)
+    sla_p.add_argument("--close-sla-seconds", type=int, default=3600)
+    sla_p.add_argument("--apply", action="store_true", help="Persist SLA escalation fields on handoffs/tasks")
     return parser
 
 
@@ -764,6 +1121,15 @@ def main() -> int:
             print_role_context(board, role=role, limit=max(1, int(args.limit)))
             return 0
 
+        if args.cmd == "replay":
+            replay_events(
+                board,
+                limit=max(1, int(args.limit)),
+                kind_filter=str(args.kind or "").strip(),
+                role_filter=str(args.role or "").strip(),
+            )
+            return 0
+
         if args.cmd == "claim":
             role = str(args.role).strip()
             if role not in ROLE_CATALOG:
@@ -789,6 +1155,13 @@ def main() -> int:
                 artifact=str(args.artifact or "").strip(),
                 note=str(args.note or "").strip(),
                 handoff_to=handoff_to,
+                proof_root=Path(str(args.proof_root)),
+                cmd=str(args.exec_cmd or "").strip(),
+                tests_run=str(args.tests_run or "").strip(),
+                review_ref=str(args.review_ref or "").strip(),
+                reviewer_role=str(args.reviewer_role or "").strip(),
+                review_verdict=str(args.review_verdict or "").strip(),
+                idempotency_key=str(args.idempotency_key or "").strip(),
             )
             save_board(board_path, board)
             print(
@@ -820,6 +1193,29 @@ def main() -> int:
             print(f"HANDOFF_CLOSE_OK handoff={handoff.get('id')} task={handoff.get('task_id')}")
             return 0
 
+        if args.cmd == "enforce-sla":
+            summary = enforce_handoff_sla(
+                board,
+                ack_sla_seconds=max(1, int(args.ack_sla_seconds)),
+                close_sla_seconds=max(1, int(args.close_sla_seconds)),
+                apply=bool(args.apply),
+            )
+            if bool(args.apply):
+                save_board(board_path, board)
+            print(
+                "HANDOFF_SLA_SUMMARY "
+                f"open_total={summary['open_total']} "
+                f"ack_total={summary['ack_total']} "
+                f"ack_overdue={summary['ack_overdue']} "
+                f"close_overdue={summary['close_overdue']} "
+                f"escalated={summary['escalated']} "
+                f"blocked_tasks={summary['blocked_tasks']} "
+                f"apply={1 if bool(args.apply) else 0}"
+            )
+            if summary["close_overdue"] > 0:
+                return 2
+            return 0
+
         if args.cmd == "validate":
             recompute_states(board)
             errors, warnings = validate_board(
@@ -827,6 +1223,8 @@ def main() -> int:
                 queue_path=Path(str(args.queue)),
                 ack_sla_seconds=max(1, int(args.ack_sla_seconds)),
                 close_sla_seconds=max(1, int(args.close_sla_seconds)),
+                proof_root=Path(str(args.proof_root)),
+                require_proof_manifest=bool(args.require_proof_manifest),
             )
             if errors or (warnings and bool(args.strict_warn)):
                 print("VALIDATE_BLOCKED")

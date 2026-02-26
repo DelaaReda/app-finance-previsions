@@ -188,6 +188,26 @@ else:
 PY
 }
 
+runtime_source_version() {
+  local path="$1"
+  local prefix="$2"
+  local checksum=""
+  local mtime=""
+  if [[ ! -f "$path" ]]; then
+    echo "${prefix}_missing"
+    return 0
+  fi
+  checksum="$(sha256sum "$path" 2>/dev/null | awk '{print $1}' | cut -c1-12)"
+  mtime="$(stat -c %Y "$path" 2>/dev/null || echo 0)"
+  if [[ -z "$checksum" ]]; then
+    checksum="unknown"
+  fi
+  if [[ ! "$mtime" =~ ^[0-9]+$ ]]; then
+    mtime=0
+  fi
+  echo "${prefix}_${mtime}_${checksum}"
+}
+
 RUNTIME_QUEUE_HAS_READY="$(runtime_queue_has_ready)"
 if [[ ! "$RUNTIME_QUEUE_HAS_READY" =~ ^[01]$ ]]; then
   RUNTIME_QUEUE_HAS_READY="0"
@@ -196,6 +216,8 @@ RUNTIME_WORKBOARD_ROLE_HAS_WORK="$(runtime_workboard_role_has_work)"
 if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" =~ ^[01]$ ]]; then
   RUNTIME_WORKBOARD_ROLE_HAS_WORK="0"
 fi
+RUNTIME_QUEUE_VERSION="$(runtime_source_version "docs/orchestrator-ops/priority-queue.json" "queue")"
+RUNTIME_WORKBOARD_VERSION="$(runtime_source_version "$WORKBOARD_FILE" "workboard")"
 # Auto-delivery roles only run in write/delivery mode when there is an actual READY item.
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   if [[ "$RUNTIME_QUEUE_HAS_READY" != "1" ]]; then
@@ -474,7 +496,7 @@ enforce_role_delivery_contract() {
   local tmp=""
   tmp="$(mktemp)"
   cat > "$tmp"
-  python3 - "$ROLE" "$source" "$tmp" "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" <<'PY'
+  python3 - "$ROLE" "$source" "$tmp" "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" "$RUNTIME_QUEUE_VERSION" "$RUNTIME_WORKBOARD_VERSION" <<'PY'
 import json
 import re
 import sys
@@ -486,6 +508,8 @@ source = sys.argv[2]
 payload_path = Path(sys.argv[3])
 allow_file_edits = sys.argv[4] == "1"
 workboard_role_has_work = sys.argv[5] == "1"
+runtime_queue_version = sys.argv[6]
+runtime_workboard_version = sys.argv[7]
 text = payload_path.read_text(encoding="utf-8", errors="ignore")
 
 keys = [
@@ -576,9 +600,6 @@ def emit_blocked(blocker_id: str, reason: str) -> None:
     sys.exit(0)
 
 status_u = values["STATUS"].upper()
-if status_u == "BLOCKED":
-    print("\n".join(f"{k}: {values[k]}" for k in keys))
-    sys.exit(0)
 
 role_tokens = {
     "planner": ["QUEUE", "READY", "PRIOR", "WORKSTATE", "PLAN"],
@@ -659,6 +680,17 @@ if not has_artifact_marker:
         "ROLE_ARTIFACT_MISSING",
         f"role={role}; source={source}; required_marker={required_marker}",
     )
+
+if not evidence_kv.get("queue_version", "").strip():
+    values["EVIDENCE"] = append_evidence(values.get("EVIDENCE", ""), f"queue_version={runtime_queue_version}")
+    evidence_kv = parse_evidence_kv(values.get("EVIDENCE", ""))
+if not evidence_kv.get("workboard_version", "").strip():
+    values["EVIDENCE"] = append_evidence(values.get("EVIDENCE", ""), f"workboard_version={runtime_workboard_version}")
+    evidence_kv = parse_evidence_kv(values.get("EVIDENCE", ""))
+
+if status_u == "BLOCKED":
+    print("\n".join(f"{k}: {values[k]}" for k in keys))
+    sys.exit(0)
 
 # Phase 1 (SHOULD): when work exists, ask for stream/task IDs without blocking the role.
 if queue_has_ready or workboard_role_has_work:
@@ -1423,7 +1455,7 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready> et lock_check=ok. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready> et lock_check=ok. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. N'invente pas de blocker historique non présent dans queue_states."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
@@ -1435,6 +1467,8 @@ build_runtime_context() {
   local blocked_items=""
   local queue_states=""
   local queue_has_ready="0"
+  local queue_version=""
+  local workboard_version=""
   local ready_next_actions=""
   local workstate_hint=""
   local parallel_hint=""
@@ -1455,6 +1489,8 @@ build_runtime_context() {
     ready_next_actions="$(jq -r '.items[]? | select(.state=="READY") | "\(.id):\(.next_action // "NONE")"' docs/orchestrator-ops/priority-queue.json 2>/dev/null | head -n 5 | tr '\n' '; ')"
     queue_has_ready="$(jq -r '[.items[]? | select(.state=="READY")] | if length>0 then "1" else "0" end' docs/orchestrator-ops/priority-queue.json 2>/dev/null || printf '0')"
   fi
+  queue_version="${RUNTIME_QUEUE_VERSION:-queue_unknown}"
+  workboard_version="${RUNTIME_WORKBOARD_VERSION:-workboard_unknown}"
   if [[ -f "docs/planning/WORKSTATE.md" ]]; then
     workstate_hint="$(tail -n 20 docs/planning/WORKSTATE.md 2>/dev/null | tr '\n' ' ' | tr -s ' ' | cut -c1-320)"
   fi
@@ -1470,10 +1506,12 @@ build_runtime_context() {
   team_iteration_tail="$(compact_file_tail "$TEAM_ITER_FILE" 8 260)"
   trace_tail="$(compact_file_tail "$TRACE_FILE" 8 280)"
 
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs' \
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs' \
     "${now_iso:-unknown}" \
     "${queue_states:-none}" \
     "${queue_has_ready:-0}" \
+    "${queue_version:-queue_unknown}" \
+    "${workboard_version:-workboard_unknown}" \
     "${ready_items:-none}" \
     "${ready_next_actions:-none}" \
     "${blocked_items:-none}" \

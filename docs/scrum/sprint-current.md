@@ -52,3 +52,9 @@
 ## Update 2026-02-25 20:20 America/New_York
 - `batch-02-20260225-202042.md` publié avec `VERDICT: PASS`, `BLOCKER_ID: NONE`, `QA_SIGNOFF: YES`.
 - Preuves live validées (`/api/stocks/prices?tickers=SPY,QQQ` et `/api/news/feed?tickers=SPY,QQQ`) + gates backend (`5 passed` ciblés, `33 passed` régression).
+
+## Update 2026-02-26 America/New_York
+- Vision product clarifier baseline established for next cycle:
+  - `docs/planning/PRODUCT_VISION.md`
+  - `docs/scrum/sprint-next.md`
+- Next cycle priority is now user-value first: daily portfolio decision workflow in 2-3 clicks with freshness target <= 10 minutes.

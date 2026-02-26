@@ -9,6 +9,11 @@
   - analyze current product artifacts first,
   - then ask targeted clarification questions to lock the final product goal,
   - then derive epics/priorities/sprint goals from that clarified vision.
+- Product intent clarified (2026-02-26):
+  - personal-first finance copilot for daily portfolio decisions,
+  - low runtime cost target (free/low-cost model providers for backend inference),
+  - OpenAI Pro budget used for development acceleration more than runtime serving,
+  - decision workflow target: 2-3 clicks with near-real-time freshness (~10 min gap acceptable).
 
 ## Admin agents ownership
 - Active tri-admin identities:

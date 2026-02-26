@@ -29,6 +29,9 @@ Per task, require:
 ### Gate 3 — Independent Codex Review
 - Run independent reviewer with Codex (separate from the delivery role that authored the change).
 - Required output: `GO` or `BLOCKED` + minimal fix list.
+- Machine-readable evidence required in artifact `EVIDENCE`:
+  - `review_ref=<path_or_run_id>`
+  - `review_verdict=<GO|BLOCKED|PASS>`
 - If `BLOCKED`, task cannot move forward.
 
 ### Gate 4 — Regression Gate

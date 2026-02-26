@@ -16,6 +16,8 @@ Toujours presentes:
 - `task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready>`
 - `lock_check=ok`
 - `<role>_artifact=<path_or_proof>` (au minimum 1 artefact role-specifique)
+- `queue_version=<checksum_or_version>`
+- `workboard_version=<checksum_or_version>`
 
 ## Clés recommandées (qualite / audit)
 - `stream_id=<stream>`
@@ -46,4 +48,3 @@ Les exigences ci-dessous sont `SHOULD` en phase 1 et deviennent `MUST` (au moins
 ## Notes pratiques
 - Les scripts gate utilisent souvent une normalisation en uppercase; `planner_artifact=` et `PLANNER_ARTIFACT=` sont equivalentes.
 - Si une commande est volontairement non executee (ex: environnement indisponible), ne pas simuler: utiliser `cmd=SKIP(<raison>)`.
-

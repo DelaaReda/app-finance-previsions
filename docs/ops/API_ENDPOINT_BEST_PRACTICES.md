@@ -53,6 +53,25 @@ Standardiser tous les endpoints avec le même niveau de qualité que les endpoin
 - Logger les erreurs avec contexte utile (paramètres clés), sans fuite de secrets.
 - Garder les messages de warning compréhensibles et actionnables.
 
+## Endpoints LLM (pattern Judge à copier)
+Référence: `copilot-app/backend/src/api/routes/judge.py` + `services/judge_pipeline.py` + `services/g4f_client.py`.
+
+Règles supplémentaires:
+- Ajouter `debug=true` (query) qui:
+  - désactive le cache,
+  - expose `debug_pipeline` (traces) + `debug_payload` + `debug_llm_res` (jamais en nominal).
+- Forcer un format de réponse LLM strict:
+  - dernière ligne = JSON (une seule ligne),
+  - validation Pydantic avant/après si possible,
+  - parsing tolérant (dernière ligne puis extraction du plus gros bloc `{...}`).
+- Multi-provider fallback (ordre recommandé):
+  1. provider principal (ex: OpenRouter via agent)
+  2. g4f no-auth (`services/g4f_client.call_g4f`) si `G4F_PROVIDER` configuré
+  3. Codestral (`services/codestral_client.call_codestral`) si `CODESTRAL_API_KEY`
+  4. Groq (`services/groq_client.call_groq`) si `GROQ_API_KEY`
+  - exposer explicitement `fallback_used` et `model/provider` en debug.
+- Ne jamais casser le contrat "never-empty": si le LLM échoue, retourner `data` vide mais valide + `error` + `source[]=*_fallback`.
+
 ## Tests minimum requis
 - Test de contrat endpoint:
   - structure stable (`ok`, `data`, champs critiques),

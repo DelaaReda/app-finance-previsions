@@ -57,6 +57,18 @@ else
   check_fail "bash_syntax:tmux_live_watchdog"
 fi
 
+if bash -n scripts/orchestration_circuit_breaker.sh; then
+  check_ok "bash_syntax:orchestration_circuit_breaker"
+else
+  check_fail "bash_syntax:orchestration_circuit_breaker"
+fi
+
+if bash -n scripts/export_orchestration_kpi.sh; then
+  check_ok "bash_syntax:export_orchestration_kpi"
+else
+  check_fail "bash_syntax:export_orchestration_kpi"
+fi
+
 if python3 -m py_compile scripts/parallel_workstream.py; then
   check_ok "python_compile:parallel_workstream"
 else
