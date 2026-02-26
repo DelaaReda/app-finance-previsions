@@ -435,9 +435,224 @@ workboard_context_hint() {
     | cut -c1-520
 }
 
+publication_channels_hint() {
+  if [[ ! -x "scripts/parallel_workstream.py" ]]; then
+    printf 'none'
+    return 0
+  fi
+  python3 scripts/parallel_workstream.py channels --role "$ROLE" --limit 4 2>/dev/null \
+    | tr '\n' ' ' \
+    | tr -s ' ' \
+    | cut -c1-620
+}
+
 persist_last_contract() {
   local payload="$1"
   printf '%s\n' "$payload" > "$LAST_CONTRACT_FILE"
+}
+
+publish_execution_monitoring() {
+  local payload="$1"
+  local source="${2:-unknown}"
+  local tmp_payload=""
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  tmp_payload="$(mktemp)"
+  printf '%s\n' "$payload" > "$tmp_payload"
+  python3 - "$ROLE" "$source" "$tmp_payload" "$EXEC_MONITORING_LATEST_FILE" "$EXEC_MONITORING_EVENTS_FILE" "$TOOL_REQUESTS_FILE" "$TOOL_REQUESTS_EVENTS_FILE" "$STATE_DIR" <<'PY' 2>/dev/null || true
+import fcntl
+import hashlib
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def one_line(value: str, limit: int = 320) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) > limit:
+        return text[:limit]
+    return text
+
+
+def none_like(value: str) -> bool:
+    token = re.sub(r"[\s_/\-]+", "", str(value or "").strip().lower())
+    return token in {"", "none", "na", "null"}
+
+
+role = sys.argv[1]
+source = sys.argv[2]
+contract_path = Path(sys.argv[3])
+latest_path = Path(sys.argv[4])
+events_path = Path(sys.argv[5])
+tool_md_path = Path(sys.argv[6])
+tool_events_path = Path(sys.argv[7])
+state_dir = Path(sys.argv[8])
+
+text = read_text(contract_path)
+lines = text.splitlines()
+keys = {
+    "STATUS",
+    "DELTA",
+    "EVIDENCE",
+    "RISKS",
+    "NEXT",
+    "VERDICT",
+    "BLOCKER_ID",
+    "NEXT_ACTION_UNIQUE",
+}
+values = {}
+for line in lines:
+    m = re.match(r"^\s*([A-Z_]+)\s*:\s*(.*)$", line.strip())
+    if not m:
+        continue
+    k = m.group(1).upper()
+    if k in keys and k not in values:
+        values[k] = m.group(2).strip()
+
+evidence = values.get("EVIDENCE", "")
+evidence_kv = {}
+for part in evidence.split(";"):
+    if "=" not in part:
+        continue
+    k, v = part.split("=", 1)
+    k = k.strip().lower()
+    if not k or k in evidence_kv:
+        continue
+    evidence_kv[k] = v.strip()
+
+ts_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+record = {
+    "ts_utc": ts_utc,
+    "role": role,
+    "source": source,
+    "status": one_line(values.get("STATUS", "")),
+    "delta": one_line(values.get("DELTA", "")),
+    "verdict": one_line(values.get("VERDICT", "")),
+    "blocker_id": one_line(values.get("BLOCKER_ID", "")),
+    "next_action_unique": one_line(values.get("NEXT_ACTION_UNIQUE", "")),
+    "next": one_line(values.get("NEXT", ""), 420),
+    "exec_report": one_line(evidence_kv.get("exec_report", "")),
+    "issues": one_line(evidence_kv.get("issues", "")),
+    "suggestions": one_line(evidence_kv.get("suggestions", "")),
+    "stream_id": one_line(evidence_kv.get("stream_id", "")),
+    "task_id": one_line(evidence_kv.get("task_id", "")),
+    "tool_request": one_line(evidence_kv.get("tool_request", "")),
+    "skill_request": one_line(evidence_kv.get("skill_request", "")),
+    "tools_used": one_line(evidence_kv.get("tools_used", ""), 420),
+    "channels_read": one_line(evidence_kv.get("channels_read", ""), 200),
+    "impact_assessment": one_line(evidence_kv.get("impact_assessment", ""), 120),
+    "impact_action": one_line(evidence_kv.get("impact_action", ""), 220),
+}
+
+state_dir.mkdir(parents=True, exist_ok=True)
+events_path.parent.mkdir(parents=True, exist_ok=True)
+latest_path.parent.mkdir(parents=True, exist_ok=True)
+tool_md_path.parent.mkdir(parents=True, exist_ok=True)
+tool_events_path.parent.mkdir(parents=True, exist_ok=True)
+
+lock_path = state_dir / "executor-monitoring.lock"
+with lock_path.open("a+", encoding="utf-8") as lock_fh:
+    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+
+    with events_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=True) + "\n")
+
+    latest = {}
+    if latest_path.exists():
+        try:
+            latest = json.loads(read_text(latest_path))
+            if not isinstance(latest, dict):
+                latest = {}
+        except Exception:
+            latest = {}
+    roles = latest.get("roles")
+    if not isinstance(roles, dict):
+        roles = {}
+    roles[role] = record
+    latest["roles"] = roles
+    latest["updated_at_utc"] = ts_utc
+
+    issue_roles = sorted(
+        r for r, data in roles.items()
+        if isinstance(data, dict) and not none_like(str(data.get("issues", "")))
+    )
+    blocker_roles = sorted(
+        r for r, data in roles.items()
+        if isinstance(data, dict) and not none_like(str(data.get("blocker_id", "")))
+    )
+    request_roles = sorted(
+        r for r, data in roles.items()
+        if isinstance(data, dict) and (
+            not none_like(str(data.get("tool_request", "")))
+            or not none_like(str(data.get("skill_request", "")))
+        )
+    )
+    latest["summary"] = {
+        "roles_total": len(roles),
+        "issues_open": len(issue_roles),
+        "blockers_open": len(blocker_roles),
+        "tool_skill_requests_open": len(request_roles),
+        "issue_roles": issue_roles[:8],
+        "blocker_roles": blocker_roles[:8],
+        "tool_skill_request_roles": request_roles[:8],
+    }
+    latest_path.write_text(json.dumps(latest, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+    has_tool_request = not none_like(record.get("tool_request", ""))
+    has_skill_request = not none_like(record.get("skill_request", ""))
+    if has_tool_request or has_skill_request:
+        if not tool_md_path.exists():
+            tool_md_path.write_text(
+                "# Agent Tool/Skill Requests\n\n"
+                "- Auto-generated requests from role contracts (`EVIDENCE`).\n"
+                "- Format: `[ts] [role] tool_request=...; skill_request=...; stream_id=...; task_id=...; source=...`\n\n",
+                encoding="utf-8",
+            )
+        fp_input = "|".join(
+            [
+                role,
+                str(record.get("tool_request", "")),
+                str(record.get("skill_request", "")),
+                str(record.get("stream_id", "")),
+                str(record.get("task_id", "")),
+                str(record.get("issues", "")),
+            ]
+        )
+        fingerprint = hashlib.sha256(fp_input.encode("utf-8")).hexdigest()
+        fp_file = state_dir / f"{role}.last_tool_request_fingerprint"
+        previous_fp = read_text(fp_file).strip()
+        if fingerprint != previous_fp:
+            line = (
+                f"- [{ts_utc}] [{role}] "
+                f"tool_request={record.get('tool_request') or 'none'}; "
+                f"skill_request={record.get('skill_request') or 'none'}; "
+                f"stream_id={record.get('stream_id') or 'none'}; "
+                f"task_id={record.get('task_id') or 'none'}; "
+                f"source={source}; "
+                f"issues={record.get('issues') or 'none'}; "
+                f"suggestion={record.get('suggestions') or 'none'}.\n"
+            )
+            with tool_md_path.open("a", encoding="utf-8") as md:
+                md.write(line)
+            with tool_events_path.open("a", encoding="utf-8") as jf:
+                jf.write(json.dumps(record, ensure_ascii=True) + "\n")
+            fp_file.write_text(fingerprint + "\n", encoding="utf-8")
+
+    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+PY
+  rm -f "$tmp_payload"
 }
 
 acquire_role_lock() {
@@ -794,6 +1009,9 @@ if len(run_note_words) < 5:
 exec_report = evidence_kv.get("exec_report", "").strip()
 issues_summary = evidence_kv.get("issues", "").strip()
 suggestions_summary = evidence_kv.get("suggestions", "").strip()
+channels_read = evidence_kv.get("channels_read", "").strip().lower()
+impact_assessment = evidence_kv.get("impact_assessment", "").strip().lower()
+impact_action = evidence_kv.get("impact_action", "").strip().lower()
 if not exec_report:
     emit_blocked(
         "EXEC_REPORT_MISSING",
@@ -816,6 +1034,35 @@ if issues_summary_l and issues_summary_l not in {"none", "n/a", "na"} and sugges
         "SUGGESTIONS_REQUIRED_WITH_ISSUES",
         f"role={role}; source={source}; issues={issues_summary}; required=suggestions actionable when issues!=none",
     )
+
+require_publication_check = queue_has_ready or workboard_role_has_work or workboard_role_has_in_progress
+if require_publication_check:
+    if not channels_read:
+        emit_blocked(
+            "CHANNELS_READ_MISSING",
+            f"role={role}; source={source}; required=channels_read in EVIDENCE when queue_or_workboard_has_work=1",
+        )
+    if not impact_assessment:
+        emit_blocked(
+            "IMPACT_ASSESSMENT_MISSING",
+            f"role={role}; source={source}; required=impact_assessment in EVIDENCE when queue_or_workboard_has_work=1",
+        )
+    allowed_impact = {"none", "low", "medium", "high", "critical"}
+    if impact_assessment and impact_assessment not in allowed_impact:
+        emit_blocked(
+            "IMPACT_ASSESSMENT_INVALID",
+            f"role={role}; source={source}; impact_assessment={impact_assessment}; allowed={','.join(sorted(allowed_impact))}",
+        )
+    if not impact_action:
+        emit_blocked(
+            "IMPACT_ACTION_MISSING",
+            f"role={role}; source={source}; required=impact_action in EVIDENCE when queue_or_workboard_has_work=1",
+        )
+    if impact_assessment in {"high", "critical"} and impact_action in {"none", "n/a", "na", "monitor", "monitor_updates"}:
+        emit_blocked(
+            "IMPACT_ACTION_INSUFFICIENT",
+            f"role={role}; source={source}; impact_assessment={impact_assessment}; impact_action={impact_action}; required=concrete_action",
+        )
 
 if allow_file_edits and task_update in {"claim", "complete", "handoff"}:
     preannounce_required = ("intent_id", "intent_chat_ref", "intent_memory_ref", "intent_registry_ref", "edit_scope")
@@ -1772,7 +2019,8 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>, exec_report=<resume_execution_concret>, issues=<none_ou_liste_priorisee>, suggestions=<none_ou_liste_actionnable>. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, intent_registry_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. RISKS doit prioriser le principal probleme rencontre (ou none). Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>) et inclure une suggestion d'amelioration si issues!=none. Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Avant un blocker read-only/permission, execute un probe ecriture concret sur docs/orchestrator-ops/parallel-workstreams.json.lock et docs/orchestrator-ops/intent-registry.json.lock; si probes OK, n'utilise pas un blocker permission. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>, exec_report=<resume_execution_concret>, issues=<none_ou_liste_priorisee>, suggestions=<none_ou_liste_actionnable>. Si un outil/skill manque pour livrer, ajoute tool_request=<outil_ou_none> et skill_request=<skill_ou_none> dans EVIDENCE. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, intent_registry_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. RISKS doit prioriser le principal probleme rencontre (ou none). Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>) et inclure une suggestion d'amelioration si issues!=none. Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Avant un blocker read-only/permission, execute un probe ecriture concret sur docs/orchestrator-ops/parallel-workstreams.json.lock et docs/orchestrator-ops/intent-registry.json.lock; si probes OK, n'utilise pas un blocker permission. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu dois lire publication_channels dans RUNTIME_CONTEXT pour savoir sur quoi travaillent les autres agents et evaluer l'impact sur ta tache. EVIDENCE doit inclure channels_read=<liste_canaux_lus>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none_ou_action_concrete>."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
@@ -1782,10 +2030,12 @@ fi
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
 - Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
+- Lecture des canaux de publication obligatoire au debut du tick: `python3 scripts/parallel_workstream.py channels --role <role> --limit 5`.
 - Pré-annonce obligatoire avant toute action delivery (claim/édition): exécuter `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`; réutiliser les refs générées dans EVIDENCE (`intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`).
 - Co-édition: après pré-annonce, claim d'abord (scripts/parallel_workstream.py claim --role <role>), patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
 - Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
 - Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
+- Impact inter-rôles: EVIDENCE doit inclure channels_read, impact_assessment, impact_action; si impact_assessment=high|critical, impact_action ne doit jamais être none.
 - Gate architecture commun: chaque rôle doit vérifier forecast-first (API prévisions -> UI visible), stabilité de schéma, réutilisation modules existants et observabilité minimale; refléter ces checks dans arch_rule/review_scope/conformance/violations.
 - Si aucun slot rôle READY/IN_PROGRESS: task_update=none_no_ready (pas de faux blocker).
 PROMPT
@@ -1807,6 +2057,7 @@ build_runtime_context() {
   local self_last_contract_hint=""
   local peer_contracts_hint_text=""
   local workboard_context=""
+  local publication_channels=""
   local team_chat_tail=""
   local team_iteration_tail=""
   local trace_tail=""
@@ -1833,11 +2084,12 @@ build_runtime_context() {
   self_last_contract_hint="$(read_last_contract_hint "$LAST_CONTRACT_FILE" "self" | cut -c1-420)"
   peer_contracts_hint_text="$(peer_contracts_hint)"
   workboard_context="$(workboard_context_hint)"
+  publication_channels="$(publication_channels_hint)"
   team_chat_tail="$(compact_file_tail "$TEAM_CHAT_FILE" 10 340)"
   team_iteration_tail="$(compact_file_tail "$TEAM_ITER_FILE" 8 260)"
   trace_tail="$(compact_file_tail "$TRACE_FILE" 8 280)"
 
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs' \
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | publication_channels=%s | team_chat_tail=%s | team_iteration_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
     "${now_iso:-unknown}" \
     "${queue_states:-none}" \
     "${queue_has_ready:-0}" \
@@ -1854,6 +2106,7 @@ build_runtime_context() {
     "${self_last_contract_hint:-none}" \
     "${peer_contracts_hint_text:-none}" \
     "${workboard_context:-none}" \
+    "${publication_channels:-none}" \
     "${team_chat_tail:-none}" \
     "${team_iteration_tail:-none}" \
     "${trace_tail:-none}"
@@ -2243,6 +2496,7 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
       STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
       sanitize_tmux_logs
       persist_last_contract "$STRUCTURED"
+      publish_execution_monitoring "$STRUCTURED" "primary_structured"
       trace_event "final_output source=primary"
       printf "%s\n" "$STRUCTURED"
       exit 0
@@ -2260,6 +2514,8 @@ Rappel critique:
 - Une seule valeur utile par ligne, sans commentaire ni texte hors contrat.
 - Obligatoire: EVIDENCE doit contenir ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>.
 - Obligatoire: EVIDENCE doit contenir task_update=<...>, lock_check=ok, run_note=<...>, exec_report=<...>, issues=<none|...>, suggestions=<none|...>.
+- Obligatoire: EVIDENCE doit contenir channels_read=<...>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none|action>.
+- Optionnel (si blocage outillage): EVIDENCE peut contenir tool_request=<outil_requis> et/ou skill_request=<skill_requise> (sinon mettre none).
 - Si queue_has_ready=1 ou workboard_role_has_work=1: inclure stream_id=<...> et task_id=<...>.
 - Si task_update=complete: inclure cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>.
 - Interdit: sortie générique READY/DISPATCH sans preuve explicite du rôle.
@@ -2291,6 +2547,7 @@ if [[ $RC_RETRY -eq 0 ]]; then
       STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
       sanitize_tmux_logs
       persist_last_contract "$STRUCTURED"
+      publish_execution_monitoring "$STRUCTURED" "retry_structured"
       trace_event "final_output source=retry"
       printf "%s\n" "$STRUCTURED"
       exit 0
@@ -2332,6 +2589,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
         sanitize_tmux_logs
         persist_last_contract "$STRUCTURED"
+        publish_execution_monitoring "$STRUCTURED" "codex_exec_fallback"
         trace_event "final_output source=codex_fallback"
         printf "%s\n" "$STRUCTURED"
         exit 0
@@ -2448,12 +2706,12 @@ if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
 
@@ -2474,5 +2732,6 @@ FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
 sanitize_tmux_logs
 persist_last_contract "$FALLBACK_OUTPUT"
+publish_execution_monitoring "$FALLBACK_OUTPUT" "fallback_checkpoint"
 trace_event "final_output source=checkpoint"
 printf "%s\n" "$FALLBACK_OUTPUT"
