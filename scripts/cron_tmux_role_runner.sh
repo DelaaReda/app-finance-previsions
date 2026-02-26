@@ -20,8 +20,8 @@ esac
 
 AGENT_BIN="${TMUX_ROLE_AGENT_BIN:-codex}"
 AGENT_BIN_NAME="${AGENT_BIN##*/}"
-PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-55}"
-RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-20}"
+PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-120}"
+RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-60}"
 STATE_DIR="${TMUX_ROLE_STATE_DIR:-/home/venom/.openclaw/cron/role-state}"
 TRACE_DIR="${TMUX_ROLE_TRACE_DIR:-$ROOT/logs-codex-runs/role-runner}"
 ROLE_MEMORY_DIR="${TMUX_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
@@ -31,11 +31,11 @@ WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$ROOT/docs/orchestrator-ops/parallel
 RECOVERY_THRESHOLD="${TMUX_ROLE_RECOVERY_THRESHOLD:-2}"
 SKIP_RETRY_ON_TIMEOUT="${SKIP_RETRY_ON_TIMEOUT:-1}"
 RETRY_ENGINE_DEFAULT="${TMUX_ROLE_RETRY_ENGINE_DEFAULT:-tmux}"
-NO_DELTA_THRESHOLD="${TMUX_ROLE_NO_DELTA_THRESHOLD:-6}"
+NO_DELTA_THRESHOLD="${TMUX_ROLE_NO_DELTA_THRESHOLD:-10}"
 TMUX_CAPTURE_LINES="${TMUX_ROLE_CAPTURE_LINES:-2600}"
 TMUX_READY_WAIT_SECONDS="${TMUX_ROLE_READY_WAIT_SECONDS:-8}"
 TMUX_POLL_INTERVAL_SECONDS="${TMUX_ROLE_POLL_INTERVAL_SECONDS:-1}"
-TMUX_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-18}"
+TMUX_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-75}"
 CODEX_EXEC_FALLBACK="${TMUX_ROLE_CODEX_EXEC_FALLBACK:-1}"
 CODEX_EXEC_MODEL="${TMUX_ROLE_CODEX_MODEL:-gpt-5.3-codex}"
 CODEX_NO_ALT_SCREEN="${TMUX_ROLE_CODEX_NO_ALT_SCREEN:-1}"
@@ -58,16 +58,16 @@ if ! [[ "$RECOVERY_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$RECOVERY_THRESHOLD" -lt 1 ]
   RECOVERY_THRESHOLD=2
 fi
 if ! [[ "$PROMPT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$PROMPT_TIMEOUT_SECONDS" -lt 1 ]]; then
-  PROMPT_TIMEOUT_SECONDS=55
+  PROMPT_TIMEOUT_SECONDS=120
 fi
 if ! [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 1 ]]; then
-  RETRY_PROMPT_TIMEOUT_SECONDS=20
+  RETRY_PROMPT_TIMEOUT_SECONDS=60
 fi
 if ! [[ "$SKIP_RETRY_ON_TIMEOUT" =~ ^[01]$ ]]; then
   SKIP_RETRY_ON_TIMEOUT=1
 fi
 if ! [[ "$NO_DELTA_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$NO_DELTA_THRESHOLD" -lt 1 ]]; then
-  NO_DELTA_THRESHOLD=6
+  NO_DELTA_THRESHOLD=10
 fi
 if ! [[ "$TMUX_CAPTURE_LINES" =~ ^[0-9]+$ ]] || [[ "$TMUX_CAPTURE_LINES" -lt 400 ]]; then
   TMUX_CAPTURE_LINES=2600
@@ -79,7 +79,7 @@ if ! [[ "$TMUX_POLL_INTERVAL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TMUX_POLL_INTERVAL_
   TMUX_POLL_INTERVAL_SECONDS=1
 fi
 if ! [[ "$TMUX_STALL_ABORT_SECONDS" =~ ^[0-9]+$ ]]; then
-  TMUX_STALL_ABORT_SECONDS=18
+  TMUX_STALL_ABORT_SECONDS=75
 fi
 if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
   CODEX_EXEC_FALLBACK=1
@@ -141,11 +141,11 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
 fi
 if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
   # codex exec resume often needs longer wall time than tmux prompt scraping.
-  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 90 ]]; then
-    PROMPT_TIMEOUT_SECONDS=90
+  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 120 ]]; then
+    PROMPT_TIMEOUT_SECONDS=120
   fi
-  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 45 ]]; then
-    RETRY_PROMPT_TIMEOUT_SECONDS=45
+  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 60 ]]; then
+    RETRY_PROMPT_TIMEOUT_SECONDS=60
   fi
 fi
 
@@ -767,6 +767,28 @@ if lock_check != "ok":
         "LOCK_CHECK_MISSING",
         f"role={role}; source={source}; required=lock_check=ok in EVIDENCE",
     )
+
+run_note = evidence_kv.get("run_note", "").strip()
+if not run_note:
+    emit_blocked(
+        "RUN_NOTE_MISSING",
+        f"role={role}; source={source}; required=run_note (>=5 words) in EVIDENCE",
+    )
+run_note_words = [w for w in re.split(r"\s+", run_note) if w]
+if len(run_note_words) < 5:
+    emit_blocked(
+        "RUN_NOTE_TOO_SHORT",
+        f"role={role}; source={source}; run_note_words={len(run_note_words)}; required>=5",
+    )
+
+if allow_file_edits and task_update in {"claim", "complete", "handoff"}:
+    preannounce_required = ("intent_id", "intent_chat_ref", "intent_memory_ref", "edit_scope")
+    missing_preannounce = [k for k in preannounce_required if not evidence_kv.get(k, "").strip()]
+    if missing_preannounce:
+        emit_blocked(
+            "PREANNOUNCE_EVIDENCE_MISSING",
+            f"role={role}; source={source}; task_update={task_update}; missing={','.join(missing_preannounce)}; required={','.join(preannounce_required)}",
+        )
 
 if allow_file_edits and workboard_role_has_in_progress and task_update in {"analysis_only", "none_no_ready", "none_no_signal"}:
     emit_blocked(
@@ -1678,7 +1700,7 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal> et lock_check=ok. EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>). Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, et run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>). Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
@@ -1688,8 +1710,8 @@ fi
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
 - Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
-- Co-édition: claim d'abord (scripts/parallel_workstream.py claim --role <role>), patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
-- Avant édition cross-section: publier un INTENT dans docs/ops/ADMIN_TEAM_CHAT.md.
+- Pré-annonce obligatoire avant toute action delivery (claim/édition): publier un INTENT dans docs/ops/ADMIN_TEAM_CHAT.md ET dans memory/YYYY-MM-DD.md avec intent_id, fichiers ciblés, scope, ETA.
+- Co-édition: après pré-annonce, claim d'abord (scripts/parallel_workstream.py claim --role <role>), patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
 - Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
 - Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
 - Gate architecture commun: chaque rôle doit vérifier forecast-first (API prévisions -> UI visible), stabilité de schéma, réutilisation modules existants et observabilité minimale; refléter ces checks dans arch_rule/review_scope/conformance/violations.
@@ -2217,8 +2239,8 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
   fi
   # Codex exec JSON mode can stream for longer than tmux scrape windows.
   # Keep a higher floor to avoid false timeout fallbacks.
-  if [[ "$CODEX_FALLBACK_TIMEOUT" -lt 90 ]]; then
-    CODEX_FALLBACK_TIMEOUT=90
+  if [[ "$CODEX_FALLBACK_TIMEOUT" -lt 120 ]]; then
+    CODEX_FALLBACK_TIMEOUT=120
   fi
   CODEX_TICK="C$(date +%s)_$RANDOM"
   trace_event "codex_fallback_begin tick=${CODEX_TICK} timeout=${CODEX_FALLBACK_TIMEOUT}s"
@@ -2354,12 +2376,12 @@ if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
 

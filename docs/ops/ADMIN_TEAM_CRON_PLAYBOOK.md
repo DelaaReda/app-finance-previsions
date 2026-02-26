@@ -129,7 +129,7 @@ Donner un protocole unique pour les admins qui travaillent en parallèle sur les
    - `TMUX_ROLE_CODEX_EXEC_RESUME=1`
 5. Baseline qualité:
    - `thinking=high`
-   - `timeoutSeconds=480`
+   - `timeoutSeconds=900`
    - output structuré 8 clés (`STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE`)
 6. Logs:
    - conserver les logs par itération/run
@@ -151,6 +151,14 @@ At each iteration, assign one of `adminapp-codex`, `admin-agents`, `clawsentinel
 Rotation recommandée: changer les rôles toutes les 2 heures.
 
 ## Protocole d'intervention (obligatoire)
+
+### 0) Pre-annonce avant action
+- Avant tout changement cron/runtime, publier un `TYPE: INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md` avec:
+  - `intent_id=<...>`
+  - `planned_files=<...>`
+  - `edit_scope=<...>`
+  - `eta_minutes=<...>`
+- Reporter le meme `intent_id` dans `memory/YYYY-MM-DD.md` avant la premiere commande de modification.
 
 ### 1) Prendre le lock admin
 ```bash
@@ -177,7 +185,7 @@ scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "scripts/cron_a
 
 ### 5) Forcer validation ciblée
 ```bash
-scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "scripts/cron_admin_lock.sh -- openclaw cron run <job-id> --expect-final --timeout 480000"
+scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "scripts/cron_admin_lock.sh -- openclaw cron run <job-id> --expect-final --timeout 900000"
 scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "scripts/cron_admin_lock.sh -- openclaw cron runs --id <job-id> --limit 3"
 ```
 

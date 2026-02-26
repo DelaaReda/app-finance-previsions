@@ -35,11 +35,16 @@ Named admin triad (for signed updates):
   - runner-only (`bash scripts/cron_tmux_role_runner.sh <role>`)
 - Defaults observed/expected:
   - `thinking=high`
-  - `timeoutSeconds=480`
+  - `timeoutSeconds=900`
+  - `PROMPT_TIMEOUT_SECONDS=180`
+  - `RETRY_PROMPT_TIMEOUT_SECONDS=90`
+  - `TMUX_ROLE_STALL_ABORT_SECONDS=75`
+  - `TMUX_ROLE_NO_DELTA_THRESHOLD=12`
   - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
   - `TMUX_ROLE_CODEX_EXEC_RESUME=1`
 - Evidence schema:
   - `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+  - `run_note` is mandatory (>= 5 words) to make future troubleshooting easier.
 - Restart checklist for admin agents:
   - `docs/ops/ADMIN_POST_RESTART_RUNBOOK.md`
 
@@ -56,7 +61,7 @@ Use this when 2+ agents can edit cron settings at the same time.
    - `openclaw cron list`
 4. Apply the smallest possible change (prefer editing one job at a time).
 5. Force one validation run for the edited job:
-   - `openclaw cron run <job-id> --expect-final --timeout 480000`
+   - `openclaw cron run <job-id> --expect-final --timeout 900000`
 6. Record result and release the edit window in `agent-watchdog.md` (success/failure + rollback note).
 7. Add signed iteration notes from all 3 admins in `docs/ops/ADMIN_TEAM_ITERATIONS.md`, then mirror runtime decision in `agent-watchdog.md`.
 
@@ -145,6 +150,6 @@ Quick example:
   - `NO_DELTA` streak escalation is suppressed when `queue_has_ready=0` to avoid false `NO_PROGRESS_STREAK`.
 
 ## Improvement backlog (next doc-driven hardening)
-1. Keep `timeoutSeconds=480` until parse quality improves; only then evaluate reductions role-by-role.
+1. Keep `timeoutSeconds=900`; tune down only with measured evidence (p95 duration, timeout rate, false BLOCKED rate).
 2. Keep one canonical runner script for tmux role turns (`cron_tmux_role_runner.sh`) and maintain `cron_tmux_role_turn.sh` as compatibility wrapper only.
 3. Enforce a strict edit-window protocol before any cron rewrite to prevent ID churn and stale monitors.

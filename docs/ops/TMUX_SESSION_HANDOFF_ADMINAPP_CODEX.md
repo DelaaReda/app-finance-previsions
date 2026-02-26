@@ -11,7 +11,7 @@
 2. Runtime profile target:
    - parallel / codex-only / 17 jobs (14 roles + 2 admins + 1 stale auto-heal)
    - runner-only payloads (`bash scripts/cron_tmux_role_runner.sh <role>`)
-   - baseline: `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`, `timeoutSeconds=480`
+   - baseline: `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`, `timeoutSeconds=900`
 3. Proof-first policy:
    - role contract 8-keys obligatoire
    - `EVIDENCE` schema kv (cf. `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`)

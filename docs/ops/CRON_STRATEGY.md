@@ -10,20 +10,22 @@
   - 2 admin loops: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`
   - 1 utility: `stale-sweep-autoheal-7m`
 - Runtime hardening baseline (tmux role runner):
-  - `PROMPT_TIMEOUT_SECONDS=55`
-  - `RETRY_PROMPT_TIMEOUT_SECONDS=30`
+  - `PROMPT_TIMEOUT_SECONDS=180`
+  - `RETRY_PROMPT_TIMEOUT_SECONDS=90`
   - `TMUX_ROLE_RECOVERY_THRESHOLD=2`
   - `TMUX_ROLE_NO_DELTA_THRESHOLD=12`
+  - `TMUX_ROLE_STALL_ABORT_SECONDS=75`
   - `TMUX_ROLE_AGENT_BIN=codex`
   - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
   - `TMUX_ROLE_CODEX_EXEC_RESUME=1`
   - `TMUX_ROLE_CODEX_EXEC_FALLBACK=1`
   - `TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex`
   - `thinking=high`
-  - `timeoutSeconds=480` (all role jobs)
+  - `timeoutSeconds=900` (all role jobs, incl. architect)
   - payload policy: runner-only (`bash scripts/cron_tmux_role_runner.sh <role>`)
   - tmux role session naming is codex-first (`codex_<role>_cron`)
   - evidence schema: `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+  - blocked detection priority: `NO_DELTA` streak gate + delivery-contract invariants + stall traces (not single hard timeout)
 
 ## Legacy baseline (core, 10 jobs)
 - Historical profile: 8 delivery roles + 2 admin continuity ticks.

@@ -31,6 +31,13 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 4. Sans item `READY`, le mode normal est `monitoring` (pas d’escalade artificielle).
 5. Les admins ne livrent pas le code applicatif a la place de `dev/tester/qa`; ils garantissent la plomberie, le routage et la qualite du flux.
 
+## Protocole pre-annonce obligatoire (anti-chevauchement)
+1. Avant toute action delivery (`claim|edit|complete|handoff`), l’agent publie un `TYPE: INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md` avec: `intent_id`, `planned_files`, `edit_scope`, `eta_minutes`.
+2. Le meme `intent_id` doit etre logue dans `memory/YYYY-MM-DD.md` avant la premiere edition.
+3. Apres pre-annonce seulement, l’agent execute `scripts/parallel_workstream.py claim --role <role>`.
+4. Si un autre intent actif cible les memes fichiers/sections, l’agent n’ecrase pas: il passe en merge/handoff explicite.
+5. Les preuves de livraison (`EVIDENCE`) doivent contenir `intent_id`, `intent_chat_ref`, `intent_memory_ref`, `edit_scope`.
+
 ## Mapping owner par issue (admin-agents)
 - `sessions_missing`, `role_errors_present`, `role_jobs_pending`, `role_jobs_missing`, `role_jobs_disabled`, `sessions_stale_no_recent_runner_activity` -> `adminapp-codex` (`runtime_stability`)
 - `sessions_idle_generic_prompt` -> `clawsentinel` (`quality_signal`)

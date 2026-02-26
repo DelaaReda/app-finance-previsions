@@ -292,15 +292,22 @@ contracts:
         MUST_contain:
           - "task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>"
           - "lock_check=ok"
+          - "run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>"
           - "queue_version=<checksum_or_version>"
           - "workboard_version=<checksum_or_version>"
         enforcement_progressif:
           baseline_must:
             - "task_update"
             - "lock_check"
+            - "run_note"
             - "role artifact marker (<role>_artifact=...)"
             - "queue_version"
             - "workboard_version"
+          phase_1_must_when_delivery_action:
+            - "si task_update in [claim, complete, handoff]: intent_id"
+            - "si task_update in [claim, complete, handoff]: intent_chat_ref"
+            - "si task_update in [claim, complete, handoff]: intent_memory_ref"
+            - "si task_update in [claim, complete, handoff]: edit_scope"
           phase_1_should_when_has_work:
             - "stream_id"
             - "task_id"
@@ -480,6 +487,14 @@ coordination_and_ordination:
       remediation:
         - "reopen le stream dans priority-queue si du travail reste a livrer"
         - "sinon cloturer/archiver les tasks restantes du workboard"
+    - id: "INV-PREANNOUNCE-BEFORE-EDIT"
+      severity: "BLOCKED"
+      rule: "toute action delivery (claim/complete/handoff) doit etre pre-annoncee dans ADMIN_TEAM_CHAT + memory du jour avant la premiere edition"
+      detection: "role_contract EVIDENCE contient intent_id + intent_chat_ref + intent_memory_ref + edit_scope"
+      owner: "admin-agents"
+      remediation:
+        - "publier INTENT pre-run (chat+memory) puis relancer claim"
+        - "si conflit d'intent sur memes fichiers: handoff/merge explicite, pas d'ecrasement"
 
 conflict_prevention:
   locking_mechanisms:
