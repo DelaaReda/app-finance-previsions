@@ -85,6 +85,11 @@ Per asset/sector card:
 - P0 - Epic 3: Multi-Model Consensus and Judge
 - P1 - Epic 4: Decision Cockpit Frontend (2-3 click workflow)
 - P1 - Epic 5: Ask Copilot Deep Analysis (grounded Q&A)
+- P1 - Epic 10: Data Source Reliability and Ingestion Automation
+- P1 - Epic 11: UX Workflow and Personal Settings Basics
+- P1 - Epic 12: Alerts and Daily Automation
+- P1 - Epic 13: Reliability, Security, and Backup
+- P1 - Epic 14: MVP Release Readiness and Go-Live
 - P2 - Epic 6: Portfolio Adaptation Layer (watchlist/risk profile tuning)
 - P1 - Epic 8: Cost Governance and Runtime Efficiency (free-first routing + guardrails)
 - P2 - Epic 7: Geopolitical and Macro Impact Radar (event impact + regime flags)
@@ -107,3 +112,4 @@ Per asset/sector card:
 ## Changelog
 - 2026-02-26 America/New_York - Initial vision clarified from direct user answers and defaults for missing constraints.
 - 2026-02-26 America/New_York - Added expansion epics for macro radar, cost governance, and learning loop continuity.
+- 2026-02-26 America/New_York - Added basic-ready expansion epics for ingestion reliability, UX/settings, alerts, operations hardening, and release go-live.

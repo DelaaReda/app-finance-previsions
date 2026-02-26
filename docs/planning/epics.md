@@ -260,6 +260,7 @@ bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp
 - 2026-02-24 22:05 America/New_York — Correction cohérence de dépendances: EPIC A rendu indépendant (socle), suppression cycle implicite A<->C; commande pytest rendue auto-bootstrap.
 - 2026-02-26 America/New_York — Added vision-clarifier epic set focused on personal low-cost decision workflow (`docs/planning/PRODUCT_VISION.md`).
 - 2026-02-26 America/New_York — Extended vision epic set with Epic 7/8/9 (macro radar, cost governance, decision learning loop).
+- 2026-02-26 America/New_York — Extended vision epic set with Epic 10/11/12/13/14 for basic-ready delivery loop.
 
 ## Delta vision-clarifier (2026-02-26)
 
@@ -327,3 +328,38 @@ This section is the active product-priority lens for upcoming sprints.
   - every daily brief decision can be logged with rationale/confidence/sources
   - short-horizon outcomes (1d/1w) are attached to decisions
   - recommendation output includes explicit feedback-weight adjustments
+
+### Epic 10 (P1) - Data Source Reliability and Ingestion Automation
+- Goal: ensure core feeds stay available, fresh, and normalized without manual babysitting.
+- Done when:
+  - source inventory and SLA tiers are defined for core endpoints
+  - scheduler + fallback adapters keep core feeds available under source instability
+  - ingestion health is exposed to UI and delivery gate
+
+### Epic 11 (P1) - UX Workflow and Personal Settings Basics
+- Goal: make daily usage faster and clearer for a solo investor workflow.
+- Done when:
+  - home information architecture supports 2-3 click decision workflow
+  - quick filters and explanation drawer improve action clarity
+  - key user preferences persist reliably across sessions
+
+### Epic 12 (P1) - Alerts and Daily Automation
+- Goal: surface only actionable events in time, without notification noise.
+- Done when:
+  - alert rules and triggers run on price/news/regime events
+  - in-app alert center and daily digest are available
+  - dedupe and prioritization reduce low-value alert spam
+
+### Epic 13 (P1) - Reliability, Security, and Backup
+- Goal: make the app recoverable and trustworthy under failures.
+- Done when:
+  - error catalog + retry policy are enforced on critical flows
+  - traceability and backup/restore exist for critical user state
+  - recovery drills pass with explicit runbook steps
+
+### Epic 14 (P1) - MVP Release Readiness and Go-Live
+- Goal: reach a formal go/no-go decision with auditable proof.
+- Done when:
+  - checklist and E2E scenarios cover all basic user flows
+  - performance and defect thresholds are within release budget
+  - final gate returns explicit GO/NO-GO with blocker traceability

@@ -23,6 +23,11 @@ Order by:
 - Epic 4: Decision cockpit frontend (2-3 click daily brief)
 - Epic 5: Ask copilot deep analysis (grounded by current data)
 - Epic 8: Cost governance/runtime efficiency (free-first + guardrails)
+- Epic 10: Data source reliability and ingestion automation
+- Epic 11: UX workflow and personal settings basics
+- Epic 12: Alerts and daily automation
+- Epic 13: Reliability, security, and backup
+- Epic 14: MVP release readiness and go-live
 
 ### P2 - After core workflow is stable
 - Epic 6: Portfolio adaptation layer (watchlist + risk profile tuning)
@@ -51,6 +56,11 @@ Order by:
 - Epic 7: `TV7-MACRO-01..06`
 - Epic 8: `TV8-COST-01..06`
 - Epic 9: `TV9-LOOP-01..06`
+- Epic 10: `TV10-DATA-01..06`
+- Epic 11: `TV11-UX-01..06`
+- Epic 12: `TV12-ALRT-01..06`
+- Epic 13: `TV13-OPS-01..06`
+- Epic 14: `TV14-SHIP-01..06`
 
 Reference:
 - `docs/planning/tasks.md` (`Vision Task Pack - Sprint W10`, `Code-Audit Advance Pack`, `Full Epic Decomposition - All Epics`)

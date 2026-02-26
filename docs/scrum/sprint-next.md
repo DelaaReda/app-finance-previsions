@@ -60,3 +60,4 @@ User can open the app and, in 2-3 clicks, get:
 - 2026-02-26 America/New_York - Added full-ahead queue for Epic 3 to Epic 6 based on complete task decomposition.
 - 2026-02-26 America/New_York - Re-aligned sprint doc to single-board rule: task definitions and ordering now live only in `docs/planning/tasks.md`.
 - 2026-02-26 America/New_York - Board reference now includes expansion epics 7/8/9 through the single source `docs/planning/tasks.md`.
+- 2026-02-26 America/New_York - Board reference expanded to include epic tracks 10/11/12/13/14 for basic-ready delivery loop.

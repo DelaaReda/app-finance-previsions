@@ -1,6 +1,7 @@
-# Tasks détaillées orientées exécution par agents codex (OpenClaw)
+# pTasks détaillées orientées exécution par agents codex (OpenClaw)
 
 ## Gate Status (source of truth)
+
 - `BATCH-01`: `PASS` (QA signoff already present)
   - artifact: `finance-app/openclaw-gates/batch-01-20260225-000127.md`
   - keys: `QA_SIGNOFF: YES`, `VERDICT: PASS`, `BLOCKER_ID: NONE`
@@ -10,15 +11,18 @@
 - If a runtime role output reports `QA_PASS_SIGNATURE_UNVERIFIED`, re-check the artifact above before keeping the blocker.
 
 ## Convention de dispatch
+
 - **Rôles (core chain)**: planner, dev, tester, qa
 - **Taille cible**: 2-4h / tâche
 - **Format sortie obligatoire (contrat)**: STATUS / DELTA / EVIDENCE / RISKS / NEXT / VERDICT / BLOCKER_ID / NEXT_ACTION_UNIQUE
 - **EVIDENCE**: suivre `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md` (kv `key=value;...`)
 
 ## Architecture d'intégration détaillée (anti-chevauchement, sans nouvelles tâches)
+
 - Cette section n'ajoute aucun nouvel ID. Elle précise uniquement l'ownership architecture des tâches déjà présentes dans ce backlog.
 
 ### Sources de vérité techniques
+
 - Entrypoint API principal: `copilot-app/backend/src/api/main.py`
 - Routes modulaires: `copilot-app/backend/src/api/routes/*.py`
 - Frontend runtime: `copilot-app/frontend/app/app.js` + `index.html`
@@ -26,12 +30,14 @@
 - Gates de livraison: `scripts/run_delivery_gate.sh` + artefacts `finance-app/openclaw-gates/`
 
 ### Règles globales anti-chevauchement
+
 - Un endpoint fonctionnel = un owner de tâche à la fois.
 - Une tâche peut lire hors scope, mais ne modifie que son périmètre explicitement listé.
 - Si une modification traverse 2 périmètres, elle doit être split selon les `Dependencies` existantes (pas de fusion opportuniste).
 - Toute exception cross-scope doit être signalée dans `EVIDENCE` et validée par `qa` avant merge batch.
 
 ### Mode co-édition multi-agents (fichiers modifiés en parallèle)
+
 - `docs/planning/tasks.md` est le board commun unique pour les tâches (pas de définition de tâches dans les autres docs).
 - Avant édition:
   - claimer la tâche via le workboard (`scripts/parallel_workstream.py claim --role <role>`),
@@ -47,6 +53,7 @@
   - toute nouvelle granularité de tâche/ordre d'exécution doit d'abord être écrite dans `docs/planning/tasks.md`, puis seulement référencée ailleurs.
 
 ### Ownership architecture (tâches T-A / T-B / T-C existantes)
+
 - `T-A1.1`
   - Owned: contrat `/api/health` uniquement.
   - Not owned: cache/freshness SLA, logique signal, UI.
@@ -70,6 +77,7 @@
   - Not owned: features endpoint/UI.
 
 ### Ownership architecture (Sprint W10 - tâches TV* existantes)
+
 - `TV1-FRESH-01`
   - Owned: champs de fraîcheur (`updated_at`, `age_seconds`, `freshness_status`) sur `/api/stocks/prices`, `/api/news/feed`, `/api/forecasts`.
   - Not owned: TTL/cache policy détaillée, SLA scripts.
@@ -102,6 +110,7 @@
   - Not owned: développement fonctionnel endpoint/UI.
 
 ### Ownership architecture (Advance Pack - tâches TV-ADV* existantes)
+
 - `TV-ADV-01`
   - Owned: suppression du chemin runtime mock-driven, bridge API frontend.
   - Not owned: widget Judge détaillé (TV-ADV-02), refresh orchestration (TV-ADV-03).
@@ -134,6 +143,7 @@
   - Not owned: changements de contenu métier endpoints.
 
 ### Verrous de zones sensibles (pour éviter recouvrement)
+
 - `/api/freshness` est réservé à `TV-ADV-04` (consommation seulement pour les autres).
 - `/api/dashboard/kpis` est réservé à `TV-ADV-06` pendant consolidation.
 - `/api/copilot/history` est réservé à `TV-ADV-05` pendant sortie du mode mock.
@@ -141,6 +151,7 @@
 - `scripts/run_delivery_gate.sh` est réservé à `TV-QA-01` puis `TV-ADV-10`.
 
 ### Handoffs obligatoires entre tâches existantes
+
 - `TV1-FRESH-01` -> `TV1-FRESH-02` -> `TV1-FRESH-03`
 - `TV2-SIGNAL-01` -> `TV2-SIGNAL-02` -> `TV2-SIGNAL-03`
 - `TV4-UI-01` -> `TV4-UI-02` -> `TV4-UI-03`
@@ -148,6 +159,7 @@
 - `TV-ADV-04`, `TV-ADV-05`, `TV-ADV-06`, `TV-ADV-07` -> `TV-ADV-08` -> `TV-ADV-10`
 
 ## Modèle de référence: Judge API (à réutiliser pour les autres endpoints)
+
 - **Implémentation canonique**: `copilot-app/backend/src/api/routes/judge.py` (GET `/api/judge`).
 - **Pourquoi c'est le modèle**: l'endpoint montre le pattern complet "production-ready" (normalisation input, cache TTL, debug bypass, validation Pydantic, parsing JSON strict, multi-provider fallback, contrat typé pour le frontend).
 - **Dépendances à réutiliser (backend)**:
@@ -169,6 +181,7 @@
 ---
 
 ## T-A1.1 — Verrouiller contrat `/api/health`
+
 - **Objectif**: réponse health stable et rétro-compatible.
 - **Scope IN**: normalisation shape + tests.
 - **Scope OUT**: ajout observabilité avancée.
@@ -193,6 +206,7 @@
 - **Dépendances**: aucune.
 
 ## T-A2.1 — Unifier réponse mono ticker `/api/stocks/prices`
+
 - **Objectif**: contrat UI-friendly pour 1 ticker.
 - **Scope IN**: champs `ticker, points, count, timestamp`.
 - **Scope OUT**: provider data externe.
@@ -215,6 +229,7 @@
 - **Dépendances**: T-A1.1.
 
 ## T-A2.2 — Tester multi ticker `/api/stocks/prices`
+
 - **Objectif**: valider payload map multi-tickers.
 - **Scope IN**: tests de contrat + cas erreur input.
 - **Scope OUT**: optimisation perfs.
@@ -236,6 +251,7 @@
 - **Dépendances**: T-A2.1.
 
 ## T-A3.1 — Normaliser `news_feed` items
+
 - **Objectif**: items news exploitables et homogènes.
 - **Scope IN**: mapping title/url/source/date/tickers/score.
 - **Scope OUT**: scoring algorithmique news.
@@ -258,6 +274,7 @@
 - **Dépendances**: T-A1.1.
 
 ## T-A3.2 — Tests contrat `news_feed`
+
 - **Objectif**: figer le contrat minimal dans des tests.
 - **Scope IN**: tests items/limit/filter tickers.
 - **Scope OUT**: perf tests.
@@ -278,6 +295,7 @@
 - **Dépendances**: T-A3.1.
 
 ## T-A4.1 — Confirmer route unique `/api/forecasts`
+
 - **Objectif**: éviter ambiguïtés d’implémentation forecasts.
 - **Scope IN**: route active unique via router.
 - **Scope OUT**: calcul des scores forecast.
@@ -299,6 +317,7 @@
 - **Dépendances**: T-A1.1.
 
 ## T-A5.1 — Hardening `/api/copilot/ask`
+
 - **Objectif**: robustesse cas sans source/LLM indisponible.
 - **Scope IN**: erreurs contrôlées, champs qualité.
 - **Scope OUT**: amélioration modèle LLM.
@@ -320,6 +339,7 @@
 - **Dépendances**: T-A1.1.
 
 ## T-B1.1 — Créer couche API frontend minimale
+
 - **Objectif**: centraliser fetch MVP.
 - **Scope IN**: helper fetch + timeout + gestion erreurs.
 - **Scope OUT**: migration framework frontend.
@@ -340,6 +360,7 @@
 - **Dépendances**: T-A2.1, T-A3.1, T-A4.1, T-A5.1.
 
 ## T-B1.2 — Brancher widgets MVP aux données API
+
 - **Objectif**: afficher health/news/forecasts/stocks réels.
 - **Scope IN**: mapping payload -> render.
 - **Scope OUT**: redesign complet UI.
@@ -365,6 +386,7 @@
 - **Dépendances**: T-B1.1.
 
 ## T-B2.1 — Badge « Données simulées »
+
 - **Objectif**: transparence utilisateur fallback.
 - **Scope IN**: badge visible par composant fallback.
 - **Scope OUT**: système de feature flags global.
@@ -385,6 +407,7 @@
 - **Dépendances**: T-B1.2.
 
 ## T-C1.1 — Script gate MVP PASS/BLOCKED
+
 - **Objectif**: une commande de gate unique.
 - **Scope IN**: health + 4 endpoints + copilot ask + smoke.
 - **Scope OUT**: tests perfs.
@@ -407,6 +430,7 @@
 - **Dépendances**: A1..A2 (gate initial), puis A3..A5 et B1..B2 pour le gate final.
 
 ## T-C1.2 — Runbook orchestration MVP (codex/OpenClaw)
+
 - **Objectif**: standardiser dispatch/monitoring des tâches.
 - **Scope IN**: prompts par rôle, cadence check, format preuves.
 - **Scope OUT**: auto-remédiation complète.
@@ -443,6 +467,7 @@
 ## Pack de dispatch (delta incrémental)
 
 ### Batch-01
+
 - **Tâches**: `T-A1.1`, `T-A2.1`
 - **Instruction commune agents**:
   - livrer strictement le scope IN
@@ -458,6 +483,7 @@
   - contenu minimal: `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`
 
 ### Handoff checklist QA (delta 20:05)
+
 - [ ] Scope IN respecté pour chaque tâche du batch
 - [ ] Au moins 1 commande de test exécutée par tâche
 - [ ] Évidence textuelle copiée dans artefact gate
@@ -465,6 +491,7 @@
 - [ ] Prochaine action unique définie
 
 ## Ordonnancement recommandé
+
 1. T-A1.1
 2. T-A2.1 → T-A2.2
 3. T-A3.1 → T-A3.2
@@ -477,16 +504,19 @@
 ## Delta tâches (cycle 20:20)
 
 ### Delta 20:20 — commandes renforcées pour `T-A1.1`
+
 - Ajouter boucle stabilité:
   - `for i in {1..3}; do curl -sS http://localhost:8050/api/health | jq -c '{ok,status,ts:.data.timestamp}'; done`
 - Critère additionnel: 3/3 réponses exploitables, sans clé absente.
 
 ### Delta 20:20 — commandes renforcées pour `T-A2.1`
+
 - Ajouter vérification robuste des clés:
   - `for i in {1..5}; do curl -sS "http://localhost:8050/api/stocks/prices?ticker=SPY" | jq -c '{ok,ticker,count,has_points:(.data.points!=null),has_ts:(.data.timestamp!=null)}'; done`
 - Critère additionnel: 5/5 réponses sans erreur serveur.
 
 ### Template d’évidence obligatoire (toutes tâches Batch-01)
+
 ```text
 STATUS:
 DELTA:
@@ -501,6 +531,7 @@ NEXT_ACTION_UNIQUE:
 ## Delta runbook tâches (cycle 20:35)
 
 ### Lot prêt à exécution immédiate (Batch-01)
+
 1. **T-A1.1**
    - Owner: `dev`
    - QA gate: `tester` valide commandes, `qa` signe verdict
@@ -509,12 +540,14 @@ NEXT_ACTION_UNIQUE:
    - QA gate: stabilité 5x obligatoire avant verdict
 
 ### Lot conditionnel suivant (Batch-02)
+
 1. **T-A2.2** (tests multi-ticker)
 2. **T-A3.1** (normalisation news)
 
 **Règle d’activation Batch-02**: présence de `VERDICT: PASS` dans `finance-app/openclaw-gates/batch-01-<timestamp>.md`.
 
 ### Template d’assignation agent (copier-coller)
+
 ```text
 [TASK_ID] <id>
 OBJECTIF: <objectif court>
@@ -536,6 +569,7 @@ VERDICT_ATTENDU: PASS|BLOCKED
 ### Pack Batch-02 (préparé, verrouillé)
 
 #### Carte d’assignation prête pour `T-A2.2`
+
 ```text
 [TASK_ID] T-A2.2
 OBJECTIF: valider contrat multi-ticker /api/stocks/prices
@@ -553,6 +587,7 @@ VERDICT_ATTENDU: PASS|BLOCKED
 ```
 
 #### Carte d’assignation prête pour `T-A3.1`
+
 ```text
 [TASK_ID] T-A3.1
 OBJECTIF: normaliser le contrat /api/news/feed
@@ -570,27 +605,32 @@ VERDICT_ATTENDU: PASS|BLOCKED
 ```
 
 ### Règle de lot
+
 - Batch-02 est exécuté en séquence stricte `T-A2.2` puis `T-A3.1`.
 - Si `T-A2.2` est BLOCKED, ne pas lancer `T-A3.1`.
 
 ## Delta tâches (cycle 21:05)
 
 ### Contrôle qualité lot (ajout)
+
 - **Nouvelle exigence commune Batch-01/Batch-02**:
   - inclure `VERDICT: PASS|BLOCKED`
   - inclure `BLOCKER_ID` (ou `NONE`)
   - inclure `NEXT_ACTION_UNIQUE`
 
 ### Patch minimal policy (ajout)
+
 - En cas `BLOCKED`, l’agent `dev` doit proposer un patch minimal ciblé sur le fichier fautif listé dans `BLOCKER_ID`.
 - Interdiction d’ouvrir des fichiers hors scope de la tâche sans justification QA.
 
 ### Evidence quality gate (ajout)
+
 - Toute commande de test listée dans la tâche doit avoir soit:
   1) sortie utile incluse dans l’artefact, soit
   2) motif documenté de non-exécution.
 
 ## Changelog
+
 - 2026-02-24 19:50 America/New_York — Ajout du pack de dispatch Batch-01 avec règles de preuve et conditions de blocage immédiat.
 - 2026-02-24 20:05 America/New_York — Ajout du chemin d’artefact obligatoire pour Batch-01 et d’une checklist QA de handoff pour fiabiliser le verdict.
 - 2026-02-24 20:20 America/New_York — Renforcement incrémental des tâches Batch-01 (boucles de stabilité health/stocks) + template d’évidence unifié PASS/BLOCKED.
@@ -605,15 +645,18 @@ VERDICT_ATTENDU: PASS|BLOCKED
 ## Vision Task Pack - Sprint W10 (P0-first)
 
 Source:
+
 - `docs/planning/PRODUCT_VISION.md`
 - `docs/scrum/sprint-next.md`
 
 Execution rule:
+
 - Keep tasks 2-4h each.
 - Close only with contract output + test evidence.
 - Prioritize user-visible decision flow over refactor work.
 
 ### TV1-FRESH-01 - Freshness metadata contract (P0)
+
 - **Epic**: Epic 1 - Data Freshness Foundation
 - **Objectif**: rendre la fraicheur visible et cohérente sur les endpoints core.
 - **Scope IN**:
@@ -625,6 +668,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/forecasts.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - les 3 endpoints exposent les 3 champs de fraicheur.
 - **Commandes de test**:
@@ -634,6 +681,7 @@ Execution rule:
 - **Dependencies**: none
 
 ### TV1-FRESH-02 - Cache TTL and stale guardrails (P0)
+
 - **Epic**: Epic 1 - Data Freshness Foundation
 - **Objectif**: garantir la cible <=10 minutes sur surfaces critiques.
 - **Scope IN**:
@@ -643,6 +691,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/services/news_service.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - aucun fallback silencieux; stale signalé explicitement.
 - **Commandes de test**:
@@ -650,6 +702,7 @@ Execution rule:
 - **Dependencies**: TV1-FRESH-01
 
 ### TV1-FRESH-03 - Freshness SLA checker (P0)
+
 - **Epic**: Epic 1 - Data Freshness Foundation
 - **Objectif**: mesurer et prouver le SLA de fraicheur.
 - **Scope IN**:
@@ -659,6 +712,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `scripts/`
   - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - un run produit un verdict SLA auditable.
 - **Commandes de test**:
@@ -667,6 +724,7 @@ Execution rule:
 - **Dependencies**: TV1-FRESH-02
 
 ### TV2-SIGNAL-01 - Decision signal schema v1 (P0)
+
 - **Epic**: Epic 2 - Forecast Engine
 - **Objectif**: figer le contrat de signal utilisé par backend+frontend.
 - **Scope IN**:
@@ -677,6 +735,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/schemas.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
   - contrat stable et sans champ manquant.
 - **Commandes de test**:
@@ -684,6 +746,7 @@ Execution rule:
 - **Dependencies**: TV1-FRESH-01
 
 ### TV2-SIGNAL-02 - Core asset signals (P0)
+
 - **Epic**: Epic 2 - Forecast Engine
 - **Objectif**: livrer un signal exploitable sur noyau d’actifs prioritaire.
 - **Scope IN**:
@@ -693,6 +756,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
   - chaque actif retourne direction+confidence+action+updated_at.
 - **Commandes de test**:
@@ -700,6 +767,7 @@ Execution rule:
 - **Dependencies**: TV2-SIGNAL-01
 
 ### TV2-SIGNAL-03 - Full MVP universe coverage (P0)
+
 - **Epic**: Epic 2 - Forecast Engine
 - **Objectif**: étendre la couverture au périmètre vision MVP.
 - **Scope IN**:
@@ -711,13 +779,19 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/data/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
-  - >=90% univers avec signal complet par cycle.
+  - > =90% univers avec signal complet par cycle.
+    >
 - **Commandes de test**:
   - `cd copilot-app/backend && .venv/bin/pytest -q tests/test_stocks_prices_contract.py`
 - **Dependencies**: TV2-SIGNAL-02
 
 ### TV4-UI-01 - Decision cards API adapter (P1 but sprint-committed)
+
 - **Epic**: Epic 4 - Decision Cockpit Frontend
 - **Objectif**: brancher frontend sur le contrat de signal backend.
 - **Scope IN**:
@@ -726,6 +800,10 @@ Execution rule:
 - **Scope OUT**: redesign UI complet.
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - appels API centralisés et traçables.
 - **Commandes de test**:
@@ -734,6 +812,7 @@ Execution rule:
 - **Dependencies**: TV2-SIGNAL-01
 
 ### TV4-UI-02 - 2-3 click daily brief flow (P1 but sprint-committed)
+
 - **Epic**: Epic 4 - Decision Cockpit Frontend
 - **Objectif**: obtenir "quoi faire aujourd’hui" en 2-3 interactions.
 - **Scope IN**:
@@ -744,6 +823,10 @@ Execution rule:
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - flux complet <=3 clics vers briefing actionnable.
 - **Commandes de test**:
@@ -751,6 +834,7 @@ Execution rule:
 - **Dependencies**: TV4-UI-01
 
 ### TV4-UI-03 - Freshness and degraded-state badges (P1 but sprint-committed)
+
 - **Epic**: Epic 4 - Decision Cockpit Frontend
 - **Objectif**: rendre explicite l’état des données.
 - **Scope IN**:
@@ -760,6 +844,10 @@ Execution rule:
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - aucun état caché: stale/degraded toujours visible.
 - **Commandes de test**:
@@ -767,6 +855,7 @@ Execution rule:
 - **Dependencies**: TV1-FRESH-01, TV4-UI-01
 
 ### TV-QA-01 - Sprint W10 end-to-end gate (P0 release gate)
+
 - **Epic**: Cross-epic quality gate
 - **Objectif**: valider le sprint sur workflow utilisateur final.
 - **Scope IN**:
@@ -788,6 +877,7 @@ Execution rule:
   - TV4-UI-03
 
 ### Ready-next queue (after W10 commit)
+
 - TV3-JUDGE-01 - Multi-provider opinion collector (g4f-first).
   - INTEGRATION-APP-EENGINEER-RECOMMENDATIONS:
     - Réutiliser le pattern `/api/judge` (cache TTL + debug bypass + Pydantic + JSON strict) comme squelette de l'endpoint.
@@ -803,11 +893,13 @@ Execution rule:
     - Éviter d'introduire une nouvelle logique de RAG: s'appuyer sur `rag_store`/chunks existants et stabiliser le contrat + tests.
 
 ## Changelog (vision tasks)
+
 - 2026-02-26 America/New_York - Added W10 vision-aligned task pack prioritized by P0 user-value and freshness constraints.
 
 ## Code-Audit Advance Pack (pre-W11)
 
 Source audit (2026-02-26):
+
 - frontend still relies heavily on `mockData.js` and simulated flows in `app.js`
 - `/api/freshness` in `main.py` is currently placeholder/static
 - `/api/copilot/history` currently returns mock conversations
@@ -816,6 +908,7 @@ Source audit (2026-02-26):
 - backend has deprecation debt (`@app.on_event`, `datetime.utcnow`, pydantic v1 validators/max_items)
 
 ### UI Fast-Lane Priority (concrete user-visible results)
+
 1. `TV-ADV-01-D2` - Runtime wiring of priority widgets
 2. `TV-ADV-02` - Judge widget real wiring
 3. `TV-ADV-03` - Real refresh behavior in UI
@@ -823,6 +916,7 @@ Source audit (2026-02-26):
 5. `TV-ADV-10` - Gate upgrade tied to UI workflow proof
 
 ### TV-ADV-01 - Frontend API bridge (remove mock-driven runtime path)
+
 - **Epic**: Epic 4 - Decision Cockpit Frontend
 - **Objectif**: remplacer le chemin principal mock par des appels backend réels.
 - **Scope IN**:
@@ -844,6 +938,7 @@ Source audit (2026-02-26):
 #### Breakdown for `TV-ADV-01` (ready to launch)
 
 ##### TV-ADV-01-P - Planner scope lock and widget map
+
 - **Owner**: planner
 - **Objectif**: verrouiller le mapping API -> widgets MVP à migrer en premier.
 - **Scope IN**:
@@ -854,11 +949,16 @@ Source audit (2026-02-26):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
   - `docs/planning/tasks.md` (notes de dispatch si besoin)
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
+  - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
+  - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
 - **Evidence attendue**:
   - table de mapping widget->endpoint->contrat->fallback.
 - **Dependencies**: TV4-UI-01
 
 ##### TV-ADV-01-D1 - Dev API client layer
+
 - **Owner**: dev
 - **Objectif**: créer un client API frontend centralisé.
 - **Scope IN**:
@@ -876,6 +976,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-01-P
 
 ##### TV-ADV-01-D2 - Dev runtime wiring on priority widgets
+
 - **Owner**: dev
 - **Objectif**: brancher les widgets MVP prioritaires aux appels backend réels.
 - **Scope IN**:
@@ -899,6 +1000,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-01-D1
 
 ##### TV-ADV-01-T1 - Tester contract and runtime checks
+
 - **Owner**: tester
 - **Objectif**: valider que le frontend n’est plus mock-driven sur le chemin principal.
 - **Scope IN**:
@@ -909,6 +1011,10 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/` (si tests API supplémentaires nécessaires)
   - artefact de preuve dans `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
+  - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
+  - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
 - **Evidence attendue**:
   - capture réseau (endpoints réellement appelés),
   - liste erreurs console (attendu: aucune bloquante),
@@ -916,6 +1022,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-01-D2
 
 ##### TV-ADV-01-QA1 - QA signoff gate
+
 - **Owner**: qa
 - **Objectif**: signer PASS/BLOCKED de la migration `TV-ADV-01`.
 - **Scope IN**:
@@ -929,9 +1036,14 @@ Source audit (2026-02-26):
   - `VERDICT: PASS|BLOCKED`
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un seul adaptateur frontend API (fetchJson) et mapper les widgets MVP existants sans nouveaux composants.
+  - Supprimer la dependance mock en nominal, mais conserver un fallback explicite et visible par widget.
+  - Aligner strictement les contrats avec les endpoints backend deja cibles (/api/dashboard/kpis, /api/forecasts, /api/news/feed).
 - **Dependencies**: TV-ADV-01-T1
 
 ### TV-ADV-02 - Judge widget real wiring
+
 - **Epic**: Epic 3 - Multi-Model Consensus and Judge
 - **Objectif**: connecter le widget Judge à des endpoints réels.
 - **Scope IN**:
@@ -952,6 +1064,7 @@ Source audit (2026-02-26):
 #### Breakdown for `TV-ADV-02` (UI impact first)
 
 ##### TV-ADV-02-P - Planner contract and UX states
+
 - **Owner**: planner
 - **Objectif**: verrouiller le contrat UI Judge et les états visuels.
 - **Scope IN**:
@@ -969,6 +1082,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-01-D2
 
 ##### TV-ADV-02-D1 - Dev API call integration
+
 - **Owner**: dev
 - **Objectif**: brancher le trigger Judge sur endpoints backend réels.
 - **Scope IN**:
@@ -987,6 +1101,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-02-P
 
 ##### TV-ADV-02-D2 - Dev visual result rendering
+
 - **Owner**: dev
 - **Objectif**: rendre la sortie Judge clairement actionnable dans l’UI.
 - **Scope IN**:
@@ -1004,6 +1119,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-02-D1
 
 ##### TV-ADV-02-T1 - Tester runtime validation
+
 - **Owner**: tester
 - **Objectif**: valider le comportement réel du Judge côté UI.
 - **Scope IN**:
@@ -1011,11 +1127,16 @@ Source audit (2026-02-26):
   - vérification UI states: loading/success/error/fallback
   - vérification absence de blocage JS
 - **Scope OUT**: test cross-browser complet.
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le contrat /api/judge et le composant widget Judge existant comme source unique du verdict UI.
+  - Eviter toute shape parallele de donnees Judge; ajouter seulement des champs compatibles en extension.
+  - Valider le wiring runtime avec preuves reseau/console et fallback explicite en cas dindisponibilite provider.
 - **Evidence attendue**:
   - capture réseau + captures UI des états critiques.
 - **Dependencies**: TV-ADV-02-D2
 
 ##### TV-ADV-02-QA1 - QA signoff
+
 - **Owner**: qa
 - **Objectif**: valider que le Judge UI apporte un résultat concret utilisateur.
 - **Scope IN**:
@@ -1028,9 +1149,14 @@ Source audit (2026-02-26):
   - `VERDICT: PASS|BLOCKED`
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le contrat /api/judge et le composant widget Judge existant comme source unique du verdict UI.
+  - Eviter toute shape parallele de donnees Judge; ajouter seulement des champs compatibles en extension.
+  - Valider le wiring runtime avec preuves reseau/console et fallback explicite en cas dindisponibilite provider.
 - **Dependencies**: TV-ADV-02-T1
 
 ### TV-ADV-03 - Refresh data real path
+
 - **Epic**: Epic 1 - Data Freshness Foundation
 - **Objectif**: faire de `refreshData()` un refresh réel (pas simulation).
 - **Scope IN**:
@@ -1039,6 +1165,10 @@ Source audit (2026-02-26):
 - **Scope OUT**: scheduler avancé.
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Acceptation testable**:
   - refresh déclenche des calls API et reflète l’état `fresh/stale/degraded`.
 - **Dependencies**: TV1-FRESH-01, TV-ADV-01
@@ -1046,6 +1176,7 @@ Source audit (2026-02-26):
 #### Breakdown for `TV-ADV-03` (UI concrete refresh)
 
 ##### TV-ADV-03-P - Planner refresh scope lock
+
 - **Owner**: planner
 - **Objectif**: définir le périmètre refresh strict pour le flux principal.
 - **Scope IN**:
@@ -1056,9 +1187,14 @@ Source audit (2026-02-26):
     - endpoint décision principal validé
   - définir règles d’ordre/cadence (debounce/cooldown)
 - **Scope OUT**: auto-refresh intelligent avancé.
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Dependencies**: TV-ADV-01-D2
 
 ##### TV-ADV-03-D1 - Dev real refresh orchestration
+
 - **Owner**: dev
 - **Objectif**: remplacer la simulation `setTimeout` par un pipeline refresh réel.
 - **Scope IN**:
@@ -1068,12 +1204,17 @@ Source audit (2026-02-26):
 - **Scope OUT**: scheduler background permanent.
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Commandes de test**:
   - `./finance-copilot.sh restart`
   - action manuelle bouton refresh.
 - **Dependencies**: TV-ADV-03-P
 
 ##### TV-ADV-03-D2 - Dev freshness/degraded visual sync
+
 - **Owner**: dev
 - **Objectif**: synchroniser le rendu UI avec les métadonnées de fraîcheur.
 - **Scope IN**:
@@ -1083,20 +1224,30 @@ Source audit (2026-02-26):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Dependencies**: TV-ADV-03-D1, TV-ADV-04
 
 ##### TV-ADV-03-T1 - Tester refresh flow validation
+
 - **Owner**: tester
 - **Objectif**: valider le refresh réel et son impact visible UI.
 - **Scope IN**:
   - vérifier appels réseau déclenchés au click
   - vérifier changement visible de timestamps
   - vérifier cas erreur endpoint (degraded visible)
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Evidence attendue**:
   - capture réseau + captures UI avant/après refresh.
 - **Dependencies**: TV-ADV-03-D2
 
 ##### TV-ADV-03-QA1 - QA signoff refresh
+
 - **Owner**: qa
 - **Objectif**: signer la fiabilité du refresh côté expérience utilisateur.
 - **Scope IN**:
@@ -1109,9 +1260,14 @@ Source audit (2026-02-26):
   - `VERDICT: PASS|BLOCKED`
   - `BLOCKER_ID: NONE|...`
   - `NEXT_ACTION_UNIQUE: ...`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver refreshData() comme orchestrateur unique du refresh global (pas de second declencheur concurrent).
+  - Synchroniser refresh UI avec /api/freshness et etats degraded/stale affiches sans ambiguite.
+  - Isoler la logique de refresh dans app.js et verifier le parcours complet via preuves de rechargement reel.
 - **Dependencies**: TV-ADV-03-T1
 
 ### TV-ADV-04 - Real `/api/freshness` computation
+
 - **Epic**: Epic 1 - Data Freshness Foundation
 - **Objectif**: remplacer le placeholder `/api/freshness` par un calcul réel.
 - **Scope IN**:
@@ -1129,6 +1285,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV1-FRESH-03
 
 ### TV-ADV-05 - Persisted copilot history
+
 - **Epic**: Epic 5 - Ask Copilot Deep Analysis
 - **Objectif**: supprimer le mock d’historique et persister les conversations.
 - **Scope IN**:
@@ -1146,6 +1303,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV5-ASK-01
 
 ### TV-ADV-06 - KPI endpoint consolidation
+
 - **Epic**: Tech quality enabler
 - **Objectif**: éliminer la duplication de logique KPI.
 - **Scope IN**:
@@ -1163,6 +1321,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-01
 
 ### TV-ADV-07 - Decision brief aggregator endpoint
+
 - **Epic**: Epic 4 + Epic 3 bridge
 - **Objectif**: exposer un endpoint unique “quoi faire aujourd’hui”.
 - **Scope IN**:
@@ -1186,6 +1345,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV2-SIGNAL-03, TV3-JUDGE-02
 
 ### TV-ADV-08 - API test coverage expansion
+
 - **Epic**: Cross-epic quality gate
 - **Objectif**: couvrir endpoints décision non testés.
 - **Scope IN**:
@@ -1208,6 +1368,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-04, TV-ADV-05, TV-ADV-06, TV-ADV-07
 
 ### TV-ADV-09 - Deprecation cleanup pack
+
 - **Epic**: Tech quality enabler
 - **Objectif**: réduire warnings de dépréciation qui masquent les vrais risques.
 - **Scope IN**:
@@ -1228,6 +1389,7 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-ADV-08
 
 ### TV-ADV-10 - Delivery gate upgrade for decision workflow
+
 - **Epic**: Cross-epic quality gate
 - **Objectif**: faire échouer la livraison si le workflow décision n’est pas démontré.
 - **Scope IN**:
@@ -1247,18 +1409,21 @@ Source audit (2026-02-26):
 - **Dependencies**: TV-QA-01, TV-ADV-08
 
 ## Changelog (advance tasks)
+
 - 2026-02-26 America/New_York - Added code-audit advance task pack for missing runtime wiring, placeholder removal, tests, and tech debt cleanup.
 
 ## Full Epic Decomposition - All Epics (UI-first acceleration)
 
-This section completes the task breakdown for Epic 1 to Epic 6 with dispatch-ready IDs.
+This section maintains the dispatch-ready task breakdown for Epic 1 to Epic 14.
 
 Execution lens:
+
 - Prioritize tasks that produce visible UI decision value first.
 - Keep runtime cost low (g4f/free providers first, fallback explicit).
 - Keep each task in 2-4h execution slices with evidence.
 
 Task ID policy:
+
 - One task = one unique ID.
 - Headings that start with `T-` or `TV` are reserved for real tasks only.
 - Delta/breakdown/notes headings must not start with a task ID.
@@ -1267,6 +1432,7 @@ Task ID policy:
   - expected output: empty (no duplicate IDs).
 
 UI-first dispatch lane (recommended order):
+
 1. `TV-ADV-01-D2`
 2. `TV-ADV-02-D1`
 3. `TV-ADV-02-D2`
@@ -1281,6 +1447,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 1 - Data Freshness and Signal Reliability Foundation
 
 #### TV1-FRESH-04 - Freshness reason contract
+
 - **Epic**: Epic 1
 - **Priority**: P0
 - **Objectif**: exposer le `why stale` pour chaque surface clé.
@@ -1291,11 +1458,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/forecasts.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - aucun endpoint clé sans `freshness_status` + `stale_reason`.
 - **Dependencies**: TV1-FRESH-02
 
 #### TV1-FRESH-05 - Frontend freshness bar sync
+
 - **Epic**: Epic 1
 - **Priority**: P0
 - **Objectif**: refléter la fraîcheur réelle dans la barre/tiles UI.
@@ -1306,11 +1478,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - état visuel change correctement entre `fresh/stale/degraded`.
 - **Dependencies**: TV1-FRESH-04, TV4-UI-03
 
 #### TV1-FRESH-06 - Freshness regression tests
+
 - **Epic**: Epic 1
 - **Priority**: P0
 - **Objectif**: verrouiller les contrats de fraîcheur par tests.
@@ -1320,6 +1497,10 @@ UI-first dispatch lane (recommended order):
 - **Scope OUT**: tests de charge.
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser un helper commun de fraicheur (TTL + statut + raison) pour eviter une logique dupliquee entre endpoints et UI.
+  - Imposer le contrat minimal commun: freshness_status, stale_reason, source_status, generated_at et warnings[].
+  - Propager explicitement letat degraded jusquau frontend (pas de fallback silencieux).
 - **Acceptation testable**:
   - tests freshness passent dans le gate backend.
 - **Dependencies**: TV1-FRESH-05
@@ -1327,6 +1508,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 2 - Forecast Engine (Asset/Sector)
 
 #### TV2-SIGNAL-04 - Signal rationale enrichment
+
 - **Epic**: Epic 2
 - **Priority**: P0
 - **Objectif**: fournir `why` (max 3 raisons) et `risk_flag` stables pour chaque signal.
@@ -1337,11 +1519,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
   - 90%+ des actifs MVP ont `why` non vide et `risk_flag` valide.
 - **Dependencies**: TV2-SIGNAL-03
 
 #### TV2-SIGNAL-05 - Horizon calibration rules
+
 - **Epic**: Epic 2
 - **Priority**: P0
 - **Objectif**: stabiliser short/swing horizon pour éviter signaux incohérents.
@@ -1352,11 +1539,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
   - aucun actif sans horizon valide; conflit -> action fallback documentée.
 - **Dependencies**: TV2-SIGNAL-04
 
 #### TV2-SIGNAL-06 - Forecast coverage gate
+
 - **Epic**: Epic 2
 - **Priority**: P0
 - **Objectif**: bloquer la livraison si `Coverage SLA < 90%`.
@@ -1367,6 +1559,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser le calcul des signaux dans un service core partage puis exposer via routes, sans dupliquer la logique metier par endpoint.
+  - Garder une shape stable (why[], risk_flag, confidence, horizon) avec enums normalisees et fallback deterministe.
+  - Brancher les controles de coverage/SLA dans le gate existant scripts/run_delivery_gate.sh plutot quun check parallele.
 - **Acceptation testable**:
   - gate fail explicite si couverture insuffisante.
 - **Dependencies**: TV2-SIGNAL-05, TV-ADV-10
@@ -1374,6 +1570,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 3 - Multi-Model Consensus and Judge
 
 #### TV3-JUDGE-01 - Multi-provider opinion collector
+
 - **Epic**: Epic 3
 - **Priority**: P0
 - **Objectif**: collecter au moins 3 avis modèles à coût minimal.
@@ -1384,11 +1581,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - endpoint Judge inclut liste des avis collectés.
 - **Dependencies**: TV2-SIGNAL-03
 
 #### TV3-JUDGE-02 - Judge arbitration contract
+
 - **Epic**: Epic 3
 - **Priority**: P0
 - **Objectif**: produire un verdict unique stable pour le frontend.
@@ -1399,11 +1601,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/schemas/judge.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - shape Judge identique sur runs successifs.
 - **Dependencies**: TV3-JUDGE-01
 
 #### TV3-JUDGE-03 - Conflict penalty policy
+
 - **Epic**: Epic 3
 - **Priority**: P0
 - **Objectif**: réduire la confiance quand les modèles divergent.
@@ -1413,11 +1620,16 @@ UI-first dispatch lane (recommended order):
 - **Scope OUT**: calibration financière avancée.
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - cas de divergence testés avec baisse de confiance attendue.
 - **Dependencies**: TV3-JUDGE-02
 
 #### TV3-JUDGE-04 - Judge decision card integration
+
 - **Epic**: Epic 3
 - **Priority**: P0 (UI)
 - **Objectif**: afficher le verdict Judge dans la carte décision principale.
@@ -1428,11 +1640,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/components/widgets/llm-judge.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - utilisateur voit un verdict Judge actionnable sans ouvrir la console.
 - **Dependencies**: TV-ADV-02-D2, TV3-JUDGE-03
 
 #### TV3-JUDGE-05 - Cost guardrails and provider fallback
+
 - **Epic**: Epic 3
 - **Priority**: P0
 - **Objectif**: garder un coût proche de zéro en cas de provider instable.
@@ -1443,11 +1660,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - Judge répond même avec providers partiellement indisponibles.
 - **Dependencies**: TV3-JUDGE-03
 
 #### TV3-JUDGE-06 - Judge quality gate pack
+
 - **Epic**: Epic 3
 - **Priority**: P0
 - **Objectif**: couvrir Judge via tests et gate dédié.
@@ -1458,6 +1680,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le modele Judge existant (services/judge_pipeline.py, judge_builder.py, schemas/judge.py) comme chemin unique.
+  - Conserver la chaine de fallback providers et le JSON strict valide avant/apres parsing (aucune seconde shape judge-like).
+  - Garantir le contrat frontend stable (final_action, confidence, conflict_mode, risk_note, source[], warnings[]).
 - **Acceptation testable**:
   - suites Judge vertes + verdict QA explicite.
 - **Dependencies**: TV3-JUDGE-05, TV3-JUDGE-04
@@ -1465,6 +1691,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 4 - Decision Cockpit Frontend (2-3 Click Workflow)
 
 #### TV4-UI-04 - Today decision brief screen
+
 - **Epic**: Epic 4
 - **Priority**: P1 (UI)
 - **Objectif**: écran unique "quoi faire aujourd’hui" en 2-3 clics.
@@ -1476,11 +1703,16 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - flux quotidien complet <=3 clics.
 - **Dependencies**: TV-ADV-07, TV-ADV-01-D2
 
 #### TV4-UI-05 - Action panel and quick drill-down
+
 - **Epic**: Epic 4
 - **Priority**: P1 (UI)
 - **Objectif**: permettre drill-down rapide depuis action globale vers actifs clés.
@@ -1491,11 +1723,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - accès au détail d’un actif en 1 clic depuis le brief.
 - **Dependencies**: TV4-UI-04
 
 #### TV4-UI-06 - UI performance and caching polish
+
 - **Epic**: Epic 4
 - **Priority**: P1
 - **Objectif**: rendre l’UI fluide sur refresh fréquent.
@@ -1505,11 +1742,16 @@ UI-first dispatch lane (recommended order):
 - **Scope OUT**: refonte framework.
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - temps perçu refresh UI réduit sans perte de cohérence.
 - **Dependencies**: TV4-UI-05, TV-ADV-03-D1
 
 #### TV4-UI-07 - Mobile sanity for daily flow
+
 - **Epic**: Epic 4
 - **Priority**: P1
 - **Objectif**: garantir usage mobile basique pour brief quotidien.
@@ -1520,6 +1762,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/style.css`
   - `copilot-app/frontend/app/index.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Sappuyer sur les widgets et loaders existants (app.js, componentLoader.js, composants actuels) sans nouveau framework UI.
+  - Creer un adaptateur API par surface (cards/brief/actions) avec etats loading/error/degraded explicites.
+  - Preserver le flux 2-3 clics de bout en bout et eviter des chemins async concurrents qui cassent la coherence ecran.
 - **Acceptation testable**:
   - parcours quotidien complet sur viewport mobile sans blocage.
 - **Dependencies**: TV4-UI-06
@@ -1527,6 +1773,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 5 - Ask Copilot Deep Analysis
 
 #### TV5-ASK-01 - Ask contract and orchestrator
+
 - **Epic**: Epic 5
 - **Priority**: P1
 - **Objectif**: stabiliser la réponse ask orientée décision.
@@ -1537,11 +1784,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/copilot.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - aucune réponse ask sans action + caveat risque.
 - **Dependencies**: TV3-JUDGE-02, TV2-SIGNAL-03
 
 #### TV5-ASK-02 - Context pack builder
+
 - **Epic**: Epic 5
 - **Priority**: P1
 - **Objectif**: construire un contexte marché compact et réutilisable.
@@ -1552,11 +1804,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/context.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - contexte ask réutilisable et horodaté.
 - **Dependencies**: TV5-ASK-01
 
 #### TV5-ASK-03 - Ask UI panel with evidence slots
+
 - **Epic**: Epic 5
 - **Priority**: P1 (UI)
 - **Objectif**: afficher réponse ask structurée et actionnable côté UI.
@@ -1567,11 +1824,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - réponse ask lisible sans ouvrir données brutes.
 - **Dependencies**: TV5-ASK-02, TV-ADV-05
 
 #### TV5-ASK-04 - Follow-up and history continuity
+
 - **Epic**: Epic 5
 - **Priority**: P1
 - **Objectif**: garder continuité Q/A pour analyse quotidienne.
@@ -1582,11 +1844,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - historique persistant visible en UI.
 - **Dependencies**: TV5-ASK-03
 
 #### TV5-ASK-05 - Ask latency and cost budget
+
 - **Epic**: Epic 5
 - **Priority**: P1
 - **Objectif**: maintenir ask pratique en quasi temps réel.
@@ -1597,11 +1864,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/services/judge_pipeline.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - ask retourne une réponse utile dans un délai acceptable.
 - **Dependencies**: TV5-ASK-04
 
 #### TV5-ASK-06 - Ask quality gate coverage
+
 - **Epic**: Epic 5
 - **Priority**: P1
 - **Objectif**: verrouiller non-régression ask/history.
@@ -1612,6 +1884,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Orchestrer Ask via les clients/services LLM existants et le contexte RAG en place (pas de pipeline parallele ad-hoc).
+  - Standardiser la reponse avec preuves (sources[], evidence, generated_at, warnings[], cost/latency).
+  - Relier continuity/history a un stockage unique versionne pour conserver le contexte multi-questions sans divergence.
 - **Acceptation testable**:
   - tests ask/history verts + artefact gate.
 - **Dependencies**: TV5-ASK-05
@@ -1619,6 +1895,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 6 - Portfolio Adaptation Layer
 
 #### TV6-PORT-01 - Watchlist profile model
+
 - **Epic**: Epic 6
 - **Priority**: P2
 - **Objectif**: créer un profil watchlist personnel exploitable par recommandations.
@@ -1629,11 +1906,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/schemas/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - création/lecture watchlist fonctionnelle via API.
 - **Dependencies**: none
 
 #### TV6-PORT-02 - Risk posture settings
+
 - **Epic**: Epic 6
 - **Priority**: P2
 - **Objectif**: ajouter profil `conservative|neutral|aggressive`.
@@ -1643,11 +1925,16 @@ UI-first dispatch lane (recommended order):
 - **Scope OUT**: optimisation quant sophistiquée.
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/portfolios.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - changement de posture modifie les paramètres de décision.
 - **Dependencies**: TV6-PORT-01
 
 #### TV6-PORT-03 - Portfolio-aware reranking
+
 - **Epic**: Epic 6
 - **Priority**: P2
 - **Objectif**: reclasser actions recommandées selon watchlist + risque.
@@ -1658,11 +1945,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - deux profils de risque donnent un top actions différent.
 - **Dependencies**: TV6-PORT-02, TV2-SIGNAL-06
 
 #### TV6-PORT-04 - Portfolio action summary card
+
 - **Epic**: Epic 6
 - **Priority**: P2 (UI)
 - **Objectif**: afficher "ce que je fais aujourd’hui sur mon portefeuille".
@@ -1673,11 +1965,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - carte visible et cohérente avec profil utilisateur.
 - **Dependencies**: TV6-PORT-03, TV4-UI-05
 
 #### TV6-PORT-05 - Daily portfolio digest
+
 - **Epic**: Epic 6
 - **Priority**: P2
 - **Objectif**: générer un résumé quotidien portfolio compact.
@@ -1688,11 +1985,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - digest disponible en un appel API.
 - **Dependencies**: TV6-PORT-04
 
 #### TV6-PORT-06 - Portfolio adaptation QA gate
+
 - **Epic**: Epic 6
 - **Priority**: P2
 - **Objectif**: valider que l’adaptation portefeuille est stable et traçable.
@@ -1703,6 +2005,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Definir un modele portefeuille canonique reutilise par reranking, digest et cartes UI (single source of truth).
+  - Appliquer ladaptation portefeuille en couche post-signal pour eviter un fork du moteur forecast principal.
+  - Versionner les parametres/profils persistes et garder des defaults surs pour compatibilite retroactive.
 - **Acceptation testable**:
   - non-régression validée pour les flux portfolio.
 - **Dependencies**: TV6-PORT-05
@@ -1710,6 +2016,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 7 - Geopolitical and Macro Impact Radar
 
 #### TV7-MACRO-01 - Geopolitical event ingestion contract
+
 - **Epic**: Epic 7
 - **Priority**: P2
 - **Objectif**: structurer l’entrée des événements géopolitiques impact marché.
@@ -1720,11 +2027,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/context.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - les événements critiques sont exposés via un format stable.
 - **Dependencies**: TV1-FRESH-01
 
 #### TV7-MACRO-02 - Event-to-asset impact mapping
+
 - **Epic**: Epic 7
 - **Priority**: P2
 - **Objectif**: relier chaque événement aux actifs/secteurs concernés.
@@ -1735,11 +2047,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - un événement retourne une liste d’actifs/secteurs impactés.
 - **Dependencies**: TV7-MACRO-01
 
 #### TV7-MACRO-03 - Regime shift flags
+
 - **Epic**: Epic 7
 - **Priority**: P2
 - **Objectif**: signaler rapidement un basculement risk-on/risk-off.
@@ -1750,11 +2067,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/context.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - présence d’un flag de régime exploitable par UI et Ask.
 - **Dependencies**: TV7-MACRO-02
 
 #### TV7-MACRO-04 - Macro risk strip in decision UI
+
 - **Epic**: Epic 7
 - **Priority**: P2 (UI)
 - **Objectif**: afficher les 3 risques macro/géo dominants dans le cockpit.
@@ -1766,11 +2088,16 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - l’utilisateur voit immédiatement les risques macro utiles à la décision.
 - **Dependencies**: TV7-MACRO-03, TV4-UI-04
 
 #### TV7-MACRO-05 - Macro-aware recommendation adjustments
+
 - **Epic**: Epic 7
 - **Priority**: P2
 - **Objectif**: ajuster recommandations en fonction du risque macro actif.
@@ -1781,11 +2108,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - changement de régime modifie action/confiance sur le brief.
 - **Dependencies**: TV7-MACRO-04, TV-ADV-07
 
 #### TV7-MACRO-06 - Macro radar QA gate
+
 - **Epic**: Epic 7
 - **Priority**: P2
 - **Objectif**: verrouiller la fiabilité du radar macro/géo.
@@ -1796,6 +2128,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Reutiliser le pipeline ingestion/news existant et normaliser les evenements macro avant impact mapping.
+  - Garder un mapping impact deterministe et explicable (event -> assets/sectors -> weight/risk_flag).
+  - Injecter loverlay macro comme couche additive de risque sur la recommandation, sans ecraser le signal coeur.
 - **Acceptation testable**:
   - verdict PASS/BLOCKED explicite sur le flux macro.
 - **Dependencies**: TV7-MACRO-05
@@ -1803,6 +2139,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 8 - Cost Governance and Runtime Efficiency
 
 #### TV8-COST-01 - Provider routing policy (free-first)
+
 - **Epic**: Epic 8
 - **Priority**: P1
 - **Objectif**: forcer un routage low-cost par défaut sur tout flux IA.
@@ -1813,11 +2150,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/services/judge_pipeline.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - appels IA passent d’abord par la chaîne low-cost.
 - **Dependencies**: TV3-JUDGE-05, TV5-ASK-05
 
 #### TV8-COST-02 - Request/token budget metering
+
 - **Epic**: Epic 8
 - **Priority**: P1
 - **Objectif**: mesurer le coût par endpoint critique (Judge/Ask/Brief).
@@ -1828,11 +2170,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `scripts/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - rapport coût journalier disponible localement.
 - **Dependencies**: TV8-COST-01
 
 #### TV8-COST-03 - Timeout and circuit-breaker policy
+
 - **Epic**: Epic 8
 - **Priority**: P1
 - **Objectif**: éviter blocage UX si providers instables.
@@ -1843,11 +2190,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/services/judge_pipeline.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - UI reçoit toujours une réponse exploitable, même en dégradé.
 - **Dependencies**: TV8-COST-02
 
 #### TV8-COST-04 - Runtime cost/degraded badge in UI
+
 - **Epic**: Epic 8
 - **Priority**: P1 (UI)
 - **Objectif**: rendre visible l’état runtime/cost pour éviter décisions aveugles.
@@ -1858,11 +2210,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - état runtime et niveau coût visibles sans debug console.
 - **Dependencies**: TV8-COST-03, TV5-ASK-03
 
 #### TV8-COST-05 - Monthly cost guardrail report
+
 - **Epic**: Epic 8
 - **Priority**: P1
 - **Objectif**: contrôler budget mensuel sans outils externes coûteux.
@@ -1873,11 +2230,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `scripts/`
   - `docs/ops/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - dépassement seuil remonte alerte explicite.
 - **Dependencies**: TV8-COST-04
 
 #### TV8-COST-06 - Cost governance gate
+
 - **Epic**: Epic 8
 - **Priority**: P1
 - **Objectif**: bloquer livraison si contraintes coût/runtime non tenues.
@@ -1888,6 +2250,10 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser routing providers, budget tokens et timeouts dans un service partage (politique free-first unique).
+  - Appliquer la meme politique circuit-breaker a Judge/Ask pour eviter des comportements divergents par feature.
+  - Exposer en UI des indicateurs cout/degrade alignes avec le contrat backend (source[], warnings[], fallback_used).
 - **Acceptation testable**:
   - gate échoue explicitement en cas de dérive coût.
 - **Dependencies**: TV8-COST-05, TV-ADV-10
@@ -1895,6 +2261,7 @@ UI-first dispatch lane (recommended order):
 ### Epic 9 - Decision Journal and Learning Loop
 
 #### TV9-LOOP-01 - Decision journal schema
+
 - **Epic**: Epic 9
 - **Priority**: P2
 - **Objectif**: définir le format de journal de décision quotidien.
@@ -1905,11 +2272,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/routes/portfolios.py`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - chaque daily brief peut être enregistré avec ID unique.
 - **Dependencies**: TV-ADV-07
 
 #### TV9-LOOP-02 - Auto-capture from daily brief
+
 - **Epic**: Epic 9
 - **Priority**: P2
 - **Objectif**: créer l’entrée journal automatiquement après génération du brief.
@@ -1920,11 +2292,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/api/routes/recommendations.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - une décision quotidienne crée une entrée journal sans action manuelle.
 - **Dependencies**: TV9-LOOP-01
 
 #### TV9-LOOP-03 - Outcome tracking (simple P/L proxy)
+
 - **Epic**: Epic 9
 - **Priority**: P2
 - **Objectif**: mesurer ex-post la qualité des décisions.
@@ -1935,11 +2312,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/api/main.py`
   - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - chaque entrée journal peut recevoir un outcome court terme.
 - **Dependencies**: TV9-LOOP-02, TV2-SIGNAL-05
 
 #### TV9-LOOP-04 - Journal timeline UI
+
 - **Epic**: Epic 9
 - **Priority**: P2 (UI)
 - **Objectif**: rendre visible l’historique des décisions et outcomes.
@@ -1951,11 +2333,16 @@ UI-first dispatch lane (recommended order):
   - `copilot-app/frontend/app/index.html`
   - `copilot-app/frontend/app/app.js`
   - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - l’utilisateur peut revoir ses décisions passées en 1-2 clics.
 - **Dependencies**: TV9-LOOP-03
 
 #### TV9-LOOP-05 - Feedback weighting for next recommendations
+
 - **Epic**: Epic 9
 - **Priority**: P2
 - **Objectif**: ajuster légèrement la confiance future selon historique outcomes.
@@ -1966,11 +2353,16 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/src/core/`
   - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - recommendations incluent un ajustement explicable lié au journal.
 - **Dependencies**: TV9-LOOP-04
 
 #### TV9-LOOP-06 - Learning loop QA gate
+
 - **Epic**: Epic 9
 - **Priority**: P2
 - **Objectif**: valider la robustesse de la boucle apprentissage décisionnelle.
@@ -1981,11 +2373,660 @@ UI-first dispatch lane (recommended order):
 - **Fichiers cibles**:
   - `copilot-app/backend/tests/`
   - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Utiliser un journal append-only avec snapshot decision immuable et mises a jour outcomes separees.
+  - Brancher lauto-capture depuis le daily brief via une API decriture unique (pas decritures directes dispersees).
+  - Calculer les ponderations de feedback sur agregats journalises, sans mutation destructive des payloads dorigine.
 - **Acceptation testable**:
   - gate PASS/BLOCKED explicite sur boucle de feedback.
 - **Dependencies**: TV9-LOOP-05
 
+## Continuous Delivery Loop (until app is basic-ready)
+
+Loop rule:
+
+1. Pick next highest-impact `P0/P1` task from this board only.
+2. Execute planner -> dev -> tester -> qa with evidence contract.
+3. Run gate and record `PASS|BLOCKED` + `NEXT_ACTION_UNIQUE`.
+4. If `BLOCKED`, fix minimal blocker task immediately and rerun gate.
+5. Repeat until readiness criteria are fully met.
+
+Basic-ready criteria (minimum functional baseline):
+
+- Mandatory epics PASS: 1, 2, 3, 4, 5, 8, 10, 11, 13, 14.
+- Mandatory user flow PASS:
+  - open app -> get daily brief in <=3 clicks,
+  - run Judge and Ask with grounded answers,
+  - see freshness/degraded/runtime status clearly,
+  - complete gate with no critical blockers.
+
+### Epic 10 - Data Source Reliability and Ingestion Automation
+
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Réutiliser le modèle Judge (section `Modèle de référence: Judge API`) pour standardiser `ok/data`, `generated_at`, `freshness`, `source[]`, `warnings[]` sur tous les endpoints d'ingestion/health.
+  - Réutiliser les briques existantes avant d'ajouter du code:
+    - loaders `storage.io.load_json(...)`,
+    - normalisation tickers (`core/ticker_normalization.py`),
+    - caches TTL déjà utilisés par `stocks/prices` et `news/feed`.
+  - Scheduler: privilégier l'orchestration existante (OpenClaw cron + scripts) et garder un circuit-breaker (voir `scripts/orchestration_circuit_breaker.sh`) plutôt que d'introduire un nouveau daemon.
+
+#### TV10-DATA-01 - Source inventory and SLA tiers
+
+- **Epic**: Epic 10
+- **Priority**: P1
+- **Objectif**: lister les sources critiques et définir leurs SLA de fraîcheur.
+- **Scope IN**:
+  - inventaire sources prices/news/macro/signals
+  - classification `tier1/tier2` + SLA cible
+- **Scope OUT**: ajout de nouvelles sources premium.
+- **Fichiers cibles**:
+  - `docs/ops/`
+  - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - chaque endpoint critique a une source principale et un fallback identifié.
+- **Dependencies**: TV1-FRESH-03
+
+#### TV10-DATA-02 - Ingestion scheduler for core feeds
+
+- **Epic**: Epic 10
+- **Priority**: P1
+- **Objectif**: automatiser le refresh des feeds core sans action manuelle.
+- **Scope IN**:
+  - scheduler local pour prices/news/context
+  - cadence configurable avec garde-fou anti-thrashing
+- **Scope OUT**: orchestration cloud distribuée.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - les feeds core se rafraîchissent automatiquement selon cadence définie.
+- **Dependencies**: TV10-DATA-01
+
+#### TV10-DATA-03 - Schema normalization and fallback adapters
+
+- **Epic**: Epic 10
+- **Priority**: P1
+- **Objectif**: uniformiser les payloads malgré les variations de sources.
+- **Scope IN**:
+  - normalisation champs indispensables (`updated_at`, `source`, `warnings`)
+  - adapters fallback explicites par type de feed
+- **Scope OUT**: refonte complète des providers.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - aucun endpoint critique ne casse sur un changement mineur de schéma source.
+- **Dependencies**: TV10-DATA-02
+
+#### TV10-DATA-04 - Ingestion health endpoint
+
+- **Epic**: Epic 10
+- **Priority**: P1
+- **Objectif**: exposer un état d’ingestion actionnable pour UI et gate.
+- **Scope IN**:
+  - endpoint santé ingestion (latence, stale count, erreurs)
+  - contrat stable consommable par UI/gate
+- **Scope OUT**: monitoring externe SaaS.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/tests/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - un appel API retourne l’état ingestion global et par feed.
+- **Dependencies**: TV10-DATA-03
+
+#### TV10-DATA-05 - Ingestion status chips in UI
+
+- **Epic**: Epic 10
+- **Priority**: P1 (UI)
+- **Objectif**: rendre visible l’état des sources directement dans le cockpit.
+- **Scope IN**:
+  - chips `ok/stale/degraded` par bloc clé
+  - détail léger des warnings source
+- **Scope OUT**: dashboard observabilité dédié.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - l’utilisateur voit immédiatement si une source critique est dégradée.
+- **Dependencies**: TV10-DATA-04, TV4-UI-03
+
+#### TV10-DATA-06 - Ingestion reliability QA gate
+
+- **Epic**: Epic 10
+- **Priority**: P1
+- **Objectif**: bloquer la livraison si l’ingestion n’est pas fiable.
+- **Scope IN**:
+  - tests ingestion scheduler/normalization/health
+  - gate PASS/BLOCKED avec blocker explicite
+- **Scope OUT**: tests charge massifs.
+- **Fichiers cibles**:
+  - `copilot-app/backend/tests/`
+  - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Maintenir un inventaire de sources/SLA central (config unique) consomme par scheduler, ingestion et health endpoints.
+  - Normaliser les schemas via adapters partages avant persistance pour eviter des formats par source non compatibles.
+  - Faire consommer letat ingestion UI via endpoint dedie, pas via lectures directes de fichiers backend.
+- **Acceptation testable**:
+  - gate échoue explicitement si ingestion critique non fiable.
+- **Dependencies**: TV10-DATA-05
+
+### Epic 11 - UX Workflow and Personal Settings Basics
+
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Réutiliser les widgets HTML existants (`copilot-app/frontend/app/components/widgets/`) + le loader (`js/utils/componentLoader.js`) au lieu de créer de nouveaux composants.
+  - Les features UX doivent se brancher sur les adaptateurs API (`fetchJson`) et afficher les métadonnées backend (`source[]`, `freshness`, `warnings[]`) pour éviter l'illusion "mock".
+  - Toute nouvelle UI (drawer/actions/shortcuts) doit préserver les IDs DOM existants quand possible (éviter de casser `app.js`).
+
+#### TV11-UX-01 - Home information architecture lock
+
+- **Epic**: Epic 11
+- **Priority**: P1
+- **Objectif**: verrouiller la structure du home pour le flux quotidien.
+- **Scope IN**:
+  - ordre des blocs décision/freshness/risque/ask
+  - hiérarchie claire pour usage en 2-3 clics
+- **Scope OUT**: redesign visuel complet.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/index.html`
+  - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - parcours quotidien est lisible sans friction.
+- **Dependencies**: TV4-UI-03
+
+#### TV11-UX-02 - Watchlist quick filter strip
+
+- **Epic**: Epic 11
+- **Priority**: P1 (UI)
+- **Objectif**: filtrer rapidement les cartes sur watchlist et secteurs prioritaires.
+- **Scope IN**:
+  - bande de filtres rapides watchlist/secteurs
+  - interaction en un clic
+- **Scope OUT**: screener avancé multi-critères.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/style.css`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - passage global -> watchlist en un clic.
+- **Dependencies**: TV11-UX-01, TV6-PORT-01
+
+#### TV11-UX-03 - Decision explanation drawer
+
+- **Epic**: Epic 11
+- **Priority**: P1 (UI)
+- **Objectif**: montrer "pourquoi" sans surcharger la vue principale.
+- **Scope IN**:
+  - drawer par carte: `why`, `risk`, `sources`
+  - états fallback explicites
+- **Scope OUT**: documentation financière longue.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/index.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - chaque recommandation est explicable en 1 interaction.
+- **Dependencies**: TV11-UX-02, TV5-ASK-03
+
+#### TV11-UX-04 - Quick actions and keyboard shortcuts
+
+- **Epic**: Epic 11
+- **Priority**: P1
+- **Objectif**: accélérer les actions quotidiennes.
+- **Scope IN**:
+  - actions rapides: refresh, ask, judge, focus watchlist
+  - raccourcis clavier basiques
+- **Scope OUT**: personnalisation complète des shortcuts.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - actions principales réalisables sans navigation longue.
+- **Dependencies**: TV11-UX-03
+
+#### TV11-UX-05 - Personal settings persistence
+
+- **Epic**: Epic 11
+- **Priority**: P1
+- **Objectif**: mémoriser les préférences utilisateur essentielles.
+- **Scope IN**:
+  - persister filtres, densité UI, préférences horizon
+  - restore automatique au chargement
+- **Scope OUT**: comptes multi-utilisateurs.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/backend/src/api/routes/portfolios.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - préférences conservées entre sessions.
+- **Dependencies**: TV11-UX-04
+
+#### TV11-UX-06 - UX workflow QA gate
+
+- **Epic**: Epic 11
+- **Priority**: P1
+- **Objectif**: valider que le flux UX quotidien est réellement rapide.
+- **Scope IN**:
+  - mesure clicks/time sur scénarios principaux
+  - preuves UI avant/après + gate verdict
+- **Scope OUT**: tests UX exploratoires étendus.
+- **Fichiers cibles**:
+  - `scripts/run_delivery_gate.sh`
+  - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver larchitecture frontend existante (widgets + app.js) et limiter les changements a IA/navigation/etat.
+  - Centraliser la persistance des preferences utilisateur avec schema versionne + fallback par defaut.
+  - Brancher quick actions/raccourcis sur les adaptateurs API existants, sans dupliquer les chemins reseau.
+- **Acceptation testable**:
+  - test quotidien <=3 clics et temps cible respecté.
+- **Dependencies**: TV11-UX-05
+
+### Epic 12 - Alerts and Daily Automation
+
+#### TV12-ALRT-01 - Alert rule schema v1
+
+- **Epic**: Epic 12
+- **Priority**: P1
+- **Objectif**: définir des règles d’alerte simples mais robustes.
+- **Scope IN**:
+  - schéma règle: type, seuil, horizon, priorité, mute
+  - stockage local des règles
+- **Scope OUT**: alerting multi-canal externe.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/routes/alerts.py`
+  - `copilot-app/backend/src/schemas/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - création/édition/suppression de règles via API.
+- **Dependencies**: TV2-SIGNAL-03
+
+#### TV12-ALRT-02 - Trigger engine (price/news/regime)
+
+- **Epic**: Epic 12
+- **Priority**: P1
+- **Objectif**: déclencher alertes sur signaux réellement utiles.
+- **Scope IN**:
+  - déclencheurs prix, news sentiment, regime shift
+  - anti-spam simple (cooldown par règle)
+- **Scope OUT**: scoring ML avancé.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - règles pertinentes déclenchent des alertes observables.
+- **Dependencies**: TV12-ALRT-01, TV7-MACRO-03
+
+#### TV12-ALRT-03 - In-app alert center UI
+
+- **Epic**: Epic 12
+- **Priority**: P1 (UI)
+- **Objectif**: afficher les alertes dans un centre visible et triable.
+- **Scope IN**:
+  - liste alertes avec priorité/âge/source
+  - actions rapides: mark read, snooze
+- **Scope OUT**: push mobile/email externe.
+- **Fichiers cibles**:
+  - `copilot-app/frontend/app/app.js`
+  - `copilot-app/frontend/app/index.html`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - alertes consultables et actionnables en 1-2 clics.
+- **Dependencies**: TV12-ALRT-02, TV11-UX-01
+
+#### TV12-ALRT-04 - Daily digest generator
+
+- **Epic**: Epic 12
+- **Priority**: P1
+- **Objectif**: générer automatiquement un digest quotidien synthétique.
+- **Scope IN**:
+  - résumé des alertes + actions proposées du jour
+  - endpoint digest dédié
+- **Scope OUT**: envoi externe automatique.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/api/routes/recommendations.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - digest disponible quotidiennement via API/UI.
+- **Dependencies**: TV12-ALRT-03, TV-ADV-07
+
+#### TV12-ALRT-05 - Alert prioritization and dedupe
+
+- **Epic**: Epic 12
+- **Priority**: P1
+- **Objectif**: réduire le bruit et remonter seulement l’actionnable.
+- **Scope IN**:
+  - déduplication règles similaires
+  - ranking par urgence/confiance/coût d’inaction
+- **Scope OUT**: assistant notification autonome.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/core/`
+  - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - baisse des alertes redondantes sans perte des critiques.
+- **Dependencies**: TV12-ALRT-04, TV8-COST-03
+
+#### TV12-ALRT-06 - Alerts QA gate
+
+- **Epic**: Epic 12
+- **Priority**: P1
+- **Objectif**: garantir la fiabilité du système d’alertes.
+- **Scope IN**:
+  - tests règles/trigger/dedupe/digest
+  - preuve UI center + verdict gate
+- **Scope OUT**: test charge global.
+- **Fichiers cibles**:
+  - `copilot-app/backend/tests/`
+  - `scripts/run_delivery_gate.sh`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Versionner et valider le schema de regles dalerte au backend avant execution moteur.
+  - Utiliser des cles de deduplication deterministes communes (price/news/regime) pour eviter alert storms.
+  - Partager un payload alerte unique entre moteur, digest quotidien et UI Alert Center.
+- **Acceptation testable**:
+  - gate PASS/BLOCKED explicite pour alertes.
+- **Dependencies**: TV12-ALRT-05
+
+### Epic 13 - Reliability, Security, and Backup
+
+#### TV13-OPS-01 - Error catalog and retry policy
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: standardiser la gestion des erreurs critiques.
+- **Scope IN**:
+  - catalogue erreurs (network/provider/schema/cache)
+  - politique retry/backoff par type d’erreur
+- **Scope OUT**: plateforme d’observabilité externe.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - erreurs majeures retournent des réponses cohérentes et actionnables.
+- **Dependencies**: TV8-COST-03
+
+#### TV13-OPS-02 - Structured logs and trace IDs
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: tracer chaque décision de bout en bout.
+- **Scope IN**:
+  - trace_id sur endpoints décision
+  - logs structurés corrélables frontend/backend
+- **Scope OUT**: SIEM enterprise.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `scripts/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - un incident est traçable par `trace_id`.
+- **Dependencies**: TV13-OPS-01
+
+#### TV13-OPS-03 - Local backup/restore for critical state
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: protéger l’état critique utilisateur (watchlist, journal, settings).
+- **Scope IN**:
+  - backup local versionné
+  - restore simple par commande/script
+- **Scope OUT**: backup cloud managé.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `copilot-app/backend/src/api/routes/portfolios.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - restauration valide après suppression simulée d’état.
+- **Dependencies**: TV13-OPS-02
+
+#### TV13-OPS-04 - Config and secrets hygiene
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: sécuriser la gestion des configs sensibles.
+- **Scope IN**:
+  - séparation claire config runtime vs secrets
+  - vérification de variables critiques au boot
+- **Scope OUT**: secret manager externe.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `docs/ops/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - boot fail explicite si secret critique manquant.
+- **Dependencies**: TV13-OPS-02
+
+#### TV13-OPS-05 - Recovery drill scripts and runbook
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: rendre la récupération opérationnelle et répétable.
+- **Scope IN**:
+  - scripts de drill (provider down, stale data, restore backup)
+  - runbook recovery étape par étape
+- **Scope OUT**: PRA multi-région.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `docs/ops/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - drills exécutables avec résultat PASS/BLOCKED.
+- **Dependencies**: TV13-OPS-03, TV13-OPS-04
+
+#### TV13-OPS-06 - Reliability/security QA gate
+
+- **Epic**: Epic 13
+- **Priority**: P1
+- **Objectif**: verrouiller la robustesse opérationnelle avant release.
+- **Scope IN**:
+  - gate basé sur drills + logs + backup/restore
+  - blocker explicite sur fail critique
+- **Scope OUT**: audit sécurité formel externe.
+- **Fichiers cibles**:
+  - `scripts/run_delivery_gate.sh`
+  - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Centraliser catalogue derreurs + politiques retry dans un module commun reutilise par API, jobs et scripts.
+  - Imposer trace_id/correlation_id dans logs structures depuis les points dentree jusquaux appels externes.
+  - Integrer backup/restore et drills au gate de livraison avec artefacts audites (pas doperations manuelles implicites).
+- **Acceptation testable**:
+  - gate bloque si récupération/traçabilité insuffisante.
+- **Dependencies**: TV13-OPS-05
+
+### Epic 14 - MVP Release Readiness and Go-Live
+
+#### TV14-SHIP-01 - MVP checklist matrix
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: construire une matrice claire des fonctionnalités basiques requises.
+- **Scope IN**:
+  - checklist par flux (brief, judge, ask, portfolio, alerts)
+  - critères pass/fail par flux
+- **Scope OUT**: roadmap long terme.
+- **Fichiers cibles**:
+  - `docs/scrum/`
+  - `docs/planning/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - chaque flux basique a des critères mesurables validables.
+- **Dependencies**: TV11-UX-06, TV12-ALRT-06
+
+#### TV14-SHIP-02 - End-to-end scenario suite
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: exécuter des scénarios complets utilisateur.
+- **Scope IN**:
+  - scénarios E2E journaliers principaux
+  - capture des preuves standardisées
+- **Scope OUT**: tests cross-browser exhaustifs.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - scénarios E2E passants sur environnement local cible.
+- **Dependencies**: TV14-SHIP-01
+
+#### TV14-SHIP-03 - Performance baseline and budget
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: garantir une expérience perçue fluide sur flux basiques.
+- **Scope IN**:
+  - budget latence API + render UI
+  - mesures baseline documentées
+- **Scope OUT**: optimisation micro benchmark.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `docs/ops/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - respect budget perf défini pour flux critiques.
+- **Dependencies**: TV14-SHIP-02
+
+#### TV14-SHIP-04 - Defect burn-down sprint
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: fermer les blockers avant release.
+- **Scope IN**:
+  - triage bugs critiques/majeurs
+  - correction priorisée par impact utilisateur
+- **Scope OUT**: refactors non bloquants.
+- **Fichiers cibles**:
+  - `docs/scrum/`
+  - `copilot-app/backend/`
+  - `copilot-app/frontend/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - aucun bug critique ouvert sur flux basiques.
+- **Dependencies**: TV14-SHIP-03
+
+#### TV14-SHIP-05 - Release candidate and rollback pack
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: préparer une release candidate réversible rapidement.
+- **Scope IN**:
+  - paquet release candidate + notes
+  - plan rollback en 1 procédure
+- **Scope OUT**: déploiement multi-environnements complexe.
+- **Fichiers cibles**:
+  - `docs/ops/`
+  - `scripts/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - rollback drill exécuté avec succès.
+- **Dependencies**: TV14-SHIP-04, TV13-OPS-06
+
+#### TV14-SHIP-06 - Final MVP go/no-go gate
+
+- **Epic**: Epic 14
+- **Priority**: P1
+- **Objectif**: décider formellement `GO` ou `NO-GO` sur MVP basique.
+- **Scope IN**:
+  - gate final consolidé (fonctionnel + qualité + coût + perf)
+  - verdict signé avec blockers résiduels
+- **Scope OUT**: roadmap post-MVP.
+- **Fichiers cibles**:
+  - `scripts/run_delivery_gate.sh`
+  - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Consolider la checklist release depuis les gates existants (fonctionnel, qualite, cout, perf) sans creer un second referentiel.
+  - Executer les scenarios E2E sur le parcours MVP reel avec fixtures reproductibles et preuves versionnees.
+  - Relier go/no-go au script de gate commun et pack rollback explicite (run_delivery_gate.sh + artefacts RC).
+- **Acceptation testable**:
+  - verdict final clair, auditable, reproductible.
+- **Dependencies**: TV14-SHIP-05
+
 ## Changelog (all-epics decomposition)
+
 - 2026-02-26 America/New_York - Added complete Epic 1-6 task decomposition with UI-first dispatch lane and explicit dependencies.
 - 2026-02-26 America/New_York - Enforced unique task-ID heading policy and removed heading ID collisions in delta/breakdown sections.
 - 2026-02-26 America/New_York - Added Epic 7/8/9 tasks: macro-geopolitical radar, cost governance, and decision learning loop.
+- 2026-02-26 America/New_York - Added continuous delivery loop and Epic 10/11/12/13/14 task decomposition toward basic-ready MVP.
+- 2026-02-26 America/New_York - Added INTEGRATION-APP-EENGINEER-RECOMMENDATIONS to all remaining task IDs (123/123 coverage) to detail architecture per existing task without creating new backlog items.

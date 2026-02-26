@@ -1,0 +1,885 @@
+{
+  "jobs": [
+    {
+      "id": "09d045db-b12a-4486-a743-57b761d52e50",
+      "name": "planner-tmux-12m",
+      "description": "Planner tmux context loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771979462389,
+      "updatedAtMs": 1772088021892,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 720000,
+        "anchorMs": 1772088021892
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh planner",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772071911312,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 179305,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "planner"
+    },
+    {
+      "id": "0a39d655-01e4-43aa-822f-75d6f64adcf3",
+      "agentId": "dev",
+      "name": "dev-tmux-loop",
+      "description": "Legacy generalist dev lane",
+      "enabled": false,
+      "createdAtMs": 1772085351171,
+      "updatedAtMs": 1772113258986,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 960000,
+        "anchorMs": 1772103643350
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh dev",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112877972,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 54260,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "1f0d2ceb-c20c-4441-a5a4-def8a0c6adb9",
+      "agentId": "scrum_master",
+      "name": "scrum-master-tmux-loop",
+      "description": "Flow and blocker cadence lane",
+      "enabled": false,
+      "createdAtMs": 1772085369294,
+      "updatedAtMs": 1772113317726,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772103658109
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh scrum_master",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772113278649,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 39077,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "25756cb4-57f1-41c7-83d4-66fd67a0164d",
+      "name": "clawsentinel-tmux-25m",
+      "description": "ClawSentinel safety/quality tmux loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1772027852703,
+      "updatedAtMs": 1772088084631,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500000,
+        "anchorMs": 1772088084631
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh clawsentinel",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772052337628,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 52947,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "clawsentinel"
+    },
+    {
+      "id": "36bed423-e965-4a19-a43a-c8ffbff751d8",
+      "name": "tester-tmux-15m",
+      "description": "Tester tmux context loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771989959662,
+      "updatedAtMs": 1772088039830,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772088039830
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh tester",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772072271721,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 166099,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "tester"
+    },
+    {
+      "id": "44f08bd9-b9c0-4ab5-8882-cc91d402c8db",
+      "name": "po-tmux-30m",
+      "description": "Product Owner tmux backlog loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771996880716,
+      "updatedAtMs": 1772088066700,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1800000,
+        "anchorMs": 1772088066700
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh po",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772054320355,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 100878,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "po"
+    },
+    {
+      "id": "454dc361-14bb-4f71-8ca2-ec86708c503f",
+      "name": "qa-tmux-20m",
+      "description": "QA tmux context loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771990080738,
+      "updatedAtMs": 1772088048764,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1200000,
+        "anchorMs": 1772088048764
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh qa",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772072441337,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 158829,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "qa"
+    },
+    {
+      "id": "4ae54781-37a5-4d76-8110-7c6edcc4f2b4",
+      "agentId": "infra_engineer",
+      "name": "infra-engineer-tmux-loop",
+      "description": "Infra and CI/CD acceleration lane",
+      "enabled": false,
+      "createdAtMs": 1772085342146,
+      "updatedAtMs": 1772113260033,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1200000,
+        "anchorMs": 1772103636031
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh infra_engineer",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112736074,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 46760,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "5541bb49-16c3-4886-9e20-99255aa8fcfa",
+      "agentId": "adminapp-codex",
+      "name": "stale-sweep-autoheal-7m",
+      "description": "Automatic stale-running cron auto-heal sweep",
+      "enabled": false,
+      "createdAtMs": 1772102190986,
+      "updatedAtMs": 1772113251883,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 420000,
+        "anchorMs": 1772103665608
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: STALE_SWEEP_THRESHOLD_SECONDS=330 bash scripts/stale_cron_tick.sh",
+        "thinking": "low",
+        "timeoutSeconds": 180
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112962283,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 11070,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "55d59382-996d-4291-bd07-58047f65fe54",
+      "agentId": "data_analyst",
+      "name": "data-analyst-tmux-loop",
+      "description": "Data validation and metrics lane",
+      "enabled": false,
+      "createdAtMs": 1772085337575,
+      "updatedAtMs": 1772113249627,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1020000,
+        "anchorMs": 1772103632358
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh data_analyst",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112331352,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 47283,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "5d943c14-f03f-48c5-af2e-2554850632a5",
+      "agentId": "architect",
+      "name": "architect-tmux-loop",
+      "description": "Architecture constraints and guardrails",
+      "enabled": false,
+      "createdAtMs": 1772085324141,
+      "updatedAtMs": 1772113248469,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1080000,
+        "anchorMs": 1772103621431
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh architect",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772111925546,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 126226,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "81310c68-e9e7-4a85-bd3c-a7234e685f2d",
+      "agentId": "planner",
+      "name": "planner-tmux-loop",
+      "description": "Planner dispatch and dependency orchestration",
+      "enabled": false,
+      "createdAtMs": 1772085315171,
+      "updatedAtMs": 1772113250703,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 720000,
+        "anchorMs": 1772103613396
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh planner",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112657390,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 46250,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "838deae5-fa39-4052-b31d-66013faccee0",
+      "name": "admin-agents-supervisor-15m",
+      "description": "Admin-agents tmux supervision tick (continuity)",
+      "enabled": false,
+      "createdAtMs": 1772027639222,
+      "updatedAtMs": 1772113262116,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772027639222
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: bash scripts/admin_agents_tmux_tick.sh",
+        "model": "openai-codex/gpt-5.2",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772113139248,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 21163,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "admin-agents"
+    },
+    {
+      "id": "8e5b1bd7-f319-48d8-b8f7-c906c024135f",
+      "name": "scrum-master-tmux-30m",
+      "description": "Scrum Master tmux flow loop (lower cadence)",
+      "enabled": false,
+      "createdAtMs": 1771996880685,
+      "updatedAtMs": 1772088075668,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1800000,
+        "anchorMs": 1772088075668
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh scrum_master",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772052294690,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 39035,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "scrum_master"
+    },
+    {
+      "id": "94042f90-aec7-4828-b24f-fa5adc1bd2da",
+      "agentId": "tester",
+      "name": "tester-tmux-loop",
+      "description": "Test automation lane",
+      "enabled": false,
+      "createdAtMs": 1772085355674,
+      "updatedAtMs": 1772113253896,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772103646991
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh tester",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112041959,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 184961,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "98004fba-0873-400c-8158-a1a2db626843",
+      "agentId": "qa",
+      "name": "qa-tmux-loop",
+      "description": "Quality gate and release lane",
+      "enabled": false,
+      "createdAtMs": 1772085360216,
+      "updatedAtMs": 1772113261089,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1200000,
+        "anchorMs": 1772103650685
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh qa",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112782874,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 53008,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "9dc56a33-786a-4158-a61f-431016c98452",
+      "agentId": "frontend_engineer",
+      "name": "frontend-engineer-tmux-loop",
+      "description": "Frontend implementation lane",
+      "enabled": false,
+      "createdAtMs": 1772085333081,
+      "updatedAtMs": 1772113252881,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 720000,
+        "anchorMs": 1772103628695
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh frontend_engineer",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112703889,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 32185,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "bde5885a-388f-4fe4-a8b7-a146521d9e9d",
+      "name": "architect-tmux-25m",
+      "description": "Architect tmux context loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771996872869,
+      "updatedAtMs": 1772088057763,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500000,
+        "anchorMs": 1772088057763
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh architect",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772054223609,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 92761,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "architect"
+    },
+    {
+      "id": "bf3edf97-86dd-42b5-8691-7bdb9048cefb",
+      "agentId": "po",
+      "name": "po-tmux-loop",
+      "description": "Scope and backlog value lane",
+      "enabled": false,
+      "createdAtMs": 1772085364738,
+      "updatedAtMs": 1772113264146,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1800000,
+        "anchorMs": 1772103654436
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh po",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112569034,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 55175,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "c05d5f7e-4daf-48e7-a6a4-bab31839dd07",
+      "agentId": "backend_engineer",
+      "name": "backend-engineer-tmux-loop",
+      "description": "Backend implementation lane",
+      "enabled": false,
+      "createdAtMs": 1772085328597,
+      "updatedAtMs": 1772113255861,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 720000,
+        "anchorMs": 1772103625061
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh backend_engineer",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112991915,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 45848,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "cd75ac2f-2a58-4778-b244-d386b4cc1e33",
+      "agentId": "clawsentinel",
+      "name": "clawsentinel-tmux-loop",
+      "description": "Safety and anti-drift lane",
+      "enabled": false,
+      "createdAtMs": 1772085373926,
+      "updatedAtMs": 1772113257842,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 1500000,
+        "anchorMs": 1772103661841
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh clawsentinel",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112295843,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 35356,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "d744f394-7a03-4a43-a7b4-f88b73b2bb05",
+      "agentId": "analyst",
+      "name": "analyst-tmux-loop",
+      "description": "Business analysis and requirement clarity",
+      "enabled": false,
+      "createdAtMs": 1772085319697,
+      "updatedAtMs": 1772113256869,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 840000,
+        "anchorMs": 1772103617628
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh analyst",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772112932529,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 29754,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      }
+    },
+    {
+      "id": "dfd61f17-206f-4feb-ab14-6ae4ce54f04c",
+      "name": "dev-tmux-15m",
+      "description": "Dev tmux context loop (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1771990215305,
+      "updatedAtMs": 1772088030854,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772088030854
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=tmux PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=0 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=0 TMUX_ROLE_ALLOW_FILE_EDITS=auto bash scripts/cron_tmux_role_runner.sh dev",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772072093989,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 174267,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "dev"
+    },
+    {
+      "id": "e393741f-78b0-461b-89b3-af9d58742e9f",
+      "agentId": "integrator",
+      "name": "integrator-tmux-loop",
+      "description": "Cross-team integration lane",
+      "enabled": false,
+      "createdAtMs": 1772085346645,
+      "updatedAtMs": 1772113263109,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 900000,
+        "anchorMs": 1772103639684
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.\nNever call send/message/delivery actions.\nCommand: TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=55 RETRY_PROMPT_TIMEOUT_SECONDS=30 TMUX_ROLE_RECOVERY_THRESHOLD=2 TMUX_ROLE_NO_DELTA_THRESHOLD=12 TMUX_ROLE_STALL_ABORT_SECONDS=18 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=1 TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=1 bash scripts/cron_tmux_role_runner.sh integrator",
+        "thinking": "high",
+        "timeoutSeconds": 480
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772113160425,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 72999,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "fbccac5b-1028-4c9a-b021-c1998d3bad97",
+      "name": "adminapp-codex-sync-10m",
+      "description": "AdminApp Codex tmux continuity + cron health tick (rebalanced cadence)",
+      "enabled": false,
+      "createdAtMs": 1772027673698,
+      "updatedAtMs": 1772113254867,
+      "schedule": {
+        "kind": "every",
+        "everyMs": 600000,
+        "anchorMs": 1772035874898
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation: bash scripts/adminapp_codex_cron_tick.sh",
+        "thinking": "high",
+        "timeoutSeconds": 240
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "lastRunAtMs": 1772113099830,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 17296,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0,
+        "lastDelivered": false
+      },
+      "agentId": "adminapp-codex"
+    }
+  ],
+  "total": 25,
+  "offset": 0,
+  "limit": 25,
+  "hasMore": false,
+  "nextOffset": null
+}

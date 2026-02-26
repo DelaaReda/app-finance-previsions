@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T11:05:33Z",
+  "updated_at": "2026-02-26T17:25:28Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -113,9 +113,12 @@
       ],
       "handoff_to": "architect",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:54:50Z",
+      "updated_at": "2026-02-26T17:23:15Z",
       "started_at": "2026-02-26T05:54:50Z",
-      "completed_at": "2026-02-26T05:54:50Z"
+      "completed_at": "2026-02-26T05:54:50Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ANALYSIS/20260226T172315Z-517.yaml"
+      ]
     },
     {
       "id": "BATCH-01-ARCH",
@@ -153,13 +156,17 @@
         "finance-app/openclaw-gates/batch-01-20260225-000127.md"
       ],
       "notes": [
-        "Gate PASS confirme vs queue PASS"
+        "Gate PASS confirme vs queue PASS",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T08:48:05Z",
+      "updated_at": "2026-02-26T17:23:15Z",
       "started_at": "2026-02-26T08:48:05Z",
-      "completed_at": "2026-02-26T08:48:05Z"
+      "completed_at": "2026-02-26T08:48:05Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_PREP/20260226T172315Z-186.yaml"
+      ]
     },
     {
       "id": "BATCH-01-TEST_PLAN",
@@ -197,13 +204,17 @@
         "docs/orchestrator-ops/data-artifacts/batch-01-data-qc-20260226T110317Z.md"
       ],
       "notes": [
-        "QC filesystem data: 2 files, structured=0 (WARN) pour support integrator"
+        "QC filesystem data: 2 files, structured=0 (WARN) pour support integrator",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T11:05:33Z",
+      "updated_at": "2026-02-26T17:23:15Z",
       "started_at": "2026-02-26T07:31:11Z",
-      "completed_at": "2026-02-26T11:05:33Z"
+      "completed_at": "2026-02-26T11:05:33Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-DATA/20260226T172315Z-637.yaml"
+      ]
     },
     {
       "id": "BATCH-01-INFRA",
@@ -391,13 +402,17 @@
         "finance-app/openclaw-gates/batch-02-20260225-202042.md"
       ],
       "notes": [
-        "Gate PASS confirme vs queue PASS"
+        "Gate PASS confirme vs queue PASS",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T08:48:05Z",
+      "updated_at": "2026-02-26T17:23:15Z",
       "started_at": "2026-02-26T08:48:05Z",
-      "completed_at": "2026-02-26T08:48:05Z"
+      "completed_at": "2026-02-26T08:48:05Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-QA_PREP/20260226T172315Z-117.yaml"
+      ]
     },
     {
       "id": "BATCH-02-TEST_PLAN",
@@ -576,17 +591,17 @@
       "code": "PLAN",
       "title": "Stabiliser contrats API MVP [PLAN]",
       "role": "planner",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P0",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "planner",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T06:06:13Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T17:20:41Z",
+      "started_at": "2026-02-26T17:20:41Z",
       "completed_at": ""
     },
     {
@@ -637,17 +652,17 @@
       "code": "PLAN",
       "title": "Contrats multi-ticker + news [PLAN]",
       "role": "planner",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P1",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "planner",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T06:06:13Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T17:25:28Z",
+      "started_at": "2026-02-26T17:25:28Z",
       "completed_at": ""
     },
     {
@@ -700,10 +715,11 @@
       "stream_id": "BATCH-01",
       "from_role": "analyst",
       "to_role": "architect",
-      "status": "ACK",
+      "status": "CLOSED",
       "note": "analysis sync",
       "created_at": "2026-02-26T05:54:50Z",
-      "updated_at": "2026-02-26T05:55:05Z"
+      "updated_at": "2026-02-26T17:23:15Z",
+      "idempotency_key": "IK-retro-ho-20260226055450-756"
     }
   ],
   "events": [
@@ -833,6 +849,44 @@
         "artifact": "docs/orchestrator-ops/data-artifacts/batch-01-data-qc-20260226T110317Z.md",
         "handoff_to": "none",
         "handoff_id": "none"
+      }
+    },
+    {
+      "at": "2026-02-26T17:20:41Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T17:23:15Z",
+      "kind": "retro_proof_backfill",
+      "details": {
+        "tasks": [
+          "BATCH-01-ANALYSIS",
+          "BATCH-01-QA_PREP",
+          "BATCH-01-DATA",
+          "BATCH-02-QA_PREP"
+        ],
+        "notes_added": [
+          "BATCH-01-QA_PREP",
+          "BATCH-01-DATA",
+          "BATCH-02-QA_PREP"
+        ],
+        "handoff": "HO-20260226055450-756",
+        "handoff_actions": [
+          "idempotency_added",
+          "closed"
+        ]
+      }
+    },
+    {
+      "at": "2026-02-26T17:25:28Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-PLAN"
       }
     }
   ]
