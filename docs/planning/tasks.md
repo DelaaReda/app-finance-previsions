@@ -2393,9 +2393,10 @@ Loop rule:
 
 Basic-ready criteria (minimum functional baseline):
 
-- Mandatory epics PASS: 1, 2, 3, 4, 5, 8, 10, 11, 13, 14.
+- Mandatory epics PASS: 1, 2, 3, 4, 5, 8, 10, 11, 13, 14, 15.
 - Mandatory user flow PASS:
   - open app -> get daily brief in <=3 clicks,
+  - forecasts returned by model/data pipeline (not only heuristic fallback),
   - run Judge and Ask with grounded answers,
   - see freshness/degraded/runtime status clearly,
   - complete gate with no critical blockers.
@@ -3023,6 +3024,128 @@ Basic-ready criteria (minimum functional baseline):
   - verdict final clair, auditable, reproductible.
 - **Dependencies**: TV14-SHIP-05
 
+### Epic 15 - Data-Driven Forecasting Core
+
+#### TV15-ML-01 - Forecast dataset and feature contract
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: définir un dataset d’entraînement stable pour prévisions basées sur data réelle.
+- **Scope IN**:
+  - schéma dataset: `timestamp`, `asset`, `target_horizon`, `label`, `features`
+  - feature matrix minimale (price action, volume, volatility, regime, news/macro proxies)
+- **Scope OUT**: feature engineering avancé non nécessaire MVP.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/core/`
+  - `copilot-app/backend/data/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Réutiliser les flux ingestion normalisés (Epic 10) pour éviter des datasets ad hoc.
+  - Versionner le schéma dataset pour empêcher les breaks silencieux.
+  - Conserver le mapping direct vers le contrat signal (`direction/confidence/action`).
+- **Acceptation testable**:
+  - dataset généré avec schéma validé et coverage sur univers MVP.
+- **Dependencies**: TV10-DATA-03, TV2-SIGNAL-01
+
+#### TV15-ML-02 - Training pipeline baseline (reproducible)
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: entraîner un modèle baseline reproductible à partir du dataset versionné.
+- **Scope IN**:
+  - script d’entraînement local reproductible
+  - sortie modèle versionnée + métriques minimales
+- **Scope OUT**: AutoML et tuning massif.
+- **Fichiers cibles**:
+  - `scripts/`
+  - `copilot-app/backend/src/core/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Garder un pipeline déterministe (seed fixe, split explicite).
+  - Produire un artefact modèle local simple (pas d’infra externe requise).
+  - Tracer métriques clés utilisées ensuite pour le gate.
+- **Acceptation testable**:
+  - un run training produit un artefact modèle + métriques auditables.
+- **Dependencies**: TV15-ML-01
+
+#### TV15-ML-03 - Walk-forward backtest and robustness checks
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: vérifier que les prévisions gardent une robustesse minimale en mode temporel réaliste.
+- **Scope IN**:
+  - backtest walk-forward sur horizons `1-3d` et `1-2w`
+  - métriques robustesse (hit-rate direction, stabilité confidence)
+- **Scope OUT**: framework backtest institutionnel complet.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/core/`
+  - `scripts/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Éviter toute fuite temporelle (train < test strictement).
+  - Utiliser les mêmes horizons et actifs que l’univers MVP.
+  - Publier les résultats dans un format lisible par gate.
+- **Acceptation testable**:
+  - rapport backtest généré avec verdict PASS/BLOCKED selon seuils minimaux.
+- **Dependencies**: TV15-ML-02
+
+#### TV15-ML-04 - Data-driven inference service for forecasts
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: servir des prévisions runtime issues du modèle (pas heuristique seule).
+- **Scope IN**:
+  - endpoint d’inférence branché au modèle entraîné
+  - fallback explicite si modèle indisponible
+- **Scope OUT**: serving distribué multi-cluster.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/api/main.py`
+  - `copilot-app/backend/src/api/routes/forecasts.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Conserver contrat API stable (`ok/data`, freshness, source[], warnings[]).
+  - Exposer `source=model` vs `source=fallback` de manière explicite.
+  - Réutiliser cache TTL existant sans masquer la fraîcheur d’inférence.
+- **Acceptation testable**:
+  - `/api/forecasts` retourne des sorties model-driven en nominal + fallback visible en dégradé.
+- **Dependencies**: TV15-ML-03, TV1-FRESH-01
+
+#### TV15-ML-05 - Confidence calibration and drift guardrails
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: calibrer la confiance et détecter la dérive data/modèle.
+- **Scope IN**:
+  - calibration confidence vers `0-100`
+  - checks drift simples (feature drift / degradation signal quality)
+- **Scope OUT**: monitoring MLOps avancé externe.
+- **Fichiers cibles**:
+  - `copilot-app/backend/src/core/`
+  - `copilot-app/backend/src/api/main.py`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Appliquer des seuils simples et explicites pour réduire les faux niveaux de confiance.
+  - Si drift détecté, réduire confidence et activer un warning utilisateur.
+  - Aligner ces warnings avec les badges UI dégradés existants.
+- **Acceptation testable**:
+  - confidence calibrée et warnings drift visibles dans les payloads forecasts/signals.
+- **Dependencies**: TV15-ML-04, TV8-COST-03
+
+#### TV15-ML-06 - Data-driven forecasting QA gate
+
+- **Epic**: Epic 15
+- **Priority**: P0
+- **Objectif**: empêcher la release si le forecast n’est pas réellement data-driven et robuste.
+- **Scope IN**:
+  - gate couvrant dataset/training/backtest/inference/calibration
+  - critères PASS/BLOCKED explicites
+- **Scope OUT**: benchmark académique étendu.
+- **Fichiers cibles**:
+  - `scripts/run_delivery_gate.sh`
+  - `finance-app/openclaw-gates/`
+- **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
+  - Vérifier explicitement la provenance `source=model` sur un échantillon MVP.
+  - Bloquer si backtest ou calibration est absent/invalide.
+  - Inclure preuve lisible pour décision GO/NO-GO produit.
+- **Acceptation testable**:
+  - gate final bloque si forecasts non data-driven ou non calibrés.
+- **Dependencies**: TV15-ML-05, TV14-SHIP-06
+
 ## Changelog (all-epics decomposition)
 
 - 2026-02-26 America/New_York - Added complete Epic 1-6 task decomposition with UI-first dispatch lane and explicit dependencies.
@@ -3030,3 +3153,4 @@ Basic-ready criteria (minimum functional baseline):
 - 2026-02-26 America/New_York - Added Epic 7/8/9 tasks: macro-geopolitical radar, cost governance, and decision learning loop.
 - 2026-02-26 America/New_York - Added continuous delivery loop and Epic 10/11/12/13/14 task decomposition toward basic-ready MVP.
 - 2026-02-26 America/New_York - Added INTEGRATION-APP-EENGINEER-RECOMMENDATIONS to all remaining task IDs (123/123 coverage) to detail architecture per existing task without creating new backlog items.
+- 2026-02-26 America/New_York - Added Epic 15 data-driven forecasting core (dataset, training, backtest, inference, calibration, QA gate).
