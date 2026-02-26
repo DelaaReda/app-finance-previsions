@@ -261,6 +261,7 @@ bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp
 - 2026-02-26 America/New_York — Added vision-clarifier epic set focused on personal low-cost decision workflow (`docs/planning/PRODUCT_VISION.md`).
 - 2026-02-26 America/New_York — Extended vision epic set with Epic 7/8/9 (macro radar, cost governance, decision learning loop).
 - 2026-02-26 America/New_York — Extended vision epic set with Epic 10/11/12/13/14 for basic-ready delivery loop.
+- 2026-02-26 America/New_York — Added Epic 15 for explicit data-driven forecasting core (dataset -> training -> backtest -> inference).
 
 ## Delta vision-clarifier (2026-02-26)
 
@@ -363,3 +364,10 @@ This section is the active product-priority lens for upcoming sprints.
   - checklist and E2E scenarios cover all basic user flows
   - performance and defect thresholds are within release budget
   - final gate returns explicit GO/NO-GO with blocker traceability
+
+### Epic 15 (P0) - Data-Driven Forecasting Core
+- Goal: generate forecasts from measurable data pipelines, not only heuristic synthesis.
+- Done when:
+  - training dataset and feature contract are versioned and reproducible
+  - walk-forward backtests validate minimum robustness on MVP horizons
+  - runtime forecasts expose explicit model provenance and calibrated confidence

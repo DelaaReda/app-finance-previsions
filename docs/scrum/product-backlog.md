@@ -18,6 +18,7 @@ Order by:
 - Epic 1: Data freshness foundation (`<=10m` target on key tiles)
 - Epic 2: Forecast engine contract (`direction/confidence/action` for MVP universe)
 - Epic 3: Multi-model consensus + judge (low-cost providers first)
+- Epic 15: Data-driven forecasting core (dataset/training/backtest/inference)
 
 ### P1 - Must follow immediately after P0 baseline
 - Epic 4: Decision cockpit frontend (2-3 click daily brief)
@@ -61,6 +62,7 @@ Order by:
 - Epic 12: `TV12-ALRT-01..06`
 - Epic 13: `TV13-OPS-01..06`
 - Epic 14: `TV14-SHIP-01..06`
+- Epic 15: `TV15-ML-01..06`
 
 Reference:
 - `docs/planning/tasks.md` (`Vision Task Pack - Sprint W10`, `Code-Audit Advance Pack`, `Full Epic Decomposition - All Epics`)

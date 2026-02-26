@@ -83,6 +83,7 @@ Per asset/sector card:
 - P0 - Epic 1: Data Freshness and Signal Reliability Foundation
 - P0 - Epic 2: Forecast Engine (asset/sector direction + confidence + action)
 - P0 - Epic 3: Multi-Model Consensus and Judge
+- P0 - Epic 15: Data-Driven Forecasting Core (dataset/training/backtest/inference)
 - P1 - Epic 4: Decision Cockpit Frontend (2-3 click workflow)
 - P1 - Epic 5: Ask Copilot Deep Analysis (grounded Q&A)
 - P1 - Epic 10: Data Source Reliability and Ingestion Automation
@@ -113,3 +114,4 @@ Per asset/sector card:
 - 2026-02-26 America/New_York - Initial vision clarified from direct user answers and defaults for missing constraints.
 - 2026-02-26 America/New_York - Added expansion epics for macro radar, cost governance, and learning loop continuity.
 - 2026-02-26 America/New_York - Added basic-ready expansion epics for ingestion reliability, UX/settings, alerts, operations hardening, and release go-live.
+- 2026-02-26 America/New_York - Added explicit P0 data-driven forecasting core epic to ensure predictions are model/data based.
