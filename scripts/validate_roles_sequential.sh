@@ -10,8 +10,6 @@ ROLE_MAP=(
   "tester:36bed423-e965-4a19-a43a-c8ffbff751d8"
   "qa:454dc361-14bb-4f71-8ca2-ec86708c503f"
   "architect:bde5885a-388f-4fe4-a8b7-a146521d9e9d"
-  "po:44f08bd9-b9c0-4ab5-8882-cc91d402c8db"
-  "scrum_master:8e5b1bd7-f319-48d8-b8f7-c906c024135f"
   "clawsentinel:25756cb4-57f1-41c7-83d4-66fd67a0164d"
 )
 
@@ -53,6 +51,24 @@ extract_field() {
     | sed 's/[[:space:]]*$//'
 }
 
+extract_evidence_kv() {
+  local key="$1"
+  local evidence="$2"
+  printf '%s' "$evidence" \
+    | tr ';' '\n' \
+    | sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//Ip" \
+    | head -n 1 \
+    | tr -d '\r' \
+    | sed 's/[[:space:]]*$//'
+}
+
+none_like_value() {
+  local raw="$1"
+  local norm
+  norm="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d ' _/-')"
+  [[ -z "$norm" || "$norm" == "none" || "$norm" == "na" ]]
+}
+
 artifact_marker_for_role() {
   case "$1" in
     planner) echo "PLANNER_ARTIFACT=" ;;
@@ -60,8 +76,6 @@ artifact_marker_for_role() {
     tester) echo "TESTER_ARTIFACT=" ;;
     qa) echo "QA_ARTIFACT=" ;;
     architect) echo "ARCHITECT_ARTIFACT=" ;;
-    po) echo "PO_ARTIFACT=" ;;
-    scrum_master) echo "SCRUM_ARTIFACT=" ;;
     clawsentinel) echo "SENTINEL_ARTIFACT=" ;;
     *) echo "ROLE_ARTIFACT=" ;;
   esac
@@ -151,10 +165,13 @@ append_jsonl_event() {
   local gate_ok="${11}"
   local failure_reason="${12}"
   local evidence_head="${13}"
-  local strict_ready_chain="${14}"
-  local chain_target_expected="${15}"
-  local chain_target_observed="${16}"
-  local chain_check_ok="${17}"
+  local exec_report="${14}"
+  local issues_summary="${15}"
+  local suggestions_summary="${16}"
+  local strict_ready_chain="${17}"
+  local chain_target_expected="${18}"
+  local chain_target_observed="${19}"
+  local chain_check_ok="${20}"
   local now_iso
   now_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   jq -nc \
@@ -172,11 +189,14 @@ append_jsonl_event() {
     --argjson gate_ok "$gate_ok" \
     --arg failure_reason "$failure_reason" \
     --arg evidence_head "$evidence_head" \
+    --arg exec_report "$exec_report" \
+    --arg issues_summary "$issues_summary" \
+    --arg suggestions_summary "$suggestions_summary" \
     --argjson strict_ready_chain "$strict_ready_chain" \
     --arg chain_target_expected "$chain_target_expected" \
     --arg chain_target_observed "$chain_target_observed" \
     --argjson chain_check_ok "$chain_check_ok" \
-    '{ts:$ts,role:$role,status:$status,delta:$delta,verdict:$verdict,blocker_id:$blocker,next_action_unique:$next_action,duration_ms:($duration_ms|tonumber?),tokens_total:($tokens|tonumber?),artifact_marker:$artifact_marker,artifact_present:$artifact_present,gate_ok:$gate_ok,failure_reason:$failure_reason,evidence_head:$evidence_head,strict_ready_chain:$strict_ready_chain,chain_target_expected:$chain_target_expected,chain_target_observed:$chain_target_observed,chain_check_ok:$chain_check_ok}' \
+    '{ts:$ts,role:$role,status:$status,delta:$delta,verdict:$verdict,blocker_id:$blocker,next_action_unique:$next_action,duration_ms:($duration_ms|tonumber?),tokens_total:($tokens|tonumber?),artifact_marker:$artifact_marker,artifact_present:$artifact_present,gate_ok:$gate_ok,failure_reason:$failure_reason,evidence_head:$evidence_head,exec_report:$exec_report,issues:$issues_summary,suggestions:$suggestions_summary,strict_ready_chain:$strict_ready_chain,chain_target_expected:$chain_target_expected,chain_target_observed:$chain_target_observed,chain_check_ok:$chain_check_ok}' \
     >> "$REPORT_FILE"
 }
 
@@ -227,6 +247,15 @@ print_report_summary() {
     | .[]
     | "ROLE_SUMMARY role=\(.role) total=\(.total) ok=\(.ok) failed=\(.failed) avg_duration_ms=\(.avg_duration_ms) avg_tokens=\(.avg_tokens) latest_failure=\(.latest_failure) chain_expected=\(.latest_chain_expected) chain_observed=\(.latest_chain_observed) latest_next=\(.latest_next)"
   ' "$report_file"
+}
+
+normalize_cron_runs_file() {
+  local input_file="$1"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "${ROOT}/scripts/openclaw_cron_runs_normalize.py" ]]; then
+    python3 "${ROOT}/scripts/openclaw_cron_runs_normalize.py" < "$input_file" 2>/dev/null || echo '{"entries":[]}'
+  else
+    cat "$input_file"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -346,10 +375,11 @@ for pair in "${ROLE_MAP[@]}"; do
   openclaw cron enable "$id" >/dev/null
   openclaw cron run "$id" --expect-final --timeout "$TIMEOUT_SECONDS" >/dev/null
   openclaw cron runs --id "$id" --limit 1 > "$out_json"
+  norm_json="$(normalize_cron_runs_file "$out_json")"
 
-  summary="$(jq -r '.entries[0].summary // ""' "$out_json")"
-  duration="$(jq -r '.entries[0].durationMs // ""' "$out_json")"
-  tokens="$(jq -r '.entries[0].usage.total_tokens // ""' "$out_json")"
+  summary="$(printf '%s' "$norm_json" | jq -r '.entries[0].summary // .entries[0].error // ""')"
+  duration="$(printf '%s' "$norm_json" | jq -r '.entries[0].durationMs // ""')"
+  tokens="$(printf '%s' "$norm_json" | jq -r '.entries[0].usage.total_tokens // ""')"
 
   status="$(extract_field "STATUS" "$summary")"
   delta="$(extract_field "DELTA" "$summary")"
@@ -368,6 +398,9 @@ for pair in "${ROLE_MAP[@]}"; do
   marker_u="$(printf '%s' "$marker" | tr '[:lower:]' '[:upper:]')"
   evidence_u="$(printf '%s' "$evidence_full" | tr '[:lower:]' '[:upper:]')"
   evidence_l="$(printf '%s' "$evidence_full" | tr '[:upper:]' '[:lower:]')"
+  exec_report_kv="$(extract_evidence_kv "exec_report" "$evidence_full")"
+  issues_kv="$(extract_evidence_kv "issues" "$evidence_full")"
+  suggestions_kv="$(extract_evidence_kv "suggestions" "$evidence_full")"
   chain_observed="$(extract_batch_target "$next_action $delta $evidence_full")"
   chain_check_ok=true
   artifact_present=false
@@ -412,6 +445,38 @@ for pair in "${ROLE_MAP[@]}"; do
       failure_reason="BLOCKER_NOT_CLEAR"
     else
       failure_reason="${failure_reason},BLOCKER_NOT_CLEAR"
+    fi
+  fi
+  if [[ -z "$exec_report_kv" ]]; then
+    gate_ok=false
+    if [[ "$failure_reason" == "NONE" ]]; then
+      failure_reason="EXEC_REPORT_EVIDENCE_MISSING"
+    else
+      failure_reason="${failure_reason},EXEC_REPORT_EVIDENCE_MISSING"
+    fi
+  fi
+  if [[ -z "$issues_kv" ]]; then
+    gate_ok=false
+    if [[ "$failure_reason" == "NONE" ]]; then
+      failure_reason="ISSUES_EVIDENCE_MISSING"
+    else
+      failure_reason="${failure_reason},ISSUES_EVIDENCE_MISSING"
+    fi
+  fi
+  if [[ -z "$suggestions_kv" ]]; then
+    gate_ok=false
+    if [[ "$failure_reason" == "NONE" ]]; then
+      failure_reason="SUGGESTIONS_EVIDENCE_MISSING"
+    else
+      failure_reason="${failure_reason},SUGGESTIONS_EVIDENCE_MISSING"
+    fi
+  fi
+  if ! none_like_value "$issues_kv" && none_like_value "$suggestions_kv"; then
+    gate_ok=false
+    if [[ "$failure_reason" == "NONE" ]]; then
+      failure_reason="SUGGESTIONS_REQUIRED_WITH_ISSUES"
+    else
+      failure_reason="${failure_reason},SUGGESTIONS_REQUIRED_WITH_ISSUES"
     fi
   fi
 
@@ -518,11 +583,13 @@ for pair in "${ROLE_MAP[@]}"; do
   echo "ROLE=${role} STATUS=${status:-n/a} DELTA=${delta:-n/a} VERDICT=${verdict:-n/a} BLOCKER=${blocker:-n/a} DURATION_MS=${duration:-n/a} TOKENS=${tokens:-n/a} GATE_OK=${gate_ok}"
   echo "ROLE=${role} NEXT_ACTION=${next_action:-n/a}"
   echo "ROLE=${role} CHAIN_EXPECTED=${CHAIN_TARGET:-n/a} CHAIN_OBSERVED=${chain_observed:-n/a} CHAIN_OK=${chain_check_ok} READY_IDS=${ready_ids_csv:-none}"
+  echo "ROLE=${role} EXEC_REPORT=${exec_report_kv:-none} ISSUES=${issues_kv:-none} SUGGESTIONS=${suggestions_kv:-none}"
   echo "ROLE=${role} EVIDENCE_HEAD=${evidence_head:-n/a}"
 
   append_jsonl_event \
     "$role" "$status" "$delta" "$verdict" "$blocker" "$next_action" \
     "$duration" "$tokens" "$marker" "$artifact_present" "$gate_ok" "$failure_reason" "$evidence_head" \
+    "$exec_report_kv" "$issues_kv" "$suggestions_kv" \
     "$([[ "$STRICT_READY_CHAIN" -eq 1 ]] && echo true || echo false)" "$CHAIN_TARGET" "${chain_observed:-}" "$chain_check_ok"
 
   openclaw cron disable "$id" >/dev/null

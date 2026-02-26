@@ -17,7 +17,7 @@
 2. `admins` -> organisation/process de l'equipe de livraison.
 3. `equipe de livraison` -> `admins` -> `main` (reporting et escalade).
 4. Interdit:
-   - directive directe de `main` vers les roles livraison (`planner/dev/tester/qa/architect/po/scrum_master`);
+   - directive directe de `main` vers les roles livraison (voir `docs/orchestrator-ops/parallel-role-topology.json`);
    - reponse directe de l'equipe livraison vers `main` hors circuit admin.
 
 ## Routage documentaire (obligatoire)
@@ -84,7 +84,7 @@ Regle:
    - une seule variable changee par intervention (cadence, timeout, message, retry), jamais plusieurs axes a la fois.
 2. Routine minimale a chaque iteration:
    - verifier `openclaw cron list --json`,
-   - verifier les derniers `cron runs` sur `planner`, `qa`, `scrum_master`,
+   - verifier les derniers `cron runs` sur `planner`, `backend_engineer`, `qa`,
    - publier une entree signee par chacun dans `agent-watchdog`.
 3. Seuils d'escalade:
    - `tmux_unparseable` > 40% sur fenetre recente,
@@ -131,6 +131,7 @@ Donner un protocole unique pour les admins qui travaillent en parallèle sur les
    - `thinking=high`
    - `timeoutSeconds=900`
    - output structuré 8 clés (`STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE`)
+   - rapport de fin obligatoire par tick: `exec_report`, `issues`, `suggestions` (si `issues!=none`, suggestion actionnable obligatoire)
 6. Logs:
    - conserver les logs par itération/run
    - logs propres par défaut (sanitized stream), pas de suppression historique sans demande explicite.
@@ -153,12 +154,14 @@ Rotation recommandée: changer les rôles toutes les 2 heures.
 ## Protocole d'intervention (obligatoire)
 
 ### 0) Pre-annonce avant action
-- Avant tout changement cron/runtime, publier un `TYPE: INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md` avec:
-  - `intent_id=<...>`
-  - `planned_files=<...>`
-  - `edit_scope=<...>`
-  - `eta_minutes=<...>`
-- Reporter le meme `intent_id` dans `memory/YYYY-MM-DD.md` avant la premiere commande de modification.
+- Avant tout changement cron/runtime, exécuter:
+```bash
+scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "bash scripts/preannounce_intent.sh preannounce --role adminapp-codex --scope cron_runtime_change --files scripts/configure_parallel_team_crons.sh,docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md --eta-minutes 20"
+```
+- Cette commande:
+  - publie l’`INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md`,
+  - écrit la pre-annonce dans `memory/YYYY-MM-DD.md`,
+  - réserve le scope dans `docs/orchestrator-ops/intent-registry.json` et bloque les chevauchements.
 
 ### 1) Prendre le lock admin
 ```bash

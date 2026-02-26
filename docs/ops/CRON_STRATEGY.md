@@ -1,12 +1,13 @@
 # CRON STRATEGY v1
 
-## Active baseline (parallel, 17 jobs)
+## Active baseline (parallel, 15 jobs)
 - Profile: tmux-by-role (specialized lanes) + tri-admin + stale auto-heal.
 - Source of truth (avoid doc drift):
   - `openclaw cron list --all`
   - `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
 - Jobs:
-  - 14 role loops: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `po`, `scrum_master`, `clawsentinel`
+  - 12 role loops: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `clawsentinel`
+    - note: scope/value + flow/WIP reviews are absorbed by `planner` (no always-on `po`/`scrum_master` loops)
   - 2 admin loops: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`
   - 1 utility: `stale-sweep-autoheal-7m`
 - Runtime hardening baseline (tmux role runner):

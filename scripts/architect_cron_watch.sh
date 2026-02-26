@@ -49,6 +49,22 @@ now_epoch() {
   date -u +%s
 }
 
+normalize_cron_runs_json() {
+  local raw="${1:-}"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "${ROOT}/scripts/openclaw_cron_runs_normalize.py" ]]; then
+    printf '%s' "$raw" | python3 "${ROOT}/scripts/openclaw_cron_runs_normalize.py" 2>/dev/null || echo '{"entries":[]}'
+  else
+    printf '%s' "$raw"
+  fi
+}
+
+fetch_runs_json() {
+  local limit="${1:-1}"
+  local raw=""
+  raw="$(openclaw cron runs --id "$JOB_ID" --limit "$limit" 2>/dev/null || echo '{}')"
+  normalize_cron_runs_json "$raw"
+}
+
 job_json() {
   openclaw cron list --json | jq -c --arg id "$JOB_ID" '.jobs[]? | select(.id==$id)'
 }
@@ -180,7 +196,7 @@ run_once_cmd() {
     fi
   fi
 
-  openclaw cron runs --id "$JOB_ID" --limit 1 | jq -r '.entries[0]? | "ARCH_WATCH_LAST_RUN status=\(.status // "unknown") duration_ms=\(.durationMs // 0) run_at_ms=\(.runAtMs // 0)"'
+  fetch_runs_json 1 | jq -r '.entries[0]? | "ARCH_WATCH_LAST_RUN status=\(.status // "unknown") duration_ms=\(.durationMs // 0) run_at_ms=\(.runAtMs // 0)"'
   status_cmd || true
 }
 
@@ -195,7 +211,7 @@ tail_cmd() {
 audit_stats_json() {
   local runs_json
   local tmp_json
-  runs_json="$(openclaw cron runs --id "$JOB_ID" --limit "$AUDIT_LIMIT")"
+  runs_json="$(fetch_runs_json "$AUDIT_LIMIT")"
   tmp_json="$(mktemp)"
   printf '%s' "$runs_json" > "$tmp_json"
   python3 - "$AUDIT_LIMIT" "$AUDIT_RECENT_STRICT" "$tmp_json" <<'PY'
@@ -305,7 +321,7 @@ audit_cmd() {
 slo_stats_json() {
   local runs_json
   local tmp_json
-  runs_json="$(openclaw cron runs --id "$JOB_ID" --limit "$SLO_LIMIT")"
+  runs_json="$(fetch_runs_json "$SLO_LIMIT")"
   tmp_json="$(mktemp)"
   printf '%s' "$runs_json" > "$tmp_json"
   python3 - "$SLO_LIMIT" "$SLO_P95_MAX_MS" "$SLO_TIMEOUT_RATE_MAX" "$SLO_ERROR_RATE_MAX" "$tmp_json" <<'PY'

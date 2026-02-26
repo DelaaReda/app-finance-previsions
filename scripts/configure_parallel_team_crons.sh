@@ -42,8 +42,6 @@ DEFAULT_ROLE_PROFILES=(
   "dev|16m|1|Legacy generalist dev lane"
   "tester|15m|1|Test automation lane"
   "qa|20m|1|Quality gate and release lane"
-  "po|30m|0|Scope and backlog value lane"
-  "scrum_master|15m|0|Flow and blocker cadence lane"
   "clawsentinel|25m|0|Safety and anti-drift lane"
 )
 ROLE_PROFILES=("${DEFAULT_ROLE_PROFILES[@]}")
@@ -208,8 +206,6 @@ session_for_role() {
     dev) echo "codex_dev_cron" ;;
     tester) echo "codex_tester_cron" ;;
     qa) echo "codex_qa_cron" ;;
-    po) echo "codex_po_cron" ;;
-    scrum_master) echo "codex_scrum_master_cron" ;;
     clawsentinel) echo "clawsentinel" ;;
     *) return 1 ;;
   esac
@@ -225,7 +221,6 @@ trace_for_role() {
     return 0
   fi
   case "$1" in
-    scrum_master) echo "logs-codex-runs/role-runner/scrum_master.live.log" ;;
     *) echo "logs-codex-runs/role-runner/$1.live.log" ;;
   esac
 }
@@ -246,7 +241,7 @@ thinking_level_for_role() {
   local role="$1"
   case "$role" in
     architect)
-      printf '%s\n' "${PARALLEL_CRON_THINKING_ARCHITECT:-low}"
+      printf '%s\n' "${PARALLEL_CRON_THINKING_ARCHITECT:-high}"
       ;;
     *)
       printf '%s\n' "$THINKING_LEVEL"

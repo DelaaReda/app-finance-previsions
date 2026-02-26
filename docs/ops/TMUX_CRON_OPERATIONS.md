@@ -72,10 +72,13 @@ Run this checklist in order:
    - `openclaw cron list`
 2. Last runs for each active job:
    - `openclaw cron runs --id <job-id> --limit 5`
+   - Parser robuste multi-format:
+     - `openclaw cron runs --id <job-id> --limit 5 | python3 scripts/openclaw_cron_runs_normalize.py`
 3. Watch for these failure patterns:
    - `Error: cron: job execution timed out`
    - summary polluted by shell noise (`clear`, prompt echoes, terminal banners)
    - missing structured fields (`STATUS`, `DELTA`, `EVIDENCE`, `RISKS`, `NEXT`, `VERDICT`, `BLOCKER_ID`, `NEXT_ACTION_UNIQUE`)
+   - `EVIDENCE` missing end-of-execution report keys (`exec_report`, `issues`, `suggestions`) or `issues!=none` with `suggestions=none`
 4. If IDs changed unexpectedly, treat previous monitoring links as stale and refresh from `openclaw cron list`.
 
 ## Quick controls (new)

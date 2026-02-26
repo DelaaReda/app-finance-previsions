@@ -53,7 +53,7 @@ ACTIVE_STATES = {STATE_IN_PROGRESS, STATE_REVIEW}
 READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY}
 
 ROLE_CATALOG: Dict[str, Dict[str, object]] = {
-    "planner": {"wip_limit": 2, "can_edit": False, "focus": "vision conformance mentoring and dispatch hygiene"},
+    "planner": {"wip_limit": 2, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
     "analyst": {"wip_limit": 3, "can_edit": False, "focus": "requirements and assumptions"},
     "architect": {"wip_limit": 2, "can_edit": False, "focus": "constraints and design"},
     "backend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "api and backend impl"},
@@ -64,8 +64,6 @@ ROLE_CATALOG: Dict[str, Dict[str, object]] = {
     "dev": {"wip_limit": 2, "can_edit": True, "focus": "cross-cutting implementation and debt"},
     "tester": {"wip_limit": 3, "can_edit": True, "focus": "test automation and checks"},
     "qa": {"wip_limit": 3, "can_edit": True, "focus": "quality gate and validation"},
-    "po": {"wip_limit": 2, "can_edit": False, "focus": "scope and value"},
-    "scrum_master": {"wip_limit": 2, "can_edit": False, "focus": "flow and blockers"},
     "clawsentinel": {"wip_limit": 2, "can_edit": False, "focus": "anti-drift and safety"},
 }
 
@@ -91,11 +89,12 @@ STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
     TemplateStep("INTEGRATION", "integrator", ("BACKEND", "FRONTEND", "INFRA", "DATA", "DEV")),
     TemplateStep("QA_EXEC", "qa", ("INTEGRATION", "QA_PREP", "TEST_PLAN")),
     TemplateStep("SENTINEL_CHECK", "clawsentinel", ("QA_EXEC",)),
-    TemplateStep("SCRUM_REVIEW", "scrum_master", ("PLAN",)),
-    TemplateStep("PO_REVIEW", "po", ("QA_EXEC", "SENTINEL_CHECK")),
 )
 
 DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
+    "PLAN": [
+        "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
+    ],
     "BACKEND": [
         "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md.",
     ],
@@ -674,24 +673,24 @@ def enforce_handoff_sla(board: dict, ack_sla_seconds: int, close_sla_seconds: in
                 summary["ack_overdue"] += 1
                 if apply:
                     handoff["sla_state"] = "ACK_OVERDUE"
-                    handoff["owner"] = "scrum_master"
+                    handoff["owner"] = "planner"
                     handoff["updated_at"] = now_iso()
                     append_event(
                         board,
                         "handoff_sla_escalation",
-                        {"handoff_id": hid, "severity": "WARN", "reason": "ACK_OVERDUE", "owner": "scrum_master"},
+                        {"handoff_id": hid, "severity": "WARN", "reason": "ACK_OVERDUE", "owner": "planner"},
                     )
                     summary["escalated"] += 1
             if age_seconds > close_sla_seconds:
                 summary["close_overdue"] += 1
                 if apply:
                     handoff["sla_state"] = "CLOSE_OVERDUE"
-                    handoff["owner"] = "scrum_master"
+                    handoff["owner"] = "planner"
                     handoff["updated_at"] = now_iso()
                     append_event(
                         board,
                         "handoff_sla_escalation",
-                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE", "owner": "scrum_master"},
+                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE", "owner": "planner"},
                     )
                     summary["escalated"] += 1
                     task = tasks.get(task_ref)
@@ -708,12 +707,12 @@ def enforce_handoff_sla(board: dict, ack_sla_seconds: int, close_sla_seconds: in
                 summary["close_overdue"] += 1
                 if apply:
                     handoff["sla_state"] = "CLOSE_OVERDUE_AFTER_ACK"
-                    handoff["owner"] = "scrum_master"
+                    handoff["owner"] = "planner"
                     handoff["updated_at"] = now_iso()
                     append_event(
                         board,
                         "handoff_sla_escalation",
-                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE_AFTER_ACK", "owner": "scrum_master"},
+                        {"handoff_id": hid, "severity": "BLOCKED", "reason": "CLOSE_OVERDUE_AFTER_ACK", "owner": "planner"},
                     )
                     summary["escalated"] += 1
     if apply:
@@ -908,7 +907,7 @@ def validate_board(
     if queue_ready == 0 and ready_tasks:
         sample = ",".join([tid for tid in ready_tasks if tid][:5]) or "none"
         warnings.append(
-            f"INV-READY-SYNC:owner=scrum_master:queue_ready=0:board_ready={len(ready_tasks)}:sample={sample}:remediation=sync-priority"
+            f"INV-READY-SYNC:owner=planner:queue_ready=0:board_ready={len(ready_tasks)}:sample={sample}:remediation=sync-priority"
         )
 
     # INV-QUEUE-CLOSED-WITH-OPEN-TASKS (WARN): stream marked PASS/CLOSED in queue while actionable tasks remain.
@@ -931,7 +930,7 @@ def validate_board(
         warnings.append(
             "INV-QUEUE-CLOSED-WITH-OPEN-TASKS:"
             f"stream={stream_id}:queue_state={queue_state}:open_tasks={len(task_ids)}:sample={sample}:"
-            "owner=scrum_master:remediation=reopen_queue_or_close_workboard_tasks"
+            "owner=planner:remediation=reopen_queue_or_close_workboard_tasks"
         )
 
     now = datetime.now(timezone.utc)
@@ -941,29 +940,29 @@ def validate_board(
         if task_ref and task_ref not in idx:
             errors.append(f"HANDOFF_TASK_MISSING:{hid}:{task_ref}")
         if not str(handoff.get("idempotency_key", "")).strip():
-            warnings.append(f"HANDOFF_IDEMPOTENCY_MISSING:handoff={hid}:owner=scrum_master:remediation=attach_idempotency_key")
+            warnings.append(f"HANDOFF_IDEMPOTENCY_MISSING:handoff={hid}:owner=planner:remediation=attach_idempotency_key")
         status = str(handoff.get("status", "")).upper()
         created_at = _parse_utc(str(handoff.get("created_at", ""))) or _parse_utc(str(handoff.get("updated_at", "")))
         if created_at is None:
             if status in {"OPEN", "ACK"}:
-                warnings.append(f"INV-HANDOFF-SLA:INVALID_TIMESTAMP:handoff={hid}:owner=scrum_master:remediation=repair_timestamps")
+                warnings.append(f"INV-HANDOFF-SLA:INVALID_TIMESTAMP:handoff={hid}:owner=planner:remediation=repair_timestamps")
             continue
         age_seconds = int((now - created_at).total_seconds())
         if status == "OPEN":
             if age_seconds > close_sla_seconds:
                 errors.append(
-                    f"INV-HANDOFF-SLA:CLOSE_OVERDUE:handoff={hid}:age={age_seconds}s:owner=scrum_master:remediation=escalate_and_reduce_wip"
+                    f"INV-HANDOFF-SLA:CLOSE_OVERDUE:handoff={hid}:age={age_seconds}s:owner=planner:remediation=escalate_and_reduce_wip"
                 )
             elif age_seconds > ack_sla_seconds:
                 warnings.append(
-                    f"INV-HANDOFF-SLA:ACK_OVERDUE:handoff={hid}:age={age_seconds}s:owner=scrum_master:remediation=handoff-ack_or_reassign"
+                    f"INV-HANDOFF-SLA:ACK_OVERDUE:handoff={hid}:age={age_seconds}s:owner=planner:remediation=handoff-ack_or_reassign"
                 )
         elif status == "ACK":
             ack_at = _parse_utc(str(handoff.get("updated_at", ""))) or created_at
             ack_age = int((now - ack_at).total_seconds())
             if ack_age > close_sla_seconds:
                 warnings.append(
-                    f"INV-HANDOFF-SLA:CLOSE_OVERDUE_AFTER_ACK:handoff={hid}:age={ack_age}s:owner=scrum_master:remediation=handoff-close_or_reassign"
+                    f"INV-HANDOFF-SLA:CLOSE_OVERDUE_AFTER_ACK:handoff={hid}:age={ack_age}s:owner=planner:remediation=handoff-close_or_reassign"
                 )
 
     for task in tasks:
@@ -976,7 +975,7 @@ def validate_board(
         age_seconds = int((now - ref_time).total_seconds())
         if age_seconds > in_progress_stale_seconds:
             warnings.append(
-                f"INV-INPROGRESS-STALE:task={tid}:age={age_seconds}s:owner=scrum_master:remediation=reclaim_or_close"
+                f"INV-INPROGRESS-STALE:task={tid}:age={age_seconds}s:owner=planner:remediation=reclaim_or_close"
             )
 
     return errors, warnings

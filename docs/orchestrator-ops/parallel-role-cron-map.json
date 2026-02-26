@@ -1,5 +1,5 @@
 {
-  "generatedAtUtc": "2026-02-26T20:39:05Z",
+  "generatedAtUtc": "2026-02-26T21:19:27Z",
   "thinking": "high",
   "timeoutSeconds": 900,
   "roles": [
@@ -39,7 +39,7 @@
       "name": "architect-tmux-loop",
       "agent_id": "architect",
       "every": "18m",
-      "thinking": "low",
+      "thinking": "high",
       "timeout_seconds": 900,
       "lane": "analysis",
       "wip_limit": 2,
@@ -167,36 +167,6 @@
       "provisioned": 1,
       "session_name": "codex_qa_cron",
       "trace_file": "logs-codex-runs/role-runner/qa.live.log"
-    },
-    {
-      "role": "po",
-      "id": "5a34a9aa-e33d-4309-9c57-cb06f26ba5a4",
-      "name": "po-tmux-loop",
-      "agent_id": "po",
-      "every": "30m",
-      "thinking": "high",
-      "timeout_seconds": 900,
-      "lane": "governance",
-      "wip_limit": 2,
-      "allow_file_edits": 0,
-      "provisioned": 1,
-      "session_name": "codex_po_cron",
-      "trace_file": "logs-codex-runs/role-runner/po.live.log"
-    },
-    {
-      "role": "scrum_master",
-      "id": "1391e0e6-a440-464e-b225-ea27412ef5c3",
-      "name": "scrum-master-tmux-loop",
-      "agent_id": "scrum_master",
-      "every": "15m",
-      "thinking": "high",
-      "timeout_seconds": 900,
-      "lane": "governance",
-      "wip_limit": 2,
-      "allow_file_edits": 0,
-      "provisioned": 1,
-      "session_name": "codex_scrum_master_cron",
-      "trace_file": "logs-codex-runs/role-runner/scrum_master.live.log"
     },
     {
       "role": "clawsentinel",

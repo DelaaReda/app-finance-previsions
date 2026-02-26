@@ -65,8 +65,8 @@ bash scripts/tmux_live_watchdog.sh status
 - Per-role execution trace: `logs-codex-runs/role-runner/<role>.live.log`
 
 ## 7) Daily cadence
-- Scrum flow check:
-  - `scripts/parallel_workstream.py status --role scrum_master --compact`
+- Dispatch + flow check (planner absorbs ex-scrum_master):
+  - `scripts/parallel_workstream.py status --role planner --compact`
 - Role wake-up context check:
   - `scripts/parallel_workstream.py context --role <role> --limit 3`
 - Role claim/complete examples:

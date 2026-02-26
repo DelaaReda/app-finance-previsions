@@ -16,13 +16,11 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 ### Delivery
 | Role | Mandat | Output attendu |
 |---|---|---|
-| `planner` | mentor de conformite vision (valider READY/IN_PROGRESS vs vision produit) | verdict conformite + regle verifiee + `PLANNER_ARTIFACT=` |
+| `planner` | mentor de conformite vision + dispatch (absorbe aussi scope/value ex-PO + flow/WIP ex-scrum_master) | verdict conformite + decision scope/value + check WIP/blocages + `PLANNER_ARTIFACT=` |
 | `dev` | implementer l’item READY | patch/commande + `DEV_ARTIFACT=` + `cmd=` |
 | `tester` | verifier execution/tests | tests + `TESTER_ARTIFACT=` + `cmd=` |
 | `qa` | verdict gate final | verdict + `QA_ARTIFACT=` + `cmd=` |
 | `architect` | contraintes architecture anti-derive | decision contrainte + `ARCHITECT_ARTIFACT=` |
-| `po` | alignement scope/valeur | decision backlog + `PO_ARTIFACT=` |
-| `scrum_master` | hygiene flux/WIP/blocages | action cadence + `SCRUM_ARTIFACT=` |
 
 ## Regles d’integration
 1. `admin-agents` detecte le probleme et assigne un owner explicite.
@@ -32,11 +30,14 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 5. Les admins ne livrent pas le code applicatif a la place de `dev/tester/qa`; ils garantissent la plomberie, le routage et la qualite du flux.
 
 ## Protocole pre-annonce obligatoire (anti-chevauchement)
-1. Avant toute action delivery (`claim|edit|complete|handoff`), l’agent publie un `TYPE: INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md` avec: `intent_id`, `planned_files`, `edit_scope`, `eta_minutes`.
-2. Le meme `intent_id` doit etre logue dans `memory/YYYY-MM-DD.md` avant la premiere edition.
+1. Avant toute action delivery (`claim|edit|complete|handoff`), l’agent execute:
+   - `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`
+2. Cette commande publie automatiquement l’`INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md`, logue la pre-annonce dans `memory/YYYY-MM-DD.md`, et enregistre l’intent actif dans `docs/orchestrator-ops/intent-registry.json`.
 3. Apres pre-annonce seulement, l’agent execute `scripts/parallel_workstream.py claim --role <role>`.
-4. Si un autre intent actif cible les memes fichiers/sections, l’agent n’ecrase pas: il passe en merge/handoff explicite.
-5. Les preuves de livraison (`EVIDENCE`) doivent contenir `intent_id`, `intent_chat_ref`, `intent_memory_ref`, `edit_scope`.
+4. Si un autre intent actif cible les memes fichiers/sections, la pre-annonce est `BLOCKED` (pas d’ecrasement); l’agent doit reduire le scope ou faire un handoff explicite.
+5. Les preuves de livraison (`EVIDENCE`) doivent contenir `intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`, `edit_scope`.
+6. A la fin de la livraison, fermer l’intent:
+   - `bash scripts/preannounce_intent.sh close --intent-id <id> --status done`
 
 ## Mapping owner par issue (admin-agents)
 - `sessions_missing`, `role_errors_present`, `role_jobs_pending`, `role_jobs_missing`, `role_jobs_disabled`, `sessions_stale_no_recent_runner_activity` -> `adminapp-codex` (`runtime_stability`)
@@ -51,7 +52,9 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 
 ## Parallel delivery plumbing
 - Workboard et dependances inter-roles: `docs/orchestrator-ops/parallel-workstreams.json`
+- Registre d intentions actives: `docs/orchestrator-ops/intent-registry.json`
 - CLI de claim/handoff/validation: `scripts/parallel_workstream.py`
+- CLI de pre-annonce/close/list: `scripts/preannounce_intent.sh`
 - Provisioning cron multi-roles specialisees: `scripts/configure_parallel_team_crons.sh`
 
 ## Commandes de controle

@@ -1,11 +1,24 @@
 spec:
   id: "openclaw-parallel-orchestration-coordination"
-  version: "1.1.1"
+  version: "1.1.3"
   status: "active"
   language: "fr"
   generated_at_utc: "2026-02-26T00:00:00Z"
-  updated_at_utc: "2026-02-26T23:10:00Z"
+  updated_at_utc: "2026-02-26T23:58:00Z"
   change_log:
+    - date_utc: "2026-02-26"
+      version: "1.1.3"
+      changes:
+        - "Rend explicite le rapport de fin d'execution agent: exec_report/issues/suggestions prioritaires."
+        - "Ajoute la regle: si issues!=none alors suggestions actionnables obligatoires."
+        - "Aligne la supervision admin pour remonter exec_report/issues/suggestions dans la boucle de triage."
+    - date_utc: "2026-02-26"
+      version: "1.1.2"
+      changes:
+        - "Formalise le registre canonique des actions admin (+ support actions parametrees)."
+        - "Aligne la policy role runner (timeouts 180/90, stall_abort 75, timeoutSeconds 900, thinking high)."
+        - "Ajoute l'invariant forecast-first dans la spec centrale."
+        - "Aligne EVIDENCE MUST sur le gate architecture commun (arch_rule/review_scope/conformance/violations)."
     - date_utc: "2026-02-26"
       version: "1.1.1"
       changes:
@@ -50,8 +63,11 @@ baseline_actuelle:
     role_jobs_total: 14
     admin_jobs_total: 2
     utility_jobs_total: 1
+    cron_name_policy:
+      unexpected_jobs: "BLOCKED"
+      allowed_extra_jobs: []
     health_target:
-      cron_health_summary: "total=17 ok=17 blocked_signals=0 slow_over_180s=0"
+      cron_health_summary: "total=17 ok=17 blocked_signals=0 slow_over_300s=0"
     role_jobs:
       - role: "planner"
         cron_name: "planner-tmux-loop"
@@ -130,20 +146,6 @@ baseline_actuelle:
         lane: "validation"
         can_edit: true
         wip_limit: 3
-      - role: "po"
-        cron_name: "po-tmux-loop"
-        agent_id: "po"
-        session_name: "codex_po_cron"
-        lane: "governance"
-        can_edit: false
-        wip_limit: 2
-      - role: "scrum_master"
-        cron_name: "scrum-master-tmux-loop"
-        agent_id: "scrum_master"
-        session_name: "codex_scrum_master_cron"
-        lane: "governance"
-        can_edit: false
-        wip_limit: 2
       - role: "clawsentinel"
         cron_name: "clawsentinel-tmux-loop"
         agent_id: "clawsentinel"
@@ -168,6 +170,7 @@ baseline_actuelle:
     workboard: "docs/orchestrator-ops/parallel-workstreams.json"
     topology: "docs/orchestrator-ops/parallel-role-topology.json"
     cron_map: "docs/orchestrator-ops/parallel-role-cron-map.json"
+    intent_registry: "docs/orchestrator-ops/intent-registry.json"
     coordination_bus: "docs/orchestrator-ops/coordination-bus.yaml"
     delivery_gate_artifacts: "finance-app/openclaw-gates/"
     role_state_dir: "/home/venom/.openclaw/cron/role-state"
@@ -184,12 +187,13 @@ baseline_actuelle:
       TMUX_ROLE_CODEX_SEARCH_ENABLED: 1
       TMUX_ROLE_CODEX_SANDBOX_MODE: "danger-full-access"
       TMUX_ROLE_CODEX_APPROVAL_POLICY: "never"
-      PROMPT_TIMEOUT_SECONDS: 55
-      RETRY_PROMPT_TIMEOUT_SECONDS: 30
+      PROMPT_TIMEOUT_SECONDS: 180
+      RETRY_PROMPT_TIMEOUT_SECONDS: 90
       TMUX_ROLE_RECOVERY_THRESHOLD: 2
       TMUX_ROLE_NO_DELTA_THRESHOLD: 12
+      TMUX_ROLE_STALL_ABORT_SECONDS: 75
       SKIP_RETRY_ON_TIMEOUT: 1
-      timeoutSeconds: 480
+      timeoutSeconds: 900
       thinking: "high"
       delivery_mode: "none"
 
@@ -293,6 +297,13 @@ contracts:
           - "task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>"
           - "lock_check=ok"
           - "run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>"
+          - "exec_report=<resume_execution_concret>"
+          - "issues=<none_ou_liste_priorisee>"
+          - "suggestions=<none_ou_liste_actionnable>"
+          - "arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>"
+          - "review_scope=<stream_task_ou_composant>"
+          - "conformance=<PASS|WARN|BLOCKED>"
+          - "violations=<none_ou_liste>"
           - "queue_version=<checksum_or_version>"
           - "workboard_version=<checksum_or_version>"
         enforcement_progressif:
@@ -300,13 +311,23 @@ contracts:
             - "task_update"
             - "lock_check"
             - "run_note"
+            - "exec_report"
+            - "issues"
+            - "suggestions"
+            - "arch_rule"
+            - "review_scope"
+            - "conformance"
+            - "violations"
             - "role artifact marker (<role>_artifact=...)"
             - "queue_version"
             - "workboard_version"
+          coupling_rules:
+            - "si issues!=none => suggestions MUST etre actionnable (pas suggestions=none)"
           phase_1_must_when_delivery_action:
             - "si task_update in [claim, complete, handoff]: intent_id"
             - "si task_update in [claim, complete, handoff]: intent_chat_ref"
             - "si task_update in [claim, complete, handoff]: intent_memory_ref"
+            - "si task_update in [claim, complete, handoff]: intent_registry_ref"
             - "si task_update in [claim, complete, handoff]: edit_scope"
           phase_1_should_when_has_work:
             - "stream_id"
@@ -366,6 +387,26 @@ contracts:
         action: "auto_execute_if_enabled"
       - case: "action_owner in [admin-agents, clawsentinel]"
         action: "route_handoff_to_admin_chat_no_fake_blocked"
+    action_expression_contract:
+      format: "action_name(arg1,arg2,...)_optional_suffix"
+      parser_rule:
+        - "si expression contient '(...)', extraire action_name + args + suffix"
+        - "suffix '_and_verify_new_role_output' est normalise en partie du nom d'action"
+        - "arg1 (si present) est normalise en role slug (dash -> underscore)"
+      canonical_actions_adminapp:
+        - "reset_stale_running_role_jobs_then_force_run_planner_backend_frontend"
+        - "reset_stale_running_role_jobs_then_force_run_planner_backend"
+        - "reset_stale_running_role_jobs_then_force_run_planner_dev"
+        - "recreate_missing_sessions_then_validate_one_role(<role>)"
+        - "reactivate_one_role_sequential(<role>)_and_verify_new_role_output"
+        - "force_run_planner_then_backend_and_frontend_then_confirm_live_logs_refresh"
+        - "force_run_planner_then_backend_and_confirm_live_logs_refresh"
+        - "force_run_planner_then_dev_and_confirm_live_logs_refresh"
+        - "force_run_failed_roles_then_recheck"
+        - "verify_scheduler_lane_and_recent_runs"
+        - "rebuild_role_cron_jobs_from_configure_script"
+        - "enable_roles_sequential_for_delivery_validation"
+        - "if_delivery_needed_enable_sequential_mode_starting_planner"
 
 coordination_and_ordination:
   dependency_graph_template:
@@ -397,21 +438,18 @@ coordination_and_ordination:
       - code: "FRONTEND"
         role: "frontend_engineer"
         depends_on: ["ARCH"]
+      - code: "DEV"
+        role: "dev"
+        depends_on: ["ARCH"]
       - code: "INTEGRATION"
         role: "integrator"
-        depends_on: ["BACKEND", "FRONTEND", "INFRA", "DATA"]
+        depends_on: ["BACKEND", "FRONTEND", "INFRA", "DATA", "DEV"]
       - code: "QA_EXEC"
         role: "qa"
         depends_on: ["INTEGRATION", "QA_PREP", "TEST_PLAN"]
       - code: "SENTINEL_CHECK"
         role: "clawsentinel"
         depends_on: ["QA_EXEC"]
-      - code: "SCRUM_REVIEW"
-        role: "scrum_master"
-        depends_on: ["PLAN"]
-      - code: "PO_REVIEW"
-        role: "po"
-        depends_on: ["QA_EXEC", "SENTINEL_CHECK"]
 
   task_state_machine:
     states: ["BACKLOG", "WAITING_DEP", "READY", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"]
@@ -451,7 +489,7 @@ coordination_and_ordination:
       severity: "WARN"
       rule: "workboard ne doit pas contenir de tasks READY si la priority queue n'a aucun item READY (eviter la derive queue/workboard)"
       detection: "python3 scripts/parallel_workstream.py validate + compare priority-queue.json"
-      owner: "scrum_master"
+      owner: "planner"
       remediation:
         - "scripts/parallel_workstream.py sync-priority"
         - "corriger source-of-truth (priority queue) puis revalider"
@@ -467,7 +505,7 @@ coordination_and_ordination:
       severity: "WARN->BLOCKED"
       rule: "OPEN handoffs doivent etre ACK < 900s et CLOSE < 3600s"
       detection: "workboard + handoff_policy + KPI-HANDOFF-ACK-SLA"
-      owner: "scrum_master"
+      owner: "planner"
       remediation:
         - "de-bottleneck via reassignment/WIP reduction"
         - "escalation admin-agents si repetition >=2 ticks"
@@ -475,7 +513,7 @@ coordination_and_ordination:
       severity: "WARN"
       rule: "une task IN_PROGRESS ne doit pas rester sans progression au-dela du SLA stale (default 4h)"
       detection: "python3 scripts/parallel_workstream.py validate --in-progress-stale-seconds <sec>"
-      owner: "scrum_master"
+      owner: "planner"
       remediation:
         - "reclaim_or_close de la task stale"
         - "si cause technique: blocker explicite sur la task (raison verifiable)"
@@ -483,17 +521,25 @@ coordination_and_ordination:
       severity: "WARN"
       rule: "un stream marque PASS/CLOSED dans la queue ne doit plus avoir de tasks READY/IN_PROGRESS/REVIEW/BLOCKED dans le workboard"
       detection: "python3 scripts/parallel_workstream.py validate"
-      owner: "scrum_master"
+      owner: "planner"
       remediation:
         - "reopen le stream dans priority-queue si du travail reste a livrer"
         - "sinon cloturer/archiver les tasks restantes du workboard"
+    - id: "INV-FORECAST-FIRST-MVP"
+      severity: "BLOCKED"
+      rule: "sur les flows decision MVP, la chaine forecast backend -> UI -> gate evidence doit etre prouvee; un rendu data brute sans forecast est non-conforme"
+      detection: "evidence kv (arch_rule=forecast_contract + role artifacts) + gate artifact (scripts/run_delivery_gate.sh)"
+      owner: "architect"
+      remediation:
+        - "reouvrir task en REVIEW avec gap forecast explicite"
+        - "forcer handoff vers backend/frontend/qa jusqu'a preuve complete forecast-first"
     - id: "INV-PREANNOUNCE-BEFORE-EDIT"
       severity: "BLOCKED"
       rule: "toute action delivery (claim/complete/handoff) doit etre pre-annoncee dans ADMIN_TEAM_CHAT + memory du jour avant la premiere edition"
-      detection: "role_contract EVIDENCE contient intent_id + intent_chat_ref + intent_memory_ref + edit_scope"
+      detection: "role_contract EVIDENCE contient intent_id + intent_chat_ref + intent_memory_ref + intent_registry_ref + edit_scope"
       owner: "admin-agents"
       remediation:
-        - "publier INTENT pre-run (chat+memory) puis relancer claim"
+        - "executer bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n> puis relancer claim"
         - "si conflit d'intent sur memes fichiers: handoff/merge explicite, pas d'ecrasement"
 
 conflict_prevention:
@@ -567,8 +613,6 @@ proofs_of_delivery:
     dev: "DEV_ARTIFACT="
     tester: "TESTER_ARTIFACT="
     qa: "QA_ARTIFACT="
-    po: "PO_ARTIFACT="
-    scrum_master: "SCRUM_ARTIFACT="
     clawsentinel: "SENTINEL_ARTIFACT="
 
   proposed_delivery_proof_manifest_schema:
@@ -669,7 +713,7 @@ enforcement_and_escalation:
       MUST_enforce:
         - "task_update=complete => stream_id + task_id + <role>_artifact + cmd/tests_run (ou SKIP motive) obligatoires"
         - "artefact path doit exister au moment du DONE"
-        - "delivery artifact gate obligatoire avant PASS final QA/PO"
+        - "delivery artifact gate obligatoire avant PASS final QA"
 
   state_corrections:
     - id: "CORR-001-DONE-WITHOUT-PROOF"
@@ -686,7 +730,7 @@ enforcement_and_escalation:
       to_state: "*"
       severity: "WARN"
       reason: "workboard READY alors que queue_has_ready=0 (derive source-of-truth)"
-      owner: "scrum_master"
+      owner: "planner"
       action:
         - "scripts/parallel_workstream.py sync-priority"
         - "corriger la priority queue si necessaire"
@@ -717,14 +761,14 @@ enforcement_and_escalation:
     - id: "ENF-TRG-004-HANDOFF-SLA-BREACH"
       when: "handoff OPEN sans ACK > 900s ou sans CLOSE > 3600s"
       severity: "WARN->BLOCKED"
-      owner: "scrum_master"
+      owner: "planner"
       remediation:
         - "reassign workload / reduire WIP"
         - "escalation admin-agents si repetition >=2 ticks"
 
   escalation_path:
     - rule: "role-level quality/proof issues => qa owns"
-    - rule: "flow/WIP/handoff congestion => scrum_master owns (escalate admin-agents if stuck)"
+    - rule: "flow/WIP/handoff congestion => planner owns (escalate admin-agents if stuck)"
     - rule: "runtime cron/tmux/locks => adminapp-codex owns"
     - rule: "safety/anti-drift => clawsentinel owns"
 
@@ -845,7 +889,7 @@ specs_vnext_proposals:
     policy:
       ack_deadline_seconds: 900
       close_deadline_seconds: 3600
-      escalation_owner: "scrum_master"
+      escalation_owner: "planner"
     acceptance:
       - "open_handoffs older than ack_deadline == 0"
 
@@ -896,7 +940,7 @@ validation_and_compliance:
       expected: "stale=0"
     - name: "cron_health"
       command: "openclaw cron list + openclaw cron runs"
-      expected: "total=17 ok=17 blocked_signals=0 slow_over_180s=0"
+      expected: "total=15 ok=15 blocked_signals=0 slow_over_180s=0"
     - name: "watchdog_alive"
       command: "bash scripts/tmux_live_watchdog.sh status"
       expected: "status=yes"
@@ -919,7 +963,7 @@ organizational_model:
     analysis_lane:
       roles: ["planner", "analyst", "architect"]
       accountable: "planner"
-      consulted: ["po", "scrum_master", "clawsentinel"]
+      consulted: ["integrator", "qa", "clawsentinel"]
       expected_outputs:
         - "scope clair par stream"
         - "contrats de dependance explicitement declares"
@@ -943,14 +987,14 @@ organizational_model:
     validation_lane:
       roles: ["tester", "qa", "clawsentinel"]
       accountable: "qa"
-      consulted: ["po", "scrum_master"]
+      consulted: ["planner", "integrator"]
       expected_outputs:
         - "rapport validation reproductible"
         - "verdict binaire PASS/BLOCKED avec preuves"
         - "risques residuels explicites"
     governance_lane:
-      roles: ["po", "scrum_master", "admin-agents", "adminapp-codex"]
-      accountable: "scrum_master"
+      roles: ["planner", "admin-agents", "adminapp-codex"]
+      accountable: "admin-agents"
       consulted: ["planner", "integrator", "qa"]
       expected_outputs:
         - "priorites stables"
@@ -1023,13 +1067,13 @@ organizational_model:
 
   role_charters:
     planner:
-      mission: "mentor de conformite vision: verifier que le travail READY/IN_PROGRESS respecte la vision produit"
+      mission: "mentor de conformite vision + dispatch (absorbe scope/value ex-PO + flow/WIP ex-scrum_master)"
       entry_criteria:
         - "priority queue disponible"
         - "vision produit explicite disponible (PRODUCT_VISION + epics/tasks)"
       exit_criteria:
-        - "au moins un verdict de conformite task-level publie avec regle verifiee"
-        - "si non-conformite: correction unique proposee et owner cible"
+        - "verdict conformite + decision scope/value + check flow/WIP publies (contract planner)"
+        - "si non-conformite: correction unique proposee + owner cible + dependances mises a jour (queue/workboard)"
     analyst:
       mission: "clarifier exigences fonctionnelles et donnees"
       entry_criteria:
@@ -1090,18 +1134,6 @@ organizational_model:
         - "evidence tester + integration"
       exit_criteria:
         - "QA verdict explicite + next action unique"
-    po:
-      mission: "garder alignement business/priorites"
-      entry_criteria:
-        - "verdict QA disponible"
-      exit_criteria:
-        - "go/no-go documente sur queue"
-    scrum_master:
-      mission: "tenir cadence et lever impediments inter-roles"
-      entry_criteria:
-        - "etat iteration et blockers disponibles"
-      exit_criteria:
-        - "actions de debottleneck assignées"
     clawsentinel:
       mission: "controler surete/qualite/signal faible"
       entry_criteria:
@@ -1247,7 +1279,7 @@ failure_modes_and_playbooks:
       symptom: "open handoffs augmentent sans ack"
       detection: "open_handoffs older than ack_deadline > 0"
       immediate_actions:
-        - "scrum_master escalation"
+        - "planner escalation (flow/WIP owner)"
         - "reassign workload or lower WIP"
       owner: "admin-agents"
     - id: "FM-003"
@@ -1257,7 +1289,7 @@ failure_modes_and_playbooks:
       immediate_actions:
         - "prioriser qa/tester streams critiques"
         - "temporarily pause non critical build tasks"
-      owner: "scrum_master"
+      owner: "admin-agents"
     - id: "FM-004"
       title: "false_delivery_claim"
       symptom: "contract claims delivery but no artifact/test proof"

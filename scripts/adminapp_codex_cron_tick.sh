@@ -21,6 +21,7 @@ ACTION_LAST_EXEC_TS_FILE="${STATE_DIR}/admin-action-last-exec-ts.txt"
 ACTION_LAST_ROUTED_ID_FILE="${STATE_DIR}/admin-action-last-routed-id.txt"
 ROLE_TRACE_DIR="${ADMINAPP_ROLE_TRACE_DIR:-logs-codex-runs/role-runner}"
 PRIORITY_QUEUE_FILE="${ADMINAPP_PRIORITY_QUEUE_FILE:-docs/orchestrator-ops/priority-queue.json}"
+ROLE_TOPOLOGY_FILE="${ADMINAPP_ROLE_TOPOLOGY_FILE:-docs/orchestrator-ops/parallel-role-topology.json}"
 OPENCLAW_BIN="${ADMINAPP_OPENCLAW_BIN:-}"
 RUNNING_STALE_SECONDS="${ADMINAPP_RUNNING_STALE_SECONDS:-330}"
 STALE_SWEEP_SCRIPT="${ADMINAPP_STALE_SWEEP_SCRIPT:-scripts/stale_cron_sweep.sh}"
@@ -101,6 +102,247 @@ mark_action_executed_now() {
   now_epoch="$(date -u +%s)"
   printf '%s\n' "$signature" > "$ACTION_LAST_EXEC_SIG_FILE"
   printf '%s\n' "$now_epoch" > "$ACTION_LAST_EXEC_TS_FILE"
+}
+
+trim_value() {
+  printf '%s' "${1:-}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
+
+normalize_role_name() {
+  local value=""
+  value="$(trim_value "${1:-}")"
+  value="${value//-/_}"
+  printf '%s\n' "$value"
+}
+
+role_session_default() {
+  case "$1" in
+    planner) echo "codex_planner_cron" ;;
+    analyst) echo "codex_analyst_cron" ;;
+    architect) echo "codex_architect_cron" ;;
+    backend_engineer) echo "codex_backend_engineer_cron" ;;
+    frontend_engineer) echo "codex_frontend_engineer_cron" ;;
+    data_analyst) echo "codex_data_analyst_cron" ;;
+    infra_engineer) echo "codex_infra_engineer_cron" ;;
+    integrator) echo "codex_integrator_cron" ;;
+    dev) echo "codex_dev_cron" ;;
+    tester) echo "codex_tester_cron" ;;
+    qa) echo "codex_qa_cron" ;;
+    po) echo "codex_po_cron" ;;
+    scrum_master) echo "codex_scrum_master_cron" ;;
+    clawsentinel) echo "clawsentinel" ;;
+    *) echo "" ;;
+  esac
+}
+
+role_trace_default() {
+  case "$1" in
+    scrum_master) echo "scrum_master.live.log" ;;
+    *) echo "$1.live.log" ;;
+  esac
+}
+
+role_trace_path() {
+  local role=""
+  local trace=""
+  role="$(normalize_role_name "${1:-}")"
+  if [[ -f "$ROLE_TOPOLOGY_FILE" ]]; then
+    trace="$(jq -r --arg r "$role" '.roles[]? | select(.role==$r) | .trace_file // empty' "$ROLE_TOPOLOGY_FILE" 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$trace" ]]; then
+    printf '%s\n' "$trace"
+    return 0
+  fi
+  printf '%s/%s\n' "$ROLE_TRACE_DIR" "$(role_trace_default "$role")"
+}
+
+role_session_name() {
+  local role=""
+  local session=""
+  role="$(normalize_role_name "${1:-}")"
+  if [[ -f "$ROLE_TOPOLOGY_FILE" ]]; then
+    session="$(jq -r --arg r "$role" '.roles[]? | select(.role==$r) | .session_name // empty' "$ROLE_TOPOLOGY_FILE" 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -n "$session" ]]; then
+    printf '%s\n' "$session"
+    return 0
+  fi
+  role_session_default "$role"
+}
+
+role_from_job_name() {
+  local name=""
+  name="$(trim_value "${1:-}")"
+  name="${name%-tmux-loop}"
+  printf '%s\n' "${name//-/_}"
+}
+
+role_exists_in_topology() {
+  local role=""
+  role="$(normalize_role_name "${1:-}")"
+  if [[ -f "$ROLE_TOPOLOGY_FILE" ]]; then
+    jq -e --arg r "$role" '.roles[]? | select(.role==$r)' "$ROLE_TOPOLOGY_FILE" >/dev/null 2>&1
+    return $?
+  fi
+  case "$role" in
+    planner|analyst|architect|backend_engineer|frontend_engineer|data_analyst|infra_engineer|integrator|dev|tester|qa|po|scrum_master|clawsentinel) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_role_session_exists() {
+  local role=""
+  local session=""
+  role="$(normalize_role_name "${1:-}")"
+  session="$(role_session_name "$role")"
+  if [[ -z "$session" ]]; then
+    return 1
+  fi
+  if tmux has-session -t "$session" 2>/dev/null; then
+    return 0
+  fi
+  tmux new-session -d -s "$session" -c "$ROOT"
+  tmux set-option -t "$session" history-limit 200000 >/dev/null 2>&1 || true
+  tmux send-keys -t "$session:0.0" "cd $ROOT" C-m
+  return 0
+}
+
+run_probe_for_role() {
+  local role=""
+  local trace=""
+  role="$(normalize_role_name "${1:-}")"
+  if ! role_exists_in_topology "$role"; then
+    return 1
+  fi
+  trace="$(role_trace_path "$role")"
+  run_role_probe_once "$role" "$trace"
+}
+
+force_run_failed_roles_then_recheck() {
+  local cron_json=""
+  local failed_jobs=()
+  local role=""
+  local ok_count=0
+  local fail_count=0
+  local attempted=()
+
+  cron_json="$("$OPENCLAW_BIN" cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  mapfile -t failed_jobs < <(printf '%s' "$cron_json" | jq -r '.jobs[] | select((.name | test("-tmux-loop$")) and (.state.lastStatus=="error")) | .name' 2>/dev/null || true)
+  if [[ "${#failed_jobs[@]}" -eq 0 ]]; then
+    ACTION_EXEC_DETAILS="failed_jobs=0;probed_ok=0;probed_failed=0"
+    return 0
+  fi
+
+  for job_name in "${failed_jobs[@]}"; do
+    role="$(role_from_job_name "$job_name")"
+    attempted+=("$role")
+    if run_probe_for_role "$role"; then
+      ok_count=$((ok_count + 1))
+    else
+      fail_count=$((fail_count + 1))
+    fi
+  done
+
+  ACTION_EXEC_DETAILS="failed_jobs=${#failed_jobs[@]};probed_ok=${ok_count};probed_failed=${fail_count};roles=$(IFS=,; echo "${attempted[*]}")"
+  if [[ "$fail_count" -gt 0 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+verify_scheduler_lane_and_recent_runs() {
+  local cron_json=""
+  local role_total=0
+  local role_enabled=0
+  local role_error=0
+  local role_running=0
+  local stale=0
+
+  cron_json="$("$OPENCLAW_BIN" cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  role_total="$(printf '%s' "$cron_json" | jq '[.jobs[] | select(.name | test("-tmux-loop$"))] | length' 2>/dev/null || echo 0)"
+  role_enabled="$(printf '%s' "$cron_json" | jq '[.jobs[] | select((.name | test("-tmux-loop$")) and .enabled==true)] | length' 2>/dev/null || echo 0)"
+  role_error="$(printf '%s' "$cron_json" | jq '[.jobs[] | select((.name | test("-tmux-loop$")) and .state.lastStatus=="error")] | length' 2>/dev/null || echo 0)"
+  role_running="$(printf '%s' "$cron_json" | jq '[.jobs[] | select((.name | test("-tmux-loop$")) and .state.runningAtMs!=null)] | length' 2>/dev/null || echo 0)"
+  if run_stale_sweep_preview; then
+    stale="$(parse_sweep_field "$STALE_SWEEP_LAST_SUMMARY" "stale")"
+  fi
+  if [[ ! "$stale" =~ ^[0-9]+$ ]]; then
+    stale=0
+  fi
+  ACTION_EXEC_DETAILS="role_total=${role_total};role_enabled=${role_enabled};role_running=${role_running};role_error=${role_error};stale_running=${stale}"
+  return 0
+}
+
+rebuild_role_cron_jobs_from_configure_script() {
+  local out=""
+  local rc=0
+  set +e
+  out="$(bash scripts/configure_parallel_team_crons.sh --apply --enable 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    ACTION_EXEC_DETAILS="reprovision_failed;rc=${rc}"
+    return 1
+  fi
+  if run_probe_for_role "planner"; then
+    ACTION_EXEC_DETAILS="reprovision_ok;planner_probe=ok"
+    return 0
+  fi
+  ACTION_EXEC_DETAILS="reprovision_ok;planner_probe=failed"
+  return 1
+}
+
+enable_roles_sequential_for_delivery_validation() {
+  local cron_json=""
+  local ids=()
+  local enabled_count=0
+  local id=""
+  cron_json="$("$OPENCLAW_BIN" cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  mapfile -t ids < <(printf '%s' "$cron_json" | jq -r '.jobs[] | select((.name | test("-tmux-loop$")) and .enabled==false) | .id' 2>/dev/null || true)
+  for id in "${ids[@]}"; do
+    if [[ -n "$id" ]]; then
+      if "$OPENCLAW_BIN" cron enable "$id" >/dev/null 2>&1; then
+        enabled_count=$((enabled_count + 1))
+      fi
+    fi
+  done
+  if run_probe_for_role "planner"; then
+    ACTION_EXEC_DETAILS="enabled_roles=${enabled_count};planner_probe=ok"
+    return 0
+  fi
+  ACTION_EXEC_DETAILS="enabled_roles=${enabled_count};planner_probe=failed"
+  return 1
+}
+
+ACTION_CANON_NAME=""
+ACTION_CANON_ARG1=""
+ACTION_CANON_ARGS=""
+
+parse_action_expression() {
+  local raw=""
+  local base=""
+  local args=""
+  local rest=""
+  local suffix=""
+  raw="$(trim_value "${1:-}")"
+  ACTION_CANON_NAME="$raw"
+  ACTION_CANON_ARG1=""
+  ACTION_CANON_ARGS=""
+  if [[ "$raw" == *"("*")"* ]]; then
+    base="${raw%%(*}"
+    rest="${raw#*(}"
+    args="${rest%%)*}"
+    suffix="${rest#*)}"
+    base="$(trim_value "$base")"
+    args="$(trim_value "$args")"
+    ACTION_CANON_ARGS="$args"
+    ACTION_CANON_ARG1="$(trim_value "${args%%,*}")"
+    if [[ "$suffix" == "_and_verify_new_role_output" ]]; then
+      ACTION_CANON_NAME="${base}_and_verify_new_role_output"
+    else
+      ACTION_CANON_NAME="${base}${suffix}"
+    fi
+  fi
 }
 
 route_handoff_to_chat() {
@@ -250,13 +492,40 @@ resolve_openclaw_bin() {
   return 1
 }
 
+normalize_cron_runs_json() {
+  local raw="${1:-}"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "${ROOT}/scripts/openclaw_cron_runs_normalize.py" ]]; then
+    printf '%s' "$raw" | python3 "${ROOT}/scripts/openclaw_cron_runs_normalize.py" 2>/dev/null || echo '{"entries":[]}'
+  else
+    printf '%s' "$raw"
+  fi
+}
+
+latest_cron_run_summary() {
+  local job_id="$1"
+  local limit="${2:-1}"
+  local runs_raw=""
+  local runs_json=""
+  runs_raw="$("$OPENCLAW_BIN" cron runs --id "$job_id" --limit "$limit" 2>/dev/null || echo '{}')"
+  runs_json="$(normalize_cron_runs_json "$runs_raw")"
+  printf '%s' "$runs_json" | jq -r '.entries[0].summary // .entries[0].error // ""' 2>/dev/null || true
+}
+
 execute_admin_action() {
   local action="$1"
+  local action_name=""
+  local action_arg1=""
+  local extra_details=""
+  local target_role=""
+  local _roles_for_sessions=()
   ACTION_EXEC_RESULT="none"
   ACTION_EXEC_DETAILS="none"
-  case "$action" in
+  parse_action_expression "$action"
+  action_name="$ACTION_CANON_NAME"
+  action_arg1="$(normalize_role_name "${ACTION_CANON_ARG1:-}")"
+  case "$action_name" in
     reset_stale_running_role_jobs_then_force_run_planner_backend_frontend)
-      if run_stale_sweep_action && run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "backend_engineer" "${ROLE_TRACE_DIR}/backend_engineer.live.log" && run_role_probe_once "frontend_engineer" "${ROLE_TRACE_DIR}/frontend_engineer.live.log"; then
+      if run_stale_sweep_action && run_probe_for_role "planner" && run_probe_for_role "backend_engineer" && run_probe_for_role "frontend_engineer"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="${ACTION_EXEC_DETAILS};planner+backend+frontend_refresh_ok"
       else
@@ -267,7 +536,7 @@ execute_admin_action() {
       fi
       ;;
     reset_stale_running_role_jobs_then_force_run_planner_backend)
-      if run_stale_sweep_action && run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "backend_engineer" "${ROLE_TRACE_DIR}/backend_engineer.live.log"; then
+      if run_stale_sweep_action && run_probe_for_role "planner" && run_probe_for_role "backend_engineer"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="${ACTION_EXEC_DETAILS};planner+backend_refresh_ok"
       else
@@ -278,7 +547,7 @@ execute_admin_action() {
       fi
       ;;
     reset_stale_running_role_jobs_then_force_run_planner_dev)
-      if run_stale_sweep_action && run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "dev" "${ROLE_TRACE_DIR}/dev.live.log"; then
+      if run_stale_sweep_action && run_probe_for_role "planner" && run_probe_for_role "dev"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="${ACTION_EXEC_DETAILS};planner+dev_refresh_ok"
       else
@@ -289,7 +558,7 @@ execute_admin_action() {
       fi
       ;;
     force_run_planner_then_dev_and_confirm_live_logs_refresh)
-      if run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "dev" "${ROLE_TRACE_DIR}/dev.live.log"; then
+      if run_probe_for_role "planner" && run_probe_for_role "dev"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="planner+dev_refresh_ok"
       else
@@ -298,7 +567,7 @@ execute_admin_action() {
       fi
       ;;
     force_run_planner_then_backend_and_confirm_live_logs_refresh)
-      if run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "backend_engineer" "${ROLE_TRACE_DIR}/backend_engineer.live.log"; then
+      if run_probe_for_role "planner" && run_probe_for_role "backend_engineer"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="planner+backend_refresh_ok"
       else
@@ -307,7 +576,7 @@ execute_admin_action() {
       fi
       ;;
     force_run_planner_then_backend_and_frontend_then_confirm_live_logs_refresh)
-      if run_role_probe_once "planner" "${ROLE_TRACE_DIR}/planner.live.log" && run_role_probe_once "backend_engineer" "${ROLE_TRACE_DIR}/backend_engineer.live.log" && run_role_probe_once "frontend_engineer" "${ROLE_TRACE_DIR}/frontend_engineer.live.log"; then
+      if run_probe_for_role "planner" && run_probe_for_role "backend_engineer" && run_probe_for_role "frontend_engineer"; then
         ACTION_EXEC_RESULT="done"
         ACTION_EXEC_DETAILS="planner+backend+frontend_refresh_ok"
       else
@@ -315,11 +584,105 @@ execute_admin_action() {
         ACTION_EXEC_DETAILS="planner_or_backend_or_frontend_refresh_failed"
       fi
       ;;
+    recreate_missing_sessions_then_validate_one_role)
+      target_role="${action_arg1:-planner}"
+      if ! role_exists_in_topology "$target_role"; then
+        ACTION_EXEC_RESULT="failed"
+        ACTION_EXEC_DETAILS="invalid_role=${target_role}"
+      else
+        mapfile -t _roles_for_sessions < <(jq -r '.roles[]?.role' "$ROLE_TOPOLOGY_FILE" 2>/dev/null || true)
+        if [[ "${#_roles_for_sessions[@]}" -eq 0 ]]; then
+          _roles_for_sessions=(planner analyst architect backend_engineer frontend_engineer data_analyst infra_engineer integrator dev tester qa po scrum_master clawsentinel)
+        fi
+        local missing_before=0
+        local created_count=0
+        local role_name=""
+        for role_name in "${_roles_for_sessions[@]}"; do
+          role_name="$(normalize_role_name "$role_name")"
+          if [[ -z "$role_name" ]]; then
+            continue
+          fi
+          local session_name=""
+          session_name="$(role_session_name "$role_name")"
+          if [[ -z "$session_name" ]]; then
+            continue
+          fi
+          if ! tmux has-session -t "$session_name" 2>/dev/null; then
+            missing_before=$((missing_before + 1))
+            if ensure_role_session_exists "$role_name"; then
+              created_count=$((created_count + 1))
+            else
+              ACTION_EXEC_RESULT="failed"
+              ACTION_EXEC_DETAILS="missing_before=${missing_before};created=${created_count};create_failed_role=${role_name}"
+              return 0
+            fi
+          fi
+        done
+        if run_probe_for_role "$target_role"; then
+          ACTION_EXEC_RESULT="done"
+          ACTION_EXEC_DETAILS="missing_before=${missing_before};created=${created_count};validated_role=${target_role}"
+        else
+          ACTION_EXEC_RESULT="failed"
+          ACTION_EXEC_DETAILS="missing_before=${missing_before};created=${created_count};validated_role=${target_role};validate_failed=1"
+        fi
+      fi
+      ;;
+    reactivate_one_role_sequential_and_verify_new_role_output)
+      target_role="${action_arg1:-planner}"
+      if run_probe_for_role "$target_role"; then
+        ACTION_EXEC_RESULT="done"
+        ACTION_EXEC_DETAILS="reactivated_role=${target_role};probe=ok"
+      else
+        ACTION_EXEC_RESULT="failed"
+        ACTION_EXEC_DETAILS="reactivated_role=${target_role};probe=failed"
+      fi
+      ;;
+    force_run_failed_roles_then_recheck)
+      if force_run_failed_roles_then_recheck; then
+        ACTION_EXEC_RESULT="done"
+      else
+        ACTION_EXEC_RESULT="failed"
+      fi
+      ;;
+    verify_scheduler_lane_and_recent_runs)
+      if verify_scheduler_lane_and_recent_runs; then
+        ACTION_EXEC_RESULT="done"
+      else
+        ACTION_EXEC_RESULT="failed"
+      fi
+      ;;
+    rebuild_role_cron_jobs_from_configure_script)
+      if rebuild_role_cron_jobs_from_configure_script; then
+        ACTION_EXEC_RESULT="done"
+      else
+        ACTION_EXEC_RESULT="failed"
+      fi
+      ;;
+    enable_roles_sequential_for_delivery_validation|if_delivery_needed_enable_sequential_mode_starting_planner)
+      if enable_roles_sequential_for_delivery_validation; then
+        ACTION_EXEC_RESULT="done"
+      else
+        ACTION_EXEC_RESULT="failed"
+      fi
+      ;;
+    keep_monitoring|keep_monitoring_no_ready_items)
+      ACTION_EXEC_RESULT="done"
+      ACTION_EXEC_DETAILS="no_execution_required"
+      ;;
     *)
       ACTION_EXEC_RESULT="unsupported"
       ACTION_EXEC_DETAILS="unsupported_action"
       ;;
   esac
+  extra_details="parsed_action=${action_name}"
+  if [[ -n "$action_arg1" ]]; then
+    extra_details="${extra_details};parsed_arg1=${action_arg1}"
+  fi
+  if [[ "$ACTION_EXEC_DETAILS" == "none" || -z "$ACTION_EXEC_DETAILS" ]]; then
+    ACTION_EXEC_DETAILS="$extra_details"
+  else
+    ACTION_EXEC_DETAILS="${ACTION_EXEC_DETAILS};${extra_details}"
+  fi
 }
 
 if ! command -v tmux >/dev/null 2>&1; then
@@ -445,18 +808,25 @@ fi
 if [[ -n "$ADMIN_AGENTS_SUMMARY_OVERRIDE" ]]; then
   admin_agents_last_summary="$ADMIN_AGENTS_SUMMARY_OVERRIDE"
 else
-  admin_agents_last_summary="$("$OPENCLAW_BIN" cron runs --id "$ADMIN_AGENTS_CRON_ID" --limit 1 2>/dev/null | jq -r '.entries[0].summary // ""' 2>/dev/null || true)"
+  admin_agents_last_summary="$(latest_cron_run_summary "$ADMIN_AGENTS_CRON_ID" 1)"
 fi
 admin_agents_blocked=0
 admin_agents_signal_status="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*status=\([A-Z]*\).*/\1/p' | head -n 1)"
 admin_agents_next_action="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*next_action=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_issue="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*deterministic_issue=\([^ ]*\).*/\1/p' | head -n 1)"
+admin_agents_exec_report="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*exec_report=\([^ ]*\).*/\1/p' | head -n 1)"
+admin_agents_issues_report="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*issues=\([^ ]*\).*/\1/p' | head -n 1)"
+admin_agents_suggestions_report="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*suggestions=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_action_id="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_id=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_action_owner="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_owner=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_agents_action_scope="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*action_scope=\([^ ]*\).*/\1/p' | head -n 1)"
 admin_action_id_missing=0
-if printf '%s\n' "$admin_agents_last_summary" | rg -q 'status=(BLOCKED|ERROR|WARN)'; then
+if printf '%s\n' "$admin_agents_last_summary" | rg -q 'status=(BLOCKED|ERROR)'; then
   admin_agents_blocked=1
+elif printf '%s\n' "$admin_agents_last_summary" | rg -q 'status=WARN'; then
+  if [[ -n "$admin_agents_issue" && "$admin_agents_issue" != "none" ]]; then
+    admin_agents_blocked=1
+  fi
 fi
 if [[ -z "$admin_agents_action_id" ]]; then
   admin_agents_action_id="none"
@@ -469,6 +839,15 @@ if [[ -z "$admin_agents_action_owner" ]]; then
 fi
 if [[ -z "$admin_agents_action_scope" ]]; then
   admin_agents_action_scope="none"
+fi
+if [[ -z "$admin_agents_exec_report" ]]; then
+  admin_agents_exec_report="none"
+fi
+if [[ -z "$admin_agents_issues_report" ]]; then
+  admin_agents_issues_report="none"
+fi
+if [[ -z "$admin_agents_suggestions_report" ]]; then
+  admin_agents_suggestions_report="none"
 fi
 admin_issue_benign_when_no_ready=0
 if [[ "$queue_ready_items" -eq 0 ]]; then
@@ -663,14 +1042,14 @@ if [[ -f "$LAST_ALERT_FILE" ]]; then
   last_alert="$(cat "$LAST_ALERT_FILE" 2>/dev/null || true)"
 fi
 if [[ "$verdict" != "PASS" && "$alert_fingerprint" != "$last_alert" && -f "$CHAT_FILE" ]]; then
-  printf -- "- [%s] [adminapp-codex] TYPE: INFO MSG: cron monitor tick => verdict=%s, errors=%s, timeouts=%s, unhealthy=%s. NEXT: %s.\n" \
+  printf -- "- [%s] [adminapp-codex] TYPE: ALERT MSG: cron monitor tick => verdict=%s, errors=%s, timeouts=%s, unhealthy=%s. NEXT: %s.\n" \
     "$ts_local" "$verdict" "$error_jobs" "$timeout_jobs" "$unhealthy_compact" "$next" >> "$CHAT_FILE"
 fi
 printf '%s\n' "$alert_fingerprint" > "$LAST_ALERT_FILE"
 
 echo "STATUS: ${status}"
 echo "DELTA: ${delta}"
-echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; circuit_breaker_triggered=${circuit_breaker_triggered}; circuit_breaker_result=${circuit_breaker_result}; circuit_breaker_details=${circuit_breaker_details}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_id_missing=${admin_action_id_missing}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
+echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; circuit_breaker_triggered=${circuit_breaker_triggered}; circuit_breaker_result=${circuit_breaker_result}; circuit_breaker_details=${circuit_breaker_details}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_exec_report=${admin_agents_exec_report:-none}; admin_issues=${admin_agents_issues_report:-none}; admin_suggestions=${admin_agents_suggestions_report:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_id_missing=${admin_action_id_missing}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
 echo "RISKS: ${risks}"
 echo "NEXT: ${next}"
 echo "VERDICT: ${verdict}"

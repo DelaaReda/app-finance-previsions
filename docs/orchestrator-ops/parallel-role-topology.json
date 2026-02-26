@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T05:00:00Z",
+  "updated_at": "2026-02-26T21:19:35Z",
   "roles": [
     {
       "role": "planner",
@@ -118,7 +118,7 @@
       "every": "30m",
       "allow_file_edits": 0,
       "wip_limit": 2,
-      "description": "Scope and backlog value lane",
+      "description": "Backlog prioritization and scope governance lane",
       "session_name": "codex_po_cron",
       "trace_file": "logs-codex-runs/role-runner/po.live.log"
     },
@@ -128,7 +128,7 @@
       "every": "15m",
       "allow_file_edits": 0,
       "wip_limit": 2,
-      "description": "Flow and blocker cadence lane",
+      "description": "Flow discipline and blocker removal lane",
       "session_name": "codex_scrum_master_cron",
       "trace_file": "logs-codex-runs/role-runner/scrum_master.live.log"
     },

@@ -154,10 +154,6 @@ upsert_existing "454dc361-14bb-4f71-8ca2-ec86708c503f" "qa-tmux-20m" "20m" "qa" 
 sleep 8
 upsert_existing "bde5885a-388f-4fe4-a8b7-a146521d9e9d" "architect-tmux-25m" "25m" "architect" "Architect tmux context loop (rebalanced cadence)"
 sleep 8
-upsert_existing "44f08bd9-b9c0-4ab5-8882-cc91d402c8db" "po-tmux-30m" "30m" "po" "Product Owner tmux backlog loop (rebalanced cadence)"
-sleep 8
-upsert_existing "8e5b1bd7-f319-48d8-b8f7-c906c024135f" "scrum-master-tmux-30m" "30m" "scrum_master" "Scrum Master tmux flow loop (lower cadence)"
-sleep 8
 upsert_existing "25756cb4-57f1-41c7-83d4-66fd67a0164d" "clawsentinel-tmux-25m" "25m" "clawsentinel" "ClawSentinel safety/quality tmux loop (rebalanced cadence)"
 
 echo "backup_ts=${TS}"

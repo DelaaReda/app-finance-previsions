@@ -45,7 +45,17 @@ CODEX_SANDBOX_MODE="${TMUX_ROLE_CODEX_SANDBOX_MODE:-danger-full-access}"
 CODEX_APPROVAL_POLICY="${TMUX_ROLE_CODEX_APPROVAL_POLICY:-never}"
 ROLE_ALLOW_FILE_EDITS="${TMUX_ROLE_ALLOW_FILE_EDITS:-auto}"
 ALLOW_WORKBOARD_ONLY_DELIVERY="${TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY:-0}"
-mkdir -p "$STATE_DIR" "$TRACE_DIR"
+EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ROOT/docs/orchestrator-ops/executors-monitoring-latest.json}"
+EXEC_MONITORING_EVENTS_FILE="${TMUX_ROLE_EXEC_MONITORING_EVENTS_FILE:-$ROOT/logs-codex-runs/executor-monitoring/events.jsonl}"
+TOOL_REQUESTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_FILE:-$ROOT/docs/ops/AGENT_TOOL_REQUESTS.md}"
+TOOL_REQUESTS_EVENTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_EVENTS_FILE:-$ROOT/docs/orchestrator-ops/agent-tool-requests.jsonl}"
+mkdir -p \
+  "$STATE_DIR" \
+  "$TRACE_DIR" \
+  "$(dirname "$EXEC_MONITORING_LATEST_FILE")" \
+  "$(dirname "$EXEC_MONITORING_EVENTS_FILE")" \
+  "$(dirname "$TOOL_REQUESTS_FILE")" \
+  "$(dirname "$TOOL_REQUESTS_EVENTS_FILE")"
 FAIL_FILE="${STATE_DIR}/${ROLE}.fail_count"
 NO_DELTA_FILE="${STATE_DIR}/${ROLE}.no_delta_count"
 CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
@@ -781,8 +791,34 @@ if len(run_note_words) < 5:
         f"role={role}; source={source}; run_note_words={len(run_note_words)}; required>=5",
     )
 
+exec_report = evidence_kv.get("exec_report", "").strip()
+issues_summary = evidence_kv.get("issues", "").strip()
+suggestions_summary = evidence_kv.get("suggestions", "").strip()
+if not exec_report:
+    emit_blocked(
+        "EXEC_REPORT_MISSING",
+        f"role={role}; source={source}; required=exec_report in EVIDENCE",
+    )
+if not issues_summary:
+    emit_blocked(
+        "ISSUES_SUMMARY_MISSING",
+        f"role={role}; source={source}; required=issues in EVIDENCE (use none if no issue)",
+    )
+if not suggestions_summary:
+    emit_blocked(
+        "SUGGESTIONS_SUMMARY_MISSING",
+        f"role={role}; source={source}; required=suggestions in EVIDENCE (use none if no suggestion)",
+    )
+issues_summary_l = issues_summary.strip().lower()
+suggestions_summary_l = suggestions_summary.strip().lower()
+if issues_summary_l and issues_summary_l not in {"none", "n/a", "na"} and suggestions_summary_l in {"none", "n/a", "na"}:
+    emit_blocked(
+        "SUGGESTIONS_REQUIRED_WITH_ISSUES",
+        f"role={role}; source={source}; issues={issues_summary}; required=suggestions actionable when issues!=none",
+    )
+
 if allow_file_edits and task_update in {"claim", "complete", "handoff"}:
-    preannounce_required = ("intent_id", "intent_chat_ref", "intent_memory_ref", "edit_scope")
+    preannounce_required = ("intent_id", "intent_chat_ref", "intent_memory_ref", "intent_registry_ref", "edit_scope")
     missing_preannounce = [k for k in preannounce_required if not evidence_kv.get(k, "").strip()]
     if missing_preannounce:
         emit_blocked(
@@ -860,10 +896,6 @@ if not evidence_kv.get("coordination_ref", "").strip():
     coord_task = evidence_kv.get("task_id", "").strip() or "none"
     values["EVIDENCE"] = append_evidence(values.get("EVIDENCE", ""), f"coordination_ref={task_update}:{coord_task}")
     evidence_kv = parse_evidence_kv(values.get("EVIDENCE", ""))
-
-if status_u == "BLOCKED":
-    print("\n".join(f"{k}: {values[k]}" for k in keys))
-    sys.exit(0)
 
 # Phase 1 (SHOULD): when work exists, ask for stream/task IDs without blocking the role.
 if queue_has_ready or workboard_role_has_work:
@@ -966,11 +998,44 @@ if role in {"dev", "backend_engineer", "frontend_engineer", "integrator", "data_
             "PERMISSION_BLOCKER_UNVERIFIED",
             f"role={role}; source={source}; required=cmd or cmd_err_excerpt with permission_denied evidence",
         )
+
+    probe_sources = " ".join(
+        [
+            values.get("EVIDENCE", ""),
+            values.get("RISKS", ""),
+            values.get("NEXT", ""),
+            cmd_value,
+            cmd_err_excerpt,
+        ]
+    )
+    path_candidates = set()
+    for quoted in re.findall(r"[\"']([^\"']+)[\"']", probe_sources):
+        cand = quoted.strip()
+        if "/" in cand or cand.startswith(("docs/", "copilot-app/")):
+            path_candidates.add(cand)
+
+    known_probe_paths = {
+        "docs/orchestrator-ops/parallel-workstreams.json.lock",
+        "docs/orchestrator-ops/intent-registry.json.lock",
+        "docs/orchestrator-ops/parallel-workstreams.json",
+        "docs/planning/tasks.md",
+        "copilot-app/backend/logs/finance_analysis.log",
+        "/home/venom/shared/analyse-financiere/copilot-app/backend/logs/finance_analysis.log",
+    }
+    path_candidates.update(known_probe_paths)
+
     writable_refs = []
-    for ref_path in (Path("docs/orchestrator-ops/parallel-workstreams.json"), Path("docs/planning/tasks.md")):
+    cwd = Path.cwd()
+    for raw_path in sorted(path_candidates):
         try:
-            if ref_path.exists() and os.access(ref_path, os.W_OK):
-                writable_refs.append(str(ref_path))
+            p = Path(raw_path)
+            if not p.is_absolute():
+                p = (cwd / p).resolve(strict=False)
+            else:
+                p = p.resolve(strict=False)
+            probe_target = p if p.exists() else p.parent
+            if probe_target and os.access(probe_target, os.W_OK):
+                writable_refs.append(str(p))
         except Exception:
             continue
     if writable_refs:
@@ -986,6 +1051,10 @@ if "/home/venom/shared/analyse-financiere" in cmd_value_norm:
     # Treat the shared path as an allowed alias, not a blocker.
     values["EVIDENCE"] = append_evidence(values.get("EVIDENCE", ""), "workdir_alias=shared_ok")
     evidence_kv = parse_evidence_kv(values.get("EVIDENCE", ""))
+
+if status_u == "BLOCKED":
+    print("\n".join(f"{k}: {values[k]}" for k in keys))
+    sys.exit(0)
 
 # Task/lock hygiene must stay explicit when work exists.
 if (queue_has_ready or workboard_role_has_work) and role in {
@@ -1646,7 +1715,10 @@ ROLE=po.
 Read docs/planning/mvp-plan.md, docs/planning/epics.md, and docs/orchestrator-ops/priority-queue.json.
 Do not modify files.
 Verify backlog priority and scope alignment, then propose one PO decision.
-Obligatoire: EVIDENCE doit contenir po_artifact=<decision_backlog_ou_scope>.
+Mode read-only strict: task_update autorises=analysis_only|blocked|none_no_ready|none_no_signal.
+Interdit en mode read-only: task_update=claim|complete|handoff.
+Si aucune tache PO n'est READY/IN_PROGRESS, utiliser task_update=none_no_ready.
+Obligatoire: EVIDENCE doit contenir po_artifact=<decision_backlog_ou_scope>, task_id=<task_ou_stream>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -1700,7 +1772,7 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, et run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>). Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>, exec_report=<resume_execution_concret>, issues=<none_ou_liste_priorisee>, suggestions=<none_ou_liste_actionnable>. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, intent_registry_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. RISKS doit prioriser le principal probleme rencontre (ou none). Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>) et inclure une suggestion d'amelioration si issues!=none. Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Avant un blocker read-only/permission, execute un probe ecriture concret sur docs/orchestrator-ops/parallel-workstreams.json.lock et docs/orchestrator-ops/intent-registry.json.lock; si probes OK, n'utilise pas un blocker permission. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
@@ -1710,7 +1782,7 @@ fi
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
 - Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
-- Pré-annonce obligatoire avant toute action delivery (claim/édition): publier un INTENT dans docs/ops/ADMIN_TEAM_CHAT.md ET dans memory/YYYY-MM-DD.md avec intent_id, fichiers ciblés, scope, ETA.
+- Pré-annonce obligatoire avant toute action delivery (claim/édition): exécuter `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`; réutiliser les refs générées dans EVIDENCE (`intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`).
 - Co-édition: après pré-annonce, claim d'abord (scripts/parallel_workstream.py claim --role <role>), patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
 - Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
 - Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
@@ -2187,7 +2259,7 @@ Rappel critique:
 - Réponds avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 - Une seule valeur utile par ligne, sans commentaire ni texte hors contrat.
 - Obligatoire: EVIDENCE doit contenir ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>.
-- Obligatoire: EVIDENCE doit contenir task_update=<...> et lock_check=ok.
+- Obligatoire: EVIDENCE doit contenir task_update=<...>, lock_check=ok, run_note=<...>, exec_report=<...>, issues=<none|...>, suggestions=<none|...>.
 - Si queue_has_ready=1 ou workboard_role_has_work=1: inclure stream_id=<...> et task_id=<...>.
 - Si task_update=complete: inclure cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>.
 - Interdit: sortie générique READY/DISPATCH sans preuve explicite du rôle.
@@ -2376,12 +2448,12 @@ if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
 

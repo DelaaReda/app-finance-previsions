@@ -14,8 +14,6 @@ ROLE_MAP=(
   "tester:36bed423-e965-4a19-a43a-c8ffbff751d8"
   "qa:454dc361-14bb-4f71-8ca2-ec86708c503f"
   "architect:bde5885a-388f-4fe4-a8b7-a146521d9e9d"
-  "po:44f08bd9-b9c0-4ab5-8882-cc91d402c8db"
-  "scrum_master:8e5b1bd7-f319-48d8-b8f7-c906c024135f"
   "clawsentinel:25756cb4-57f1-41c7-83d4-66fd67a0164d"
 )
 
@@ -134,8 +132,6 @@ session_for_role() {
     tester) echo "codex_tester_cron" ;;
     qa) echo "codex_qa_cron" ;;
     architect) echo "codex_architect_cron" ;;
-    po) echo "codex_po_cron" ;;
-    scrum_master) echo "codex_scrum_master_cron" ;;
     clawsentinel) echo "clawsentinel" ;;
     admin-agents) echo "admin-agents-sync-cron" ;;
     adminapp-codex) echo "adminapp_codex_sync" ;;

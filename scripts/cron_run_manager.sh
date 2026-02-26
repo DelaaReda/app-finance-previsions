@@ -82,6 +82,15 @@ load_jobs_json() {
   JOBS_JSON="$("$OPENCLAW_BIN" cron list --all --json 2>/dev/null || "$OPENCLAW_BIN" cron list --json 2>/dev/null || echo '{"jobs":[]}')"
 }
 
+normalize_cron_runs_json() {
+  local raw="${1:-}"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "${ROOT}/scripts/openclaw_cron_runs_normalize.py" ]]; then
+    printf '%s' "$raw" | python3 "${ROOT}/scripts/openclaw_cron_runs_normalize.py" 2>/dev/null || echo '{"entries":[]}'
+  else
+    printf '%s' "$raw"
+  fi
+}
+
 normalize_role() {
   local raw="$1"
   printf '%s' "$raw" | tr '-' '_' | tr '[:upper:]' '[:lower:]'
@@ -251,6 +260,7 @@ command_last_summary() {
   local job_json=""
   local job_id=""
   local job_name=""
+  local runs_raw=""
   local runs_json=""
 
   while [[ $# -gt 0 ]]; do
@@ -286,7 +296,8 @@ command_last_summary() {
   job_id="$(printf '%s' "$job_json" | jq -r '.id')"
   job_name="$(printf '%s' "$job_json" | jq -r '.name')"
 
-  runs_json="$("$OPENCLAW_BIN" cron runs --id "$job_id" --limit "$limit" 2>/dev/null || echo '{"entries":[]}')"
+  runs_raw="$("$OPENCLAW_BIN" cron runs --id "$job_id" --limit "$limit" 2>/dev/null || echo '{}')"
+  runs_json="$(normalize_cron_runs_json "$runs_raw")"
   printf '%s' "$runs_json" | jq -r --arg job "$job_name" '
     .entries[]?
     | "CRON_LAST_SUMMARY job=" + $job

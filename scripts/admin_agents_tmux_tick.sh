@@ -85,32 +85,29 @@ latest_handoff_file() {
   ls -1t docs/ops/TMUX_HANDOFF_admin-agents_*.md 2>/dev/null | head -n 1 || true
 }
 
-role_session_default() {
-  case "$1" in
-    planner) echo "codex_planner_cron" ;;
-    analyst) echo "codex_analyst_cron" ;;
-    architect) echo "codex_architect_cron" ;;
-    backend_engineer) echo "codex_backend_engineer_cron" ;;
-    frontend_engineer) echo "codex_frontend_engineer_cron" ;;
-    data_analyst) echo "codex_data_analyst_cron" ;;
-    infra_engineer) echo "codex_infra_engineer_cron" ;;
-    integrator) echo "codex_integrator_cron" ;;
-    dev) echo "codex_dev_cron" ;;
-    tester) echo "codex_tester_cron" ;;
-    qa) echo "codex_qa_cron" ;;
-    po) echo "codex_po_cron" ;;
-    scrum_master) echo "codex_scrum_master_cron" ;;
-    clawsentinel) echo "clawsentinel" ;;
-    *) echo "" ;;
-  esac
-}
+	role_session_default() {
+	  case "$1" in
+	    planner) echo "codex_planner_cron" ;;
+	    analyst) echo "codex_analyst_cron" ;;
+	    architect) echo "codex_architect_cron" ;;
+	    backend_engineer) echo "codex_backend_engineer_cron" ;;
+	    frontend_engineer) echo "codex_frontend_engineer_cron" ;;
+	    data_analyst) echo "codex_data_analyst_cron" ;;
+	    infra_engineer) echo "codex_infra_engineer_cron" ;;
+	    integrator) echo "codex_integrator_cron" ;;
+	    dev) echo "codex_dev_cron" ;;
+	    tester) echo "codex_tester_cron" ;;
+	    qa) echo "codex_qa_cron" ;;
+	    clawsentinel) echo "clawsentinel" ;;
+	    *) echo "" ;;
+	  esac
+	}
 
-role_trace_default() {
-  case "$1" in
-    scrum_master) echo "scrum_master.live.log" ;;
-    *) echo "$1.live.log" ;;
-  esac
-}
+	role_trace_default() {
+	  case "$1" in
+	    *) echo "$1.live.log" ;;
+	  esac
+	}
 
 ensure_session() {
   local session="$1"
@@ -185,7 +182,9 @@ Objectif du tick:
 1) verifier l'etat des runs recents (errors/NO_DELTA/BLOCKED);
 2) identifier le principal frein productivite;
 3) identifier qui doit agir (adminapp-codex, admin-agents, clawsentinel) avant toute action;
-4) journaliser INTENT/DONE dans docs/ops/ADMIN_TEAM_CHAT.md et une ligne dans docs/ops/ADMIN_TEAM_ITERATIONS.md.
+4) remonter tout probleme d'execution (timeout, tmux reply unparseable, evidence manquante: EXEC_REPORT_MISSING/ISSUES_SUMMARY_MISSING/SUGGESTIONS_SUMMARY_MISSING, ou delivery evidence missing) + proposer une action concrete;
+5) journaliser INTENT/DONE dans docs/ops/ADMIN_TEAM_CHAT.md et une ligne dans docs/ops/ADMIN_TEAM_ITERATIONS.md;
+6) publier en fin de tick un rapport compact orienté incidents: exec_report=<resume>, issues=<none|liste_priorisee>, suggestions=<none|actions>.
 Contraintes:
 - garder les crons role sur gpt-5.3-codex et thinking high;
 - garder le main agent OpenClaw sur gpt-5.2 + xhigh;
@@ -287,6 +286,9 @@ deterministic_delivery_tick() {
   local action_id=""
   local action_owner="$ACTION_OWNER"
   local action_scope="$ACTION_SCOPE_DEFAULT"
+  local exec_report="none"
+  local issues_report="none"
+  local suggestions_report="none"
   local role_keys=()
   local role_sessions=()
   local role_traces=()
@@ -338,20 +340,18 @@ deterministic_delivery_tick() {
       role_sessions+=("$topo_session")
       role_traces+=("$topo_trace")
     done
-  else
-    role_keys=("planner" "dev" "tester" "qa" "architect" "po" "scrum_master" "clawsentinel")
-    role_sessions=("codex_planner_cron" "codex_dev_cron" "codex_tester_cron" "codex_qa_cron" "codex_architect_cron" "codex_po_cron" "codex_scrum_master_cron" "clawsentinel")
-    role_traces=(
-      "${ROLE_TRACE_DIR}/planner.live.log"
-      "${ROLE_TRACE_DIR}/dev.live.log"
-      "${ROLE_TRACE_DIR}/tester.live.log"
-      "${ROLE_TRACE_DIR}/qa.live.log"
-      "${ROLE_TRACE_DIR}/architect.live.log"
-      "${ROLE_TRACE_DIR}/po.live.log"
-      "${ROLE_TRACE_DIR}/scrum_master.live.log"
-      "${ROLE_TRACE_DIR}/clawsentinel.live.log"
-    )
-  fi
+	  else
+	    role_keys=("planner" "dev" "tester" "qa" "architect" "clawsentinel")
+	    role_sessions=("codex_planner_cron" "codex_dev_cron" "codex_tester_cron" "codex_qa_cron" "codex_architect_cron" "clawsentinel")
+	    role_traces=(
+	      "${ROLE_TRACE_DIR}/planner.live.log"
+	      "${ROLE_TRACE_DIR}/dev.live.log"
+	      "${ROLE_TRACE_DIR}/tester.live.log"
+	      "${ROLE_TRACE_DIR}/qa.live.log"
+	      "${ROLE_TRACE_DIR}/architect.live.log"
+	      "${ROLE_TRACE_DIR}/clawsentinel.live.log"
+	    )
+	  fi
 
   role_total="$(printf '%s' "$cron_json" | jq '[.jobs[]? | select((.name // "") | test("-tmux-"))] | length' 2>/dev/null || echo 0)"
   role_enabled="$(printf '%s' "$cron_json" | jq '[.jobs[]? | select((.name // "") | test("-tmux-")) | select(.enabled==true)] | length' 2>/dev/null || echo 0)"
@@ -531,6 +531,11 @@ deterministic_delivery_tick() {
       action_scope="$ACTION_SCOPE_DEFAULT"
       ;;
   esac
+  exec_report="role_ok_${role_ok}_on_${role_total}_sessions_${session_present}_on_${session_total}_ready_${ready_total}_errors_${role_error}_stale_${stale_running}"
+  if [[ "$top_issue" != "none" ]]; then
+    issues_report="${top_issue}"
+    suggestions_report="${next_action}"
+  fi
   action_id="AA_${tick}_${top_issue}"
 
   now_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -574,6 +579,12 @@ deterministic_delivery_tick() {
     "scope": "$action_scope",
     "status": "SUGGESTED"
   },
+  "executionReport": {
+    "summary": "$exec_report",
+    "issues": "$issues_report",
+    "suggestions": "$suggestions_report",
+    "issueExamples": "$issue_examples"
+  },
   "topIssue": "$top_issue",
   "nextAction": "$next_action"
 }
@@ -599,6 +610,9 @@ EOF
   DETERMINISTIC_ACTION_ID="$action_id"
   DETERMINISTIC_ACTION_OWNER="$action_owner"
   DETERMINISTIC_ACTION_SCOPE="$action_scope"
+  DETERMINISTIC_EXEC_REPORT="$exec_report"
+  DETERMINISTIC_ISSUES="$issues_report"
+  DETERMINISTIC_SUGGESTIONS="$suggestions_report"
 }
 
 DETERMINISTIC_OK=0
@@ -608,6 +622,9 @@ DETERMINISTIC_NEXT_ACTION="keep_monitoring"
 DETERMINISTIC_ACTION_ID=""
 DETERMINISTIC_ACTION_OWNER="none"
 DETERMINISTIC_ACTION_SCOPE="monitoring"
+DETERMINISTIC_EXEC_REPORT="none"
+DETERMINISTIC_ISSUES="none"
+DETERMINISTIC_SUGGESTIONS="none"
 
 SESSION="$(pick_session)"
 ensure_session "$SESSION"
@@ -661,12 +678,16 @@ fi
 write_no_progress_streak "$streak"
 
 if [[ "$tick_seen" -ne 1 || "$pane_changed" -ne 1 ]]; then
+  if [[ "$proof_changed" -eq 1 ]]; then
+    echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=tick_not_observed_but_proof_changed"
+    exit 0
+  fi
   maybe_append_chat_alert \
     "BLOCKER" \
     "tick ${TICK} non observe en tmux (pane_changed=${pane_changed}, tick_seen=${tick_seen})" \
     "verifier soumission codex dans la session ${SESSION}" \
     "BLOCKED|tick=${TICK}|pane_changed=${pane_changed}|tick_seen=${tick_seen}"
-  echo "status=ERROR role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} artifact=${DETERMINISTIC_ARTIFACT} reason=tick_not_observed"
+  echo "status=ERROR role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=tick_not_observed"
   exit 6
 fi
 
@@ -676,18 +697,18 @@ if [[ "$proof_changed" -ne 1 && "$streak" -ge "$NO_PROGRESS_THRESHOLD" ]]; then
     "aucune preuve de livraison admin-agents depuis ${streak} ticks (chat/iterations inchanges)" \
     "forcer une action admin concrete puis revalider" \
     "BLOCKED|streak=${streak}|session=${SESSION}"
-  echo "status=BLOCKED role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence"
+  echo "status=BLOCKED role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence"
   exit 7
 fi
 
 if [[ "$proof_changed" -ne 1 ]]; then
-  echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence_yet"
+  echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence_yet"
   exit 0
 fi
 
 if [[ "$DETERMINISTIC_ISSUE" != "none" ]]; then
-  echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT} reason=deterministic_issue_detected"
+  echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT} reason=deterministic_issue_detected"
   exit 0
 fi
 
-echo "status=OK role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT}"
+echo "status=OK role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT}"

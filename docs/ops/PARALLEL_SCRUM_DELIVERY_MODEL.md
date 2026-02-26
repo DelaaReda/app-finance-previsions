@@ -9,7 +9,7 @@ without losing control of dependencies, validation ownership, or handoffs.
 - Build lanes: `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`
 - Validation lanes: `tester`, `qa`
 - Integration lane: `integrator`
-- Delivery governance: `po`, `scrum_master`
+- Delivery governance: `planner` (scope/value + flow/WIP) + `admin-agents` (routing/escalations)
 - Reliability/safety: `adminapp-codex`, `admin-agents`, `clawsentinel`
 
 ## Plumbing artifacts
@@ -44,9 +44,9 @@ without losing control of dependencies, validation ownership, or handoffs.
 
 ## Cadence
 - Continuous mini-iterations (cron loops by role)
-- Scrum sync every ~15 min (scrum master role lane)
+- Dispatch + flow/WIP sync every ~15 min (planner absorbs ex-scrum_master)
 - Admin checkpoints every 10-15 min
-- Sprint-level review stays product-driven via `po`
+- Sprint-level review stays product-driven via `planner` + human owner (no always-on PO agent)
 - Each cron tick acts as wake-up: resume from role memory + last contract + peer signals + workboard context.
 
 ## Safety locks

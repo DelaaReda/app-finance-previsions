@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T20:16:47Z",
+  "updated_at": "2026-02-26T21:19:18Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -56,16 +56,6 @@
       "wip_limit": 3,
       "can_edit": true,
       "focus": "quality gate and validation"
-    },
-    "po": {
-      "wip_limit": 2,
-      "can_edit": false,
-      "focus": "scope and value"
-    },
-    "scrum_master": {
-      "wip_limit": 2,
-      "can_edit": false,
-      "focus": "flow and blockers"
     },
     "clawsentinel": {
       "wip_limit": 2,
@@ -395,36 +385,6 @@
       ]
     },
     {
-      "id": "BATCH-01-PO_REVIEW",
-      "stream_id": "BATCH-01",
-      "code": "PO_REVIEW",
-      "title": "Stabiliser contrats API MVP [PO_REVIEW]",
-      "role": "po",
-      "state": "DONE",
-      "priority": "P0",
-      "depends_on": [
-        "BATCH-01-QA_EXEC"
-      ],
-      "assignee": "po",
-      "blocked_reason": "",
-      "artifacts": [
-        "docs/orchestrator-ops/roleflow/20260226-pilot/po-batch-01-po-review.md"
-      ],
-      "notes": [
-        "po_review_pilot_pass",
-        "cmd=python3 scripts/parallel_workstream.py status --role po --compact;tests_run=SKIP(po_value_review_only);review_ref=roleflow-pilot-po;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml"
-      ],
-      "handoff_to": "",
-      "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T17:46:09Z",
-      "started_at": "2026-02-26T17:45:59Z",
-      "completed_at": "2026-02-26T17:46:09Z",
-      "last_idempotency_key": "IK-roleflow-b01-po",
-      "proof_manifests": [
-        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml"
-      ]
-    },
-    {
       "id": "BATCH-02-ANALYSIS",
       "stream_id": "BATCH-02",
       "code": "ANALYSIS",
@@ -682,28 +642,6 @@
       "completed_at": ""
     },
     {
-      "id": "BATCH-02-PO_REVIEW",
-      "stream_id": "BATCH-02",
-      "code": "PO_REVIEW",
-      "title": "Contrats multi-ticker + news [PO_REVIEW]",
-      "role": "po",
-      "state": "WAITING_DEP",
-      "priority": "P1",
-      "depends_on": [
-        "BATCH-02-QA_EXEC",
-        "BATCH-02-SENTINEL_CHECK"
-      ],
-      "assignee": "",
-      "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
-      "handoff_to": "",
-      "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T19:29:57Z",
-      "started_at": "",
-      "completed_at": ""
-    },
-    {
       "id": "BATCH-01-PLAN",
       "stream_id": "BATCH-01",
       "code": "PLAN",
@@ -762,36 +700,6 @@
       ]
     },
     {
-      "id": "BATCH-01-SCRUM_REVIEW",
-      "stream_id": "BATCH-01",
-      "code": "SCRUM_REVIEW",
-      "title": "Stabiliser contrats API MVP [SCRUM_REVIEW]",
-      "role": "scrum_master",
-      "state": "DONE",
-      "priority": "P0",
-      "depends_on": [
-        "BATCH-01-PLAN"
-      ],
-      "assignee": "scrum_master",
-      "blocked_reason": "",
-      "artifacts": [
-        "docs/orchestrator-ops/roleflow/20260226-pilot/scrum-batch-01-review.md"
-      ],
-      "notes": [
-        "scrum_review_pilot_closed",
-        "cmd=python3 scripts/parallel_workstream.py status --compact;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-scrum;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml"
-      ],
-      "handoff_to": "",
-      "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T17:46:46Z",
-      "started_at": "2026-02-26T17:46:35Z",
-      "completed_at": "2026-02-26T17:46:46Z",
-      "last_idempotency_key": "IK-roleflow-b01-scrum",
-      "proof_manifests": [
-        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml"
-      ]
-    },
-    {
       "id": "BATCH-02-PLAN",
       "stream_id": "BATCH-02",
       "code": "PLAN",
@@ -820,27 +728,6 @@
       "priority": "P1",
       "depends_on": [
         "BATCH-02-QA_EXEC"
-      ],
-      "assignee": "",
-      "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
-      "handoff_to": "",
-      "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T06:06:13Z",
-      "started_at": "",
-      "completed_at": ""
-    },
-    {
-      "id": "BATCH-02-SCRUM_REVIEW",
-      "stream_id": "BATCH-02",
-      "code": "SCRUM_REVIEW",
-      "title": "Contrats multi-ticker + news [SCRUM_REVIEW]",
-      "role": "scrum_master",
-      "state": "WAITING_DEP",
-      "priority": "P1",
-      "depends_on": [
-        "BATCH-02-PLAN"
       ],
       "assignee": "",
       "blocked_reason": "",
