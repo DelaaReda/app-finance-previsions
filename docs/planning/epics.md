@@ -262,6 +262,7 @@ bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/batch-XX-<timestamp
 - 2026-02-26 America/New_York — Extended vision epic set with Epic 7/8/9 (macro radar, cost governance, decision learning loop).
 - 2026-02-26 America/New_York — Extended vision epic set with Epic 10/11/12/13/14 for basic-ready delivery loop.
 - 2026-02-26 America/New_York — Added Epic 15 for explicit data-driven forecasting core (dataset -> training -> backtest -> inference).
+- 2026-02-26 America/New_York — Added Epic 16 for strict API->UI forecast delivery contract and release-gate enforcement.
 
 ## Delta vision-clarifier (2026-02-26)
 
@@ -381,3 +382,11 @@ This section is the active product-priority lens for upcoming sprints.
   - walk-forward backtests validate minimum robustness on MVP horizons
   - runtime forecasts expose explicit model provenance and calibrated confidence
   - core UI surfaces display these forecasts and provenance without hidden fallback
+
+### Epic 16 (P0) - Forecast Delivery Contract (API -> UI)
+- Goal: guarantee that every core user flow displays live data-driven forecasts from API payloads.
+- Done when:
+  - forecast contract is unified across `/api/forecasts`, `/api/decision/brief`, `/api/judge`, `/api/copilot/ask`
+  - decision UI surfaces (cards/brief/judge/ask) render forecast fields + provenance with no hidden fallback
+  - end-to-end tests prove API payload -> UI rendering on core flows
+  - release gate blocks if one core flow misses forecast payload or provenance visibility

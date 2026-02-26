@@ -63,6 +63,22 @@ Per asset/sector card:
 - `risk_flag`: low | medium | high
 - `updated_at`: timestamp
 
+## Forecast API -> UI mandatory map (MVP)
+- Core APIs that must always expose forecast payload:
+  - `/api/forecasts`
+  - `/api/decision/brief` (or approved equivalent)
+  - `/api/judge`
+  - `/api/copilot/ask` (must reference current forecast payloads)
+- Core UI surfaces that must always render forecast payload:
+  - decision cards
+  - daily brief summary
+  - judge result panel
+  - ask answer panel
+- Required fields on every decision-facing flow:
+  - `direction`, `confidence`, `action`, `horizon`, `why`, `risk_flag`, `updated_at`, `source`, `model_version` (or explicit fallback marker)
+- Release rule:
+  - if one core API/UI flow does not render data-driven forecast + provenance, release is blocked.
+
 ## Initial universe (MVP v1)
 - Index/market regime: SPY, QQQ, DIA, IWM
 - Metals: GLD, SLV
@@ -92,6 +108,7 @@ Per asset/sector card:
 - P0 - Epic 2: Forecast Engine (asset/sector direction + confidence + action)
 - P0 - Epic 3: Multi-Model Consensus and Judge
 - P0 - Epic 15: Data-Driven Forecasting Core (dataset/training/backtest/inference)
+- P0 - Epic 16: Forecast Delivery Contract (API->UI evidence and release gate)
 - P1 - Epic 4: Decision Cockpit Frontend (2-3 click workflow)
 - P1 - Epic 5: Ask Copilot Deep Analysis (grounded Q&A)
 - P1 - Epic 10: Data Source Reliability and Ingestion Automation

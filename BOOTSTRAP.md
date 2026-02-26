@@ -57,9 +57,11 @@ Flux MVP attendu:
 
 ## 5) Basic-ready (cible opérationnelle)
 La baseline “app prête basique” est atteinte si:
-- les epics obligatoires passent: 1, 2, 3, 4, 5, 8, 10, 11, 13, 14
+- les epics obligatoires passent: 1, 2, 3, 4, 5, 8, 10, 11, 13, 14, 15, 16
 - flux utilisateur passe:
   - ouvrir app -> brief <= 3 clics
+  - forecasts retournés par pipeline data/model (pas uniquement heuristique) + provenance visible (nominal/degraded)
+  - preuve API->UI: decision cards/brief/judge/ask affichent les champs forecast + provenance (aucun fallback caché)
   - Judge et Ask fonctionnels avec réponses exploitables
   - freshness/degraded/runtime visibles
   - gate final sans blocker critique
@@ -67,7 +69,7 @@ La baseline “app prête basique” est atteinte si:
 Référence: section `Continuous Delivery Loop` dans `docs/planning/tasks.md`
 
 ## 6) Carte des epics (actifs)
-- P0: 1, 2, 3
+- P0: 1, 2, 3, 15, 16
 - P1: 4, 5, 8, 10, 11, 12, 13, 14
 - P2: 6, 7, 9
 
@@ -94,13 +96,14 @@ Voir:
 7. En cas de blocage: remonter immédiatement `BLOCKER_ID` + action unique.
 
 ## 9) Commandes de base (golden path)
-Depuis `/home/venom/shared/analyse-financiere`:
+Depuis la racine du repo sur la VM (ex: `/home/venom/analyse-financiere` ou `/home/venom/shared/analyse-financiere` selon mount):
 
 ```bash
-scripts/exec_safe.sh --workdir /home/venom/shared/analyse-financiere -- "python3 scripts/parallel_workstream.py claim --role <role>"
-scripts/exec_safe.sh --workdir /home/venom/shared/analyse-financiere -- "bash scripts/preflight_dispatch.sh"
-scripts/exec_safe.sh --workdir /home/venom/shared/analyse-financiere -- "bash scripts/backend_regression_gate.sh --no-live"
-scripts/exec_safe.sh --workdir /home/venom/shared/analyse-financiere -- "bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/<artifact>.md"
+PROJECT_ROOT="/home/venom/analyse-financiere"
+scripts/exec_safe.sh --workdir "$PROJECT_ROOT" -- "python3 scripts/parallel_workstream.py claim --role <role>"
+scripts/exec_safe.sh --workdir "$PROJECT_ROOT" -- "bash scripts/preflight_dispatch.sh"
+scripts/exec_safe.sh --workdir "$PROJECT_ROOT" -- "bash scripts/backend_regression_gate.sh --no-live"
+scripts/exec_safe.sh --workdir "$PROJECT_ROOT" -- "bash scripts/run_delivery_gate.sh finance-app/openclaw-gates/<artifact>.md"
 ```
 
 ## 10) Definition of Done (pratique)
