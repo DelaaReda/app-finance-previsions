@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T17:25:28Z",
+  "updated_at": "2026-02-26T17:45:52Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -79,9 +79,9 @@
       "title": "Stabiliser contrats API MVP",
       "priority": "P0",
       "source_state": "PASS",
-      "state": "IN_PROGRESS",
+      "state": "READY",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T06:23:10Z"
+      "updated_at": "2026-02-26T17:45:52Z"
     },
     {
       "id": "BATCH-02",
@@ -126,20 +126,29 @@
       "code": "ARCH",
       "title": "Stabiliser contrats API MVP [ARCH]",
       "role": "architect",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-ANALYSIS"
       ],
-      "assignee": "",
+      "assignee": "architect",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/architect-batch-01-arch.md"
+      ],
+      "notes": [
+        "arch_pilot_contract_defined",
+        "cmd=python3 scripts/parallel_workstream.py context --role architect --limit 6;tests_run=SKIP(architecture_only);review_ref=roleflow-pilot-arch;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:54:50Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:43:31Z",
+      "started_at": "2026-02-26T17:43:20Z",
+      "completed_at": "2026-02-26T17:43:31Z",
+      "last_idempotency_key": "IK-roleflow-b01-arch",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml"
+      ]
     },
     {
       "id": "BATCH-01-QA_PREP",
@@ -174,18 +183,27 @@
       "code": "TEST_PLAN",
       "title": "Stabiliser contrats API MVP [TEST_PLAN]",
       "role": "tester",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [],
       "assignee": "tester",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/tester-batch-01-test-plan.md"
+      ],
+      "notes": [
+        "test_plan_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role tester --compact;tests_run=SKIP(test_plan_document);review_ref=roleflow-pilot-testplan;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T06:23:10Z",
+      "updated_at": "2026-02-26T17:43:49Z",
       "started_at": "2026-02-26T06:23:10Z",
-      "completed_at": ""
+      "completed_at": "2026-02-26T17:43:49Z",
+      "last_idempotency_key": "IK-roleflow-b01-testplan",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml"
+      ]
     },
     {
       "id": "BATCH-01-DATA",
@@ -222,20 +240,29 @@
       "code": "INFRA",
       "title": "Stabiliser contrats API MVP [INFRA]",
       "role": "infra_engineer",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-ARCH"
       ],
-      "assignee": "",
+      "assignee": "infra_engineer",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/infra-batch-01-infra.md"
+      ],
+      "notes": [
+        "infra_pilot_completed",
+        "cmd=openclaw cron status;tests_run=SKIP(infra_read_only_check);review_ref=roleflow-pilot-infra;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:44:13Z",
+      "started_at": "2026-02-26T17:44:01Z",
+      "completed_at": "2026-02-26T17:44:13Z",
+      "last_idempotency_key": "IK-roleflow-b01-infra",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml"
+      ]
     },
     {
       "id": "BATCH-01-BACKEND",
@@ -243,20 +270,29 @@
       "code": "BACKEND",
       "title": "Stabiliser contrats API MVP [BACKEND]",
       "role": "backend_engineer",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-ARCH"
       ],
-      "assignee": "",
+      "assignee": "backend_engineer",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/backend-batch-01-backend.md"
+      ],
+      "notes": [
+        "backend_pilot_code_change_done",
+        "cmd=python3 -m py_compile scripts/parallel_workstream.py;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-backend;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:44:53Z",
+      "started_at": "2026-02-26T17:44:20Z",
+      "completed_at": "2026-02-26T17:44:53Z",
+      "last_idempotency_key": "IK-roleflow-b01-backend",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml"
+      ]
     },
     {
       "id": "BATCH-01-FRONTEND",
@@ -264,20 +300,29 @@
       "code": "FRONTEND",
       "title": "Stabiliser contrats API MVP [FRONTEND]",
       "role": "frontend_engineer",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-ARCH"
       ],
-      "assignee": "",
+      "assignee": "frontend_engineer",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/frontend-batch-01-frontend.md"
+      ],
+      "notes": [
+        "frontend_pilot_contract_check",
+        "cmd=python3 scripts/parallel_workstream.py context --role frontend_engineer --limit 5;tests_run=SKIP(no_frontend_code_change);review_ref=roleflow-pilot-frontend;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:45:08Z",
+      "started_at": "2026-02-26T17:44:58Z",
+      "completed_at": "2026-02-26T17:45:08Z",
+      "last_idempotency_key": "IK-roleflow-b01-frontend",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml"
+      ]
     },
     {
       "id": "BATCH-01-INTEGRATION",
@@ -285,7 +330,7 @@
       "code": "INTEGRATION",
       "title": "Stabiliser contrats API MVP [INTEGRATION]",
       "role": "integrator",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-BACKEND",
@@ -293,15 +338,24 @@
         "BATCH-01-INFRA",
         "BATCH-01-DATA"
       ],
-      "assignee": "",
+      "assignee": "integrator",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/integrator-batch-01-integration.md"
+      ],
+      "notes": [
+        "integration_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --compact;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-integration;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:45:26Z",
+      "started_at": "2026-02-26T17:45:15Z",
+      "completed_at": "2026-02-26T17:45:26Z",
+      "last_idempotency_key": "IK-roleflow-b01-integration",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml"
+      ]
     },
     {
       "id": "BATCH-01-QA_EXEC",
@@ -309,22 +363,31 @@
       "code": "QA_EXEC",
       "title": "Stabiliser contrats API MVP [QA_EXEC]",
       "role": "qa",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-INTEGRATION",
         "BATCH-01-QA_PREP",
         "BATCH-01-TEST_PLAN"
       ],
-      "assignee": "",
+      "assignee": "qa",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/qa-batch-01-qa-exec.md"
+      ],
+      "notes": [
+        "qa_exec_pilot_pass",
+        "cmd=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;tests_run=bash scripts/validate_parallel_plumbing.sh;review_ref=roleflow-pilot-qa;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:45:52Z",
+      "started_at": "2026-02-26T17:45:40Z",
+      "completed_at": "2026-02-26T17:45:52Z",
+      "last_idempotency_key": "IK-roleflow-b01-qaexec",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml"
+      ]
     },
     {
       "id": "BATCH-01-PO_REVIEW",
@@ -332,7 +395,7 @@
       "code": "PO_REVIEW",
       "title": "Stabiliser contrats API MVP [PO_REVIEW]",
       "role": "po",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-QA_EXEC"
@@ -343,7 +406,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:45:52Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -353,18 +416,27 @@
       "code": "ANALYSIS",
       "title": "Contrats multi-ticker + news [ANALYSIS]",
       "role": "analyst",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "analyst",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/analyst-batch-02-analysis.md"
+      ],
+      "notes": [
+        "analysis_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py context --role analyst --limit 6;tests_run=SKIP(analysis_only);review_ref=roleflow-pilot-analyst;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:42:57Z",
+      "started_at": "2026-02-26T17:42:37Z",
+      "completed_at": "2026-02-26T17:42:57Z",
+      "last_idempotency_key": "IK-roleflow-b02-analysis",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml"
+      ]
     },
     {
       "id": "BATCH-02-ARCH",
@@ -372,7 +444,7 @@
       "code": "ARCH",
       "title": "Contrats multi-ticker + news [ARCH]",
       "role": "architect",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ANALYSIS"
@@ -383,7 +455,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:42:57Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -439,20 +511,29 @@
       "code": "DATA",
       "title": "Contrats multi-ticker + news [DATA]",
       "role": "data_analyst",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ANALYSIS"
       ],
-      "assignee": "",
+      "assignee": "data_analyst",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/data-analyst-batch-02-data.md"
+      ],
+      "notes": [
+        "data_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role data_analyst --compact;tests_run=SKIP(data_note_only);review_ref=roleflow-pilot-data;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T05:53:04Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-02-26T17:43:13Z",
+      "started_at": "2026-02-26T17:43:02Z",
+      "completed_at": "2026-02-26T17:43:13Z",
+      "last_idempotency_key": "IK-roleflow-b02-data",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml"
+      ]
     },
     {
       "id": "BATCH-02-INFRA",
@@ -591,18 +672,27 @@
       "code": "PLAN",
       "title": "Stabiliser contrats API MVP [PLAN]",
       "role": "planner",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "priority": "P0",
       "depends_on": [],
       "assignee": "planner",
       "blocked_reason": "",
-      "artifacts": [],
-      "notes": [],
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/planner-batch-01-plan.md"
+      ],
+      "notes": [
+        "plan_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role planner --compact;tests_run=SKIP(planning_only);review_ref=roleflow-pilot-plan;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T17:20:41Z",
+      "updated_at": "2026-02-26T17:43:49Z",
       "started_at": "2026-02-26T17:20:41Z",
-      "completed_at": ""
+      "completed_at": "2026-02-26T17:43:49Z",
+      "last_idempotency_key": "IK-roleflow-b01-plan",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml"
+      ]
     },
     {
       "id": "BATCH-01-SENTINEL_CHECK",
@@ -610,7 +700,7 @@
       "code": "SENTINEL_CHECK",
       "title": "Stabiliser contrats API MVP [SENTINEL_CHECK]",
       "role": "clawsentinel",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-QA_EXEC"
@@ -621,7 +711,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-26T17:45:52Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -631,7 +721,7 @@
       "code": "SCRUM_REVIEW",
       "title": "Stabiliser contrats API MVP [SCRUM_REVIEW]",
       "role": "scrum_master",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P0",
       "depends_on": [
         "BATCH-01-PLAN"
@@ -642,7 +732,7 @@
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-26T17:43:49Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -887,6 +977,200 @@
       "details": {
         "role": "planner",
         "task_id": "BATCH-02-PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T17:42:37Z",
+      "kind": "claim",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-02-ANALYSIS"
+      }
+    },
+    {
+      "at": "2026-02-26T17:42:57Z",
+      "kind": "complete",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-02-ANALYSIS",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/analyst-batch-02-analysis.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml",
+        "idempotency_key": "IK-roleflow-b02-analysis"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-02-DATA"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:13Z",
+      "kind": "complete",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-02-DATA",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/data-analyst-batch-02-data.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml",
+        "idempotency_key": "IK-roleflow-b02-data"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:20Z",
+      "kind": "claim",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-01-ARCH"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:31Z",
+      "kind": "complete",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-01-ARCH",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/architect-batch-01-arch.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml",
+        "idempotency_key": "IK-roleflow-b01-arch"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:49Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-PLAN",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/planner-batch-01-plan.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml",
+        "idempotency_key": "IK-roleflow-b01-plan"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:49Z",
+      "kind": "complete",
+      "details": {
+        "role": "tester",
+        "task_id": "BATCH-01-TEST_PLAN",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/tester-batch-01-test-plan.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml",
+        "idempotency_key": "IK-roleflow-b01-testplan"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:01Z",
+      "kind": "claim",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-01-INFRA"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:13Z",
+      "kind": "complete",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-01-INFRA",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/infra-batch-01-infra.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml",
+        "idempotency_key": "IK-roleflow-b01-infra"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:20Z",
+      "kind": "claim",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-01-BACKEND"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:53Z",
+      "kind": "complete",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-01-BACKEND",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/backend-batch-01-backend.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml",
+        "idempotency_key": "IK-roleflow-b01-backend"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:58Z",
+      "kind": "claim",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-01-FRONTEND"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:08Z",
+      "kind": "complete",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-01-FRONTEND",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/frontend-batch-01-frontend.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml",
+        "idempotency_key": "IK-roleflow-b01-frontend"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:15Z",
+      "kind": "claim",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-01-INTEGRATION"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:26Z",
+      "kind": "complete",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-01-INTEGRATION",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/integrator-batch-01-integration.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml",
+        "idempotency_key": "IK-roleflow-b01-integration"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:40Z",
+      "kind": "claim",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_EXEC"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:52Z",
+      "kind": "complete",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_EXEC",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/qa-batch-01-qa-exec.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml",
+        "idempotency_key": "IK-roleflow-b01-qaexec"
       }
     }
   ]

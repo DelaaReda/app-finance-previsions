@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-02-BATCH-02-ANALYSIS-20260226T174257Z-382"
+stream_id: "BATCH-02"
+task_id: "BATCH-02-ANALYSIS"
+role: "analyst"
+produced_at_utc: "2026-02-26T17:42:57Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/analyst.last_contract"
+execution:
+  commands:
+    - cmd: "python3 scripts/parallel_workstream.py context --role analyst --limit 6"
+      rc: "0"
+      started_at_utc: "2026-02-26T17:42:57Z"
+      ended_at_utc: "2026-02-26T17:42:57Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(analysis_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/analyst.last_contract"
+  artifacts:
+    - "docs/orchestrator-ops/roleflow/20260226-pilot/analyst-batch-02-analysis.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "analyst"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-roleflow-b02-analysis"
+  review_ref: "roleflow-pilot-analyst"
+  note: "analysis_pilot_completed"

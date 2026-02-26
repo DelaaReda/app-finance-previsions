@@ -690,6 +690,22 @@ def _queue_ready_count(queue_path: Path) -> int:
     return sum(1 for item in payload.get("items", []) if str(item.get("state", "")).upper() == STATE_READY)
 
 
+def _queue_state_map(queue_path: Path) -> Dict[str, str]:
+    if not queue_path.exists():
+        return {}
+    try:
+        payload = json.loads(queue_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    states: Dict[str, str] = {}
+    for item in payload.get("items", []):
+        sid = str(item.get("id", "")).strip().upper()
+        if not sid:
+            continue
+        states[sid] = str(item.get("state", "")).strip().upper()
+    return states
+
+
 def _artifact_ref_exists(raw: str) -> bool:
     value = (raw or "").strip()
     if not value:
@@ -821,7 +837,16 @@ def validate_board(
                             warnings.append(f"INV-DONE-PROOF-WARN:{tid}:{issue}")
 
     # INV-READY-SYNC (WARN): queue/workboard drift signal.
-    ready_tasks = [str(task.get("id", "")) for task in tasks if str(task.get("state", "")) == STATE_READY]
+    queue_states = _queue_state_map(queue_path)
+    ready_tasks = []
+    for task in tasks:
+        if str(task.get("state", "")) != STATE_READY:
+            continue
+        stream_id = str(task.get("stream_id", "")).strip().upper()
+        # Ignore READY tasks belonging to streams already marked PASS in the queue.
+        if stream_id and queue_states.get(stream_id, "") == "PASS":
+            continue
+        ready_tasks.append(str(task.get("id", "")))
     queue_ready = _queue_ready_count(queue_path)
     if queue_ready == 0 and ready_tasks:
         sample = ",".join([tid for tid in ready_tasks if tid][:5]) or "none"
