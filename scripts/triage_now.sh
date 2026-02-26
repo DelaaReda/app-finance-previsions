@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="/home/venom/analyse-financiere"
+EXEC_LATEST_FILE="docs/orchestrator-ops/executors-monitoring-latest.json"
+TOOL_REQUESTS_FILE="docs/ops/AGENT_TOOL_REQUESTS.md"
 cd "$ROOT"
 
 ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
@@ -51,6 +53,34 @@ for r in planner dev tester qa; do
 done
 role_blockers="${role_blockers# }"
 
+# Executor monitoring snapshot (auto-published by role runner)
+exec_blockers=0
+exec_issues=0
+exec_requests=0
+exec_blocker_roles="none"
+exec_issue_roles="none"
+exec_request_roles="none"
+if [[ -f "$EXEC_LATEST_FILE" ]]; then
+  exec_blockers="$(jq -r '.summary.blockers_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_issues="$(jq -r '.summary.issues_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_requests="$(jq -r '.summary.tool_skill_requests_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_blocker_roles="$(jq -r '(.summary.blocker_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+  exec_issue_roles="$(jq -r '(.summary.issue_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+  exec_request_roles="$(jq -r '(.summary.tool_skill_request_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+fi
+if [[ ! "$exec_blockers" =~ ^[0-9]+$ ]]; then exec_blockers=0; fi
+if [[ ! "$exec_issues" =~ ^[0-9]+$ ]]; then exec_issues=0; fi
+if [[ ! "$exec_requests" =~ ^[0-9]+$ ]]; then exec_requests=0; fi
+[[ -n "$exec_blocker_roles" ]] || exec_blocker_roles="none"
+[[ -n "$exec_issue_roles" ]] || exec_issue_roles="none"
+[[ -n "$exec_request_roles" ]] || exec_request_roles="none"
+
+latest_request="none"
+if [[ -f "$TOOL_REQUESTS_FILE" ]]; then
+  latest_request="$(tail -n 1 "$TOOL_REQUESTS_FILE" | tr -d '\r' | sed 's/[[:space:]]*$//' )"
+fi
+[[ -n "$latest_request" ]] || latest_request="none"
+
 # Workstreams (counts)
 ws="unknown"
 if [[ -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
@@ -71,6 +101,14 @@ elif printf '%s' "$cron_summary" | rg -q 'failed=[1-9]|error=[1-9]'; then
   issue="CRON_ERROR"
   owner="adminapp-codex"
   action="inspect_failed_jobs_then_probe_roles"
+elif [[ "$exec_blockers" -gt 0 ]]; then
+  issue="ROLE_CONTRACT_BLOCKERS"
+  owner="admin-agents"
+  action="prioriser_resolution_blockers_roles_et_recheck"
+elif [[ "$exec_requests" -gt 0 ]]; then
+  issue="TOOL_SKILL_REQUESTS_PENDING"
+  owner="admin-agents"
+  action="traiter_demandes_outils_skills_puis_recheck"
 elif [[ "$queue_ready" != "none" ]]; then
   issue="QUEUE_READY_NOT_DISPATCHED"
   owner="admin-agents"
@@ -84,7 +122,9 @@ GATE latest=${latest_gate}
 CRON ${cron_summary}
 APP ${backend_line} | ${frontend_line}
 ROLES ${role_blockers}
+EXEC blockers=${exec_blockers} issues=${exec_issues} requests=${exec_requests} roles_blocked=${exec_blocker_roles} roles_issue=${exec_issue_roles} roles_request=${exec_request_roles}
+REQUEST latest=${latest_request}
 WORKSTREAMS ${ws}
 TOP issue=${issue} owner=${owner} next=${action}
-FILES priority-queue=docs/orchestrator-ops/priority-queue.json role-state=~/.openclaw/cron/role-state gates=finance-app/openclaw-gates parallel=docs/orchestrator-ops/parallel-workstreams.json
+FILES priority-queue=docs/orchestrator-ops/priority-queue.json role-state=~/.openclaw/cron/role-state gates=finance-app/openclaw-gates parallel=docs/orchestrator-ops/parallel-workstreams.json exec-latest=${EXEC_LATEST_FILE} tool-requests=${TOOL_REQUESTS_FILE}
 EOF

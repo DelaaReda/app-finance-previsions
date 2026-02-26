@@ -113,26 +113,6 @@
       "trace_file": "logs-codex-runs/role-runner/qa.live.log"
     },
     {
-      "role": "po",
-      "lane": "governance",
-      "every": "30m",
-      "allow_file_edits": 0,
-      "wip_limit": 2,
-      "description": "Backlog prioritization and scope governance lane",
-      "session_name": "codex_po_cron",
-      "trace_file": "logs-codex-runs/role-runner/po.live.log"
-    },
-    {
-      "role": "scrum_master",
-      "lane": "governance",
-      "every": "15m",
-      "allow_file_edits": 0,
-      "wip_limit": 2,
-      "description": "Flow discipline and blocker removal lane",
-      "session_name": "codex_scrum_master_cron",
-      "trace_file": "logs-codex-runs/role-runner/scrum_master.live.log"
-    },
-    {
       "role": "clawsentinel",
       "lane": "safety",
       "every": "25m",

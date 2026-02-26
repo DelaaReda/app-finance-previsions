@@ -79,6 +79,20 @@ When web/browser/skills are used in a task, add at minimum:
 - `cmd=<executed_command_or_SKIP(reason)>`
 - `tests_run=<suite:PASS|FAIL|SKIP(reason)>`
 - `review_ref=<independent_review_ref>`
+- If blocked by missing tooling/skill:
+  - `tool_request=<none_or_required_tool>`
+  - `skill_request=<none_or_required_skill>`
+
+### Effortless monitoring surfaces (no raw log digging)
+- Role-level latest status:
+  - `docs/orchestrator-ops/executors-monitoring-latest.json`
+- Role-level monitoring events:
+  - `logs-codex-runs/executor-monitoring/events.jsonl`
+- Tool/skill requests surfaced automatically:
+  - `docs/ops/AGENT_TOOL_REQUESTS.md`
+  - `docs/orchestrator-ops/agent-tool-requests.jsonl`
+- Continuous digest:
+  - `bash scripts/dg_alert_15m.sh`
 
 ---
 

@@ -19,6 +19,7 @@ without losing control of dependencies, validation ownership, or handoffs.
 - Role/cron map generated: `docs/orchestrator-ops/parallel-role-cron-map.json`
 - Parallel plumbing validator: `scripts/validate_parallel_plumbing.sh`
 - Role wake-up context feed: `scripts/parallel_workstream.py context --role <role>`
+- Publication channels feed: `scripts/parallel_workstream.py channels --role <role>`
 - Persistent per-role execution memory: `/home/venom/.openclaw/cron/role-state/<role>.last_contract`
 - Stale-running cron recovery sweep: `scripts/stale_cron_sweep.sh`
   - dedicated cron lane: `stale-sweep-autoheal-7m` (agent `adminapp-codex`)
@@ -67,3 +68,4 @@ All role outputs still follow the 8-key contract:
 - `NEXT_ACTION_UNIQUE`
 
 For specialized lanes, evidence must include role artifact markers (`BACKEND_ARTIFACT=`, `FRONTEND_ARTIFACT=`, `INTEGRATOR_ARTIFACT=`, etc.).
+Inter-role awareness is mandatory in each contract evidence: `channels_read=...`, `impact_assessment=...`, `impact_action=...`.

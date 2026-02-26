@@ -85,6 +85,7 @@ Regle:
 2. Routine minimale a chaque iteration:
    - verifier `openclaw cron list --json`,
    - verifier les derniers `cron runs` sur `planner`, `backend_engineer`, `qa`,
+   - verifier `docs/orchestrator-ops/executors-monitoring-latest.json` + `docs/ops/AGENT_TOOL_REQUESTS.md`,
    - publier une entree signee par chacun dans `agent-watchdog`.
 3. Seuils d'escalade:
    - `tmux_unparseable` > 40% sur fenetre recente,
@@ -132,6 +133,7 @@ Donner un protocole unique pour les admins qui travaillent en parallèle sur les
    - `timeoutSeconds=900`
    - output structuré 8 clés (`STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE`)
    - rapport de fin obligatoire par tick: `exec_report`, `issues`, `suggestions` (si `issues!=none`, suggestion actionnable obligatoire)
+   - demande outillage facultative mais traçable: `tool_request`, `skill_request` dans `EVIDENCE` (auto-remontée)
 6. Logs:
    - conserver les logs par itération/run
    - logs propres par défaut (sanitized stream), pas de suppression historique sans demande explicite.

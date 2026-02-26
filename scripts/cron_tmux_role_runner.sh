@@ -45,6 +45,8 @@ CODEX_SANDBOX_MODE="${TMUX_ROLE_CODEX_SANDBOX_MODE:-danger-full-access}"
 CODEX_APPROVAL_POLICY="${TMUX_ROLE_CODEX_APPROVAL_POLICY:-never}"
 ROLE_ALLOW_FILE_EDITS="${TMUX_ROLE_ALLOW_FILE_EDITS:-auto}"
 ALLOW_WORKBOARD_ONLY_DELIVERY="${TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY:-0}"
+TOOL_REQUEST_DEFAULT="${TMUX_ROLE_TOOL_REQUEST_DEFAULT:-none}"
+SKILL_REQUEST_DEFAULT="${TMUX_ROLE_SKILL_REQUEST_DEFAULT:-none}"
 EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ROOT/docs/orchestrator-ops/executors-monitoring-latest.json}"
 EXEC_MONITORING_EVENTS_FILE="${TMUX_ROLE_EXEC_MONITORING_EVENTS_FILE:-$ROOT/logs-codex-runs/executor-monitoring/events.jsonl}"
 TOOL_REQUESTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_FILE:-$ROOT/docs/ops/AGENT_TOOL_REQUESTS.md}"
@@ -116,6 +118,14 @@ if [[ "$ROLE_ALLOW_FILE_EDITS" != "0" && "$ROLE_ALLOW_FILE_EDITS" != "1" && "$RO
 fi
 if ! [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" =~ ^[01]$ ]]; then
   ALLOW_WORKBOARD_ONLY_DELIVERY=0
+fi
+TOOL_REQUEST_DEFAULT="$(printf '%s' "$TOOL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
+SKILL_REQUEST_DEFAULT="$(printf '%s' "$SKILL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
+if [[ -z "$TOOL_REQUEST_DEFAULT" ]]; then
+  TOOL_REQUEST_DEFAULT="none"
+fi
+if [[ -z "$SKILL_REQUEST_DEFAULT" ]]; then
+  SKILL_REQUEST_DEFAULT="none"
 fi
 if [[ "$RETRY_ENGINE_DEFAULT" != "tmux" && "$RETRY_ENGINE_DEFAULT" != "sdk" ]]; then
   RETRY_ENGINE_DEFAULT="tmux"
@@ -2706,12 +2716,12 @@ if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
 

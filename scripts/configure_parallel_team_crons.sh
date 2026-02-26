@@ -17,6 +17,12 @@ STALE_SWEEP_AGENT="${PARALLEL_STALE_SWEEP_AGENT:-adminapp-codex}"
 STALE_SWEEP_THINKING="${PARALLEL_STALE_SWEEP_THINKING:-low}"
 STALE_SWEEP_TIMEOUT_SECONDS="${PARALLEL_STALE_SWEEP_TIMEOUT_SECONDS:-180}"
 STALE_SWEEP_THRESHOLD_SECONDS="${PARALLEL_STALE_SWEEP_THRESHOLD_SECONDS:-330}"
+ENABLE_DG_ALERT="${PARALLEL_ENABLE_DG_ALERT:-1}"
+DG_ALERT_JOB_NAME="${PARALLEL_DG_ALERT_JOB_NAME:-dg-alert-15m}"
+DG_ALERT_EVERY="${PARALLEL_DG_ALERT_EVERY:-15m}"
+DG_ALERT_AGENT="${PARALLEL_DG_ALERT_AGENT:-adminapp-codex}"
+DG_ALERT_THINKING="${PARALLEL_DG_ALERT_THINKING:-low}"
+DG_ALERT_TIMEOUT_SECONDS="${PARALLEL_DG_ALERT_TIMEOUT_SECONDS:-180}"
 ROLE_PROMPT_TIMEOUT_SECONDS="${PARALLEL_ROLE_PROMPT_TIMEOUT_SECONDS:-180}"
 ROLE_RETRY_PROMPT_TIMEOUT_SECONDS="${PARALLEL_ROLE_RETRY_PROMPT_TIMEOUT_SECONDS:-90}"
 ROLE_RECOVERY_THRESHOLD="${PARALLEL_ROLE_RECOVERY_THRESHOLD:-2}"
@@ -59,6 +65,9 @@ Options:
   --stale-sweep-every <dur>  Schedule for stale sweep job (default: 7m)
   --stale-sweep-timeout <sec> Timeout for stale sweep job (default: 180)
   --stale-sweep-threshold <sec> Stale threshold passed to sweep tick (default: 330)
+  --disable-dg-alert     Do not create/update monitoring digest cron
+  --dg-alert-every <dur> Schedule for dg-alert job (default: 15m)
+  --dg-alert-timeout <sec> Timeout for dg-alert job (default: 180)
   -h, --help        Show help
 EOF
 }
@@ -108,6 +117,18 @@ while [[ $# -gt 0 ]]; do
       STALE_SWEEP_THRESHOLD_SECONDS="${2:-}"
       shift 2
       ;;
+    --disable-dg-alert)
+      ENABLE_DG_ALERT=0
+      shift
+      ;;
+    --dg-alert-every)
+      DG_ALERT_EVERY="${2:-}"
+      shift 2
+      ;;
+    --dg-alert-timeout)
+      DG_ALERT_TIMEOUT_SECONDS="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -133,6 +154,12 @@ if ! [[ "$STALE_SWEEP_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$STALE_SWEEP_TIMEOU
 fi
 if ! [[ "$STALE_SWEEP_THRESHOLD_SECONDS" =~ ^[0-9]+$ ]] || [[ "$STALE_SWEEP_THRESHOLD_SECONDS" -lt 60 ]]; then
   STALE_SWEEP_THRESHOLD_SECONDS=330
+fi
+if ! [[ "$ENABLE_DG_ALERT" =~ ^[01]$ ]]; then
+  ENABLE_DG_ALERT=1
+fi
+if ! [[ "$DG_ALERT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$DG_ALERT_TIMEOUT_SECONDS" -lt 60 ]]; then
+  DG_ALERT_TIMEOUT_SECONDS=180
 fi
 if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TIMEOUT_SECONDS" -lt 300 ]]; then
   TIMEOUT_SECONDS=900
@@ -267,6 +294,14 @@ Command: STALE_SWEEP_THRESHOLD_SECONDS=${STALE_SWEEP_THRESHOLD_SECONDS} bash scr
 EOF
 }
 
+message_for_dg_alert() {
+  cat <<EOF
+Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
+Never call send/message/delivery actions.
+Command: bash scripts/dg_alert_15m.sh
+EOF
+}
+
 find_job_id_by_name() {
   local name="$1"
   openclaw cron list --json | jq -r --arg n "$name" '.jobs[]? | select(.name==$n) | .id' | head -n 1
@@ -395,6 +430,65 @@ upsert_stale_sweep_job() {
   echo "APPLIED utility=stale_sweep name=${STALE_SWEEP_JOB_NAME} agent=${STALE_SWEEP_AGENT} id=${id:-unknown} every=${STALE_SWEEP_EVERY} timeout=${STALE_SWEEP_TIMEOUT_SECONDS}"
 }
 
+upsert_dg_alert_job() {
+  local id=""
+  local msg=""
+  local desc="Continuous delivery-health digest and auto-escalation hints"
+  id="$(find_job_id_by_name "$DG_ALERT_JOB_NAME" || true)"
+  msg="$(message_for_dg_alert)"
+
+  if [[ "$ENABLE_DG_ALERT" -eq 0 ]]; then
+    if [[ "$APPLY" -eq 0 ]]; then
+      echo "PLAN utility=dg_alert name=${DG_ALERT_JOB_NAME} enabled=0 existing_id=${id:-none}"
+      return 0
+    fi
+    if [[ -n "$id" ]]; then
+      openclaw cron disable "$id" >/dev/null 2>&1 || true
+      echo "APPLIED utility=dg_alert name=${DG_ALERT_JOB_NAME} id=${id} action=disabled"
+    else
+      echo "APPLIED utility=dg_alert name=${DG_ALERT_JOB_NAME} id=none action=skip_missing"
+    fi
+    return 0
+  fi
+
+  if [[ "$APPLY" -eq 0 ]]; then
+    echo "PLAN utility=dg_alert name=${DG_ALERT_JOB_NAME} agent=${DG_ALERT_AGENT} every=${DG_ALERT_EVERY} timeout=${DG_ALERT_TIMEOUT_SECONDS} existing_id=${id:-none}"
+    return 0
+  fi
+
+  if [[ -n "$id" ]]; then
+    openclaw cron edit "$id" \
+      --name "$DG_ALERT_JOB_NAME" \
+      --description "$desc" \
+      --agent "$DG_ALERT_AGENT" \
+      --every "$DG_ALERT_EVERY" \
+      --thinking "$DG_ALERT_THINKING" \
+      --session isolated \
+      --no-deliver \
+      --wake now \
+      --timeout-seconds "$DG_ALERT_TIMEOUT_SECONDS" \
+      --message "$msg" >/dev/null
+  else
+    openclaw cron add \
+      --name "$DG_ALERT_JOB_NAME" \
+      --description "$desc" \
+      --agent "$DG_ALERT_AGENT" \
+      --every "$DG_ALERT_EVERY" \
+      --thinking "$DG_ALERT_THINKING" \
+      --session isolated \
+      --no-deliver \
+      --wake now \
+      --timeout-seconds "$DG_ALERT_TIMEOUT_SECONDS" \
+      --message "$msg" >/dev/null
+    id="$(find_job_id_by_name "$DG_ALERT_JOB_NAME" || true)"
+  fi
+
+  if [[ "$ENABLE_AFTER_CREATE" -eq 1 && -n "$id" ]]; then
+    openclaw cron enable "$id" >/dev/null 2>&1 || true
+  fi
+  echo "APPLIED utility=dg_alert name=${DG_ALERT_JOB_NAME} agent=${DG_ALERT_AGENT} id=${id:-unknown} every=${DG_ALERT_EVERY} timeout=${DG_ALERT_TIMEOUT_SECONDS}"
+}
+
 if [[ "$APPLY" -eq 1 ]]; then
   mkdir -p "$BACKUP_DIR"
   cp /home/venom/.openclaw/cron/jobs.json "${BACKUP_DIR}/jobs.parallel.${TS}.json"
@@ -413,6 +507,8 @@ for line in "${ROLE_PROFILES[@]}"; do
 done
 
 upsert_stale_sweep_job
+sleep 1
+upsert_dg_alert_job
 sleep 1
 
 cron_json="$(openclaw cron list --json)"
@@ -478,12 +574,17 @@ map_tmp="$(mktemp)"
 
   echo '  ],'
   echo '  "utility_jobs": ['
+  utility_first=1
   stale_id="$(printf '%s' "$cron_json" | jq -r --arg n "$STALE_SWEEP_JOB_NAME" '.jobs[]? | select(.name==$n) | .id' | head -n 1)"
   stale_provisioned=0
   if [[ -n "$stale_id" ]]; then
     stale_provisioned=1
   fi
   if [[ "$ENABLE_STALE_SWEEP" -eq 1 ]]; then
+    if [[ "$utility_first" -eq 0 ]]; then
+      echo '    ,'
+    fi
+    utility_first=0
     jq -nc \
       --arg name "$STALE_SWEEP_JOB_NAME" \
       --arg id "$stale_id" \
@@ -494,6 +595,26 @@ map_tmp="$(mktemp)"
       --argjson threshold "$STALE_SWEEP_THRESHOLD_SECONDS" \
       --argjson provisioned "$stale_provisioned" \
       '{name:$name,id:$id,agent_id:$agent_id,every:$every,thinking:$thinking,timeout_seconds:$timeout,threshold_seconds:$threshold,provisioned:$provisioned}'
+  fi
+  dg_alert_id="$(printf '%s' "$cron_json" | jq -r --arg n "$DG_ALERT_JOB_NAME" '.jobs[]? | select(.name==$n) | .id' | head -n 1)"
+  dg_alert_provisioned=0
+  if [[ -n "$dg_alert_id" ]]; then
+    dg_alert_provisioned=1
+  fi
+  if [[ "$ENABLE_DG_ALERT" -eq 1 ]]; then
+    if [[ "$utility_first" -eq 0 ]]; then
+      echo '    ,'
+    fi
+    utility_first=0
+    jq -nc \
+      --arg name "$DG_ALERT_JOB_NAME" \
+      --arg id "$dg_alert_id" \
+      --arg agent_id "$DG_ALERT_AGENT" \
+      --arg every "$DG_ALERT_EVERY" \
+      --arg thinking "$DG_ALERT_THINKING" \
+      --argjson timeout "$DG_ALERT_TIMEOUT_SECONDS" \
+      --argjson provisioned "$dg_alert_provisioned" \
+      '{name:$name,id:$id,agent_id:$agent_id,every:$every,thinking:$thinking,timeout_seconds:$timeout,provisioned:$provisioned}'
   fi
   echo '  ]'
   echo '}'

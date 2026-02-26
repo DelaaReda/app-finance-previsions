@@ -21,6 +21,7 @@ ADMIN_MAP=(
   "admin-agents:838deae5-fa39-4052-b31d-66013faccee0"
   "adminapp-codex:fbccac5b-1028-4c9a-b021-c1998d3bad97"
   "stale-sweep-autoheal:"
+  "dg-alert:"
 )
 
 usage() {
@@ -107,6 +108,7 @@ find_admin_id() {
     admin-agents) name="admin-agents-supervisor-15m" ;;
     adminapp-codex) name="adminapp-codex-sync-10m" ;;
     stale-sweep-autoheal) name="stale-sweep-autoheal-7m" ;;
+    dg-alert) name="dg-alert-15m" ;;
     *) name="" ;;
   esac
   if [[ -n "$name" ]]; then
@@ -136,6 +138,7 @@ session_for_role() {
     admin-agents) echo "admin-agents-sync-cron" ;;
     adminapp-codex) echo "adminapp_codex_sync" ;;
     stale-sweep-autoheal) echo "" ;;
+    dg-alert) echo "" ;;
     *) return 1 ;;
   esac
 }

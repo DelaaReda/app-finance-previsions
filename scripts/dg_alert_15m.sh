@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="/home/venom/analyse-financiere"
 STATE_DIR="${DG_MONITOR_STATE_DIR:-$HOME/.openclaw/state/dg_monitor}"
+CHAT_FILE="${DG_MONITOR_CHAT_FILE:-docs/ops/ADMIN_TEAM_CHAT.md}"
+TOOL_REQUESTS_FILE="${DG_MONITOR_TOOL_REQUESTS_FILE:-docs/ops/AGENT_TOOL_REQUESTS.md}"
 mkdir -p "$STATE_DIR"
 
 cd "$ROOT"
@@ -17,8 +19,21 @@ fi
 # 2) Extract fields from the baseline
 cron_error_jobs="$(printf '%s' "$line" | sed -n 's/.* error=\([0-9][0-9]*\).*/\1/p' | head -n1)"
 unhealthy="$(printf '%s' "$line" | sed -n 's/.* unhealthy=\([^ ]*\).*/\1/p' | head -n1)"
+exec_blockers="$(printf '%s' "$line" | sed -n 's/.* exec_blockers=\([0-9][0-9]*\).*/\1/p' | head -n1)"
+exec_issues="$(printf '%s' "$line" | sed -n 's/.* exec_issues=\([0-9][0-9]*\).*/\1/p' | head -n1)"
+exec_requests="$(printf '%s' "$line" | sed -n 's/.* exec_requests=\([0-9][0-9]*\).*/\1/p' | head -n1)"
+exec_blocker_roles="$(printf '%s' "$line" | sed -n 's/.* exec_blocker_roles=\([^ ]*\).*/\1/p' | head -n1)"
+exec_issue_roles="$(printf '%s' "$line" | sed -n 's/.* exec_issue_roles=\([^ ]*\).*/\1/p' | head -n1)"
+exec_request_roles="$(printf '%s' "$line" | sed -n 's/.* exec_request_roles=\([^ ]*\).*/\1/p' | head -n1)"
 cron_mgr="$(printf '%s' "$line" | sed -n 's/.* cron_mgr="\([^"]*\)".*/\1/p' | head -n1)"
 app="$(printf '%s' "$line" | sed -n 's/.* app="\([^"]*\)".*/\1/p' | head -n1)"
+
+if [[ ! "$exec_blockers" =~ ^[0-9]+$ ]]; then exec_blockers=0; fi
+if [[ ! "$exec_issues" =~ ^[0-9]+$ ]]; then exec_issues=0; fi
+if [[ ! "$exec_requests" =~ ^[0-9]+$ ]]; then exec_requests=0; fi
+[[ -n "$exec_blocker_roles" ]] || exec_blocker_roles="none"
+[[ -n "$exec_issue_roles" ]] || exec_issue_roles="none"
+[[ -n "$exec_request_roles" ]] || exec_request_roles="none"
 
 ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
 
@@ -108,6 +123,23 @@ if [[ "$role_blockers_issue" -eq 1 ]]; then
   important=1
   reasons+=("role_blockers")
 fi
+if [[ "$exec_blockers" -gt 0 ]]; then
+  important=1
+  reasons+=("exec_blockers=${exec_blockers}")
+fi
+if [[ "$exec_issues" -gt 0 ]]; then
+  important=1
+  reasons+=("exec_issues=${exec_issues}")
+fi
+if [[ "$exec_requests" -gt 0 ]]; then
+  reasons+=("tool_skill_requests=${exec_requests}")
+fi
+
+tool_req_tail="none"
+if [[ -f "$TOOL_REQUESTS_FILE" ]]; then
+  tool_req_tail="$(tail -n 1 "$TOOL_REQUESTS_FILE" | tr -d '\r' | sed 's/[[:space:]]*$//' )"
+fi
+[[ -n "$tool_req_tail" ]] || tool_req_tail="none"
 
 # 5) Update memory every 15m (with file lock)
 mem_file="memory/$(date +%F).md"
@@ -129,14 +161,35 @@ else
     "$ts_local" "$app" "${cron_error_jobs:-?}" "${unhealthy:-?}" "$queue_ready" "$queue_blocked" "$role_blockers" "$gate_latest" "$ws_summary" >> "$mem_file"
 fi
 
+chat_fp="${cron_error_jobs:-?}|${unhealthy:-?}|${queue_ready}|${queue_blocked}|${role_blockers}|${gate_latest}|${exec_blockers}|${exec_issues}|${exec_requests}|${exec_blocker_roles}|${exec_issue_roles}|${exec_request_roles}"
+chat_fp_file="$STATE_DIR/last_chat_digest.fp"
+last_chat_fp=""
+if [[ -f "$chat_fp_file" ]]; then
+  last_chat_fp="$(cat "$chat_fp_file" 2>/dev/null || true)"
+fi
+if [[ "$chat_fp" != "$last_chat_fp" && -f "$CHAT_FILE" ]]; then
+  ts_chat="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S %Z')"
+  chat_type="INFO"
+  if [[ "$important" -eq 1 ]]; then
+    chat_type="ALERT"
+  fi
+  printf -- "- [%s] [dg-monitor] TYPE: %s MSG: exec_monitor cron_error=%s unhealthy=%s exec_blockers=%s exec_issues=%s exec_requests=%s roles_blocked=%s roles_issue=%s roles_requests=%s gate=%s ready=%s blocked=%s. NEXT: triage_now puis appliquer owner/action de NEXT_ACTION_UNIQUE.\n" \
+    "$ts_chat" "$chat_type" "${cron_error_jobs:-?}" "${unhealthy:-?}" "$exec_blockers" "$exec_issues" "$exec_requests" "$exec_blocker_roles" "$exec_issue_roles" "$exec_request_roles" "$gate_latest" "$queue_ready" "$queue_blocked" >> "$CHAT_FILE"
+  printf '%s\n' "$chat_fp" > "$chat_fp_file"
+fi
+
 # 6) Output for delivery (compact)
 if [[ "$important" -eq 1 ]]; then
   reason_txt="$(IFS=,; echo "${reasons[*]}")"
   echo "DG15 ALERT ($ts_local): $reason_txt | gate=$gate_latest | ready=$queue_ready | blocked=$queue_blocked | roles=[$role_blockers] | unhealthy=$unhealthy | app=$app"
+  echo "EXEC: blockers=$exec_blockers issues=$exec_issues requests=$exec_requests roles_blocked=$exec_blocker_roles roles_issue=$exec_issue_roles roles_request=$exec_request_roles"
   echo "TRIAGE: $(bash scripts/triage_now.sh | sed -n 's/^TOP //p' | head -n 1)"
   echo "WORK: $ws_summary"
   echo "CHAT: $chat_tail"
   echo "WATCH: $watch_tail"
+  if [[ "$exec_requests" -gt 0 ]]; then
+    echo "REQUESTS: $tool_req_tail"
+  fi
 else
-  echo "DG15 OK ($ts_local): gate=$gate_latest | ready=$queue_ready | blocked=$queue_blocked | roles=[$role_blockers] | app=$app"
+  echo "DG15 OK ($ts_local): gate=$gate_latest | ready=$queue_ready | blocked=$queue_blocked | roles=[$role_blockers] | app=$app | exec_blockers=$exec_blockers | exec_issues=$exec_issues | exec_requests=$exec_requests"
 fi

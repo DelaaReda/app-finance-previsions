@@ -70,6 +70,18 @@ else
   check_fail "bash_syntax:export_orchestration_kpi"
 fi
 
+if bash -n scripts/dg_monitor_tick.sh; then
+  check_ok "bash_syntax:dg_monitor_tick"
+else
+  check_fail "bash_syntax:dg_monitor_tick"
+fi
+
+if bash -n scripts/dg_alert_15m.sh; then
+  check_ok "bash_syntax:dg_alert_15m"
+else
+  check_fail "bash_syntax:dg_alert_15m"
+fi
+
 if python3 -m py_compile scripts/parallel_workstream.py; then
   check_ok "python_compile:parallel_workstream"
 else
@@ -84,6 +96,14 @@ if scripts/parallel_workstream.py --board "$BOARD_FILE" validate >/dev/null; the
   check_ok "board_validate"
 else
   check_fail "board_validate"
+fi
+
+if [[ -f "docs/orchestrator-ops/executors-monitoring-latest.json" ]] \
+  && jq -e '.summary.roles_total != null and .summary.issues_open != null and .summary.blockers_open != null and .summary.tool_skill_requests_open != null' \
+      docs/orchestrator-ops/executors-monitoring-latest.json >/dev/null 2>&1; then
+  check_ok "executors_monitoring_latest_json"
+else
+  check_fail "executors_monitoring_latest_json"
 fi
 
 if [[ -f "$MAP_FILE" ]]; then

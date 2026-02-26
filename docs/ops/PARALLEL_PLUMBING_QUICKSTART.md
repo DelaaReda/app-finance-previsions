@@ -60,15 +60,21 @@ Near-real-time troubleshooting:
 bash scripts/tmux_codex_live_monitor.sh --mode follow --engine capture --include-admin
 bash scripts/tmux_live_watchdog.sh start
 bash scripts/tmux_live_watchdog.sh status
+bash scripts/dg_alert_15m.sh
 ```
 - Consolidated live logs: `logs-codex-runs/tmux-live/`
 - Per-role execution trace: `logs-codex-runs/role-runner/<role>.live.log`
+- Effortless status (no raw logs):
+  - `docs/orchestrator-ops/executors-monitoring-latest.json`
+  - `docs/ops/AGENT_TOOL_REQUESTS.md`
 
 ## 7) Daily cadence
 - Dispatch + flow check (planner absorbs ex-scrum_master):
   - `scripts/parallel_workstream.py status --role planner --compact`
 - Role wake-up context check:
   - `scripts/parallel_workstream.py context --role <role> --limit 3`
+- Publication channels + impact check (obligatoire avant action):
+  - `scripts/parallel_workstream.py channels --role <role> --limit 5`
 - Role claim/complete examples:
   - `scripts/parallel_workstream.py claim --role backend_engineer`
   - `scripts/parallel_workstream.py complete --role backend_engineer --task <TASK_ID> --artifact <FILE_OR_TEST> --handoff-to integrator`

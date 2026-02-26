@@ -12,10 +12,12 @@ Cette politique s’applique aux 3 admins:
 ## Sources de vérité à surveiller (ordre)
 
 1. `openclaw cron list --json` + `scripts/cron_run_manager.sh status` (timeouts, error, stale running)
-2. `~/.openclaw/cron/role-state/<role>.last_contract` (BLOCKER_ID/NEXT_ACTION)
-3. `~/.openclaw/cron/runs/<jobId>.jsonl` (derniers summaries)
-4. `docs/orchestrator-ops/priority-queue.json` (READY/BLOCKED)
-5. `finance-app/openclaw-gates/*.md` (VERDICT)
+2. `docs/orchestrator-ops/executors-monitoring-latest.json` (digest role-level sans logs bruts)
+3. `docs/ops/AGENT_TOOL_REQUESTS.md` + `docs/orchestrator-ops/agent-tool-requests.jsonl` (demandes outillage)
+4. `~/.openclaw/cron/role-state/<role>.last_contract` (BLOCKER_ID/NEXT_ACTION)
+5. `~/.openclaw/cron/runs/<jobId>.jsonl` (derniers summaries)
+6. `docs/orchestrator-ops/priority-queue.json` (READY/BLOCKED)
+7. `finance-app/openclaw-gates/*.md` (VERDICT)
 
 ## Définition d’un “problème d’exécution”
 
@@ -25,6 +27,7 @@ Remonter systématiquement si l’un des signaux apparaît:
 - `TMUX_REPLY_UNPARSEABLE` / `TMUX_RESPONSE_UNSTRUCTURED`
 - `EXEC_REPORT_MISSING` / `ISSUES_SUMMARY_MISSING` / `SUGGESTIONS_SUMMARY_MISSING`
 - `PREANNOUNCE_EVIDENCE_MISSING` (si édition attendue)
+- `TOOL_SKILL_REQUEST_PENDING` (demande outillage non traitée)
 - toute dérive de modèle/thinking non conforme aux standards (roles codex / main gpt-5.2)
 
 ## Format de remontée (obligatoire)

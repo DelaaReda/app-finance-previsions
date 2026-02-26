@@ -48,6 +48,8 @@ Delivery (`task_update=claim|complete|handoff`) MUST aussi contenir:
 - `tools_used=<comma_list>` (ex: `web.search,web.fetch,playwright-mcp`)
 - `web_ref=<url_or_doc_ref>` (si recherche/navigation web effectuee)
 - `browser_ref=<trace_or_session_ref>` (si verification browser/cdp)
+- `tool_request=<none_ou_outil_requis>` (remontee automatique des besoins outillage)
+- `skill_request=<none_ou_skill_requise>` (remontee automatique des besoins skill)
 - `tooling_check=<PASS|BLOCKED>` (etat preflight `scripts/dev_qa_tooling_check.sh`)
 - `tooling_ref=<path_or_run_ref>` (log ou trace du preflight outillage)
 - `planned_files=<csv_paths>` (fichiers cibles annonces avant edition)
@@ -81,3 +83,6 @@ Les exigences ci-dessous sont `SHOULD` en phase 1 et deviennent `MUST` (au moins
 - Les scripts gate utilisent souvent une normalisation en uppercase; `planner_artifact=` et `PLANNER_ARTIFACT=` sont equivalentes.
 - Si une commande est volontairement non executee (ex: environnement indisponible), ne pas simuler: utiliser `cmd=SKIP(<raison>)`.
 - Ne pas "debugger" avec 30 commandes dans `cmd=`: la preuve machine (cmd/tests_run) reste utile, mais `run_note` doit expliquer en langage humain ce qui a été tenté/changé/verifié pour faciliter le troubleshooting.
+- Les champs `tool_request` / `skill_request` (si non-`none`) sont remontes automatiquement dans:
+  - `docs/ops/AGENT_TOOL_REQUESTS.md`
+  - `docs/orchestrator-ops/agent-tool-requests.jsonl`

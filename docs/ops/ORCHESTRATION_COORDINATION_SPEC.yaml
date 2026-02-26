@@ -1,11 +1,17 @@
 spec:
   id: "openclaw-parallel-orchestration-coordination"
-  version: "1.1.3"
+  version: "1.1.4"
   status: "active"
   language: "fr"
   generated_at_utc: "2026-02-26T00:00:00Z"
-  updated_at_utc: "2026-02-26T23:58:00Z"
+  updated_at_utc: "2026-02-26T22:25:00Z"
   change_log:
+    - date_utc: "2026-02-26"
+      version: "1.1.4"
+      changes:
+        - "Ajoute le canal optionnel tool_request/skill_request dans EVIDENCE pour escalade outillage."
+        - "Formalise la publication auto du monitoring executeurs (latest JSON + events JSONL)."
+        - "Formalise la remontée continue dg-alert vers ADMIN_TEAM_CHAT en mode dedupe."
     - date_utc: "2026-02-26"
       version: "1.1.3"
       changes:
@@ -59,15 +65,15 @@ baseline_actuelle:
   runtime_profile:
     mode: "parallel"
     model_policy: "codex-only"
-    cron_jobs_total: 17
+    cron_jobs_total: 18
     role_jobs_total: 14
     admin_jobs_total: 2
-    utility_jobs_total: 1
+    utility_jobs_total: 2
     cron_name_policy:
       unexpected_jobs: "BLOCKED"
       allowed_extra_jobs: []
     health_target:
-      cron_health_summary: "total=17 ok=17 blocked_signals=0 slow_over_300s=0"
+      cron_health_summary: "total=18 ok=18 blocked_signals=0 slow_over_300s=0"
     role_jobs:
       - role: "planner"
         cron_name: "planner-tmux-loop"
@@ -164,6 +170,9 @@ baseline_actuelle:
       - cron_name: "stale-sweep-autoheal-7m"
         owner: "adminapp-codex"
         function: "stale running state auto-heal"
+      - cron_name: "dg-alert-15m"
+        owner: "adminapp-codex"
+        function: "continuous digest (cron/roles/gates) + auto-remontee chat dedupe"
 
   runtime_sources_of_truth:
     priority_queue: "docs/orchestrator-ops/priority-queue.json"
@@ -176,6 +185,10 @@ baseline_actuelle:
     role_state_dir: "/home/venom/.openclaw/cron/role-state"
     admin_chat: "docs/ops/ADMIN_TEAM_CHAT.md"
     admin_iterations: "docs/ops/ADMIN_TEAM_ITERATIONS.md"
+    executors_monitoring_latest: "docs/orchestrator-ops/executors-monitoring-latest.json"
+    executors_monitoring_events: "logs-codex-runs/executor-monitoring/events.jsonl"
+    tool_skill_requests: "docs/ops/AGENT_TOOL_REQUESTS.md"
+    tool_skill_requests_events: "docs/orchestrator-ops/agent-tool-requests.jsonl"
 
   standard_env_policy:
     role_runner:
@@ -235,7 +248,7 @@ execution_model:
       MUST: "acquerir lock fichier par role; si lock occupe, sortir contrat RUN_LOCK_BUSY"
       implementation_ref: "scripts/cron_tmux_role_runner.sh:343"
     - step: "context_hydration"
-      MUST: "charger queue/workboard/memoire role/self_last_contract/peer_contracts/admin chat"
+      MUST: "charger queue/workboard/memoire role/self_last_contract/peer_contracts/admin chat + canaux de publication"
       implementation_ref: "scripts/cron_tmux_role_runner.sh:1376"
     - step: "execution"
       MUST: "executer prompt role et normaliser en contrat 8 cles"
@@ -263,6 +276,7 @@ execution_model:
       - "self_last_contract"
       - "peer_contracts"
       - "workboard_context"
+      - "publication_channels"
       - "team_chat_tail"
       - "team_iteration_tail"
       - "trace_tail"
@@ -300,6 +314,9 @@ contracts:
           - "exec_report=<resume_execution_concret>"
           - "issues=<none_ou_liste_priorisee>"
           - "suggestions=<none_ou_liste_actionnable>"
+          - "channels_read=<liste_canaux_lus>"
+          - "impact_assessment=<none|low|medium|high|critical>"
+          - "impact_action=<none_ou_action_concrete>"
           - "arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>"
           - "review_scope=<stream_task_ou_composant>"
           - "conformance=<PASS|WARN|BLOCKED>"
@@ -314,6 +331,9 @@ contracts:
             - "exec_report"
             - "issues"
             - "suggestions"
+            - "channels_read"
+            - "impact_assessment"
+            - "impact_action"
             - "arch_rule"
             - "review_scope"
             - "conformance"
@@ -323,6 +343,11 @@ contracts:
             - "workboard_version"
           coupling_rules:
             - "si issues!=none => suggestions MUST etre actionnable (pas suggestions=none)"
+            - "si impact_assessment in [high,critical] => impact_action MUST etre concret (pas none)"
+          optional_tooling_signal_keys:
+            - "tool_request=<none_ou_outil_requis>"
+            - "skill_request=<none_ou_skill_requise>"
+            - "tools_used=<comma_list>"
           phase_1_must_when_delivery_action:
             - "si task_update in [claim, complete, handoff]: intent_id"
             - "si task_update in [claim, complete, handoff]: intent_chat_ref"
@@ -565,6 +590,7 @@ conflict_prevention:
     detector_script: "scripts/stale_cron_sweep.sh"
     tick_wrapper: "scripts/stale_cron_tick.sh"
     utility_cron: "stale-sweep-autoheal-7m"
+    monitoring_digest_cron: "dg-alert-15m"
     stale_definition:
       - "runningAtMs age > threshold"
       - "aucun process cron_tmux_role_runner.sh <role> vivant"
@@ -832,11 +858,11 @@ observability_and_slos:
 
   health_metrics:
     cron_health_summary:
-      formula: "total, ok, blocked_signals, slow_over_180s"
+      formula: "total, ok, blocked_signals, slow_over_300s"
       target:
         ok_rate_min: 1.0
         blocked_signals_max: 0
-        slow_over_180s_max: 0
+        slow_over_300s_max: 0
     role_productivity_metrics:
       - name: "no_delta_rate_when_queue_ready"
         target_max: 0.1
@@ -940,7 +966,7 @@ validation_and_compliance:
       expected: "stale=0"
     - name: "cron_health"
       command: "openclaw cron list + openclaw cron runs"
-      expected: "total=15 ok=15 blocked_signals=0 slow_over_180s=0"
+      expected: "total=18 ok=18 blocked_signals=0 slow_over_300s=0"
     - name: "watchdog_alive"
       command: "bash scripts/tmux_live_watchdog.sh status"
       expected: "status=yes"
@@ -950,12 +976,20 @@ validation_and_compliance:
     - name: "kpi_export_dry_run"
       command: "bash scripts/export_orchestration_kpi.sh --dry-run"
       expected: "json valide + KPI_EXPORT status=PASS"
+    - name: "executor_monitoring_latest_json"
+      command: "jq '.summary' docs/orchestrator-ops/executors-monitoring-latest.json"
+      expected: "json valide + summary.roles_total/issues_open/blockers_open/tool_skill_requests_open"
+    - name: "dg_alert_tick"
+      command: "bash scripts/dg_alert_15m.sh"
+      expected: "sortie compacte DG15 + digest exec"
 
   compliance_rules:
     - "Aucun role editable ne doit livrer en mode write si queue_has_ready=0 (sauf override explicite)."
     - "Chaque run role doit finir avec un contrat 8 cles persisté."
+    - "Chaque run role doit publier un resume monitoring structuré (executors-monitoring-latest.json + events.jsonl)."
     - "Chaque action admin remontee doit avoir action_id + owner + scope explicites."
     - "Tout stale running detecte doit etre traite par stale sweep."
+    - "Si EVIDENCE contient tool_request/skill_request non-none, la demande doit etre remontée automatiquement dans AGENT_TOOL_REQUESTS.md."
 
 organizational_model:
   objective: "aligner les roles comme une equipe IT reelle travaillant en parallele"

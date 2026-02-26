@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="/home/venom/analyse-financiere"
 STATE_DIR="${DG_MONITOR_STATE_DIR:-$HOME/.openclaw/state/dg_monitor}"
+EXEC_LATEST_FILE="${DG_EXEC_LATEST_FILE:-docs/orchestrator-ops/executors-monitoring-latest.json}"
 mkdir -p "$STATE_DIR"
 
 cd "$ROOT"
@@ -36,7 +37,28 @@ else
   app_compact="app_status=unknown"
 fi
 
-line="DG_TICK ts_local=\"$now_local\" ts_utc=$now_iso cron_total=$total_jobs ok=$ok_jobs running=$running_jobs error=$error_jobs unhealthy=$unhealthy cron_mgr=\"$cron_mgr_summary\" app=\"$app_compact\""
+exec_blockers=0
+exec_issues=0
+exec_requests=0
+exec_blocker_roles="none"
+exec_issue_roles="none"
+exec_request_roles="none"
+if [[ -f "$EXEC_LATEST_FILE" ]]; then
+  exec_blockers="$(jq -r '.summary.blockers_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_issues="$(jq -r '.summary.issues_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_requests="$(jq -r '.summary.tool_skill_requests_open // 0' "$EXEC_LATEST_FILE" 2>/dev/null || echo 0)"
+  exec_blocker_roles="$(jq -r '(.summary.blocker_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+  exec_issue_roles="$(jq -r '(.summary.issue_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+  exec_request_roles="$(jq -r '(.summary.tool_skill_request_roles // []) | map(select(type=="string" and length>0)) | if length==0 then "none" else join(",") end' "$EXEC_LATEST_FILE" 2>/dev/null || echo none)"
+fi
+if [[ ! "$exec_blockers" =~ ^[0-9]+$ ]]; then exec_blockers=0; fi
+if [[ ! "$exec_issues" =~ ^[0-9]+$ ]]; then exec_issues=0; fi
+if [[ ! "$exec_requests" =~ ^[0-9]+$ ]]; then exec_requests=0; fi
+[[ -n "$exec_blocker_roles" ]] || exec_blocker_roles="none"
+[[ -n "$exec_issue_roles" ]] || exec_issue_roles="none"
+[[ -n "$exec_request_roles" ]] || exec_request_roles="none"
+
+line="DG_TICK ts_local=\"$now_local\" ts_utc=$now_iso cron_total=$total_jobs ok=$ok_jobs running=$running_jobs error=$error_jobs unhealthy=$unhealthy exec_blockers=$exec_blockers exec_issues=$exec_issues exec_requests=$exec_requests exec_blocker_roles=$exec_blocker_roles exec_issue_roles=$exec_issue_roles exec_request_roles=$exec_request_roles cron_mgr=\"$cron_mgr_summary\" app=\"$app_compact\""
 
 printf '%s\n' "$line"
 

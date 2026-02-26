@@ -28,6 +28,7 @@ Rendre chaque agent utile, non redondant, et mesurable dans la chaine:
 3. Si `action_owner` est externe (`admin-agents` ou `clawsentinel`), `adminapp-codex` route le handoff dans `ADMIN_TEAM_CHAT.md` (dedupe par `action_id`) et ne force pas de faux `BLOCKED`.
 4. Sans item `READY`, le mode normal est `monitoring` (pas d’escalade artificielle).
 5. Les admins ne livrent pas le code applicatif a la place de `dev/tester/qa`; ils garantissent la plomberie, le routage et la qualite du flux.
+6. Chaque role delivery doit lire les canaux de publication avant action (`python3 scripts/parallel_workstream.py channels --role <role> --limit 5`) et reporter `channels_read`, `impact_assessment`, `impact_action` dans son contrat.
 
 ## Protocole pre-annonce obligatoire (anti-chevauchement)
 1. Avant toute action delivery (`claim|edit|complete|handoff`), l’agent execute:

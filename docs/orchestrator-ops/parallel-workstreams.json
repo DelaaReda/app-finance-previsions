@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T21:19:18Z",
+  "updated_at": "2026-02-26T21:46:29Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -83,9 +83,9 @@
       "title": "Contrats multi-ticker + news",
       "priority": "P1",
       "source_state": "READY",
-      "state": "IN_PROGRESS",
+      "state": "READY",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T20:16:47Z"
+      "updated_at": "2026-02-26T21:46:29Z"
     }
   ],
   "tasks": [
@@ -705,17 +705,19 @@
       "code": "PLAN",
       "title": "Contrats multi-ticker + news [PLAN]",
       "role": "planner",
-      "state": "IN_PROGRESS",
+      "state": "READY",
       "priority": "P1",
       "depends_on": [],
-      "assignee": "planner",
+      "assignee": "",
       "blocked_reason": "",
       "artifacts": [],
-      "notes": [],
+      "notes": [
+        "STALE_SWEEP:at=2026-02-26T21:46:29Z;task=BATCH-02-PLAN;age_s=15661;action=reclaim;to_state=READY"
+      ],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T17:25:28Z",
-      "started_at": "2026-02-26T17:25:28Z",
+      "updated_at": "2026-02-26T21:46:29Z",
+      "started_at": "",
       "completed_at": ""
     },
     {
@@ -1282,6 +1284,18 @@
         "handoff_id": "none",
         "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
         "idempotency_key": "IK-c23e60ebda58"
+      }
+    },
+    {
+      "at": "2026-02-26T21:46:29Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-02-PLAN",
+        "role": "planner",
+        "age_seconds": 15661,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY",
+        "mode": "reclaim"
       }
     }
   ]

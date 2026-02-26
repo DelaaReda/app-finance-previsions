@@ -1019,7 +1019,7 @@ if [[ "$admin_agents_blocked" -eq 1 ]]; then
         next="admin-agents blocked, appliquer next_action: ${admin_agents_next_action}"
       fi
     fi
-    if [[ "$admin_action_repeat" -ge 2 && "$admin_action_result" != "done" ]]; then
+    if [[ "$admin_action_repeat" -ge 2 && "$admin_action_result" != "done" && ( "$admin_agents_signal_status" == "BLOCKED" || "$admin_agents_signal_status" == "ERROR" ) ]]; then
       verdict="BLOCKED"
       status="BLOCKED"
       delta="admin_agents_action_stalled"

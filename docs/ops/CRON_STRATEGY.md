@@ -1,6 +1,6 @@
 # CRON STRATEGY v1
 
-## Active baseline (parallel, 15 jobs)
+## Active baseline (parallel, 15+ jobs)
 - Profile: tmux-by-role (specialized lanes) + tri-admin + stale auto-heal.
 - Source of truth (avoid doc drift):
   - `openclaw cron list --all`
@@ -9,7 +9,9 @@
   - 12 role loops: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `clawsentinel`
     - note: scope/value + flow/WIP reviews are absorbed by `planner` (no always-on `po`/`scrum_master` loops)
   - 2 admin loops: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`
-  - 1 utility: `stale-sweep-autoheal-7m`
+  - utility jobs:
+    - `stale-sweep-autoheal-7m` (auto-heal stale running)
+    - `dg-alert-15m` (continuous digest + auto-remontee monitoring)
 - Runtime hardening baseline (tmux role runner):
   - `PROMPT_TIMEOUT_SECONDS=180`
   - `RETRY_PROMPT_TIMEOUT_SECONDS=90`
@@ -27,6 +29,10 @@
   - tmux role session naming is codex-first (`codex_<role>_cron`)
   - evidence schema: `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
   - blocked detection priority: `NO_DELTA` streak gate + delivery-contract invariants + stall traces (not single hard timeout)
+  - effortless monitoring surfaces:
+    - `docs/orchestrator-ops/executors-monitoring-latest.json`
+    - `docs/ops/AGENT_TOOL_REQUESTS.md`
+    - `bash scripts/dg_alert_15m.sh`
 
 ## Legacy baseline (core, 10 jobs)
 - Historical profile: 8 delivery roles + 2 admin continuity ticks.

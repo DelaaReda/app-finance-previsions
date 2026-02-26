@@ -1098,6 +1098,124 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
     )
 
 
+def print_publication_channels_context(board: dict, role: str, limit: int) -> None:
+    if role not in ROLE_CATALOG:
+        raise SystemExit(f"UNKNOWN_ROLE: {role}")
+    recompute_states(board)
+    idx = task_index(board)
+
+    actionable_states = {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
+    peer_active_states = {STATE_IN_PROGRESS, STATE_REVIEW}
+
+    role_tasks = list(iter_tasks_for_role(board, role))
+    own_actionable = [t for t in role_tasks if str(t.get("state", "")) in actionable_states]
+    own_ids = {str(t.get("id", "")) for t in own_actionable}
+    own_streams = {str(t.get("stream_id", "")) for t in own_actionable}
+
+    peer_active = [
+        t
+        for t in board.get("tasks", [])
+        if str(t.get("role", "")) != role and str(t.get("state", "")) in peer_active_states
+    ]
+
+    shared_stream_impacts: List[str] = []
+    for task in peer_active:
+        stream_id = str(task.get("stream_id", ""))
+        if stream_id and stream_id in own_streams:
+            shared_stream_impacts.append(
+                f"{task.get('id')}:{task.get('role')}:{task.get('state')}"
+            )
+
+    upstream_impacts: List[str] = []
+    for task in own_actionable:
+        for dep in task.get("depends_on", []):
+            dep_task = idx.get(str(dep))
+            if dep_task is None:
+                continue
+            dep_role = str(dep_task.get("role", ""))
+            dep_state = str(dep_task.get("state", ""))
+            if dep_role == role or dep_state == STATE_DONE:
+                continue
+            upstream_impacts.append(f"{dep_task.get('id')}:{dep_role}:{dep_state}")
+
+    downstream_impacts: List[str] = []
+    for task in board.get("tasks", []):
+        task_role = str(task.get("role", ""))
+        task_state = str(task.get("state", ""))
+        if task_role == role or task_state not in actionable_states:
+            continue
+        deps = {str(dep) for dep in task.get("depends_on", []) if dep}
+        if own_ids.intersection(deps):
+            downstream_impacts.append(f"{task.get('id')}:{task_role}:{task_state}")
+
+    open_handoffs = [h for h in board.get("handoffs", []) if str(h.get("status", "")) == "OPEN"]
+    open_to = [h for h in open_handoffs if str(h.get("to_role", "")) == role]
+    open_from = [h for h in open_handoffs if str(h.get("from_role", "")) == role]
+
+    recent_peer_events: List[str] = []
+    for event in reversed(board.get("events", [])):
+        kind = str(event.get("kind", "")).strip()
+        if not kind:
+            continue
+        details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
+        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip()
+        if actor == role:
+            continue
+        ref = str(details.get("task_id") or details.get("handoff_id") or details.get("stream_id") or "none").strip()
+        recent_peer_events.append(f"{kind}:{ref}")
+        if len(recent_peer_events) >= max(1, limit):
+            break
+
+    impact_level = "none"
+    impact_action = "none"
+    if open_to or any(item.endswith(f":{STATE_BLOCKED}") for item in upstream_impacts):
+        impact_level = "high"
+        impact_action = "handoff-ack_or_unblock_upstream"
+    elif upstream_impacts or shared_stream_impacts or downstream_impacts or open_from:
+        impact_level = "medium"
+        impact_action = "sync_cross_role"
+    elif recent_peer_events:
+        impact_level = "low"
+        impact_action = "monitor_updates"
+
+    def csv(values: List[str]) -> str:
+        cleaned = [str(v).strip() for v in values if str(v).strip()]
+        return ",".join(cleaned[: max(1, limit)]) if cleaned else "none"
+
+    own_status_counts = {
+        STATE_READY: 0,
+        STATE_IN_PROGRESS: 0,
+        STATE_REVIEW: 0,
+        STATE_DONE: 0,
+        STATE_BLOCKED: 0,
+    }
+    for task in role_tasks:
+        state = str(task.get("state", ""))
+        if state in own_status_counts:
+            own_status_counts[state] += 1
+
+    print(
+        "CHANNELS_CONTEXT "
+        f"role={role} "
+        "channels=workboard_tasks,workboard_handoffs,workboard_events,role_contracts,admin_chat,admin_iterations "
+        f"self_active={len(own_actionable)} "
+        f"peer_active={len(peer_active)} "
+        f"open_handoffs_to={len(open_to)} "
+        f"open_handoffs_from={len(open_from)} "
+        f"shared_stream_impacts={csv(shared_stream_impacts)} "
+        f"upstream_impacts={csv(upstream_impacts)} "
+        f"downstream_impacts={csv(downstream_impacts)} "
+        f"peer_events={csv(recent_peer_events)} "
+        f"impact_level={impact_level} "
+        f"impact_action={impact_action} "
+        f"status_ready={own_status_counts[STATE_READY]} "
+        f"status_in_progress={own_status_counts[STATE_IN_PROGRESS]} "
+        f"status_review={own_status_counts[STATE_REVIEW]} "
+        f"status_done={own_status_counts[STATE_DONE]} "
+        f"status_blocked={own_status_counts[STATE_BLOCKED]}"
+    )
+
+
 def replay_events(board: dict, limit: int, kind_filter: str, role_filter: str) -> None:
     events = board.get("events", [])
     if not isinstance(events, list):
@@ -1180,6 +1298,10 @@ def build_parser() -> argparse.ArgumentParser:
     context_p.add_argument("--role", required=True)
     context_p.add_argument("--limit", type=int, default=3, help="Max ids/events in context")
 
+    channels_p = sub.add_parser("channels", help="Publication channels context + cross-role impact")
+    channels_p.add_argument("--role", required=True)
+    channels_p.add_argument("--limit", type=int, default=3, help="Max ids/events in channel summary")
+
     replay_p = sub.add_parser("replay", help="Deterministic replay of board events for audit/postmortem")
     replay_p.add_argument("--limit", type=int, default=50, help="Max events to print (tail)")
     replay_p.add_argument("--kind", default="", help="Filter by event kind")
@@ -1237,6 +1359,11 @@ def main() -> int:
         if args.cmd == "context":
             role = str(args.role).strip()
             print_role_context(board, role=role, limit=max(1, int(args.limit)))
+            return 0
+
+        if args.cmd == "channels":
+            role = str(args.role).strip()
+            print_publication_channels_context(board, role=role, limit=max(1, int(args.limit)))
             return 0
 
         if args.cmd == "replay":

@@ -18,6 +18,8 @@ Objectif: réduire la charge mentale en standardisant les problèmes d’exécut
 - `EVIDENCE_MISSING_SUGGESTIONS`
 - `ROLE_ARTIFACT_MISSING`
 - `PREANNOUNCE_EVIDENCE_MISSING`
+- `TOOL_REQUEST_PENDING`
+- `SKILL_REQUEST_PENDING`
 
 ### Delivery / Governance
 - `DELIVERY_TARGET_MISSING`
@@ -28,6 +30,7 @@ Objectif: réduire la charge mentale en standardisant les problèmes d’exécut
 - `NO_DELTA_STREAK`
 - `NO_PROGRESS_STREAK`
 - `QUEUE_READY_NOT_DISPATCHED`
+- `EXEC_MONITORING_DRIFT`
 
 ## Reporting format (obligatoire)
 
