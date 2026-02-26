@@ -141,11 +141,11 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
 fi
 if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
   # codex exec resume often needs longer wall time than tmux prompt scraping.
-  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 70 ]]; then
-    PROMPT_TIMEOUT_SECONDS=70
+  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 90 ]]; then
+    PROMPT_TIMEOUT_SECONDS=90
   fi
-  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 20 ]]; then
-    RETRY_PROMPT_TIMEOUT_SECONDS=20
+  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 45 ]]; then
+    RETRY_PROMPT_TIMEOUT_SECONDS=45
   fi
 fi
 
@@ -781,9 +781,22 @@ if not has_artifact_marker:
         f"role={role}; source={source}; required_marker={required_marker}",
     )
 
+common_architecture_evidence_keys = ("arch_rule", "review_scope", "conformance", "violations")
 role_required_evidence_keys = {
-    "planner": ("vision_rule", "conformance"),
-    "architect": ("arch_rule", "conformance", "review_scope", "violations"),
+    "planner": ("vision_rule", *common_architecture_evidence_keys),
+    "analyst": common_architecture_evidence_keys,
+    "dev": common_architecture_evidence_keys,
+    "backend_engineer": common_architecture_evidence_keys,
+    "frontend_engineer": common_architecture_evidence_keys,
+    "integrator": common_architecture_evidence_keys,
+    "data_analyst": common_architecture_evidence_keys,
+    "infra_engineer": common_architecture_evidence_keys,
+    "tester": common_architecture_evidence_keys,
+    "qa": common_architecture_evidence_keys,
+    "architect": common_architecture_evidence_keys,
+    "po": common_architecture_evidence_keys,
+    "scrum_master": common_architecture_evidence_keys,
+    "clawsentinel": common_architecture_evidence_keys,
 }
 required_evidence_keys = role_required_evidence_keys.get(role, tuple())
 if required_evidence_keys:
@@ -794,26 +807,21 @@ if required_evidence_keys:
             f"role={role}; source={source}; missing={','.join(missing_required)}; required={','.join(required_evidence_keys)}",
         )
 
-if role == "planner":
+if "conformance" in required_evidence_keys:
     conformance = evidence_kv.get("conformance", "").strip().upper()
     if conformance not in {"PASS", "WARN", "BLOCKED"}:
         emit_blocked(
-            "PLANNER_CONFORMANCE_INVALID",
+            "ARCHITECTURE_CONFORMANCE_INVALID",
             f"role={role}; source={source}; conformance={conformance or 'missing'}; allowed=PASS,WARN,BLOCKED",
         )
+
+if role == "planner":
     if (queue_has_ready or workboard_role_has_in_progress) and not evidence_kv.get("task_id", "").strip():
         emit_blocked(
             "PLANNER_TASK_ID_MISSING",
             f"role={role}; source={source}; required=task_id when queue_ready=1 or workboard_in_progress=1",
         )
-
 if role == "architect":
-    conformance = evidence_kv.get("conformance", "").strip().upper()
-    if conformance not in {"PASS", "WARN", "BLOCKED"}:
-        emit_blocked(
-            "ARCHITECT_CONFORMANCE_INVALID",
-            f"role={role}; source={source}; conformance={conformance or 'missing'}; allowed=PASS,WARN,BLOCKED",
-        )
     if (queue_has_ready or workboard_role_has_in_progress) and not evidence_kv.get("task_id", "").strip():
         emit_blocked(
             "ARCHITECT_TASK_ID_MISSING",
@@ -1670,7 +1678,7 @@ required_artifact_marker_for_role() {
 }
 
 PROMPT_TEXT="$(build_prompt "$ROLE")"
-SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal> et lock_check=ok. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>). Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal> et lock_check=ok. EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>). Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. Un blocker read-only/permission doit inclure cmd_err_excerpt exact du tick courant. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
 else
@@ -1684,6 +1692,7 @@ PROTOCOLE_ORCHESTRATION_COMMUN:
 - Avant édition cross-section: publier un INTENT dans docs/ops/ADMIN_TEAM_CHAT.md.
 - Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
 - Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
+- Gate architecture commun: chaque rôle doit vérifier forecast-first (API prévisions -> UI visible), stabilité de schéma, réutilisation modules existants et observabilité minimale; refléter ces checks dans arch_rule/review_scope/conformance/violations.
 - Si aucun slot rôle READY/IN_PROGRESS: task_update=none_no_ready (pas de faux blocker).
 PROMPT
 )"
@@ -2247,76 +2256,94 @@ STARTUP_NOTE_SAFE="$(sanitize_evidence_fragment "${STARTUP_NOTE:-startup_skipped
 FALLBACK_SOURCE=""
 FALLBACK_NEXT=""
 FALLBACK_ACTION=""
+FALLBACK_ARCH_RULE="observability"
+FALLBACK_REVIEW_SCOPE="${ROLE}_checkpoint"
+FALLBACK_CONFORMANCE="WARN"
+FALLBACK_VIOLATIONS="signal_unparseable"
 case "$ROLE" in
   planner)
     FALLBACK_SOURCE="docs/orchestrator-ops/priority-queue.json"
     FALLBACK_NEXT="vérifier READY/BLOCKED puis prioriser une action unique"
     FALLBACK_ACTION="CONTINUE_PLANNER_FROM_PRIORITY_QUEUE"
+    FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   analyst)
     FALLBACK_SOURCE="docs/planning/stories.md"
     FALLBACK_NEXT="maintenir un brief d'analyse actionnable pour les equipes parallelisees"
     FALLBACK_ACTION="CONTINUE_ANALYST_FROM_STORIES"
+    FALLBACK_ARCH_RULE="reusability"
     ;;
   dev)
     FALLBACK_SOURCE="docs/planning/tasks.md"
     FALLBACK_NEXT="préparer l'action dev exécutable du prochain item READY"
     FALLBACK_ACTION="CONTINUE_DEV_FROM_TASKS"
+    FALLBACK_ARCH_RULE="api_contract"
     ;;
   backend_engineer)
     FALLBACK_SOURCE="docs/planning/tasks.md"
     FALLBACK_NEXT="maintenir la prochaine action backend executable avec preuve attendue"
     FALLBACK_ACTION="CONTINUE_BACKEND_FROM_TASKS"
+    FALLBACK_ARCH_RULE="api_contract"
     ;;
   frontend_engineer)
     FALLBACK_SOURCE="docs/planning/tasks.md"
     FALLBACK_NEXT="maintenir la prochaine action frontend executable avec preuve attendue"
     FALLBACK_ACTION="CONTINUE_FRONTEND_FROM_TASKS"
+    FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   integrator)
     FALLBACK_SOURCE="docs/scrum/sprint-current.md"
     FALLBACK_NEXT="maintenir le plan d'integration inter-equipes et de handoff"
     FALLBACK_ACTION="CONTINUE_INTEGRATOR_FROM_SPRINT"
+    FALLBACK_ARCH_RULE="schema_stability"
     ;;
   data_analyst)
     FALLBACK_SOURCE="data"
     FALLBACK_NEXT="maintenir la prochaine action data exploitable pour produit/qa"
     FALLBACK_ACTION="CONTINUE_DATA_ANALYST_FROM_DATASET"
+    FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   infra_engineer)
     FALLBACK_SOURCE="docs/ops"
     FALLBACK_NEXT="maintenir la prochaine action infra/cicd pour accelerer la livraison"
     FALLBACK_ACTION="CONTINUE_INFRA_FROM_OPS"
+    FALLBACK_ARCH_RULE="observability"
     ;;
   tester)
     FALLBACK_SOURCE="copilot-app/backend/tests"
     FALLBACK_NEXT="maintenir plan de tests minimal pour prochain item READY"
     FALLBACK_ACTION="CONTINUE_TESTER_FROM_TEST_TREE"
+    FALLBACK_ARCH_RULE="schema_stability"
     ;;
   qa)
     FALLBACK_SOURCE="finance-app/openclaw-gates"
     FALLBACK_NEXT="contrôler cohérence VERDICT/BLOCKER_ID au prochain tick"
     FALLBACK_ACTION="CONTINUE_QA_FROM_GATES"
+    FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   architect)
     FALLBACK_SOURCE="docs/ops/API_ENDPOINT_BEST_PRACTICES.md"
     FALLBACK_NEXT="produire un gate architecture aligné best-practices sur le prochain scope READY"
     FALLBACK_ACTION="CONTINUE_ARCHITECT_ARCH_GUARDRAIL_REVIEW"
+    FALLBACK_ARCH_RULE="reusability"
     ;;
   po)
     FALLBACK_SOURCE="docs/planning/mvp-plan.md"
     FALLBACK_NEXT="reconfirmer les priorités backlog orientées valeur"
     FALLBACK_ACTION="CONTINUE_PO_FROM_MVP_PLAN"
+    FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   scrum_master)
     FALLBACK_SOURCE="docs/scrum/sprint-current.md"
     FALLBACK_NEXT="maintenir cadence et réduction des blockers/WIP"
     FALLBACK_ACTION="CONTINUE_SCRUM_MASTER_FROM_SPRINT_STATE"
+    FALLBACK_ARCH_RULE="observability"
     ;;
   clawsentinel)
     FALLBACK_SOURCE="docs/orchestrator-ops/agent-watchdog.md"
     FALLBACK_NEXT="vérifier dérive cron et publier action anti-drift unique"
     FALLBACK_ACTION="CONTINUE_CLAWSENTINEL_FROM_WATCHDOG"
+    FALLBACK_ARCH_RULE="security"
     ;;
 esac
 
@@ -2327,12 +2354,12 @@ if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+  EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
 
