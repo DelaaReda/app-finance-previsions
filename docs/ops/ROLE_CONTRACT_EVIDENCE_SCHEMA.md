@@ -20,6 +20,9 @@ Toujours presentes:
 - `issues=<none_ou_liste_priorisee>`
 - `suggestions=<none_ou_liste_actionnable>`
 - Couplage obligatoire: si `issues!=none`, alors `suggestions` ne peut pas etre `none`.
+- `channels_read=<liste_canaux_publication_lus>` (si queue/workboard a du travail: ne doit pas etre `none`)
+- `impact_assessment=<none|low|medium|high|critical>`
+- `impact_action=<none_ou_action_concrete>` (si `impact_assessment=medium|high|critical`, `impact_action` ne peut pas etre `none`)
 - `arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>`
 - `review_scope=<stream_task_ou_composant>`
 - `conformance=<PASS|WARN|BLOCKED>`

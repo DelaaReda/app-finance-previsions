@@ -15,6 +15,9 @@ scripts/parallel_workstream.py init --force
 scripts/parallel_workstream.py sync-priority --include-pass
 scripts/parallel_workstream.py validate
 ```
+Notes:
+- Stream template ends with `GOV_REVIEW` in planner lane (planner absorbs governance task flow).
+- `po` and `scrum_master` remain valid roles for channels/status visibility and cross-role impact reporting.
 
 ## 3) Provision specialized role crons (dry-run first)
 ```bash
@@ -44,6 +47,9 @@ scripts/validate_parallel_plumbing.sh
 openclaw cron list --all
 python3 scripts/parallel_workstream.py context --role planner --limit 3
 bash scripts/stale_cron_sweep.sh --dry-run --threshold 330
+bash scripts/cron_cleanup_duplicates.sh --dry-run --regex '(-tmux-loop$|adminapp-codex-sync-10m$|admin-agents-supervisor-15m$|stale-sweep-autoheal-7m$|dg-alert-15m$)'
+python3 scripts/workboard_stale_task_sweep.py --threshold-seconds 14400
+bash scripts/dev_quality_gate.sh --all --no-pre-commit
 # Find the job id for "stale-sweep-autoheal-7m" from `openclaw cron list --all`, then:
 openclaw cron runs --id <stale_job_id> --limit 1
 ```
@@ -54,6 +60,13 @@ Role runner behavior baseline:
 
 Evidence schema (contract quality):
 - `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+- Contract guard implementation: `scripts/role_contract_guard.py`
+- Role memory append module: `scripts/role_memory_append.py`
+- Execution monitoring publish module: `scripts/role_execution_monitoring.py`
+- Guard tests:
+```bash
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+```
 
 Near-real-time troubleshooting:
 ```bash
@@ -69,8 +82,10 @@ bash scripts/dg_alert_15m.sh
   - `docs/ops/AGENT_TOOL_REQUESTS.md`
 
 ## 7) Daily cadence
-- Dispatch + flow check (planner absorbs ex-scrum_master):
+- Dispatch + flow check:
   - `scripts/parallel_workstream.py status --role planner --compact`
+  - `scripts/parallel_workstream.py status --role po --compact`
+  - `scripts/parallel_workstream.py status --role scrum_master --compact`
 - Role wake-up context check:
   - `scripts/parallel_workstream.py context --role <role> --limit 3`
 - Publication channels + impact check (obligatoire avant action):

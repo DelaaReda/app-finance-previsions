@@ -23,9 +23,14 @@ DEFAULT_BOARD = Path("docs/orchestrator-ops/parallel-workstreams.json")
 DEFAULT_PRIORITY_QUEUE = Path("docs/orchestrator-ops/priority-queue.json")
 DEFAULT_PROOF_ROOT = Path("docs/orchestrator-ops/proofs")
 
+INTEGRATION_REUSE_TAG = "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS"
+INTEGRATION_REUSE_TAG_ALIAS = "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS"
+DEPRECATED_ROLES = {"po", "scrum_master"}
+DEPRECATED_TASK_CODES = {"PO_REVIEW", "SCRUM_REVIEW"}
+
 
 @contextmanager
-def board_lock(board_path: Path):
+def board_lock(board_path: Path, write: bool = True):
     """Global board lock to keep multi-role writes deterministic."""
     board_text = str(board_path or "").strip()
     # Defensive: avoid creating weird "..lock" when board_path is empty (Path("") -> ".").
@@ -33,9 +38,33 @@ def board_lock(board_path: Path):
         board_path = DEFAULT_BOARD
         board_text = str(board_path)
     lock_path = Path(f"{board_text}.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as lock_fh:
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+    if write:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="utf-8") as lock_fh:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        return
+
+    # Read-only mode: avoid opening lock file in write mode (sandbox/read-only envs).
+    lock_handle = None
+    try:
+        lock_handle = lock_path.open("r", encoding="utf-8")
+    except FileNotFoundError:
+        if board_path.exists():
+            lock_handle = board_path.open("r", encoding="utf-8")
+    except PermissionError:
+        if board_path.exists():
+            lock_handle = board_path.open("r", encoding="utf-8")
+
+    if lock_handle is None:
+        yield
+        return
+
+    with lock_handle as lock_fh:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_SH)
         try:
             yield
         finally:
@@ -56,6 +85,8 @@ ROLE_CATALOG: Dict[str, Dict[str, object]] = {
     "planner": {"wip_limit": 2, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
     "analyst": {"wip_limit": 3, "can_edit": False, "focus": "requirements and assumptions"},
     "architect": {"wip_limit": 2, "can_edit": False, "focus": "constraints and design"},
+    "po": {"wip_limit": 2, "can_edit": False, "focus": "value prioritization, acceptance criteria, and release decisions"},
+    "scrum_master": {"wip_limit": 2, "can_edit": False, "focus": "flow health, WIP governance, cadence, and blocker removal"},
     "backend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "api and backend impl"},
     "frontend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "ui and frontend impl"},
     "data_analyst": {"wip_limit": 2, "can_edit": True, "focus": "data quality and metrics"},
@@ -89,6 +120,8 @@ STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
     TemplateStep("INTEGRATION", "integrator", ("BACKEND", "FRONTEND", "INFRA", "DATA", "DEV")),
     TemplateStep("QA_EXEC", "qa", ("INTEGRATION", "QA_PREP", "TEST_PLAN")),
     TemplateStep("SENTINEL_CHECK", "clawsentinel", ("QA_EXEC",)),
+    # Governance review happens in planner lane (absorbs legacy PO/Scrum steps).
+    TemplateStep("GOV_REVIEW", "planner", ("QA_EXEC", "SENTINEL_CHECK")),
 )
 
 DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
@@ -96,22 +129,26 @@ DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
         "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
     ],
     "BACKEND": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md.",
+        f"{INTEGRATION_REUSE_TAG}: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
     ],
     "FRONTEND": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components.",
+        f"{INTEGRATION_REUSE_TAG}: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components.",
     ],
     "INTEGRATION": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh.",
+        f"{INTEGRATION_REUSE_TAG}: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh.",
     ],
     "DEV": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests.",
+        f"{INTEGRATION_REUSE_TAG}: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests.",
     ],
     "TEST_PLAN": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses.",
+        f"{INTEGRATION_REUSE_TAG}: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses.",
     ],
     "QA_EXEC": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found.",
+        f"{INTEGRATION_REUSE_TAG}: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found.",
+    ],
+    "GOV_REVIEW": [
+        "GOVERNANCE-NOTE: final scope/value + flow/WIP review (planner absorbs legacy PO/Scrum steps).",
+        f"{INTEGRATION_REUSE_TAG_ALIAS}: alias for search and legacy task notes (same meaning as {INTEGRATION_REUSE_TAG}).",
     ],
 }
 
@@ -255,8 +292,14 @@ def load_board(path: Path) -> dict:
     roles = data.get("roles", {})
     if not isinstance(roles, dict):
         roles = {}
+    # Prune deprecated always-on roles from the board state to avoid drift and stuck tasks.
+    for deprecated in DEPRECATED_ROLES:
+        roles.pop(deprecated, None)
+    # Sync canonical role configuration while preserving any extra keys.
     for role_name, role_cfg in ROLE_CATALOG.items():
-        roles.setdefault(role_name, role_cfg)
+        merged = dict(roles.get(role_name, {}))
+        merged.update(role_cfg)
+        roles[role_name] = merged
     data["roles"] = roles
     data.setdefault("streams", [])
     data.setdefault("tasks", [])
@@ -384,6 +427,24 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
         )
         tasks[tid] = board["tasks"][-1]
         created += 1
+
+    # Remove legacy governance tasks if they were created by older templates.
+    pruned: List[str] = []
+    kept: List[dict] = []
+    for task in board.get("tasks", []):
+        if str(task.get("stream_id", "")) != stream_id:
+            kept.append(task)
+            continue
+        code = str(task.get("code", "")).strip().upper()
+        tid = str(task.get("id", "")).strip()
+        state = str(task.get("state", "")).strip().upper()
+        if state != STATE_DONE and (code in DEPRECATED_TASK_CODES or tid.endswith("-PO_REVIEW") or tid.endswith("-SCRUM_REVIEW")):
+            pruned.append(tid or code or "unknown")
+            continue
+        kept.append(task)
+    if pruned:
+        board["tasks"] = kept
+        append_event(board, "prune_legacy_tasks", {"stream_id": stream_id, "pruned_task_ids": pruned})
     return created
 
 
@@ -1338,7 +1399,10 @@ def main() -> int:
             print(f"INIT_OK board={board_path}")
             return 0
 
-    with board_lock(board_path):
+    write_commands = {"sync-priority", "claim", "complete", "block", "unblock", "handoff-ack", "handoff-close"}
+    lock_write = args.cmd in write_commands or (args.cmd == "enforce-sla" and bool(args.apply))
+
+    with board_lock(board_path, write=lock_write):
         board = load_board(board_path)
 
         if args.cmd == "sync-priority":
