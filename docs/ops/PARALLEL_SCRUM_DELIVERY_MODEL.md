@@ -38,6 +38,25 @@ without losing control of dependencies, validation ownership, or handoffs.
    - `adminapp-codex` auto-executes runtime actions or routes external handoffs
    - `clawsentinel` handles quality-signal and anti-drift
 
+## Stream template (per batch)
+- `PLAN` (planner)
+- `ANALYSIS` (analyst, depends on `PLAN`)
+- `ARCH` (architect, depends on `ANALYSIS`)
+- `QA_PREP` (qa, depends on `PLAN`)
+- `TEST_PLAN` (tester, depends on `PLAN`)
+- `DATA` (data_analyst, depends on `ANALYSIS`)
+- `INFRA` (infra_engineer, depends on `ARCH`)
+- `BACKEND` (backend_engineer, depends on `ARCH`)
+- `FRONTEND` (frontend_engineer, depends on `ARCH`)
+- `DEV` (dev, depends on `ARCH`)
+- `INTEGRATION` (integrator, depends on `BACKEND`, `FRONTEND`, `INFRA`, `DATA`, `DEV`)
+- `QA_EXEC` (qa, depends on `INTEGRATION`, `QA_PREP`, `TEST_PLAN`)
+- `SENTINEL_CHECK` (clawsentinel, depends on `QA_EXEC`)
+- `GOV_REVIEW` (planner, depends on `QA_EXEC` + `SENTINEL_CHECK`)
+
+Legacy note:
+- `PO_REVIEW` and `SCRUM_REVIEW` are deprecated (planner absorbs governance). If older boards still contain them, `scripts/parallel_workstream.py sync-priority` prunes non-DONE legacy tasks automatically.
+
 ## Why QA can work in parallel
 - Each stream creates `QA_PREP` and `TEST_PLAN` tasks from the start.
 - QA/tester do not wait for full dev completion to begin validation design.

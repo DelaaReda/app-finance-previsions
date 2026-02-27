@@ -13,6 +13,21 @@ TICKERS=(
 )
 
 echo "Fetching prices from stooq.pl..."
+
+promote_tmp_file() {
+  local tmp_path="$1"
+  local out_path="$2"
+  if mv "$tmp_path" "$out_path" 2>/dev/null; then
+    return 0
+  fi
+  # virtiofs can reject rename-over-existing with EPERM; fallback to in-place copy.
+  if cat "$tmp_path" > "$out_path"; then
+    rm -f "$tmp_path"
+    return 0
+  fi
+  return 1
+}
+
 for T in "${TICKERS[@]}"; do
   sym="$(echo "$T" | tr '[:upper:]' '[:lower:]')"
   tmp="$OUT_DIR/${T}.csv.tmp"
@@ -37,12 +52,11 @@ for T in "${TICKERS[@]}"; do
   fi
 
   if [ -s "$tmp" ]; then
-    if [ -s "$tmp" ]; then
-      mv "$tmp" "$out"
+    if promote_tmp_file "$tmp" "$out"; then
       echo "  ✓ $T"
     else
       rm -f "$tmp"
-      echo "  ! $T (empty)" >&2
+      echo "  ! $T (promote failed)" >&2
     fi
   else
     rm -f "$tmp"

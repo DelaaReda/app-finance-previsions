@@ -11,6 +11,7 @@ CHAT_FILE="${ADMINAPP_CHAT_FILE:-docs/ops/ADMIN_TEAM_CHAT.md}"
 STATE_DIR="${ADMINAPP_STATE_DIR:-/home/venom/.openclaw/cron/admin-state}"
 LAST_ALERT_FILE="${STATE_DIR}/last-alert.txt"
 ADMIN_AGENTS_CRON_ID="${ADMIN_AGENTS_CRON_ID:-838deae5-fa39-4052-b31d-66013faccee0}"
+ADMIN_AGENTS_CRON_NAME="${ADMIN_AGENTS_CRON_NAME:-admin-agents-supervisor-15m}"
 ADMIN_AGENTS_SUMMARY_OVERRIDE="${ADMINAPP_ADMIN_AGENTS_SUMMARY_OVERRIDE:-}"
 AUTO_EXEC_ENABLED="${ADMINAPP_AUTO_EXEC_ENABLED:-1}"
 ACTION_COOLDOWN_SECONDS="${ADMINAPP_ACTION_COOLDOWN_SECONDS:-900}"
@@ -28,7 +29,12 @@ STALE_SWEEP_SCRIPT="${ADMINAPP_STALE_SWEEP_SCRIPT:-scripts/stale_cron_sweep.sh}"
 CIRCUIT_BREAKER_SCRIPT="${ADMINAPP_CIRCUIT_BREAKER_SCRIPT:-scripts/orchestration_circuit_breaker.sh}"
 CIRCUIT_BREAKER_ERROR_THRESHOLD="${ADMINAPP_CIRCUIT_BREAKER_ERROR_THRESHOLD:-3}"
 
+ROLE_MEMORY_DIR="${ADMINAPP_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
+ADMIN_MEMORY_FILE="${ROLE_MEMORY_DIR}/adminapp-codex.md"
+ADMIN_MEMORY_LOCK_FILE="${STATE_DIR}/adminapp-codex.memory.lock"
+
 mkdir -p "$STATE_DIR"
+mkdir -p "$ROLE_MEMORY_DIR"
 
 if ! [[ "$CIRCUIT_BREAKER_ERROR_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$CIRCUIT_BREAKER_ERROR_THRESHOLD" -lt 1 ]]; then
   CIRCUIT_BREAKER_ERROR_THRESHOLD=3
@@ -375,8 +381,11 @@ run_role_probe_once() {
   local pre_mtime=0
   local post_mtime=0
   local out=""
+  local probe_state_dir=""
+  probe_state_dir="/tmp/openclaw-role-probe-state/${role}"
+  mkdir -p "$probe_state_dir"
   pre_mtime="$(file_mtime "$trace")"
-  out="$(TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=25 RETRY_PROMPT_TIMEOUT_SECONDS=10 TMUX_ROLE_STALL_ABORT_SECONDS=10 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=0 TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 bash scripts/cron_tmux_role_runner.sh "$role" 2>&1 || true)"
+  out="$(TMUX_ROLE_AGENT_BIN=codex TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk PROMPT_TIMEOUT_SECONDS=25 RETRY_PROMPT_TIMEOUT_SECONDS=10 TMUX_ROLE_STALL_ABORT_SECONDS=10 SKIP_RETRY_ON_TIMEOUT=1 TMUX_ROLE_CODEX_EXEC_FALLBACK=0 TMUX_ROLE_CODEX_EXEC_RESUME=1 TMUX_ROLE_ALLOW_FILE_EDITS=0 TMUX_ROLE_STATE_DIR="$probe_state_dir" TMUX_ROLE_PUBLISH_MONITORING=0 bash scripts/cron_tmux_role_runner.sh "$role" 2>&1 || true)"
   post_mtime="$(file_mtime "$trace")"
   if [[ "$post_mtime" -gt "$pre_mtime" ]]; then
     return 0
@@ -506,9 +515,31 @@ latest_cron_run_summary() {
   local limit="${2:-1}"
   local runs_raw=""
   local runs_json=""
+  if [[ -z "$job_id" ]]; then
+    printf ''
+    return 0
+  fi
   runs_raw="$("$OPENCLAW_BIN" cron runs --id "$job_id" --limit "$limit" 2>/dev/null || echo '{}')"
   runs_json="$(normalize_cron_runs_json "$runs_raw")"
   printf '%s' "$runs_json" | jq -r '.entries[0].summary // .entries[0].error // ""' 2>/dev/null || true
+}
+
+resolve_cron_id_by_name() {
+  local cron_name="$1"
+  local cron_json="${2:-}"
+  local resolved_id=""
+  if [[ -z "$cron_name" ]]; then
+    printf ''
+    return 0
+  fi
+  if [[ -z "$cron_json" ]]; then
+    cron_json="$("$OPENCLAW_BIN" cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  fi
+  resolved_id="$(printf '%s' "$cron_json" | jq -r --arg n "$cron_name" '.jobs[]? | select(.name==$n) | .id' | head -n 1)"
+  if [[ "$resolved_id" == "null" ]]; then
+    resolved_id=""
+  fi
+  printf '%s' "$resolved_id"
 }
 
 execute_admin_action() {
@@ -808,7 +839,19 @@ fi
 if [[ -n "$ADMIN_AGENTS_SUMMARY_OVERRIDE" ]]; then
   admin_agents_last_summary="$ADMIN_AGENTS_SUMMARY_OVERRIDE"
 else
-  admin_agents_last_summary="$(latest_cron_run_summary "$ADMIN_AGENTS_CRON_ID" 1)"
+  admin_agents_cron_id_runtime="$(resolve_cron_id_by_name "$ADMIN_AGENTS_CRON_NAME" "$cron_json")"
+  admin_agents_cron_id_source="name_lookup"
+  if [[ -z "$admin_agents_cron_id_runtime" ]]; then
+    admin_agents_cron_id_runtime="$ADMIN_AGENTS_CRON_ID"
+    admin_agents_cron_id_source="fallback_env"
+  fi
+  admin_agents_last_summary="$(latest_cron_run_summary "$admin_agents_cron_id_runtime" 1)"
+fi
+if [[ -z "${admin_agents_cron_id_runtime:-}" ]]; then
+  admin_agents_cron_id_runtime="none"
+fi
+if [[ -z "${admin_agents_cron_id_source:-}" ]]; then
+  admin_agents_cron_id_source="override"
 fi
 admin_agents_blocked=0
 admin_agents_signal_status="$(printf '%s\n' "$admin_agents_last_summary" | sed -n 's/.*status=\([A-Z]*\).*/\1/p' | head -n 1)"
@@ -1047,9 +1090,46 @@ if [[ "$verdict" != "PASS" && "$alert_fingerprint" != "$last_alert" && -f "$CHAT
 fi
 printf '%s\n' "$alert_fingerprint" > "$LAST_ALERT_FILE"
 
+# Persist a compact admin memory line (no stdout noise).
+append_admin_memory() {
+  local ts="$1"; shift
+  local line="$*"
+  if [[ -z "$line" ]]; then
+    return 0
+  fi
+  if command -v flock >/dev/null 2>&1; then
+    {
+      exec 9>"$ADMIN_MEMORY_LOCK_FILE"
+      flock -x 9
+      if [[ ! -f "$ADMIN_MEMORY_FILE" ]]; then
+        printf '# adminapp-codex\n\n' > "$ADMIN_MEMORY_FILE"
+      fi
+      printf -- "- [%s] %s\n" "$ts" "$line" >> "$ADMIN_MEMORY_FILE"
+      python3 - "$ADMIN_MEMORY_FILE" <<'PY' 2>/dev/null || true
+import sys
+from pathlib import Path
+p=Path(sys.argv[1])
+lines=p.read_text(encoding='utf-8',errors='ignore').splitlines(True)
+if len(lines) <= 900:
+    raise SystemExit(0)
+head=lines[:40]
+tail=lines[-760:]
+p.write_text(''.join(head+['\n']+tail),encoding='utf-8')
+PY
+    }
+  else
+    if [[ ! -f "$ADMIN_MEMORY_FILE" ]]; then
+      printf '# adminapp-codex\n\n' > "$ADMIN_MEMORY_FILE"
+    fi
+    printf -- "- [%s] %s\n" "$ts" "$line" >> "$ADMIN_MEMORY_FILE"
+  fi
+}
+
+append_admin_memory "$ts_local" "status=${status} verdict=${verdict} delta=${delta} blocker=${blocker_id} jobs_total=${total_jobs} error=${error_jobs} timeouts=${timeout_jobs} stale_running=${stale_running_jobs} unhealthy=${unhealthy_compact} queue_ready=${queue_ready_items} next=${next}"
+
 echo "STATUS: ${status}"
 echo "DELTA: ${delta}"
-echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; circuit_breaker_triggered=${circuit_breaker_triggered}; circuit_breaker_result=${circuit_breaker_result}; circuit_breaker_details=${circuit_breaker_details}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_exec_report=${admin_agents_exec_report:-none}; admin_issues=${admin_agents_issues_report:-none}; admin_suggestions=${admin_agents_suggestions_report:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_id_missing=${admin_action_id_missing}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
+echo "EVIDENCE: jobs_total=${total_jobs}; ok=${ok_jobs}; running=${running_jobs}; pending=${pending_jobs}; error=${error_jobs}; timed_out=${timeout_jobs}; stale_running=${stale_running_jobs}; stale_running_skipped_live=${stale_running_skipped_live}; unhealthy=${unhealthy_compact}; queue_ready=${queue_ready_items}; circuit_breaker_triggered=${circuit_breaker_triggered}; circuit_breaker_result=${circuit_breaker_result}; circuit_breaker_details=${circuit_breaker_details}; admin_agents_cron_name=${ADMIN_AGENTS_CRON_NAME}; admin_agents_cron_id=${admin_agents_cron_id_runtime}; admin_agents_cron_id_source=${admin_agents_cron_id_source}; admin_signal_status=${admin_agents_signal_status:-none}; admin_issue=${admin_agents_issue:-none}; admin_exec_report=${admin_agents_exec_report:-none}; admin_issues=${admin_agents_issues_report:-none}; admin_suggestions=${admin_agents_suggestions_report:-none}; admin_issue_benign_no_ready=${admin_issue_benign_when_no_ready}; admin_action_id=${admin_agents_action_id:-none}; admin_action_id_missing=${admin_action_id_missing}; admin_action_owner=${admin_agents_action_owner:-none}; admin_action_scope=${admin_agents_action_scope:-none}; admin_action_owner_external=${admin_action_owner_external}; admin_action_result=${admin_action_result}; admin_action_details=${admin_action_details}; admin_action_repeat=${admin_action_repeat}"
 echo "RISKS: ${risks}"
 echo "NEXT: ${next}"
 echo "VERDICT: ${verdict}"

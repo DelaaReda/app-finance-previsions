@@ -18,6 +18,7 @@ build/
 cache/
 artifacts/
 artifacts_phase1/
+.tmp/
 logs/
 logs-qwen-runs/
 logs-codex-runs/

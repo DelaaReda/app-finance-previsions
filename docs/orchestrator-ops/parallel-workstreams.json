@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-26T21:46:29Z",
+  "updated_at": "2026-02-26T23:54:52Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -10,7 +10,7 @@
     "planner": {
       "wip_limit": 2,
       "can_edit": false,
-      "focus": "roadmap and dispatch"
+      "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"
     },
     "analyst": {
       "wip_limit": 3,
@@ -83,9 +83,9 @@
       "title": "Contrats multi-ticker + news",
       "priority": "P1",
       "source_state": "READY",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T21:46:29Z"
+      "updated_at": "2026-02-26T23:54:52Z"
     }
   ],
   "tasks": [
@@ -484,7 +484,7 @@
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
@@ -528,19 +528,19 @@
       "code": "INFRA",
       "title": "Contrats multi-ticker + news [INFRA]",
       "role": "infra_engineer",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
       ],
-      "assignee": "",
+      "assignee": "infra_engineer",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T18:13:35Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T23:54:52Z",
+      "started_at": "2026-02-26T23:54:52Z",
       "completed_at": ""
     },
     {
@@ -549,21 +549,21 @@
       "code": "BACKEND",
       "title": "Contrats multi-ticker + news [BACKEND]",
       "role": "backend_engineer",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
       ],
-      "assignee": "",
+      "assignee": "backend_engineer",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T20:16:47Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T23:54:52Z",
+      "started_at": "2026-02-26T23:54:52Z",
       "completed_at": ""
     },
     {
@@ -572,21 +572,21 @@
       "code": "FRONTEND",
       "title": "Contrats multi-ticker + news [FRONTEND]",
       "role": "frontend_engineer",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P1",
       "depends_on": [
         "BATCH-02-ARCH"
       ],
-      "assignee": "",
+      "assignee": "frontend_engineer",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
-      "updated_at": "2026-02-26T20:16:47Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T23:54:52Z",
+      "started_at": "2026-02-26T23:54:52Z",
       "completed_at": ""
     },
     {
@@ -608,7 +608,7 @@
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
@@ -633,7 +633,7 @@
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T05:53:04Z",
@@ -705,19 +705,20 @@
       "code": "PLAN",
       "title": "Contrats multi-ticker + news [PLAN]",
       "role": "planner",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P1",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "planner",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "STALE_SWEEP:at=2026-02-26T21:46:29Z;task=BATCH-02-PLAN;age_s=15661;action=reclaim;to_state=READY"
+        "STALE_SWEEP:at=2026-02-26T21:46:29Z;task=BATCH-02-PLAN;age_s=15661;action=reclaim;to_state=READY",
+        "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T06:06:13Z",
-      "updated_at": "2026-02-26T21:46:29Z",
-      "started_at": "",
+      "updated_at": "2026-02-26T23:54:52Z",
+      "started_at": "2026-02-26T23:54:52Z",
       "completed_at": ""
     },
     {
@@ -760,7 +761,7 @@
       "notes": [
         "dev_lane_hardening_applied_for_delivery_gating_and_prompt_contract",
         "cmd=bash -n scripts/cron_tmux_role_runner.sh && python3 -m py_compile scripts/parallel_workstream.py;tests_run=parallel_workstream_validate:PASS;dev_qa_tooling_check:PASS;review_ref=admin-hardening-20260226-dev-lane;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
-        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests."
       ],
       "handoff_to": "",
       "created_at": "2026-02-26T19:29:57Z",
@@ -771,6 +772,30 @@
       "proof_manifests": [
         "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml"
       ]
+    },
+    {
+      "id": "BATCH-02-GOV_REVIEW",
+      "stream_id": "BATCH-02",
+      "code": "GOV_REVIEW",
+      "title": "Contrats multi-ticker + news [GOV_REVIEW]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-QA_EXEC",
+        "BATCH-02-SENTINEL_CHECK"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "GOVERNANCE-NOTE: final scope/value + flow/WIP review (planner absorbs legacy PO/Scrum steps)."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T21:53:36Z",
+      "updated_at": "2026-02-26T21:53:36Z",
+      "started_at": "",
+      "completed_at": ""
     }
   ],
   "handoffs": [
@@ -1296,6 +1321,47 @@
         "from_state": "IN_PROGRESS",
         "to_state": "READY",
         "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-02-26T21:53:36Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 2
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-02-INFRA"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-02-BACKEND"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-02-FRONTEND"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-PLAN"
       }
     }
   ]

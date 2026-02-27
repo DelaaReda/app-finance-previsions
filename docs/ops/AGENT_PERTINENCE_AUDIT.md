@@ -121,6 +121,6 @@ Si l'objectif est "moins d'agents, meme qualite":
 
 ## Etapes de Decommission (safe)
 1. Desactiver les crons: `po`, `scrum_master` (et optionnellement `clawsentinel`, `analyst`, `architect`, `data_analyst`, `dev`).
-2. Mettre a jour le template workboard pour ne plus creer de taches `PO_REVIEW` et `SCRUM_REVIEW` sur les nouveaux batches.
+2. (DONE 2026-02-26) Mettre a jour le template workboard pour ne plus creer de taches `PO_REVIEW` et `SCRUM_REVIEW` sur les nouveaux batches (remplace par `GOV_REVIEW` dans la lane `planner`).
 3. Mettre a jour `docs/ops/AGENT_ROLE_INTEGRATION_MODEL.md` pour supprimer ces roles et deplacer leurs responsabilites vers `planner` + `admin-agents`.
 4. Conserver les definitions d'agents en catalogue en mode on-demand (sauf si suppression totale desiree).

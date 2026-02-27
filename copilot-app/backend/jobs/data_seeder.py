@@ -38,7 +38,6 @@ def seed_real_data_snapshots():
     }
     
     try:
-    try:
         # 1. Seed forecasts with real data
         print("Seeding forecasts with real data...")
         try:

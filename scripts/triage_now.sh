@@ -88,6 +88,17 @@ if [[ -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
   [[ -n "$ws" ]] || ws="unknown"
 fi
 
+# Dispatch-needed check: queue READY but board has unassigned READY tasks
+queue_ready_primary="$(printf '%s' "$queue_ready" | cut -d',' -f1)"
+dispatch_needed=0
+dispatch_ready_tasks="none"
+if [[ "$queue_ready_primary" != "none" && -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
+  dispatch_ready_tasks="$(jq -r --arg pref "${queue_ready_primary}-" '[.tasks[]? | select(.state=="READY") | select((.id//"")|startswith($pref)) | select((.assignee//"")=="") | .id] | if length==0 then "none" else join(",") end' docs/orchestrator-ops/parallel-workstreams.json 2>/dev/null || echo none)"
+  if [[ "$dispatch_ready_tasks" != "none" ]]; then
+    dispatch_needed=1
+  fi
+fi
+
 # Top issue heuristic
 issue="none"
 owner="none"
@@ -109,7 +120,7 @@ elif [[ "$exec_requests" -gt 0 ]]; then
   issue="TOOL_SKILL_REQUESTS_PENDING"
   owner="admin-agents"
   action="traiter_demandes_outils_skills_puis_recheck"
-elif [[ "$queue_ready" != "none" ]]; then
+elif [[ "$dispatch_needed" -eq 1 ]]; then
   issue="QUEUE_READY_NOT_DISPATCHED"
   owner="admin-agents"
   action="DISPATCH_READY_ITEM"
@@ -125,6 +136,7 @@ ROLES ${role_blockers}
 EXEC blockers=${exec_blockers} issues=${exec_issues} requests=${exec_requests} roles_blocked=${exec_blocker_roles} roles_issue=${exec_issue_roles} roles_request=${exec_request_roles}
 REQUEST latest=${latest_request}
 WORKSTREAMS ${ws}
+DISPATCH needed=${dispatch_needed} ready_unassigned=${dispatch_ready_tasks}
 TOP issue=${issue} owner=${owner} next=${action}
 FILES priority-queue=docs/orchestrator-ops/priority-queue.json role-state=~/.openclaw/cron/role-state gates=finance-app/openclaw-gates parallel=docs/orchestrator-ops/parallel-workstreams.json exec-latest=${EXEC_LATEST_FILE} tool-requests=${TOOL_REQUESTS_FILE}
 EOF

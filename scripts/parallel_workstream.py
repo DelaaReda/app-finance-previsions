@@ -11,6 +11,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import os
 import random
 import sys
 from contextlib import contextmanager
@@ -22,11 +23,19 @@ from typing import Dict, Iterable, List, Tuple
 DEFAULT_BOARD = Path("docs/orchestrator-ops/parallel-workstreams.json")
 DEFAULT_PRIORITY_QUEUE = Path("docs/orchestrator-ops/priority-queue.json")
 DEFAULT_PROOF_ROOT = Path("docs/orchestrator-ops/proofs")
+DEFAULT_SHARED_LOCK_DIR = Path(os.environ.get("OPENCLAW_LOCK_DIR", "/tmp/openclaw-shared-locks"))
 
 INTEGRATION_REUSE_TAG = "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS"
 INTEGRATION_REUSE_TAG_ALIAS = "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS"
 DEPRECATED_ROLES = {"po", "scrum_master"}
 DEPRECATED_TASK_CODES = {"PO_REVIEW", "SCRUM_REVIEW"}
+
+
+def shared_lock_path(prefix: str, target: Path) -> Path:
+    # Keep orchestration locks outside docs/*.lock files to avoid permission drift.
+    resolved = target.resolve(strict=False)
+    digest = hashlib.sha256(str(resolved).encode("utf-8")).hexdigest()[:20]
+    return DEFAULT_SHARED_LOCK_DIR / f"{prefix}-{digest}.lock"
 
 
 @contextmanager
@@ -36,8 +45,7 @@ def board_lock(board_path: Path, write: bool = True):
     # Defensive: avoid creating weird "..lock" when board_path is empty (Path("") -> ".").
     if board_text in {"", ".", "./"}:
         board_path = DEFAULT_BOARD
-        board_text = str(board_path)
-    lock_path = Path(f"{board_text}.lock")
+    lock_path = shared_lock_path("parallel-workstreams", board_path)
     if write:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a+", encoding="utf-8") as lock_fh:
@@ -1109,6 +1117,7 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
         key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("id", ""))),
     )
     active_tasks = [t for t in role_tasks if str(t.get("state", "")) in ACTIVE_STATES]
+    waiting_dep_tasks = [t for t in role_tasks if str(t.get("state", "")) == STATE_WAITING_DEP]
     blocked_tasks = [t for t in role_tasks if str(t.get("state", "")) == STATE_BLOCKED]
 
     open_handoffs = [h for h in board.get("handoffs", []) if str(h.get("status", "")) == "OPEN"]
@@ -1136,6 +1145,7 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
     next_task = str(ready_tasks[0].get("id", "none")) if ready_tasks else "none"
     ready_ids = [str(t.get("id", "")) for t in ready_tasks]
     active_ids = [str(t.get("id", "")) for t in active_tasks]
+    waiting_ids = [str(t.get("id", "")) for t in waiting_dep_tasks]
     blocked_ids = [str(t.get("id", "")) for t in blocked_tasks]
     to_ids = [str(h.get("id", "")) for h in open_to]
     from_ids = [str(h.get("id", "")) for h in open_from]
@@ -1146,10 +1156,12 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
         f"total={len(role_tasks)} "
         f"ready={len(ready_tasks)} "
         f"in_progress={len(active_tasks)} "
+        f"waiting_dep={len(waiting_dep_tasks)} "
         f"blocked={len(blocked_tasks)} "
         f"next_task={next_task} "
         f"ready_tasks={csv(ready_ids)} "
         f"in_progress_tasks={csv(active_ids)} "
+        f"waiting_dep_tasks={csv(waiting_ids)} "
         f"blocked_tasks={csv(blocked_ids)} "
         f"open_handoffs_to={len(open_to)} "
         f"open_handoffs_from={len(open_from)} "

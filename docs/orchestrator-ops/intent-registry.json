@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAtUtc": "2026-02-26T21:18:57Z",
+  "updatedAtUtc": "2026-02-27T01:21:01Z",
   "intents": [
     {
       "intent_id": "INTENT_ARCHITECT_20260226T204740Z",
@@ -62,6 +62,167 @@
       "close_note": "Implemented deterministic triage + incident taxonomy; updated DG15 and admin reporting prompts.",
       "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:201",
       "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1360"
+    },
+    {
+      "intent_id": "INTENT_ARCHITECT_20260226T220410Z",
+      "role": "architect",
+      "scope": "stooq_mv_virtiofs_fix",
+      "planned_files": [
+        "copilot-app/backend/scripts/fetch_prices_stooq.sh"
+      ],
+      "eta_minutes": 10,
+      "status": "done",
+      "created_at_utc": "2026-02-26T22:04:10Z",
+      "created_at_local": "2026-02-26 17:04:10 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:211",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1496",
+      "closed_at_utc": "2026-02-26T22:05:55Z",
+      "close_note": "",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:212",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1497"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260226T221001Z",
+      "role": "main",
+      "scope": "directive_broadcast_bus",
+      "planned_files": [
+        "scripts/directive_bus.sh",
+        "docs/ops/DIRECTIVE_BUS.md",
+        "docs/ops/DIRECTIVE_BUS.jsonl",
+        "scripts/cron_tmux_role_runner.sh"
+      ],
+      "eta_minutes": 25,
+      "status": "done",
+      "created_at_utc": "2026-02-26T22:10:01Z",
+      "created_at_local": "2026-02-26 17:10:01 EST",
+      "owner_note": "Add quick directive bus consumed by all cron roles via RUNTIME_CONTEXT.directives_tail + helper CLI to post directives.",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:214",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1498",
+      "closed_at_utc": "2026-02-26T22:30:35Z",
+      "close_note": "Directive bus implemented: docs/ops/DIRECTIVE_BUS.jsonl + scripts/directive_bus.sh; runner injects directives_tail into RUNTIME_CONTEXT.",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:217",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1520"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260226T233019Z",
+      "role": "main",
+      "scope": "agent_memory_persistence",
+      "planned_files": [
+        "scripts/cron_tmux_role_runner.sh",
+        "scripts/admin_agents_tmux_tick.sh",
+        "scripts/adminapp_codex_cron_tick.sh",
+        "docs/ops/AGENT_MEMORY_POLICY.md"
+      ],
+      "eta_minutes": 25,
+      "status": "done",
+      "created_at_utc": "2026-02-26T23:30:19Z",
+      "created_at_local": "2026-02-26 18:30:19 EST",
+      "owner_note": "Persist role/admin execution summaries into memory/agents/*.md each tick with locking+auto-compaction.",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:228",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1548",
+      "closed_at_utc": "2026-02-26T23:39:34Z",
+      "close_note": "Implemented durable memory persistence: roles append to memory/agents/<role>.md on persist_last_contract; admin ticks append to adminapp-codex/admin-agents memory; auto-compaction + locking.",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:233",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1550"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260226T235411Z",
+      "role": "main",
+      "scope": "auto_dispatch_ready_queue",
+      "planned_files": [
+        "scripts/admin_agents_auto_dispatch_ready.sh",
+        "scripts/admin_agents_tmux_tick.sh",
+        "scripts/dg_admin_router_tick.sh"
+      ],
+      "eta_minutes": 25,
+      "status": "done",
+      "created_at_utc": "2026-02-26T23:54:11Z",
+      "created_at_local": "2026-02-26 18:54:11 EST",
+      "owner_note": "Prevent QUEUE_READY_NOT_DISPATCHED by auto-claiming READY tasks for BATCH-* and optionally force-running admin-agents supervisor when READY persists.",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:235",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1551",
+      "closed_at_utc": "2026-02-26T23:57:09Z",
+      "close_note": "Implemented auto-dispatch: admin-agents auto-claims unassigned READY tasks for single READY BATCH-*; triage_now now flags QUEUE_READY_NOT_DISPATCHED only when board has unassigned READY tasks.",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:238",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1553"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260227T003942Z",
+      "role": "main",
+      "scope": "router_force_run_admin_agents",
+      "planned_files": [
+        "scripts/dg_admin_router_tick.sh"
+      ],
+      "eta_minutes": 10,
+      "status": "done",
+      "created_at_utc": "2026-02-27T00:39:42Z",
+      "created_at_local": "2026-02-26 19:39:42 EST",
+      "owner_note": "When triage indicates DISPATCH needed, dg-admin-router-5m will force-run admin-agents-supervisor-15m with cooldown to reduce READY stall.",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:242",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1556",
+      "closed_at_utc": "2026-02-27T00:43:06Z",
+      "close_note": "dg-admin-router-5m now parses DISPATCH needed from triage and force-runs admin-agents-supervisor-15m with cooldown when dispatch is needed. Also set admin-agents supervisor thinking to xhigh.",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:244",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1557"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260227T010938Z",
+      "role": "main",
+      "scope": "process_issue_auto_refresh",
+      "planned_files": [
+        "scripts/admin_agents_refresh_process_issues.sh",
+        "scripts/admin_agents_tmux_tick.sh",
+        "scripts/cron_tmux_role_runner.sh"
+      ],
+      "eta_minutes": 25,
+      "status": "done",
+      "created_at_utc": "2026-02-27T01:09:38Z",
+      "created_at_local": "2026-02-26 20:09:38 EST",
+      "owner_note": "Reduce recurring exec issues by: (1) default TMPDIR=/tmp for all roles (pytest); (2) admin-agents auto-refresh pass to re-run roles whose issues are stale (permission/slot) after channels probe succeeds.",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:247",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1559",
+      "closed_at_utc": "2026-02-27T01:19:38Z",
+      "close_note": "handoff_to_current_lock_tmpdir_fix",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:248",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1560"
+    },
+    {
+      "intent_id": "INTENT_MAIN_20260227T011943Z",
+      "role": "main",
+      "scope": "lock_tmpdir_plumbing_fix",
+      "planned_files": [
+        "scripts/parallel_workstream.py",
+        "scripts/intent_registry.py",
+        "scripts/cron_tmux_role_runner.sh",
+        "scripts/tests/test_role_contract_guard.py"
+      ],
+      "eta_minutes": 35,
+      "status": "active",
+      "created_at_utc": "2026-02-27T01:19:43Z",
+      "created_at_local": "2026-02-26 20:19:43 EST",
+      "owner_note": "move_locks_to_shared_dir_and_disable_lock_probes",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:249",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1561"
+    },
+    {
+      "intent_id": "INTENT_MAIN_LOCK_SELFTEST_20260227T0120Z",
+      "role": "main",
+      "scope": "lock_selftest",
+      "planned_files": [
+        "scripts/intent_registry.py"
+      ],
+      "eta_minutes": 3,
+      "status": "cancelled",
+      "created_at_utc": "2026-02-27T01:20:56Z",
+      "created_at_local": "2026-02-26 20:20:56 EST",
+      "owner_note": "shared_lock_path_test",
+      "chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:250",
+      "memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1562",
+      "closed_at_utc": "2026-02-27T01:21:01Z",
+      "close_note": "selftest_done",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md:251",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/memory/2026-02-26.md:1563"
     }
   ]
 }

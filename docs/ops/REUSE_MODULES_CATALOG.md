@@ -2,6 +2,9 @@
 
 Objectif: aider l'equipe a **reutiliser** les modules deja presents (helpers, services, schemas, widgets) au lieu de recreer des variantes.
 
+Checklist (reuse-first marker):
+- `docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md`
+
 Règle: avant d'ajouter un nouveau fichier, faire:
 
 ```bash

@@ -44,6 +44,8 @@ def _earnings_for(ticker: str) -> List[Dict[str, Any]]:
                         'date': str(d)[:10],
                         'info': {k: (None if k=='Earnings Date' else row.get(k)) for k in df.columns},
                     })
+                except Exception:
+                    pass
         else:
             # Fallback to .calendar
             cal = t.calendar
@@ -76,4 +78,3 @@ def run() -> Path:
 
 if __name__ == '__main__':
     print(run())
-

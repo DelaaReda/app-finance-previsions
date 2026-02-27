@@ -6,7 +6,7 @@
       "role": "planner",
       "lane": "analysis",
       "every": "12m",
-      "allow_file_edits": 0,
+      "allow_file_edits": 1,
       "wip_limit": 2,
       "description": "Planner dispatch and dependency orchestration",
       "session_name": "codex_planner_cron",

@@ -12,7 +12,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REGISTRY = ROOT / "docs" / "orchestrator-ops" / "intent-registry.json"
 DEFAULT_CHAT = ROOT / "docs" / "ops" / "ADMIN_TEAM_CHAT.md"
 DEFAULT_MEMORY_DIR = ROOT / "memory"
+DEFAULT_SHARED_LOCK_DIR = Path(os.environ.get("OPENCLAW_LOCK_DIR", "/tmp/openclaw-shared-locks"))
 ACTIVE_STATUSES = {"active"}
 
 
@@ -87,7 +90,9 @@ def memory_file_for_today(memory_dir: Path) -> Path:
 
 
 def lock_path_for(registry_path: Path) -> Path:
-    return Path(str(registry_path) + ".lock")
+    # Shared lock location avoids write failures on repo lock files in mixed runtimes.
+    digest = hashlib.sha256(str(registry_path.resolve(strict=False)).encode("utf-8")).hexdigest()[:20]
+    return DEFAULT_SHARED_LOCK_DIR / f"intent-registry-{digest}.lock"
 
 
 def append_line(path: Path, line: str) -> int:

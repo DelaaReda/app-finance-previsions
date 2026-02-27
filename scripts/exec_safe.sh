@@ -39,5 +39,26 @@ if [[ "$DECISION" == "CONFIRM" && "$FORCE_CONFIRM" -ne 1 ]]; then
   echo "[exec_safe] CONFIRM risk detected; auto-proceed enabled by policy (no user wait)." >&2
 fi
 
+ensure_tmpdir() {
+  local candidate="${TMPDIR:-/tmp}"
+  if [[ -n "$candidate" ]]; then
+    mkdir -p "$candidate" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$candidate" && -d "$candidate" && -w "$candidate" ]]; then
+    export TMPDIR="$candidate"
+    export TEMP="$candidate"
+    export TMP="$candidate"
+    return 0
+  fi
+
+  candidate="${WORKDIR}/.tmp/exec-safe"
+  mkdir -p "$candidate"
+  chmod 700 "$candidate" >/dev/null 2>&1 || true
+  export TMPDIR="$candidate"
+  export TEMP="$candidate"
+  export TMP="$candidate"
+}
+
 cd "$WORKDIR"
+ensure_tmpdir
 exec bash -lc "$CMD"

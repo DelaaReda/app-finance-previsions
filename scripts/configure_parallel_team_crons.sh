@@ -37,7 +37,7 @@ BACKUP_DIR="/home/venom/.openclaw/cron/backups"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 DEFAULT_ROLE_PROFILES=(
-  "planner|12m|0|Planner dispatch and dependency orchestration"
+  "planner|12m|1|Planner dispatch and dependency orchestration"
   "analyst|14m|0|Business analysis and requirement clarity"
   "architect|18m|0|Architecture constraints and guardrails"
   "backend_engineer|12m|1|Backend implementation lane"

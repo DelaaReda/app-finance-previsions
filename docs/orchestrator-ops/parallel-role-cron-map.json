@@ -1,5 +1,5 @@
 {
-  "generatedAtUtc": "2026-02-26T21:44:42Z",
+  "generatedAtUtc": "2026-02-27T01:19:08Z",
   "thinking": "high",
   "timeoutSeconds": 900,
   "roles": [
@@ -13,7 +13,7 @@
       "timeout_seconds": 900,
       "lane": "analysis",
       "wip_limit": 2,
-      "allow_file_edits": 0,
+      "allow_file_edits": 1,
       "provisioned": 1,
       "session_name": "codex_planner_cron",
       "trace_file": "logs-codex-runs/role-runner/planner.live.log"

@@ -12,6 +12,9 @@ CHAT_FILE="${ADMIN_AGENTS_CHAT_FILE:-docs/ops/ADMIN_TEAM_CHAT.md}"
 ITER_FILE="${ADMIN_AGENTS_ITER_FILE:-docs/ops/ADMIN_TEAM_ITERATIONS.md}"
 EVIDENCE_DIR="${ADMIN_AGENTS_EVIDENCE_DIR:-logs-codex-runs/admin-agents/ticks}"
 ROLE_TRACE_DIR="${ADMIN_AGENTS_ROLE_TRACE_DIR:-logs-codex-runs/role-runner}"
+ROLE_MEMORY_DIR="${ADMIN_AGENTS_ROLE_MEMORY_DIR:-$WORKDIR/memory/agents}"
+ADMIN_MEMORY_FILE="${ROLE_MEMORY_DIR}/admin-agents.md"
+ADMIN_MEMORY_LOCK_FILE="${STATE_DIR}/admin-agents.memory.lock"
 PRIORITY_QUEUE_FILE="${ADMIN_AGENTS_PRIORITY_QUEUE_FILE:-docs/orchestrator-ops/priority-queue.json}"
 ROLE_TOPOLOGY_FILE="${ADMIN_AGENTS_ROLE_TOPOLOGY_FILE:-docs/orchestrator-ops/parallel-role-topology.json}"
 ACTION_OWNER="${ADMIN_AGENTS_ACTION_OWNER:-adminapp-codex}"
@@ -31,6 +34,7 @@ OPENCLAW_BIN="${ADMIN_AGENTS_OPENCLAW_BIN:-}"
 cd "$WORKDIR"
 mkdir -p "$STATE_DIR"
 mkdir -p "$EVIDENCE_DIR"
+mkdir -p "$ROLE_MEMORY_DIR"
 
 if ! command -v tmux >/dev/null 2>&1; then
   echo "status=ERROR reason=tmux_missing"
@@ -642,7 +646,21 @@ sleep "$VERIFY_WAIT_SECONDS"
 post_digest="$(pane_digest "$TARGET" "$CAPTURE_LINES")"
 post_chat_mtime="$(file_mtime "$CHAT_FILE")"
 post_iter_mtime="$(file_mtime "$ITER_FILE")"
+
+# Globals for stdout + memory (avoid unbound vars under set -u)
+role_total=0
+role_enabled=0
+role_error=0
+stale_running=0
+session_total=0
+session_present=0
+
 deterministic_delivery_tick "$TICK"
+
+# Auto-dispatch READY queue item to avoid long stalls (optional)
+if [[ "${ADMIN_AGENTS_AUTO_DISPATCH_ENABLED:-1}" -eq 1 ]]; then
+  bash scripts/admin_agents_auto_dispatch_ready.sh >/dev/null 2>&1 || true
+fi
 
 pane_changed=0
 docs_changed=0
@@ -677,8 +695,47 @@ else
 fi
 write_no_progress_streak "$streak"
 
+append_admin_agents_memory() {
+  local status="$1"; shift
+  local reason="$1"; shift
+  local ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S %Z')"
+  local line="$*"
+  if [[ -z "$line" ]]; then
+    line="(no_details)"
+  fi
+  if command -v flock >/dev/null 2>&1; then
+    {
+      exec 9>"$ADMIN_MEMORY_LOCK_FILE"
+      flock -x 9
+      if [[ ! -f "$ADMIN_MEMORY_FILE" ]]; then
+        printf '# admin-agents\n\n' > "$ADMIN_MEMORY_FILE"
+      fi
+      printf -- "- [%s] status=%s reason=%s %s\n" "$ts_local" "$status" "$reason" "$line" >> "$ADMIN_MEMORY_FILE"
+      python3 - "$ADMIN_MEMORY_FILE" <<'PY' 2>/dev/null || true
+import sys
+from pathlib import Path
+p=Path(sys.argv[1])
+lines=p.read_text(encoding='utf-8',errors='ignore').splitlines(True)
+if len(lines) <= 900:
+    raise SystemExit(0)
+head=lines[:40]
+tail=lines[-760:]
+p.write_text(''.join(head+['\n']+tail),encoding='utf-8')
+PY
+    }
+  else
+    if [[ ! -f "$ADMIN_MEMORY_FILE" ]]; then
+      printf '# admin-agents\n\n' > "$ADMIN_MEMORY_FILE"
+    fi
+    printf -- "- [%s] status=%s reason=%s %s\n" "$ts_local" "$status" "$reason" "$line" >> "$ADMIN_MEMORY_FILE"
+  fi
+}
+
+mem_common="tick=${TICK} sessions=${session_present}/${session_total} role_enabled=${role_enabled}/${role_total} role_error=${role_error} stale_running=${stale_running} top_issue=${DETERMINISTIC_ISSUE} next_action=${DETERMINISTIC_NEXT_ACTION} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT}"
+
 if [[ "$tick_seen" -ne 1 || "$pane_changed" -ne 1 ]]; then
   if [[ "$proof_changed" -eq 1 ]]; then
+    append_admin_agents_memory "WARN" "tick_not_observed_but_proof_changed" "$mem_common"
     echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=tick_not_observed_but_proof_changed"
     exit 0
   fi
@@ -687,6 +744,7 @@ if [[ "$tick_seen" -ne 1 || "$pane_changed" -ne 1 ]]; then
     "tick ${TICK} non observe en tmux (pane_changed=${pane_changed}, tick_seen=${tick_seen})" \
     "verifier soumission codex dans la session ${SESSION}" \
     "BLOCKED|tick=${TICK}|pane_changed=${pane_changed}|tick_seen=${tick_seen}"
+  append_admin_agents_memory "ERROR" "tick_not_observed" "$mem_common"
   echo "status=ERROR role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=tick_not_observed"
   exit 6
 fi
@@ -697,18 +755,23 @@ if [[ "$proof_changed" -ne 1 && "$streak" -ge "$NO_PROGRESS_THRESHOLD" ]]; then
     "aucune preuve de livraison admin-agents depuis ${streak} ticks (chat/iterations inchanges)" \
     "forcer une action admin concrete puis revalider" \
     "BLOCKED|streak=${streak}|session=${SESSION}"
+  append_admin_agents_memory "BLOCKED" "no_delivery_evidence" "$mem_common"
   echo "status=BLOCKED role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence"
   exit 7
 fi
 
 if [[ "$proof_changed" -ne 1 ]]; then
+  append_admin_agents_memory "WARN" "no_delivery_evidence_yet" "$mem_common"
   echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} artifact=${DETERMINISTIC_ARTIFACT} reason=no_delivery_evidence_yet"
   exit 0
 fi
 
 if [[ "$DETERMINISTIC_ISSUE" != "none" ]]; then
+  append_admin_agents_memory "WARN" "deterministic_issue_detected" "$mem_common"
   echo "status=WARN role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT} reason=deterministic_issue_detected"
   exit 0
 fi
+
+append_admin_agents_memory "OK" "ok" "$mem_common"
 
 echo "status=OK role=${ROLE_NAME} session=${SESSION} target=${TARGET} tick=${TICK} pane_changed=${pane_changed} tick_seen=${tick_seen} docs_changed=${docs_changed} proof_changed=${proof_changed} no_progress_streak=${streak} deterministic_issue=${DETERMINISTIC_ISSUE} action_id=${DETERMINISTIC_ACTION_ID} action_owner=${DETERMINISTIC_ACTION_OWNER} action_scope=${DETERMINISTIC_ACTION_SCOPE} exec_report=${DETERMINISTIC_EXEC_REPORT} issues=${DETERMINISTIC_ISSUES} suggestions=${DETERMINISTIC_SUGGESTIONS} next_action=${DETERMINISTIC_NEXT_ACTION} artifact=${DETERMINISTIC_ARTIFACT}"
