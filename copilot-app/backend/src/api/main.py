@@ -1233,10 +1233,10 @@ def register_routes(app: FastAPI):
 
     # ========================= PILLAR 1: MACRO ===========================
 
-    # ========================= MACRO SERIES (DISABLED - Using router instead) ======================
-    # NOTE: The /api/macro/series endpoint is now handled by api/routes/macro.py router
-    # This endpoint is commented out to avoid conflicts with the router
-    # The router provides better filtering, caching, and error handling
+    # ========================= MACRO SERIES =========================================
+    # NOTE: The /api/macro/series endpoint is intentionally handled here.
+    # The macro router exists in routes/macro.py but is not mounted in this
+    # application path today.
     
     @app.get("/api/macro/series")
     async def macro_series(
@@ -3802,6 +3802,8 @@ def register_routes(app: FastAPI):
 
             bt = load_json("backtests") or load_json("backtests.json") or {}
             if not bt:
+                requested_strategy = rule or "all"
+                requested_min_confidence = 0.0
                 return _ok({
                     "results": {
                         "overall_metrics": {
@@ -3822,10 +3824,10 @@ def register_routes(app: FastAPI):
                         "trade_log": [],
                     },
                     "params": {
-                        "strategy": strategy,
+                        "strategy": requested_strategy,
                         "universe": universe,
                         "horizon": horizon,
-                        "min_confidence": min_confidence,
+                        "min_confidence": requested_min_confidence,
                     },
                     "message": "Backtests not available yet - returning fallback snapshot",
                     "generated_at": datetime.utcnow().isoformat(),

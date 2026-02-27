@@ -31,7 +31,7 @@ from ..services.dashboard_ui_service import (  # type: ignore
 # below are relative to `/api/dashboard`.
 dashboard_router = APIRouter(tags=["dashboard"])
 
-@dashboard_router.get("/kpis")
+@dashboard_router.get("/kpis-legacy")
 async def dashboard_kpis() -> Dict[str, Any]:
   """Get dashboard KPIs with real data (never-empty fallback)."""
   try:

@@ -17,8 +17,6 @@ for p in (backend_root / "src", backend_root):
     if p_str not in sys.path:
         sys.path.insert(0, p_str)
 
-from models.alert_configuration import AlertRule
-
 
 class AlertRulesService:
     """

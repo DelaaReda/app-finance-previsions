@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stocks")
 
-@router.get("/top")
+@router.get("/top-legacy")
 async def get_top_stocks(
     limit: int = Query(10, ge=1, le=50, description="Number of top stocks to return"),
     sort_by: str = Query("score", description="Sort by: score, change_1d, momentum_30d, mcap"),

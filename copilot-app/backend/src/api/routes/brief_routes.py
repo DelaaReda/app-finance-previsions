@@ -49,7 +49,7 @@ async def get_brief(
 
 
 @router.get(
-    "/signals/top",
+    "/signals/top-legacy",
     response_model=SignalsResponse,
     summary="Top 3 signals and top 3 risks"
 )
