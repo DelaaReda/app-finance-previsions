@@ -1,19 +1,123 @@
 """
 Stocks Extra API Routes - Finance Copilot System
-Additional endpoints for advanced stock analysis features
-Task: FC-API-027 - Stock Correlation Heatmap
+Additional endpoints for advanced stock analysis features.
+Task: FC-API-027 - Stock Correlation Heatmap.
 """
-from fastapi import APIRouter, Query
-from typing import Dict, Any, List, Optional
-import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+import logging
 
-from core.response import ok, err
-from storage.io import load_json
-from ..models.correlation_matrix import correlation_model
+from fastapi import APIRouter, Query
+
+from core.response import ok
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+try:
+    from src.services.correlation_service import get_correlation_matrix as load_correlation_matrix
+except ImportError:  # pragma: no cover
+    try:
+        from services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
+    except ImportError:  # pragma: no cover
+        try:
+            from backend.services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
+        except ImportError:  # pragma: no cover
+            load_correlation_matrix = None
+
+
+def _normalize_ticker_list(raw_tickers: Optional[List[str]]) -> List[str]:
+    normalized: List[str] = []
+    seen = set()
+    for raw in raw_tickers or []:
+        for token in str(raw).replace(" ", "").split(","):
+            token = token.strip().upper()
+            if token and token not in seen:
+                normalized.append(token)
+                seen.add(token)
+    return normalized
+
+
+def _extract_matrix_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"matrix": {}, "tickers": [], "lookback_days": 0}
+
+    matrix = payload.get("matrix")
+    if isinstance(matrix, dict):
+        tickers = payload.get("tickers", [])
+        if not isinstance(tickers, list):
+            tickers = list(matrix.keys())
+        return {
+            "matrix": matrix,
+            "tickers": tickers,
+            "lookback_days": payload.get("lookback_days"),
+            "generated_at": payload.get("generated_at"),
+            "source": payload.get("source"),
+        }
+
+    # Fallback for legacy list-of-lists structure.
+    rows = payload.get("rows") or payload.get("columns") or []
+    if isinstance(rows, list) and rows and isinstance(matrix, list):
+        row_tickers = rows
+        matrix_lookup: Dict[str, Dict[str, float]] = {}
+        for row_index, row_name in enumerate(row_tickers):
+            row_key = str(row_name).upper()
+            row_values = matrix[row_index] if row_index < len(matrix) else []
+            matrix_row = {}
+            for col_index, col_name in enumerate(row_tickers):
+                col_key = str(col_name).upper()
+                if col_index < len(row_values):
+                    value = row_values[col_index]
+                    if isinstance(value, (int, float)):
+                        matrix_row[col_key] = float(value)
+            matrix_lookup[row_key] = matrix_row
+        return {
+            "matrix": matrix_lookup,
+            "tickers": row_tickers,
+            "lookback_days": payload.get("lookback_days"),
+            "generated_at": payload.get("generated_at"),
+            "source": payload.get("source"),
+        }
+
+    return {"matrix": {}, "tickers": [], "lookback_days": 0}
+
+
+def _build_matrix_table(matrix: Dict[str, Dict[str, float]]) -> List[Dict[str, Any]]:
+    table: List[Dict[str, Any]] = []
+    for ticker in sorted(matrix.keys()):
+        row = matrix[ticker]
+        row_payload = {"ticker": ticker}
+        for col in sorted(matrix.keys()):
+            row_payload[col] = float(row.get(col, 0.0))
+        table.append(row_payload)
+    return table
+
+
+def _filter_matrix(
+    matrix: Dict[str, Dict[str, float]],
+    selected_tickers: List[str],
+    min_correlation: float,
+    max_correlation: float,
+    limit: int,
+) -> Dict[str, Dict[str, float]]:
+    tickers = [ticker for ticker in sorted(matrix.keys()) if not selected_tickers or ticker in selected_tickers]
+    if limit and len(tickers) > limit:
+        tickers = tickers[:limit]
+
+    filtered: Dict[str, Dict[str, float]] = {}
+    for row_ticker in tickers:
+        row = matrix.get(row_ticker, {})
+        filtered_row: Dict[str, float] = {}
+        for col_ticker in tickers:
+            value = row.get(col_ticker)
+            if value is None or not isinstance(value, (int, float)):
+                continue
+            if min_correlation <= value <= max_correlation:
+                filtered_row[col_ticker] = float(value)
+        if filtered_row:
+            filtered[row_ticker] = filtered_row
+    return filtered
+
 
 @router.get("/stocks/heatmap")
 def get_stock_correlation_heatmap(
@@ -22,152 +126,131 @@ def get_stock_correlation_heatmap(
     method: Optional[str] = Query("pearson", description="Correlation method: pearson, spearman, kendall"),
     limit: Optional[int] = Query(50, ge=1, le=200, description="Limit number of results (max 200)"),
     min_correlation: Optional[float] = Query(-1.0, description="Minimum correlation threshold (-1.0 to 1.0)"),
-    max_correlation: Optional[float] = Query(1.0, description="Maximum correlation threshold (-1.0 to 1.0)")
+    max_correlation: Optional[float] = Query(1.0, description="Maximum correlation threshold (-1.0 to 1.0)"),
 ) -> Dict[str, Any]:
     """
-    Get stock correlation heatmap data with filtering capabilities.
-    Returns correlation matrix for specified tickers and time window.
+    Return a correlation matrix for selected tickers.
     """
     try:
-        logger.info(f"📈 Correlation heatmap requested", extra={
-            "tickers": tickers,
-            "window": window,
-            "method": method,
-            "limit": limit
-        })
-        
-        # Load stock price data to calculate correlations
-        # In a real implementation, this would fetch from live sources or recent cache
-        stocks_data = load_json("stocks_prices")
-        
-        if not stocks_data:
-            # Return empty structure but never fail (never-empty pattern)
+        requested_tickers = _normalize_ticker_list(tickers)
+        limit_count = int(limit or 50)
+        min_value = float(min_correlation if min_correlation is not None else -1.0)
+        max_value = float(max_correlation if max_correlation is not None else 1.0)
+
+        logger.info(
+            "Correlation heatmap requested",
+            extra={
+                "tickers": requested_tickers,
+                "window": window,
+                "method": method,
+                "limit": limit_count,
+            },
+        )
+
+        source_matrix = {}
+        if load_correlation_matrix:
+            source_matrix = _extract_matrix_payload(load_correlation_matrix())
+        matrix = source_matrix.get("matrix", {}) if isinstance(source_matrix, dict) else {}
+
+        if not matrix:
             return ok({
                 "matrix": {},
                 "matrix_table": [],
-                "tickers": tickers or [],
-                "rows": tickers or [],
-                "columns": tickers or [],
+                "tickers": requested_tickers,
+                "rows": requested_tickers,
+                "columns": requested_tickers,
                 "method": method,
                 "start_date": datetime.utcnow().isoformat(),
                 "end_date": datetime.utcnow().isoformat(),
                 "generated_at": datetime.utcnow().isoformat(),
-                "message": "No price data available - correlation matrix empty. Prices being fetched in background.",
+                "message": "No cached correlation matrix available for this request.",
                 "freshness": "unknown",
                 "source": ["fallback_empty", "correlation_heatmap"],
                 "filters": {
-                    "tickers": tickers,
+                    "tickers": requested_tickers,
                     "window": window,
                     "method": method,
-                    "limit": limit
+                    "limit": limit_count,
+                    "min_correlation": min_value,
+                    "max_correlation": max_value,
                 },
                 "metadata": {
-                    "symbols_count": len(tickers) if tickers else 0,
+                    "symbols_count": len(requested_tickers),
                     "data_points_per_symbol": 0,
                     "computation_method": method,
                     "correlation_range": {"min": 0.0, "max": 0.0, "avg": 0.0},
-                    "valid_pairs": 0
-                }
-            })
-        
-        # Extract price history for the specified tickers
-        data_payload = stocks_data.get("data", stocks_data.get("payload", stocks_data))
-        all_prices = data_payload.get("prices", {})
-        
-        # Filter to include only requested tickers if specified
-        if tickers:
-            filtered_prices = {k: v for k, v in all_prices.items() if k.upper() in [t.upper() for t in tickers]}
-        else:
-            filtered_prices = dict(all_prices)
-        
-        # Calculate returns for each ticker
-        ticker_returns = {}
-        for ticker, price_data in filtered_prices.items():
-            if isinstance(price_data, list) and len(price_data) > 1:
-                # Calculate daily logarithmic returns
-                closes = []
-                for item in price_data:
-                    # Get close price from different possible field names
-                    close_price = (item.get('close') or item.get('adjusted_close') or 
-                                  item.get('last_price') or item.get('price') or 0.0)
-                    if close_price and close_price > 0:
-                        closes.append(float(close_price))
-                
-                if len(closes) > 1:
-                    # Calculate log returns
-                    import numpy as np
-                    log_returns = np.diff(np.log(closes))
-                    ticker_returns[ticker.upper()] = log_returns.tolist()
-        
-        # If no returns data, return empty matrix
-        if not ticker_returns:
-            return ok({
-                "matrix": {},
-                "matrix_table": [],
-                "tickers": list(filtered_prices.keys()) if not tickers else tickers,
-                "rows": list(filtered_prices.keys()) if not tickers else tickers,
-                "columns": list(filtered_prices.keys()) if not tickers else tickers,
-                "method": method,
-                "start_date": datetime.utcnow().isoformat(),
-                "end_date": datetime.utcnow().isoformat(),
-                "generated_at": datetime.utcnow().isoformat(),
-                "message": "Insufficient price history for correlation calculation",
-                "freshness": stocks_data.get("freshness") or "unknown",
-                "source": ["insufficient_data", "correlation_heatmap"],
-                "filters": {
-                    "tickers": tickers,
-                    "window": window,
-                    "method": method,
-                    "limit": limit
+                    "valid_pairs": 0,
                 },
-                "metadata": {
-                    "symbols_count": len(filtered_prices),
-                    "data_points_per_symbol": 0,
-                    "computation_method": method,
-                    "correlation_range": {"min": 0.0, "max": 0.0, "avg": 0.0},
-                    "valid_pairs": 0
-                }
             })
-        
-        # Calculate correlation matrix using the correlation model
-        correlation_result = correlation_model.create_correlation_matrix(
-            ticker_returns=ticker_returns,
-            method=method
+
+        filtered_matrix = _filter_matrix(
+            matrix=matrix,
+            selected_tickers=requested_tickers,
+            min_correlation=min_value,
+            max_correlation=max_value,
+            limit=limit_count,
         )
-        
-        # Apply additional filters like min/max correlation
-        correlation_matrix = correlation_result["matrix"]
-        
-        # Apply correlation threshold filtering if specified
-        if min_correlation > -1.0 or max_correlation < 1.0:
-            # This would require post-processing of the correlation matrix
-            # For now, we'll return the full matrix as calculated
-            pass
-        
-        # Add request filters to the result
-        result = dict(correlation_result)
-        result["filters"] = {
-            "tickers": tickers,
-            "window": window,
+        rows = sorted(filtered_matrix.keys())
+        correlation_values = []
+        for row in rows:
+            for col, value in filtered_matrix.get(row, {}).items():
+                if row == col:
+                    continue
+                correlation_values.append(float(value))
+
+        if correlation_values:
+            min_corr = min(correlation_values)
+            max_corr = max(correlation_values)
+            avg_corr = sum(correlation_values) / len(correlation_values)
+        else:
+            min_corr = 0.0
+            max_corr = 0.0
+            avg_corr = 0.0
+
+        payload = {
+            "matrix": filtered_matrix,
+            "matrix_table": _build_matrix_table(filtered_matrix),
+            "tickers": rows,
+            "rows": rows,
+            "columns": rows,
             "method": method,
-            "limit": limit,
-            "min_correlation": min_correlation,
-            "max_correlation": max_correlation
+            "start_date": datetime.utcnow().isoformat(),
+            "end_date": datetime.utcnow().isoformat(),
+            "generated_at": source_matrix.get("generated_at") or datetime.utcnow().isoformat(),
+            "freshness": source_matrix.get("freshness", "cached"),
+            "source": source_matrix.get("source", ["correlation_matrix", "correlation_service"]),
+            "lookback_days": source_matrix.get("lookback_days", 90),
+            "filters": {
+                "tickers": requested_tickers,
+                "window": window,
+                "method": method,
+                "limit": limit_count,
+                "min_correlation": min_value,
+                "max_correlation": max_value,
+            },
+            "metadata": {
+                "symbols_count": len(rows),
+                "data_points_per_symbol": 0,
+                "computation_method": method,
+                "correlation_range": {
+                    "min": float(min_corr),
+                    "max": float(max_corr),
+                    "avg": float(avg_corr),
+                },
+                "valid_pairs": len(correlation_values),
+            },
         }
-        
-        logger.info(f"✅ Correlation heatmap generated for {len(ticker_returns)} tickers using {method} method")
-        return ok(result)
-        
+        logger.info("Correlation heatmap generated for %s tickers using %s", len(rows), method)
+        return ok(payload)
+
     except Exception as e:
-        logger.error(f"❌ Error in correlation heatmap endpoint: {str(e)}", exc_info=True)
-        
-        # Return structured response even on error to maintain never-empty contract
+        logger.error("Error in correlation heatmap endpoint: %s", str(e), exc_info=True)
         return ok({
             "matrix": {},
             "matrix_table": [],
-            "tickers": tickers or [],
-            "rows": tickers or [],
-            "columns": tickers or [],
+            "tickers": [],
+            "rows": [],
+            "columns": [],
             "method": method,
             "start_date": datetime.utcnow().isoformat(),
             "end_date": datetime.utcnow().isoformat(),
@@ -177,18 +260,18 @@ def get_stock_correlation_heatmap(
             "freshness": "error",
             "source": ["correlation_heatmap", "error_fallback"],
             "filters": {
-                "tickers": tickers,
+                "tickers": requested_tickers if "requested_tickers" in locals() else [],
                 "window": window,
                 "method": method,
-                "limit": limit
+                "limit": limit,
             },
             "metadata": {
-                "symbols_count": len(tickers) if tickers else 0,
+                "symbols_count": 0,
                 "data_points_per_symbol": 0,
                 "computation_method": method,
                 "correlation_range": {"min": 0.0, "max": 0.0, "avg": 0.0},
-                "valid_pairs": 0
-            }
+                "valid_pairs": 0,
+            },
         })
 
 
@@ -197,50 +280,52 @@ def get_stock_correlations(
     base_ticker: str = Query(..., description="Base ticker to measure correlations against"),
     compare_tickers: Optional[List[str]] = Query(None, description="Tickers to compare against base (comma-separated)"),
     window: Optional[str] = Query("30d", description="Time window for correlation calculation"),
-    method: Optional[str] = Query("pearson", description="Correlation method: pearson, spearman, kendall")
+    method: Optional[str] = Query("pearson", description="Correlation method: pearson, spearman, kendall"),
 ) -> Dict[str, Any]:
     """
-    Get correlations of a base ticker against other tickers.
-    Useful for sector analysis or benchmark comparisons.
+    Return correlations of a base ticker versus a provided ticker list.
     """
     try:
-        logger.info(f"🔗 Getting correlations for {base_ticker} vs {compare_tickers or 'all'}", extra={
-            "base_ticker": base_ticker,
-            "compare_tickers": compare_tickers,
-            "window": window,
-            "method": method
-        })
-        
-        # This would use the same correlation calculation as the heatmap
-        # For now, return a similar structure but focused on one base ticker
-        correlation_result = get_stock_correlation_heatmap(
-            tickers=[base_ticker] + (compare_tickers or []),
+        base = str(base_ticker).strip().upper()
+        compare = _normalize_ticker_list(compare_tickers)
+        logger.info("Getting correlations for %s vs %s", base, compare)
+
+        heatmap = get_stock_correlation_heatmap(
+            tickers=[base] + compare,
             window=window,
             method=method,
-            limit=50
+            limit=50,
+            min_correlation=-1.0,
+            max_correlation=1.0,
         )
-        
-        # Process the result to focus on correlations with the base ticker
-        if correlation_result.get("ok") and correlation_result.get("data"):
-            data = correlation_result["data"]
-            base_correlations = {}
-            
-            matrix = data.get("matrix", {})
-            if base_ticker in matrix:
-                base_row = matrix[base_ticker]
-                for ticker, correlation in base_row.items():
-                    if ticker != base_ticker:  # Exclude self-correlation
-                        base_correlations[ticker] = correlation
-            
-            data["base_correlations"] = base_correlations
-            data["base_ticker"] = base_ticker
-            correlation_result["data"] = data
-        
-        return correlation_result
-        
+        if not heatmap.get("ok"):
+            return heatmap
+
+        data = heatmap.get("data", {})
+        matrix = data.get("matrix", {})
+        base_row = matrix.get(base, {})
+        base_correlations = {
+            ticker: value
+            for ticker, value in base_row.items()
+            if ticker != base and isinstance(value, (int, float))
+        }
+
+        if compare:
+            compare_set = set(compare)
+            base_correlations = {
+                ticker: base_correlations[ticker]
+                for ticker in list(base_correlations.keys())
+                if ticker in compare_set
+            }
+
+        data["base_ticker"] = base
+        data["base_correlations"] = base_correlations
+        data["method"] = method
+        heatmap["data"] = data
+        return heatmap
+
     except Exception as e:
-        logger.error(f"❌ Error in stock correlations endpoint: {str(e)}", exc_info=True)
-        
+        logger.error("Error in stock correlations endpoint: %s", str(e), exc_info=True)
         return ok({
             "base_ticker": base_ticker,
             "correlations": {},
@@ -250,7 +335,7 @@ def get_stock_correlations(
             "generated_at": datetime.utcnow().isoformat(),
             "error": str(e),
             "message": "Stock correlations temporarily unavailable - showing fallback data",
-            "source": ["stock_correlations", "error_fallback"]
+            "source": ["stock_correlations", "error_fallback"],
         })
 
 # Export the router for the main application to include

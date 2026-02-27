@@ -631,9 +631,6 @@ def _fallback_market_context(message: str) -> Dict[str, Any]:
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "note": message,
     }
-    if "w" in freq:
-        return "weekly"
-    return "daily"
 
 
 def _run_macro_series_job() -> None:
@@ -866,6 +863,87 @@ def create_app() -> FastAPI:
         app.include_router(alerts_router)
     except ImportError as e:
         print(f"⚠️  Failed to include alerts routes: {e}")
+
+    # Additional routers expose legacy/non-duplicated paths used by older UI clients.
+    # They are included intentionally only when route paths don't conflict with current
+    # inline API definitions.
+    try:
+        from .routes.backtests import router as legacy_backtests_router
+        app.include_router(legacy_backtests_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include backtests routes: {e}")
+
+    try:
+        from .routes.brief import router as legacy_brief_router
+        app.include_router(legacy_brief_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include brief routes: {e}")
+
+    try:
+        from .routes.brief_alias import router as legacy_brief_alias_router
+        app.include_router(legacy_brief_alias_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include brief alias routes: {e}")
+
+    try:
+        from .routes.context import router as legacy_context_router
+        app.include_router(legacy_context_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include context routes: {e}")
+
+    try:
+        from .routes.copilot import router as legacy_copilot_router
+        app.include_router(legacy_copilot_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include copilot routes: {e}")
+
+    try:
+        from .routes.correlations import router as legacy_correlations_router
+        app.include_router(legacy_correlations_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include correlations routes: {e}")
+
+    try:
+        from .routes.intelligence import intelligence_router as legacy_intelligence_router
+        app.include_router(legacy_intelligence_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include intelligence routes: {e}")
+
+    try:
+        from .routes.macro import router as legacy_macro_router
+        app.include_router(legacy_macro_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include macro routes: {e}")
+
+    try:
+        from .routes.news import router as legacy_news_router
+        app.include_router(legacy_news_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include news routes: {e}")
+
+    try:
+        from .routes.news_impact import router as legacy_news_impact_router
+        app.include_router(legacy_news_impact_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include news impact routes: {e}")
+
+    try:
+        from .routes.recommendations import router as legacy_recommendations_router
+        app.include_router(legacy_recommendations_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include recommendations routes: {e}")
+
+    try:
+        from .routes.search import router as legacy_search_router
+        app.include_router(legacy_search_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include search routes: {e}")
+
+    try:
+        from .routes.stocks_extra import router as legacy_stocks_extra_router
+        app.include_router(legacy_stocks_extra_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include stocks extra routes: {e}")
 
     try:
         from .routes.judge import judge_router
@@ -1212,6 +1290,7 @@ def register_routes(app: FastAPI):
             "ok": True,
             "status": "ok",
             "version": "1.0.0",
+            "service_status": health_payload["status"],
             "data": health_payload,
         }
 
