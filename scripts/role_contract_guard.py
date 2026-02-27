@@ -227,29 +227,29 @@ def main() -> int:
         current_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
         stream_id = (current_kv.get("stream_id") or "none").strip() or "none"
         task_id = (current_kv.get("task_id") or "none").strip() or "none"
-        run_note = "probe lock incoherent, reprise livraison demandee"
+        run_note = "faux signal lock ignore, reprise livraison exigee"
         evidence = (
-            "task_update=analysis_only; lock_check=ok; "
+            "task_update=none_no_signal; lock_check=ok; "
             f"run_note={run_note}; "
             "exec_report=delivery_probe_inconsistent_lock_only; "
-            "issues=lock_probe_false_positive; "
-            "suggestions=reprendre_livraison_sur_fichier_metier_et_fermer_tache; "
+            "issues=none; "
+            "suggestions=executer_commande_metier_reelle_et_fermer_tache; "
             f"stream_id={stream_id}; task_id={task_id}; "
             "tool_request=none; skill_request=none; "
             "channels_read=runtime_context; impact_assessment=low; impact_action=resume_delivery; "
             f"arch_rule=api_contract; review_scope={role}_delivery_probe; conformance=WARN; violations=lock_probe_false_positive; "
             f"{required_artifact_key}=delivery_probe_lock_false_positive; "
             f"queue_version={runtime_queue_version}; workboard_version={runtime_workboard_version}; "
-            f"coordination_ref=analysis_only:{task_id}; probe_reason={reason_clean}"
+            f"coordination_ref=resume_delivery:{task_id}; probe_reason={reason_clean}"
         )
         if writable_refs:
             evidence = _append_evidence(evidence, f"probe_writable_refs_count={len(writable_refs)}")
         values["STATUS"] = "IN_PROGRESS"
         values["DELTA"] = "DELIVERY_PROBE_INCONSISTENT_CONTINUE"
         values["EVIDENCE"] = evidence
-        values["RISKS"] = "signal lock incoherent; reprendre livraison sur commande metier ciblee"
+        values["RISKS"] = "none"
         values["NEXT"] = (
-            f"owner={role}; action=reprendre_claim_ou_complete_avec_preuve_cmd_sur_fichier_metier"
+            f"owner={role}; action=executer_cmd_metier_reel_puis_complete_ou_handoff"
         )
         values["VERDICT"] = "GO_WITH_CAUTION"
         values["BLOCKER_ID"] = "NONE"
