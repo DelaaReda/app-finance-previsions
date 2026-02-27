@@ -63,6 +63,7 @@ Evidence schema (contract quality):
 - Contract guard implementation: `scripts/role_contract_guard.py`
 - Role memory append module: `scripts/role_memory_append.py`
 - Execution monitoring publish module: `scripts/role_execution_monitoring.py`
+- Runtime context builder module: `scripts/role_runtime_context.py`
 - Guard tests:
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'

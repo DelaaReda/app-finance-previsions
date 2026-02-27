@@ -4,11 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
 
-# Default temp dirs for deterministic tooling (pytest/tmp) across roles.
-export TMPDIR="${TMPDIR:-/tmp}"
-export TMP="${TMP:-$TMPDIR}"
-export TEMP="${TEMP:-$TMPDIR}"
-
 ROLE="${1:-}"
 if [[ -z "$ROLE" ]]; then
   echo "Usage: $0 <planner|dev|tester|qa|architect|po|scrum_master|clawsentinel>"
@@ -22,6 +17,16 @@ case "$ROLE" in
     exit 3
     ;;
 esac
+
+# Role-local temp dir prevents flaky pytest/tmpdir failures in cron runs.
+ROLE_TMPDIR="${TMUX_ROLE_TMPDIR:-$ROOT/.tmp/role-runner/${ROLE}}"
+if mkdir -p "$ROLE_TMPDIR" >/dev/null 2>&1 && [[ -d "$ROLE_TMPDIR" && -w "$ROLE_TMPDIR" ]]; then
+  export TMPDIR="$ROLE_TMPDIR"
+else
+  export TMPDIR="${TMPDIR:-/tmp}"
+fi
+export TMP="${TMP:-$TMPDIR}"
+export TEMP="${TEMP:-$TMPDIR}"
 
 AGENT_BIN="${TMUX_ROLE_AGENT_BIN:-codex}"
 AGENT_BIN_NAME="${AGENT_BIN##*/}"
@@ -381,87 +386,6 @@ ensure_role_memory_file() {
 - Recurring blockers:
 - Handoff expectations:
 EOF
-}
-
-compact_file_tail() {
-  local path="$1"
-  local lines="$2"
-  local max_chars="$3"
-  if [[ ! -f "$path" ]]; then
-    printf 'none'
-    return 0
-  fi
-  tail -n "$lines" "$path" 2>/dev/null \
-    | tr '\n' ' ' \
-    | tr -s ' ' \
-    | sed -E 's/[[:space:]]+/ /g' \
-    | cut -c1-"$max_chars"
-}
-
-read_last_contract_hint() {
-  local path="$1"
-  local scope="$2"
-  local status=""
-  local delta=""
-  local next_action=""
-  if [[ ! -f "$path" ]]; then
-    printf '%s:none' "$scope"
-    return 0
-  fi
-  status="$(sed -n 's/^STATUS:[[:space:]]*//p' "$path" | head -n 1 | tr -s ' ' | tr '\n' ' ')"
-  delta="$(sed -n 's/^DELTA:[[:space:]]*//p' "$path" | head -n 1 | tr -s ' ' | tr '\n' ' ')"
-  next_action="$(sed -n 's/^NEXT_ACTION_UNIQUE:[[:space:]]*//p' "$path" | head -n 1 | tr -s ' ' | tr '\n' ' ')"
-  printf '%s:status=%s,delta=%s,next=%s' \
-    "$scope" \
-    "${status:-unknown}" \
-    "${delta:-unknown}" \
-    "${next_action:-unknown}"
-}
-
-peer_contracts_hint() {
-  local role_file=""
-  local role_name=""
-  local hint=""
-  local count=0
-  local parts=()
-  while IFS= read -r role_file; do
-    role_name="$(basename "$role_file" .last_contract)"
-    [[ -z "$role_name" || "$role_name" == "$ROLE" ]] && continue
-    hint="$(read_last_contract_hint "$role_file" "$role_name")"
-    parts+=("$hint")
-    count=$((count + 1))
-    if [[ "$count" -ge 5 ]]; then
-      break
-    fi
-  done < <(ls -1t "$STATE_DIR"/*.last_contract 2>/dev/null || true)
-
-  if [[ "${#parts[@]}" -eq 0 ]]; then
-    printf 'none'
-    return 0
-  fi
-  (IFS='; '; printf '%s' "${parts[*]}") | cut -c1-600
-}
-
-workboard_context_hint() {
-  if [[ ! -x "scripts/parallel_workstream.py" ]]; then
-    printf 'none'
-    return 0
-  fi
-  python3 scripts/parallel_workstream.py context --role "$ROLE" --limit 3 2>/dev/null \
-    | tr '\n' ' ' \
-    | tr -s ' ' \
-    | cut -c1-520
-}
-
-publication_channels_hint() {
-  if [[ ! -x "scripts/parallel_workstream.py" ]]; then
-    printf 'none'
-    return 0
-  fi
-  python3 scripts/parallel_workstream.py channels --role "$ROLE" --limit 4 2>/dev/null \
-    | tr '\n' ' ' \
-    | tr -s ' ' \
-    | cut -c1-620
 }
 
 append_role_memory() {
@@ -1370,6 +1294,7 @@ ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
 - Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
 - Lecture des canaux de publication obligatoire au debut du tick: `python3 scripts/parallel_workstream.py channels --role <role> --limit 5`.
+- Interdit: faire des probes directes sur `*.lock` (ex: `parallel-workstreams.json.lock`, `intent-registry.json.lock`). Utilise uniquement des commandes métier (`preannounce`, `claim`, tests) pour prouver un blocage réel.
 - Pré-annonce obligatoire avant toute action delivery (claim/édition): exécuter `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`; réutiliser les refs générées dans EVIDENCE (`intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`).
 - Co-édition: si workboard_role_has_in_progress=1, reprendre/fermer cette tâche d'abord (sans nouveau claim). Sinon, après pré-annonce, claim d'abord (scripts/parallel_workstream.py claim --role <role>), puis patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
 - Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
@@ -1381,93 +1306,39 @@ PROMPT
 )"
 
 build_runtime_context() {
-  local ready_items=""
-  local blocked_items=""
-  local queue_states=""
-  local queue_has_ready="0"
-  local queue_version=""
-  local workboard_version=""
-  local ready_next_actions=""
-  local workstate_hint=""
-  local parallel_hint=""
-  local workboard_role_has_work=""
-  local workboard_role_has_in_progress=""
-  local agent_memory_hint=""
-  local self_last_contract_hint=""
-  local peer_contracts_hint_text=""
-  local workboard_context=""
-  local publication_channels=""
-  local team_chat_tail=""
-  local team_iteration_tail=""
-  local directives_tail=""
-  local trace_tail=""
-  local now_iso=""
-  now_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  if [[ -f "docs/orchestrator-ops/priority-queue.json" ]]; then
-    ready_items="$(jq -r '.items[]? | select(.state=="READY") | "\(.id):\(.title)"' docs/orchestrator-ops/priority-queue.json 2>/dev/null | head -n 3 | tr '\n' '; ')"
-    blocked_items="$(jq -r '.items[]? | select(.state=="BLOCKED") | "\(.id):\(.blocker_id // "NONE")"' docs/orchestrator-ops/priority-queue.json 2>/dev/null | head -n 3 | tr '\n' '; ')"
-    queue_states="$(jq -r '.items[]? | "\(.id)=\(.state)"' docs/orchestrator-ops/priority-queue.json 2>/dev/null | head -n 8 | tr '\n' '; ')"
-    ready_next_actions="$(jq -r '.items[]? | select(.state=="READY") | "\(.id):\(.next_action // "NONE")"' docs/orchestrator-ops/priority-queue.json 2>/dev/null | head -n 5 | tr '\n' '; ')"
-    queue_has_ready="$(jq -r '[.items[]? | select(.state=="READY")] | if length>0 then "1" else "0" end' docs/orchestrator-ops/priority-queue.json 2>/dev/null || printf '0')"
-  fi
-  queue_version="${RUNTIME_QUEUE_VERSION:-queue_unknown}"
-  workboard_version="${RUNTIME_WORKBOARD_VERSION:-workboard_unknown}"
-  if [[ -f "docs/planning/WORKSTATE.md" ]]; then
-    workstate_hint="$(tail -n 20 docs/planning/WORKSTATE.md 2>/dev/null | tr '\n' ' ' | tr -s ' ' | cut -c1-320)"
-  fi
-  if [[ -x "scripts/parallel_workstream.py" ]]; then
-    parallel_hint="$(python3 scripts/parallel_workstream.py status --role "$ROLE" --compact --limit 3 2>/dev/null | tr '\n' '; ' | tr -s ' ' | cut -c1-380)"
-  fi
-  workboard_role_has_work="${RUNTIME_WORKBOARD_ROLE_HAS_WORK:-0}"
-  workboard_role_has_in_progress="${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}"
-  agent_memory_hint="$(compact_file_tail "${ROLE_MEMORY_DIR}/${ROLE}.md" 24 420)"
-  self_last_contract_hint="$(read_last_contract_hint "$LAST_CONTRACT_FILE" "self" | cut -c1-420)"
-  peer_contracts_hint_text="$(peer_contracts_hint)"
-  workboard_context="$(workboard_context_hint)"
-  publication_channels="$(publication_channels_hint)"
-  team_chat_tail="$(compact_file_tail "$TEAM_CHAT_FILE" 10 340)"
-  team_iteration_tail="$(compact_file_tail "$TEAM_ITER_FILE" 8 260)"
+  local context=""
+  local queue_version="${RUNTIME_QUEUE_VERSION:-queue_unknown}"
+  local workboard_version="${RUNTIME_WORKBOARD_VERSION:-workboard_unknown}"
+  local workboard_role_has_work="${RUNTIME_WORKBOARD_ROLE_HAS_WORK:-0}"
+  local workboard_role_has_in_progress="${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}"
 
-  directives_tail="none"
-  if [[ -f "$DIRECTIVE_BUS_FILE" ]]; then
-    directives_tail="$(tail -n 220 "$DIRECTIVE_BUS_FILE" 2>/dev/null \
-      | jq -s -r --arg role "$ROLE" --arg now "$now_iso" '
-          map(select(type=="object"))
-        | map(select((.expires_at // "")=="" or .expires_at > $now))
-        | map(select((.targets|index("all")) or (.targets|index($role))))
-        | sort_by(.ts) | reverse
-        | .[0:3]
-        | map("\(.id // \"DIR?\"):\(.kind // \"policy\"):\(.msg // \"\")")
-        | join(" ; ")
-      ' 2>/dev/null \
-      | cut -c1-340)"
-    [[ -n "$directives_tail" ]] || directives_tail="none"
+  if command -v python3 >/dev/null 2>&1 && [[ -f "scripts/role_runtime_context.py" ]]; then
+    context="$(python3 scripts/role_runtime_context.py \
+      "$ROLE" \
+      "$ROOT" \
+      "$STATE_DIR" \
+      "$ROLE_MEMORY_DIR" \
+      "$TEAM_CHAT_FILE" \
+      "$TEAM_ITER_FILE" \
+      "$DIRECTIVE_BUS_FILE" \
+      "$TRACE_FILE" \
+      "$LAST_CONTRACT_FILE" \
+      "$queue_version" \
+      "$workboard_version" \
+      "$workboard_role_has_work" \
+      "$workboard_role_has_in_progress" 2>/dev/null || true)"
+    if [[ -n "$context" ]]; then
+      printf '%s' "$context"
+      return 0
+    fi
   fi
 
-  trace_tail="$(compact_file_tail "$TRACE_FILE" 8 280)"
-
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=%s | queue_has_ready=%s | queue_version=%s | workboard_version=%s | ready_items=%s | ready_next_actions=%s | blocked_items=%s | workstate_hint=%s | parallel_hint=%s | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=%s | self_last_contract=%s | peer_contracts=%s | workboard_context=%s | publication_channels=%s | team_chat_tail=%s | team_iteration_tail=%s | directives_tail=%s | trace_tail=%s | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
-    "${now_iso:-unknown}" \
-    "${queue_states:-none}" \
-    "${queue_has_ready:-0}" \
-    "${queue_version:-queue_unknown}" \
-    "${workboard_version:-workboard_unknown}" \
-    "${ready_items:-none}" \
-    "${ready_next_actions:-none}" \
-    "${blocked_items:-none}" \
-    "${workstate_hint:-none}" \
-    "${parallel_hint:-none}" \
-    "${workboard_role_has_work:-0}" \
-    "${workboard_role_has_in_progress:-0}" \
-    "${agent_memory_hint:-none}" \
-    "${self_last_contract_hint:-none}" \
-    "${peer_contracts_hint_text:-none}" \
-    "${workboard_context:-none}" \
-    "${publication_channels:-none}" \
-    "${team_chat_tail:-none}" \
-    "${team_iteration_tail:-none}" \
-    "${directives_tail:-none}" \
-    "${trace_tail:-none}"
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$queue_version" \
+    "$workboard_version" \
+    "$workboard_role_has_work" \
+    "$workboard_role_has_in_progress"
 }
 RUNTIME_CONTEXT="$(build_runtime_context)"
 
