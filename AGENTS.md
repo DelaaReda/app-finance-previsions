@@ -186,7 +186,44 @@ Skills provide your tools. When you need one, check its `SKILL.md`. Keep local n
 - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
 - **WhatsApp:** No headers — use **bold** or CAPS for emphasis
 
-## 💓 Heartbeats - Be Proactive!
+## � MCP (Model Context Protocol) Setup
+
+**SSH Access to VM via Claude Desktop:**
+
+Claude can now execute commands on `dev-vm-utm` using MCP SSH server.
+
+**Quick Start:**
+1. Restart Claude Desktop (⌘Q then relaunch)
+2. Ask Claude: *"Check if OpenClaw is running"*
+3. Claude uses SSH to run the command on the VM
+
+**What you can do:**
+- Check service status
+- View logs
+- Run Git operations
+- Manage agents (List tmux sessions, etc.)
+- Monitor disk/memory usage
+
+**Documentation:**
+- Full guide: [`docs/ops/MCP_SSH_CONFIGURATION_GUIDE.md`](docs/ops/MCP_SSH_CONFIGURATION_GUIDE.md)
+- Quick reference: [`docs/ops/MCP_SSH_QUICK_REFERENCE.md`](docs/ops/MCP_SSH_QUICK_REFERENCE.md)
+
+**Example requests for Claude:**
+```
+"Is the VM running?"
+"Show me the last 100 log lines"
+"How many agents are active on the VM?"
+"Pull latest changes from Git on the VM"
+"Restart the OpenClaw service"
+```
+
+**Architecture:**
+- **Script:** `/Users/venom/ssh_mcp_server.py` (Python MCP wrapper)
+- **Auth:** `/Users/venom/.ssh/id_utm_linux` (SSH key)
+- **Target:** `venom@dev-vm-utm` (192.168.64.9)
+- **Timeout:** 30 seconds per command
+
+## �💓 Heartbeats - Be Proactive!
 
 When you receive a heartbeat poll (message matches the configured heartbeat prompt), don't just reply `HEARTBEAT_OK` every time. Use heartbeats productively!
 
