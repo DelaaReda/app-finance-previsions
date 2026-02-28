@@ -115,3 +115,29 @@
 - [2026-02-27 20:43:41 EST] role=frontend_engineer source=primary_structured status=PASS verdict=PASS delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=WAIT_FRONTEND_SLOT_P1772243015_10667 directive=none/none exec_report=Inspection du statut runtime frontend, queue PASS et workboard sans tâche ready ni in_progress issues=slot_frontend_indisponible suggestions=monitorer_slot_frontend
 - [2026-02-28 00:40:17 EST] role=frontend_engineer source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_FRONTEND_FROM_TASKS directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable_source_missing suggestions=verifier_sources_et_stabiliser_prompt
 - [2026-02-28 11:20:12 EST] role=frontend_engineer source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_FRONTEND_FROM_TASKS directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable suggestions=stabiliser_prompt_et_tmux_capture
+
+## [2026-02-28 PLANNER] BATCH-03-FRONTEND assigné
+
+**Mission:** Connecter tous les widgets UI aux données live de l'API
+
+**Context admin:**
+- `apiConnector.js` déjà créé dans `apps/web/src/domains/forecasts/contracts/apiConnector.js`
+- Il charge 460 news réelles, 19 forecasts, stocks, KPIs depuis le backend
+- Il est déjà injecté dans `apps/web/src/domains/forecasts/pages/index.html`
+
+**Tâches concrètes:**
+1. Vérifier que `renderNewsFeed()` dans app.js utilise `window.newsItems` (déjà peuplé par apiConnector)
+2. Connecter le widget forecasts aux `window.liveForecasts` (disponible via apiConnector)
+3. Connecter le widget stocks aux `window.liveStocks`
+4. Remplacer les KPIs hardcodés (portfolio $127k) par les vrais KPIs de `/api/dashboard/kpis`
+5. Afficher un badge "LIVE" discret quand les données sont réelles
+
+**Success criteria:**
+- News widget: affiche des vraies headlines (pas "Fed Signals Rate Cuts Q2" hardcodé)
+- Forecasts: affiche les vrais tickers (SPY, QQQ, AAPL etc)
+- Console browser: voir "[API] ✅ 20 news chargées depuis l'API"
+
+**Fichiers cibles:**
+- `apps/web/src/domains/forecasts/pages/app.js`
+- `apps/web/src/domains/forecasts/contracts/mockData.js` (réduire sa dépendance)
+- `apps/web/src/domains/forecasts/contracts/apiConnector.js` (étendre si besoin)

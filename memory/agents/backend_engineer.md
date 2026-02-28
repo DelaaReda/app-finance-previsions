@@ -118,3 +118,27 @@
 - [2026-02-28 00:40:17 EST] role=backend_engineer source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_BACKEND_FROM_TASKS directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable_source_missing suggestions=verifier_sources_et_stabiliser_prompt
 - [2026-02-28 11:20:11 EST] role=backend_engineer source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_BACKEND_FROM_TASKS directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable suggestions=stabiliser_prompt_et_tmux_capture
 - [2026-02-28 13:49:19 EST] role=backend_engineer source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_BACKEND_FROM_TASKS directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable suggestions=stabiliser_prompt_et_tmux_capture
+
+## [2026-02-28 PLANNER] BATCH-03-BACKEND assigné
+
+**Mission:** Corriger la qualité des données forecasts et stocks
+
+**Problèmes identifiés:**
+1. `forecasts_count: 19, high_confidence: 0` — aucun forecast n'a une confiance > seuil (tous à ~0.517)
+2. `stocks/top`: `change: 0.0, change_percent: 0.0` pour tous les stocks — le calcul de variation journalière ne fonctionne pas
+3. `backtests: { hit_rate: 0.0, status: "pending" }` — jamais calculé
+
+**Tâches concrètes:**
+1. **Forecasts confidence:** Investiguer pourquoi confidence=0 pour "high". Revoir le seuil `high_confidence` ou corriger le calcul. Target: au moins 30% des forecasts en high_confidence
+2. **Stocks change:** Corriger le calcul de variation journalière dans le pipeline stocks. Source: comparer prix actuel vs prix veille (Yahoo Finance ou stooq)
+3. **Backtests:** Activer le job de calcul backtests simple (hit rate = % forecasts corrects sur 7j glissants)
+
+**Fichiers cibles:**
+- `apps/api/src/domains/*/api/routes/forecasts.py`
+- `apps/api/src/jobs/stocks_prices_refresh.py` ou équivalent
+- `apps/api/src/jobs/backtests.py` ou équivalent
+
+**Success criteria:**
+- `curl /api/dashboard/kpis | jq .data.forecasts.high_confidence` → > 0
+- `curl /api/stocks/top | jq .data.stocks[0].change_percent` → != 0.0
+- `curl /api/backtests | jq .data.hit_rate` → > 0.0

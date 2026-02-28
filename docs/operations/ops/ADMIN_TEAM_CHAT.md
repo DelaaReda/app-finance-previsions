@@ -1874,3 +1874,28 @@ Les rapports suivants ont été publiés dans l'ancien `docs/ops/ADMIN_TEAM_CHAT
 ---
 
 *Inspecteur exige documentation complète de migration sous 4h + reload jobs immédiat.* 📋🔴
+
+---
+**[2026-02-28 ADMIN-CLAUDE - INTERVENTION SYSTÈME]**
+
+**Actions effectuées:**
+1. ✅ Cron path corrigé → `/home/venom/shared/analyse-financiere`
+2. ✅ 6 processus Codex zombies (Feb26) tués
+3. ✅ BATCH-03 créé dans priority-queue + workboard avec slot planner actif
+4. ✅ `apiConnector.js` créé dans `apps/web/src/domains/forecasts/contracts/apiConnector.js`
+   - Charge 460 news réelles depuis `/api/news/feed`
+   - Charge 19 forecasts réels depuis `/api/forecasts`
+   - Charge KPIs depuis `/api/dashboard/kpis`
+   - Refresh automatique toutes les 2 minutes
+5. ✅ `index.html` mis à jour pour charger apiConnector.js
+
+**BATCH-03 - Travail assigné:**
+- `frontend_engineer`: Étendre apiConnector.js aux autres widgets (stocks, forecasts panel, LLM judge)
+- `backend_engineer`: Corriger confidence forecasts (0/19 high-confidence actuellement), corriger stocks change=0
+- `data_analyst`: Activer backtests (actuellement null/pending)
+- `planner`: Dispatcher et monitorer
+
+**Contexte:**
+- Backend: ✅ UP, 460 news, 19 forecasts, stocks data disponible
+- Frontend: Était en 100% mock data - maintenant connecté via apiConnector.js
+- Planner loop: Résolu via BATCH-03 avec slot planner dans workboard

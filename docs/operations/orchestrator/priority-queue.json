@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "updated_at": "2026-02-27T11:00:00Z",
+  "updated_at": "2026-02-28T20:01:54Z",
   "items": [
     {
       "id": "BATCH-01",
       "title": "Stabiliser contrats API MVP",
-      "state": "PASS",
+      "state": "CLOSED",
       "priority": "P0",
       "owner_role": "planner",
       "blocker_id": "NONE",
@@ -21,12 +21,13 @@
         "VERDICT",
         "BLOCKER_ID",
         "NEXT_ACTION_UNIQUE"
-      ]
+      ],
+      "closed_at": "2026-02-28T20:01:54Z"
     },
     {
       "id": "BATCH-02",
       "title": "Contrats multi-ticker + news",
-      "state": "PASS",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "blocker_id": "NONE",
@@ -41,6 +42,32 @@
       "evidence_required": [
         "VERDICT: PASS",
         "QA_SIGNOFF: YES"
+      ],
+      "closed_at": "2026-02-28T20:01:54Z"
+    },
+    {
+      "id": "BATCH-03",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es",
+      "state": "READY",
+      "priority": "P0",
+      "owner_role": "planner",
+      "blocker_id": "NONE",
+      "dispatch_authorized": true,
+      "next_action": "DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
+      "depends_on": [
+        "BATCH-02"
+      ],
+      "created_at": "2026-02-28T20:01:54Z",
+      "goals": [
+        "frontend_engineer: connecter news/forecasts/stocks \u00e0 l'API live (apiConnector.js d\u00e9j\u00e0 cr\u00e9\u00e9 par admin)",
+        "backend_engineer: corriger confidence des forecasts (actuellement 0 high-confidence sur 19)",
+        "data_analyst: activer backtests (actuellement null/pending)",
+        "infra_engineer: ajouter monitoring cron et alerting si job fail"
+      ],
+      "evidence_required": [
+        "DELTA",
+        "VERDICT: PASS",
+        "API_UI_PROOF"
       ]
     }
   ]

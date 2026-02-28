@@ -1,142 +1,146 @@
-# Product Vision Clarified - Finance Copilot
+# PRODUCT VISION — Finance Copilot
+_Document de référence pour tous les agents — mis à jour 2026-02-28 par admin-claude_
+_Source: vision directe de venom (owner)_
 
-Date: 2026-02-26
-Owner: Product Clarifier (Codex) + Venom
-Mode: personal-first, low-cost execution
+---
 
-## Product intent
-Build a personal finance copilot that helps a time-constrained investor make faster, better daily portfolio decisions without spending hours reading markets/news.
+## 🎯 Qui est l'utilisateur
 
-## Target user (v1)
-- Primary user: Venom only (single user).
-- Profile: professional, self-directed investor, not a finance expert.
-- Constraint: low available time for market monitoring.
-- Constraint: low runtime budget.
+**Profil:** Reda (venom) — professionnel non-expert en finance qui gère ses investissements personnels seul.
 
-## Core problem
-- Today, decision making is slow because market signals are fragmented across many sources.
-- Development is also slowed by wide scope and weak end-to-end focus.
+**Problème réel:** Ne pas avoir le temps de suivre les marchés, lire les news, analyser les secteurs chaque jour. Prendre des décisions d'investissement avec 3-10h de recherche actuellement.
 
-## Value proposition
-"In 2-3 clicks, get a clear portfolio decision brief for today, backed by multi-model analysis and current market context."
+**Cible initiale:** Usage 100% personnel. Pas de SaaS, pas d'utilisateurs externes pour l'instant.
 
-Expected value:
-- Save 3-10 hours/week of manual research.
-- Detect directional shifts earlier (risk-on/risk-off, sector rotation, geopolitics).
+---
 
-## Non-negotiable value edge
-- The core differentiator is **data-driven forecasts**, not generic summaries.
-- If forecasts are not generated from measurable data/model pipelines and shown clearly in UI, the product fails its core value.
-- Every decision surface must expose forecast provenance (`source=model|fallback`, `updated_at`, confidence context).
+## 💡 Proposition de valeur
 
-## Product principles
-- Decision support first, not auto-trading.
-- Actionable output over raw data dumps.
-- Freshness target over perfect precision.
-- Low-cost runtime by default (g4f/free providers first).
-- Explicit confidence + evidence for each recommendation.
-- Forecast-first rule: API and UI must prioritize model/data-based prediction output on every decision flow.
+> En 2-3 clics, économiser 3 à 10 heures de recherches quotidiennes pour rester à jour sur les marchés et prendre les bonnes décisions d'investissement assez tôt.
 
-## Runtime and cost constraints
-- Runtime AI: prefer g4f/free providers + cheap fallbacks.
-- Dev acceleration: OpenAI Pro budget used for development agents only.
-- Keep infra simple (local-first, no expensive managed stack).
+L'app remplace:
+- Lire les news financières chaque matin
+- Analyser manuellement les tendances de marché
+- Chercher des avis sur or, argent, IA, Tesla, secteurs géopolitiques
+- Décider quoi faire avec son portefeuille aujourd'hui
 
-## MVP capability scope (locked)
-1. Forecast by asset/sector:
-   - Direction + confidence for selected assets/sectors.
-2. Multi-model analysis and judge:
-   - Aggregate multiple model outputs and produce one final decision signal.
-3. Ask Copilot deep analysis:
-   - User asks a question and receives a grounded synthesis using market data + near-real-time context.
+---
 
-Freshness target:
-- Market/context data gap <= 10 minutes for MVP decision surfaces.
+## 🏆 Fonctionnalités MVP (ordre de priorité)
 
-## Decision output contract (frontend)
-Per asset/sector card:
-- `direction`: bullish | neutral | bearish
-- `confidence`: 0-100
-- `action`: accumulate | hold | reduce
-- `horizon`: short (1-3d) or swing (1-2w)
-- `why`: 3 key reasons max
-- `risk_flag`: low | medium | high
-- `updated_at`: timestamp
+### P0 — Vue Globale Marché (Dashboard principal)
+- **Résumé du marché aujourd'hui** : tendances majeures, humeur générale (bullish/bearish/neutre)
+- **Alertes importantes** : ce qui a changé depuis hier, ce qu'il ne faut pas rater
+- **Indicateurs macro** : géopolitique, taux Fed, inflation, récession signal
+- **Secteurs à surveiller** : IA, or, argent, énergie, tech, crypto — direction et momentum
+- **Brief quotidien** : texte synthétique "Voilà ce qui compte aujourd'hui"
 
-## Forecast API -> UI mandatory map (MVP)
-- Core APIs that must always expose forecast payload:
-  - `/api/forecasts`
-  - `/api/decision/brief` (or approved equivalent)
-  - `/api/judge`
-  - `/api/copilot/ask` (must reference current forecast payloads)
-- Core UI surfaces that must always render forecast payload:
-  - decision cards
-  - daily brief summary
-  - judge result panel
-  - ask answer panel
-- Required fields on every decision-facing flow:
-  - `direction`, `confidence`, `action`, `horizon`, `why`, `risk_flag`, `updated_at`, `source`, `model_version` (or explicit fallback marker)
-- Release rule:
-  - if one core API/UI flow does not render data-driven forecast + provenance, release is blocked.
+### P0 — Copilot Portfolio ("Que faire aujourd'hui ?")
+- Input: décrire son portefeuille ou sélectionner ses actifs
+- Output: recommandation concrète (hold/buy/sell/rééquilibrer) avec raisonnement
+- Source: combine news récentes + signaux techniques + forecasts + macro
+- Réponse en moins de 30 secondes
 
-## Initial universe (MVP v1)
-- Index/market regime: SPY, QQQ, DIA, IWM
-- Metals: GLD, SLV
-- AI/mega-cap focus: NVDA, MSFT, AMZN, GOOGL, META, TSLA, AAPL
-- Sector ETFs: XLK, XLE, XLF, XLV, XLI
+### P1 — Forecasts Multi-Assets
+- **Actifs couverts:** SPY, QQQ, AAPL, NVDA, META, MSFT, TSLA, or (GLD), argent (SLV), BTC, énergie (XLE), IA sector
+- **Horizons:** 1 jour, 1 semaine, 1 mois
+- **Format:** direction (up/down/flat) + confiance % + pourquoi (3 bullets max)
+- **Multi-IA Judge:** au moins 2 modèles analysent, 1 juge tranche → verdict final
 
-## Explicit non-goals (out of MVP)
-- Auto-trading / order execution.
-- Broker API integration.
-- Multi-user accounts and auth complexity.
-- Mobile app.
-- Social/community features.
-- Full macro research platform.
+### P1 — Deep Dive Asset Spécifique
+- Chercher "or", "Tesla", "IA stocks" → analyse complète en 1 clic
+- News récentes sur cet actif (fraîcheur < 10 min)
+- Signaux techniques + macro contexte
+- Question libre : "L'or va monter cette semaine ?" → analyse IA approfondie
 
-## Success metrics (first 30 days)
-- North Star:
-  - `Daily Decision Brief Completion Rate`: >= 85% of active days have a complete decision brief in < 10 minutes.
-- KPI 1:
-  - `Freshness SLA`: >= 90% of key tiles updated within 10 minutes.
-- KPI 2:
-  - `Coverage SLA`: >= 90% of MVP universe has direction+confidence+action available at each refresh cycle.
-- KPI 3:
-  - `Forecast Provenance Coverage`: >= 95% of decision outputs expose `source/model_version/updated_at` (or explicit degraded fallback).
+### P2 — News Feed Intelligent
+- Pas de liste de news brutes — résumés avec impact estimé sur le portefeuille
+- Filtres: macro / secteur / actif spécifique
+- Score d'importance (0-10) pour prioriser la lecture
+- Sentiment (positif/négatif/neutre)
 
-## Priority epics (product order)
-- P0 - Epic 1: Data Freshness and Signal Reliability Foundation
-- P0 - Epic 2: Forecast Engine (asset/sector direction + confidence + action)
-- P0 - Epic 3: Multi-Model Consensus and Judge
-- P0 - Epic 15: Data-Driven Forecasting Core (dataset/training/backtest/inference)
-- P0 - Epic 16: Forecast Delivery Contract (API->UI evidence and release gate)
-- P1 - Epic 4: Decision Cockpit Frontend (2-3 click workflow)
-- P1 - Epic 5: Ask Copilot Deep Analysis (grounded Q&A)
-- P1 - Epic 10: Data Source Reliability and Ingestion Automation
-- P1 - Epic 11: UX Workflow and Personal Settings Basics
-- P1 - Epic 12: Alerts and Daily Automation
-- P1 - Epic 13: Reliability, Security, and Backup
-- P1 - Epic 14: MVP Release Readiness and Go-Live
-- P2 - Epic 6: Portfolio Adaptation Layer (watchlist/risk profile tuning)
-- P1 - Epic 8: Cost Governance and Runtime Efficiency (free-first routing + guardrails)
-- P2 - Epic 7: Geopolitical and Macro Impact Radar (event impact + regime flags)
-- P2 - Epic 9: Decision Journal and Learning Loop (feedback from outcomes)
+### P3 — Alertes & Surveillance
+- Alertes sur seuils (ex: or > $2100 → notifier)
+- Signaux géopolitiques (risque élevé détecté)
+- Changements de régime (ex: Fed pivot probable)
 
-## Sprint objective baseline (1-week cadence)
-- Sprint objective style:
-  - one user-visible decision workflow per sprint.
-  - done only if backend+frontend+cache+evidence are integrated.
+---
 
-- Sprint 1 target:
-  - "Decision cards live": deliver reliable forecast cards for MVP universe with <=10 min freshness.
+## 🚫 Hors scope MVP (ne pas implémenter)
 
-- Sprint 2 target:
-  - "Consensus live": enable multi-model + judge output in decision cards and ask flow.
+- Connexion à des comptes de courtage réels (Wealthsimple, etc.)
+- Exécution d'ordres automatiques
+- Partage social / collaboration
+- Application mobile native
+- Gestion de portefeuille complexe (optimisation Markowitz complète)
+- Backtests sophistiqués (simple hit rate suffit pour MVP)
+- Multi-utilisateurs / authentification
 
-- Sprint 3 target:
-  - "Daily workflow live": complete 2-3 click daily brief and portfolio action summary.
+---
 
-## Changelog
-- 2026-02-26 America/New_York - Initial vision clarified from direct user answers and defaults for missing constraints.
-- 2026-02-26 America/New_York - Added expansion epics for macro radar, cost governance, and learning loop continuity.
-- 2026-02-26 America/New_York - Added basic-ready expansion epics for ingestion reliability, UX/settings, alerts, operations hardening, and release go-live.
-- 2026-02-26 America/New_York - Added explicit P0 data-driven forecasting core epic to ensure predictions are model/data based.
+## ⚙️ Contraintes techniques
+
+- **Coût runtime:** modèles gratuits ou très peu chers (g4f, groq, ollama, qwen)
+- **Fraîcheur données:** gap de 10 minutes acceptable (pas de temps réel strict)
+- **Performance UI:** réponse < 3 secondes pour le dashboard principal
+- **Cache:** obligatoire sur tous les endpoints lourds
+- **Infra:** VM Ubuntu UTM locale, pas de cloud coûteux
+
+---
+
+## 📊 Définition du succès MVP
+
+L'app est MVP-complète quand venom peut:
+1. Ouvrir le dashboard le matin → voir en 30 secondes si le marché est à risque ou opportunité
+2. En 2 clics → savoir si son portefeuille actuel est OK pour aujourd'hui
+3. Chercher "or" → avoir une analyse + forecast en moins de 15 secondes
+4. Poser une question → réponse avec raisonnement en moins de 30 secondes
+
+---
+
+## 🗺️ Roadmap Batches (plan de livraison agents)
+
+### ✅ BATCH-01 — Contrats API (DONE)
+Stabilisation des 5 endpoints MVP: health, stocks, news, forecasts, copilot/ask
+
+### ✅ BATCH-02 — Multi-ticker + news (DONE)
+Extension endpoints multi-ticker, filtres news, contract robustesse
+
+### 🔄 BATCH-03 — Frontend Live + Qualité Données (EN COURS)
+- frontend_engineer: connecter apiConnector.js à tous les widgets
+- backend_engineer: corriger confidence forecasts, stocks change=0
+- data_analyst: activer backtests, corriger pipeline données
+
+### 📋 BATCH-04 — Dashboard Vision (À FAIRE)
+- Brief quotidien fonctionnel (texte synthèse marché du jour)
+- Secteurs vue globale avec direction et momentum réels
+- Signaux macro (Fed, inflation, géopolitique)
+- KPIs dashboard connectés aux vraies données
+
+### 📋 BATCH-05 — Copilot "Que faire aujourd'hui ?" (À FAIRE)
+- Endpoint copilot/ask amélioré avec contexte marché injecté automatiquement
+- UI copilot: input portefeuille → output recommandation structurée
+- Réponse < 30 secondes avec sources citées
+
+### 📋 BATCH-06 — Forecasts Multi-Assets + Judge (À FAIRE)
+- Coverage: or, argent, Tesla, secteur IA, énergie, crypto
+- Multi-modèle: au moins 2 fournisseurs LLM analysent
+- Judge IA: arbitre et donne verdict final avec confiance
+- Horizons: 1d, 1w, 1m
+
+### 📋 BATCH-07 — Deep Dive + News Intelligence (À FAIRE)
+- Recherche par actif: analyse complète en 1 clic
+- News résumées avec score d'impact (pas brutes)
+- Question libre → analyse approfondie avec données fraîches
+
+---
+
+## 📌 Règles pour les agents
+
+1. **Toujours relire ce fichier avant de planifier** — c'est la source de vérité
+2. **Priorité P0 avant P1 avant P2** — ne pas sauter des étapes
+3. **Chaque batch = une valeur démontrable** — pas de batch purement technique sans bénéfice visible
+4. **Preuve obligatoire** — chaque livraison doit avoir une commande curl ou screenshot UI
+5. **Coût runtime** — éviter d'appeler des LLMs coûteux en boucle, utiliser le cache
+6. **2-3 clics max** — si une feature nécessite plus de 3 clics, simplifier l'UX
+

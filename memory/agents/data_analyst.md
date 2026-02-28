@@ -83,3 +83,29 @@
 - [2026-02-27 20:42:45 EST] role=data_analyst source=primary_structured status=NO_READY_SLOT_WAIT verdict=PASS delta=NO_DELTA blocker=NONE stream_id=none task_id=BATCH-02 next_action_unique=BATCH-02_MONITOR_SLOT_P1772242963_22805 directive=none/none exec_report=Lecture des états runtime confirmée, Aucune tâche in_progress n’est active et BATCH-02 reste sans item prêt issues=absence_slot_data_analyst,sans_item_ready suggestions=continuer la veille des canaux et préparer la reprise
 - [2026-02-28 00:40:16 EST] role=data_analyst source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_DATA_ANALYST_FROM_DATASET directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable suggestions=stabiliser_prompt_et_tmux_capture
 - [2026-02-28 11:21:26 EST] role=data_analyst source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_DATA_ANALYST_FROM_DATASET directive=none/none exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable issues=signal_unparseable suggestions=stabiliser_prompt_et_tmux_capture
+
+## [2026-02-28 PLANNER] BATCH-03-DATA assigné
+
+**Mission:** Activer le pipeline backtests et vérifier la fraîcheur des données
+
+**Problèmes identifiés:**
+1. Backtests: `hit_rate: 0.0, status: "pending"` — jamais calculé
+2. News last_update: `2026-02-28T15:15:38` — fraîcheur de ~4h (acceptable mais à monitorer)
+3. Forecasts confidence très faible (0.517 avg) — peut-être données insuffisantes pour LLM
+
+**Tâches concrètes:**
+1. **Backtests simple:** Implémenter calcul hit_rate = nb forecasts corrects / nb forecasts total sur 7 jours. Un forecast "correct" = direction prédite (up/down) === direction réelle après 1 jour
+2. **News fraîcheur:** Vérifier que le job news_ingest tourne bien toutes les X minutes. Target: fraîcheur < 30 min
+3. **Couverture actifs vision:** Vérifier que les actifs prioritaires sont couverts: GLD, SLV, TSLA, BTC, XLE — sinon ajouter au pipeline
+
+**Commandes utiles:**
+```bash
+curl http://localhost:8050/api/freshness
+curl http://localhost:8050/api/backtests
+python3 -m apps.api.src.platform.legacy.jobs.backtests
+```
+
+**Success criteria:**
+- `curl /api/backtests` → `hit_rate > 0.0`
+- `curl /api/freshness` → tous les feeds < 30 min
+- Actifs GLD, SLV dans `/api/forecasts`

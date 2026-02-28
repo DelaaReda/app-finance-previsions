@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updated_at": "2026-02-27T12:46:09Z",
+  "updated_at": "2026-02-28T20:05:47Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
-    "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
+    "goal": "Accélérer la livraison parallèle sans désordre",
     "cadence_days": 14
   },
   "roles": {
@@ -96,6 +96,205 @@
       "state": "DONE",
       "created_at": "2026-02-26T05:53:04Z",
       "updated_at": "2026-02-27T10:59:06Z"
+    },
+    {
+      "id": "BATCH-03",
+      "title": "Frontend live + data quality",
+      "state": "OPEN",
+      "planner_slot": "assigned",
+      "created_at": "2026-02-28T20:01:54Z",
+      "tasks": [
+        {
+          "id": "BATCH-03-FRONTEND",
+          "assigned_to": "frontend_engineer",
+          "status": "ready",
+          "has_work": true,
+          "description": "Intégrer apiConnector.js dans toutes les pages, remplacer mock data par API live"
+        },
+        {
+          "id": "BATCH-03-BACKEND",
+          "assigned_to": "backend_engineer",
+          "status": "ready",
+          "has_work": true,
+          "description": "Améliorer confidence forecasts, corriger stocks prices (change=0)"
+        },
+        {
+          "id": "BATCH-03-DATA",
+          "assigned_to": "data_analyst",
+          "status": "ready",
+          "has_work": true,
+          "description": "Activer backtests et corriger data pipeline"
+        },
+        {
+          "id": "BATCH-03-PLAN",
+          "assigned_to": "planner",
+          "status": "in_progress",
+          "has_work": true,
+          "description": "Dispatcher BATCH-03 aux rôles et monitorer la livraison"
+        }
+      ]
+    },
+    {
+      "id": "BATCH-04",
+      "title": "Dashboard Vision — Brief quotidien + Secteurs réels",
+      "state": "PLANNED",
+      "planner_slot": "unassigned",
+      "priority": "P0",
+      "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-04",
+      "depends_on": [
+        "BATCH-03"
+      ],
+      "tasks": [
+        {
+          "id": "BATCH-04-BACKEND",
+          "assigned_to": "backend_engineer",
+          "status": "planned",
+          "description": "Endpoint /api/brief/daily opérationnel avec résumé marché du jour (texte synthèse < 200 mots), macro signals (Fed/inflation/géopolitique), secteurs top/bottom du jour"
+        },
+        {
+          "id": "BATCH-04-FRONTEND",
+          "assigned_to": "frontend_engineer",
+          "status": "planned",
+          "description": "Dashboard principal: brief quotidien visible en header, secteurs avec direction arrows (up/down), KPIs connectés au live"
+        },
+        {
+          "id": "BATCH-04-DATA",
+          "assigned_to": "data_analyst",
+          "status": "planned",
+          "description": "Pipeline macro indicators: taux Fed, VIX, inflation CPI, DXY — fraîcheur < 10min"
+        },
+        {
+          "id": "BATCH-04-PLAN",
+          "assigned_to": "planner",
+          "status": "planned",
+          "description": "Dispatcher et valider que chaque livraison respecte la vision: 2-3 clics, dashboard lisible en 30s"
+        }
+      ],
+      "success_criteria": [
+        "curl /api/brief/daily retourne un texte synthèse du marché du jour",
+        "Dashboard affiche le brief en haut sans scroll",
+        "Les secteurs (or, IA, énergie) ont une direction visible (↑↓→)"
+      ]
+    },
+    {
+      "id": "BATCH-05",
+      "title": "Copilot 'Que faire aujourd'hui ?'",
+      "state": "PLANNED",
+      "planner_slot": "unassigned",
+      "priority": "P0",
+      "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-05",
+      "depends_on": [
+        "BATCH-04"
+      ],
+      "tasks": [
+        {
+          "id": "BATCH-05-BACKEND",
+          "assigned_to": "backend_engineer",
+          "status": "planned",
+          "description": "Améliorer /api/copilot/ask: injecter auto contexte marché actuel (news, forecasts, macro) dans le prompt LLM. Réponse structurée: verdict (buy/sell/hold) + raisonnement 3 bullets + sources"
+        },
+        {
+          "id": "BATCH-05-FRONTEND",
+          "assigned_to": "frontend_engineer",
+          "status": "planned",
+          "description": "UI Copilot: champ input portefeuille, bouton 'Analyser maintenant', affichage verdict avec couleur (vert/rouge/jaune), sources cliquables. Réponse visible < 30s"
+        },
+        {
+          "id": "BATCH-05-PLAN",
+          "assigned_to": "planner",
+          "status": "planned",
+          "description": "Valider: test utilisateur simulé (2 clics max pour avoir une recommandation portfolio)"
+        }
+      ],
+      "success_criteria": [
+        "POST /api/copilot/ask avec question portfolio → réponse structurée en < 30s",
+        "UI: 2 clics max de la page principale à la recommandation",
+        "Réponse contient: verdict + raisonnement + sources"
+      ]
+    },
+    {
+      "id": "BATCH-06",
+      "title": "Forecasts Multi-Assets + LLM Judge",
+      "state": "PLANNED",
+      "planner_slot": "unassigned",
+      "priority": "P1",
+      "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-06",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "tasks": [
+        {
+          "id": "BATCH-06-BACKEND",
+          "assigned_to": "backend_engineer",
+          "status": "planned",
+          "description": "Coverage forecasts: GLD (or), SLV (argent), TSLA, NVDA, QQQ (IA sector), XLE (énergie), BTC. Horizons: 1d/1w/1m. Multi-LLM: 2+ providers analysent, judge tranche"
+        },
+        {
+          "id": "BATCH-06-FRONTEND",
+          "assigned_to": "frontend_engineer",
+          "status": "planned",
+          "description": "Page Forecasts: grille d'actifs avec direction + confiance + judge verdict. Filtres par secteur. Deep-dive 1 clic sur un actif"
+        },
+        {
+          "id": "BATCH-06-DATA",
+          "assigned_to": "data_analyst",
+          "status": "planned",
+          "description": "Pipeline prix or/argent/crypto: source gratuite (Yahoo Finance, stooq), fraîcheur < 10min"
+        },
+        {
+          "id": "BATCH-06-PLAN",
+          "assigned_to": "planner",
+          "status": "planned",
+          "description": "Valider judge pipeline: 2+ modèles LLM répondent, arbitrage visible dans l'UI"
+        }
+      ],
+      "success_criteria": [
+        "GET /api/forecasts?tickers=GLD,SLV,TSLA retourne forecasts avec confidence > 0",
+        "Judge visible dans l'UI avec verdict + modèles qui ont voté",
+        "Horizons 1d/1w/1m disponibles pour chaque actif"
+      ]
+    },
+    {
+      "id": "BATCH-07",
+      "title": "Deep Dive + News Intelligence",
+      "state": "PLANNED",
+      "planner_slot": "unassigned",
+      "priority": "P1",
+      "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-07",
+      "depends_on": [
+        "BATCH-06"
+      ],
+      "tasks": [
+        {
+          "id": "BATCH-07-BACKEND",
+          "assigned_to": "backend_engineer",
+          "status": "planned",
+          "description": "Deep dive endpoint: /api/deep-dive/{ticker} → news + signaux + forecast + analyse LLM contextualisée. Question libre via /api/copilot/ask avec ticker context"
+        },
+        {
+          "id": "BATCH-07-FRONTEND",
+          "assigned_to": "frontend_engineer",
+          "status": "planned",
+          "description": "Barre de recherche universelle: taper 'or' ou 'Tesla' → deep-dive en 1 clic. News avec score impact (0-10) pas liste brute. Question libre dans copilot"
+        },
+        {
+          "id": "BATCH-07-DATA",
+          "assigned_to": "data_analyst",
+          "status": "planned",
+          "description": "News scoring: calculer impact estimé de chaque news sur le portefeuille (0-10). Résumé auto des news longues"
+        },
+        {
+          "id": "BATCH-07-PLAN",
+          "assigned_to": "planner",
+          "status": "planned",
+          "description": "Test final MVP: simuler session utilisateur complète (dashboard → copilot → deep-dive) en < 5 min"
+        }
+      ],
+      "success_criteria": [
+        "Recherche 'or' → analyse complète en < 15 secondes",
+        "News affichées avec score impact, pas brutes",
+        "Session utilisateur complète possible en < 5 minutes"
+      ]
     }
   ],
   "tasks": [
@@ -822,7 +1021,7 @@
         "docs/orchestrator-ops/proofs/BATCH-02/sentinel-contracts-20260227T105451Z.log"
       ],
       "notes": [
-        "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
+        "Template Judge validé en base (never-empty + cache + quality), mais bloqué pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et cohérence risk_level ne sont pas corrigés.",
         "cmd=validate_parallel_plumbing + triage_now + pytest contracts;tests_run=pytest targeted contracts: 3 passed;review_ref=sentinel_manual_review_2026-02-27T10:55Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-SENTINEL_CHECK/20260227T105506Z-554.yaml"
       ],
       "handoff_to": "planner",
@@ -1056,7 +1255,7 @@
       "from_role": "clawsentinel",
       "to_role": "planner",
       "status": "CLOSED",
-      "note": "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
+      "note": "Template Judge validé en base (never-empty + cache + quality), mais bloqué pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et cohérence risk_level ne sont pas corrigés.",
       "idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A",
       "created_at": "2026-02-27T10:55:06Z",
       "updated_at": "2026-02-27T12:46:09Z"
