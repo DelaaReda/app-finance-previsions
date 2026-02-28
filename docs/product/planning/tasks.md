@@ -26,7 +26,7 @@
 - Entrypoint API principal: `apps/api/src/platform/main.py`
 - Routes modulaires: `apps/api/src/domains/{copilot|forecasts|judge|market_data}/api/*.py`
 - Frontend runtime: `apps/web/src/domains/{copilot|forecasts|portfolio}/pages/*.html|*.js`
-- Données simulées frontend: `apps/web/src/domains/forecasts/contracts/mockData.js`
+- Données simulées frontend (fallback dégradé): `apps/web/src/domains/forecasts/contracts/mockData.js`
 - Gates de livraison: `scripts/run_delivery_gate.sh` + artefacts `finance-app/openclaw-gates/`
 - Compat legacy (interdit pour les nouvelles livraisons produit):
   - `apps/api/src/api/main.py` (compat wrapper pour `apps/api/src/platform/main.py`)
@@ -244,8 +244,8 @@ Après chaque cycle d’action du lot (ou au redémarrage de plusieurs rôles), 
 
 1. `python3 scripts/parallel_workstream.py status`
 2. `python3 scripts/parallel_workstream.py sync-priority --include-pass`
-3. `python3 scripts/qwen_orchestrator.py --tmux-cmd status --status-format compact`
-4. `python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact`
+3. `bash scripts/tmux_live_watchdog.sh status`
+4. `python3 scripts/parallel_workstream.py validate`
 
 Sans preuve de ces 4 points dans la `EVIDENCE`, le lot est considéré `BLOCKED`.
 
@@ -947,8 +947,8 @@ VERDICT_ATTENDU: PASS|BLOCKED
 
 Source:
 
-- `docs/planning/PRODUCT_VISION.md`
-- `docs/scrum/sprint-next.md`
+- `docs/product/planning/PRODUCT_VISION.md`
+- `docs/product/scrum/sprint-next.md`
 
 Execution rule:
 
@@ -1195,7 +1195,7 @@ Execution rule:
 - **Fichiers cibles**:
   - `scripts/run_delivery_gate.sh`
   - `finance-app/openclaw-gates/`
-  - `docs/scrum/sprint-next.md`
+- `docs/product/scrum/sprint-next.md`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
   - Modules à réutiliser (voir docs/ops/REUSE_MODULES_CATALOG.md): apps/api/src/platform/legacy/core/response.py; apps/api/src/services/snapshot_loader.py; apps/api/src/platform/legacy/storage/io.py
   - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
@@ -1816,7 +1816,7 @@ Source audit (2026-02-26):
 - **Scope OUT**: CI/CD cloud complet.
 - **Fichiers cibles**:
   - `scripts/run_delivery_gate.sh`
-  - `docs/scrum/sprint-next.md`
+- `docs/product/scrum/sprint-next.md`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
   - Modules à réutiliser (voir docs/ops/REUSE_MODULES_CATALOG.md): apps/api/src/platform/main.py (_response_cache_*); apps/api/src/services/snapshot_loader.py; apps/api/src/platform/legacy/storage/ttl.py
   - Forecast-first invariant: chaque livraison doit soit produire une prevision API data-driven (action/direction, confidence, horizon, why, risk_flag, freshness), soit prouver son rendu UI + evidence gate sur le flux decision principal.
@@ -3674,7 +3674,7 @@ Basic-ready criteria (minimum functional baseline):
   - critères pass/fail par flux
 - **Scope OUT**: roadmap long terme.
 - **Fichiers cibles**:
-  - `docs/scrum/`
+  - `docs/product/scrum/`
   - `docs/planning/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:
   - Modules à réutiliser (voir docs/ops/REUSE_MODULES_CATALOG.md): scripts/run_delivery_gate.sh; scripts/backend_regression_gate.sh; scripts/preflight_dispatch.sh; finance-app/openclaw-gates/
@@ -3743,7 +3743,7 @@ Basic-ready criteria (minimum functional baseline):
   - correction priorisée par impact utilisateur
 - **Scope OUT**: refactors non bloquants.
 - **Fichiers cibles**:
-  - `docs/scrum/`
+  - `docs/product/scrum/`
   - `apps/api/`
   - `apps/web/src/`
 - **INTEGRATION-APP-EENGINEER-RECOMMENDATIONS**:

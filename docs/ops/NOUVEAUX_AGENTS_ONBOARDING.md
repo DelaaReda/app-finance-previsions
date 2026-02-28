@@ -560,7 +560,7 @@ xclip -selection clipboard -o
 
 4. **📝 Validation Tri-Admin**
    - **REQUIS** pour: Scripts nouveaux, Changements architecture, API keys
-   - **FORMAT:** `docs/ops/ADMIN_TEAM_CHAT.md`
+   - **FORMAT:** `docs/ops/TEAM_CHAT.md (general) or docs/ops/ADMIN_TEAM_CHAT.md (admins only)`
    - **APPROVAL:** 2/3 admins minimum
 
 ---
@@ -778,7 +778,7 @@ diff /tmp/ps-before.txt /tmp/ps-after.txt
 
 ```bash
 # 1. Vérifier approvals dans ADMIN_TEAM_CHAT.md
-grep -A 10 "Extension.*APPROVED" docs/ops/ADMIN_TEAM_CHAT.md
+grep -A 10 "Extension.*APPROVED" docs/ops/TEAM_CHAT.md (general) or docs/ops/ADMIN_TEAM_CHAT.md (admins only)
 
 # 2. Installer avec scope limité
 qwen extensions link <extension-path> --scope=workspace
@@ -831,7 +831,7 @@ bash scripts/security/test_extension_sandbox.sh /tmp/extension-review/<name>
 bash scripts/security/generate_security_report.sh /tmp/extension-review/<name>
 
 # 6. Submit pour review tri-admin
-# Ajouter rapport dans docs/ops/ADMIN_TEAM_CHAT.md
+# Ajouter rapport dans docs/ops/TEAM_CHAT.md (general) or docs/ops/ADMIN_TEAM_CHAT.md (admins only)
 
 # === APRÈS APPROVAL (2/3 admins) ===
 
@@ -911,7 +911,7 @@ rkhunter --check
 # - Passwords
 
 # 6. Rapport incident
-# Documenter dans docs/ops/ADMIN_TEAM_CHAT.md
+# Documenter dans docs/ops/TEAM_CHAT.md (general) or docs/ops/ADMIN_TEAM_CHAT.md (admins only)
 # Inclure: timeline, impact, remediation
 
 # 7. Notification tri-admin + owner

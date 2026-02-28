@@ -37,7 +37,7 @@ python3 scripts/parallel_workstream.py sync-priority --include-pass
 - EVIDENCE doit inclure: `run_note=<phrase>=5 mots`, `exec_report=...`, `channels_read=...`, `impact_assessment=...`, `impact_action=...` (si impact medium+)
 - Inclure l’artefact rôle: ex. `PLANNER_ARTIFACT=docs/...`, `BACKEND_ARTIFACT=apps/api/src/...`
 
-**Référence:** `docs/operations/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
+**Référence:** `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
 
 **Template minimal (8 lignes obligatoires):**
 ```
@@ -76,7 +76,7 @@ NEXT_ACTION_UNIQUE=...
 tmux list-sessions
 
 # Forcer un re-run des rôles bloqués (admin)
-# Voir docs/operations/ops/ADMIN_TEAM_CRON_PLAYBOOK.md
+# Voir docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md
 ```
 
 ---
@@ -93,8 +93,8 @@ tmux list-sessions
 | Document | Chemin |
 |----------|--------|
 | ORCHESTRATION_COORDINATION_SPEC | `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml` |
-| ROLE_CONTRACT_EVIDENCE_SCHEMA | `docs/operations/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md` |
-| PARALLEL_PLUMBING_QUICKSTART | `docs/operations/ops/PARALLEL_PLUMBING_QUICKSTART.md` |
+| ROLE_CONTRACT_EVIDENCE_SCHEMA | `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md` |
+| PARALLEL_PLUMBING_QUICKSTART | `docs/ops/PARALLEL_PLUMBING_QUICKSTART.md` |
 | priority-queue | `docs/orchestrator-ops/priority-queue.json` |
 | parallel-workstreams-plumbing | `docs/orchestrator-ops/parallel-workstreams-plumbing.json` |
 
@@ -107,6 +107,34 @@ tmux list-sessions
 3. **Un rôle pilote** (ex. planner) – vérifier qu’il passe le contract guard
 4. **Autres rôles** – activer progressivement
 
+## Supervision continue (copier-coller rapide)
+
+```bash
+# 1) Vérifier l'état des sessions tmux
+tmux list-sessions -F '#S' | sort
+
+# 2) Vérifier la santé du pipeline d'orchestration
+python3 scripts/parallel_workstream.py status
+
+# 3) Vérifier l'état des files (queue + board)
+jq '.items[] | {id,state,next_action,owner_role,dispatch_authorized}' docs/orchestrator-ops/priority-queue.json
+jq '.streams[] | {id,state,planner_slot}' docs/orchestrator-ops/parallel-workstreams.json
+
+# 4) Relancer un rôle (quand bloqué) via runner
+for r in planner frontend_engineer backend_engineer data_analyst; do
+  ./scripts/cron_tmux_role_runner.sh \"$r\"
+done
+
+# 5) Vérifier activité récente par rôle
+for r in planner frontend_engineer backend_engineer data_analyst; do
+  echo \"== $r ==\"
+  tail -n 12 \"logs-codex-runs/role-runner/${r}.live.log\"
+done
+
+# 6) Détection de dérives récurrentes
+rg -n \"NO_DELTA|NO_READY|BLOCKED|checkpoint_fallback\" logs-codex-runs/role-runner/*.live.log
+```
+
 ---
 
-*Voir aussi: `docs/ops/AGENTS_READY.md`, `docs/operations/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`*
+*Voir aussi: `docs/ops/AGENTS_READY.md`, `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`*

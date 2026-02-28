@@ -218,6 +218,15 @@ NEWS_FEED_CACHE_TTL_SECONDS = max(
 )
 _STOCKS_PRICES_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 _NEWS_FEED_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_DATA_FRESHNESS_TTL_SECONDS: Dict[str, int] = {
+    "forecasts": 24 * 3600,
+    "news_feed": 30 * 60,
+    "brief_daily": 24 * 3600,
+    "brief_weekly": 7 * 24 * 3600,
+    "macro_series": 7 * 24 * 3600,
+    "stocks": 24 * 3600,
+    "backtests": 30 * 24 * 3600,
+}
 
 
 # Import data access layer
@@ -478,6 +487,61 @@ def _to_utc_iso(value: Any) -> Optional[str]:
     if dt is None:
         return None
     return dt.isoformat().replace("+00:00", "Z")
+
+
+def _extract_payload_timestamp(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    for key in ("freshness", "generated_at", "saved_at", "last_update", "timestamp"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _payload_age_seconds(payload: Any, now: Optional[datetime] = None) -> Optional[float]:
+    raw_ts = _extract_payload_timestamp(payload)
+    parsed = _coerce_utc_datetime(raw_ts)
+    if parsed is None:
+        return None
+    now_dt = now or datetime.now(timezone.utc)
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+    age_seconds = (now_dt - parsed).total_seconds()
+    return float(age_seconds) if age_seconds >= 0 else 0.0
+
+
+def _is_payload_stale(payload: Any, ttl_seconds: int, now: Optional[datetime] = None) -> bool:
+    if not isinstance(payload, dict):
+        return True
+    age_seconds = _payload_age_seconds(payload, now=now)
+    if age_seconds is None:
+        return True
+    return age_seconds > ttl_seconds
+
+
+def _freshness_payload(payload: Any, ttl_seconds: int, now: Optional[datetime] = None) -> Dict[str, Any]:
+    now_dt = now or datetime.now(timezone.utc)
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+    timestamp = _to_utc_iso(_extract_payload_timestamp(payload))
+    age_seconds = _payload_age_seconds(payload, now=now_dt)
+    status = "missing"
+    is_fresh = False
+    if age_seconds is None:
+        age_seconds = None
+    else:
+        status = "fresh" if age_seconds <= ttl_seconds else "stale"
+        is_fresh = status == "fresh"
+
+    return {
+        "timestamp": timestamp,
+        "age_seconds": age_seconds,
+        "age_minutes": round(age_seconds / 60.0, 2) if age_seconds is not None else None,
+        "ttl_seconds": ttl_seconds,
+        "status": status,
+        "is_fresh": is_fresh,
+    }
 
 
 def _normalize_news_article(article: Any) -> Optional[Dict[str, Any]]:
@@ -1026,6 +1090,21 @@ def create_app() -> FastAPI:
                 except ImportError:
                     run_alerts_job = None
             try:
+                from jobs.backtests_simple import run_backtests_simple
+                run_backtests_job = run_backtests_simple
+            except ImportError:
+                try:
+                    from backend.jobs.backtests_simple import run_backtests_simple
+                    run_backtests_job = run_backtests_simple
+                except ImportError:
+                    try:
+                        from jobs.backtests_job import run_backtests_job
+                    except ImportError:
+                        try:
+                            from backend.jobs.backtests_job import run_backtests_job
+                        except ImportError:
+                            run_backtests_job = None
+            try:
                 from scheduler.app import start_scheduler
             except ImportError:
                 try:
@@ -1064,9 +1143,11 @@ def create_app() -> FastAPI:
                 forecast_count = len(forecasts_data.get("rows", []))
                 logger.info(f"✅ Forecasts data found: {forecast_count} forecasts")
 
-            # Check and generate news feed if missing or empty
+            # Check and generate news feed if missing, empty, or stale
+            news_ttl_seconds = int(os.getenv("NEWS_FRESHNESS_TTL_SECONDS", "1800") or "1800")
             news_data = load_json("news_feed") or load_json("news_feed.json")
-            if not news_data or not news_data.get("articles") or len(news_data.get("articles", [])) == 0:
+            news_stale = _is_payload_stale(news_data, news_ttl_seconds)
+            if not news_data or not news_data.get("articles") or len(news_data.get("articles", [])) == 0 or news_stale:
                 logger.info("⚠️  No news feed found or empty, fetching in background...")
                 asyncio.create_task(run_job_async(run_news_ingest, "News ingestion"))
             else:
@@ -1133,6 +1214,18 @@ def create_app() -> FastAPI:
             else:
                 alerts_count = len(alerts_data.get("alerts", []))
                 logger.info(f"✅ Alerts data found: {alerts_count} alerts")
+
+            # Check and generate backtests if missing or stale
+            backtests_data = load_json("backtests") or load_json("backtests.json")
+            if not backtests_data or _is_payload_stale(
+                backtests_data, _DATA_FRESHNESS_TTL_SECONDS["backtests"]
+            ):
+                logger.info("⚠️  No backtests found or stale, running in background...")
+                if run_backtests_job:
+                    asyncio.create_task(run_job_async(run_backtests_job, "Backtests analysis"))
+            else:
+                backtests_hits = (backtests_data.get("overall_metrics", {}) or {}).get("n_trades", 0)
+                logger.info(f"✅ Backtests data found: {backtests_hits} evaluated trades")
 
             # Refresh tested/working LLM model list at each app startup (non-blocking).
             if ensure_working_models:
@@ -1317,12 +1410,62 @@ def register_routes(app: FastAPI):
     @app.get("/api/freshness")
     async def data_freshness():
         """Check freshness of all data sources."""
-        # Placeholder implementation - not yet available in core.data_access
+        now = datetime.now(timezone.utc)
+        try:
+            from storage.io import load_json
+        except Exception:
+            load_json = lambda key: None  # type: ignore
+
+        forecasts_data = load_json("forecasts") or load_json("forecasts.json")
+        news_data = load_json("news_feed") or load_json("news_feed.json")
+        macro_data = load_json("macro_series") or load_json("macro_series.json")
+        stocks_data = load_json("stocks/prices") or load_json("stocks/prices.json")
+        backtests_data = load_json("backtests") or load_json("backtests.json")
+        weekly_brief_data = load_json("brief_weekly") or load_json("brief_weekly.json")
+
+        forecasts_meta = _freshness_payload(forecasts_data, _DATA_FRESHNESS_TTL_SECONDS["forecasts"], now=now)
+        news_meta = _freshness_payload(news_data, _DATA_FRESHNESS_TTL_SECONDS["news_feed"], now=now)
+        macro_meta = _freshness_payload(macro_data, _DATA_FRESHNESS_TTL_SECONDS["macro_series"], now=now)
+        stocks_meta = _freshness_payload(stocks_data, _DATA_FRESHNESS_TTL_SECONDS["stocks"], now=now)
+        backtests_meta = _freshness_payload(
+            backtests_data,
+            _DATA_FRESHNESS_TTL_SECONDS["backtests"],
+            now=now,
+        )
+        weekly_brief_meta = _freshness_payload(
+            weekly_brief_data,
+            _DATA_FRESHNESS_TTL_SECONDS["brief_weekly"],
+            now=now,
+        )
+
         return _ok({
-            "macro_freshness_minutes": 60,
-            "news_freshness_minutes": 15,
-            "stocks_freshness_minutes": 5,
-            "last_update": datetime.utcnow().isoformat()
+            "macro_freshness_minutes": macro_meta["age_minutes"],
+            "news_freshness_minutes": news_meta["age_minutes"],
+            "stocks_freshness_minutes": stocks_meta["age_minutes"],
+            "backtests_freshness_minutes": backtests_meta["age_minutes"],
+            "last_update": now.isoformat().replace("+00:00", "Z"),
+            "targets": {
+                "forecasts_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["forecasts"] / 60),
+                "news_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["news_feed"] / 60),
+                "stocks_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["stocks"] / 60),
+                "backtests_hours": round(_DATA_FRESHNESS_TTL_SECONDS["backtests"] / 3600),
+            },
+            "freshness": {
+                "forecasts": forecasts_meta,
+                "news": news_meta,
+                "macro": macro_meta,
+                "stocks": stocks_meta,
+                "backtests": backtests_meta,
+                "weekly_brief": weekly_brief_meta,
+            },
+            "all_fresh": (
+                forecasts_meta["is_fresh"]
+                and news_meta["is_fresh"]
+                and stocks_meta["is_fresh"]
+                and backtests_meta["is_fresh"]
+            ),
+            "source": ["api_health", "freshness_metrics"],
+            "status": "ok",
         })
 
     @app.get("/api/frontend/config")
@@ -3864,8 +4007,30 @@ def register_routes(app: FastAPI):
                 from storage.io import load_json
             except Exception:
                 load_json = lambda key: {}  # type: ignore
+            run_backtests_job = None
+            try:
+                from jobs.backtests_simple import run_backtests_simple as _run_backtests_simple
+                run_backtests_job = _run_backtests_simple
+            except Exception:
+                try:
+                    from backend.jobs.backtests_simple import run_backtests_simple as _run_backtests_simple
+                    run_backtests_job = _run_backtests_simple
+                except Exception:
+                    try:
+                        from jobs.backtests_job import run_backtests_job as _run_backtests_job
+                        run_backtests_job = _run_backtests_job
+                    except Exception:
+                        pass
 
             bt = load_json("backtests") or load_json("backtests.json") or {}
+            backtests_ttl = _DATA_FRESHNESS_TTL_SECONDS["backtests"]
+            if run_backtests_job and (not bt or _is_payload_stale(bt, backtests_ttl)):
+                try:
+                    generated_bt = await run_in_threadpool(run_backtests_job)
+                    if isinstance(generated_bt, dict) and generated_bt:
+                        bt = generated_bt
+                except Exception:
+                    pass
             if not bt:
                 requested_strategy = rule or "all"
                 requested_min_confidence = 0.0
@@ -3902,13 +4067,27 @@ def register_routes(app: FastAPI):
             core = data_block if isinstance(data_block, dict) else bt if isinstance(bt, dict) else {}
 
             # Normalize keys from various producers (jobs/services)
-            metrics = core.get("metrics") or {}
-            n_trades = int(metrics.get("n_trades", core.get("n_trades", 0)) or 0)
-            avg_ret = float(metrics.get("avg_expected_return", core.get("avg_return", 0)) or 0)
+            metrics = core.get("metrics") if isinstance(core, dict) else {}
+            overall_metrics = core.get("overall_metrics") if isinstance(core, dict) else {}
+            if not metrics and isinstance(overall_metrics, dict):
+                metrics = overall_metrics
+            n_trades = int(metrics.get("n_trades", metrics.get("total_trades", core.get("n_trades", 0))) or 0)
+            avg_ret = float(
+                metrics.get("avg_expected_return", metrics.get("avg_return", core.get("avg_return", 0)))
+                or 0
+            )
             hit_rate = float(metrics.get("hit_rate", core.get("hit_rate", 0)) or 0)
-            stdev = metrics.get("stdev", 0)
+            if n_trades == 0:
+                n_trades = int(
+                    core.get("total_trades", 0)
+                    or core.get("results", {}).get("total_trades", 0)
+                    or core.get("results", {}).get("n_trades", 0)
+                    or overall_metrics.get("total_trades", 0)
+                )
+            stdev = metrics.get("stdev", metrics.get("volatility", 0))
 
             generated_at = core.get("until") or core.get("generated_at") or datetime.utcnow().isoformat()
+            cache_status = "stale" if _is_payload_stale(bt, backtests_ttl) else "fresh"
 
             # If no meaningful backtests snapshot, compute a lightweight real-time metric from latest prices
             if not core or (not core.get("results") and not core.get("overall_metrics")):
@@ -4005,7 +4184,7 @@ def register_routes(app: FastAPI):
                     "hit_rate": hit_rate,
                 },
                 "results_list": core.get("results", []),
-                "cache_status": "fresh" if core else "empty",
+                "cache_status": cache_status,
             }
             return _ok(response_data)
         except Exception as e:
@@ -4200,10 +4379,27 @@ def register_routes(app: FastAPI):
             backtest_status = "pending"
             if backtests_data:
                 results = backtests_data.get("results") or backtests_data.get("data", {}).get("results", []) or []
+                overall_metrics = (
+                    backtests_data.get("overall_metrics")
+                    or backtests_data.get("data", {}).get("overall_metrics")
+                    or {}
+                )
                 if isinstance(results, list) and len(results) > 0:
                     correct = sum(1 for r in results if isinstance(r, dict) and r.get("correct", False))
                     hit_rate = (correct / len(results)) * 100 if results else 0.0
                     backtest_status = "completed"
+                elif isinstance(overall_metrics, dict):
+                    overall_hit_rate = overall_metrics.get("hit_rate", 0) or 0
+                    try:
+                        overall_hit_rate = float(overall_hit_rate)
+                    except (TypeError, ValueError):
+                        overall_hit_rate = 0.0
+                    n_trades = int(
+                        overall_metrics.get("n_trades", overall_metrics.get("total_trades", 0)) or 0
+                    )
+                    if n_trades > 0:
+                        backtest_status = "completed"
+                    hit_rate = overall_hit_rate * 100 if overall_hit_rate <= 1 else overall_hit_rate
             
             # Build base_data with all KPIs
             # Macro last update (optional)

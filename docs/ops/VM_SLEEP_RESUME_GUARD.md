@@ -1,0 +1,1 @@
+../operations/ops/VM_SLEEP_RESUME_GUARD.md

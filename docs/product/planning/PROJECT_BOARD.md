@@ -1,57 +1,32 @@
-# PROJECT_BOARD.md
+# PROJECT_BOARD (Vision + Orchestration)
 
-## North Star
-Livrer un **MVP Finance Copilot stable en local** (backend + frontend + 5 endpoints fiables), sans suppression destructive.
+## Sources de vérité
+- `docs/product/planning/PRODUCT_VISION.md`
+- `docs/product/planning/WORKSTATE.md`
+- `docs/orchestrator-ops/parallel-workstreams.json`
+- `docs/orchestrator-ops/priority-queue.json`
 
-## Working Rules (Hard)
-- ❌ Ne jamais supprimer de code/fichiers historiques
-- ✅ Déplacer l'ancien dans `legacy/` ou repo legacy dédié
-- ✅ Tickets de 2-4h max
-- ✅ WIP max = 2 tickets en parallèle
-- ✅ Une tâche = preuve de validation (commande/test)
+## État courant
+- **BATCH-01**: CLOSE
+- **BATCH-02**: CLOSE
+- **BATCH-03**: IN_PROGRESS
+- **BATCH-04**: READY (planifié)
+- **BATCH-05**: READY (planifié)
+- **BATCH-06**: READY (planifié)
+- **BATCH-07**: READY (planifié)
 
-## Priority Backlog (Sprint 0 - Structuration)
+## Priorité opérationnelle immédiate
+1. Poursuivre BATCH-03 avec tâches prêtes pour `frontend_engineer`, `backend_engineer`, `data_analyst`.
+2. Valider completion avec workboard + queue avant ouverture de `BATCH-04`.
+3. Maintenir la règle: `planner` ne doit pas réouvrir/fermer de batch sans preuve d'achèvement dans les deux sources.
 
-### TODO
-- [ ] S0-T1 Cartographier les zones actives vs legacy
-  - Owner: Architect
-  - Deliverable: `ARCHITECTURE_MAP.md` validé
-  - Validation: chemins actifs documentés + conventions import
+## Risques à surveiller
+- État de tâche incohérent entre queue et workboard.
+- Handoff/communication de status en retard (batch trop vite marqué complet).
+- Tâches de batch suivant non bloquées par dépendance batch parent.
 
-- [ ] S0-T2 Définir workflow agents + DoD + format ticket
-  - Owner: PO/Analyst
-  - Deliverable: `AGENT_WORKFLOW.md`
-  - Validation: templates prêts à copier-coller
-
-- [ ] S0-T3 Politique legacy (migrations safe)
-  - Owner: Architect
-  - Deliverable: `LEGACY_POLICY.md`
-  - Validation: checklist move + naming standard
-
-- [ ] S0-T4 Préparer handoff prompts (roles)
-  - Owner: PO
-  - Deliverable: dossier `handoff/`
-  - Validation: 4 briefs min (backend/frontend/data/qa)
-
-- [ ] S0-T5 Définir MVP scope figé (v1)
-  - Owner: Prioritization Analyst
-  - Deliverable: `MVP_SCOPE.md`
-  - Validation: in-scope/out-of-scope + endpoints cibles
-
-### DOING
-- [ ] (empty)
-
-### DONE
-- [x] S0-INIT Créer la structure de gouvernance locale
-  - Preuve: `PROJECT_BOARD.md`, `AGENT_WORKFLOW.md`, `ARCHITECTURE_MAP.md`, `LEGACY_POLICY.md`, `MVP_SCOPE.md`, `handoff/*`, `legacy/README.md`
-
-## Risks & Blockers
-- Architecture hybride (`backend/services` + `backend/src/services`) peut perdre les agents
-- Frontend comporte encore des mocks massifs (`mockData.js`)
-- Jobs avec nombreux fallbacks peuvent masquer des pannes de data
-
-## Daily Checkpoint Format
-- Done today
-- Broken / blocked
-- Next 3 priorities
-- Confidence (0-100)
+## Checklist de route
+- [ ] Vérifier `docs/orchestrator-ops/parallel-workstreams.json` (stream/taskes BATCH-03)
+- [ ] Vérifier `docs/orchestrator-ops/priority-queue.json` (item BATCH-03)
+- [ ] Vérifier preuves `docs/orchestrator-ops/proofs/...`
+- [ ] Mettre `docs/product/planning/WORKSTATE.md` à jour après chaque transition.

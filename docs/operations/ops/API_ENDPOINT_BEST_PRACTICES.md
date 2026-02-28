@@ -9,10 +9,10 @@ Standardiser tous les endpoints avec le même niveau de qualité que les endpoin
   - auth/permissions,
   - appel d'un service métier réutilisable,
   - mapping de réponse (`ok/data`) + fallback de dernier niveau.
-- Toute logique métier (filtres, scoring, cache/single-flight, intégrations externes, LLM pipelines) doit vivre dans `src/services/*`.
+- Toute logique métier (filtres, scoring, cache/single-flight, intégrations externes, LLM pipelines) doit vivre dans les modules métier du domaine.
 - Les routes ne doivent pas contenir de logique métier longue.
 - Utiliser le module standard de services pour éviter la duplication:
-  - `copilot-app/backend/src/services/service_standard.py`
+  - `apps/api/src/platform/legacy/services/service_standard.py`
   - helpers clés: `utc_now_iso`, `safe_int`, `safe_float`, `ensure_source_list`, `append_source_tag`, `unwrap_storage_payload`, `service_response`, `never_empty_payload`.
 
 ## Contrat de réponse (non négociable)
@@ -67,16 +67,16 @@ Standardiser tous les endpoints avec le même niveau de qualité que les endpoin
 
 ## Endpoints LLM (pattern Judge à copier)
 Référence:
-- route orchestrateur: `copilot-app/backend/src/api/routes/judge.py`
-- service endpoint: `copilot-app/backend/src/services/judge_endpoint_service.py`
-- logique métier: `services/judge_pipeline.py` + `services/g4f_client.py`
+- route orchestrateur: `apps/api/src/domains/judge/api/judge.py`
+- service endpoint: `apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- logique métier: `apps/api/src/domains/judge/application/judge_pipeline.py` + `apps/api/src/domains/judge/application/g4f_client.py`
 
 Règles supplémentaires:
 - Le service endpoint ne doit pas importer dynamiquement la route.
   - Pour les endpoints template volumineux (ex: verdict judge), la route passe explicitement une fonction de compute au service (`compute_verdicts_fn`) pour garder le découplage.
 - Point d'entrée **canonique** pour tous les appels LLM backend:
-  - `services.g4f_client.call_llm(...)`
-  - facade stable equivalent (preferred for low-cognitive-load imports): `reuse.llm.call_llm(...)`
+  - `apps/api/src/domains/judge/application/g4f_client.call_llm(...)`
+  - facade équivalente stable selon le contexte du module
   - modes supportés:
     - `mode="dev"`: modèles rapides + timeout court + peu d'essais
     - `mode="best"`: meilleur modèle testé + fallback chain complète
@@ -90,27 +90,22 @@ Règles supplémentaires:
   - parsing tolérant (dernière ligne puis extraction du plus gros bloc `{...}`).
 - Multi-provider fallback (ordre recommandé):
   1. provider principal (ex: OpenRouter via agent)
-  2. g4f no-auth via `services/g4f_client.call_llm` (`mode="best"` en prod)
+  2. g4f no-auth via `apps/api/src/domains/judge/application/g4f_client.py` (`mode="best"` en prod)
   3. Codestral (`services/codestral_client.call_codestral`) si `CODESTRAL_API_KEY`
   4. Groq (`services/groq_client.call_groq`) si `GROQ_API_KEY`
   - exposer explicitement `fallback_used` et `model/provider` en debug.
 - Ne jamais casser le contrat "never-empty": si le LLM échoue, retourner `data` vide mais valide + `error` + `source[]=*_fallback`.
 
 ## Template réutilisable (style Judge)
-- Module template backend: `copilot-app/backend/src/api/templates/judge_like_endpoint.py`
+- Module template backend: `apps/api/src/platform/legacy/api/templates/judge_like_endpoint.py`
   - `stable_cache_key(...)`
   - `response_cache_get(...)`
   - `response_cache_set(...)`
   - `compute_singleflight(...)`
   - `append_source_tag(...)`
 - Endpoint de référence template appliqué:
-  - route orchestrateur: `copilot-app/backend/src/api/routes/forecasts.py`
-  - logique métier réutilisable: `copilot-app/backend/src/services/forecasts_service.py`
-- Facades de réutilisation pour agents:
-  - `copilot-app/backend/src/reuse/llm.py`
-  - `copilot-app/backend/src/reuse/forecasting.py`
-  - `copilot-app/backend/src/reuse/judge.py`
-  - `copilot-app/backend/src/reuse/data.py`
+  - route orchestrateur: `apps/api/src/domains/forecasts/api/forecasts.py`
+  - logique métier réutilisable: `apps/api/src/domains/forecasts/application/forecasts_service.py`
 
 ## Tests minimum requis
 - Test de contrat endpoint:

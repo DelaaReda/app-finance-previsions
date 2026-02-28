@@ -1,6 +1,6 @@
 # 🚀 BATCH-03 Ready for Execution - Handoff Summary
 
-**Status:** ✅ COMPLETE  
+**Status:** ⏳ IN_PROGRESS  
 **Last Updated:** 2026-02-28 22:15 UTC  
 **Commit:** `690e609` (origin/codex/judge-reuse-guidance-20260226)
 
@@ -13,7 +13,7 @@
 - All 4 backend endpoints operational
 - Caching + fallback strategy implemented
 - PRODUCT_VISION.md is authoritative north star
-- BATCH-03 marked READY in orchestration system
+- BATCH-03 is READY in `docs/orchestrator-ops/priority-queue.json` and stream is `IN_PROGRESS` in `docs/orchestrator-ops/parallel-workstreams.json`
 
 ### ✅ Assignments Clear
 - **frontend_engineer:** Connected UI widgets to live data APIs
@@ -106,7 +106,7 @@ curl http://localhost:8050/api/forecasts | jq '.rows[] | select(.backtest_result
 5. Create BATCH-04 with new goals
 
 **Key Files:**
-- `docs/operations/orchestrator/priority-queue.json` (mark completion)
+- `docs/orchestrator-ops/priority-queue.json` (mark completion)
 - `docs/product/planning/WORKSTATE.md` (update state)
 - `memory/agents/planner.md` (your instructions)
 
@@ -138,7 +138,7 @@ grep -A 20 "BATCH-03" memory/agents/data_analyst.md
 grep -A 20 "BATCH-03" memory/agents/planner.md
 
 # Check orchestration state
-cat docs/operations/orchestrator/priority-queue.json | jq '.items[] | select(.id == "BATCH-03")'
+cat docs/orchestrator-ops/priority-queue.json | jq '.items[] | select(.id == "BATCH-03")'
 ```
 
 ---
@@ -174,7 +174,7 @@ cat docs/operations/orchestrator/priority-queue.json | jq '.items[] | select(.id
 docs/product/planning/PRODUCT_VISION.md
     ↑ Everything flows from this
 
-docs/operations/orchestrator/priority-queue.json
+docs/orchestrator-ops/priority-queue.json
     ↑ Source of truth for batch states
 
 apps/web/src/domains/forecasts/contracts/apiConnector.js  

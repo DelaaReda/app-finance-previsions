@@ -111,7 +111,7 @@ Un agent passe en on-demand / est supprime si:
 ### Cas particulier
 - `dev` (ON-DEMAND, ou supprimer si vous voulez "specialists only")
   - Aujourd'hui, le trio `backend_engineer` + `frontend_engineer` + `integrator` couvre l'essentiel.
-  - Garder `dev` seulement si vous avez beaucoup de taches "glue" (scripts/docs/refactors) qui ne rentrent pas bien dans backend/frontend/infra.
+- Garder `dev` seulement si vous avez beaucoup de taches "glue" (`scripts/`) qui ne rentrent pas bien dans backend/frontend/infra.
 
 ## Portfolio Recommande
 Si l'objectif est "moins d'agents, meme qualite":

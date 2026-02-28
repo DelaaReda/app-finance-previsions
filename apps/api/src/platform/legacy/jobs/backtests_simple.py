@@ -5,8 +5,8 @@ and persists a minimal snapshot to data/backtests.json.
 """
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import sys
 from pathlib import Path
@@ -18,6 +18,27 @@ from storage.io import save_json, load_json
 from core.market_data import get_price_history  # type: ignore
 
 
+def _coerce_timestamp(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            return None
+    return None
+
+
 def run_backtests_simple() -> Dict[str, Any]:
     try:
         forecasts = load_json("forecasts") or {}
@@ -26,8 +47,10 @@ def run_backtests_simple() -> Dict[str, Any]:
             or forecasts.get("data", {}).get("rows", [])
             or []
         )
-        # Build unique latest direction per ticker
-        latest: Dict[str, str] = {}
+        # Build most recent directional prediction by ticker from last 7 days
+        latest_by_ticker: Dict[str, Tuple[str, datetime]] = {}
+        now = datetime.now(timezone.utc)
+        min_ts = now - timedelta(days=7)
         for r in rows:
             if not isinstance(r, dict):
                 continue
@@ -35,7 +58,22 @@ def run_backtests_simple() -> Dict[str, Any]:
             if not t:
                 continue
             d = str(r.get("direction") or "").lower()
-            latest[t] = d
+            if d not in ("up", "down"):
+                continue
+            ts = _coerce_timestamp(
+                r.get("generated_at")
+                or r.get("last_update")
+                or r.get("freshness")
+                or r.get("saved_at")
+            )
+            if ts is None or ts < min_ts:
+                continue
+
+            prev = latest_by_ticker.get(t)
+            if prev is None or ts > prev[1]:
+                latest_by_ticker[t] = (d, ts)
+
+        latest: Dict[str, str] = {ticker: direction for ticker, (direction, _) in latest_by_ticker.items()}
 
         import requests as _rq
         from urllib.parse import urlencode

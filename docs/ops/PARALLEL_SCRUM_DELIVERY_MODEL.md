@@ -1,0 +1,1 @@
+../operations/ops/PARALLEL_SCRUM_DELIVERY_MODEL.md

@@ -15,7 +15,7 @@ const v16State = {
 };
 
 // Diamond Facettes Configuration
-// Facettes configuration moved to mockData.js
+// Facettes configuration fallback data and UI config
 
 // ============ V16 DIAMOND DROPDOWN FUNCTIONS (ENHANCED) ============
 function toggleDiamondDropdown() {
@@ -628,25 +628,483 @@ document.addEventListener('click', (e) => {
 });
 
 // ============ DATA LAYER ============
-// V11 Enhanced Data
-// v11Data moved to mockData.js
+const LIVE_DATA_EVENT = window.FINANCECOPILOT_LIVE_EVENT || 'financecopilot:live-dashboard-updated';
+const LIVE_FALLBACK_TAG = 'offline-fallback';
 
-// V13 Trade Ideas Data
-// tradeIdeas moved to mockData.js
+const FALLBACK_FACETTES = {
+  'deep-dive': {
+    icon: '📈',
+    name: 'Deep Dive Action',
+    color: '#3B82F6',
+    needsSearch: true,
+    tabs: ['Synthèse', 'Prévisions', 'Risques', 'Signaux Techniques', 'Actualités', 'Copilot']
+  },
+  economie: {
+    icon: '🌍',
+    name: 'Économie Globale',
+    color: '#10B981',
+    needsSearch: false,
+    tabs: ['Marché', 'Macro Économie', 'Prévisions', 'News Économiques', 'Copilot Macro']
+  },
+  news: {
+    icon: '📰',
+    name: 'News Impactantes',
+    color: '#F59E0B',
+    needsSearch: false,
+    tabs: ['Toutes les News', 'High Impact', 'Mes Holdings', 'Par Secteur']
+  },
+  previsions: {
+    icon: '🔮',
+    name: 'Prévisions AI',
+    color: '#8B5CF6',
+    needsSearch: false,
+    tabs: ['Portfolio', 'Marché Général', 'Secteurs', 'Actions Suivies']
+  },
+  risques: {
+    icon: '🚦',
+    name: 'Risques & Signaux',
+    color: '#EF4444',
+    needsSearch: false,
+    tabs: ['Alertes Actives', 'Risk Dashboard', 'Anomalies Détectées', 'Monitoring']
+  },
+  copilot: {
+    icon: '🤖',
+    name: 'Copilot Q&A',
+    color: '#14B8A6',
+    needsSearch: false,
+    tabs: ['Chat Global', 'Questions Fréquentes', 'Historique', 'Suggestions']
+  },
+  trading: {
+    icon: '💹',
+    name: 'Opportunités Trading',
+    color: '#FCD34D',
+    needsSearch: false,
+    tabs: ['Trade Ideas', 'Backtests', 'Scenarios', 'Exécution']
+  },
+  portfolio: {
+    icon: '🗂️',
+    name: 'Portfolio Analytics',
+    color: '#6366F1',
+    needsSearch: false,
+    tabs: ['Vue d’Ensemble', 'Performance', 'Holdings', 'Attribution', 'Dividendes']
+  },
+  explorer: {
+    icon: '🗺️',
+    name: 'Explorer Avancé',
+    color: '#EC4899',
+    needsSearch: false,
+    tabs: ['Corrélations', 'Clustering', 'Patterns', 'Heatmaps', 'Network Graph']
+  }
+};
 
-// V13 Market Calendar Data
-// marketCalendar moved to mockData.js
+const FALLBACK_V11_DATA = {
+  userProfile: {
+    type: 'Trader',
+    preferences: {
+      complexityLevel: 'advanced',
+      autoRefresh: true,
+      refreshInterval: 30,
+      theme: 'dark',
+      notifications: true
+    },
+    behavior: {
+      mostViewedTab: 'Opportunities',
+      mostClickedWidget: 'Trade Ideas',
+      averageSessionTime: 18,
+      lastActive: '2025-11-18T20:00:00'
+    }
+  },
+  aiSuggestions: [
+    { type: 'check', title: 'Check Risk Concentration Alert', priority: 'high', widget: 'Risk Alerts', tab: 'Risk', timestamp: '2 min ago' },
+    { type: 'view', title: "You haven't viewed Sector Performance today", priority: 'medium', widget: 'Sector Performance', tab: 'Market Intel', timestamp: 'Today' },
+    { type: 'action', title: 'NVDA signal 92% confidence - Act Now', priority: 'high', widget: 'Trade Ideas', tab: 'Opportunities', timestamp: '2h ago' }
+  ],
+  storyPoints: {
+    overview: [
+      { step: 1, title: 'Portfolio Performance', description: 'Portfolio up 1.88% today, driven by tech rally', widget: 'Hero KPIs', highlight: 'portfolioValue' }
+    ]
+  },
+  aiInsights: {
+    overview: [
+      { type: 'positive', icon: '📈', title: 'Technical trend', description: 'Momentum remains constructive', severity: 'info', action: 'View Performance' },
+      { type: 'neutral', icon: '⚖️', title: 'Risk stable', description: 'Risk score stable for the session', severity: 'info', action: 'View Risk' }
+    ],
+    opportunities: []
+  }
+};
 
-// V13 News Items Data (EXPANDED)
-// newsItems moved to mockData.js
+const FALLBACK_TRADE_IDEAS = [
+  { symbol: 'NVDA', signalType: 'Breakout', entry: 875, target: 980, confidence: 92 },
+  { symbol: 'META', signalType: 'Reversal', entry: 520, target: 565, confidence: 85 }
+];
 
-// V13 LLM Judge Data
-// llmJudgeData moved to mockData.js
+const FALLBACK_MARKET_CALENDAR = {
+  earnings: [
+    { stock: 'NVDA', date: 'Nov 20', impact: 'High', holding: true }
+  ],
+  economicData: [
+    { event: 'Fed Minutes', date: 'Nov 21', impact: 'High' }
+  ],
+  exDividend: [
+    { stock: 'MSFT', date: 'Nov 19', amount: 0.68 }
+  ]
+};
 
-// V13 Market Drivers Visual
-// marketDrivers moved to mockData.js
+const FALLBACK_NEWS_ITEMS = [
+  { headline: 'Fed Signals Rate Cuts Q2', impact: 8.5, effect: '+3.2%', time: '2h ago', source: 'Reuters', category: 'Macro' },
+  { headline: 'NVDA Earnings Beat Expectations', impact: 9.2, effect: '+5.1%', time: '4h ago', source: 'Bloomberg', category: 'Earnings' }
+];
 
-// appData moved to mockData.js
+const FALLBACK_LLM_JUDGE_DATA = {
+  question: 'What should I do with my portfolio today?',
+  consensus: 'HOLD POSITIONS',
+  confidence: 87,
+  models: [
+    { name: 'Model A', verdict: 'Hold', confidence: 85, icon: '🤖' },
+    { name: 'Model B', verdict: 'Hold', confidence: 90, icon: '🧠' },
+    { name: 'Model C', verdict: 'Hold', confidence: 86, icon: '💎' }
+  ],
+  reasoning: 'Signals remain mixed but bias remains constructive with moderate confidence.',
+  dataSources: ['Portfolio Analysis', 'Market Signals', 'News Feed'],
+  suggestedActions: [
+    { icon: '🔔', title: 'Set Alert', detail: 'NVDA $880', action: 'setAlert' },
+    { icon: '⚖️', title: 'Review Risk', detail: 'Concentration Check', action: 'reviewRisk' },
+    { icon: '📅', title: 'Check Calendar', detail: '3 Events This Week', action: 'viewCalendar' }
+  ]
+};
+
+const FALLBACK_MARKET_DRIVERS = [
+  { factor: 'Technical', contribution: 40, color: '#1F40AF' },
+  { factor: 'Sentiment', contribution: 35, color: '#8B5CF6' },
+  { factor: 'News', contribution: 20, color: '#F59E0B' },
+  { factor: 'Macro', contribution: 5, color: '#10B981' }
+];
+
+const FALLBACK_APP_DATA = {
+  portfolioSparkline: [125000, 125150, 125300, 125400, 125550, 125700, 125800, 125950, 126100, 126200, 126100, 126250, 126400, 126500, 126650, 126800, 126900, 127050, 127200, 127150, 127100],
+  forecastProjection: [127456, 127650, 127850, 128100, 128350, 128600, 128800, 129000, 129250, 129500, 129700, 129900, 130100, 130300, 130500, 130700],
+  stockSparklines: {
+    NVDA: [820, 822, 825, 828, 830, 832, 835, 837, 840, 842, 845, 847, 850, 852, 855, 857, 860, 862, 865, 867, 870],
+    META: [500, 501, 502, 503, 505, 506, 508, 509, 510, 511, 512, 513, 515, 516, 518, 519, 520, 521, 522, 523, 523.5],
+    AAPL: [175, 175.5, 176, 176.5, 177, 177.5, 178, 178.5, 179, 179.5, 178.5, 178, 177.5, 177, 176.5, 176, 177, 177.5, 178, 178.5, 179],
+    MSFT: [400, 401, 402, 403, 405, 406, 408, 409, 410, 411, 412, 413, 414, 415, 416, 415, 414, 413, 412, 411, 410],
+    GOOGL: [138, 138.5, 139, 139.5, 140, 140.5, 141, 141.5, 142, 141.5, 141, 140.5, 140, 139.5, 139, 140, 140.5, 141, 141.5, 142]
+  },
+  hero: {
+    portfolioValue: 127456,
+    portfolioChange: 1.88,
+    forecastNext30d: 5.3,
+    forecastConfidence: 82,
+    winRate: 72,
+    winRateChange: 2.3
+  },
+  story: {
+    headline: 'Aperçu du jour',
+    content: 'Les signaux IA détectent un retour de confiance technique; le marché reste orienté croissance.',
+    sentiment: 'bullish',
+    timestamp: 'Updated 5 minutes ago'
+  },
+  correlations: {
+    labels: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
+    data: [
+      [1.0, 0.85, 0.72, 0.68, 0.58],
+      [0.85, 1.0, 0.78, 0.70, 0.62],
+      [0.72, 0.78, 1.0, 0.68, 0.55],
+      [0.68, 0.70, 0.68, 1.0, 0.60],
+      [0.58, 0.62, 0.55, 0.60, 1.0]
+    ]
+  },
+  portfolioHealth: {
+    overall: 83,
+    suggestion: 'Diversifier Tech → Santé'
+  },
+  backtestResults: {
+    sharpeRatio: 1.28,
+    winRate: 72,
+    maxDrawdown: -12.3,
+    totalReturn: 28.5
+  },
+  marketDrivers: FALLBACK_MARKET_DRIVERS,
+  opportunities: [
+    { conviction: 'High', return: 12.3, confidence: 92 },
+    { conviction: 'Medium', return: 5.8, confidence: 78 }
+  ],
+  topStocks: [
+    { symbol: 'NVDA', price: 875.60, change: 8.5, forecast: '+12.3%', confidence: 92 },
+    { symbol: 'META', price: 523.45, change: 5.2, forecast: '+8.1%', confidence: 85 },
+    { symbol: 'AAPL', price: 178.23, change: 2.1, forecast: '+4.5%', confidence: 78 }
+  ]
+};
+
+let facettes = window.facettes || FALLBACK_FACETTES;
+let v11Data = window.v11Data || FALLBACK_V11_DATA;
+let tradeIdeas = sanitizeTradeIdeas(window.tradeIdeas || FALLBACK_TRADE_IDEAS);
+let marketCalendar = sanitizeMarketCalendar(window.marketCalendar || FALLBACK_MARKET_CALENDAR);
+let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
+let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
+let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
+let appData = normalizeAppData(window.appData || {});
+let liveDataMeta = {
+  generatedAt: new Date().toISOString(),
+  sources: [LIVE_FALLBACK_TAG],
+  modelVersions: [LIVE_FALLBACK_TAG],
+  warnings: ['offline-fallback'],
+  freshness: { lastFetchedAt: Date.now(), ttlMs: 60000 }
+};
+
+function isObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toString(value, fallback = '') {
+  if (value === undefined || value === null) return fallback;
+  return String(value);
+}
+
+function toArray(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function toNumberArray(value, fallback = []) {
+  if (!Array.isArray(value)) return fallback;
+  const normalized = value
+    .map((item) => toFiniteNumber(item))
+    .filter((item) => Number.isFinite(item));
+  return normalized.length ? normalized : fallback;
+}
+
+function sanitizeTradeIdeas(items) {
+  const rows = toArray(items, FALLBACK_TRADE_IDEAS);
+  return rows.map((item) => ({
+    symbol: toString(item.symbol || item.ticker || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
+    signalType: toString(item.signalType || item.signal, 'Signal'),
+    entry: toFiniteNumber(item.entry, 0),
+    target: toFiniteNumber(item.target, 0),
+    confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70))))
+  }));
+}
+
+function sanitizeNewsItems(items) {
+  const rows = toArray(items, FALLBACK_NEWS_ITEMS);
+  return rows.map((item) => ({
+    headline: toString(item.headline, 'Market update'),
+    impact: Math.max(0, Math.min(10, Math.round(toFiniteNumber(item.impact, 5)))),
+    effect: toString(item.effect, `${toFiniteNumber(item.change_percent, 0).toFixed(1)}%`),
+    time: toString(item.time || item.published_at || item.created_at, 'recently'),
+    source: toString(item.source, 'Unknown'),
+    category: toString(item.category || item.section || item.ticker, 'News'),
+    tickers: toArray(item.tickers, []),
+    sentiment: toString(item.sentiment, '')
+  }));
+}
+
+function sanitizeMarketCalendar(calendar) {
+  const source = isObject(calendar) ? calendar : FALLBACK_MARKET_CALENDAR;
+  return {
+    earnings: toArray(source.earnings, FALLBACK_MARKET_CALENDAR.earnings).map((item) => ({
+      stock: toString(item.stock, 'N/A'),
+      date: toString(item.date, 'TBA'),
+      impact: toString(item.impact, 'Medium'),
+      holding: Boolean(item.holding)
+    })),
+    economicData: toArray(source.economicData, FALLBACK_MARKET_CALENDAR.economicData).map((item) => ({
+      event: toString(item.event, 'N/A'),
+      date: toString(item.date, 'TBA'),
+      impact: toString(item.impact, 'Medium')
+    })),
+    exDividend: toArray(source.exDividend, FALLBACK_MARKET_CALENDAR.exDividend).map((item) => ({
+      stock: toString(item.stock, 'N/A'),
+      date: toString(item.date, 'TBA'),
+      amount: toFiniteNumber(item.amount, 0)
+    }))
+  };
+}
+
+function sanitizeMarketDrivers(items) {
+  const rows = toArray(items, FALLBACK_MARKET_DRIVERS);
+  return rows.map((item) => ({
+    factor: toString(item.factor, 'Market'),
+    contribution: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.contribution, 0)))),
+    color: toString(item.color, '#1F40AF')
+  }));
+}
+
+function sanitizeCorrelationMatrix(rows, fallback) {
+  if (!Array.isArray(rows)) return fallback;
+  if (!rows.length) return fallback;
+  return rows.map((row) => toNumberArray(row, fallback[0] || []));
+}
+
+function normalizeAppData(data = {}) {
+  const base = FALLBACK_APP_DATA;
+  const source = isObject(data) ? data : {};
+  const sourceCorrelations = isObject(source.correlations) ? source.correlations : {};
+  const labels = toArray(sourceCorrelations.labels, base.correlations.labels);
+  const size = labels.length;
+  const matrix = sanitizeCorrelationMatrix(sourceCorrelations.data, base.correlations.data).slice(0, size);
+
+  return {
+    ...base,
+    ...source,
+    portfolioSparkline: toNumberArray(source.portfolioSparkline, base.portfolioSparkline),
+    forecastProjection: toNumberArray(source.forecastProjection, base.forecastProjection),
+    stockSparklines: {
+      ...base.stockSparklines,
+      ...(isObject(source.stockSparklines) ? source.stockSparklines : {})
+    },
+    hero: {
+      ...base.hero,
+      ...(isObject(source.hero) ? source.hero : {})
+    },
+    correlations: {
+      labels,
+      data: matrix
+    },
+    portfolioHealth: {
+      ...base.portfolioHealth,
+      ...(isObject(source.portfolioHealth) ? source.portfolioHealth : {})
+    },
+    backtestResults: {
+      ...base.backtestResults,
+      ...(isObject(source.backtestResults) ? {
+        sharpeRatio: toFiniteNumber(source.backtestResults.sharpe_ratio ?? source.backtestResults.sharpeRatio, base.backtestResults.sharpeRatio),
+        winRate: toFiniteNumber(source.backtestResults.win_rate ?? source.backtestResults.winRate, base.backtestResults.winRate),
+        maxDrawdown: toFiniteNumber(source.backtestResults.max_drawdown ?? source.backtestResults.maxDrawdown, base.backtestResults.maxDrawdown),
+        totalReturn: toFiniteNumber(source.backtestResults.total_return ?? source.backtestResults.totalReturn, base.backtestResults.totalReturn)
+      } : source.backtestResults)
+    },
+    opportunities: toArray(source.opportunities, base.opportunities),
+    topStocks: toArray(source.topStocks, base.topStocks),
+    marketDrivers: toArray(source.marketDrivers, base.marketDrivers),
+    newsImpact: toArray(source.newsImpact, [])
+  };
+}
+
+function formatRelativeTime(input) {
+  const parsed = Date.parse(input);
+  if (Number.isNaN(parsed)) return 'just now';
+  const deltaMs = Math.max(0, Date.now() - parsed);
+  const deltaMin = Math.floor(deltaMs / 60000);
+  if (deltaMin < 1) return 'just now';
+  if (deltaMin < 60) return `${deltaMin}m ago`;
+  const deltaHours = Math.floor(deltaMin / 60);
+  if (deltaHours < 24) return `${deltaHours}h ago`;
+  const deltaDays = Math.floor(deltaHours / 24);
+  return `${deltaDays}d ago`;
+}
+
+function updateLiveProvenance(meta = {}) {
+  const lineage = document.getElementById('liveDataProvenance');
+  if (!lineage) return;
+
+  const configuredSources = toArray(meta.sources, [LIVE_FALLBACK_TAG]);
+  const configuredModels = toArray(meta.modelVersions, ['unknown']);
+  const configuredWarnings = toArray(meta.warnings, []);
+  const sources = configuredSources.length ? configuredSources : [LIVE_FALLBACK_TAG];
+  const models = configuredModels.length ? configuredModels : ['unknown'];
+  const warnings = configuredWarnings.length ? configuredWarnings : [];
+  const warningText = warnings.length ? ` | warnings: ${warnings.join(', ')}` : '';
+  const freshness = formatRelativeTime(meta.generatedAt);
+  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${warningText}`;
+}
+
+function syncDashboardCards() {
+  const hero = appData.hero || {};
+  const portfolioValue = toFiniteNumber(hero.portfolioValue, FALLBACK_APP_DATA.hero.portfolioValue);
+  const portfolioChange = toFiniteNumber(hero.portfolioChange, FALLBACK_APP_DATA.hero.portfolioChange);
+  const forecast30d = toFiniteNumber(hero.forecastNext30d, FALLBACK_APP_DATA.hero.forecastNext30d);
+  const forecastConfidence = toFiniteNumber(hero.forecastConfidence, FALLBACK_APP_DATA.hero.forecastConfidence);
+  const winRate = Math.round(toFiniteNumber(hero.winRate, FALLBACK_APP_DATA.hero.winRate));
+
+  const portfolioValueEl = document.querySelector('.kpi-value-huge[data-value]');
+  if (portfolioValueEl) {
+    portfolioValueEl.textContent = `$${portfolioValue.toLocaleString()}`;
+  }
+  const changeHuge = document.querySelector('.change-huge');
+  if (changeHuge) {
+    changeHuge.dataset.value = portfolioChange.toFixed(2);
+    changeHuge.textContent = `${portfolioChange >= 0 ? '+' : ''}${portfolioChange.toFixed(2)}%`;
+  }
+  const forecastEl = document.querySelector('.kpi-value-huge.forecast');
+  if (forecastEl) {
+    forecastEl.dataset.value = forecast30d.toFixed(1);
+    forecastEl.textContent = `${forecast30d >= 0 ? '+' : ''}${forecast30d.toFixed(1)}%`;
+  }
+  const gaugeEl = document.querySelector('.gauge-value-overlay');
+  if (gaugeEl) {
+    gaugeEl.textContent = `${Math.round(forecastConfidence)}%`;
+  }
+  const circleEl = document.querySelector('.circle-number[data-value]');
+  if (circleEl) {
+    circleEl.textContent = String(winRate);
+  }
+
+  if (appData.story && appData.story.content) {
+    const summary = document.querySelector('.ai-summary-content');
+    if (summary) {
+      summary.textContent = appData.story.content;
+    }
+    const lastUpdated = document.querySelector('.last-updated');
+    if (lastUpdated) {
+      lastUpdated.textContent = toString(appData.story.timestamp, `Updated ${formatRelativeTime(liveDataMeta.generatedAt)}`);
+    }
+  }
+
+  document.querySelectorAll('.last-updated, .refresh-time').forEach((el) => {
+    el.textContent = `Updated ${formatRelativeTime(liveDataMeta.generatedAt)}`;
+  });
+}
+
+function renderLiveDashboardWidgets() {
+  renderTradeIdeas();
+  renderMarketCalendar();
+  renderNewsFeed();
+  renderMarketDrivers();
+  syncDashboardCards();
+  updateLiveProvenance(liveDataMeta);
+  drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));
+  drawWinRateCircle();
+}
+
+function applyLiveDashboardData(payload = {}) {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  const data = payload.data || payload;
+  const payloadMeta = payload.meta || {};
+  liveDataMeta = {
+    generatedAt: payload.generatedAt || data.generatedAt || payload.generated_at || new Date().toISOString(),
+    sources: toArray(payload.sources, toArray(payloadMeta.sources, toArray(payload.source, [LIVE_FALLBACK_TAG]))),
+    modelVersions: toArray(payload.modelVersions, toArray(payloadMeta.modelVersions, ['unknown'])),
+    warnings: toArray(payload.warnings, toArray(payloadMeta.warnings, [])),
+    freshness: payload.freshness || payload.cache || { lastFetchedAt: Date.now(), ttlMs: 60000 },
+    cache: payload.cache || { lastFetchedAt: Date.now(), ttlMs: 60000 }
+  };
+
+  tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
+  marketCalendar = sanitizeMarketCalendar(data.marketCalendar);
+  newsItems = sanitizeNewsItems(data.newsItems);
+  marketDrivers = sanitizeMarketDrivers(data.marketDrivers);
+  appData = normalizeAppData(data);
+  if (isObject(data.llmJudgeData)) {
+    llmJudgeData = {
+      ...FALLBACK_LLM_JUDGE_DATA,
+      ...data.llmJudgeData
+    };
+  }
+
+  renderLiveDashboardWidgets();
+}
+
+window.addEventListener(LIVE_DATA_EVENT, (event) => {
+  applyLiveDashboardData(event.detail || {});
+});
 
 // V11 State Management
 const v11State = {
@@ -1302,26 +1760,67 @@ document.addEventListener('click', (e) => {
 });
 
 function refreshData() {
-  // Target the dedicated refresh button instead of relying on the implicit event
   const btn = document.querySelector('.header-btn[aria-label="Refresh data"]');
   if (btn) {
     btn.style.animation = 'spin 1s linear';
   }
 
   showLoading();
+  const refresh = (typeof window.refreshLiveData === 'function')
+    ? window.refreshLiveData()
+    : Promise.resolve(window.getLiveDashboardData ? window.getLiveDashboardData() : {});
 
-  setTimeout(() => {
-    hideLoading();
-    if (btn) {
-      btn.style.animation = '';
-    }
-    showToast('Data refreshed successfully');
+  Promise.resolve(refresh)
+    .then((payload) => {
+      if (payload) {
+        applyLiveDashboardData(payload);
+        showToast('Data refreshed from live endpoint');
+      } else {
+        showToast('Data refreshed with cached content');
+      }
+    })
+    .catch((error) => {
+      console.error('refreshData failed:', error);
+      showToast('Refresh failed, keeping last known data', 'error');
+    })
+    .finally(() => {
+      setTimeout(() => {
+        hideLoading();
+        if (btn) {
+          btn.style.animation = '';
+        }
 
-    // Update timestamp
-    document.querySelectorAll('.last-updated, .refresh-time').forEach(el => {
-      el.textContent = 'Updated just now';
+        // Update timestamp
+        document.querySelectorAll('.last-updated, .refresh-time').forEach(el => {
+          el.textContent = `Updated ${formatRelativeTime(liveDataMeta.generatedAt || Date.now())}`;
+        });
+      }, 300);
     });
-  }, 1500);
+}
+
+// V13: Draw Confidence Gauge
+function drawConfidenceGauge(value) {
+  const canvas = document.getElementById('confidenceGauge');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const clampedValue = Math.max(0, Math.min(100, Math.round(toFiniteNumber(value, 82))));
+
+  // Background arc
+  ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(60, 50, 35, 0.75 * Math.PI, 2.25 * Math.PI);
+  ctx.stroke();
+
+  // Value arc
+  const percent = clampedValue / 100;
+  ctx.strokeStyle = '#10B981';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(60, 50, 35, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
+  ctx.stroke();
 }
 
 function openExportModal() {
@@ -1352,6 +1851,39 @@ function saveSettings() {
 
   closeSettings();
   showToast('Settings saved successfully');
+}
+
+function drawConfidenceGauge() {
+  const clampedValue = Math.max(0, Math.min(100, Math.round(toFiniteNumber(appData?.hero?.forecastConfidence, 82))));
+
+  // Background arc
+  const canvas = document.getElementById('confidenceGauge');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Value arc
+  const percent = clampedValue / 100;
+  ctx.strokeStyle = '#10B981';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(60, 50, 35, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
+  ctx.stroke();
+}
+
+  setTimeout(() => {
+    hideLoading();
+    if (btn) {
+      btn.style.animation = '';
+    }
+    showToast('Data refreshed successfully');
+
+    // Update timestamp
+    document.querySelectorAll('.last-updated, .refresh-time').forEach(el => {
+      el.textContent = 'Updated just now';
+    });
+  }, 1500);
 }
 
 function toggleTheme() {
@@ -2624,31 +3156,6 @@ function loadMoreNews() {
   showToast('Loading more news...');
 }
 
-// V13: Draw Confidence Gauge
-function drawConfidenceGauge() {
-  const canvas = document.getElementById('confidenceGauge');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  const value = 82;
-
-  // Background arc
-  ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.arc(60, 50, 35, 0.75 * Math.PI, 2.25 * Math.PI);
-  ctx.stroke();
-
-  // Value arc
-  const percent = value / 100;
-  ctx.strokeStyle = '#10B981';
-  ctx.lineWidth = 8;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(60, 50, 35, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
-  ctx.stroke();
-}
-
 // V13: Draw Win Rate Circle
 function drawWinRateCircle() {
   const canvases = document.querySelectorAll('.win-rate-circle');
@@ -2686,6 +3193,12 @@ function drawWinRateCircle() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  if (typeof window.initLiveData === 'function') {
+    window.initLiveData().catch((error) => {
+      console.warn('[Finance Copilot] live init failed, fallback data remains active:', error?.message || error);
+    });
+  }
+
   console.log('🚀 Finance Copilot V16 ULTIMATE initializing...');
   console.log('✨ ULTIMATE EXCELLENCE VERSION');
   console.log('💎 Diamond Dropdown Top-Left = Enhanced Grid 3x3 Navigation');
@@ -2795,30 +3308,19 @@ window.addEventListener('DOMContentLoaded', () => {
   // V11: Initialize enhancements
   initAISuggestions();
   initAIInsights();
+  applyLiveDashboardData(window.getLiveDashboardData ? window.getLiveDashboardData() : {});
 
   // V13: Initialize visual components
   setTimeout(() => {
-    renderTradeIdeas();
-    renderMarketCalendar();
-    renderNewsFeed();
-    renderMarketDrivers();
-    drawConfidenceGauge();
-    drawWinRateCircle();
-
-    // Sync numeric win rate display with data attribute / appData
-    document.querySelectorAll('.circle-number[data-value]').forEach(el => {
-      const target = parseFloat(el.dataset.value);
-      if (!Number.isNaN(target)) {
-        el.textContent = target.toString();
-      }
-    });
+    renderLiveDashboardWidgets();
   }, 600);
 
   // Animate change values
   setTimeout(() => {
     const changeHuge = document.querySelector('.change-huge');
     if (changeHuge) {
-      animateValue(changeHuge, 0, 1.88, 2000, '+', '%');
+      const target = toFiniteNumber(changeHuge.dataset.value || appData.hero?.portfolioChange, 1.88);
+      animateValue(changeHuge, 0, target, 2000, target >= 0 ? '+' : '', '%');
     }
   }, 800);
 

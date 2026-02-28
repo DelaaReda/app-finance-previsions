@@ -34,17 +34,39 @@ if command -v flock >/dev/null 2>&1; then
   fi
 fi
 
-# Read READY items
+# Validate queue file before sync.
 if [[ ! -f "$QUEUE_FILE" ]]; then
   echo "AUTO_DISPATCH status=NOOP reason=queue_missing"
   exit 0
 fi
+ready_id="UNKNOWN"
 
+# Ensure board exists / synced (also perform migration + queue auto-advance)
+# Preflight gate
+if ! bash scripts/preflight_dispatch.sh >/tmp/preflight_dispatch.out 2>/tmp/preflight_dispatch.err; then
+  log_chat "ALERT" "exec_issue=DISPATCH_PREFLIGHT_BLOCKED; evidence=scripts/preflight_dispatch.sh; impact=delivery; suggestion=fix_preflight_then_retry"
+  echo "AUTO_DISPATCH status=BLOCKED reason=preflight_failed"
+  exit 0
+fi
+
+if ! python3 scripts/parallel_workstream.py sync-priority --include-pass --queue "$QUEUE_FILE" --board "$BOARD_FILE" >/tmp/auto_sync.out 2>/tmp/auto_sync.err; then
+  log_chat "ALERT" "exec_issue=SYNC_PRIORITY_FAILED; evidence=scripts/parallel_workstream.py sync-priority; impact=delivery; suggestion=inspect_auto_sync_err"
+  echo "AUTO_DISPATCH status=BLOCKED reason=board_sync_failed"
+  exit 0
+fi
+
+if [[ ! -f "$BOARD_FILE" ]]; then
+  log_chat "ALERT" "exec_issue=WORKBOARD_MISSING; scope=queue/${QUEUE_FILE}; evidence=${BOARD_FILE}; impact=delivery; suggestion=parallel_workstream_sync_priority"
+  echo "AUTO_DISPATCH status=BLOCKED reason=board_missing id=$ready_id"
+  exit 0
+fi
+
+# Recompute ready items after sync/auto-advance.
 ready_ids="$(jq -r '[.items[]? | select((.state//"")=="READY") | (.id//"")] | map(select(length>0)) | unique | .[]' "$QUEUE_FILE" 2>/dev/null || true)"
 ready_count="$(printf '%s\n' "$ready_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
 
 if [[ "$ready_count" -eq 0 ]]; then
-  echo "AUTO_DISPATCH status=NOOP reason=no_ready"
+  echo "AUTO_DISPATCH status=NOOP reason=no_ready_post_sync"
   exit 0
 fi
 
@@ -63,26 +85,14 @@ if [[ ! "$ready_id" =~ ^BATCH-[0-9]+$ ]]; then
   exit 0
 fi
 
-# Preflight gate
-if ! bash scripts/preflight_dispatch.sh >/tmp/preflight_dispatch.out 2>/tmp/preflight_dispatch.err; then
-  log_chat "ALERT" "exec_issue=DISPATCH_PREFLIGHT_BLOCKED; scope=${ready_id}; evidence=scripts/preflight_dispatch.sh; impact=delivery; suggestion=fix_preflight_then_retry"
-  echo "AUTO_DISPATCH status=BLOCKED reason=preflight_failed id=$ready_id"
-  exit 0
-fi
-
-# Ensure board exists / synced
-if [[ ! -f "$BOARD_FILE" ]]; then
-  python3 scripts/parallel_workstream.py sync-priority >/dev/null 2>&1 || true
-fi
-
-# Collect READY tasks for this batch with empty assignee
-if [[ ! -f "$BOARD_FILE" ]]; then
-  log_chat "ALERT" "exec_issue=WORKBOARD_MISSING; scope=${ready_id}; evidence=${BOARD_FILE}; impact=delivery; suggestion=parallel_workstream_sync_priority"
-  echo "AUTO_DISPATCH status=BLOCKED reason=board_missing id=$ready_id"
-  exit 0
-fi
-
-mapfile -t tasks < <(jq -r --arg pref "${ready_id}-" '.tasks[] | select(.state=="READY") | select((.id//"")|startswith($pref)) | select((.assignee//"")=="") | "\(.role)\t\(.id)"' "$BOARD_FILE" 2>/dev/null || true)
+# Collect READY tasks for this batch that are unassigned or explicitly assigned to the same role.
+mapfile -t tasks < <(
+  jq -r --arg pref "${ready_id}-" '.tasks[]
+    | select(.state=="READY")
+    | select((.id//"")|startswith($pref))
+    | select(((.assignee//"")|length)==0 or .assignee==.role)
+    | "\(.role)\t\(.id)"' "$BOARD_FILE" 2>/dev/null || true
+)
 
 if [[ "${#tasks[@]}" -eq 0 ]]; then
   echo "AUTO_DISPATCH status=NOOP reason=no_unassigned_ready_tasks id=$ready_id"

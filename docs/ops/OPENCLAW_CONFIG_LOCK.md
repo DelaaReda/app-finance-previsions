@@ -1,0 +1,1 @@
+../operations/ops/OPENCLAW_CONFIG_LOCK.md

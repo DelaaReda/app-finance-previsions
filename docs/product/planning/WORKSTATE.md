@@ -3,7 +3,7 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 
 ## ⚡ LECTURE OBLIGATOIRE À CHAQUE RUN
 
-**1. Lis d'abord:** `docs/planning/PRODUCT_VISION.md` — c'est la source de vérité du produit.
+**1. Lis d'abord:** `docs/product/planning/PRODUCT_VISION.md` — c'est la source de vérité du produit.
 **2. Ensuite:** ce fichier pour l'état actuel.
 **3. Puis:** `docs/orchestrator-ops/parallel-workstreams.json` pour les tâches en cours.
 
@@ -33,7 +33,7 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 ## Règles Planner (à appliquer chaque run)
 
 ### Protocole de run
-1. Lire `docs/planning/PRODUCT_VISION.md`
+1. Lire `docs/product/planning/PRODUCT_VISION.md`
 2. Lire ce fichier
 3. Vérifier l'état du batch actif dans workboard
 4. Si batch actif = IN_PROGRESS → monitorer et débloquer
@@ -62,8 +62,8 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 
 ### Si le planner est bloqué
 - **Cause commune 1:** Workboard sans slot planner → chercher le batch OPEN et vérifier que BATCH-N-PLAN existe
-- **Cause commune 2:** Tâche ambiguë → relire `docs/planning/PRODUCT_VISION.md` pour clarification
-- **Cause commune 3:** Rôle bloqué → écrire dans `docs/operations/ops/ADMIN_TEAM_CHAT.md` avec tag `[BLOCKER]`
+- **Cause commune 2:** Tâche ambiguë → relire `docs/product/planning/PRODUCT_VISION.md` pour clarification
+- **Cause commune 3:** Rôle bloqué → écrire dans `docs/ops/ADMIN_TEAM_CHAT.md` avec tag `[BLOCKER]`
 
 ### Ne jamais faire
 - ❌ Tourner en boucle sur la même analyse sans livrer

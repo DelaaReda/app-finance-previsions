@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Copilot V16 ULTIMATE - Excellence Absolue</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="../platform/design-tokens.css">
+  <link rel="stylesheet" href="../platform/style.css">
+</head>
+
+<body>
+  <!-- ============ SECTION: STICKY HEADER ============ -->
+  <!-- Loaded dynamically from components/header.html -->
+  <div id="header-container"></div>
+
+  <!-- V11: AI SUGGESTIONS PANEL -->
+  <!-- Loaded dynamically from components/ai-suggestions-panel.html -->
+  <div id="ai-suggestions-container"></div>
+
+  <!-- V11: FILTER BAR -->
+  <!-- Loaded dynamically from components/filter-bar.html -->
+  <div id="filter-bar-container"></div>
+
+  <!-- MORE MENU DROPDOWN -->
+  <!-- Loaded dynamically from components/modals/more-menu.html -->
+  <div id="more-menu-container"></div>
+
+  <!-- ============ NOTIFICATION DRAWER ============ -->
+  <!-- Loaded dynamically from components/modals/notification-drawer.html -->
+  <div id="notification-drawer-container"></div>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <!-- Loaded dynamically from components/modals/settings-modal.html -->
+  <div id="settings-modal-container"></div>
+
+  <!-- ============ COMMAND PALETTE ============ -->
+  <!-- Loaded dynamically from components/modals/command-palette.html -->
+  <div id="command-palette-container"></div>
+
+  <!-- ============ MAIN CONTENT ============ -->
+  <main class="main-container">
+    <!-- ============ V14: DIAMOND NAVIGATION HUB ============ -->
+    <div id="diamondHub" class="diamond-hub" onclick="toggleDiamondMenu()">
+      <div class="diamond-icon">💎</div>
+      <div class="diamond-label">Navigation</div>
+    </div>
+
+    <!-- ============ DIAMOND RADIAL MENU ============ -->
+    <!-- First duplicate removed - loaded from components/navigation/diamond-menu.html -->
+
+    <!-- ============ FACETTE VIEW CONTAINER ============ -->
+    <!-- Loaded dynamically from components/navigation/facette-view.html -->
+    <div id="facette-view-container"></div>
+
+    <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
+    <section class="hero-section hero-glassmorphic" aria-label="Portfolio overview" style="display: none;"
+      id="mainHeroSection">
+      <div class="hero-header">
+        <div class="user-info">
+          <div class="user-avatar">👤</div>
+          <div>
+            <h1 class="greeting">Bonjour, Alex 👋</h1>
+            <p class="headline">Your AI-Powered Portfolio Command Center</p>
+          </div>
+        </div>
+        <div class="last-updated">Updated 5 minutes ago</div>
+      </div>
+
+      <div class="ai-daily-summary">
+        <div class="ai-summary-header">
+          <span class="ai-icon">🤖</span>
+          <h3>AI Copilot Analysis</h3>
+        </div>
+        <p class="ai-summary-content">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
+          Fed dovish signals support bullish continuation. Recommended: Hold current positions, monitor volatility.</p>
+        <div class="ai-summary-footer">
+          <span class="ai-timestamp">Generated 2 minutes ago</span>
+          <button class="ai-action-btn" onclick="toggleAICopilot()">Ask AI Copilot</button>
+        </div>
+      </div>
+
+      <!-- V13: VISUAL HERO KPIs (HUGE NUMBERS + ARROWS + SPARKLINES) -->
+      <div class="mega-kpi-blocks visual-hero">
+        <div class="kpi-block" tabindex="0" role="article" aria-label="Portfolio value">
+          <div class="kpi-header">
+            <button class="help-icon" onclick="showHelp('portfolio')" aria-label="Help" title="Learn more">?</button>
+          </div>
+          <div class="kpi-value-huge" data-value="127456">$0</div>
+          <div class="kpi-change-visual positive">
+            <span class="arrow-huge">↗️</span>
+            <span class="change-huge" data-value="1.88">+0%</span>
+          </div>
+          <div class="kpi-context-bar">
+            <div class="context-item">
+              <span class="context-label">Target: $130,000</span>
+              <div class="progress-bar-mini">
+                <div class="progress-fill-mini" style="width: 98%"></div>
+              </div>
+            </div>
+            <div class="context-item">
+              <span class="context-badge positive">vs. Last Month: +4.2%</span>
+            </div>
+          </div>
+          <canvas class="kpi-sparkline" id="sparkline1" width="120" height="30"></canvas>
+        </div>
+
+        <div class="kpi-block" tabindex="0" role="article" aria-label="AI forecast">
+          <div class="kpi-header">
+            <div class="kpi-icon">🔮</div>
+            <button class="help-icon" onclick="showHelp('forecast')" aria-label="Help" title="Learn more">?</button>
+          </div>
+          <div class="kpi-value-huge forecast" data-value="5.3">+0%</div>
+          <div class="confidence-gauge-visual">
+            <canvas id="confidenceGauge" width="120" height="60"></canvas>
+            <div class="gauge-value-overlay">82%</div>
+          </div>
+          <canvas class="kpi-sparkline" id="sparkline2" width="120" height="30"></canvas>
+        </div>
+
+        <div class="kpi-block" tabindex="0" role="article" aria-label="Win rate">
+          <div class="kpi-header">
+            <div class="kpi-icon">🎯</div>
+            <button class="help-icon" onclick="showHelp('winrate')" aria-label="Help" title="Learn more">?</button>
+          </div>
+          <div class="circular-progress-container">
+            <canvas id="winRateCircle" class="win-rate-circle" width="140" height="140"></canvas>
+            <div class="circle-value-overlay">
+              <span class="circle-number" data-value="72">0</span>
+              <span class="circle-unit">%</span>
+            </div>
+          </div>
+          <canvas class="kpi-sparkline" id="sparkline3" width="120" height="30"></canvas>
+        </div>
+      </div>
+    </section>
+
+
+
+    <!-- V11: STORY MODE OVERLAY -->
+    <div id="storyOverlay" class="story-overlay" style="display: none;">
+      <div class="story-controls">
+        <button class="story-nav-btn" onclick="prevStoryPoint()" aria-label="Previous">← Prev</button>
+        <div class="story-progress">
+          <span class="story-current" id="storyCurrent">1</span> / <span class="story-total" id="storyTotal">4</span>
+        </div>
+        <button class="story-nav-btn" onclick="nextStoryPoint()" aria-label="Next">Next →</button>
+        <button class="story-exit-btn" onclick="toggleStoryMode()">Exit Story</button>
+      </div>
+      <div id="storyPointContainer" class="story-point-container"></div>
+    </div>
+
+    <!-- ============ V16: DIAMOND DROPDOWN TOP-LEFT ============ -->
+    <!-- Loaded dynamically from components/navigation/diamond-dropdown.html -->
+    <div id="diamond-dropdown-container"></div>
+
+    <!-- ============ DIAMOND RADIAL MENU ============ -->
+    <!-- Loaded dynamically from components/navigation/diamond-menu.html -->
+    <div id="diamond-menu-container"></div>
+
+    <!-- ============ FACETTE VIEW CONTAINER ============ -->
+    <div id="facetteView" class="facette-view" style="display: none;">
+      <div class="facette-header">
+        <button class="back-to-diamond" onclick="closeFacette()">
+          <span>← Back to Diamond</span>
+        </button>
+        <div class="facette-title">
+          <span class="facette-icon-header" id="facetteIcon">📈</span>
+          <h2 id="facetteTitle">Deep Dive Action</h2>
+        </div>
+        <div class="facette-breadcrumb" id="facetteBreadcrumb">💎 &gt; Deep Dive</div>
+      </div>
+
+      <div class="facette-search" id="facetteSearch" style="display: none;">
+        <input type="text" class="facette-search-input" placeholder="Enter stock symbol..." id="stockSymbolInput">
+        <button class="facette-search-btn" onclick="searchStock()">Search</button>
+      </div>
+
+      <div class="facette-tabs" id="facetteTabs"></div>
+
+      <div class="facette-content" id="facetteContent"></div>
+    </div>
+
+    <!-- ============ HERO: WHAT DO YOU NEED TODAY ============ -->
+    <!-- Loaded dynamically from components/sections/hero-what-need.html -->
+    <div id="hero-what-need-container"></div>
+
+    <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
+    <!-- Loaded dynamically from components/sections/hero-glassmorphic.html -->
+    <div id="hero-glassmorphic-container"></div>
+
+    <!-- ============ TAB NAVIGATION ============ -->
+    <!-- ============ TAB NAVIGATION ============ -->
+    <!-- Loaded dynamically from components/navigation/tab-navigation.html -->
+    <div id="tab-navigation-container"></div>
+
+    <!-- ============ TAB CONTENT: OVERVIEW ============ -->
+    <div class="tab-content active" id="tab-overview">
+
+      <!-- V11: DRILL-DOWN MODAL -->
+      <!-- Loaded dynamically from components/modals/drill-down-modal.html -->
+      <div id="drill-down-modal-container"></div>
+
+      <!-- V11: SPLIT VIEW CONTAINER -->
+      <!-- Loaded dynamically from components/sections/split-view.html -->
+      <div id="split-view-container"></div>
+
+      <!-- ============ WIDGET: MARKET PULSE (STORY) ============ -->
+      <!-- Loaded dynamically from components/widgets/market-pulse.html -->
+      <div id="market-pulse-widget-container"></div>
+
+      <!-- ============ V13: TRADE IDEAS WIDGET (SCREENSHOT STYLE) ============ -->
+      <!-- ============ V13: TRADE IDEAS WIDGET (SCREENSHOT STYLE) ============ -->
+      <!-- Loaded dynamically from components/widgets/trade-ideas.html -->
+      <div id="trade-ideas-widget-container"></div>
+
+      <!-- ============ V13: MARKET CALENDAR WIDGET (SCREENSHOT STYLE) ============ -->
+      <!-- Loaded dynamically from components/widgets/market-calendar.html -->
+      <div id="market-calendar-widget-container"></div>
+
+      <!-- ============ V13: NEWS FEED WIDGET (NEW DEDICATED) ============ -->
+      <!-- Loaded dynamically from components/widgets/news-feed.html -->
+      <div id="news-feed-widget-container"></div>
+
+      <!-- ============ V13: LLM JUDGE WIDGET (NEW INTELLIGENT) ============ -->
+      <!-- Loaded dynamically from components/widgets/llm-judge.html -->
+      <div id="llm-judge-widget-container"></div>
+
+      <!-- ============ V17: CANDLESTICK CHART PRO ============ -->
+      <!-- Loaded dynamically from components/widgets/candlestick-chart.html -->
+      <div id="candlestick-chart-widget-container"></div>
+
+      <!-- ============ V17: HEATMAP CORRELATION PRO ============ -->
+      <!-- ============ V17: HEATMAP CORRELATION PRO ============ -->
+      <!-- Loaded dynamically from components/widgets/heatmap-correlation.html -->
+      <div id="heatmap-correlation-widget-container"></div>
+
+      <!-- ============ V17: TREEMAP + KPI CARDS GRID ============ -->
+      <div class="grid-2-desktop">
+        <!-- ============ V17: TREEMAP ALLOCATION PRO ============ -->
+        <section class="widget-card treemap-allocation-pro" aria-label="Treemap Allocation">
+          <div class="widget-header">
+            <div class="widget-title-row">
+              <span class="widget-icon">🗺️</span>
+              <div>
+                <h2 class="widget-title">Portfolio Allocation</h2>
+                <p class="widget-subtitle-inline">Holdings by market value</p>
+              </div>
+            </div>
+          </div>
+          <div class="widget-body">
+            <canvas id="treemapChart" width="800" height="500"></canvas>
+          </div>
+          <div class="widget-footer">
+            <div class="allocation-summary">
+              <span class="summary-item">Tech: 45%</span>
+              <span class="summary-item">Healthcare: 25%</span>
+              <span class="summary-item">Finance: 20%</span>
+              <span class="summary-item">Other: 10%</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ V17: MULTI-KPI CARDS BLOOMBERG STYLE ============ -->
+        <!-- Loaded dynamically from components/widgets/kpi-cards-pro.html -->
+        <div id="kpi-cards-pro-widget-container"></div>
+      </div>
+
+      <!-- ============ V13: MARKET DRIVERS VISUAL ============ -->
+      <!-- ============ V13: MARKET DRIVERS VISUAL ============ -->
+      <!-- Loaded dynamically from components/widgets/market-drivers.html -->
+      <div id="market-drivers-widget-container"></div>
+
+      <!-- ============ WIDGET: QUICK ACTIONS (RECOMMENDATIONS) ============ -->
+      <!-- Loaded dynamically from components/widgets/quick-actions.html -->
+      <div id="quick-actions-widget-container"></div>
+
+      <!-- ============ WIDGET: FORECAST SCENARIOS ============ -->
+      <!-- Loaded dynamically from components/widgets/forecast-scenarios.html -->
+      <div id="forecast-scenarios-widget-container"></div>
+
+      <!-- ============ WIDGET: TOP MOVERS ============ -->
+      <!-- Loaded dynamically from components/widgets/top-movers.html -->
+      <div id="top-movers-widget-container"></div>
+
+      <!-- ============ WIDGET: PORTFOLIO HEALTH SNAPSHOT ============ -->
+      <!-- Loaded dynamically from components/widgets/portfolio-health.html -->
+      <div id="portfolio-health-widget-container"></div>
+
+    </div><!-- End tab-overview -->
+
+    <!-- ============ TAB CONTENT: MARKET ANALYSIS ============ -->
+    <div class="tab-content" id="tab-market" style="display: none;">
+
+      <!-- ============ WIDGETS GRID ROW 1: MARKET DRIVERS ============ -->
+      <div class="grid-2col">
+        <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
+        <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
+        <!-- Loaded dynamically from components/widgets/alerts-timeline.html -->
+        <div id="alerts-timeline-widget-container"></div>
+
+        <!-- ============ WIDGET: What's Driving Your Portfolio ============ -->
+        <!-- ============ WIDGET: What's Driving Your Portfolio ============ -->
+        <!-- Loaded dynamically from components/widgets/market-drivers-detailed.html -->
+        <div id="market-drivers-detailed-widget-container"></div>
+      </div>
+
+      <!-- ============ WIDGETS GRID ROW 2: STOCK RELATIONSHIPS + SIMILAR STOCKS ============ -->
+      <div class="grid-2col">
+        <!-- ============ WIDGET: Stock Relationships ============ -->
+        <!-- ============ WIDGET: Stock Relationships ============ -->
+        <!-- Loaded dynamically from components/widgets/stock-relationships.html -->
+        <div id="stock-relationships-widget-container"></div>
+
+        <!-- ============ WIDGET: Similar Stocks ============ -->
+        <!-- ============ WIDGET: Similar Stocks ============ -->
+        <!-- Loaded dynamically from components/widgets/similar-stocks.html -->
+        <div id="similar-stocks-widget-container"></div>
+      </div>
+
+      <!-- ============ WIDGETS GRID ROW 3: NEWS + SECTOR ============ -->
+      <div class="grid-2col">
+        <!-- ============ WIDGET: News That Matters ============ -->
+        <!-- ============ WIDGET: News That Matters ============ -->
+        <!-- Loaded dynamically from components/widgets/news-impact.html -->
+        <div id="news-impact-widget-container"></div>
+
+        <!-- ============ WIDGET: Sector Performance ============ -->
+        <!-- ============ WIDGET: Sector Performance ============ -->
+        <!-- Loaded dynamically from components/widgets/sector-performance.html -->
+        <div id="sector-performance-widget-container"></div>
+      </div>
+
+      <!-- ============ V15: MARKET VOLATILITY PRO ============ -->
+      <!-- ============ V15: MARKET VOLATILITY PRO ============ -->
+      <!-- Loaded dynamically from components/widgets/market-volatility.html -->
+      <div id="market-volatility-widget-container"></div>
+
+    </div><!-- End tab-market -->
+
+    <!-- ============ TAB CONTENT: OPPORTUNITIES ============ -->
+    <div class="tab-content" id="tab-opportunities" style="display: none;">
+
+      <!-- ============ WIDGET: ALERTS TIMELINE ============ -->
+      <!-- ============ WIDGET: AI RECOMMENDATIONS ============ -->
+      <div class="recommendations-grid">
+        <!-- ============ WIDGET: AI RECOMMENDATIONS ============ -->
+        <section class="widget-card ai-recommendations" aria-label="AI recommendations">
+          <div class="widget-header">
+            <div class="widget-title-row">
+              <span class="widget-icon">🤖</span>
+              <h2 class="widget-title">AI Recommendations</h2>
+            </div>
+            <div class="widget-actions">
+              <button class="help-icon" onclick="showHelp('recommendations')" aria-label="Help"
+                title="AI-powered investment recommendations">?</button>
+              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+            </div>
+          </div>
+          <div class="widget-body">
+            <div class="recommendation-cards">
+              <div class="recommendation-card high-conviction">
+                <div class="rec-header">
+                  <span class="conviction-badge high">High Conviction</span>
+                </div>
+                <h3 class="rec-title">Strong Buy NVDA</h3>
+                <div class="rec-metrics">
+                  <span>Return: +12.3%</span>
+                  <span>Confidence: 92%</span>
+                </div>
+                <p class="rec-reasoning">Breakout pattern + earnings beat</p>
+                <div class="rec-actions">
+                  <button class="rec-btn primary" onclick="showToast('Executing NVDA trade...')">Execute Trade</button>
+                  <button class="rec-btn secondary" onclick="showToast('Added to watchlist')">Add to Watchlist</button>
+                  <button class="rec-btn" onclick="showToast('Learning why...')">Learn Why</button>
+                </div>
+              </div>
+              <div class="recommendation-card medium-conviction">
+                <div class="rec-header">
+                  <span class="conviction-badge medium">Medium Conviction</span>
+                </div>
+                <h3 class="rec-title">Rebalance Portfolio</h3>
+                <div class="rec-metrics">
+                  <span>Benefit: Risk reduction</span>
+                </div>
+                <div class="rec-actions">
+                  <button class="rec-btn primary" onclick="showToast('Viewing rebalance plan...')">See Plan</button>
+                  <button class="rec-btn secondary" onclick="showToast('Scheduled')">Schedule</button>
+                </div>
+              </div>
+              <div class="recommendation-card low-conviction">
+                <div class="rec-header">
+                  <span class="conviction-badge low">Low Conviction</span>
+                </div>
+                <h3 class="rec-title">Explore Healthcare</h3>
+                <div class="rec-metrics">
+                  <span>Potential: +2.1%</span>
+                </div>
+                <div class="rec-actions">
+                  <button class="rec-btn primary"
+                    onclick="showToast('Researching healthcare sector...')">Research</button>
+                  <button class="rec-btn secondary" onclick="showToast('Alert set')">Set Alert</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="widget-footer">
+            <span class="widget-timestamp">Updated hourly</span>
+          </div>
+        </section>
+
+        <!-- ============ WIDGET: TRADE IDEAS ============ -->
+        <section class="widget-card trade-ideas" aria-label="Trade ideas">
+          <div class="widget-header">
+            <div class="widget-title-row">
+              <span class="widget-icon">💡</span>
+              <h2 class="widget-title">Trade Ideas</h2>
+            </div>
+            <div class="widget-actions">
+              <button class="help-icon" onclick="showHelp('ideas')" aria-label="Help"
+                title="AI-generated trade opportunities">?</button>
+              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+            </div>
+          </div>
+          <div class="widget-body">
+            <div class="trade-ideas-table">
+              <div class="trade-idea-row">
+                <span class="idea-stock">NVDA</span>
+                <span class="idea-signal">Breakout</span>
+                <span class="idea-entry">$875</span>
+                <span class="idea-target">$980</span>
+                <span class="idea-risk">3:1</span>
+                <button class="idea-trade-btn" onclick="showToast('Opening trade modal...')">Trade</button>
+              </div>
+              <div class="trade-idea-row">
+                <span class="idea-stock">META</span>
+                <span class="idea-signal">Reversal</span>
+                <span class="idea-entry">$520</span>
+                <span class="idea-target">$565</span>
+                <span class="idea-risk">2:1</span>
+                <button class="idea-trade-btn" onclick="showToast('Opening trade modal...')">Trade</button>
+              </div>
+              <div class="trade-idea-row">
+                <span class="idea-stock">AAPL</span>
+                <span class="idea-signal">Value</span>
+                <span class="idea-entry">$178</span>
+                <span class="idea-target">$185</span>
+                <span class="idea-risk">2:1</span>
+                <button class="idea-trade-btn" onclick="showToast('Opening trade modal...')">Trade</button>
+              </div>
+            </div>
+          </div>
+          <div class="widget-footer">
+            <span class="widget-timestamp">Updated hourly</span>
+            <button class="widget-action-btn" onclick="showToast('Viewing all trade ideas...')">View All Ideas</button>
+          </div>
+        </section>
+
+        <!-- ============ WIDGET: MARKET CALENDAR ============ -->
+        <section class="widget-card market-calendar" aria-label="Market calendar">
+          <div class="widget-header">
+            <div class="widget-title-row">
+              <span class="widget-icon">📅</span>
+              <h2 class="widget-title">Market Calendar</h2>
+            </div>
+            <div class="widget-actions">
+              <button class="help-icon" onclick="showHelp('calendar')" aria-label="Help"
+                title="Upcoming events affecting your portfolio">?</button>
+              <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+            </div>
+          </div>
+          <div class="widget-body">
+            <p class="widget-subtitle">3 earnings this week may impact your holdings</p>
+            <div class="calendar-events">
+              <div class="calendar-section">
+                <h4 class="calendar-section-title">Earnings (Next 7 days)</h4>
+                <div class="calendar-event">NVDA - Nov 20</div>
+                <div class="calendar-event">META - Nov 22</div>
+                <div class="calendar-event">AAPL - Nov 24</div>
+              </div>
+              <div class="calendar-section">
+                <h4 class="calendar-section-title">Economic Data</h4>
+                <div class="calendar-event">Fed Minutes - Nov 21</div>
+                <div class="calendar-event">CPI Report - Nov 23</div>
+              </div>
+              <div class="calendar-section">
+                <h4 class="calendar-section-title">Ex-Dividend Dates</h4>
+                <div class="calendar-event">MSFT - Nov 19</div>
+              </div>
+            </div>
+          </div>
+          <div class="widget-footer">
+            <span class="widget-timestamp">Updated daily</span>
+            <button class="widget-action-btn" onclick="showToast('Setting reminders...')">Set Reminders</button>
+          </div>
+        </section>
+      </div>
+
+    </div><!-- End tab-opportunities -->
+
+    <!-- ============ TAB CONTENT: PERFORMANCE ============ -->
+    <div class="tab-content" id="tab-performance" style="display: none;">
+
+      <!-- ============ WIDGET: PORTFOLIO HEALTH (FULL) ============ -->
+      <section class="widget-card portfolio-health-full" aria-label="Portfolio health full">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🎯</span>
+            <h2 class="widget-title">Portfolio Health</h2>
+          </div>
+          <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('health-full')" aria-label="Help"
+              title="Complete portfolio health analysis">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <div class="health-full-layout">
+            <div class="health-gauge-large">
+              <canvas id="healthGauge" width="200" height="200"></canvas>
+              <div class="health-value" id="healthValue">0%</div>
+            </div>
+            <div class="health-breakdown">
+              <div class="health-metric-item">
+                <span class="metric-label">Diversification</span>
+                <div class="metric-bar">
+                  <div class="metric-fill" style="width: 70%">7/10</div>
+                </div>
+              </div>
+              <div class="health-metric-item">
+                <span class="metric-label">Risk Level</span>
+                <div class="metric-bar">
+                  <div class="metric-fill" style="width: 60%">6/10</div>
+                </div>
+              </div>
+              <div class="health-metric-item">
+                <span class="metric-label">Growth Potential</span>
+                <div class="metric-bar">
+                  <div class="metric-fill" style="width: 90%">9/10</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="health-suggestions">
+            <h4>Prioritized Suggestions</h4>
+            <div class="suggestion-item high">
+              <span class="suggestion-priority">High Priority</span>
+              <span class="suggestion-text">Reduce Tech concentration</span>
+              <button class="suggestion-action-btn" onclick="showToast('Viewing tech allocation...')">Act</button>
+            </div>
+            <div class="suggestion-item medium">
+              <span class="suggestion-priority">Medium Priority</span>
+              <span class="suggestion-text">Add defensive positions</span>
+              <button class="suggestion-action-btn" onclick="showToast('Exploring defensive stocks...')">Act</button>
+            </div>
+            <div class="suggestion-item low">
+              <span class="suggestion-priority">Low Priority</span>
+              <span class="suggestion-text">Review cash allocation</span>
+              <button class="suggestion-action-btn" onclick="showToast('Reviewing cash position...')">Act</button>
+            </div>
+          </div>
+        </div>
+        <div class="widget-footer">
+          <span class="widget-timestamp">Updated daily</span>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: BACKTEST YOUR STRATEGY ============ -->
+      <section class="widget-card backtest-sim" aria-label="Backtest simulation">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🧪</span>
+            <h2 class="widget-title">Test Your Ideas</h2>
+          </div>
+          <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('backtest')" aria-label="Help"
+              title="Simulate trading strategies">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <div class="backtest-input">
+            <label for="strategySelect">Select strategy from dropdown:</label>
+            <select id="strategySelect" class="strategy-select">
+              <option value="momentum">Momentum Strategy</option>
+              <option value="value">Value Investing</option>
+              <option value="growth">Growth Focus</option>
+              <option value="dividend">Dividend Strategy</option>
+            </select>
+            <button class="backtest-btn" onclick="runBacktest()" aria-label="Run simulation">Run Simulation</button>
+          </div>
+          <div class="backtest-results" id="backtestResults" style="display: none;">
+            <h4>Results</h4>
+            <div class="backtest-metrics" id="backtestMetrics"></div>
+            <div class="backtest-comparison">
+              <label class="comparison-toggle">
+                <input type="checkbox" id="compareToggle" onchange="toggleComparison()">
+                Compare vs. Buy &amp; Hold
+              </label>
+            </div>
+            <div class="backtest-actions">
+              <button class="backtest-action-btn" onclick="showToast('Strategy saved')">Save Strategy</button>
+              <button class="backtest-action-btn" onclick="showToast('Exporting report...')">Export Report</button>
+            </div>
+          </div>
+        </div>
+        <div class="widget-footer">
+          <span class="widget-timestamp">Historical data: 5 years</span>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: PERFORMANCE TABLE (FULL) ============ -->
+      <section class="widget-card performance-table-section" aria-label="Top stocks">
+        <div class="widget-header">
+          <h2 class="widget-title">Top Stocks &amp; Predictions</h2>
+          <div class="widget-actions">
+            <button class="export-btn" onclick="exportWidget('table')" aria-label="Export CSV">CSV</button>
+            <button class="collapse-btn" onclick="toggleCollapse(this)" aria-label="Collapse">−</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <div class="performance-table-container">
+            <table class="performance-table" id="performanceTable">
+              <thead>
+                <tr>
+                  <th onclick="sortTable(0)">Symbol ↕</th>
+                  <th onclick="sortTable(1)">Price ↕</th>
+                  <th onclick="sortTable(2)">Change ↕</th>
+                  <th onclick="sortTable(3)">Forecast</th>
+                  <th onclick="sortTable(4)">Confidence ↕</th>
+                  <th>Trend</th>
+                </tr>
+              </thead>
+              <tbody id="performanceTableBody"></tbody>
+            </table>
+          </div>
+          <button class="load-more-btn" onclick="loadMoreStocks()">Load more stocks</button>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: RETURNS BREAKDOWN ============ -->
+      <section class="widget-card returns-breakdown" aria-label="Returns breakdown">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">📈</span>
+            <h2 class="widget-title">Returns Breakdown</h2>
+          </div>
+          <div class="widget-actions">
+            <div class="time-range-selector">
+              <button class="range-btn active" onclick="selectReturnRange(this, '1M')">1M</button>
+              <button class="range-btn" onclick="selectReturnRange(this, '3M')">3M</button>
+              <button class="range-btn" onclick="selectReturnRange(this, '6M')">6M</button>
+              <button class="range-btn" onclick="selectReturnRange(this, '1Y')">1Y</button>
+              <button class="range-btn" onclick="selectReturnRange(this, 'ALL')">All</button>
+            </div>
+            <button class="help-icon" onclick="showHelp('returns')" aria-label="Help"
+              title="Cumulative return analysis">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <p class="widget-subtitle">You're up 28.5% vs. S&amp;P 500's 15.2%</p>
+          <div class="returns-chart-container">
+            <canvas id="returnsChart" width="800" height="300"></canvas>
+          </div>
+          <div class="returns-stats">
+            <div class="stat-item">
+              <span class="stat-label">Total Return</span>
+              <span class="stat-value positive">28.5%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Annualized</span>
+              <span class="stat-value positive">18.3%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Best Month</span>
+              <span class="stat-value positive">+12.1%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Worst Month</span>
+              <span class="stat-value negative">-5.3%</span>
+            </div>
+          </div>
+        </div>
+        <div class="widget-footer">
+          <span class="widget-timestamp">Updated daily</span>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: TRADE HISTORY ============ -->
+      <section class="widget-card trade-history" aria-label="Trade history">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">📋</span>
+            <h2 class="widget-title">Trade History</h2>
+          </div>
+          <div class="widget-actions">
+            <div class="history-filters">
+              <button class="history-filter-btn active" onclick="filterHistory(this, 'all')">All</button>
+              <button class="history-filter-btn" onclick="filterHistory(this, 'buys')">Buys</button>
+              <button class="history-filter-btn" onclick="filterHistory(this, 'sells')">Sells</button>
+              <button class="history-filter-btn" onclick="filterHistory(this, 'profitable')">Profitable</button>
+            </div>
+            <button class="help-icon" onclick="showHelp('history')" aria-label="Help"
+              title="Recent trading activity">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <p class="widget-subtitle">Last 30 days • Win rate: 72% • Total trades: 15</p>
+          <div class="trade-history-table">
+            <div class="history-row">
+              <span class="history-date">Nov 15</span>
+              <span class="history-stock">NVDA</span>
+              <span class="history-action buy">Buy</span>
+              <span class="history-price">$850.00</span>
+              <span class="history-qty">10</span>
+              <span class="history-pl positive">+$256</span>
+            </div>
+            <div class="history-row">
+              <span class="history-date">Nov 12</span>
+              <span class="history-stock">META</span>
+              <span class="history-action sell">Sell</span>
+              <span class="history-price">$520.00</span>
+              <span class="history-qty">5</span>
+              <span class="history-pl positive">+$125</span>
+            </div>
+            <div class="history-row">
+              <span class="history-date">Nov 10</span>
+              <span class="history-stock">AAPL</span>
+              <span class="history-action buy">Buy</span>
+              <span class="history-price">$175.00</span>
+              <span class="history-qty">20</span>
+              <span class="history-pl positive">+$64</span>
+            </div>
+          </div>
+        </div>
+        <div class="widget-footer">
+          <span class="widget-timestamp">Updated in real-time</span>
+          <button class="widget-action-btn" onclick="showToast('Exporting history...')">Export History</button>
+          <button class="widget-action-btn" onclick="showToast('Generating tax report...')">Tax Report</button>
+        </div>
+      </section>
+
+    </div><!-- End tab-performance -->
+
+    <!-- ============ TAB CONTENT: AI LAB ============ -->
+    <div class="tab-content" id="tab-ailab" style="display: none;">
+
+      <!-- ============ WIDGET: AI COPILOT CHAT ============ -->
+      <section class="widget-card ai-copilot-widget" aria-label="AI Copilot Chat">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🤖</span>
+            <h2 class="widget-title">AI Copilot Chat</h2>
+          </div>
+          <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('copilot')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <div class="ai-chat-container" id="aiChatContainer">
+            <div class="ai-chat-messages" id="aiChatMessages">
+              <div class="ai-message">
+                <div class="ai-avatar">🤖</div>
+                <div class="ai-message-content">
+                  <p>Hello! I'm your AI Copilot. I can help you understand your portfolio, analyze market trends, and
+                    make informed decisions. What would you like to know?</p>
+                </div>
+              </div>
+            </div>
+            <div class="ai-suggested-questions">
+              <h4>Suggested Questions:</h4>
+              <button class="suggested-q-btn" onclick="askAI('Why is my portfolio underperforming?')">Why is my
+                portfolio underperforming?</button>
+              <button class="suggested-q-btn" onclick="askAI('What should I do after Fed meeting?')">What should I do
+                after Fed meeting?</button>
+              <button class="suggested-q-btn" onclick="askAI('Find me safe growth opportunities')">Find me safe growth
+                opportunities</button>
+            </div>
+            <div class="ai-chat-input-container">
+              <input type="text" class="ai-chat-input" id="aiChatInput"
+                placeholder="Ask anything about your portfolio..." onkeypress="handleChatEnter(event)">
+              <button class="ai-send-btn" onclick="sendAIMessage()" aria-label="Send message">→</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: AI PATTERN RECOGNITION ============ -->
+      <section class="widget-card ai-patterns-widget" aria-label="AI Pattern Recognition">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🔍</span>
+            <h2 class="widget-title">AI Pattern Recognition</h2>
+          </div>
+          <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('patterns')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <p class="widget-subtitle">AI has analyzed your trading patterns and identified these insights:</p>
+          <div class="pattern-insights">
+            <div class="pattern-item">
+              <div class="pattern-icon">📊</div>
+              <div class="pattern-content">
+                <h4>You tend to sell winners too early</h4>
+                <p>Analysis shows you exit profitable positions 12% faster than optimal timing suggests. Consider
+                  implementing trailing stop losses.</p>
+                <div class="pattern-chart">
+                  <canvas id="patternChart1" width="300" height="100"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="pattern-item">
+              <div class="pattern-icon">📅</div>
+              <div class="pattern-content">
+                <h4>You perform better in Q1 vs Q4</h4>
+                <p>Your win rate is 78% in Q1 compared to 65% in Q4. Seasonal market dynamics favor your strategy early
+                  in the year.</p>
+              </div>
+            </div>
+            <div class="pattern-item">
+              <div class="pattern-icon">💻</div>
+              <div class="pattern-content">
+                <h4>You're most successful with tech stocks</h4>
+                <p>Tech sector trades show 82% win rate vs 68% average. Your timing and selection excel in technology
+                  companies.</p>
+              </div>
+            </div>
+          </div>
+          <button class="widget-action-btn" onclick="showToast('Generating strategy improvements...')">Improve My
+            Strategy</button>
+        </div>
+      </section>
+
+      <!-- ============ WIDGET: AI MARKET PREDICTIONS ============ -->
+      <section class="widget-card ai-predictions-widget" aria-label="AI Market Predictions">
+        <div class="widget-header">
+          <div class="widget-title-row">
+            <span class="widget-icon">🔮</span>
+            <h2 class="widget-title">AI Market Predictions</h2>
+          </div>
+          <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('predictions')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+          </div>
+        </div>
+        <div class="widget-body">
+          <div class="predictions-grid">
+            <div class="prediction-card">
+              <h4>Next 7 Days</h4>
+              <div class="prediction-value positive">+2.3%</div>
+              <div class="prediction-confidence">85% confidence</div>
+              <div class="prediction-factors">
+                <span class="factor-tag">Fed Policy</span>
+                <span class="factor-tag">Earnings Season</span>
+              </div>
+            </div>
+            <div class="prediction-card">
+              <h4>Next 30 Days</h4>
+              <div class="prediction-value positive">+5.3%</div>
+              <div class="prediction-confidence">82% confidence</div>
+              <div class="prediction-factors">
+                <span class="factor-tag">Tech Momentum</span>
+                <span class="factor-tag">Low Volatility</span>
+              </div>
+            </div>
+            <div class="prediction-card">
+              <h4>Next 90 Days</h4>
+              <div class="prediction-value positive">+8.7%</div>
+              <div class="prediction-confidence">73% confidence</div>
+              <div class="prediction-factors">
+                <span class="factor-tag">Bullish Trend</span>
+                <span class="factor-tag">Strong Fundamentals</span>
+              </div>
+            </div>
+          </div>
+          <div class="prediction-accuracy">
+            <h4>Historical Accuracy</h4>
+            <p>Our AI predictions have been 78% accurate over the past 12 months</p>
+            <div class="accuracy-bar">
+              <div class="accuracy-fill" style="width: 78%">78%</div>
+            </div>
+          </div>
+        </div>
+        <div class="widget-footer">
+          <span class="widget-timestamp">Updated hourly</span>
+          <button class="widget-action-btn" onclick="showToast('Customizing prediction...')">Custom Prediction</button>
+        </div>
+      </section>
+
+    </div><!-- End tab-ailab -->
+
+    <!-- Customization bar removed for V9 -->
+    <!--
+    <section class="customization-bar" aria-label="Dashboard customization">
+      <button class="customize-btn" onclick="enterCustomizeMode()">
+        <span>✨</span> Customize Dashboard
+      </button>
+      <button class="customize-btn secondary" onclick="resetLayout()">
+        <span>🔄</span> Reset to default
+      </button>
+      <button class="customize-btn" onclick="saveLayout()">
+        <span>💾</span> Save layout
+      </button>
+    </section>
+    -->
+  </main>
+
+  <!-- ============ V16: COPILOT FLOATING ENHANCED ============ -->
+  <button class="copilot-floating-btn" onclick="toggleAICopilot()" title="AI Copilot - Ask Anything">
+    <span class="copilot-icon">🤖</span>
+    <span class="copilot-badge">3</span>
+  </button>
+
+  <!-- ============ AI COPILOT OVERLAY ============ -->
+  <div id="aiCopilotOverlay" class="ai-copilot-overlay" style="display: none;">
+    <div class="ai-copilot-panel">
+      <div class="ai-copilot-header">
+        <div class="ai-copilot-title">
+          <span class="ai-icon-large">🤖</span>
+          <h2>AI Copilot</h2>
+        </div>
+        <button class="close-btn" onclick="toggleAICopilot()" aria-label="Close">✕</button>
+      </div>
+      <div class="ai-copilot-body">
+        <div class="ai-context-aware">
+          <span class="context-label">Context:</span>
+          <span class="context-value" id="aiContextValue">Portfolio Overview</span>
+        </div>
+        <div class="ai-messages-panel" id="aiMessagesPanel">
+          <div class="ai-message">
+            <div class="ai-avatar">🤖</div>
+            <div class="ai-message-content">
+              <p>I can see you're viewing your portfolio overview. Your portfolio is up 1.88% today. What would you like
+                to know?</p>
+            </div>
+          </div>
+        </div>
+        <div class="ai-quick-actions">
+          <button class="quick-action-btn" onclick="quickAsk('explain')">Explain this</button>
+          <button class="quick-action-btn" onclick="quickAsk('whatdo')">What should I do?</button>
+          <button class="quick-action-btn" onclick="quickAsk('simulate')">Simulate scenario</button>
+        </div>
+        <div class="ai-input-panel">
+          <input type="text" class="ai-input" id="aiOverlayInput" placeholder="Ask anything..."
+            onkeypress="handleOverlayEnter(event)">
+          <button class="ai-send-btn" onclick="sendOverlayMessage()" aria-label="Send">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BOTTOM NAVIGATION (MOBILE) ============ -->
+  <nav class="bottom-nav" role="navigation" aria-label="Mobile navigation">
+    <button class="nav-tab active" onclick="selectTab(this, 'dashboard')" aria-label="Dashboard">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Dashboard</span>
+    </button>
+    <button class="nav-tab" onclick="selectTab(this, 'portfolio')" aria-label="Portfolio">
+      <span class="nav-icon">💼</span>
+      <span class="nav-label">Portfolio</span>
+    </button>
+    <button class="nav-tab" onclick="selectTab(this, 'opportunities')" aria-label="Opportunities">
+      <span class="nav-icon">⭐</span>
+      <span class="nav-label">Opportunities</span>
+    </button>
+    <button class="nav-tab" onclick="selectTab(this, 'alerts')" aria-label="Alerts">
+      <span class="nav-icon">🔔</span>
+      <span class="nav-label">Alerts</span>
+      <span class="nav-badge">3</span>
+    </button>
+    <button class="nav-tab" onclick="selectTab(this, 'more')" aria-label="More">
+      <span class="nav-icon">☰</span>
+      <span class="nav-label">More</span>
+    </button>
+  </nav>
+
+  <!-- ============ LOADING OVERLAY ============ -->
+  <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p>Loading data...</p>
+  </div>
+
+  <!-- ============ SUCCESS TOAST ============ -->
+  <div id="successToast" class="toast" style="display: none;">
+    <span class="toast-icon">✓</span>
+    <span class="toast-message">Action completed successfully!</span>
+  </div>
+
+  <!-- ============ COMMAND K FLOATING BADGE ============ -->
+  <div id="commandKFloatingBadge" class="command-k-floating-badge" onclick="openCommandK()" role="button"
+    aria-label="Open Command Search" tabindex="0">
+    <span class="badge-icon">⌘K</span>
+    <span class="badge-text">Search</span>
+  </div>
+
+  <!-- ============ COMMAND K MODAL ============ -->
+  <div id="commandKModal" class="command-k-modal-overlay" style="display: none;">
+    <div class="command-k-modal">
+      <div class="command-k-search-header">
+        <span class="search-icon-large">🔍</span>
+        <input type="text" id="commandKInput" class="command-k-input"
+          placeholder="Search anything... (stocks, metrics, actions)" autocomplete="off" />
+        <span class="shortcut-hint-badge">⌘K</span>
+      </div>
+
+      <div class="command-k-results" id="commandKResults">
+        <!-- Recent Searches -->
+        <div class="result-section">
+          <div class="section-title">Recent</div>
+          <div class="result-item" onclick="executeCommandKAction('nvda-analysis')">
+            <span class="result-icon">🕐</span>
+            <span class="result-text">NVDA analysis</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('portfolio-risk')">
+            <span class="result-icon">🕐</span>
+            <span class="result-text">Portfolio risk</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('market-forecast')">
+            <span class="result-icon">🕐</span>
+            <span class="result-text">Market forecast</span>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="result-section">
+          <div class="section-title">Quick Actions</div>
+          <div class="result-item" onclick="executeCommandKAction('dashboard')">
+            <span class="result-icon">📊</span>
+            <span class="result-text">View Overview Dashboard</span>
+            <span class="shortcut-key">1</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('market')">
+            <span class="result-icon">📈</span>
+            <span class="result-text">Check Market Intel</span>
+            <span class="shortcut-key">2</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('opportunities')">
+            <span class="result-icon">💎</span>
+            <span class="result-text">Check Opportunities</span>
+            <span class="shortcut-key">3</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('copilot')">
+            <span class="result-icon">🤖</span>
+            <span class="result-text">Open AI Copilot</span>
+            <span class="shortcut-key">C</span>
+          </div>
+        </div>
+
+        <!-- Stocks -->
+        <div class="result-section">
+          <div class="section-title">Stocks</div>
+          <div class="result-item" onclick="executeCommandKAction('stock-nvda')">
+            <span class="result-icon">📈</span>
+            <span class="result-text">NVDA - $875.60 (+8.5%)</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('stock-meta')">
+            <span class="result-icon">📈</span>
+            <span class="result-text">META - $523.45 (+5.2%)</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('stock-aapl')">
+            <span class="result-icon">📈</span>
+            <span class="result-text">AAPL - $178.23 (+2.1%)</span>
+          </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="result-section">
+          <div class="section-title">Metrics</div>
+          <div class="result-item" onclick="executeCommandKAction('portfolio-value')">
+            <span class="result-icon">💰</span>
+            <span class="result-text">Portfolio Value: $127,456</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('win-rate')">
+            <span class="result-icon">🎯</span>
+            <span class="result-text">Win Rate: 72%</span>
+          </div>
+          <div class="result-item" onclick="executeCommandKAction('ai-forecast')">
+            <span class="result-icon">🔮</span>
+            <span class="result-text">AI Forecast: +5.3%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="command-k-footer">
+        <span class="hint">↑↓ Navigate</span>
+        <span class="hint">↵ Select</span>
+        <span class="hint">Esc Close</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- POC: Dynamic Component Loading -->
+  <script type="module">
+    // Import du component loader
+    import { loadComponent, loadComponents } from '../platform/js/utils/componentLoader.js';
+
+    // Charger les composants quand le DOM est prêt
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('🚀 Loading modular components...');
+
+      try {
+        // Charger tous les modals et navigation en parallèle
+        const components = [
+          { path: '../components/header.html', target: '#header-container' },
+          { path: '../components/ai-suggestions-panel.html', target: '#ai-suggestions-container' },
+          { path: '../components/filter-bar.html', target: '#filter-bar-container' },
+          { path: '../components/modals/more-menu.html', target: '#more-menu-container' },
+          { path: '../components/modals/notification-drawer.html', target: '#notification-drawer-container' },
+          { path: '../components/modals/settings-modal.html', target: '#settings-modal-container' },
+          { path: '../components/modals/command-palette.html', target: '#command-palette-container' },
+          { path: '../components/navigation/diamond-dropdown.html', target: '#diamond-dropdown-container' },
+          { path: '../components/navigation/diamond-menu.html', target: '#diamond-menu-container' },
+          { path: '../components/navigation/facette-view.html', target: '#facette-view-container' },
+          { path: '../components/sections/hero-what-need.html', target: '#hero-what-need-container' },
+          { path: '../components/sections/hero-glassmorphic.html', target: '#hero-glassmorphic-container' },
+          { path: '../components/navigation/tab-navigation.html', target: '#tab-navigation-container' },
+          { path: '../components/modals/drill-down-modal.html', target: '#drill-down-modal-container' },
+          { path: '../components/sections/split-view.html', target: '#split-view-container' },
+          { path: '../components/widgets/market-pulse.html', target: '#market-pulse-widget-container' },
+          { path: '../components/widgets/trade-ideas.html', target: '#trade-ideas-widget-container' },
+          { path: '../components/widgets/market-calendar.html', target: '#market-calendar-widget-container' },
+          { path: '../components/widgets/news-feed.html', target: '#news-feed-widget-container' },
+          { path: '../components/widgets/llm-judge.html', target: '#llm-judge-widget-container' },
+          { path: '../components/widgets/market-drivers.html', target: '#market-drivers-widget-container' },
+          { path: '../components/widgets/quick-actions.html', target: '#quick-actions-widget-container' },
+          { path: '../components/widgets/kpi-cards-pro.html', target: '#kpi-cards-pro-widget-container' },
+          { path: '../components/widgets/heatmap-correlation.html', target: '#heatmap-correlation-widget-container' },
+          { path: '../components/widgets/forecast-scenarios.html', target: '#forecast-scenarios-widget-container' },
+          { path: '../components/widgets/top-movers.html', target: '#top-movers-widget-container' },
+          { path: '../components/widgets/portfolio-health.html', target: '#portfolio-health-widget-container' },
+          { path: '../components/widgets/alerts-timeline.html', target: '#alerts-timeline-widget-container' },
+          { path: '../components/widgets/market-drivers-detailed.html', target: '#market-drivers-detailed-widget-container' },
+          { path: '../components/widgets/stock-relationships.html', target: '#stock-relationships-widget-container' },
+          { path: '../components/widgets/similar-stocks.html', target: '#similar-stocks-widget-container' },
+          { path: '../components/widgets/news-impact.html', target: '#news-impact-widget-container' },
+          { path: '../components/widgets/sector-performance.html', target: '#sector-performance-widget-container' },
+          { path: '../components/widgets/market-volatility.html', target: '#market-volatility-widget-container' }
+        ];
+
+        const results = await loadComponents(components);
+        const successCount = results.filter(r => r).length;
+
+        console.log(`✅ Loaded ${successCount}/${components.length} components successfully!`);
+
+        if (successCount === components.length) {
+          console.log('🎉 All modals loaded! Modular architecture working perfectly!');
+
+          // Initialize charts after components are loaded
+          setTimeout(() => {
+            console.log('🎨 Initializing charts...');
+
+            // Market Drivers Donut (detailed widget)
+            if (typeof drawMarketDriversDonut === 'function') {
+              drawMarketDriversDonut();
+            }
+
+            // Health Gauge Compact
+            if (typeof drawHealthGaugeCompact === 'function') {
+              drawHealthGaugeCompact();
+            }
+
+            // Cluster Map
+            if (typeof drawClusterMap === 'function') {
+              drawClusterMap();
+            }
+
+            // News Impact
+            if (typeof renderNewsImpact === 'function') {
+              renderNewsImpact();
+            }
+
+            console.log('✅ Charts initialized!');
+          }, 100); // Small delay to ensure DOM is fully updated
+        }
+      } catch (error) {
+        console.error('❌ Component loading error:', error);
+      }
+    });
+  </script>
+
+  <script src="../platform/js/sentry-init.js"></script>
+  <script src="../contracts/mockData.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

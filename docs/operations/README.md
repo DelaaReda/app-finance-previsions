@@ -4,7 +4,7 @@ This directory contains **legacy/duplicate documentation** from the pre-Feb 2026
 
 ## ⚠️ CANONICAL LOCATION
 
-For current operational documentation, use **[docs/ops/](/docs/ops/)** instead.
+For current operational documentation, use **[docs/ops/](../ops/)** instead.
 
 All files here are mirrored in [docs/ops/](../ops/) with the same content. New updates should be made to docs/ops only.
 

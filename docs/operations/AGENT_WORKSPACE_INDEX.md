@@ -46,10 +46,10 @@
 
 ## Onboarding agents
 
-- Vision architecture + règles de contribution : [docs/architecture/AGENT_ONBOARDING.md](/home/venom/analyse-financiere/docs/architecture/AGENT_ONBOARDING.md)
+- Vision architecture + règles de contribution : [docs/ops/AGENT_ONBOARDING.md](/home/venom/analyse-financiere/docs/ops/AGENT_ONBOARDING.md)
 - Architecture cible et styles : [docs/architecture/ARCHITECTURE_MAP.md](/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_MAP.md), [docs/architecture/ARCHITECTURE_STYLE_GUIDE.md](/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_STYLE_GUIDE.md), [docs/architecture/TARGET_ARCHITECTURE_LAYOUT.md](/home/venom/analyse-financiere/docs/architecture/TARGET_ARCHITECTURE_LAYOUT.md)
-- Unification src cible : [docs/operations/ops/APP_SRC_UNIFICATION.md](/home/venom/analyse-financiere/docs/operations/ops/APP_SRC_UNIFICATION.md)
-- Carte rapide documentaire globale : [docs/WORKSPACE_MAP.md](/home/venom/analyse-financiere/docs/WORKSPACE_MAP.md)
+- Unification src cible : [docs/ops/APP_SRC_UNIFICATION.md](/home/venom/analyse-financiere/docs/ops/APP_SRC_UNIFICATION.md)
+- Carte rapide documentaire globale : [docs/ops/WORKSPACE_MAP.md](/home/venom/analyse-financiere/docs/ops/WORKSPACE_MAP.md)
 
 ## Quick map de la période migration
 

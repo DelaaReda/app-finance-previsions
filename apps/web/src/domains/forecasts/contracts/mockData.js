@@ -5,7 +5,7 @@
 // ============================================================================
 
 // Diamond Facettes Configuration
-const facettes = {
+let facettes = {
     'deep-dive': {
         icon: '📈',
         name: 'Deep Dive Action',
@@ -72,7 +72,7 @@ const facettes = {
 };
 
 // V11 Enhanced Data
-const v11Data = {
+let v11Data = {
     userProfile: {
         type: 'Trader',
         preferences: {
@@ -128,7 +128,7 @@ const v11Data = {
 };
 
 // V13 Trade Ideas Data
-const tradeIdeas = [
+let tradeIdeas = [
     { symbol: 'NVDA', signalType: 'Breakout', entry: 875, target: 980, confidence: 92 },
     { symbol: 'META', signalType: 'Reversal', entry: 520, target: 565, confidence: 85 },
     { symbol: 'AAPL', signalType: 'Value', entry: 178, target: 185, confidence: 78 },
@@ -137,7 +137,7 @@ const tradeIdeas = [
 ];
 
 // V13 Market Calendar Data
-const marketCalendar = {
+let marketCalendar = {
     earnings: [
         { stock: 'NVDA', date: 'Nov 20', impact: 'High', holding: true },
         { stock: 'META', date: 'Nov 22', impact: 'High', holding: true },
@@ -153,7 +153,7 @@ const marketCalendar = {
 };
 
 // V13 News Items Data (EXPANDED)
-const newsItems = [
+let newsItems = [
     { headline: 'Fed Signals Rate Cuts Q2', impact: 8.5, effect: '+3.2%', time: '2h ago', source: 'Reuters', category: 'Macro' },
     { headline: 'NVDA Earnings Beat Expectations', impact: 9.2, effect: '+5.1%', time: '4h ago', source: 'Bloomberg', category: 'Earnings' },
     { headline: 'Tech Sector Volatility Spike', impact: 6.2, effect: '-2.3%', time: '6h ago', source: 'WSJ', category: 'Sector' },
@@ -162,7 +162,7 @@ const newsItems = [
 ];
 
 // V13 LLM Judge Data
-const llmJudgeData = {
+let llmJudgeData = {
     question: 'What should I do with my portfolio today?',
     consensus: 'HOLD POSITIONS',
     confidence: 87,
@@ -181,14 +181,14 @@ const llmJudgeData = {
 };
 
 // V13 Market Drivers Visual
-const marketDrivers = [
+let marketDrivers = [
     { factor: 'Technical', contribution: 40, color: '#1F40AF' },
     { factor: 'Sentiment', contribution: 35, color: '#8B5CF6' },
     { factor: 'News', contribution: 20, color: '#F59E0B' },
     { factor: 'Macro', contribution: 5, color: '#10B981' }
 ];
 
-const appData = {
+let appData = {
     // Enhanced with 60 data points for smoother graphs
     portfolioSparkline: [125000, 125150, 125300, 125400, 125550, 125700, 125800, 125950, 126100, 126200, 126100, 126250, 126400, 126500, 126650, 126800, 126900, 127050, 127200, 127150, 127100, 127250, 127400, 127550, 127600, 127750, 127800, 127650, 127500, 127650, 127700, 127850, 127900, 128050, 128100, 127950, 127800, 127650, 127600, 127450, 127400, 127250, 127200, 127050, 127000, 126850, 126800, 126950, 127100, 127250, 127500, 127650, 127800, 127950, 128000, 128150, 128200, 128050, 127900, 127456],
     forecastProjection: [127456, 127650, 127850, 128100, 128350, 128600, 128800, 129000, 129250, 129500, 129700, 129900, 130100, 130300, 130500, 130700, 130900, 131100, 131300, 131500, 131700, 131900, 132100, 132300, 132500, 132700, 132900, 133100, 133300, 134200],

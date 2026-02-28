@@ -57,16 +57,17 @@
     <!-- ============ SECTION: HERO GLASSMORPHIC ============ -->
     <section class="hero-section hero-glassmorphic" aria-label="Portfolio overview" style="display: none;"
       id="mainHeroSection">
-      <div class="hero-header">
-        <div class="user-info">
-          <div class="user-avatar">👤</div>
-          <div>
-            <h1 class="greeting">Bonjour, Alex 👋</h1>
-            <p class="headline">Your AI-Powered Portfolio Command Center</p>
-          </div>
+    <div class="hero-header">
+      <div class="user-info">
+        <div class="user-avatar">👤</div>
+        <div>
+          <h1 class="greeting">Bonjour, Alex 👋</h1>
+          <p class="headline">Your AI-Powered Portfolio Command Center</p>
         </div>
-        <div class="last-updated">Updated 5 minutes ago</div>
       </div>
+      <div class="last-updated">Updated 5 minutes ago</div>
+      <div id="liveDataProvenance" class="live-data-provenance" aria-live="polite" role="status">Source: offline-fallback | model: offline-fallback | updated: just now</div>
+    </div>
 
       <div class="ai-daily-summary">
         <div class="ai-summary-header">
@@ -1185,7 +1186,6 @@
   </script>
 
   <script src="../platform/js/sentry-init.js"></script>
-  <script src="../contracts/mockData.js"></script>
   <script src="../contracts/apiConnector.js"></script>
   <script src="app.js"></script>
 </body>

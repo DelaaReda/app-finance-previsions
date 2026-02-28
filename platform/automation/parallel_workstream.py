@@ -176,6 +176,8 @@ STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
     TemplateStep("GOV_REVIEW", "planner", ("QA_EXEC", "SENTINEL_CHECK")),
 )
 
+STREAM_TEMPLATE_DEPS: Dict[str, Tuple[str, ...]] = {step.code: step.deps for step in STREAM_TEMPLATE}
+
 DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
     "PLAN": [
         "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
@@ -517,6 +519,9 @@ def load_board(path: Path) -> dict:
     data.setdefault("tasks", [])
     data.setdefault("handoffs", [])
     data.setdefault("events", [])
+    migrated = migrate_legacy_stream_tasks(data)
+    if migrated:
+        append_event(data, "migrate_legacy_stream_tasks", {"migrated": str(migrated)})
     return data
 
 
@@ -559,10 +564,20 @@ def stream_index(board: dict) -> Dict[str, dict]:
     return {str(stream.get("id")): stream for stream in board.get("streams", [])}
 
 
-def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source_state: str) -> int:
+def ensure_stream(
+    board: dict,
+    stream_id: str,
+    title: str,
+    priority: str,
+    source_state: str,
+    legacy_task_codes: set[str] | None = None,
+    legacy_stream_depends_on: List[str] | None = None,
+) -> int:
     streams = stream_index(board)
     tasks = task_index(board)
     created = 0
+    legacy_tasks = {str(code).strip().upper() for code in (legacy_task_codes or []) if str(code).strip()}
+
     if stream_id not in streams:
         board.setdefault("streams", []).append(
             {
@@ -581,10 +596,30 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
         stream["priority"] = priority
         stream["source_state"] = source_state
         stream["updated_at"] = now_iso()
+    legacy_depends = [str(dep).strip().upper() for dep in (legacy_stream_depends_on or []) if str(dep).strip()]
+
+    if legacy_tasks:
+        kept: List[dict] = []
+        pruned: List[str] = []
+        for task in board.get("tasks", []):
+            if str(task.get("stream_id", "")) != stream_id:
+                kept.append(task)
+                continue
+            code = str(task.get("code", "")).strip().upper()
+            if code in legacy_tasks:
+                kept.append(task)
+                continue
+            pruned.append(str(task.get("id", "")) or str(code or "unknown"))
+        if pruned:
+            board["tasks"] = kept
+            append_event(board, "prune_legacy_tasks", {"stream_id": stream_id, "pruned_task_ids": pruned})
+            tasks = task_index(board)
 
     for step in STREAM_TEMPLATE:
+        if legacy_tasks and step.code not in legacy_tasks:
+            continue
         tid = task_id(stream_id, step.code)
-        deps = [task_id(stream_id, dep) for dep in step.deps]
+        deps = legacy_depends if legacy_tasks else [task_id(stream_id, dep) for dep in step.deps]
         default_notes = DEFAULT_STEP_NOTES.get(step.code, [])
         if tid in tasks:
             existing = tasks[tid]
@@ -660,6 +695,281 @@ def ensure_stream(board: dict, stream_id: str, title: str, priority: str, source
     return created
 
 
+def _legacy_task_state_to_board_state(raw_state: str) -> str:
+    value = (raw_state or "").strip().lower()
+    if value in {"ready", "rdy", "queued", "queue", "open", "unblocked", "start", "todo"}:
+        return STATE_READY
+    if value in {"in_progress", "inprogress", "working", "started", "wip", "active"}:
+        return STATE_IN_PROGRESS
+    if value in {"blocked", "blocked_dep", "blocked-dep", "dependency_blocked"}:
+        return STATE_BLOCKED
+    if value in {"review", "qa", "ready_for_review"}:
+        return STATE_REVIEW
+    if value in {"done", "completed", "complete", "closed", "finished"}:
+        return STATE_DONE
+    if value in {"planned", "backlog", "wait", "waiting", "not_started", "pending", "not_started"}:
+        return STATE_WAITING_DEP
+    return STATE_BACKLOG
+
+
+def _canonical_role(value: str) -> str:
+    role = str(value or "").strip()
+    if role in ROLE_CATALOG:
+        return role
+    if role.lower() in {"product_owner", "owner", "po", "po_engineer"}:
+        return "planner"
+    return ""
+
+
+def _template_default_role(code: str) -> str:
+    for step in STREAM_TEMPLATE:
+        if step.code == code:
+            return step.role
+    return "planner"
+
+
+def _stream_task_id_code(stream_id: str, legacy_task: dict, index: int) -> str:
+    legacy_id = str(legacy_task.get("id", "")).strip()
+    if legacy_id:
+        return legacy_id
+    explicit_code = str(legacy_task.get("code", "")).strip()
+    if explicit_code:
+        explicit_code = explicit_code.upper()
+        return f"{stream_id}-{explicit_code}" if stream_id else explicit_code
+    return f"{stream_id}-TASK{index}"
+
+
+def _stream_task_code(stream_id: str, task_id: str) -> str:
+    sid = (stream_id or "").strip()
+    value = (task_id or "").strip()
+    if not sid:
+        return value.upper()
+    if value == sid:
+        return ""
+    code = str(value).strip()
+    if sid and code.startswith(f"{sid}-"):
+        code = code[len(sid) + 1 :]
+    return code.upper()
+
+
+def _legacy_task_needs_assignee(task_state: str) -> bool:
+    return task_state in {STATE_IN_PROGRESS, STATE_REVIEW}
+
+
+def _all_tasks_for_stream_done(board: dict, stream_id: str) -> bool:
+    stream_id_norm = str(stream_id or "").strip()
+    stream_tasks = [task for task in board.get("tasks", []) if str(task.get("stream_id", "")) == stream_id_norm]
+    if not stream_tasks:
+        return False
+    return all(str(task.get("state", "")) == STATE_DONE for task in stream_tasks)
+
+
+def _queue_item_state(item: dict) -> str:
+    return str(item.get("state", "")).strip().upper()
+
+
+def _dependency_batches_closed(queue_states: Dict[str, str], depends_on: List[str]) -> bool:
+    if not depends_on:
+        return True
+    for dep in depends_on:
+        state = queue_states.get(str(dep).strip().upper(), "")
+        if state not in {"CLOSED", "PASS"}:
+            return False
+    return True
+
+
+def migrate_legacy_stream_tasks(board: dict) -> int:
+    tasks_by_id = task_index(board)
+    migrated = 0
+
+    for stream in board.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+
+        stream_id = str(stream.get("id", "")).strip()
+        if not stream_id:
+            continue
+
+        stream_title = str(stream.get("title", stream_id)).strip() or stream_id
+        priority = str(stream.get("priority", "P2")).strip().upper() or "P2"
+        legacy_tasks = stream.get("tasks")
+        legacy_task_codes: set[str] = set()
+        stream_depends_on: list[str] = []
+        raw_depends_on = stream.get("depends_on")
+        if isinstance(raw_depends_on, list):
+            stream_depends_on = [str(dep).strip().upper() for dep in raw_depends_on if str(dep).strip()]
+        if isinstance(legacy_tasks, list):
+            for raw_task in legacy_tasks:
+                if not isinstance(raw_task, dict):
+                    continue
+                task_id = str(raw_task.get("id", "")).strip()
+                if task_id:
+                    legacy_task_codes.add(_stream_task_code(stream_id, task_id).upper())
+        if not isinstance(legacy_tasks, list):
+            continue
+
+        stream_migrated = 0
+        for idx, raw_task in enumerate(legacy_tasks):
+            if not isinstance(raw_task, dict):
+                continue
+            task_id = _stream_task_id_code(stream_id, raw_task, idx + 1).upper()
+            task_code = _stream_task_code(stream_id, task_id)
+            task_code = task_code if task_code else str(raw_task.get("code", "")).strip().upper()
+            if not task_code:
+                continue
+
+            state = _legacy_task_state_to_board_state(raw_task.get("status", ""))
+            assigned_to = _canonical_role(raw_task.get("assigned_to", ""))
+            if not assigned_to:
+                assigned_to = _template_default_role(task_code)
+            depends_on = (
+                list(stream_depends_on)
+                if task_code in legacy_task_codes
+                else [f"{stream_id}-{dep}" for dep in STREAM_TEMPLATE_DEPS.get(task_code, ())]
+            )
+            notes = []
+            description = str(raw_task.get("description", "")).strip()
+            if description:
+                notes.append(f"legacy_note: {description}")
+            existing = tasks_by_id.get(task_id)
+            if existing:
+                changed = False
+                if str(existing.get("stream_id", "")).strip() != stream_id:
+                    existing["stream_id"] = stream_id
+                    changed = True
+                if str(existing.get("code", "")).strip() != task_code:
+                    existing["code"] = task_code
+                    changed = True
+                expected_title = f"{stream_title} [{task_code}]"
+                if str(existing.get("title", "")).strip() != expected_title:
+                    existing["title"] = expected_title
+                    changed = True
+                if str(existing.get("role", "")).strip() == "":
+                    if assigned_to:
+                        existing["role"] = assigned_to
+                        changed = True
+                if str(existing.get("state", "")) in {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY} and existing.get("state") != state:
+                    existing["state"] = state
+                    changed = True
+                if str(existing.get("state", "")) not in {STATE_DONE} and task_code in legacy_task_codes:
+                    existing["depends_on"] = depends_on
+                    changed = True
+                if _legacy_task_needs_assignee(state) and not str(existing.get("assignee", "")).strip() and assigned_to:
+                    existing["assignee"] = assigned_to
+                    changed = True
+                existing_notes = [str(item).strip() for item in (existing.get("notes") or []) if str(item).strip()]
+                for note in notes:
+                    if note not in existing_notes:
+                        existing_notes.append(note)
+                        changed = True
+                existing["notes"] = existing_notes
+            if existing and task_code not in legacy_task_codes:
+                existing_depends = [dep for dep in (existing.get("depends_on") or []) if str(dep).strip()]
+                if depends_on != existing_depends:
+                    existing["depends_on"] = depends_on
+                    changed = True
+            elif existing:
+                if depends_on != [dep for dep in (existing.get("depends_on") or []) if str(dep).strip()]:
+                    existing["depends_on"] = depends_on
+                    changed = True
+            elif depends_on != []:
+                existing["depends_on"] = depends_on
+                changed = True
+            if existing is None:
+                board.setdefault("tasks", []).append(
+                    {
+                        "id": task_id,
+                        "stream_id": stream_id,
+                        "code": task_code,
+                        "title": f"{stream_title} [{task_code}]",
+                        "role": assigned_to or "planner",
+                        "state": state,
+                        "priority": priority,
+                        "depends_on": depends_on,
+                        "assignee": assigned_to if _legacy_task_needs_assignee(state) else "",
+                        "blocked_reason": "",
+                        "artifacts": [],
+                        "notes": notes,
+                        "handoff_to": "",
+                        "created_at": now_iso(),
+                        "updated_at": now_iso(),
+                        "started_at": now_iso() if _legacy_task_needs_assignee(state) else "",
+                        "completed_at": now_iso() if state == STATE_DONE else "",
+                    }
+                )
+                tasks_by_id = task_index(board)
+                migrated += 1
+                stream_migrated += 1
+                continue
+            if str(existing.get("priority", "")).strip() != priority:
+                existing["priority"] = priority
+                changed = True
+            if changed:
+                existing["updated_at"] = now_iso()
+
+        if stream_migrated:
+            append_event(
+                board,
+                "migrated_legacy_tasks",
+                {
+                    "stream_id": stream_id,
+                    "migrated_count": str(stream_migrated),
+                },
+            )
+
+    return migrated
+
+
+def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
+    items = queue_obj.get("items")
+    if not isinstance(items, list):
+        queue_obj["items"] = []
+        return 0, None
+
+    queue_states: Dict[str, str] = {}
+    for item in items:
+        sid = str(item.get("id", "")).strip().upper()
+        if not sid:
+            continue
+        queue_states[sid] = _queue_item_state(item)
+
+    closed_count = 0
+    opened_batch = None
+
+    for item in items:
+        item_id = str(item.get("id", "")).strip().upper()
+        if not item_id:
+            continue
+        state = queue_states.get(item_id, "")
+        if state not in {"READY", "IN_PROGRESS"}:
+            continue
+        if _all_tasks_for_stream_done(board, item_id):
+            item["state"] = "CLOSED"
+            item["closed_at"] = now_iso()
+            queue_states[item_id] = "CLOSED"
+            closed_count += 1
+
+    active_count = sum(1 for item in items if _queue_item_state(item) in {"READY", "IN_PROGRESS"})
+    if active_count:
+        return closed_count, None
+
+    for item in items:
+        if _queue_item_state(item) != "PLANNED":
+            continue
+        depends_on = [str(dep).strip() for dep in item.get("depends_on", []) if str(dep).strip()]
+        if not _dependency_batches_closed(queue_states, depends_on):
+            continue
+        item["state"] = "READY"
+        item["dispatch_authorized"] = True
+        item.setdefault("ready_at", now_iso())
+        if "opened_at" not in item:
+            item["opened_at"] = now_iso()
+        opened_batch = str(item.get("id", "")).strip()
+        break
+
+    return closed_count, opened_batch
+
+
 def recompute_states(board: dict) -> None:
     tasks_by_id = task_index(board)
     for task in board.get("tasks", []):
@@ -717,7 +1027,10 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
 
     created_streams = 0
     created_tasks = 0
+    closed_streams, opened_batch = _auto_advance_queue(board, queue_obj)
+
     existing_streams = stream_index(board)
+    streams_by_id = existing_streams
     for item in queue_obj.get("items", []):
         stream_id = str(item.get("id", "")).strip().upper()
         state = str(item.get("state", "")).strip().upper()
@@ -725,10 +1038,49 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
             continue
         title = str(item.get("title", stream_id)).strip() or stream_id
         priority = str(item.get("priority", "P2")).strip().upper() or "P2"
+        stream_obj = streams_by_id.get(stream_id)
+        raw_tasks = stream_obj.get("tasks") if isinstance(stream_obj, dict) else None
+        legacy_task_codes = None
+        legacy_stream_depends_on = None
+        if isinstance(raw_tasks, list) and raw_tasks:
+            tmp_codes = set()
+            for raw_task in raw_tasks:
+                if not isinstance(raw_task, dict):
+                    continue
+                legacy_task_code = _stream_task_code(stream_id, str(raw_task.get("id", "")))
+                if legacy_task_code:
+                    tmp_codes.add(legacy_task_code)
+            if tmp_codes:
+                legacy_task_codes = tmp_codes
+            legacy_depends_on_raw = stream_obj.get("depends_on")
+            if isinstance(legacy_depends_on_raw, list):
+                legacy_stream_depends_on = legacy_depends_on_raw
         if stream_id not in existing_streams:
             created_streams += 1
-        created_tasks += ensure_stream(board, stream_id, title, priority, state)
+        created_tasks += ensure_stream(
+            board,
+            stream_id,
+            title,
+            priority,
+            state,
+            legacy_task_codes=legacy_task_codes,
+            legacy_stream_depends_on=legacy_stream_depends_on,
+        )
         existing_streams = stream_index(board)
+        streams_by_id = existing_streams
+
+    if closed_streams or opened_batch:
+        queue_obj.setdefault("updated_at", now_iso())
+        queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        append_event(
+            board,
+            "auto_advance_queue",
+            {
+                "queue": str(queue_path),
+                "closed_streams": str(closed_streams),
+                "opened_batch": str(opened_batch or "none"),
+            },
+        )
 
     recompute_states(board)
     if created_streams > 0 or created_tasks > 0:

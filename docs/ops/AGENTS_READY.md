@@ -49,8 +49,9 @@
 
 1. **AGENTS.md** – règles, mémoire, sécurité, heartbeats
 2. **docs/ops/AGENT_WORKSPACE_INDEX.md** – index rapide
-3. **docs/operations/AGENT_ONBOARDING.md** – onboarding architecture
+3. **docs/ops/AGENT_ONBOARDING.md** – onboarding architecture
 4. **docs/product/planning/tasks.md** – tâches en cours
+5. **docs/ops/API_ENDPOINTS.md** – endpoints backend frontend
 
 ---
 

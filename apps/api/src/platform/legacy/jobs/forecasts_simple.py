@@ -26,6 +26,10 @@ DEFAULT_TICKERS = [
     "SPY", "QQQ", "DIA", "IWM",
     # Tech
     "AAPL", "MSFT", "GOOGL", "META", "NVDA", "TSLA", "AMZN",
+    # Commodities / ETFs
+    "GLD", "SLV", "XLE",
+    # Crypto
+    "BTC",
     # Finance
     "JPM", "BAC", "GS",
     # Other

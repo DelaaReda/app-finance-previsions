@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-02-28T18:49:19Z",
+  "updated_at_utc": "2026-02-28T20:25:58Z",
   "roles": {
     "frontend_engineer": {
       "ts_utc": "2026-02-28T16:20:12Z",
@@ -26,15 +26,15 @@
       "workboard_version": "workboard_1772196369_8e9aed5f9a04"
     },
     "infra_engineer": {
-      "ts_utc": "2026-02-28T16:21:29Z",
+      "ts_utc": "2026-02-28T20:25:58Z",
       "role": "infra_engineer",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_INFRA_FROM_OPS",
-      "next": "maintenir la prochaine action infra/cicd pour accelerer la livraison",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -46,19 +46,19 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "dev": {
-      "ts_utc": "2026-02-28T16:20:03Z",
+      "ts_utc": "2026-02-28T20:24:23Z",
       "role": "dev",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_DEV_FROM_TASKS",
-      "next": "pr\u00e9parer l'action dev ex\u00e9cutable du prochain item READY",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -70,8 +70,8 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "backend_engineer": {
       "ts_utc": "2026-02-28T18:49:19Z",
@@ -98,15 +98,15 @@
       "workboard_version": "workboard_1772196369_8e9aed5f9a04"
     },
     "integrator": {
-      "ts_utc": "2026-02-28T16:21:25Z",
+      "ts_utc": "2026-02-28T20:25:58Z",
       "role": "integrator",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_INTEGRATOR_FROM_SPRINT",
-      "next": "maintenir le plan d'integration inter-equipes et de handoff",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable_source_missing",
       "suggestions": "verifier_sources_et_stabiliser_prompt",
@@ -118,8 +118,8 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "planner": {
       "ts_utc": "2026-02-28T16:20:01Z",
@@ -146,17 +146,41 @@
       "workboard_version": "workboard_1772196369_8e9aed5f9a04"
     },
     "analyst": {
-      "ts_utc": "2026-02-28T16:22:38Z",
+      "ts_utc": "2026-02-28T20:25:58Z",
       "role": "analyst",
+      "source": "fallback_checkpoint",
+      "status": "IN_PROGRESS",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
+      "verdict": "GO_WITH_CAUTION",
+      "blocker_id": "NONE",
+      "next_action_unique": "CONTINUE_ANALYST_FROM_STORIES",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
+      "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
+      "issues": "signal_unparseable",
+      "suggestions": "stabiliser_prompt_et_tmux_capture",
+      "stream_id": "none",
+      "task_id": "none",
+      "tool_request": "none",
+      "skill_request": "none",
+      "tools_used": "",
+      "channels_read": "runtime_context",
+      "impact_assessment": "low",
+      "impact_action": "monitor_updates",
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
+    },
+    "architect": {
+      "ts_utc": "2026-02-28T20:25:58Z",
+      "role": "architect",
       "source": "fallback_checkpoint",
       "status": "BLOCKED",
       "delta": "ROLE_OUTPUT_NOT_SPECIFIC",
       "verdict": "BLOCKED",
-      "blocker_id": "ROLE_CONTRACT_MISSING",
-      "next_action_unique": "FIX_ROLE_CONTRACT_ANALYST_20260228T162238Z",
+      "blocker_id": "ARCHITECT_TASK_ID_MISSING",
+      "next_action_unique": "FIX_ROLE_CONTRACT_ARCHITECT_20260228T202558Z",
       "next": "regenerer une sortie avec preuve explicite li\u00e9e au role et artefact concret",
-      "exec_report": "contract_guard_role_contract_missing",
-      "issues": "role_contract_missing",
+      "exec_report": "contract_guard_architect_task_id_missing",
+      "issues": "architect_task_id_missing",
       "suggestions": "regenerer_sortie_role_specifique_avec_preuve_et_cmd",
       "stream_id": "none",
       "task_id": "none",
@@ -168,30 +192,6 @@
       "impact_action": "regenerate_contract",
       "queue_version": "",
       "workboard_version": ""
-    },
-    "architect": {
-      "ts_utc": "2026-02-28T16:22:37Z",
-      "role": "architect",
-      "source": "fallback_checkpoint",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CONTINUE_ARCHITECT_ARCH_GUARDRAIL_REVIEW",
-      "next": "produire un gate architecture align\u00e9 best-practices sur le prochain scope READY",
-      "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
-      "issues": "signal_unparseable_source_missing",
-      "suggestions": "verifier_sources_et_stabiliser_prompt",
-      "stream_id": "none",
-      "task_id": "none",
-      "tool_request": "none",
-      "skill_request": "none",
-      "tools_used": "",
-      "channels_read": "runtime_context",
-      "impact_assessment": "low",
-      "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
     },
     "data_analyst": {
       "ts_utc": "2026-02-28T16:21:26Z",
@@ -218,15 +218,15 @@
       "workboard_version": "workboard_1772196369_8e9aed5f9a04"
     },
     "tester": {
-      "ts_utc": "2026-02-28T16:20:05Z",
+      "ts_utc": "2026-02-28T20:24:24Z",
       "role": "tester",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_TESTER_FROM_TEST_TREE",
-      "next": "maintenir plan de tests minimal pour prochain item READY",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -238,19 +238,19 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "qa": {
-      "ts_utc": "2026-02-28T16:20:07Z",
+      "ts_utc": "2026-02-28T20:25:31Z",
       "role": "qa",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_QA_FROM_GATES",
-      "next": "contr\u00f4ler coh\u00e9rence VERDICT/BLOCKER_ID au prochain tick",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -262,8 +262,8 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "scrum_master": {
       "ts_utc": "2026-02-27T10:43:39Z",
@@ -288,15 +288,15 @@
       "impact_action": "monitor_updates"
     },
     "clawsentinel": {
-      "ts_utc": "2026-02-28T16:21:28Z",
+      "ts_utc": "2026-02-28T20:25:57Z",
       "role": "clawsentinel",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_CLAWSENTINEL_FROM_WATCHDOG",
-      "next": "v\u00e9rifier d\u00e9rive cron et publier action anti-drift unique",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -308,8 +308,8 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "po": {
       "ts_utc": "2026-02-27T10:30:48Z",
@@ -346,7 +346,7 @@
     "blockers_open": 1,
     "tool_skill_requests_open": 0,
     "issue_roles": [
-      "analyst",
+      "architect",
       "po",
       "scrum_master"
     ],
@@ -357,16 +357,16 @@
       "scrum_master"
     ],
     "delivery_gap_roles": [
-      "analyst",
+      "architect",
       "po",
       "scrum_master"
     ],
     "blocker_roles": [
-      "analyst"
+      "architect"
     ],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
-      "architect",
+      "analyst",
       "backend_engineer",
       "clawsentinel",
       "data_analyst",
@@ -376,8 +376,8 @@
       "integrator"
     ],
     "context_versions": {
-      "queue_version": "queue_1772189937_d5046bfe2318",
-      "workboard_version": "workboard_1772196369_47384863a409"
+      "queue_version": "queue_1772309428_5903754b6142",
+      "workboard_version": "workboard_1772309428_9ffbb592b0da"
     }
   }
 }

@@ -141,3 +141,16 @@
 - `apps/web/src/domains/forecasts/pages/app.js`
 - `apps/web/src/domains/forecasts/contracts/mockData.js` (réduire sa dépendance)
 - `apps/web/src/domains/forecasts/contracts/apiConnector.js` (étendre si besoin)
+
+## [2026-02-28 ADMIN-CLAUDE INTERVENTION] apiConnector bridge FIXED
+
+**Problème résolu:** apiConnector.js chargeait les données mais ne les exposait PAS dans les globals attendus par app.js (window.newsItems, etc.)
+
+**Fix appliqué:**
+- `populateWindowGlobals()` peuple: `window.newsItems`, `window.liveForecasts`, `window.topMovers`, `window.liveStocks`
+- Dispatche l'event `financecopilot:live-dashboard-updated` → `applyLiveDashboardData()` se déclenche dans app.js
+- Stock % change calculé depuis l'historique de prix (était 0.0, maintenant +15.8% SPY, +41.8% NVDA etc.)
+- Badge LIVE vert visible en bas à droite
+
+**Status BATCH-03-FRONTEND:** Partiellement résolu. Données live connectées.
+**Prochaine étape:** Vérifier que les forecasts sont bien rendus (widget `forecasts` dans l'UI)

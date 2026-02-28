@@ -3,8 +3,8 @@
 ## Entrées rapides
 
 - Commandes d’exécution & contrôles : [docs/ops/AGENT_WORKFLOW.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKFLOW.md)
-- Index espace de travail : [docs/ops/AGENT_WORKSPACE_INDEX.md](ops/AGENT_WORKSPACE_INDEX.md)
-- Index agent (version locale) : [docs/ops/ops/AGENT_WORKSPACE_INDEX.md](ops/ops/AGENT_WORKSPACE_INDEX.md)
+- Index espace de travail : [docs/ops/AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
+- Index agent (version locale) : [docs/ops/ops/AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/ops/AGENT_WORKSPACE_INDEX.md)
 
 ## Mémoire / contexte
 

@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updated_at": "2026-02-28T20:05:47Z",
+  "updated_at": "2026-02-28T20:44:00Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
-    "goal": "Accélérer la livraison parallèle sans désordre",
+    "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
     "cadence_days": 14
   },
   "roles": {
@@ -99,8 +99,8 @@
     },
     {
       "id": "BATCH-03",
-      "title": "Frontend live + data quality",
-      "state": "OPEN",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es",
+      "state": "IN_PROGRESS",
       "planner_slot": "assigned",
       "created_at": "2026-02-28T20:01:54Z",
       "tasks": [
@@ -109,14 +109,14 @@
           "assigned_to": "frontend_engineer",
           "status": "ready",
           "has_work": true,
-          "description": "Intégrer apiConnector.js dans toutes les pages, remplacer mock data par API live"
+          "description": "Int\u00e9grer apiConnector.js dans toutes les pages, remplacer mock data par API live"
         },
         {
           "id": "BATCH-03-BACKEND",
           "assigned_to": "backend_engineer",
           "status": "ready",
           "has_work": true,
-          "description": "Améliorer confidence forecasts, corriger stocks prices (change=0)"
+          "description": "Am\u00e9liorer confidence forecasts, corriger stocks prices (change=0)"
         },
         {
           "id": "BATCH-03-DATA",
@@ -130,14 +130,17 @@
           "assigned_to": "planner",
           "status": "in_progress",
           "has_work": true,
-          "description": "Dispatcher BATCH-03 aux rôles et monitorer la livraison"
+          "description": "Dispatcher BATCH-03 aux r\u00f4les et monitorer la livraison"
         }
-      ]
+      ],
+      "priority": "P0",
+      "source_state": "READY",
+      "updated_at": "2026-02-28T20:44:00Z"
     },
     {
       "id": "BATCH-04",
-      "title": "Dashboard Vision — Brief quotidien + Secteurs réels",
-      "state": "PLANNED",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els",
+      "state": "WAITING_DEP",
       "planner_slot": "unassigned",
       "priority": "P0",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-04",
@@ -149,19 +152,19 @@
           "id": "BATCH-04-BACKEND",
           "assigned_to": "backend_engineer",
           "status": "planned",
-          "description": "Endpoint /api/brief/daily opérationnel avec résumé marché du jour (texte synthèse < 200 mots), macro signals (Fed/inflation/géopolitique), secteurs top/bottom du jour"
+          "description": "Endpoint /api/brief/daily op\u00e9rationnel avec r\u00e9sum\u00e9 march\u00e9 du jour (texte synth\u00e8se < 200 mots), macro signals (Fed/inflation/g\u00e9opolitique), secteurs top/bottom du jour"
         },
         {
           "id": "BATCH-04-FRONTEND",
           "assigned_to": "frontend_engineer",
           "status": "planned",
-          "description": "Dashboard principal: brief quotidien visible en header, secteurs avec direction arrows (up/down), KPIs connectés au live"
+          "description": "Dashboard principal: brief quotidien visible en header, secteurs avec direction arrows (up/down), KPIs connect\u00e9s au live"
         },
         {
           "id": "BATCH-04-DATA",
           "assigned_to": "data_analyst",
           "status": "planned",
-          "description": "Pipeline macro indicators: taux Fed, VIX, inflation CPI, DXY — fraîcheur < 10min"
+          "description": "Pipeline macro indicators: taux Fed, VIX, inflation CPI, DXY \u2014 fra\u00eecheur < 10min"
         },
         {
           "id": "BATCH-04-PLAN",
@@ -171,15 +174,16 @@
         }
       ],
       "success_criteria": [
-        "curl /api/brief/daily retourne un texte synthèse du marché du jour",
+        "curl /api/brief/daily retourne un texte synth\u00e8se du march\u00e9 du jour",
         "Dashboard affiche le brief en haut sans scroll",
-        "Les secteurs (or, IA, énergie) ont une direction visible (↑↓→)"
-      ]
+        "Les secteurs (or, IA, \u00e9nergie) ont une direction visible (\u2191\u2193\u2192)"
+      ],
+      "updated_at": "2026-02-28T20:44:00Z"
     },
     {
       "id": "BATCH-05",
       "title": "Copilot 'Que faire aujourd'hui ?'",
-      "state": "PLANNED",
+      "state": "WAITING_DEP",
       "planner_slot": "unassigned",
       "priority": "P0",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-05",
@@ -191,31 +195,32 @@
           "id": "BATCH-05-BACKEND",
           "assigned_to": "backend_engineer",
           "status": "planned",
-          "description": "Améliorer /api/copilot/ask: injecter auto contexte marché actuel (news, forecasts, macro) dans le prompt LLM. Réponse structurée: verdict (buy/sell/hold) + raisonnement 3 bullets + sources"
+          "description": "Am\u00e9liorer /api/copilot/ask: injecter auto contexte march\u00e9 actuel (news, forecasts, macro) dans le prompt LLM. R\u00e9ponse structur\u00e9e: verdict (buy/sell/hold) + raisonnement 3 bullets + sources"
         },
         {
           "id": "BATCH-05-FRONTEND",
           "assigned_to": "frontend_engineer",
           "status": "planned",
-          "description": "UI Copilot: champ input portefeuille, bouton 'Analyser maintenant', affichage verdict avec couleur (vert/rouge/jaune), sources cliquables. Réponse visible < 30s"
+          "description": "UI Copilot: champ input portefeuille, bouton 'Analyser maintenant', affichage verdict avec couleur (vert/rouge/jaune), sources cliquables. R\u00e9ponse visible < 30s"
         },
         {
           "id": "BATCH-05-PLAN",
           "assigned_to": "planner",
           "status": "planned",
-          "description": "Valider: test utilisateur simulé (2 clics max pour avoir une recommandation portfolio)"
+          "description": "Valider: test utilisateur simul\u00e9 (2 clics max pour avoir une recommandation portfolio)"
         }
       ],
       "success_criteria": [
-        "POST /api/copilot/ask avec question portfolio → réponse structurée en < 30s",
-        "UI: 2 clics max de la page principale à la recommandation",
-        "Réponse contient: verdict + raisonnement + sources"
-      ]
+        "POST /api/copilot/ask avec question portfolio \u2192 r\u00e9ponse structur\u00e9e en < 30s",
+        "UI: 2 clics max de la page principale \u00e0 la recommandation",
+        "R\u00e9ponse contient: verdict + raisonnement + sources"
+      ],
+      "updated_at": "2026-02-28T20:44:00Z"
     },
     {
       "id": "BATCH-06",
       "title": "Forecasts Multi-Assets + LLM Judge",
-      "state": "PLANNED",
+      "state": "WAITING_DEP",
       "planner_slot": "unassigned",
       "priority": "P1",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-06",
@@ -227,7 +232,7 @@
           "id": "BATCH-06-BACKEND",
           "assigned_to": "backend_engineer",
           "status": "planned",
-          "description": "Coverage forecasts: GLD (or), SLV (argent), TSLA, NVDA, QQQ (IA sector), XLE (énergie), BTC. Horizons: 1d/1w/1m. Multi-LLM: 2+ providers analysent, judge tranche"
+          "description": "Coverage forecasts: GLD (or), SLV (argent), TSLA, NVDA, QQQ (IA sector), XLE (\u00e9nergie), BTC. Horizons: 1d/1w/1m. Multi-LLM: 2+ providers analysent, judge tranche"
         },
         {
           "id": "BATCH-06-FRONTEND",
@@ -239,25 +244,26 @@
           "id": "BATCH-06-DATA",
           "assigned_to": "data_analyst",
           "status": "planned",
-          "description": "Pipeline prix or/argent/crypto: source gratuite (Yahoo Finance, stooq), fraîcheur < 10min"
+          "description": "Pipeline prix or/argent/crypto: source gratuite (Yahoo Finance, stooq), fra\u00eecheur < 10min"
         },
         {
           "id": "BATCH-06-PLAN",
           "assigned_to": "planner",
           "status": "planned",
-          "description": "Valider judge pipeline: 2+ modèles LLM répondent, arbitrage visible dans l'UI"
+          "description": "Valider judge pipeline: 2+ mod\u00e8les LLM r\u00e9pondent, arbitrage visible dans l'UI"
         }
       ],
       "success_criteria": [
         "GET /api/forecasts?tickers=GLD,SLV,TSLA retourne forecasts avec confidence > 0",
-        "Judge visible dans l'UI avec verdict + modèles qui ont voté",
+        "Judge visible dans l'UI avec verdict + mod\u00e8les qui ont vot\u00e9",
         "Horizons 1d/1w/1m disponibles pour chaque actif"
-      ]
+      ],
+      "updated_at": "2026-02-28T20:44:00Z"
     },
     {
       "id": "BATCH-07",
       "title": "Deep Dive + News Intelligence",
-      "state": "PLANNED",
+      "state": "WAITING_DEP",
       "planner_slot": "unassigned",
       "priority": "P1",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-07",
@@ -269,32 +275,33 @@
           "id": "BATCH-07-BACKEND",
           "assigned_to": "backend_engineer",
           "status": "planned",
-          "description": "Deep dive endpoint: /api/deep-dive/{ticker} → news + signaux + forecast + analyse LLM contextualisée. Question libre via /api/copilot/ask avec ticker context"
+          "description": "Deep dive endpoint: /api/deep-dive/{ticker} \u2192 news + signaux + forecast + analyse LLM contextualis\u00e9e. Question libre via /api/copilot/ask avec ticker context"
         },
         {
           "id": "BATCH-07-FRONTEND",
           "assigned_to": "frontend_engineer",
           "status": "planned",
-          "description": "Barre de recherche universelle: taper 'or' ou 'Tesla' → deep-dive en 1 clic. News avec score impact (0-10) pas liste brute. Question libre dans copilot"
+          "description": "Barre de recherche universelle: taper 'or' ou 'Tesla' \u2192 deep-dive en 1 clic. News avec score impact (0-10) pas liste brute. Question libre dans copilot"
         },
         {
           "id": "BATCH-07-DATA",
           "assigned_to": "data_analyst",
           "status": "planned",
-          "description": "News scoring: calculer impact estimé de chaque news sur le portefeuille (0-10). Résumé auto des news longues"
+          "description": "News scoring: calculer impact estim\u00e9 de chaque news sur le portefeuille (0-10). R\u00e9sum\u00e9 auto des news longues"
         },
         {
           "id": "BATCH-07-PLAN",
           "assigned_to": "planner",
           "status": "planned",
-          "description": "Test final MVP: simuler session utilisateur complète (dashboard → copilot → deep-dive) en < 5 min"
+          "description": "Test final MVP: simuler session utilisateur compl\u00e8te (dashboard \u2192 copilot \u2192 deep-dive) en < 5 min"
         }
       ],
       "success_criteria": [
-        "Recherche 'or' → analyse complète en < 15 secondes",
-        "News affichées avec score impact, pas brutes",
-        "Session utilisateur complète possible en < 5 minutes"
-      ]
+        "Recherche 'or' \u2192 analyse compl\u00e8te en < 15 secondes",
+        "News affich\u00e9es avec score impact, pas brutes",
+        "Session utilisateur compl\u00e8te possible en < 5 minutes"
+      ],
+      "updated_at": "2026-02-28T20:44:00Z"
     }
   ],
   "tasks": [
@@ -1021,7 +1028,7 @@
         "docs/orchestrator-ops/proofs/BATCH-02/sentinel-contracts-20260227T105451Z.log"
       ],
       "notes": [
-        "Template Judge validé en base (never-empty + cache + quality), mais bloqué pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et cohérence risk_level ne sont pas corrigés.",
+        "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
         "cmd=validate_parallel_plumbing + triage_now + pytest contracts;tests_run=pytest targeted contracts: 3 passed;review_ref=sentinel_manual_review_2026-02-27T10:55Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-SENTINEL_CHECK/20260227T105506Z-554.yaml"
       ],
       "handoff_to": "planner",
@@ -1161,6 +1168,438 @@
       "proof_manifests": [
         "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-GOV_REVIEW/20260227T105928Z-848.yaml"
       ]
+    },
+    {
+      "id": "BATCH-03-FRONTEND",
+      "stream_id": "BATCH-03",
+      "code": "FRONTEND",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "READY",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Int\u00e9grer apiConnector.js dans toutes les pages, remplacer mock data par API live",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (apps/web/src/domains/forecasts/components/*) + shared UI wiring (apps/web/src/platform) before creating new components."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-03-BACKEND",
+      "stream_id": "BATCH-03",
+      "code": "BACKEND",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [BACKEND]",
+      "role": "backend_engineer",
+      "state": "READY",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Am\u00e9liorer confidence forecasts, corriger stocks prices (change=0)",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-03-DATA",
+      "stream_id": "BATCH-03",
+      "code": "DATA",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [DATA]",
+      "role": "data_analyst",
+      "state": "READY",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Activer backtests et corriger data pipeline"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-03-PLAN",
+      "stream_id": "BATCH-03",
+      "code": "PLAN",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [PLAN]",
+      "role": "planner",
+      "state": "IN_PROGRESS",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Dispatcher BATCH-03 aux r\u00f4les et monitorer la livraison",
+        "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "2026-02-28T20:43:30Z",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-04-BACKEND",
+      "stream_id": "BATCH-04",
+      "code": "BACKEND",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els [BACKEND]",
+      "role": "backend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Endpoint /api/brief/daily op\u00e9rationnel avec r\u00e9sum\u00e9 march\u00e9 du jour (texte synth\u00e8se < 200 mots), macro signals (Fed/inflation/g\u00e9opolitique), secteurs top/bottom du jour"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-04-FRONTEND",
+      "stream_id": "BATCH-04",
+      "code": "FRONTEND",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Dashboard principal: brief quotidien visible en header, secteurs avec direction arrows (up/down), KPIs connect\u00e9s au live"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-04-DATA",
+      "stream_id": "BATCH-04",
+      "code": "DATA",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els [DATA]",
+      "role": "data_analyst",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Pipeline macro indicators: taux Fed, VIX, inflation CPI, DXY \u2014 fra\u00eecheur < 10min"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-04-PLAN",
+      "stream_id": "BATCH-04",
+      "code": "PLAN",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els [PLAN]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Dispatcher et valider que chaque livraison respecte la vision: 2-3 clics, dashboard lisible en 30s"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-05-BACKEND",
+      "stream_id": "BATCH-05",
+      "code": "BACKEND",
+      "title": "Copilot 'Que faire aujourd'hui ?' [BACKEND]",
+      "role": "backend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-04"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Am\u00e9liorer /api/copilot/ask: injecter auto contexte march\u00e9 actuel (news, forecasts, macro) dans le prompt LLM. R\u00e9ponse structur\u00e9e: verdict (buy/sell/hold) + raisonnement 3 bullets + sources"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-05-FRONTEND",
+      "stream_id": "BATCH-05",
+      "code": "FRONTEND",
+      "title": "Copilot 'Que faire aujourd'hui ?' [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-04"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: UI Copilot: champ input portefeuille, bouton 'Analyser maintenant', affichage verdict avec couleur (vert/rouge/jaune), sources cliquables. R\u00e9ponse visible < 30s"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-05-PLAN",
+      "stream_id": "BATCH-05",
+      "code": "PLAN",
+      "title": "Copilot 'Que faire aujourd'hui ?' [PLAN]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-04"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Valider: test utilisateur simul\u00e9 (2 clics max pour avoir une recommandation portfolio)"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-06-BACKEND",
+      "stream_id": "BATCH-06",
+      "code": "BACKEND",
+      "title": "Forecasts Multi-Assets + LLM Judge [BACKEND]",
+      "role": "backend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Coverage forecasts: GLD (or), SLV (argent), TSLA, NVDA, QQQ (IA sector), XLE (\u00e9nergie), BTC. Horizons: 1d/1w/1m. Multi-LLM: 2+ providers analysent, judge tranche"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-06-FRONTEND",
+      "stream_id": "BATCH-06",
+      "code": "FRONTEND",
+      "title": "Forecasts Multi-Assets + LLM Judge [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Page Forecasts: grille d'actifs avec direction + confiance + judge verdict. Filtres par secteur. Deep-dive 1 clic sur un actif"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-06-DATA",
+      "stream_id": "BATCH-06",
+      "code": "DATA",
+      "title": "Forecasts Multi-Assets + LLM Judge [DATA]",
+      "role": "data_analyst",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Pipeline prix or/argent/crypto: source gratuite (Yahoo Finance, stooq), fra\u00eecheur < 10min"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-06-PLAN",
+      "stream_id": "BATCH-06",
+      "code": "PLAN",
+      "title": "Forecasts Multi-Assets + LLM Judge [PLAN]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Valider judge pipeline: 2+ mod\u00e8les LLM r\u00e9pondent, arbitrage visible dans l'UI"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-07-BACKEND",
+      "stream_id": "BATCH-07",
+      "code": "BACKEND",
+      "title": "Deep Dive + News Intelligence [BACKEND]",
+      "role": "backend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-06"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Deep dive endpoint: /api/deep-dive/{ticker} \u2192 news + signaux + forecast + analyse LLM contextualis\u00e9e. Question libre via /api/copilot/ask avec ticker context"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-07-FRONTEND",
+      "stream_id": "BATCH-07",
+      "code": "FRONTEND",
+      "title": "Deep Dive + News Intelligence [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-06"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Barre de recherche universelle: taper 'or' ou 'Tesla' \u2192 deep-dive en 1 clic. News avec score impact (0-10) pas liste brute. Question libre dans copilot"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-07-DATA",
+      "stream_id": "BATCH-07",
+      "code": "DATA",
+      "title": "Deep Dive + News Intelligence [DATA]",
+      "role": "data_analyst",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-06"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: News scoring: calculer impact estim\u00e9 de chaque news sur le portefeuille (0-10). R\u00e9sum\u00e9 auto des news longues"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-07-PLAN",
+      "stream_id": "BATCH-07",
+      "code": "PLAN",
+      "title": "Deep Dive + News Intelligence [PLAN]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-06"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "legacy_note: Test final MVP: simuler session utilisateur compl\u00e8te (dashboard \u2192 copilot \u2192 deep-dive) en < 5 min"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-28T20:43:30Z",
+      "updated_at": "2026-02-28T20:44:00Z",
+      "started_at": "",
+      "completed_at": ""
     }
   ],
   "handoffs": [
@@ -1255,7 +1694,7 @@
       "from_role": "clawsentinel",
       "to_role": "planner",
       "status": "CLOSED",
-      "note": "Template Judge validé en base (never-empty + cache + quality), mais bloqué pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et cohérence risk_level ne sont pas corrigés.",
+      "note": "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
       "idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A",
       "created_at": "2026-02-27T10:55:06Z",
       "updated_at": "2026-02-27T12:46:09Z"
@@ -2146,6 +2585,128 @@
         "handoff_id": "HO-20260227105506-281",
         "status": "CLOSED",
         "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-03",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-04",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-05",
+        "migrated_count": "3"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-06",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-07",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "migrate_legacy_stream_tasks",
+      "details": {
+        "migrated": "19"
+      }
+    },
+    {
+      "at": "2026-02-28T20:37:55Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 10
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-03",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-04",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-05",
+        "migrated_count": "3"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-06",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrated_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-07",
+        "migrated_count": "4"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "migrate_legacy_stream_tasks",
+      "details": {
+        "migrated": "19"
+      }
+    },
+    {
+      "at": "2026-02-28T20:43:30Z",
+      "kind": "prune_legacy_tasks",
+      "details": {
+        "stream_id": "BATCH-03",
+        "pruned_task_ids": [
+          "BATCH-03-ANALYSIS",
+          "BATCH-03-ARCH",
+          "BATCH-03-QA_PREP",
+          "BATCH-03-TEST_PLAN",
+          "BATCH-03-INFRA",
+          "BATCH-03-DEV",
+          "BATCH-03-INTEGRATION",
+          "BATCH-03-QA_EXEC",
+          "BATCH-03-SENTINEL_CHECK",
+          "BATCH-03-GOV_REVIEW"
+        ]
       }
     }
   ]

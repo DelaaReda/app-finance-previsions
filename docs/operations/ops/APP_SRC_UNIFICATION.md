@@ -1,7 +1,7 @@
 # App Src Unification
 
 Voir aussi le guide agent centralisé :
-[`docs/architecture/AGENT_ONBOARDING.md`](../../architecture/AGENT_ONBOARDING.md)
+[`docs/architecture/AGENT_ONBOARDING.md`](AGENT_ONBOARDING.md)
 
 Objectif: garantir une arborescence unique et exploitable par humain/agent.
 
