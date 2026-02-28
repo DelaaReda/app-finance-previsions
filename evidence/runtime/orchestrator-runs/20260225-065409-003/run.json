@@ -1,0 +1,32 @@
+{
+  "run_id": "20260225-065409-003",
+  "timestamp": "2026-02-25T06:54:09",
+  "feature": "(restart only)",
+  "project_dir": "/home/venom/analyse-financiere",
+  "runs_dir": "/home/venom/analyse-financiere/finance-app/orchestrator-runs",
+  "backend_dir": "/home/venom/analyse-financiere/copilot-app/backend",
+  "qwen_bin": "codex",
+  "sessions": {
+    "planner": "qwen_planner",
+    "dev": "qwen_dev",
+    "tester": "qwen_tester",
+    "qa": "qwen_qa"
+  },
+  "capture_last_lines": 4000,
+  "tmux_history_limit": 200000,
+  "references": {
+    "api_endpoint_best_practices_doc": "docs/ops/API_ENDPOINT_BEST_PRACTICES.md",
+    "api_endpoint_best_practices_exists": true
+  },
+  "artifacts": {
+    "transcript": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/transcript.md",
+    "agent_bus": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/agent_bus.jsonl",
+    "agent_board": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/agent_board.md",
+    "events": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/events.jsonl",
+    "agent_activity": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/agent_activity.json",
+    "snapshots_dir": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/snapshots",
+    "tmux_dir": "/home/venom/analyse-financiere/finance-app/orchestrator-runs/20260225-065409-003/tmux"
+  },
+  "mode": "restart",
+  "agent_cli": "codex"
+}

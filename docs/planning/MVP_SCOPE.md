@@ -1,0 +1,1 @@
+../product/planning/MVP_SCOPE.md

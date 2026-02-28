@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-01-BATCH-01-DEV-20260227T105923Z-698"
+stream_id: "BATCH-01"
+task_id: "BATCH-01-DEV"
+role: "dev"
+produced_at_utc: "2026-02-27T10:59:23Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+execution:
+  commands:
+    - cmd: "SKIP(retro_close_sync_artifact)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-02-27T10:59:23Z"
+      ended_at_utc: "2026-02-27T10:59:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(retro_close_sync_artifact)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "finance-app/openclaw-gates/batch-01-20260225-000127.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "qa"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-59f8c0dc9ab5"
+  review_ref: "retro-sync-close-batch01-dev"
+  note: "retro-close: task auto-created by sync-priority include-pass on PASS stream"

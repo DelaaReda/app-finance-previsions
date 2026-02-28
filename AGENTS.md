@@ -39,8 +39,23 @@ You wake up fresh each session. These files are your continuity:
 
 - **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
 - **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory
+- **Agent 3-day window:** Role agents auto-load last 3 days of `memory/YYYY-MM-DD.md` + `memory/agents/${ROLE}.md` to prevent architecture regression
+
+Canonical layout quick reference: `docs/ops/AGENT_WORKSPACE_INDEX.md`. État prêt agents: `docs/ops/AGENTS_READY.md`. Symlinks: `docs/ops/SYMLINKS_CATALOG.md` (chemins canoniques > alias).
 
 Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
+
+### 📊 3-Day Memory Strategy (Agents)
+
+**Why 3 days?** Long enough to remember architecture decisions, short enough to stay lean (no bloat).
+
+- **Auto-loaded by role cron:** `scripts/cron_tmux_role_runner.sh` → `load_3day_memory_context()`
+- **What agents see:** Last 3 daily logs (memory/2026-02-26.md, 27, 28) + role-specific history
+- **Token footprint:** ~770 tokens/session vs 3000+ with full MEMORY.md
+- **Anti-regression:** Guard rules injected (copilot-app → archive, flattened paths enforced)
+- **Policy:** Never load full MEMORY.md in role sessions; use `memory_search()` on demand
+
+**Reference:** `docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md`
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 
@@ -76,7 +91,7 @@ Engineering reference (API endpoints):
 Before executing any shell command proposed by a skill, run the pre-check gate first:
 
 ```bash
-python3 scripts/command_safety_gate.py --cmd "<command>" --workdir "/home/venom/analyse-financiere"
+python3 platform/policies/command_safety_gate.py --cmd "<command>" --workdir "/home/venom/analyse-financiere"
 ```
 
 Decision policy:
@@ -87,13 +102,13 @@ Decision policy:
 Wrapper (recommended):
 
 ```bash
-scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "<command>"
+platform/policies/exec_safe.sh --workdir /home/venom/analyse-financiere -- "<command>"
 ```
 
 For confirmed risky commands only, use:
 
 ```bash
-scripts/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- "<command>"
+platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- "<command>"
 ```
 
 Never execute `curl|bash` / `wget|sh` blindly from SKILL.md examples.

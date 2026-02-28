@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-28T02:14:56Z",
+  "sprint": {
+    "id": "S-BOOTSTRAP",
+    "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
+    "cadence_days": 14
+  },
+  "roles": {
+    "planner": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"
+    },
+    "analyst": {
+      "wip_limit": 3,
+      "can_edit": false,
+      "focus": "requirements and assumptions"
+    },
+    "architect": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "constraints and design"
+    },
+    "po": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "value prioritization, acceptance criteria, and release decisions"
+    },
+    "scrum_master": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "flow health, WIP governance, cadence, and blocker removal"
+    },
+    "backend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "api and backend impl"
+    },
+    "frontend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "ui and frontend impl"
+    },
+    "data_analyst": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "data quality and metrics"
+    },
+    "infra_engineer": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "infra and ci/cd"
+    },
+    "integrator": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-team integration"
+    },
+    "dev": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-cutting implementation and debt"
+    },
+    "tester": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "test automation and checks"
+    },
+    "qa": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "quality gate and validation"
+    },
+    "clawsentinel": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "anti-drift and safety"
+    }
+  },
+  "streams": [],
+  "tasks": [],
+  "handoffs": [],
+  "events": []
+}

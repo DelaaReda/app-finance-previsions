@@ -1,0 +1,1 @@
+/home/venom/shared/analyse-financiere/platform/automation/validate_agent_workspace_layout.sh

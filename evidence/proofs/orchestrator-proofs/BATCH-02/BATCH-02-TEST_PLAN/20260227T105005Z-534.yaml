@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-02-BATCH-02-TEST_PLAN-20260227T105005Z-534"
+stream_id: "BATCH-02"
+task_id: "BATCH-02-TEST_PLAN"
+role: "tester"
+produced_at_utc: "2026-02-27T10:50:05Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/tester.last_contract"
+execution:
+  commands:
+    - cmd: "cd copilot-app/backend && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider tests/test_news_feed_contract.py tests/test_stocks_prices_contract.py"
+      rc: "0"
+      started_at_utc: "2026-02-27T10:50:05Z"
+      ended_at_utc: "2026-02-27T10:50:05Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest_news_feed_and_stocks_prices:PASS(3_tests)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/tester.last_contract"
+  artifacts:
+    - "copilot-app/backend/tests/test_news_feed_contract.py+copilot-app/backend/tests/test_stocks_prices_contract.py"
+handoff:
+  to_role: "qa"
+  handoff_id: "HO-20260227105005-128"
+signoff:
+  producer_agent: "tester"
+  reviewer_agent: "main"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH02_TESTPLAN_FORCE_TRANSITION_20260227A"
+  review_ref: "main_manual_review_2026-02-27T10:49Z"
+  note: "test plan concretized and executed on core contracts"

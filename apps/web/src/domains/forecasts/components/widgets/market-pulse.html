@@ -1,0 +1,53 @@
+<section class="widget-card market-pulse-widget" aria-label="Market pulse" data-widget-id="market-pulse">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📊</span>
+            <h2 class="widget-title">What's Moving Your Portfolio Today</h2>
+            <!-- V11: Live Indicator -->
+            <span class="live-badge">🟢 Live <span class="update-time">Updated 38s ago</span></span>
+        </div>
+        <div class="widget-actions">
+            <!-- V11: AI Prompt Button -->
+            <button class="ai-prompt-btn" onclick="askAIAbout('market-pulse')" aria-label="Ask AI"
+                title="Ask AI about this">🤖</button>
+            <button class="help-icon" onclick="showHelp('pulse')" aria-label="Help"
+                title="AI-generated market narrative">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <!-- V11: AI Suggested Prompts -->
+    <div class="ai-prompts">
+        <button class="prompt-bubble" onclick="askAIPrompt('Why is this changing?')">Why is this changing?</button>
+        <button class="prompt-bubble" onclick="askAIPrompt('Predict next 7 days')">Predict next 7 days</button>
+        <button class="prompt-bubble" onclick="askAIPrompt('Find anomalies')">Find anomalies</button>
+    </div>
+    <div class="widget-body">
+        <p class="story-content">Tech stocks rallying on Fed dovish signals. Your portfolio benefits from NVDA (+8.5%)
+            and META (+5.2%). Recommended action: Hold current positions.</p>
+        <button class="story-expand" onclick="expandStory(this)">Read full analysis</button>
+        <div class="story-expanded" style="display: none;">
+            <p class="story-detail">The Federal Reserve's dovish stance combined with better-than-expected earnings from
+                tech giants creates a favorable environment. Our AI models detect strong institutional buying in
+                semiconductor stocks, particularly NVDA which shows 92% confidence breakout signal. Risk factors include
+                elevated volatility in the broader tech sector.</p>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn" onclick="showToast('Viewing recommendations...')">View
+            Recommendations</button>
+    </div>
+    <!-- V11: Widget Action Bar -->
+    <div class="widget-action-bar">
+        <button class="action-bar-btn primary" onclick="showToast('Executing action...')">Execute Trade</button>
+        <button class="action-bar-btn icon" onclick="pinWidget('market-pulse')" title="Pin" aria-label="Pin">📌</button>
+        <button class="action-bar-btn icon" onclick="setAlert('market-pulse')" title="Alert"
+            aria-label="Set Alert">🔔</button>
+        <button class="action-bar-btn icon" onclick="exportWidget('market-pulse')" title="Export"
+            aria-label="Export">📤</button>
+        <button class="action-bar-btn icon" onclick="askAIAbout('market-pulse')" title="Ask AI"
+            aria-label="Ask AI">🤖</button>
+        <button class="action-bar-btn icon" onclick="openDrillDown('market-pulse')" title="Drill Down"
+            aria-label="Drill Down">🔍</button>
+    </div>
+</section>

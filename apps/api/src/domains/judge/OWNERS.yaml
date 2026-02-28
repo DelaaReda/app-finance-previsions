@@ -1,0 +1,9 @@
+version: 1
+domain: judge
+owners:
+  - architect
+  - backend_engineer
+invariants:
+  - provider_chain_visible
+  - degraded_mode_supported
+  - decision_trace_persisted

@@ -20,6 +20,7 @@
   - `adminapp-codex` (runtime governance owner)
   - `admin-agents` (delivery productivity owner)
   - `clawsentinel` (safety/quality owner)
+  - `inspecteur` (codebase audit & reporting owner) - **ENGAGÉ 2026-02-27**
 - Operational command chain:
   - `main` on WhatsApp acts as Operational Director.
   - `main` gives directives to admins only.
@@ -72,6 +73,10 @@
 - Do not use Docker in this VM for project workflow.
 - Keep operations scoped to this repository.
 - Runtime policy is codex-only for orchestration; legacy qwen scripts are archived/renamed `*_not_used`.
+
+## Orchestration runbook note (2026-02-28)
+- Stabilisation de la plomberie d’orchestration: création du lien `docs/orchestrator-ops` -> `docs/operations/orchestrator`, correction des checks pour utiliser un board de plomberie dédié (`parallel-workstreams-plumbing.json`) et passage des validations `dev_qa_tooling_check` / `validate_parallel_plumbing` en PASS.
+- Verrous legacy `.json.lock` obsolètes retirés pour réduire les faux blocages de rôles (archivés dans `archive/obsolete-locks`).
 - Role cron provisioning standard includes `--no-deliver` to avoid WhatsApp delivery target errors on isolated role jobs.
 - `scripts/qwen_orchestrator.py` now supports cron-friendly watchdog checks:
   - `--tmux-cmd status --status-format text|compact|json`
@@ -135,3 +140,14 @@
   - agent: `adminapp-codex`
   - behavior: executes `scripts/stale_cron_tick.sh` -> `scripts/stale_cron_sweep.sh --apply`.
   - orchestration mode script (`set_orchestration_mode.sh`) now treats this as admin governance job (enable in admins-only/parallel, disable in paused).
+
+## 3-Day Memory Strategy (2026-02-28)
+
+Role agents now auto-load 3-day memory window to prevent architecture regression:
+- Function: `load_3day_memory_context()` in `scripts/cron_tmux_role_runner.sh`
+- Loads: last 3 daily logs (`memory/YYYY-MM-DD.md`, 150 lines/day) + role-specific history (`memory/agents/${ROLE}.md`, 50 lines)
+- Token cost: ~770/session vs 3000+ with full MEMORY.md
+- Injection: Prepended to SYSTEM_PROMPT with ANTI-REGRESSION guards (blocks copilot-app/*, backend/src/backend/src/*, legacy imports)
+- Benefit: Recent architecture decisions visible; prevents regression to old paths
+- Reference: `docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md`
+- Policy: Role sessions never load full MEMORY.md; use `memory_search()` on demand for older context

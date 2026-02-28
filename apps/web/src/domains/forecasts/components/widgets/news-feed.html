@@ -1,0 +1,23 @@
+<section class="widget-card news-feed-widget" aria-label="News Feed">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📰</span>
+            <h2 class="widget-title">Latest Market News</h2>
+        </div>
+        <div class="header-filters">
+            <select class="filter-select" id="newsFilter" onchange="filterNews(this.value)">
+                <option value="all">All Impact</option>
+                <option value="high">High Only</option>
+                <option value="medium">Medium+</option>
+            </select>
+            <button class="view-all-btn" onclick="switchTab(document.querySelector('[data-tab=market]'), 'market')">View
+                All News</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <div class="news-cards-grid" id="newsCardsGrid"></div>
+    </div>
+    <div class="widget-footer">
+        <button class="load-more-btn" onclick="loadMoreNews()">Load More News</button>
+    </div>
+</section>

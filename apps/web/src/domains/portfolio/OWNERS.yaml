@@ -1,0 +1,9 @@
+version: 1
+domain: portfolio_ui
+owners:
+  - frontend_engineer
+  - integrator
+invariants:
+  - profile_state_persisted
+  - allocation_visibility
+  - decision_path_under_3_clicks

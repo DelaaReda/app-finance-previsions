@@ -1,0 +1,46 @@
+proof_id: "PRF-BATCH-99-BATCH-99-BACKEND-20260227T135724Z-550"
+stream_id: "BATCH-99"
+task_id: "BATCH-99-BACKEND"
+role: "backend_engineer"
+produced_at_utc: "2026-02-27T13:57:24Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+preconditions:
+  change_plan:
+    - "Analyse demande"
+    - "plan action"
+    - "identifier risque"
+    - "définir rollback"
+    - "valider tests"
+  architecture_checks:
+    - "schema_stability"
+    - "api_contract"
+    - "observability"
+execution:
+  commands:
+    - cmd: "SKIP(no_cmd_recorded)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-02-27T13:57:24Z"
+      ended_at_utc: "2026-02-27T13:57:24Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_tests_recorded)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+  artifacts:
+    - "test.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "backend_engineer"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-f3c422f1c4e5"
+  review_ref: "none"
+  note: "none"

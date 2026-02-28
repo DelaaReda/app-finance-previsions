@@ -1,0 +1,30 @@
+{
+  "g4f": {
+    "provider": "DeepInfra",
+    "model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+  },
+  "llm_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+  "llm_summary_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+  "llm_judge_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+  "llm_mode_default": "best",
+  "llm_dev_models": [
+    "qwen-3-235b",
+    "qwen/qwen3-235b-a22b",
+    "deepseek-v3",
+    "deepseek/deepseek-v3"
+  ],
+  "llm_fastest_models": [
+    "qwen-3-235b",
+    "deepseek-v3",
+    "qwen/qwen3-235b-a22b",
+    "deepseek/deepseek-v3"
+  ],
+  "llm_dev_timeout_seconds": 20,
+  "llm_fastest_timeout_seconds": 12,
+  "llm_best_timeout_seconds": 60,
+  "llm_dev_max_attempts": 2,
+  "llm_fastest_max_attempts": 2,
+  "llm_best_max_attempts": 3,
+  "econ_agent_mode": "prod",
+  "econ_agent_models": []
+}

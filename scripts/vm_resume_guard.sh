@@ -1,0 +1,1 @@
+/home/venom/shared/analyse-financiere/platform/automation/vm_resume_guard.sh

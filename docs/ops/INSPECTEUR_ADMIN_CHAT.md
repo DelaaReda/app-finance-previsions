@@ -1,0 +1,1 @@
+../operations/INSPECTEUR_ADMIN_CHAT.md

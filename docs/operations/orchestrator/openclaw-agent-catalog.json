@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-26T21:20:19Z",
+  "workspace": "/home/venom/analyse-financiere",
+  "default_model": "openai-codex/gpt-5.3-codex-spark",
+  "agents": [
+    {
+      "id": "adminapp-codex",
+      "name": "AdminApp Codex",
+      "theme": "runtime"
+    },
+    {
+      "id": "admin-agents",
+      "name": "Admin Agents",
+      "theme": "delivery-governance"
+    },
+    {
+      "id": "clawsentinel",
+      "name": "ClawSentinel",
+      "theme": "safety"
+    },
+    {
+      "id": "planner",
+      "name": "Planner",
+      "theme": "planning"
+    },
+    {
+      "id": "analyst",
+      "name": "Analyst",
+      "theme": "analysis"
+    },
+    {
+      "id": "architect",
+      "name": "Architect",
+      "theme": "architecture"
+    },
+    {
+      "id": "backend_engineer",
+      "name": "Backend Engineer",
+      "theme": "backend"
+    },
+    {
+      "id": "frontend_engineer",
+      "name": "Frontend Engineer",
+      "theme": "frontend"
+    },
+    {
+      "id": "integrator",
+      "name": "Integrator",
+      "theme": "integration"
+    },
+    {
+      "id": "data_analyst",
+      "name": "Data Analyst",
+      "theme": "data"
+    },
+    {
+      "id": "infra_engineer",
+      "name": "Infra Engineer",
+      "theme": "infra"
+    },
+    {
+      "id": "dev",
+      "name": "Dev Generalist",
+      "theme": "engineering"
+    },
+    {
+      "id": "tester",
+      "name": "Tester",
+      "theme": "testing"
+    },
+    {
+      "id": "qa",
+      "name": "QA",
+      "theme": "quality"
+    }
+  ]
+}

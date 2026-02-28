@@ -1,0 +1,42 @@
+<div id="settingsModal" class="modal" role="dialog" aria-label="Settings">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Settings</h2>
+            <button class="close-btn" onclick="closeSettings()" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="setting-group">
+                <label class="setting-label">Auto-refresh
+                    <input type="checkbox" id="autoRefresh" checked>
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Refresh interval</label>
+                <select class="setting-select">
+                    <option value="30">30 seconds</option>
+                    <option value="60" selected>1 minute</option>
+                    <option value="300">5 minutes</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Theme</label>
+                <select class="setting-select" id="themeSelect">
+                    <option value="dark" selected>Dark</option>
+                    <option value="light">Light</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Notifications
+                    <input type="checkbox" id="notifEnabled" checked>
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn primary" onclick="saveSettings()">Save preferences</button>
+            <button class="modal-btn secondary" onclick="closeSettings()">Cancel</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,9 @@
+version: 1
+domain: forecasts
+owners:
+  - architect
+  - backend_engineer
+invariants:
+  - forecast_contract_keys_required
+  - freshness_status_required
+  - ui_consumable_payload_required

@@ -1,0 +1,1 @@
+/home/venom/shared/analyse-financiere/apps/api/src/platform/legacy/scripts/fetch_prices_yahoo.sh

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-27T11:00:00Z",
+  "items": [
+    {
+      "id": "BATCH-01",
+      "title": "Stabiliser contrats API MVP",
+      "state": "PASS",
+      "priority": "P0",
+      "owner_role": "planner",
+      "blocker_id": "NONE",
+      "qa_signoff": "YES",
+      "qa_signoff_artifact": "finance-app/openclaw-gates/batch-01-20260225-000127.md",
+      "next_action": "CLOSE_BATCH01_AND_HANDOFF_BATCH02",
+      "depends_on": [],
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ]
+    },
+    {
+      "id": "BATCH-02",
+      "title": "Contrats multi-ticker + news",
+      "state": "PASS",
+      "priority": "P1",
+      "owner_role": "planner",
+      "blocker_id": "NONE",
+      "dispatch_authorized": false,
+      "gate_reference": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
+      "qa_signoff": "YES",
+      "qa_signoff_artifact": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
+      "next_action": "CLOSE_BATCH02_AND_PREPARE_NEXT_PRIORITY_BATCH",
+      "depends_on": [
+        "BATCH-01"
+      ],
+      "evidence_required": [
+        "VERDICT: PASS",
+        "QA_SIGNOFF: YES"
+      ]
+    }
+  ]
+}

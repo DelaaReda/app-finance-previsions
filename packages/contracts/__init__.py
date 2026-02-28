@@ -1,0 +1,1 @@
+"""Versioned shared contracts package."""

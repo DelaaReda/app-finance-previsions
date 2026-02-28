@@ -1,0 +1,62 @@
+<section class="widget-card market-volatility-pro" aria-label="Market volatility">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📊</span>
+            <div>
+                <h2 class="widget-title">Market Volatility</h2>
+                <p class="widget-subtitle-inline">Volatility is moderate and declining</p>
+            </div>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('volatility')" aria-label="Help">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+
+    <div class="widget-body">
+        <div class="chart-container-pro">
+            <!-- Left: Main Chart -->
+            <div class="chart-main">
+                <canvas id="volatilityChartPro" width="800" height="300"></canvas>
+            </div>
+
+            <!-- Right: Stats Panel -->
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <div class="stat-label">Current VIX</div>
+                    <div class="stat-value">20.8</div>
+                    <div class="stat-change positive">↓ -2.3%</div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label">30-Day Avg</div>
+                    <div class="stat-value">21.5</div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label">52-Week High</div>
+                    <div class="stat-value">25.2</div>
+                </div>
+
+                <div class="stat-item">
+                    <div class="stat-label">Risk Level</div>
+                    <div class="risk-badge moderate">Moderate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Insight Bar -->
+        <div class="ai-insight-bar">
+            <span class="insight-icon">🤖</span>
+            <span class="insight-text">
+                Volatility declining suggests good environment for growth positions.
+                Fed signals and earnings momentum supporting stability.
+            </span>
+        </div>
+    </div>
+
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn" onclick="showToast('Opening advanced view...')">Show Advanced View</button>
+    </div>
+</section>

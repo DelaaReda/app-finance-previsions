@@ -1,0 +1,9 @@
+version: 1
+domain: judge_ui
+owners:
+  - frontend_engineer
+  - integrator
+invariants:
+  - judge_verdict_rendered
+  - confidence_rendered
+  - fallback_state_visible

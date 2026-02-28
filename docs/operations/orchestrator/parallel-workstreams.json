@@ -1,0 +1,1953 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-27T12:46:09Z",
+  "sprint": {
+    "id": "S-BOOTSTRAP",
+    "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
+    "cadence_days": 14
+  },
+  "roles": {
+    "planner": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"
+    },
+    "analyst": {
+      "wip_limit": 3,
+      "can_edit": false,
+      "focus": "requirements and assumptions"
+    },
+    "architect": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "constraints and design"
+    },
+    "backend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "api and backend impl"
+    },
+    "frontend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "ui and frontend impl"
+    },
+    "data_analyst": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "data quality and metrics"
+    },
+    "infra_engineer": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "infra and ci/cd"
+    },
+    "integrator": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-team integration"
+    },
+    "tester": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "test automation and checks"
+    },
+    "qa": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "quality gate and validation"
+    },
+    "clawsentinel": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "anti-drift and safety"
+    },
+    "dev": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-cutting implementation and debt"
+    },
+    "po": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "value prioritization, acceptance criteria, and release decisions"
+    },
+    "scrum_master": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "flow health, WIP governance, cadence, and blocker removal"
+    }
+  },
+  "streams": [
+    {
+      "id": "BATCH-01",
+      "title": "Stabiliser contrats API MVP",
+      "priority": "P0",
+      "source_state": "PASS",
+      "state": "DONE",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:28Z"
+    },
+    {
+      "id": "BATCH-02",
+      "title": "Contrats multi-ticker + news",
+      "priority": "P1",
+      "source_state": "PASS",
+      "state": "DONE",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "BATCH-01-ANALYSIS",
+      "stream_id": "BATCH-01",
+      "code": "ANALYSIS",
+      "title": "Stabiliser contrats API MVP [ANALYSIS]",
+      "role": "analyst",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "analyst",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/planning/stories.md"
+      ],
+      "notes": [
+        "analysis sync"
+      ],
+      "handoff_to": "architect",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:23:15Z",
+      "started_at": "2026-02-26T05:54:50Z",
+      "completed_at": "2026-02-26T05:54:50Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ANALYSIS/20260226T172315Z-517.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-ARCH",
+      "stream_id": "BATCH-01",
+      "code": "ARCH",
+      "title": "Stabiliser contrats API MVP [ARCH]",
+      "role": "architect",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ANALYSIS"
+      ],
+      "assignee": "architect",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/architect-batch-01-arch.md"
+      ],
+      "notes": [
+        "arch_pilot_contract_defined",
+        "cmd=python3 scripts/parallel_workstream.py context --role architect --limit 6;tests_run=SKIP(architecture_only);review_ref=roleflow-pilot-arch;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:43:31Z",
+      "started_at": "2026-02-26T17:43:20Z",
+      "completed_at": "2026-02-26T17:43:31Z",
+      "last_idempotency_key": "IK-roleflow-b01-arch",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-QA_PREP",
+      "stream_id": "BATCH-01",
+      "code": "QA_PREP",
+      "title": "Stabiliser contrats API MVP [QA_PREP]",
+      "role": "qa",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "qa",
+      "blocked_reason": "",
+      "artifacts": [
+        "finance-app/openclaw-gates/batch-01-20260225-000127.md"
+      ],
+      "notes": [
+        "Gate PASS confirme vs queue PASS",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:23:15Z",
+      "started_at": "2026-02-26T08:48:05Z",
+      "completed_at": "2026-02-26T08:48:05Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_PREP/20260226T172315Z-186.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-TEST_PLAN",
+      "stream_id": "BATCH-01",
+      "code": "TEST_PLAN",
+      "title": "Stabiliser contrats API MVP [TEST_PLAN]",
+      "role": "tester",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "tester",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/tester-batch-01-test-plan.md"
+      ],
+      "notes": [
+        "test_plan_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role tester --compact;tests_run=SKIP(test_plan_document);review_ref=roleflow-pilot-testplan;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T06:23:10Z",
+      "completed_at": "2026-02-26T17:43:49Z",
+      "last_idempotency_key": "IK-roleflow-b01-testplan",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-DATA",
+      "stream_id": "BATCH-01",
+      "code": "DATA",
+      "title": "Stabiliser contrats API MVP [DATA]",
+      "role": "data_analyst",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ANALYSIS"
+      ],
+      "assignee": "data_analyst",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/data-artifacts/batch-01-data-qc-20260226T110317Z.md"
+      ],
+      "notes": [
+        "QC filesystem data: 2 files, structured=0 (WARN) pour support integrator",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:23:15Z",
+      "started_at": "2026-02-26T07:31:11Z",
+      "completed_at": "2026-02-26T11:05:33Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-DATA/20260226T172315Z-637.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-INFRA",
+      "stream_id": "BATCH-01",
+      "code": "INFRA",
+      "title": "Stabiliser contrats API MVP [INFRA]",
+      "role": "infra_engineer",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ARCH"
+      ],
+      "assignee": "infra_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/infra-batch-01-infra.md"
+      ],
+      "notes": [
+        "infra_pilot_completed",
+        "cmd=openclaw cron status;tests_run=SKIP(infra_read_only_check);review_ref=roleflow-pilot-infra;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:44:13Z",
+      "started_at": "2026-02-26T17:44:01Z",
+      "completed_at": "2026-02-26T17:44:13Z",
+      "last_idempotency_key": "IK-roleflow-b01-infra",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-BACKEND",
+      "stream_id": "BATCH-01",
+      "code": "BACKEND",
+      "title": "Stabiliser contrats API MVP [BACKEND]",
+      "role": "backend_engineer",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ARCH"
+      ],
+      "assignee": "backend_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/backend-batch-01-backend.md"
+      ],
+      "notes": [
+        "backend_pilot_code_change_done",
+        "cmd=python3 -m py_compile scripts/parallel_workstream.py;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-backend;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T17:44:20Z",
+      "completed_at": "2026-02-26T17:44:53Z",
+      "last_idempotency_key": "IK-roleflow-b01-backend",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-FRONTEND",
+      "stream_id": "BATCH-01",
+      "code": "FRONTEND",
+      "title": "Stabiliser contrats API MVP [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ARCH"
+      ],
+      "assignee": "frontend_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/frontend-batch-01-frontend.md"
+      ],
+      "notes": [
+        "frontend_pilot_contract_check",
+        "cmd=python3 scripts/parallel_workstream.py context --role frontend_engineer --limit 5;tests_run=SKIP(no_frontend_code_change);review_ref=roleflow-pilot-frontend;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T17:44:58Z",
+      "completed_at": "2026-02-26T17:45:08Z",
+      "last_idempotency_key": "IK-roleflow-b01-frontend",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-INTEGRATION",
+      "stream_id": "BATCH-01",
+      "code": "INTEGRATION",
+      "title": "Stabiliser contrats API MVP [INTEGRATION]",
+      "role": "integrator",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-BACKEND",
+        "BATCH-01-FRONTEND",
+        "BATCH-01-INFRA",
+        "BATCH-01-DATA"
+      ],
+      "assignee": "integrator",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/integrator-batch-01-integration.md"
+      ],
+      "notes": [
+        "integration_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --compact;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-integration;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T17:45:15Z",
+      "completed_at": "2026-02-26T17:45:26Z",
+      "last_idempotency_key": "IK-roleflow-b01-integration",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-QA_EXEC",
+      "stream_id": "BATCH-01",
+      "code": "QA_EXEC",
+      "title": "Stabiliser contrats API MVP [QA_EXEC]",
+      "role": "qa",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-INTEGRATION",
+        "BATCH-01-QA_PREP",
+        "BATCH-01-TEST_PLAN"
+      ],
+      "assignee": "qa",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/qa-batch-01-qa-exec.md"
+      ],
+      "notes": [
+        "qa_exec_pilot_pass",
+        "cmd=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;tests_run=bash scripts/validate_parallel_plumbing.sh;review_ref=roleflow-pilot-qa;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T17:45:40Z",
+      "completed_at": "2026-02-26T17:45:52Z",
+      "last_idempotency_key": "IK-roleflow-b01-qaexec",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-ANALYSIS",
+      "stream_id": "BATCH-02",
+      "code": "ANALYSIS",
+      "title": "Contrats multi-ticker + news [ANALYSIS]",
+      "role": "analyst",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [],
+      "assignee": "analyst",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/analyst-batch-02-analysis.md"
+      ],
+      "notes": [
+        "analysis_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py context --role analyst --limit 6;tests_run=SKIP(analysis_only);review_ref=roleflow-pilot-analyst;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:42:57Z",
+      "started_at": "2026-02-26T17:42:37Z",
+      "completed_at": "2026-02-26T17:42:57Z",
+      "last_idempotency_key": "IK-roleflow-b02-analysis",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-ARCH",
+      "stream_id": "BATCH-02",
+      "code": "ARCH",
+      "title": "Contrats multi-ticker + news [ARCH]",
+      "role": "architect",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ANALYSIS"
+      ],
+      "assignee": "architect",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml"
+      ],
+      "notes": [
+        "tooling preflight dev_qa + contrat evidence web/browser/skills aligne",
+        "cmd=bash scripts/dev_qa_tooling_check.sh;tests_run=dev_qa_tooling_check:PASS,validate_parallel_plumbing:PASS;review_ref=docs/ops/ADMIN_TEAM_CHAT.md;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T18:13:35Z",
+      "started_at": "2026-02-26T18:09:01Z",
+      "completed_at": "2026-02-26T18:13:35Z",
+      "last_idempotency_key": "IK-fa933fc62bb2",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-QA_PREP",
+      "stream_id": "BATCH-02",
+      "code": "QA_PREP",
+      "title": "Contrats multi-ticker + news [QA_PREP]",
+      "role": "qa",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [],
+      "assignee": "qa",
+      "blocked_reason": "",
+      "artifacts": [
+        "finance-app/openclaw-gates/batch-02-20260225-202042.md"
+      ],
+      "notes": [
+        "Gate PASS confirme vs queue PASS",
+        "CMD=SKIP(retro_backfill_manifest); TESTS_RUN=SKIP(retro_backfill_manifest)"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:23:15Z",
+      "started_at": "2026-02-26T08:48:05Z",
+      "completed_at": "2026-02-26T08:48:05Z",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-QA_PREP/20260226T172315Z-117.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-TEST_PLAN",
+      "stream_id": "BATCH-02",
+      "code": "TEST_PLAN",
+      "title": "Contrats multi-ticker + news [TEST_PLAN]",
+      "role": "tester",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-PLAN"
+      ],
+      "assignee": "tester",
+      "blocked_reason": "",
+      "artifacts": [
+        "copilot-app/backend/tests/test_news_feed_contract.py+copilot-app/backend/tests/test_stocks_prices_contract.py",
+        "copilot-app/backend/tests/test_news_feed_contract.py",
+        "copilot-app/backend/tests/test_stocks_prices_contract.py"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses.",
+        "test plan concretized and executed on core contracts",
+        "cmd=cd copilot-app/backend && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider tests/test_news_feed_contract.py tests/test_stocks_prices_contract.py;tests_run=pytest_news_feed_and_stocks_prices:PASS(3_tests);review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-TEST_PLAN/20260227T105005Z-534.yaml"
+      ],
+      "handoff_to": "qa",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:50:05Z",
+      "started_at": "2026-02-26T06:33:32Z",
+      "completed_at": "2026-02-27T10:50:05Z",
+      "last_idempotency_key": "BATCH02_TESTPLAN_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-TEST_PLAN/20260227T105005Z-534.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-DATA",
+      "stream_id": "BATCH-02",
+      "code": "DATA",
+      "title": "Contrats multi-ticker + news [DATA]",
+      "role": "data_analyst",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ANALYSIS"
+      ],
+      "assignee": "data_analyst",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/data-analyst-batch-02-data.md"
+      ],
+      "notes": [
+        "data_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role data_analyst --compact;tests_run=SKIP(data_note_only);review_ref=roleflow-pilot-data;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-26T17:43:13Z",
+      "started_at": "2026-02-26T17:43:02Z",
+      "completed_at": "2026-02-26T17:43:13Z",
+      "last_idempotency_key": "IK-roleflow-b02-data",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-INFRA",
+      "stream_id": "BATCH-02",
+      "code": "INFRA",
+      "title": "Contrats multi-ticker + news [INFRA]",
+      "role": "infra_engineer",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ARCH"
+      ],
+      "assignee": "infra_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "scripts/validate_batch_state.py"
+      ],
+      "notes": [
+        "infra validation and orchestration plumbing stable; lane ready for integration",
+        "cmd=python3 scripts/validate_batch_state.py;tests_run=validate_batch_state:PASS(validated_items=2);review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INFRA/20260227T104928Z-810.yaml"
+      ],
+      "handoff_to": "integrator",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:49:28Z",
+      "started_at": "2026-02-26T23:54:52Z",
+      "completed_at": "2026-02-27T10:49:28Z",
+      "last_idempotency_key": "BATCH02_INFRA_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INFRA/20260227T104928Z-810.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-BACKEND",
+      "stream_id": "BATCH-02",
+      "code": "BACKEND",
+      "title": "Contrats multi-ticker + news [BACKEND]",
+      "role": "backend_engineer",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ARCH"
+      ],
+      "assignee": "backend_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "copilot-app/backend/tests/test_news_feed_contract.py+copilot-app/backend/tests/test_stocks_prices_contract.py",
+        "copilot-app/backend/tests/test_news_feed_contract.py",
+        "copilot-app/backend/tests/test_stocks_prices_contract.py"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md and docs/ops/REUSE_MODULES_CATALOG.md.",
+        "backend contracts multi-ticker+news verifies by pytest pass; ready for integration wiring",
+        "cmd=cd copilot-app/backend && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider tests/test_news_feed_contract.py tests/test_stocks_prices_contract.py;tests_run=pytest_news_feed_and_stocks_prices:PASS(3_tests);review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-BACKEND/20260227T104924Z-160.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (copilot-app/backend/src/api/routes/judge.py, src/services/judge_pipeline.py, src/services/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+      ],
+      "handoff_to": "integrator",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T23:54:52Z",
+      "completed_at": "2026-02-27T10:49:24Z",
+      "last_idempotency_key": "BATCH02_BACKEND_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-BACKEND/20260227T104924Z-160.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-FRONTEND",
+      "stream_id": "BATCH-02",
+      "code": "FRONTEND",
+      "title": "Contrats multi-ticker + news [FRONTEND]",
+      "role": "frontend_engineer",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ARCH"
+      ],
+      "assignee": "frontend_engineer",
+      "blocked_reason": "",
+      "artifacts": [
+        "copilot-app/frontend/app/app.js"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (copilot-app/frontend/app/components/widgets/*) + shared UI wiring (copilot-app/frontend/app/app.js) before creating new components.",
+        "frontend bundle serves dashboard with news+market views; handoff integration for end-to-end API wiring checks",
+        "cmd=curl -fsS http://localhost:5173/ | head -n 20;tests_run=frontend_http_index:PASS(200);review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-FRONTEND/20260227T104933Z-476.yaml"
+      ],
+      "handoff_to": "integrator",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:49:33Z",
+      "started_at": "2026-02-26T23:54:52Z",
+      "completed_at": "2026-02-27T10:49:33Z",
+      "last_idempotency_key": "BATCH02_FRONTEND_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-FRONTEND/20260227T104933Z-476.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-INTEGRATION",
+      "stream_id": "BATCH-02",
+      "code": "INTEGRATION",
+      "title": "Contrats multi-ticker + news [INTEGRATION]",
+      "role": "integrator",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-BACKEND",
+        "BATCH-02-FRONTEND",
+        "BATCH-02-INFRA",
+        "BATCH-02-DATA",
+        "BATCH-02-DEV"
+      ],
+      "assignee": "integrator",
+      "blocked_reason": "",
+      "artifacts": [
+        "/tmp/integration_health.json+/tmp/integration_stocks.json+/tmp/integration_news.json",
+        "http://localhost:8050/api/health",
+        "http://localhost:8050/api/stocks/prices?ticker=AAPL,MSFT&limit=2",
+        "http://localhost:8050/api/news/feed?limit=2",
+        "http://localhost:5173/"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh.",
+        "integration smoke passed across backend APIs and frontend serving",
+        "cmd=curl /api/health,/api/stocks/prices?ticker=AAPL,MSFT,/api/news/feed + curl frontend index + python validator;tests_run=integration_smoke:PASS(backend_api+frontend_http);review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INTEGRATION/20260227T105109Z-655.yaml"
+      ],
+      "handoff_to": "qa",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:51:09Z",
+      "started_at": "2026-02-27T10:50:00Z",
+      "completed_at": "2026-02-27T10:51:09Z",
+      "last_idempotency_key": "BATCH02_INTEGRATION_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INTEGRATION/20260227T105109Z-655.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-QA_EXEC",
+      "stream_id": "BATCH-02",
+      "code": "QA_EXEC",
+      "title": "Contrats multi-ticker + news [QA_EXEC]",
+      "role": "qa",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-INTEGRATION",
+        "BATCH-02-QA_PREP",
+        "BATCH-02-TEST_PLAN"
+      ],
+      "assignee": "qa",
+      "blocked_reason": "",
+      "artifacts": [
+        "/tmp/qa_judge_quality.json+/tmp/qa_judge_quality_history.json",
+        "http://localhost:8050/api/judge/quality",
+        "http://localhost:8050/api/judge/quality/history"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate gate artifacts (finance-app/openclaw-gates) vs priority queue + workboard; update docs if drift is found.",
+        "qa contracts and judge quality endpoints validated; ready for sentinel review",
+        "cmd=pytest contracts + curl /api/judge/quality + curl /api/judge/quality/history;tests_run=qa_contracts_and_judge_quality:PASS;review_ref=main_manual_review_2026-02-27T10:49Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-QA_EXEC/20260227T105147Z-295.yaml"
+      ],
+      "handoff_to": "clawsentinel",
+      "created_at": "2026-02-26T05:53:04Z",
+      "updated_at": "2026-02-27T10:51:47Z",
+      "started_at": "2026-02-27T10:51:26Z",
+      "completed_at": "2026-02-27T10:51:47Z",
+      "last_idempotency_key": "BATCH02_QAEXEC_FORCE_TRANSITION_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-QA_EXEC/20260227T105147Z-295.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-PLAN",
+      "stream_id": "BATCH-01",
+      "code": "PLAN",
+      "title": "Stabiliser contrats API MVP [PLAN]",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/planner-batch-01-plan.md"
+      ],
+      "notes": [
+        "plan_pilot_completed",
+        "cmd=python3 scripts/parallel_workstream.py status --role planner --compact;tests_run=SKIP(planning_only);review_ref=roleflow-pilot-plan;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml",
+        "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-26T17:20:41Z",
+      "completed_at": "2026-02-26T17:43:49Z",
+      "last_idempotency_key": "IK-roleflow-b01-plan",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-SENTINEL_CHECK",
+      "stream_id": "BATCH-01",
+      "code": "SENTINEL_CHECK",
+      "title": "Stabiliser contrats API MVP [SENTINEL_CHECK]",
+      "role": "clawsentinel",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-QA_EXEC"
+      ],
+      "assignee": "clawsentinel",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/roleflow/20260226-pilot/clawsentinel-batch-01-sentinel.md"
+      ],
+      "notes": [
+        "sentinel_check_pilot_pass",
+        "cmd=python3 scripts/parallel_workstream.py enforce-sla;tests_run=python3 scripts/parallel_workstream.py validate --queue docs/orchestrator-ops/priority-queue.json --proof-root docs/orchestrator-ops/proofs --require-proof-manifest;review_ref=roleflow-pilot-sentinel;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-26T17:46:30Z",
+      "started_at": "2026-02-26T17:46:14Z",
+      "completed_at": "2026-02-26T17:46:30Z",
+      "last_idempotency_key": "IK-roleflow-b01-sentinel",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-PLAN",
+      "stream_id": "BATCH-02",
+      "code": "PLAN",
+      "title": "Contrats multi-ticker + news [PLAN]",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/planning/tasks.md"
+      ],
+      "notes": [
+        "STALE_SWEEP:at=2026-02-26T21:46:29Z;task=BATCH-02-PLAN;age_s=15661;action=reclaim;to_state=READY",
+        "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
+        "planner_unblock_after_lock_false_positive",
+        "cmd=scripts/parallel_workstream.py complete --role planner --task BATCH-02-PLAN;tests_run=SKIP(planner_workboard_lane_no_tests);review_ref=manual_planner_unblock_20260227;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-PLAN/20260227T015921Z-404.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-27T01:59:21Z",
+      "started_at": "2026-02-26T23:54:52Z",
+      "completed_at": "2026-02-27T01:59:21Z",
+      "last_idempotency_key": "IK-fdd6cfcec83a",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-PLAN/20260227T015921Z-404.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-SENTINEL_CHECK",
+      "stream_id": "BATCH-02",
+      "code": "SENTINEL_CHECK",
+      "title": "Contrats multi-ticker + news [SENTINEL_CHECK]",
+      "role": "clawsentinel",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-QA_EXEC"
+      ],
+      "assignee": "clawsentinel",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/proofs/BATCH-02/sentinel-contracts-20260227T105451Z.log"
+      ],
+      "notes": [
+        "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
+        "cmd=validate_parallel_plumbing + triage_now + pytest contracts;tests_run=pytest targeted contracts: 3 passed;review_ref=sentinel_manual_review_2026-02-27T10:55Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-SENTINEL_CHECK/20260227T105506Z-554.yaml"
+      ],
+      "handoff_to": "planner",
+      "created_at": "2026-02-26T06:06:13Z",
+      "updated_at": "2026-02-27T10:55:06Z",
+      "started_at": "2026-02-27T10:51:59Z",
+      "completed_at": "2026-02-27T10:55:06Z",
+      "last_idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-SENTINEL_CHECK/20260227T105506Z-554.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-DEV",
+      "stream_id": "BATCH-02",
+      "code": "DEV",
+      "title": "Contrats multi-ticker + news [DEV]",
+      "role": "dev",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-ARCH"
+      ],
+      "assignee": "dev",
+      "blocked_reason": "",
+      "artifacts": [
+        "scripts/cron_tmux_role_runner.sh"
+      ],
+      "notes": [
+        "dev_lane_hardening_applied_for_delivery_gating_and_prompt_contract",
+        "cmd=bash -n scripts/cron_tmux_role_runner.sh && python3 -m py_compile scripts/parallel_workstream.py;tests_run=parallel_workstream_validate:PASS;dev_qa_tooling_check:PASS;review_ref=admin-hardening-20260226-dev-lane;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T19:29:57Z",
+      "updated_at": "2026-02-26T20:16:47Z",
+      "started_at": "2026-02-26T19:48:44Z",
+      "completed_at": "2026-02-26T19:56:19Z",
+      "last_idempotency_key": "IK-c23e60ebda58",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-02-GOV_REVIEW",
+      "stream_id": "BATCH-02",
+      "code": "GOV_REVIEW",
+      "title": "Contrats multi-ticker + news [GOV_REVIEW]",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-02-QA_EXEC",
+        "BATCH-02-SENTINEL_CHECK"
+      ],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/proofs/BATCH-02/gov-review-20260227T105536Z.md"
+      ],
+      "notes": [
+        "GOVERNANCE-NOTE: final scope/value + flow/WIP review (planner absorbs legacy PO/Scrum steps).",
+        "GOV_REVIEW clos: stream BATCH-02 termine; next focus sprint = previsions data-driven exposees en UI avec SLA ~10 min.",
+        "cmd=status + triage + gov review consolidation;tests_run=SKIP(governance closure task);review_ref=planner_governance_review_2026-02-27T10:55Z;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-GOV_REVIEW/20260227T105544Z-645.yaml",
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: alias for search and legacy task notes (same meaning as INTEGRATION-APP-EENGINEER-RECOMMENDATIONS)."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-26T21:53:36Z",
+      "updated_at": "2026-02-27T10:59:06Z",
+      "started_at": "2026-02-27T10:55:18Z",
+      "completed_at": "2026-02-27T10:55:44Z",
+      "last_idempotency_key": "BATCH02_GOV_CLOSE_20260227A",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-GOV_REVIEW/20260227T105544Z-645.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-DEV",
+      "stream_id": "BATCH-01",
+      "code": "DEV",
+      "title": "Stabiliser contrats API MVP [DEV]",
+      "role": "dev",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-ARCH"
+      ],
+      "assignee": "dev",
+      "blocked_reason": "",
+      "artifacts": [
+        "finance-app/openclaw-gates/batch-01-20260225-000127.md"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests.",
+        "retro-close: task auto-created by sync-priority include-pass on PASS stream",
+        "cmd=SKIP(retro_close_sync_artifact);tests_run=SKIP(retro_close_sync_artifact);review_ref=retro-sync-close-batch01-dev;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-DEV/20260227T105923Z-698.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-27T10:59:06Z",
+      "updated_at": "2026-02-27T10:59:23Z",
+      "started_at": "2026-02-27T10:59:23Z",
+      "completed_at": "2026-02-27T10:59:23Z",
+      "last_idempotency_key": "IK-59f8c0dc9ab5",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-DEV/20260227T105923Z-698.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-01-GOV_REVIEW",
+      "stream_id": "BATCH-01",
+      "code": "GOV_REVIEW",
+      "title": "Stabiliser contrats API MVP [GOV_REVIEW]",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-01-QA_EXEC",
+        "BATCH-01-SENTINEL_CHECK"
+      ],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "finance-app/openclaw-gates/batch-01-20260225-000127.md"
+      ],
+      "notes": [
+        "GOVERNANCE-NOTE: final scope/value + flow/WIP review (planner absorbs legacy PO/Scrum steps).",
+        "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS: alias for search and legacy task notes (same meaning as INTEGRATION-APP-EENGINEER-RECOMMENDATIONS).",
+        "retro-close: task auto-created by sync-priority include-pass on PASS stream",
+        "cmd=SKIP(retro_close_sync_artifact);tests_run=SKIP(retro_close_sync_artifact);review_ref=retro-sync-close-batch01-gov;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-GOV_REVIEW/20260227T105928Z-848.yaml"
+      ],
+      "handoff_to": "",
+      "created_at": "2026-02-27T10:59:06Z",
+      "updated_at": "2026-02-27T10:59:28Z",
+      "started_at": "2026-02-27T10:59:28Z",
+      "completed_at": "2026-02-27T10:59:28Z",
+      "last_idempotency_key": "IK-ea5c3288570f",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-GOV_REVIEW/20260227T105928Z-848.yaml"
+      ]
+    }
+  ],
+  "handoffs": [
+    {
+      "id": "HO-20260226055450-756",
+      "task_id": "BATCH-01-ANALYSIS",
+      "stream_id": "BATCH-01",
+      "from_role": "analyst",
+      "to_role": "architect",
+      "status": "CLOSED",
+      "note": "analysis sync",
+      "created_at": "2026-02-26T05:54:50Z",
+      "updated_at": "2026-02-27T12:46:08Z",
+      "idempotency_key": "IK-retro-ho-20260226055450-756"
+    },
+    {
+      "id": "HO-20260227104924-136",
+      "task_id": "BATCH-02-BACKEND",
+      "stream_id": "BATCH-02",
+      "from_role": "backend_engineer",
+      "to_role": "integrator",
+      "status": "CLOSED",
+      "note": "backend contracts multi-ticker+news verifies by pytest pass; ready for integration wiring",
+      "idempotency_key": "BATCH02_BACKEND_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:49:24Z",
+      "updated_at": "2026-02-27T12:46:08Z"
+    },
+    {
+      "id": "HO-20260227104928-883",
+      "task_id": "BATCH-02-INFRA",
+      "stream_id": "BATCH-02",
+      "from_role": "infra_engineer",
+      "to_role": "integrator",
+      "status": "CLOSED",
+      "note": "infra validation and orchestration plumbing stable; lane ready for integration",
+      "idempotency_key": "BATCH02_INFRA_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:49:28Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260227104933-217",
+      "task_id": "BATCH-02-FRONTEND",
+      "stream_id": "BATCH-02",
+      "from_role": "frontend_engineer",
+      "to_role": "integrator",
+      "status": "CLOSED",
+      "note": "frontend bundle serves dashboard with news+market views; handoff integration for end-to-end API wiring checks",
+      "idempotency_key": "BATCH02_FRONTEND_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:49:33Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260227105005-128",
+      "task_id": "BATCH-02-TEST_PLAN",
+      "stream_id": "BATCH-02",
+      "from_role": "tester",
+      "to_role": "qa",
+      "status": "CLOSED",
+      "note": "test plan concretized and executed on core contracts",
+      "idempotency_key": "BATCH02_TESTPLAN_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:50:05Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260227105109-942",
+      "task_id": "BATCH-02-INTEGRATION",
+      "stream_id": "BATCH-02",
+      "from_role": "integrator",
+      "to_role": "qa",
+      "status": "CLOSED",
+      "note": "integration smoke passed across backend APIs and frontend serving",
+      "idempotency_key": "BATCH02_INTEGRATION_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:51:09Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260227105147-534",
+      "task_id": "BATCH-02-QA_EXEC",
+      "stream_id": "BATCH-02",
+      "from_role": "qa",
+      "to_role": "clawsentinel",
+      "status": "CLOSED",
+      "note": "qa contracts and judge quality endpoints validated; ready for sentinel review",
+      "idempotency_key": "BATCH02_QAEXEC_FORCE_TRANSITION_20260227A",
+      "created_at": "2026-02-27T10:51:47Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260227105506-281",
+      "task_id": "BATCH-02-SENTINEL_CHECK",
+      "stream_id": "BATCH-02",
+      "from_role": "clawsentinel",
+      "to_role": "planner",
+      "status": "CLOSED",
+      "note": "Template Judge valid\u00e9 en base (never-empty + cache + quality), mais bloqu\u00e9 pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et coh\u00e9rence risk_level ne sont pas corrig\u00e9s.",
+      "idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A",
+      "created_at": "2026-02-27T10:55:06Z",
+      "updated_at": "2026-02-27T12:46:09Z"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-02-26T05:21:57Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 0
+      }
+    },
+    {
+      "at": "2026-02-26T05:53:04Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 2,
+        "created_tasks": 22
+      }
+    },
+    {
+      "at": "2026-02-26T05:54:50Z",
+      "kind": "claim",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-01-ANALYSIS"
+      }
+    },
+    {
+      "at": "2026-02-26T05:54:50Z",
+      "kind": "complete",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-01-ANALYSIS",
+        "artifact": "docs/planning/stories.md",
+        "handoff_to": "architect",
+        "handoff_id": "HO-20260226055450-756"
+      }
+    },
+    {
+      "at": "2026-02-26T05:55:05Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260226055450-756",
+        "status": "ACK",
+        "actor": "architect"
+      }
+    },
+    {
+      "at": "2026-02-26T06:06:13Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 6
+      }
+    },
+    {
+      "at": "2026-02-26T06:23:10Z",
+      "kind": "claim",
+      "details": {
+        "role": "tester",
+        "task_id": "BATCH-01-TEST_PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T06:33:32Z",
+      "kind": "claim",
+      "details": {
+        "role": "tester",
+        "task_id": "BATCH-02-TEST_PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T07:31:11Z",
+      "kind": "claim",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-01-DATA"
+      }
+    },
+    {
+      "at": "2026-02-26T08:48:05Z",
+      "kind": "claim",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_PREP"
+      }
+    },
+    {
+      "at": "2026-02-26T08:48:05Z",
+      "kind": "complete",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_PREP",
+        "artifact": "finance-app/openclaw-gates/batch-01-20260225-000127.md",
+        "handoff_to": "none",
+        "handoff_id": "none"
+      }
+    },
+    {
+      "at": "2026-02-26T08:48:05Z",
+      "kind": "claim",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-02-QA_PREP"
+      }
+    },
+    {
+      "at": "2026-02-26T08:48:05Z",
+      "kind": "complete",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-02-QA_PREP",
+        "artifact": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
+        "handoff_to": "none",
+        "handoff_id": "none"
+      }
+    },
+    {
+      "at": "2026-02-26T11:05:33Z",
+      "kind": "complete",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-01-DATA",
+        "artifact": "docs/orchestrator-ops/data-artifacts/batch-01-data-qc-20260226T110317Z.md",
+        "handoff_to": "none",
+        "handoff_id": "none"
+      }
+    },
+    {
+      "at": "2026-02-26T17:20:41Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T17:23:15Z",
+      "kind": "retro_proof_backfill",
+      "details": {
+        "tasks": [
+          "BATCH-01-ANALYSIS",
+          "BATCH-01-QA_PREP",
+          "BATCH-01-DATA",
+          "BATCH-02-QA_PREP"
+        ],
+        "notes_added": [
+          "BATCH-01-QA_PREP",
+          "BATCH-01-DATA",
+          "BATCH-02-QA_PREP"
+        ],
+        "handoff": "HO-20260226055450-756",
+        "handoff_actions": [
+          "idempotency_added",
+          "closed"
+        ]
+      }
+    },
+    {
+      "at": "2026-02-26T17:25:28Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-PLAN"
+      }
+    },
+    {
+      "at": "2026-02-26T17:42:37Z",
+      "kind": "claim",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-02-ANALYSIS"
+      }
+    },
+    {
+      "at": "2026-02-26T17:42:57Z",
+      "kind": "complete",
+      "details": {
+        "role": "analyst",
+        "task_id": "BATCH-02-ANALYSIS",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/analyst-batch-02-analysis.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ANALYSIS/20260226T174257Z-382.yaml",
+        "idempotency_key": "IK-roleflow-b02-analysis"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-02-DATA"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:13Z",
+      "kind": "complete",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-02-DATA",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/data-analyst-batch-02-data.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DATA/20260226T174313Z-417.yaml",
+        "idempotency_key": "IK-roleflow-b02-data"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:20Z",
+      "kind": "claim",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-01-ARCH"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:31Z",
+      "kind": "complete",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-01-ARCH",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/architect-batch-01-arch.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-ARCH/20260226T174331Z-521.yaml",
+        "idempotency_key": "IK-roleflow-b01-arch"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:49Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-PLAN",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/planner-batch-01-plan.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PLAN/20260226T174349Z-122.yaml",
+        "idempotency_key": "IK-roleflow-b01-plan"
+      }
+    },
+    {
+      "at": "2026-02-26T17:43:49Z",
+      "kind": "complete",
+      "details": {
+        "role": "tester",
+        "task_id": "BATCH-01-TEST_PLAN",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/tester-batch-01-test-plan.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-TEST_PLAN/20260226T174349Z-539.yaml",
+        "idempotency_key": "IK-roleflow-b01-testplan"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:01Z",
+      "kind": "claim",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-01-INFRA"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:13Z",
+      "kind": "complete",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-01-INFRA",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/infra-batch-01-infra.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INFRA/20260226T174413Z-101.yaml",
+        "idempotency_key": "IK-roleflow-b01-infra"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:20Z",
+      "kind": "claim",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-01-BACKEND"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:53Z",
+      "kind": "complete",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-01-BACKEND",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/backend-batch-01-backend.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-BACKEND/20260226T174453Z-116.yaml",
+        "idempotency_key": "IK-roleflow-b01-backend"
+      }
+    },
+    {
+      "at": "2026-02-26T17:44:58Z",
+      "kind": "claim",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-01-FRONTEND"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:08Z",
+      "kind": "complete",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-01-FRONTEND",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/frontend-batch-01-frontend.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-FRONTEND/20260226T174508Z-599.yaml",
+        "idempotency_key": "IK-roleflow-b01-frontend"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:15Z",
+      "kind": "claim",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-01-INTEGRATION"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:26Z",
+      "kind": "complete",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-01-INTEGRATION",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/integrator-batch-01-integration.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-INTEGRATION/20260226T174526Z-253.yaml",
+        "idempotency_key": "IK-roleflow-b01-integration"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:40Z",
+      "kind": "claim",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_EXEC"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:52Z",
+      "kind": "complete",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-01-QA_EXEC",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/qa-batch-01-qa-exec.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-QA_EXEC/20260226T174552Z-434.yaml",
+        "idempotency_key": "IK-roleflow-b01-qaexec"
+      }
+    },
+    {
+      "at": "2026-02-26T17:45:59Z",
+      "kind": "claim",
+      "details": {
+        "role": "po",
+        "task_id": "BATCH-01-PO_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:09Z",
+      "kind": "complete",
+      "details": {
+        "role": "po",
+        "task_id": "BATCH-01-PO_REVIEW",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/po-batch-01-po-review.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-PO_REVIEW/20260226T174609Z-420.yaml",
+        "idempotency_key": "IK-roleflow-b01-po"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:14Z",
+      "kind": "claim",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-01-SENTINEL_CHECK"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:30Z",
+      "kind": "complete",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-01-SENTINEL_CHECK",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/clawsentinel-batch-01-sentinel.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SENTINEL_CHECK/20260226T174630Z-827.yaml",
+        "idempotency_key": "IK-roleflow-b01-sentinel"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:35Z",
+      "kind": "claim",
+      "details": {
+        "role": "scrum_master",
+        "task_id": "BATCH-01-SCRUM_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-26T17:46:46Z",
+      "kind": "complete",
+      "details": {
+        "role": "scrum_master",
+        "task_id": "BATCH-01-SCRUM_REVIEW",
+        "artifact": "docs/orchestrator-ops/roleflow/20260226-pilot/scrum-batch-01-review.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-SCRUM_REVIEW/20260226T174646Z-379.yaml",
+        "idempotency_key": "IK-roleflow-b01-scrum"
+      }
+    },
+    {
+      "at": "2026-02-26T18:04:14Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": "READ_ONLY_SANDBOX_PERMISSION_DENIED"
+      }
+    },
+    {
+      "at": "2026-02-26T18:09:01Z",
+      "kind": "claim",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-02-ARCH"
+      }
+    },
+    {
+      "at": "2026-02-26T18:13:35Z",
+      "kind": "complete",
+      "details": {
+        "role": "architect",
+        "task_id": "BATCH-02-ARCH",
+        "artifact": "docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-ARCH/20260226T181335Z-695.yaml",
+        "idempotency_key": "IK-fa933fc62bb2"
+      }
+    },
+    {
+      "at": "2026-02-26T18:29:21Z",
+      "kind": "unblock",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": ""
+      }
+    },
+    {
+      "at": "2026-02-26T18:54:47Z",
+      "kind": "unblock",
+      "details": {
+        "task_id": "BATCH-02-TEST_PLAN",
+        "reason": ""
+      }
+    },
+    {
+      "at": "2026-02-26T19:29:57Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 1
+      }
+    },
+    {
+      "at": "2026-02-26T19:48:44Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-02-DEV"
+      }
+    },
+    {
+      "at": "2026-02-26T19:56:19Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-02-DEV",
+        "artifact": "scripts/cron_tmux_role_runner.sh",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-DEV/20260226T195619Z-628.yaml",
+        "idempotency_key": "IK-c23e60ebda58"
+      }
+    },
+    {
+      "at": "2026-02-26T21:46:29Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-02-PLAN",
+        "role": "planner",
+        "age_seconds": 15661,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-02-26T21:53:36Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 2
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-02-INFRA"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-02-BACKEND"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-02-FRONTEND"
+      }
+    },
+    {
+      "at": "2026-02-26T23:54:52Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-PLAN"
+      }
+    },
+    {
+      "at": "2026-02-27T01:59:21Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-PLAN",
+        "artifact": "docs/planning/tasks.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-PLAN/20260227T015921Z-404.yaml",
+        "idempotency_key": "IK-fdd6cfcec83a"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:24Z",
+      "kind": "complete",
+      "details": {
+        "role": "backend_engineer",
+        "task_id": "BATCH-02-BACKEND",
+        "artifact": "copilot-app/backend/tests/test_news_feed_contract.py+copilot-app/backend/tests/test_stocks_prices_contract.py",
+        "handoff_to": "integrator",
+        "handoff_id": "HO-20260227104924-136",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-BACKEND/20260227T104924Z-160.yaml",
+        "idempotency_key": "BATCH02_BACKEND_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:28Z",
+      "kind": "complete",
+      "details": {
+        "role": "infra_engineer",
+        "task_id": "BATCH-02-INFRA",
+        "artifact": "scripts/validate_batch_state.py",
+        "handoff_to": "integrator",
+        "handoff_id": "HO-20260227104928-883",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INFRA/20260227T104928Z-810.yaml",
+        "idempotency_key": "BATCH02_INFRA_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:33Z",
+      "kind": "complete",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-02-FRONTEND",
+        "artifact": "copilot-app/frontend/app/app.js",
+        "handoff_to": "integrator",
+        "handoff_id": "HO-20260227104933-217",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-FRONTEND/20260227T104933Z-476.yaml",
+        "idempotency_key": "BATCH02_FRONTEND_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:55Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104924-136",
+        "status": "ACK",
+        "actor": "integrator"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:55Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104928-883",
+        "status": "ACK",
+        "actor": "integrator"
+      }
+    },
+    {
+      "at": "2026-02-27T10:49:55Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104933-217",
+        "status": "ACK",
+        "actor": "integrator"
+      }
+    },
+    {
+      "at": "2026-02-27T10:50:00Z",
+      "kind": "claim",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-02-INTEGRATION"
+      }
+    },
+    {
+      "at": "2026-02-27T10:50:05Z",
+      "kind": "complete",
+      "details": {
+        "role": "tester",
+        "task_id": "BATCH-02-TEST_PLAN",
+        "artifact": "copilot-app/backend/tests/test_news_feed_contract.py+copilot-app/backend/tests/test_stocks_prices_contract.py",
+        "handoff_to": "qa",
+        "handoff_id": "HO-20260227105005-128",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-TEST_PLAN/20260227T105005Z-534.yaml",
+        "idempotency_key": "BATCH02_TESTPLAN_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:09Z",
+      "kind": "complete",
+      "details": {
+        "role": "integrator",
+        "task_id": "BATCH-02-INTEGRATION",
+        "artifact": "/tmp/integration_health.json+/tmp/integration_stocks.json+/tmp/integration_news.json",
+        "handoff_to": "qa",
+        "handoff_id": "HO-20260227105109-942",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-INTEGRATION/20260227T105109Z-655.yaml",
+        "idempotency_key": "BATCH02_INTEGRATION_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:26Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105005-128",
+        "status": "ACK",
+        "actor": "qa"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:26Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105109-942",
+        "status": "ACK",
+        "actor": "qa"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:26Z",
+      "kind": "claim",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-02-QA_EXEC"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:47Z",
+      "kind": "complete",
+      "details": {
+        "role": "qa",
+        "task_id": "BATCH-02-QA_EXEC",
+        "artifact": "/tmp/qa_judge_quality.json+/tmp/qa_judge_quality_history.json",
+        "handoff_to": "clawsentinel",
+        "handoff_id": "HO-20260227105147-534",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-QA_EXEC/20260227T105147Z-295.yaml",
+        "idempotency_key": "BATCH02_QAEXEC_FORCE_TRANSITION_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:58Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105147-534",
+        "status": "ACK",
+        "actor": "clawsentinel"
+      }
+    },
+    {
+      "at": "2026-02-27T10:51:59Z",
+      "kind": "claim",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-02-SENTINEL_CHECK"
+      }
+    },
+    {
+      "at": "2026-02-27T10:55:06Z",
+      "kind": "complete",
+      "details": {
+        "role": "clawsentinel",
+        "task_id": "BATCH-02-SENTINEL_CHECK",
+        "artifact": "docs/orchestrator-ops/proofs/BATCH-02/sentinel-contracts-20260227T105451Z.log",
+        "handoff_to": "planner",
+        "handoff_id": "HO-20260227105506-281",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-SENTINEL_CHECK/20260227T105506Z-554.yaml",
+        "idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:55:15Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105506-281",
+        "status": "ACK",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T10:55:18Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-GOV_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-27T10:55:44Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-02-GOV_REVIEW",
+        "artifact": "docs/orchestrator-ops/proofs/BATCH-02/gov-review-20260227T105536Z.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-02/BATCH-02-GOV_REVIEW/20260227T105544Z-645.yaml",
+        "idempotency_key": "BATCH02_GOV_CLOSE_20260227A"
+      }
+    },
+    {
+      "at": "2026-02-27T10:59:06Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 0,
+        "created_tasks": 2
+      }
+    },
+    {
+      "at": "2026-02-27T10:59:23Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-01-DEV"
+      }
+    },
+    {
+      "at": "2026-02-27T10:59:23Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-01-DEV",
+        "artifact": "finance-app/openclaw-gates/batch-01-20260225-000127.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-DEV/20260227T105923Z-698.yaml",
+        "idempotency_key": "IK-59f8c0dc9ab5"
+      }
+    },
+    {
+      "at": "2026-02-27T10:59:28Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-GOV_REVIEW"
+      }
+    },
+    {
+      "at": "2026-02-27T10:59:28Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-01-GOV_REVIEW",
+        "artifact": "finance-app/openclaw-gates/batch-01-20260225-000127.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-01/BATCH-01-GOV_REVIEW/20260227T105928Z-848.yaml",
+        "idempotency_key": "IK-ea5c3288570f"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:08Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260226055450-756",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:08Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104924-136",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104928-883",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227104933-217",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105005-128",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105109-942",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105147-534",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    },
+    {
+      "at": "2026-02-27T12:46:09Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260227105506-281",
+        "status": "CLOSED",
+        "actor": "planner"
+      }
+    }
+  ]
+}

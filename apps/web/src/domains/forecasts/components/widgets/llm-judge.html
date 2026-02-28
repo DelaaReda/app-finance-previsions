@@ -1,0 +1,26 @@
+<section class="widget-card llm-judge-widget" aria-label="LLM Judge">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🧠</span>
+            <h2 class="widget-title">AI Multi-Model Judge</h2>
+        </div>
+        <button class="help-icon" onclick="showLLMHelp()" aria-label="Help">?</button>
+    </div>
+    <div class="widget-body">
+        <div class="judge-input-section">
+            <input type="text" class="judge-question-input" id="judgeQuestion"
+                placeholder="Ask AI: What should I do with my portfolio today?" />
+            <button class="ask-judge-btn" onclick="askLLMJudge()">Ask 3 AI Models</button>
+        </div>
+        <div class="judge-processing" id="judgeProcessing" style="display: none;">
+            <div class="processing-step"><span class="spinner"></span> Querying GPT-5...</div>
+            <div class="processing-step"><span class="spinner"></span> Querying Claude...</div>
+            <div class="processing-step"><span class="spinner"></span> Querying Gemini...</div>
+            <div class="processing-step"><span class="spinner"></span> Analyzing portfolio data...</div>
+            <div class="processing-step"><span class="spinner"></span> Synthesizing consensus...</div>
+        </div>
+        <div class="judge-result" id="judgeResult" style="display: none;"></div>
+        <button class="ask-another-btn" id="askAnotherBtn" style="display: none;" onclick="resetLLMJudge()">Ask
+            Another Question</button>
+    </div>
+</section>

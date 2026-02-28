@@ -26,11 +26,12 @@ Named admin triad (for signed updates):
   - `docs/ops/ADMIN_TEAM_ITERATIONS.md`
 
 ## Runtime profile (active baseline: 2026-02-28)
-- OpenClaw runs 20 active cron jobs observed aujourd’hui:
-  - 14 role loops: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `po`, `scrum_master`, `clawsentinel`
-  - 5 service jobs: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`, `stale-sweep-autoheal-7m`, `dg-admin-router-5m`, `dg-alert-15m`
-  - 1 infra/guard job: `vm-resume-guard-2m`
-- Remarque: le profil évolue selon la stratégie de migration, conserver le check actif via `openclaw cron list --json`.
+- OpenClaw provisions 20 jobs (16 actifs, 4 désactivés pour cohérence):
+  - 12 role loops actifs: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `clawsentinel`
+  - 2 service jobs: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`
+  - 2 utility jobs: `stale-sweep-autoheal-7m`, `dg-alert-15m`
+- Jobs désactivés (mode profil): `po-tmux-loop`, `scrum-master-tmux-loop`, `dg-admin-router-5m`, `vm-resume-guard-2m`
+- Remarque: conserver `openclaw cron list --json` comme garde anti-drift.
 - Source of truth:
   - `openclaw cron list --all`
   - `/home/venom/.openclaw/cron/jobs.json`
@@ -46,6 +47,9 @@ Named admin triad (for signed updates):
   - `TMUX_ROLE_NO_DELTA_THRESHOLD=12`
   - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
   - `TMUX_ROLE_CODEX_EXEC_RESUME=1`
+  - `TMUX_ROLE_CODEX_EXEC_FALLBACK=1`
+  - `TMUX_ROLE_CODEX_MODEL=openai-codex/gpt-5.3-codex-spark`
+  - `TMUX_ROLE_AGENT_BIN=codex`
 - Evidence schema:
   - `docs/ops/ROLE_CONTRACT_EVIDENCE_SCHEMA.md`
   - `run_note` is mandatory (>= 5 words) to make future troubleshooting easier.

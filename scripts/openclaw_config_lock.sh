@@ -1,0 +1,1 @@
+/home/venom/shared/analyse-financiere/platform/automation/openclaw_config_lock.sh

@@ -1,0 +1,35 @@
+<section class="quick-actions-grid" aria-label="Quick actions">
+    <div class="action-card high-priority">
+        <div class="action-header">
+            <span class="priority-badge high">High Priority</span>
+        </div>
+        <h3 class="action-title">NVDA Breakout Signal Detected</h3>
+        <div class="action-confidence">Confidence: <span class="confidence-value">92%</span></div>
+        <div class="action-buttons">
+            <button class="action-btn primary" onclick="showToast('Opening NVDA details...')">View Details</button>
+            <button class="action-btn secondary" onclick="showToast('Added to watchlist')">Add to Watchlist</button>
+        </div>
+    </div>
+    <div class="action-card medium-priority">
+        <div class="action-header">
+            <span class="priority-badge medium">Medium Priority</span>
+        </div>
+        <h3 class="action-title">Rebalance Tech Exposure</h3>
+        <div class="action-suggestion">Suggestion: Diversify to Healthcare</div>
+        <div class="action-buttons">
+            <button class="action-btn primary" onclick="showToast('Viewing rebalance plan...')">See Plan</button>
+            <button class="action-btn secondary" onclick="showToast('Executing rebalance...')">Execute</button>
+        </div>
+    </div>
+    <div class="action-card low-priority">
+        <div class="action-header">
+            <span class="priority-badge low">Low Priority</span>
+        </div>
+        <h3 class="action-title">Weekly Report Ready</h3>
+        <div class="action-suggestion">Your performance summary is available</div>
+        <div class="action-buttons">
+            <button class="action-btn primary" onclick="showToast('Opening report...')">View Report</button>
+            <button class="action-btn secondary" onclick="showToast('Email scheduled')">Schedule Email</button>
+        </div>
+    </div>
+</section>

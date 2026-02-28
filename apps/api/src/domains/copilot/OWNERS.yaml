@@ -1,0 +1,9 @@
+version: 1
+domain: copilot
+owners:
+  - architect
+  - backend_engineer
+invariants:
+  - response_contract_required
+  - fallback_explicit
+  - source_attribution_supported

@@ -26,7 +26,6 @@ finance-app/orchestrator-runs/
 finance-app/agent-memory/
 finance-app/sdk_sessions.json
 .qwen_runs/
-copilot-app/backend/.qwen_runs/
 *.log
 *.err
 *.out
@@ -77,11 +76,8 @@ data/quality/dt=20251026/
 data/
 docs/old-context/chat.md
 copilot-app/frontend/webapp/.npm-cache/
-copilot-app/frontend/webapp/.npm-cache/*
 .git_backup/
-copilot-app/frontend/temp-exported-assets/
 # Tools clones (local only)
 tools/g4f-working/
-copilot-app/backend/src/tested_g4f_models_categorized.json
-copilot-app/backend/src/tested_g4f_models_ok.json
-copilot-app/backend/src/tested_g4f_models.json
+# G4F test output (generated at runtime)
+apps/api/src/tested_g4f_models*.json

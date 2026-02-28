@@ -1,0 +1,23 @@
+<section class="widget-card cluster-map" aria-label="Similar stocks">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🎯</span>
+            <h2 class="widget-title">Stocks with Similar Patterns</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('similar')" aria-label="Help"
+                title="AI groups stocks by behavior patterns">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">AI groups stocks by behavior patterns</p>
+        <div class="cluster-container">
+            <canvas id="clusterMap" width="400" height="400"></canvas>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated daily</span>
+        <button class="widget-action-btn" onclick="showToast('Exploring stock groups...')">Explore Groups</button>
+    </div>
+</section>

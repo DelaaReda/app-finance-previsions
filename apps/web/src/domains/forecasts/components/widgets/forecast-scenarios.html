@@ -1,0 +1,74 @@
+<section class="widget-card forecast-scenarios-widget" aria-label="Forecast scenarios">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🔮</span>
+            <h2 class="widget-title">What Could Happen Next</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('scenarios')" aria-label="Help"
+                title="AI-generated scenarios for next 30 days">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">AI-generated scenarios for next 30 days</p>
+        <div class="scenario-bars">
+            <div class="scenario-bar-item bull">
+                <div class="scenario-label">Bull Case</div>
+                <div class="scenario-bar-wrapper">
+                    <div class="scenario-bar-fill" style="width: 82%">+12.3%</div>
+                </div>
+            </div>
+            <div class="scenario-bar-item base">
+                <div class="scenario-label">Base Case</div>
+                <div class="scenario-bar-wrapper">
+                    <div class="scenario-bar-fill" style="width: 30%">+2.1%</div>
+                </div>
+            </div>
+            <div class="scenario-bar-item bear">
+                <div class="scenario-label">Bear Case</div>
+                <div class="scenario-bar-wrapper">
+                    <div class="scenario-bar-fill" style="width: 15%">-5.8%</div>
+                </div>
+            </div>
+        </div>
+        <button class="toggle-interactive-btn" onclick="toggleInteractiveView(this)">Switch to Interactive
+            View</button>
+        <div class="interactive-arena" id="interactiveArena" style="display: none;">
+            <div class="arena-container" id="arenaContainer">
+                <div class="arena-center">$127.5K</div>
+                <div class="bubble bull" data-scenario="bull" draggable="false" style="top: 15%; right: 20%">
+                    <div class="bubble-label">Bull Case</div>
+                    <div class="bubble-value">+12.3%</div>
+                    <div class="bubble-conf">35% conf</div>
+                </div>
+                <div class="bubble base" data-scenario="base" draggable="false"
+                    style="top: 10%; left: 50%; transform: translateX(-50%)">
+                    <div class="bubble-label">Base Case</div>
+                    <div class="bubble-value">+2.1%</div>
+                    <div class="bubble-conf">50% conf</div>
+                </div>
+                <div class="bubble bear" data-scenario="bear" draggable="false"
+                    style="bottom: 15%; left: 50%; transform: translateX(-50%)">
+                    <div class="bubble-label">Bear Case</div>
+                    <div class="bubble-value">-5.8%</div>
+                    <div class="bubble-conf">15% conf</div>
+                </div>
+                <div class="bubble user" data-scenario="user" draggable="true" style="top: 50%; left: 15%">
+                    <div class="bubble-label">Votre Scénario</div>
+                    <div class="bubble-value">+4.5%</div>
+                    <div class="bubble-conf">Drag me!</div>
+                </div>
+                <div class="bubble consensus" data-scenario="consensus" draggable="false" style="top: 50%; right: 15%">
+                    <div class="bubble-label">Consensus</div>
+                    <div class="bubble-value">+3.2%</div>
+                </div>
+            </div>
+        </div>
+        <p class="scenario-context">Based on 10,000+ market signals</p>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <button class="widget-action-btn" onclick="showToast('Customizing scenarios...')">Customize Scenarios</button>
+    </div>
+</section>

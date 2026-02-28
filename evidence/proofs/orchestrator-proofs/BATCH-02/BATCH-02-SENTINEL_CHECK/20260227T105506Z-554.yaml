@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-02-BATCH-02-SENTINEL_CHECK-20260227T105506Z-554"
+stream_id: "BATCH-02"
+task_id: "BATCH-02-SENTINEL_CHECK"
+role: "clawsentinel"
+produced_at_utc: "2026-02-27T10:55:06Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/clawsentinel.last_contract"
+execution:
+  commands:
+    - cmd: "validate_parallel_plumbing + triage_now + pytest contracts"
+      rc: "0"
+      started_at_utc: "2026-02-27T10:55:06Z"
+      ended_at_utc: "2026-02-27T10:55:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest targeted contracts: 3 passed"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/clawsentinel.last_contract"
+  artifacts:
+    - "docs/orchestrator-ops/proofs/BATCH-02/sentinel-contracts-20260227T105451Z.log"
+handoff:
+  to_role: "planner"
+  handoff_id: "HO-20260227105506-281"
+signoff:
+  producer_agent: "clawsentinel"
+  reviewer_agent: "main"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH02_SENTINEL_CLOSE_20260227A"
+  review_ref: "sentinel_manual_review_2026-02-27T10:55Z"
+  note: "Template Judge validé en base (never-empty + cache + quality), mais bloqué pour clonage tant que single-flight cache, response_model strict OpenAPI, garde-fou debug, et cohérence risk_level ne sont pas corrigés."

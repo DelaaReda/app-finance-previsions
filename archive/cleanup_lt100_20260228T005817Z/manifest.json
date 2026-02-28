@@ -1,0 +1,1827 @@
+{
+  "timestamp_utc": "20260228T005817Z",
+  "root": "/home/venom/analyse-financiere/copilot-app/src",
+  "archive_root": "/home/venom/analyse-financiere/archive/cleanup_lt100_20260228T005817Z",
+  "scanned_text_files": 801,
+  "moved_lt_100": 451,
+  "kept_gte_100": 350,
+  "excluded_dirs": [
+    ".cache",
+    ".git",
+    ".mypy_cache",
+    ".next",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules"
+  ],
+  "moved_files": [
+    {
+      "path": "backend/.codacy/.gitignore",
+      "lines": 6
+    },
+    {
+      "path": "backend/.codacy/cli-config.yaml",
+      "lines": 1
+    },
+    {
+      "path": "backend/.codacy/codacy.yaml",
+      "lines": 16
+    },
+    {
+      "path": "backend/.codacy/tools-configs/eslint.config.mjs",
+      "lines": 67
+    },
+    {
+      "path": "backend/.codacy/tools-configs/languages-config.yaml",
+      "lines": 34
+    },
+    {
+      "path": "backend/.codacy/tools-configs/lizard.yaml",
+      "lines": 51
+    },
+    {
+      "path": "backend/.codacy/tools-configs/pylint.rc",
+      "lines": 10
+    },
+    {
+      "path": "backend/.codacy/tools-configs/revive.toml",
+      "lines": 57
+    },
+    {
+      "path": "backend/.codacy/tools-configs/trivy.yaml",
+      "lines": 11
+    },
+    {
+      "path": "backend/.qwen_runs/20251211-233159/marker.txt",
+      "lines": 3
+    },
+    {
+      "path": "backend/.qwen_runs/20251212-001810/marker.txt",
+      "lines": 3
+    },
+    {
+      "path": "backend/.qwen_runs/20260223-102010-879/marker.txt",
+      "lines": 3
+    },
+    {
+      "path": "backend/README.md",
+      "lines": 91
+    },
+    {
+      "path": "backend/api.log",
+      "lines": 0
+    },
+    {
+      "path": "backend/data/alerts/rules.json",
+      "lines": 63
+    },
+    {
+      "path": "backend/data/alerts.json",
+      "lines": 18
+    },
+    {
+      "path": "backend/data/backtests.json",
+      "lines": 27
+    },
+    {
+      "path": "backend/data/brief_daily.json",
+      "lines": 80
+    },
+    {
+      "path": "backend/data/brief_weekly.json",
+      "lines": 78
+    },
+    {
+      "path": "backend/data/dashboard_kpis.json",
+      "lines": 65
+    },
+    {
+      "path": "backend/data/forecast/dt=20251105/final.parquet",
+      "lines": 13
+    },
+    {
+      "path": "backend/data/forecast/dt=20251105/forecasts.parquet",
+      "lines": 12
+    },
+    {
+      "path": "backend/data/forecasts_all_all_all_1_0_score_desc.json",
+      "lines": 49
+    },
+    {
+      "path": "backend/data/forecasts_all_all_all_2_0_score_desc.json",
+      "lines": 67
+    },
+    {
+      "path": "backend/data/forecasts_all_all_all_3_0_score_desc.json",
+      "lines": 85
+    },
+    {
+      "path": "backend/data/forecasts_equity_1w_all_1_0_score_desc.json",
+      "lines": 49
+    },
+    {
+      "path": "backend/data/forecasts_equity_1w_all_3_0_score_desc.json",
+      "lines": 85
+    },
+    {
+      "path": "backend/data/forecasts_short_all_12.json",
+      "lines": 26
+    },
+    {
+      "path": "backend/data/intelligence_snapshot.json",
+      "lines": 54
+    },
+    {
+      "path": "backend/data/judge_profiles/equity_1w.yaml",
+      "lines": 24
+    },
+    {
+      "path": "backend/data/judge_profiles/sector_regime.yaml",
+      "lines": 27
+    },
+    {
+      "path": "backend/data/judge_quality_tracking.json",
+      "lines": 85
+    },
+    {
+      "path": "backend/data/judge_verdicts_20_0.5_all_confidence_desc.json",
+      "lines": 41
+    },
+    {
+      "path": "backend/data/llm_judge.json",
+      "lines": 98
+    },
+    {
+      "path": "backend/data/market_context_snapshot.json",
+      "lines": 29
+    },
+    {
+      "path": "backend/data/prediction_accuracy.json",
+      "lines": 45
+    },
+    {
+      "path": "backend/data/price_cache/stooq/BRK.B.csv",
+      "lines": 1
+    },
+    {
+      "path": "backend/data/quality/reports/quality_report_20260227_132843_8561e34e.json",
+      "lines": 41
+    },
+    {
+      "path": "backend/data/rag/facts.jsonl",
+      "lines": 0
+    },
+    {
+      "path": "backend/data/rag/news.jsonl",
+      "lines": 2
+    },
+    {
+      "path": "backend/data/recommendations_daily_default_3.json",
+      "lines": 53
+    },
+    {
+      "path": "backend/data/stocks/portfolio_allocation.json",
+      "lines": 20
+    },
+    {
+      "path": "backend/data/test/nested/path.json",
+      "lines": 1
+    },
+    {
+      "path": "backend/data/test_cache_key.json",
+      "lines": 2
+    },
+    {
+      "path": "backend/data/test_cache_key2.json",
+      "lines": 11
+    },
+    {
+      "path": "backend/data/user_portfolios.json",
+      "lines": 14
+    },
+    {
+      "path": "backend/docs/2025-12/JUDGE_SCHEMA.md",
+      "lines": 90
+    },
+    {
+      "path": "backend/jobs/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/jobs/alerts.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/backtests.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/backtests_job.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/backtests_simple.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/cache_manager.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/calendar_ingest.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/capital_flow.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/correlation_calculator.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/dashboard_refresh.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/data_quality_gate.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/data_seeder.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/efficient_frontier.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/forecast_materialization.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/forecasts.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/forecasts_simple.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/indicator_calculation.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/initialize_data.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/judge_enrich.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/judge_quality_report.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/leads.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/macro_ingest.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/macro_series_snapshot.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/market_brief.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/market_intelligence_snapshot.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/news_ingest.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/news_scheduler.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/news_sentiment.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/orderbook_ingest.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/performance_report.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/sector_allocation.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/stocks_metrics_refresh.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/stocks_prices_refresh.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/update_monitor.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/validate_and_generate_data.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/jobs/weekly_brief.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/legacy-archive/api-v1-compat/macro_legacy.py",
+      "lines": 19
+    },
+    {
+      "path": "backend/legacy-archive/api-v1-compat/news_legacy.py",
+      "lines": 31
+    },
+    {
+      "path": "backend/legacy-archive/apps/__init__.py",
+      "lines": 17
+    },
+    {
+      "path": "backend/legacy-archive/apps/agent_app.py",
+      "lines": 66
+    },
+    {
+      "path": "backend/legacy-archive/apps/app_tester_qa/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/00_Home.py",
+      "lines": 62
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/10_Events.py",
+      "lines": 55
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/11_Quality.py",
+      "lines": 53
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/12_Agents.py",
+      "lines": 76
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/13_LLM_Models.py",
+      "lines": 43
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/14_Regimes.py",
+      "lines": 40
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/18_Watchlist.py",
+      "lines": 42
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/19_Notes.py",
+      "lines": 43
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/20_Memos.py",
+      "lines": 46
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/21_Risk.py",
+      "lines": 45
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/22_LLM_Scoreboard.py",
+      "lines": 74
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/23_Settings.py",
+      "lines": 57
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/24_Changes.py",
+      "lines": 76
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/25_Recession.py",
+      "lines": 37
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/26_Earnings.py",
+      "lines": 60
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/4_Forecasts.py",
+      "lines": 36
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/6_Backtests.py",
+      "lines": 96
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/7_Reports.py",
+      "lines": 74
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/9_Advisor.py",
+      "lines": 87
+    },
+    {
+      "path": "backend/legacy-archive/apps/pages/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_components/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_components/charts.py",
+      "lines": 14
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_components/filters.py",
+      "lines": 21
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_components/kpi_cards.py",
+      "lines": 16
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_components/tables.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_data/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_data/cache.py",
+      "lines": 16
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_data/config.py",
+      "lines": 17
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_data/loader.py",
+      "lines": 80
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/_state.py",
+      "lines": 26
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/app.py",
+      "lines": 52
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/1_Dashboard.py",
+      "lines": 27
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/2_Signals.py",
+      "lines": 22
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/3_Deep_Dive.py",
+      "lines": 22
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/4_Forecasts.py",
+      "lines": 17
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/6_Observability.py",
+      "lines": 18
+    },
+    {
+      "path": "backend/legacy-archive/apps/streamlit/pages/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/__init__.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/logic/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/logic/deep_dive_logic.py",
+      "lines": 44
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/advisor.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/agents_status.py",
+      "lines": 94
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/changes.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/devtools.py",
+      "lines": 58
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/earnings.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/events.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/home.py",
+      "lines": 28
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/integration_agent_status.py",
+      "lines": 20
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/integration_data_quality.py",
+      "lines": 40
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/integration_llm_scoreboard.py",
+      "lines": 42
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/integration_macro_data.py",
+      "lines": 59
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/llm_models.py",
+      "lines": 44
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/memos.py",
+      "lines": 49
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/portfolio.py",
+      "lines": 79
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/profiler.py",
+      "lines": 84
+    },
+    {
+      "path": "backend/legacy-archive/dash_app/pages/reports.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/legacy-archive/docs/ARCH_BACKEND.md",
+      "lines": 87
+    },
+    {
+      "path": "backend/legacy-archive/docs/LLM_AGENT_JUDGE.md",
+      "lines": 29
+    },
+    {
+      "path": "backend/logs/finance_analysis.log",
+      "lines": 0
+    },
+    {
+      "path": "backend/models/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/models/forecast_hybrid_v1.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/pytest.ini",
+      "lines": 4
+    },
+    {
+      "path": "backend/requirements.txt",
+      "lines": 14
+    },
+    {
+      "path": "backend/scripts/fetch_prices_stooq.sh",
+      "lines": 68
+    },
+    {
+      "path": "backend/scripts/validate_marker.sh",
+      "lines": 33
+    },
+    {
+      "path": "backend/services/__init__.py",
+      "lines": 29
+    },
+    {
+      "path": "backend/services/alert_rules.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/alerts_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/backtest_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/backtests.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/cache_layer.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/cache_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/context_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/correlation_calculator.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/correlation_intelligence_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/economic_calendar.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/forecast_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/indicator_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/intelligence_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/news_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/performance_calculator.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/portfolio_performance_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/portfolio_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/prediction_analyzer.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/recommendations_service.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/risk_calculator.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/stock_screener.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/tech_indicators_fallback.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/universal_search.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/services/user_prefs.py",
+      "lines": 7
+    },
+    {
+      "path": "backend/src/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/agent_runner/__init__.py",
+      "lines": 5
+    },
+    {
+      "path": "backend/src/agent_runner/scheduler.py",
+      "lines": 43
+    },
+    {
+      "path": "backend/src/agents/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/agents/earnings_calendar_agent.py",
+      "lines": 81
+    },
+    {
+      "path": "backend/src/agents/forecast_aggregator_agent.py",
+      "lines": 57
+    },
+    {
+      "path": "backend/src/agents/llm/__init__.py",
+      "lines": 6
+    },
+    {
+      "path": "backend/src/agents/llm/arbiter_agent.py",
+      "lines": 85
+    },
+    {
+      "path": "backend/src/agents/llm/run_once.py",
+      "lines": 13
+    },
+    {
+      "path": "backend/src/agents/llm/runtime.py",
+      "lines": 95
+    },
+    {
+      "path": "backend/src/agents/llm/schemas.py",
+      "lines": 26
+    },
+    {
+      "path": "backend/src/agents/llm/toolkit.py",
+      "lines": 73
+    },
+    {
+      "path": "backend/src/agents/orchestrator.py",
+      "lines": 58
+    },
+    {
+      "path": "backend/src/agents/risk_monitor_agent.py",
+      "lines": 99
+    },
+    {
+      "path": "backend/src/analytics/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/analytics/forecaster.py",
+      "lines": 94
+    },
+    {
+      "path": "backend/src/analytics/news_aggregator.py",
+      "lines": 67
+    },
+    {
+      "path": "backend/src/analytics/recommender.py",
+      "lines": 41
+    },
+    {
+      "path": "backend/src/api/__init__.py",
+      "lines": 25
+    },
+    {
+      "path": "backend/src/api/errors.py",
+      "lines": 22
+    },
+    {
+      "path": "backend/src/api/health.py",
+      "lines": 17
+    },
+    {
+      "path": "backend/src/api/routes/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/api/routes/brief.py",
+      "lines": 56
+    },
+    {
+      "path": "backend/src/api/routes/brief_alias.py",
+      "lines": 53
+    },
+    {
+      "path": "backend/src/api/routes/brief_routes.py",
+      "lines": 73
+    },
+    {
+      "path": "backend/src/api/routes/context.py",
+      "lines": 67
+    },
+    {
+      "path": "backend/src/api/routes/copilot.py",
+      "lines": 74
+    },
+    {
+      "path": "backend/src/api/routes/correlations.py",
+      "lines": 63
+    },
+    {
+      "path": "backend/src/api/routes/intelligence.py",
+      "lines": 91
+    },
+    {
+      "path": "backend/src/api/routes/news_features.py",
+      "lines": 27
+    },
+    {
+      "path": "backend/src/api/routes/recommendations.py",
+      "lines": 86
+    },
+    {
+      "path": "backend/src/api/services/__init__.py",
+      "lines": 44
+    },
+    {
+      "path": "backend/src/api/templates/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/src/artifacts/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/backend/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/backend/services/__init__.py",
+      "lines": 20
+    },
+    {
+      "path": "backend/src/backend/storage/__init__.py",
+      "lines": 21
+    },
+    {
+      "path": "backend/src/cache/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/cache/news/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/core/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/core/cache.py",
+      "lines": 43
+    },
+    {
+      "path": "backend/src/core/data_store.py",
+      "lines": 40
+    },
+    {
+      "path": "backend/src/core/datasets.py",
+      "lines": 86
+    },
+    {
+      "path": "backend/src/core/downsample.py",
+      "lines": 77
+    },
+    {
+      "path": "backend/src/core/duck.py",
+      "lines": 29
+    },
+    {
+      "path": "backend/src/core/middleware.py",
+      "lines": 57
+    },
+    {
+      "path": "backend/src/core/prompt_context.py",
+      "lines": 18
+    },
+    {
+      "path": "backend/src/core/response.py",
+      "lines": 17
+    },
+    {
+      "path": "backend/src/core/ticker_normalization.py",
+      "lines": 97
+    },
+    {
+      "path": "backend/src/data/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/data/brief_weekly.json",
+      "lines": 19
+    },
+    {
+      "path": "backend/src/data/dashboard/kpis.json",
+      "lines": 98
+    },
+    {
+      "path": "backend/src/data/macro_series.json",
+      "lines": 13
+    },
+    {
+      "path": "backend/src/data/news_feed.json",
+      "lines": 1
+    },
+    {
+      "path": "backend/src/data_generation/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/data_generation/generate_forecast_data.py",
+      "lines": 84
+    },
+    {
+      "path": "backend/src/data_schemas/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/hub/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/hub/profiler.py",
+      "lines": 65
+    },
+    {
+      "path": "backend/src/ingestion/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/jobs/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/jobs/backtests.py",
+      "lines": 46
+    },
+    {
+      "path": "backend/src/jobs/forecasts.py",
+      "lines": 99
+    },
+    {
+      "path": "backend/src/jobs/judge_quality_report.py",
+      "lines": 97
+    },
+    {
+      "path": "backend/src/jobs/leads.py",
+      "lines": 66
+    },
+    {
+      "path": "backend/src/jobs/legacy/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/jobs/market_intelligence_snapshot.py",
+      "lines": 51
+    },
+    {
+      "path": "backend/src/jobs/news_scheduler.py",
+      "lines": 65
+    },
+    {
+      "path": "backend/src/jobs/performance_report.py",
+      "lines": 86
+    },
+    {
+      "path": "backend/src/models/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/models/accuracy_metrics.py",
+      "lines": 40
+    },
+    {
+      "path": "backend/src/models/legacy/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/ops/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/ops/daily_rag_refresh.py",
+      "lines": 48
+    },
+    {
+      "path": "backend/src/ops/logging_conf.py",
+      "lines": 32
+    },
+    {
+      "path": "backend/src/pipelines/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/pipelines/news/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/quality/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/research/__init__.py",
+      "lines": 10
+    },
+    {
+      "path": "backend/src/research/brief_renderer.py",
+      "lines": 49
+    },
+    {
+      "path": "backend/src/research/materialize.py",
+      "lines": 77
+    },
+    {
+      "path": "backend/src/reuse/__init__.py",
+      "lines": 61
+    },
+    {
+      "path": "backend/src/reuse/data.py",
+      "lines": 74
+    },
+    {
+      "path": "backend/src/reuse/forecasting.py",
+      "lines": 60
+    },
+    {
+      "path": "backend/src/reuse/judge.py",
+      "lines": 50
+    },
+    {
+      "path": "backend/src/reuse/llm.py",
+      "lines": 63
+    },
+    {
+      "path": "backend/src/runners/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/schemas/forecasts.py",
+      "lines": 89
+    },
+    {
+      "path": "backend/src/searxng-local/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/secrets_local.py",
+      "lines": 70
+    },
+    {
+      "path": "backend/src/services/__init__.py",
+      "lines": 26
+    },
+    {
+      "path": "backend/src/services/codestral_client.py",
+      "lines": 59
+    },
+    {
+      "path": "backend/src/services/dashboard_service.py",
+      "lines": 89
+    },
+    {
+      "path": "backend/src/services/flows_service.py",
+      "lines": 68
+    },
+    {
+      "path": "backend/src/services/forecast_service.py",
+      "lines": 40
+    },
+    {
+      "path": "backend/src/services/groq_client.py",
+      "lines": 58
+    },
+    {
+      "path": "backend/src/services/legacy/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/services/market_microstructure.py",
+      "lines": 81
+    },
+    {
+      "path": "backend/src/services/quality_service.py",
+      "lines": 84
+    },
+    {
+      "path": "backend/src/services/snapshot_loader.py",
+      "lines": 99
+    },
+    {
+      "path": "backend/src/storage/__init__.py",
+      "lines": 39
+    },
+    {
+      "path": "backend/src/taxonomy/__init__.py",
+      "lines": 2
+    },
+    {
+      "path": "backend/src/tools/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/src/tools/git_patcher.py",
+      "lines": 67
+    },
+    {
+      "path": "backend/src/tools/ingest_demo.py",
+      "lines": 94
+    },
+    {
+      "path": "backend/src/tools/make.py",
+      "lines": 24
+    },
+    {
+      "path": "backend/src/tools/parquet_io.py",
+      "lines": 41
+    },
+    {
+      "path": "backend/src/ui/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "backend/src/ui/footer.py",
+      "lines": 31
+    },
+    {
+      "path": "backend/src/ui/nav.py",
+      "lines": 55
+    },
+    {
+      "path": "backend/src/ui/shell.py",
+      "lines": 14
+    },
+    {
+      "path": "backend/storage/__init__.py",
+      "lines": 0
+    },
+    {
+      "path": "backend/storage/json_storage.py",
+      "lines": 94
+    },
+    {
+      "path": "backend/test_marker.py",
+      "lines": 6
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "lines": 15
+    },
+    {
+      "path": "backend/tests/test_copilot_route_orchestration.py",
+      "lines": 95
+    },
+    {
+      "path": "backend/tests/test_health.py",
+      "lines": 72
+    },
+    {
+      "path": "backend/tests/test_judge_builder.py",
+      "lines": 91
+    },
+    {
+      "path": "backend/tests/test_judge_like_endpoint_template.py",
+      "lines": 79
+    },
+    {
+      "path": "backend/tests/test_judge_pipeline_payload.py",
+      "lines": 29
+    },
+    {
+      "path": "backend/tests/test_judge_quality_tracking.py",
+      "lines": 84
+    },
+    {
+      "path": "backend/tests/test_marker_validation.py",
+      "lines": 53
+    },
+    {
+      "path": "backend/tests/test_news_feed_contract.py",
+      "lines": 77
+    },
+    {
+      "path": "backend/tests/test_news_ingest_tickers.py",
+      "lines": 53
+    },
+    {
+      "path": "backend/tests/test_reuse_facades.py",
+      "lines": 56
+    },
+    {
+      "path": "backend/tests/test_service_reuse_standardization.py",
+      "lines": 43
+    },
+    {
+      "path": "backend/tests/test_service_standard.py",
+      "lines": 61
+    },
+    {
+      "path": "backend/tests/test_stocks_prices_contract.py",
+      "lines": 90
+    },
+    {
+      "path": "backend/tests/test_ticker_normalization.py",
+      "lines": 37
+    },
+    {
+      "path": "cache/macro/ec267cf3848ce309757f1f966928fb6f9872ed78.cache",
+      "lines": 1
+    },
+    {
+      "path": "data/backtest/dt=20251026/summary.json",
+      "lines": 8
+    },
+    {
+      "path": "data/backtest/dt=20251027/details.parquet",
+      "lines": 13
+    },
+    {
+      "path": "data/backtest/dt=20251027/summary.json",
+      "lines": 8
+    },
+    {
+      "path": "data/backtest/dt=20251028/summary.json",
+      "lines": 8
+    },
+    {
+      "path": "data/cache_invalidation_state.json",
+      "lines": 12
+    },
+    {
+      "path": "data/earnings/dt=20251028/earnings.json",
+      "lines": 8
+    },
+    {
+      "path": "data/eval/eval_details.parquet",
+      "lines": 43
+    },
+    {
+      "path": "data/eval/eval_summary.json",
+      "lines": 9
+    },
+    {
+      "path": "data/evaluation/dt=20251026/details.parquet",
+      "lines": 8
+    },
+    {
+      "path": "data/evaluation/dt=20251026/metrics.json",
+      "lines": 12
+    },
+    {
+      "path": "data/evaluation/dt=20251027/details.parquet",
+      "lines": 12
+    },
+    {
+      "path": "data/evaluation/dt=20251027/metrics.json",
+      "lines": 12
+    },
+    {
+      "path": "data/evaluation/dt=20251028/details.parquet",
+      "lines": 11
+    },
+    {
+      "path": "data/evaluation/dt=20251028/metrics.json",
+      "lines": 12
+    },
+    {
+      "path": "data/events/dt=20251025/events.json",
+      "lines": 11
+    },
+    {
+      "path": "data/events/dt=20251028/events.json",
+      "lines": 11
+    },
+    {
+      "path": "data/events/dt=20251030/events.json",
+      "lines": 11
+    },
+    {
+      "path": "data/features/dt=20251025/features.parquet",
+      "lines": 30
+    },
+    {
+      "path": "data/features/dt=20251025/features_flat.parquet",
+      "lines": 50
+    },
+    {
+      "path": "data/features.json",
+      "lines": 9
+    },
+    {
+      "path": "data/forecast/20251025/AAPL.json",
+      "lines": 63
+    },
+    {
+      "path": "data/forecast/20251025/ABX.TO.json",
+      "lines": 65
+    },
+    {
+      "path": "data/forecast/20251025/AEM.TO.json",
+      "lines": 65
+    },
+    {
+      "path": "data/forecast/20251025/GDX.json",
+      "lines": 65
+    },
+    {
+      "path": "data/forecast/20251025/K.TO.json",
+      "lines": 65
+    },
+    {
+      "path": "data/forecast/20251025/MSFT.json",
+      "lines": 63
+    },
+    {
+      "path": "data/forecast/20251025/NGD.TO.json",
+      "lines": 65
+    },
+    {
+      "path": "data/forecast/20251025/brief.json",
+      "lines": 79
+    },
+    {
+      "path": "data/forecast/dt=20251025/final.parquet",
+      "lines": 4
+    },
+    {
+      "path": "data/forecast/dt=20251025/forecasts.parquet",
+      "lines": 11
+    },
+    {
+      "path": "data/forecast/dt=20251026/commodities.parquet",
+      "lines": 71
+    },
+    {
+      "path": "data/forecast/dt=20251027/final.parquet",
+      "lines": 4
+    },
+    {
+      "path": "data/forecast/dt=20251027/forecasts.parquet",
+      "lines": 11
+    },
+    {
+      "path": "data/forecast/dt=20251028/brief.json",
+      "lines": 16
+    },
+    {
+      "path": "data/forecast/dt=20251028/commodities.parquet",
+      "lines": 84
+    },
+    {
+      "path": "data/forecast/dt=20251028/final.parquet",
+      "lines": 3
+    },
+    {
+      "path": "data/forecast/dt=20251028/forecasts.parquet",
+      "lines": 10
+    },
+    {
+      "path": "data/forecast/dt=20251028/llm_agents.json",
+      "lines": 72
+    },
+    {
+      "path": "data/forecast/dt=20251030/llm_agents.json",
+      "lines": 59
+    },
+    {
+      "path": "data/fundamentals/ticker=AAPL/fundamentals_20251028.json",
+      "lines": 13
+    },
+    {
+      "path": "data/fundamentals/ticker=AAPL/fundamentals_20251030.json",
+      "lines": 13
+    },
+    {
+      "path": "data/fundamentals/ticker=ABX.TO/fundamentals_20251025.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=AEM.TO/fundamentals_20251025.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=GDX/fundamentals_20251025.json",
+      "lines": 6
+    },
+    {
+      "path": "data/fundamentals/ticker=K.TO/fundamentals_20251025.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=MSFT/fundamentals_20251028.json",
+      "lines": 13
+    },
+    {
+      "path": "data/fundamentals/ticker=MSFT/fundamentals_20251030.json",
+      "lines": 13
+    },
+    {
+      "path": "data/fundamentals/ticker=NGD.TO/fundamentals_20251025.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=NGD.TO/fundamentals_20251028.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=NGD.TO/fundamentals_20251030.json",
+      "lines": 4
+    },
+    {
+      "path": "data/fundamentals/ticker=OR/fundamentals_20251028.json",
+      "lines": 13
+    },
+    {
+      "path": "data/fundamentals/ticker=OR/fundamentals_20251030.json",
+      "lines": 13
+    },
+    {
+      "path": "data/llm/context/dt=20251028/AAPL.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251028/MSFT.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251028/NGD.TO.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251028/OR.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251030/AAPL.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251030/MSFT.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/context/dt=20251030/NGD.TO.json",
+      "lines": 81
+    },
+    {
+      "path": "data/llm/models/working.json",
+      "lines": 77
+    },
+    {
+      "path": "data/macro/forecast/dt=20251025/macro_forecast.json",
+      "lines": 25
+    },
+    {
+      "path": "data/macro/forecast/dt=20251025/macro_forecast.parquet",
+      "lines": 14
+    },
+    {
+      "path": "data/macro/forecast/dt=20251026/macro_forecast.json",
+      "lines": 25
+    },
+    {
+      "path": "data/macro/forecast/dt=20251026/macro_forecast.parquet",
+      "lines": 14
+    },
+    {
+      "path": "data/macro/forecast/dt=20251027/macro_forecast.json",
+      "lines": 25
+    },
+    {
+      "path": "data/macro/forecast/dt=20251027/macro_forecast.parquet",
+      "lines": 14
+    },
+    {
+      "path": "data/macro/forecast/dt=20251028/macro_forecast.json",
+      "lines": 25
+    },
+    {
+      "path": "data/macro/forecast/dt=20251028/macro_forecast.parquet",
+      "lines": 14
+    },
+    {
+      "path": "data/macro/series_id=GDPC1/series.parquet",
+      "lines": 45
+    },
+    {
+      "path": "data/news/bronze/dt=2025-10-30/news_bronze_025400.parquet",
+      "lines": 23
+    },
+    {
+      "path": "data/news/bronze/dt=2025-10-30/news_bronze_025426.parquet",
+      "lines": 23
+    },
+    {
+      "path": "data/news/bronze/dt=2025-10-30/news_bronze_025447.parquet",
+      "lines": 23
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_045614.parquet",
+      "lines": 69
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_045616.parquet",
+      "lines": 81
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_045620.parquet",
+      "lines": 68
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_050434.parquet",
+      "lines": 96
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_050436.parquet",
+      "lines": 64
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_053456.parquet",
+      "lines": 96
+    },
+    {
+      "path": "data/news/dt=2025-10-25/news_053501.parquet",
+      "lines": 97
+    },
+    {
+      "path": "data/news/dt=2025-10-30/news_002758.parquet",
+      "lines": 77
+    },
+    {
+      "path": "data/news/gold/events_v1/dt=2025-10-30/events.parquet",
+      "lines": 24
+    },
+    {
+      "path": "data/news/gold/features_daily/dt=2025-10-30/features.parquet",
+      "lines": 7
+    },
+    {
+      "path": "data/news/gold/features_daily/dt=2025-10-30/features_empty.parquet",
+      "lines": 7
+    },
+    {
+      "path": "data/news/gold/features_daily_v2/dt=2025-10-30/features.parquet",
+      "lines": 41
+    },
+    {
+      "path": "data/news/silver/dt=2025-10-30/news_silver_025400.parquet",
+      "lines": 1
+    },
+    {
+      "path": "data/news/silver/dt=2025-10-30/news_silver_025426.parquet",
+      "lines": 7
+    },
+    {
+      "path": "data/news/silver/dt=2025-10-30/news_silver_025447.parquet",
+      "lines": 7
+    },
+    {
+      "path": "data/news/silver_v2/dt=2025-10-30/metadata.json",
+      "lines": 32
+    },
+    {
+      "path": "data/news/silver_v2/dt=2025-10-31/metadata.json",
+      "lines": 32
+    },
+    {
+      "path": "data/news.jsonl",
+      "lines": 2
+    },
+    {
+      "path": "data/quality/dt=20251025/freshness.json",
+      "lines": 17
+    },
+    {
+      "path": "data/quality/dt=20251025/report.json",
+      "lines": 52
+    },
+    {
+      "path": "data/quality/dt=20251026/freshness.json",
+      "lines": 17
+    },
+    {
+      "path": "data/quality/dt=20251027/freshness.json",
+      "lines": 17
+    },
+    {
+      "path": "data/quality/dt=20251028/freshness.json",
+      "lines": 17
+    },
+    {
+      "path": "data/rag/facts.jsonl",
+      "lines": 0
+    },
+    {
+      "path": "data/rag/news.jsonl",
+      "lines": 0
+    },
+    {
+      "path": "data/real/20250913_0125_features.json",
+      "lines": 28
+    },
+    {
+      "path": "data/real/20250913_0125_meta.json",
+      "lines": 22
+    },
+    {
+      "path": "data/real/20250913_0125_news.jsonl",
+      "lines": 62
+    },
+    {
+      "path": "data/real/20250913_0127_features.json",
+      "lines": 28
+    },
+    {
+      "path": "data/real/20250913_0127_meta.json",
+      "lines": 22
+    },
+    {
+      "path": "data/reports/dt=20251025/investigation_gold.json",
+      "lines": 56
+    },
+    {
+      "path": "data/reports/dt=20251025/topics.json",
+      "lines": 26
+    },
+    {
+      "path": "data/reports/dt=20251025/ui_smoke_report.json",
+      "lines": 80
+    },
+    {
+      "path": "data/reports/dt=20251102/ui_smoke_direct_report.json",
+      "lines": 41
+    },
+    {
+      "path": "data/state/harvester_state.json",
+      "lines": 32
+    },
+    {
+      "path": "data/watchlist.json",
+      "lines": 2
+    },
+    {
+      "path": "frontend/app/components/ai-suggestions-panel.html",
+      "lines": 8
+    },
+    {
+      "path": "frontend/app/components/filter-bar.html",
+      "lines": 23
+    },
+    {
+      "path": "frontend/app/components/header.html",
+      "lines": 67
+    },
+    {
+      "path": "frontend/app/components/modals/command-palette.html",
+      "lines": 23
+    },
+    {
+      "path": "frontend/app/components/modals/drill-down-modal.html",
+      "lines": 10
+    },
+    {
+      "path": "frontend/app/components/modals/more-menu.html",
+      "lines": 6
+    },
+    {
+      "path": "frontend/app/components/modals/notification-drawer.html",
+      "lines": 38
+    },
+    {
+      "path": "frontend/app/components/modals/settings-modal.html",
+      "lines": 42
+    },
+    {
+      "path": "frontend/app/components/navigation/diamond-dropdown.html",
+      "lines": 79
+    },
+    {
+      "path": "frontend/app/components/navigation/diamond-menu.html",
+      "lines": 55
+    },
+    {
+      "path": "frontend/app/components/navigation/facette-view.html",
+      "lines": 30
+    },
+    {
+      "path": "frontend/app/components/navigation/tab-navigation.html",
+      "lines": 22
+    },
+    {
+      "path": "frontend/app/components/sections/hero-what-need.html",
+      "lines": 42
+    },
+    {
+      "path": "frontend/app/components/sections/split-view.html",
+      "lines": 22
+    },
+    {
+      "path": "frontend/app/components/widgets/candlestick-chart.html",
+      "lines": 46
+    },
+    {
+      "path": "frontend/app/components/widgets/forecast-scenarios.html",
+      "lines": 74
+    },
+    {
+      "path": "frontend/app/components/widgets/heatmap-correlation.html",
+      "lines": 23
+    },
+    {
+      "path": "frontend/app/components/widgets/llm-judge.html",
+      "lines": 26
+    },
+    {
+      "path": "frontend/app/components/widgets/market-calendar.html",
+      "lines": 16
+    },
+    {
+      "path": "frontend/app/components/widgets/market-drivers-detailed.html",
+      "lines": 45
+    },
+    {
+      "path": "frontend/app/components/widgets/market-drivers.html",
+      "lines": 11
+    },
+    {
+      "path": "frontend/app/components/widgets/market-pulse.html",
+      "lines": 53
+    },
+    {
+      "path": "frontend/app/components/widgets/market-volatility.html",
+      "lines": 62
+    },
+    {
+      "path": "frontend/app/components/widgets/news-feed.html",
+      "lines": 23
+    },
+    {
+      "path": "frontend/app/components/widgets/news-impact.html",
+      "lines": 20
+    },
+    {
+      "path": "frontend/app/components/widgets/portfolio-health.html",
+      "lines": 37
+    },
+    {
+      "path": "frontend/app/components/widgets/quick-actions.html",
+      "lines": 35
+    },
+    {
+      "path": "frontend/app/components/widgets/sector-performance.html",
+      "lines": 26
+    },
+    {
+      "path": "frontend/app/components/widgets/similar-stocks.html",
+      "lines": 23
+    },
+    {
+      "path": "frontend/app/components/widgets/stock-relationships.html",
+      "lines": 38
+    },
+    {
+      "path": "frontend/app/components/widgets/top-movers.html",
+      "lines": 62
+    },
+    {
+      "path": "frontend/app/components/widgets/trade-ideas.html",
+      "lines": 15
+    },
+    {
+      "path": "frontend/app/js/utils/componentLoader.js",
+      "lines": 71
+    }
+  ]
+}

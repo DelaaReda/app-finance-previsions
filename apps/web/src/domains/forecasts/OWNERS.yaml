@@ -1,0 +1,9 @@
+version: 1
+domain: forecasts_ui
+owners:
+  - frontend_engineer
+  - integrator
+invariants:
+  - forecast_card_always_visible
+  - degraded_badge_visible
+  - no_nominal_mock_path

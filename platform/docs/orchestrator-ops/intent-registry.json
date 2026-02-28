@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "updatedAtUtc": "2026-02-28T15:12:32Z",
+  "intents": [
+    {
+      "intent_id": "INTENT_ADMINAPP_CODEX_20260228T053055Z",
+      "role": "adminapp-codex",
+      "scope": "orchestration_sequential_resume",
+      "planned_files": [
+        "docs/ops/CRON_STRATEGY.md",
+        "docs/ops/ADMIN_CODEX_BASELINE.md",
+        "docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md",
+        "scripts/set_orchestration_mode.sh",
+        "docs/ops/TMUX_CRON_OPERATIONS.md"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-02-28T05:30:55Z",
+      "created_at_local": "2026-02-28 00:30:55 EST",
+      "owner_note": "Red\u00e9marrage contr\u00f4l\u00e9 en mode s\u00e9quentiel (dev) + alignement docs migration codex (qwen->codex, baseline active r\u00e9elle) avant reprise continue",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:1",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:1"
+    },
+    {
+      "intent_id": "INTENT_ADMINAPP_CODEX_20260228T151232Z",
+      "role": "adminapp-codex",
+      "scope": "docs_runtime_sync",
+      "planned_files": [
+        "docs/operations/ops/CRON_STRATEGY.md",
+        "docs/operations/ops/TMUX_CRON_OPERATIONS.md",
+        "docs/operations/ops/ADMIN_TEAM_CRON_PLAYBOOK.md",
+        "docs/operations/ops/ADMIN_CODEX_BASELINE.md"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-02-28T15:12:32Z",
+      "created_at_local": "2026-02-28 10:12:32 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:2",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:2"
+    }
+  ]
+}

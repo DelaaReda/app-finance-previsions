@@ -1,0 +1,35 @@
+proof_id: "PRF-BATCH-02-BATCH-02-INTEGRATION-20260227T105109Z-655"
+stream_id: "BATCH-02"
+task_id: "BATCH-02-INTEGRATION"
+role: "integrator"
+produced_at_utc: "2026-02-27T10:51:09Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/integrator.last_contract"
+execution:
+  commands:
+    - cmd: "curl /api/health,/api/stocks/prices?ticker=AAPL,MSFT,/api/news/feed + curl frontend index + python validator"
+      rc: "0"
+      started_at_utc: "2026-02-27T10:51:09Z"
+      ended_at_utc: "2026-02-27T10:51:09Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "integration_smoke:PASS(backend_api+frontend_http)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/integrator.last_contract"
+  artifacts:
+    - "/tmp/integration_health.json+/tmp/integration_stocks.json+/tmp/integration_news.json"
+handoff:
+  to_role: "qa"
+  handoff_id: "HO-20260227105109-942"
+signoff:
+  producer_agent: "integrator"
+  reviewer_agent: "main"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH02_INTEGRATION_FORCE_TRANSITION_20260227A"
+  review_ref: "main_manual_review_2026-02-27T10:49Z"
+  note: "integration smoke passed across backend APIs and frontend serving"

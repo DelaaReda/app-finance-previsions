@@ -1,0 +1,1 @@
+../operations/QWEN_CLI_TMUX_INSPECTION.md

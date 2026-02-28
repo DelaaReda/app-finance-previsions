@@ -1,0 +1,9 @@
+version: 1
+domain: market_data
+owners:
+  - data_analyst
+  - backend_engineer
+invariants:
+  - source_timestamp_required
+  - normalization_schema_required
+  - freshness_computable

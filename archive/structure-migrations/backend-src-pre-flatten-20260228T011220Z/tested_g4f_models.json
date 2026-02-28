@@ -1,0 +1,1343 @@
+[
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 432.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 450.4,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-12-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 517.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 517.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 424.5,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 422.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r7b-12-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 396.4,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-a",
+    "task": "text",
+    "ok": true,
+    "ms": 458.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "DeepInfra",
+    "model": "black-forest-labs/FLUX-2-klein-9b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "flux-dev",
+    "task": "text",
+    "ok": false,
+    "ms": 199.2,
+    "answer": "",
+    "error": "You have exceeded your GPU quota (75s requested vs. 25s left). Try again in 23:35:30"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 543.1,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "rnj-1",
+    "task": "text",
+    "ok": false,
+    "ms": 1424.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "gemma3-270m:free",
+    "task": "text",
+    "ok": false,
+    "ms": 1432.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "step-3.5-flash:free",
+    "task": "text",
+    "ok": false,
+    "ms": 1435.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 629.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 1648.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 905.6,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "coral",
+    "task": "text",
+    "ok": false,
+    "ms": 463.0,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "ballad",
+    "task": "text",
+    "ok": false,
+    "ms": 627.3,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "echo",
+    "task": "text",
+    "ok": false,
+    "ms": 295.5,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "cowboy",
+    "task": "text",
+    "ok": false,
+    "ms": 692.4,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "alloy",
+    "task": "text",
+    "ok": false,
+    "ms": 238.1,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "calm",
+    "task": "text",
+    "ok": false,
+    "ms": 234.8,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "ash",
+    "task": "text",
+    "ok": false,
+    "ms": 283.5,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "noir_detective",
+    "task": "text",
+    "ok": false,
+    "ms": 284.2,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "patient_teacher",
+    "task": "text",
+    "ok": false,
+    "ms": 221.8,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "friendly",
+    "task": "text",
+    "ok": false,
+    "ms": 280.0,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-30b",
+    "task": "text",
+    "ok": false,
+    "ms": 1008.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "scientific_style",
+    "task": "text",
+    "ok": false,
+    "ms": 243.0,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "fable",
+    "task": "text",
+    "ok": false,
+    "ms": 223.9,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "onyx",
+    "task": "text",
+    "ok": false,
+    "ms": 257.1,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "nova",
+    "task": "text",
+    "ok": false,
+    "ms": 278.1,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "sage",
+    "task": "text",
+    "ok": false,
+    "ms": 288.7,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "shimmer",
+    "task": "text",
+    "ok": false,
+    "ms": 343.7,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "verse",
+    "task": "text",
+    "ok": false,
+    "ms": 559.1,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "o3",
+    "task": "text",
+    "ok": false,
+    "ms": 2671.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_pro",
+    "task": "text",
+    "ok": false,
+    "ms": 2679.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude45sonnet",
+    "task": "text",
+    "ok": false,
+    "ms": 2905.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude2",
+    "task": "text",
+    "ok": false,
+    "ms": 2642.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude40opus",
+    "task": "text",
+    "ok": false,
+    "ms": 2371.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude40opusthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 2841.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "o3pro",
+    "task": "text",
+    "ok": false,
+    "ms": 2921.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "grok",
+    "task": "text",
+    "ok": false,
+    "ms": 2664.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_pro_upgraded",
+    "task": "text",
+    "ok": false,
+    "ms": 214.9,
+    "answer": "",
+    "error": "Response 429: {'status': 'failed', 'error_code': 'RATE_LIMITED', '_response_type': 'RATE_LIMITED', 'text': 'Query rate limit exceeded. Please try Perplexity again later.'}"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude41opusthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 3659.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "nomnom",
+    "task": "text",
+    "ok": false,
+    "ms": 1106.1,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai-large",
+    "task": "text",
+    "ok": false,
+    "ms": 1317.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai",
+    "task": "text",
+    "ok": false,
+    "ms": 1319.0,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "grok",
+    "task": "text",
+    "ok": false,
+    "ms": 3.0,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 4.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "mistral",
+    "task": "text",
+    "ok": false,
+    "ms": 1301.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "polly",
+    "task": "text",
+    "ok": false,
+    "ms": 5.0,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude",
+    "task": "text",
+    "ok": false,
+    "ms": 2.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude-large",
+    "task": "text",
+    "ok": false,
+    "ms": 2.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-safety",
+    "task": "text",
+    "ok": false,
+    "ms": 1.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-character",
+    "task": "text",
+    "ok": false,
+    "ms": 6.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "nova-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 1.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "midijourney",
+    "task": "text",
+    "ok": false,
+    "ms": 2.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "perplexity-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 2.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "deepseek",
+    "task": "text",
+    "ok": false,
+    "ms": 1.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "kimi",
+    "task": "text",
+    "ok": false,
+    "ms": 2.6,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "wan",
+    "task": "text",
+    "ok": false,
+    "ms": 2.9,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "grok-video",
+    "task": "text",
+    "ok": false,
+    "ms": 3.0,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "ltx-2",
+    "task": "text",
+    "ok": false,
+    "ms": 3.4,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "klein-large",
+    "task": "text",
+    "ok": false,
+    "ms": 1.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "veo",
+    "task": "text",
+    "ok": false,
+    "ms": 1.7,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "klein",
+    "task": "text",
+    "ok": false,
+    "ms": 2.7,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 1357.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-coder",
+    "task": "text",
+    "ok": false,
+    "ms": 1362.3,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "perplexity-reasoning",
+    "task": "text",
+    "ok": false,
+    "ms": 1350.7,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "glm",
+    "task": "text",
+    "ok": false,
+    "ms": 431.5,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude40sonnet_research",
+    "task": "text",
+    "ok": false,
+    "ms": 1817.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-max-latest",
+    "task": "text",
+    "ok": false,
+    "ms": 1008.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-plus-2025-01-25",
+    "task": "text",
+    "ok": false,
+    "ms": 1007.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-235b-a22b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.9,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen2.5-coder-32b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-coder-30b-a3b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1010.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen2.5-vl-32b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-plus-2025-09-11",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-coder-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.4,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Yqcloud",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-v3",
+    "task": "text",
+    "ok": false,
+    "ms": 0.7,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "default",
+    "task": "text",
+    "ok": false,
+    "ms": 1258.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "llama-4-scout",
+    "task": "text",
+    "ok": true,
+    "ms": 337.2,
+    "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b",
+    "task": "text",
+    "ok": true,
+    "ms": 405.1,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-a",
+    "task": "text",
+    "ok": true,
+    "ms": 423.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-2.5-coder-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "mistral-small-3.1-24b",
+    "task": "text",
+    "ok": false,
+    "ms": 1224.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sonar",
+    "task": "text",
+    "ok": false,
+    "ms": 0.5,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "r1-1776",
+    "task": "text",
+    "ok": false,
+    "ms": 0.4,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus",
+    "task": "text",
+    "ok": true,
+    "ms": 1248.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-oss-120b",
+    "task": "text",
+    "ok": false,
+    "ms": 1992.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sonar-reasoning",
+    "task": "text",
+    "ok": false,
+    "ms": 377.1,
+    "answer": "",
+    "error": "No Yupp accounts configured. Set YUPP_API_KEY environment variable."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r",
+    "task": "text",
+    "ok": false,
+    "ms": 1506.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1266.9,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "midijourney",
+    "task": "text",
+    "ok": false,
+    "ms": 0.4,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "kimi-k2",
+    "task": "text",
+    "ok": true,
+    "ms": 376.7,
+    "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-r1",
+    "task": "text",
+    "ok": false,
+    "ms": 1261.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-haiku-4-5",
+    "task": "text",
+    "ok": false,
+    "ms": 0.5,
+    "answer": "",
+    "error": "No Yupp accounts configured. Set YUPP_API_KEY environment variable."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "chickytutor",
+    "task": "text",
+    "ok": false,
+    "ms": 0.2,
+    "answer": "",
+    "error": "'openai-audio'"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-sonnet-4-5",
+    "task": "text",
+    "ok": false,
+    "ms": 0.5,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1253.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "mistral-small",
+    "task": "text",
+    "ok": false,
+    "ms": 346.1,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5",
+    "task": "text",
+    "ok": false,
+    "ms": 213.9,
+    "answer": "",
+    "error": "No Yupp accounts configured. Set YUPP_API_KEY environment variable."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "openai",
+    "task": "text",
+    "ok": false,
+    "ms": 398.2,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder",
+    "task": "text",
+    "ok": true,
+    "ms": 550.1,
+    "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "flux-kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sdxl-turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek",
+    "task": "text",
+    "ok": false,
+    "ms": 1251.8,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 1007.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.2,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5-thinking",
+    "task": "text",
+    "ok": false,
+    "ms": 2368.1,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1250.5,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-max",
+    "task": "text",
+    "ok": false,
+    "ms": 1001.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-2.5-vl-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1010.6,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "grok-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 3862.9,
+    "answer": "",
+    "error": "AnyProvider: Model grok-fast not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "amazon-nova-micro",
+    "task": "text",
+    "ok": false,
+    "ms": 3508.6,
+    "answer": "",
+    "error": "AnyProvider: Model amazon-nova-micro not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "glm-4.7",
+    "task": "text",
+    "ok": false,
+    "ms": 3322.0,
+    "answer": "",
+    "error": "AnyProvider: Model glm-4.7 not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-opus-4.5",
+    "task": "text",
+    "ok": false,
+    "ms": 3557.7,
+    "answer": "",
+    "error": "AnyProvider: Model claude-opus-4.5 not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5.2",
+    "task": "text",
+    "ok": false,
+    "ms": 4212.7,
+    "answer": "",
+    "error": "AnyProvider: Model gpt-5.2 not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-v3.2-thinking",
+    "task": "text",
+    "ok": false,
+    "ms": 1.7,
+    "answer": "",
+    "error": "AnyProvider: Model deepseek-v3.2-thinking not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "mistral-small-creative",
+    "task": "text",
+    "ok": false,
+    "ms": 0.4,
+    "answer": "",
+    "error": "AnyProvider: Model mistral-small-creative not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-235b-a22b",
+    "task": "text",
+    "ok": false,
+    "ms": 1155.0,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "pplx_pro",
+    "task": "text",
+    "ok": false,
+    "ms": 0.5,
+    "answer": "",
+    "error": "AnyProvider: Model pplx_pro not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "perplexity",
+    "task": "text",
+    "ok": false,
+    "ms": 0.5,
+    "answer": "",
+    "error": "AnyProvider: Model perplexity not found in any provider."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-a25",
+    "task": "text",
+    "ok": true,
+    "ms": 371.2,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r24",
+    "task": "text",
+    "ok": true,
+    "ms": 394.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b24",
+    "task": "text",
+    "ok": true,
+    "ms": 434.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus24",
+    "task": "text",
+    "ok": true,
+    "ms": 464.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b-arabic25",
+    "task": "text",
+    "ok": true,
+    "ms": 511.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.7,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "glm-4.5",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.3,
+    "answer": "",
+    "error": ""
+  },
+  {
+    "provider": "BlackForestLabs_Flux1Dev",
+    "model": "flux",
+    "task": "text",
+    "ok": false,
+    "ms": 22957.0,
+    "answer": "",
+    "error": ""
+  }
+]

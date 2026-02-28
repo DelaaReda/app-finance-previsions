@@ -1,50 +1,69 @@
-# Finance Copilot – Guide rapide (backend + frontend statique)
+# Finance Copilot – Guide rapide (Architecture 2026)
+
+## 🏗️ Nouvelle Architecture (Post-Migration Feb 2026)
+
+**Structure cible:**
+- Backend: `apps/api/src/` (ex: `copilot-app/backend/`)
+- Frontend: `apps/web/src/` (ex: `copilot-app/frontend/`)
+- Runtime: `apps/api/runtime/` (data, cache, logs)
+- Platform: `platform/` (config, automation, policies)
+- Packages: `packages/` (contracts, sdk, ui-kit)
+- Archive: `archive/` (ancienne structure)
+
+**Documentation:**
+- Architecture: `docs/architecture/AGENT_ONBOARDING.md`
+- Workspace Index: `docs/ops/AGENT_WORKSPACE_INDEX.md`
+- Migration Summary: `docs/ops/MIGRATION_SUMMARY.md`
+
+---
 
 ## Démarrer / arrêter
-- (Re)lancer backend + jobs + frontend statique :  
+- (Re)lancer backend + jobs + frontend statique :
   ```bash
   ./finance-copilot.sh restart
   ```
-- Arrêter :  
+- Arrêter :
   ```bash
   ./finance-copilot.sh stop
   ```
 
 ## URLs
-- Backend : http://localhost:8050  
+- Backend : http://localhost:8050
   Docs : http://localhost:8050/docs
-- Frontend statique : http://localhost:5173 (servi depuis `frontend/app`)
+- Frontend statique : http://localhost:5173 (servi depuis `apps/web/src/domains/forecasts/pages`)
 
 ## Endpoints utiles (curl)
-- Santé :  
+- Santé :
   `curl -s http://localhost:8050/api/health`
-- Judge (LLM) :  
+- Judge (LLM) :
   `curl -s 'http://localhost:8050/api/judge?limit=1' | jq`
 
 ## Logs
-- Backend : `copilot-app/backend/api.log`  
+- Backend : `apps/api/runtime/api.log`
   (Inclut les requêtes/réponses LLM : `judge_llm_request`, `judge_llm_raw_response`).
 - Frontend statique : `/tmp/frontend.log`
 
 ## Structure active
-- Code backend : `copilot-app/backend/src/...` (API FastAPI, services, analytics).
-- Entrée API unique : `copilot-app/backend/src/api/main.py` (lancement via `copilot-app/backend/run_api.py`).
-- Jobs (ingest/news/macro/judge_enrich) : `copilot-app/backend/jobs/` (lancés par le script).
-- Données (snapshots) : `copilot-app/backend/data/`.
-- Frontend statique : `copilot-app/frontend/app` (fichiers HTML/CSS/JS, pas de build Vite).
-- Anciennes variantes archivées : `copilot-app/backend/legacy-archive/`.
+- Code backend : `apps/api/src/domains/...` (API FastAPI, services, analytics).
+- Plan de structure pour agents : `docs/architecture/AGENT_ONBOARDING.md` et `docs/ops/AGENT_WORKSPACE_INDEX.md`.
+- Entrée API unique : `apps/api/src/platform/main.py` (lancement via `apps/api/src/platform/run_api.py`).
+- Jobs (ingest/news/macro/judge_enrich) : `apps/api/src/platform/legacy/jobs/` (lancés par le script).
+- Données (snapshots) : `apps/api/runtime/data/` (alias `data/` et `apps/api/src/data`).
+- Cache runtime : `apps/api/runtime/cache/` (alias `cache/`).
+- Frontend statique : `apps/web/src/domains/forecasts` (fichiers HTML/CSS/JS, pas de build Vite).
+- Anciennes variantes archivées : `archive/`.
 
 ## Référence bonnes pratiques (exemple)
-- Standard endpoints/API (contrat stable, cache, fallback, tests):  
+- Standard endpoints/API (contrat stable, cache, fallback, tests):
   `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
-- Gouvernance d'exécution globale (gates/process):  
+- Gouvernance d'exécution globale (gates/process):
   `docs/ops/ENGINEERING_PLAYBOOK.md`
 
 ## Dépendances / env
-- Variables : `copilot-app/backend/.env` (OPEN_ROUTER_API_KEY, clés FRED, etc.).
+- Variables : `apps/api/src/.env` (OPEN_ROUTER_API_KEY, clés FRED, etc.).
 - Installer manquants (ex : feedparser, duckdb) :
   ```bash
-  cd copilot-app/backend
+  cd apps/api/src
   .venv/bin/pip install feedparser duckdb
   ```
 
@@ -56,5 +75,6 @@
   - avec checks live : `./scripts/backend_regression_gate.sh`
 
 ## Notes
-- Pas de build frontend : le script sert directement `frontend/app` via `python -m http.server 5173`.
-- Les jobs s’exécutent au démarrage (news, sentiment, judge_enrich, macro).***
+- Pas de build frontend : le script sert directement `apps/web/src` via `python -m http.server 5173`.
+- Les jobs s'exécutent au démarrage (news, sentiment, judge_enrich, macro).
+- **Migration Feb 2026:** Architecture refactorisée vers domain-driven design. Voir `docs/ops/MIGRATION_SUMMARY.md`.

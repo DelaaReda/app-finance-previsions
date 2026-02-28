@@ -1,0 +1,1 @@
+/home/venom/shared/analyse-financiere/platform/automation/migrate_to_target_architecture.py
