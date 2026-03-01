@@ -1,16 +1,16 @@
 {
-  "updated_at_utc": "2026-02-28T20:25:58Z",
+  "updated_at_utc": "2026-03-01T04:18:07Z",
   "roles": {
     "frontend_engineer": {
-      "ts_utc": "2026-02-28T16:20:12Z",
+      "ts_utc": "2026-03-01T04:12:36Z",
       "role": "frontend_engineer",
       "source": "fallback_checkpoint",
       "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
+      "delta": "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "CONTINUE_FRONTEND_FROM_TASKS",
-      "next": "maintenir la prochaine action frontend executable avec preuve attendue",
+      "next": "executer action READY: BATCH-03:DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
       "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
       "issues": "signal_unparseable",
       "suggestions": "stabiliser_prompt_et_tmux_capture",
@@ -22,8 +22,8 @@
       "channels_read": "runtime_context",
       "impact_assessment": "low",
       "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "queue_version": "queue_1772309428_6e0f4cb2f2c0",
+      "workboard_version": "workboard_1772311440_19caf12fa7a3"
     },
     "infra_engineer": {
       "ts_utc": "2026-02-28T20:25:58Z",
@@ -122,28 +122,28 @@
       "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "planner": {
-      "ts_utc": "2026-02-28T16:20:01Z",
+      "ts_utc": "2026-03-01T04:18:07Z",
       "role": "planner",
-      "source": "fallback_checkpoint",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CONTINUE_PLANNER_FROM_PRIORITY_QUEUE",
-      "next": "v\u00e9rifier READY/BLOCKED puis prioriser une action unique",
-      "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
-      "issues": "signal_unparseable",
-      "suggestions": "stabiliser_prompt_et_tmux_capture",
+      "source": "codex_exec_fallback",
+      "status": "BLOCKED",
+      "delta": "ROLE_OUTPUT_NOT_SPECIFIC",
+      "verdict": "BLOCKED",
+      "blocker_id": "READ_ONLY_TASK_UPDATE_INVALID",
+      "next_action_unique": "FIX_ROLE_CONTRACT_PLANNER_20260301T041807Z",
+      "next": "regenerer une sortie avec preuve explicite li\u00e9e au role et artefact concret",
+      "exec_report": "contract_guard_read_only_task_update_invalid",
+      "issues": "read_only_task_update_invalid",
+      "suggestions": "regenerer_sortie_role_specifique_avec_preuve_et_cmd",
       "stream_id": "none",
       "task_id": "none",
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
       "channels_read": "runtime_context",
-      "impact_assessment": "low",
-      "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "impact_assessment": "medium",
+      "impact_action": "regenerate_contract",
+      "queue_version": "",
+      "workboard_version": ""
     },
     "analyst": {
       "ts_utc": "2026-02-28T20:25:58Z",
@@ -194,28 +194,28 @@
       "workboard_version": ""
     },
     "data_analyst": {
-      "ts_utc": "2026-02-28T16:21:26Z",
+      "ts_utc": "2026-03-01T04:15:16Z",
       "role": "data_analyst",
-      "source": "fallback_checkpoint",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CONTINUE_DATA_ANALYST_FROM_DATASET",
-      "next": "maintenir la prochaine action data exploitable pour produit/qa",
-      "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
-      "issues": "signal_unparseable",
-      "suggestions": "stabiliser_prompt_et_tmux_capture",
+      "source": "rate_limit_gate_codex_exec_fallback",
+      "status": "BLOCKED",
+      "delta": "ROLE_OUTPUT_NOT_SPECIFIC",
+      "verdict": "BLOCKED",
+      "blocker_id": "ROLE_EXEC_EVIDENCE_MISSING",
+      "next_action_unique": "FIX_ROLE_CONTRACT_DATA_ANALYST_20260301T041515Z",
+      "next": "regenerer une sortie avec preuve explicite li\u00e9e au role et artefact concret",
+      "exec_report": "contract_guard_role_exec_evidence_missing",
+      "issues": "role_exec_evidence_missing",
+      "suggestions": "regenerer_sortie_role_specifique_avec_preuve_et_cmd",
       "stream_id": "none",
       "task_id": "none",
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
       "channels_read": "runtime_context",
-      "impact_assessment": "low",
-      "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "impact_assessment": "medium",
+      "impact_action": "regenerate_contract",
+      "queue_version": "",
+      "workboard_version": ""
     },
     "tester": {
       "ts_utc": "2026-02-28T20:24:24Z",
@@ -336,17 +336,19 @@
   },
   "summary": {
     "roles_total": 14,
-    "fresh_roles_total": 3,
-    "stale_context_open": 11,
-    "issues_open": 3,
+    "fresh_roles_total": 5,
+    "stale_context_open": 9,
+    "issues_open": 5,
     "process_issues_open": 0,
-    "delivery_gaps_open": 3,
+    "delivery_gaps_open": 5,
     "delivery_probe_loops_open": 0,
     "flow_gaps_open": 2,
-    "blockers_open": 1,
+    "blockers_open": 3,
     "tool_skill_requests_open": 0,
     "issue_roles": [
       "architect",
+      "data_analyst",
+      "planner",
       "po",
       "scrum_master"
     ],
@@ -358,26 +360,30 @@
     ],
     "delivery_gap_roles": [
       "architect",
+      "data_analyst",
+      "planner",
       "po",
       "scrum_master"
     ],
     "blocker_roles": [
-      "architect"
+      "architect",
+      "data_analyst",
+      "planner"
     ],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
       "analyst",
       "backend_engineer",
       "clawsentinel",
-      "data_analyst",
       "dev",
       "frontend_engineer",
       "infra_engineer",
-      "integrator"
+      "integrator",
+      "qa"
     ],
     "context_versions": {
       "queue_version": "queue_1772309428_5903754b6142",
-      "workboard_version": "workboard_1772309428_9ffbb592b0da"
+      "workboard_version": "workboard_1772338498_4181ba257e43"
     }
   }
 }

@@ -13,6 +13,30 @@ const cache = {
   TTL: 120000 // 2 minutes
 };
 
+function getResponseData(payload) {
+  if (!payload) return {};
+  if (typeof payload === 'object' && payload.data !== undefined) return payload.data || {};
+  return payload;
+}
+
+function extractArray(payload, keys) {
+  if (!payload || typeof payload !== 'object') return [];
+  for (const key of keys) {
+    const value = payload[key];
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function extractObject(payload, keys) {
+  if (!payload || typeof payload !== 'object') return {};
+  for (const key of keys) {
+    const value = payload[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  }
+  return {};
+}
+
 async function fetchWithCache(endpoint, key) {
   const now = Date.now();
   if (cache.data[key] && (now - cache.timestamps[key]) < cache.TTL) {
@@ -32,30 +56,59 @@ async function fetchWithCache(endpoint, key) {
 
 // ─── Data fetchers ────────────────────────────────────────────────────────────
 
+function normalizeNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 async function getNewsFeed(limit) {
   if (!limit) limit = 20;
-  const data = await fetchWithCache('/news/feed?limit=' + limit, 'news');
-  return (data && data.data && (data.data.items || data.data.articles)) || [];
+  const payload = getResponseData(await fetchWithCache('/news/feed?limit=' + limit, 'news'));
+  return extractArray(payload, ['articles', 'items', 'news']);
 }
 
 async function getForecasts(limit) {
   if (!limit) limit = 20;
-  const data = await fetchWithCache('/forecasts?limit=' + limit, 'forecasts');
-  return (data && data.data && (data.data.rows || data.data.forecasts)) || [];
+  const payload = getResponseData(await fetchWithCache('/forecasts?limit=' + limit, 'forecasts'));
+  return extractArray(payload, ['rows', 'forecasts', 'data']) || [];
 }
 
 async function getStockPrices() {
-  const data = await fetchWithCache('/stocks/prices', 'stocks');
-  return (data && data.data && data.data.tickers) || {};
+  const payload = getResponseData(await fetchWithCache('/stocks/prices?tickers=NVDA,META,AAPL,MSFT,GOOGL', 'stocks'));
+  return extractObject(payload, ['prices', 'tickers', 'data']) || {};
 }
 
 async function getTopMovers() {
-  const data = await fetchWithCache('/stocks/top-movers', 'movers');
-  return (data && data.data) || null;
+  const payload = getResponseData(await fetchWithCache('/stocks/top-legacy?limit=10', 'movers'));
+  return payload;
 }
 
 async function getHealth() {
   return await fetchWithCache('/health', 'health');
+}
+
+async function getDashboardKPIs() {
+  const payload = await fetchWithCache('/dashboard/kpis', 'kpis');
+  if (!payload) return null;
+  const data = payload.data || payload;
+  if (!data || typeof data !== 'object') return null;
+  return {
+    ok: payload.ok ?? true,
+    data,
+    freshness: payload.freshness || data.generated_at || data.generatedAt,
+    source: data.source || payload.source || ['dashboard-kpis']
+  };
+}
+
+async function getPortfolioSummary() {
+  const payload = await fetchWithCache('/dashboard/portfolio-summary', 'portfolio-summary');
+  if (!payload) return null;
+  return {
+    ok: payload.ok ?? true,
+    data: payload.data || {},
+    freshness: payload.freshness || payload.generated_at || payload.data?.generated_at || new Date().toISOString(),
+    source: payload.data?.source || ['portfolio-summary']
+  };
 }
 
 async function getJudgeAnalysis(limit) {
@@ -134,7 +187,7 @@ async function populateWindowGlobals() {
     const rawNews = await getNewsFeed(20);
     if (rawNews.length > 0) {
       window.newsItems = rawNews.map(transformNewsItem);
-      console.log('[API] ✅ ' + window.newsItems.length + ' news loaded');
+      console.log('[API] ✅ ' + window.newsItems.length + ' news chargées depuis l\\'API');
     }
 
     // Forecasts
@@ -164,6 +217,20 @@ async function populateWindowGlobals() {
       }).sort((a, b) => Math.abs(b.change30d) - Math.abs(a.change30d)).slice(0, 8);
       window.topMovers = movers;
       console.log('[API] ✅ ' + tickers.length + ' stocks, top movers: ' + movers.slice(0,3).map(m => m.ticker + ' (' + (m.change30d > 0 ? '+' : '') + m.change30d + '% 30d)').join(', '));
+    }
+
+    // Portfolio KPIs
+    const kpiPayload = await getDashboardKPIs();
+    if (kpiPayload) {
+      window.liveKpis = kpiPayload.data;
+      window.liveKpisFreshness = kpiPayload.freshness;
+    }
+
+    // Portfolio summary (fallback source for portfolio value + deltas)
+    const portfolioSummary = await getPortfolioSummary();
+    if (portfolioSummary && portfolioSummary.data) {
+      window.livePortfolioSummary = portfolioSummary.data;
+      window.livePortfolioSummaryFreshness = portfolioSummary.freshness;
     }
 
     // Health
@@ -196,7 +263,13 @@ async function populateWindowGlobals() {
       detail: {
         data: {
           newsItems: window.newsItems || [],
-          forecasts: window.liveForecasts || []
+          forecasts: window.liveForecasts || [],
+          topMovers: window.topMovers || [],
+          stocks: window.liveStocks || {},
+          kpis: window.liveKpis || null,
+          portfolioSummary: window.livePortfolioSummary || null,
+          stockSummaryFreshness: window.livePortfolioSummaryFreshness || null,
+          kpiFreshness: window.liveKpisFreshness || null
         },
         generatedAt: new Date().toISOString(),
         sources: ['api-connector'],
@@ -235,6 +308,32 @@ window.FinanceAPI = {
   askCopilot,
   startAutoRefresh,
   getCacheStats: () => ({ keys: Object.keys(cache.data), TTL: cache.TTL })
+};
+
+window.getLiveDashboardData = () => ({
+  data: {
+    newsItems: window.newsItems || [],
+    forecasts: window.liveForecasts || [],
+    topMovers: window.topMovers || [],
+    stocks: window.liveStocks || {},
+    kpis: window.liveKpis || null,
+    portfolioSummary: window.livePortfolioSummary || null,
+    llmJudgeData: window.llmJudgeData || null
+  },
+  generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
+  sources: ['api-connector'],
+  modelVersions: ['live'],
+  warnings: ['live-connector'],
+  freshness: { lastFetchedAt: Date.now(), ttlMs: cache.TTL }
+});
+
+window.refreshLiveData = async () => {
+  await populateWindowGlobals();
+  return window.getLiveDashboardData();
+};
+
+window.initLiveData = async () => {
+  await populateWindowGlobals();
 };
 
 // Run on load

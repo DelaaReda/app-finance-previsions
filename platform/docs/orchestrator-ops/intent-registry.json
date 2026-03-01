@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAtUtc": "2026-02-28T15:12:32Z",
+  "updatedAtUtc": "2026-03-01T04:18:00Z",
   "intents": [
     {
       "intent_id": "INTENT_ADMINAPP_CODEX_20260228T053055Z",
@@ -38,6 +38,54 @@
       "owner_note": "",
       "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:2",
       "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:2"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T040945Z",
+      "role": "frontend_engineer",
+      "scope": "BATCH-03-FRONTEND",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/contracts/mockData.js",
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+      ],
+      "eta_minutes": 40,
+      "status": "active",
+      "created_at_utc": "2026-03-01T04:09:45Z",
+      "created_at_local": "2026-02-28 23:09:45 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:3",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:3"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260301T041452Z",
+      "role": "data_analyst",
+      "scope": "data-task-BATCH-03-DATA",
+      "planned_files": [
+        "apps/api/src"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-01T04:14:52Z",
+      "created_at_local": "2026-02-28 23:14:52 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:4",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:4"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260301T041800Z",
+      "role": "planner",
+      "scope": "workboard_progress",
+      "planned_files": [
+        "docs/planning/WORKSTATE.md",
+        "docs/planning/tasks.md"
+      ],
+      "eta_minutes": 25,
+      "status": "active",
+      "created_at_utc": "2026-03-01T04:18:00Z",
+      "created_at_local": "2026-02-28 23:18:00 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:5",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:5"
     }
   ]
 }

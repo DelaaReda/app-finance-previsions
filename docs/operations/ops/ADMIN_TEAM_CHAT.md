@@ -1899,3 +1899,4 @@ Les rapports suivants ont été publiés dans l'ancien `docs/ops/ADMIN_TEAM_CHAT
 - Backend: ✅ UP, 460 news, 19 forecasts, stocks data disponible
 - Frontend: Était en 100% mock data - maintenant connecté via apiConnector.js
 - Planner loop: Résolu via BATCH-03 avec slot planner dans workboard
+- [2026-02-28 22:50:21 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=3207 gateway=active kick=kicked=0 triage=issue=ROLE_CONTRACT_BLOCKERS owner=admin-agents next=prioriser_resolution_blockers_roles_et_recheck 

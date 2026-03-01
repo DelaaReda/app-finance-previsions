@@ -39,5 +39,6 @@
 - [docs/ops/3DAY_MEMORY_DEPLOYMENT_STATUS.md](/home/venom/analyse-financiere/docs/ops/3DAY_MEMORY_DEPLOYMENT_STATUS.md)
 - [docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md](/home/venom/analyse-financiere/docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md)
 - [docs/orchestrator-ops/](/home/venom/analyse-financiere/docs/orchestrator-ops/)
+- [docs/ops/OPENCLAW_BROWSER_QA.md](/home/venom/analyse-financiere/docs/ops/OPENCLAW_BROWSER_QA.md)
 
 *Legacy: [docs/operations/](/home/venom/analyse-financiere/docs/operations/) — archive for reference (see docs/ops for current docs)*

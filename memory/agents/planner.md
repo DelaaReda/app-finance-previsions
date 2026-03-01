@@ -158,3 +158,61 @@ Tu tournais en boucle depuis Feb 26 parce que le workboard n'avait pas de slot p
 
 ### Actifs prioritaires à couvrir
 Or (GLD), Argent (SLV), IA stocks (NVDA, QQQ), Tesla, S&P500 (SPY), Énergie (XLE), BTC
+- [2026-02-28 21:53:50 EST] role=planner source=rate_limit_gate_cache status=? verdict=? delta=? blocker=NONE stream_id=none task_id=none next_action_unique=? directive=none/none exec_report=none issues=none suggestions=none
+- [2026-02-28 21:53:57 EST] role=planner source=rate_limit_gate_cache status=? verdict=? delta=? blocker=NONE stream_id=none task_id=none next_action_unique=? directive=none/none exec_report=none issues=none suggestions=none
+- [2026-02-28 21:54:00 EST] role=planner source=rate_limit_gate_cache status=? verdict=? delta=? blocker=NONE stream_id=none task_id=none next_action_unique=? directive=none/none exec_report=none issues=none suggestions=none
+- [2026-02-28 21:54:05 EST] role=planner source=rate_limit_gate_cache status=BLOCKED verdict=BLOCKED delta=ROLE_OUTPUT_NOT_SPECIFIC blocker=ROLE_ARTIFACT_MISSING stream_id=none task_id=none next_action_unique=FIX_ROLE_CONTRACT_PLANNER_20260301T025405Z directive=none/none exec_report=contract_guard_role_artifact_missing issues=role_artifact_missing suggestions=regenerer_sortie_role_specifique_avec_preuve_et_cmd
+- [2026-02-28 21:54:10 EST] role=planner source=rate_limit_gate_cache status=BLOCKED verdict=BLOCKED delta=BLOCKED blocker=AGENT_RATE_LIMIT_QWEN stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_QWEN_SKIP_planner_1772333649 directive=none/none exec_report=skip_role_tick_due_to_rate_limit issues=rate_limit_detected suggestions=attendre le déblocage du quota avant nouveau lancement
+- [2026-02-28 21:54:12 EST] role=planner source=rate_limit_gate_probe status=BLOCKED verdict=BLOCKED delta=BLOCKED blocker=AGENT_RATE_LIMIT_QWEN stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_QWEN_SKIP_planner_1772333652 directive=none/none exec_report=skip_role_tick_due_to_rate_limit issues=rate_limit_detected suggestions=attendre le déblocage du quota avant nouveau lancement
+- [2026-02-28 21:54:16 EST] role=planner source=rate_limit_gate_probe status=BLOCKED verdict=BLOCKED delta=BLOCKED blocker=AGENT_RATE_LIMIT_CODEX stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_CODEX_SKIP_planner_1772333655 directive=none/none exec_report=skip_role_tick_due_to_rate_limit issues=rate_limit_detected suggestions=attendre le déblocage du quota avant nouveau lancement
+- [2026-02-28 21:54:55 EST] role=planner source=fallback_checkpoint status=BLOCKED verdict=BLOCKED delta=ROLE_OUTPUT_NOT_SPECIFIC blocker=PLANNER_TASK_ID_MISSING stream_id=none task_id=none next_action_unique=FIX_ROLE_CONTRACT_PLANNER_20260301T025455Z directive=none/none exec_report=contract_guard_planner_task_id_missing issues=planner_task_id_missing suggestions=regenerer_sortie_role_specifique_avec_preuve_et_cmd
+
+## [2026-03-01 ADMIN-CLAUDE] NOUVEAU SYSTÈME D'ORCHESTRATION
+
+**Changement important:** Les crons agents fonctionnent maintenant via le système cron directement.
+
+**Outils à utiliser:**
+1. `bash scripts/fc_health_check.sh` — état complet du système
+2. `openclaw browser navigate/screenshot/errors/console` — tester l'UI
+3. `bash scripts/fc_agent_tick.sh <role>` — déclencher manuellement
+4. **Lire:** `docs/ops/AGENT_TOOLS_GUIDE.md` — guide complet
+
+**BATCH-03 tâche critique:** Corriger `apps/api/src/platform/legacy/jobs/forecasts_simple.py`
+Le `change_percent=0.0` dans `/api/stocks/top` → confidence bloquée 50-55%
+Fix: calculer depuis l'historique dans `apps/api/src/platform/legacy/jobs/forecasts_simple.py` ligne ~95
+
+**Valider avec:**
+```bash
+curl http://localhost:8050/api/stocks/top | jq '.data.stocks[0].change_percent'
+# Doit être != 0.0
+openclaw browser errors  # Doit être vide
+```
+- [2026-02-28 23:18:07 EST] role=planner source=codex_exec_fallback status=BLOCKED verdict=BLOCKED delta=ROLE_OUTPUT_NOT_SPECIFIC blocker=READ_ONLY_TASK_UPDATE_INVALID stream_id=none task_id=none next_action_unique=FIX_ROLE_CONTRACT_PLANNER_20260301T041807Z directive=none/none exec_report=contract_guard_read_only_task_update_invalid issues=read_only_task_update_invalid suggestions=regenerer_sortie_role_specifique_avec_preuve_et_cmd
+
+---
+## 🔄 RESET PROPRE — 2026-03-01 (admin)
+
+**Situation actuelle:**
+- BATCH-03 est IN_PROGRESS mais agents coincés (signal_unparseable en boucle)
+- CSS: OK, App UI: OK, API live data: OK (20 news, 20 forecasts, 5 stocks)
+- Problème restant: forecasts confidence stuck at 50-55% (change_percent=0.0 dans forecasts_simple.py)
+
+**Tes prochaines actions (dans l'ordre):**
+
+1. **Valider BATCH-03-FRONTEND** (DONE par admin) → changer state à CLOSED dans priority-queue.json
+2. **Dispatcher BATCH-03-BACKEND** → assigner à backend_engineer:
+   - Fixer `apps/api/src/platform/legacy/jobs/forecasts_simple.py` ligne ~95
+   - `recent_change_pct = price_info['change_percent']` → calculer depuis `/api/stocks/prices` historique
+   - Objectif: forecasts avec confidence >65% pour NVDA, GOOGL, QQQ
+3. **Dispatcher BATCH-04** (Daily Brief) quand BATCH-03 CLOSED
+
+**📖 Guide outils:** `docs/DEV_TOOLS_GUIDE.md`
+
+**Commande de vérification:**
+```bash
+curl -s "http://localhost:8050/api/forecasts?limit=20" | python3 -c "
+import sys,json; f=json.load(sys.stdin).get('forecasts',[])
+hc=[x for x in f if x.get('confidence',0)>0.65]
+print(f'High confidence: {len(hc)}/{len(f)}')
+"
+```

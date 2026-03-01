@@ -843,6 +843,10 @@ let marketCalendar = sanitizeMarketCalendar(window.marketCalendar || FALLBACK_MA
 let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
 let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
+let liveForecastRows = [];
+let liveTopMovers = [];
+let liveKpis = window.liveKpis || null;
+let livePortfolioSummary = window.livePortfolioSummary || null;
 let appData = normalizeAppData(window.appData || {});
 let liveDataMeta = {
   generatedAt: new Date().toISOString(),
@@ -887,6 +891,115 @@ function sanitizeTradeIdeas(items) {
     target: toFiniteNumber(item.target, 0),
     confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70))))
   }));
+}
+
+function normalizePercentValue(value, fallback = 0) {
+  const parsed = toFiniteNumber(value, fallback);
+  return Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+}
+
+function sanitizeForecastRows(rows) {
+  const items = toArray(rows, []);
+  return items.map((item) => {
+    const direction = toString(item.direction, 'neutral').toLowerCase();
+    const expected = normalizePercentValue(toFiniteNumber(item.expectedReturn ?? item.expected_return ?? item.expected_return_pct ?? 0, 0));
+    const targetPrice = toFiniteNumber(item.targetPrice ?? item.target_price ?? item.target, 0);
+    const currentPrice = toFiniteNumber(item.currentPrice ?? item.current_price ?? item.current, 0);
+    return {
+      ticker: toString(item.ticker || item.symbol || item.asset || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
+      direction: direction,
+      directionArrow: item.directionArrow || (direction === 'up' ? '↑' : direction === 'down' ? '↓' : '→'),
+      confidence: Math.max(0, Math.min(100, Math.round(normalizePercentValue(toFiniteNumber(item.confidence, 0)))),
+      horizon: toString(item.horizon, ''),
+      expectedReturn: expected,
+      currentPrice,
+      targetPrice,
+      reasoning: toString(item.reasoning, item.reason || ''),
+      action: toString(item.action, 'hold'),
+      riskLevel: toString(item.riskLevel || item.risk, 'medium')
+    };
+  });
+}
+
+function sanitizeTopMovers(payload) {
+  const rawRows = isObject(payload) ? [] : toArray(payload, []);
+  const mapRows = Array.isArray(payload) ? payload : [];
+  const fromMap = isObject(payload) && !Array.isArray(payload)
+    ? Object.entries(payload).map(([ticker, stock]) => ({ ticker, ...stock }))
+    : [];
+  const rows = mapRows.length ? mapRows : (toArray(rawRows, []) || []);
+  return toArray((rows.length ? rows : fromMap), []).map((item) => {
+    const sparkline = Array.isArray(item.sparkline) ? item.sparkline : (Array.isArray(item.points) ? item.points : []);
+    const sparkValues = toArray(Array.isArray(sparkline[0]) ? sparkline.map((p) => (Array.isArray(p) ? p[1] : p)) : sparkline, []);
+    return {
+      symbol: toString(item.ticker || item.symbol || item.name, 'UNKNOWN').toUpperCase(),
+      price: toFiniteNumber(item.price, 0),
+      change: toFiniteNumber(item.change ?? item.change30d ?? item.pct_change ?? 0, 0),
+      change30d: toFiniteNumber(item.change30d ?? item.change ?? item.pct_change ?? 0, 0),
+      forecast: toString(item.forecast, ''),
+      confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70)))),
+      sparkline: sparkValues,
+      position: toString(item.position, '0 shares')
+    };
+  });
+}
+
+function buildTradeIdeasFromForecasts(items) {
+  const rows = sanitizeForecastRows(items);
+  if (!rows.length) {
+    return sanitizeTradeIdeas(window.tradeIdeas || FALLBACK_TRADE_IDEAS);
+  }
+  return rows.slice(0, 6).map((item) => ({
+    symbol: item.ticker,
+    signalType: item.action === 'buy' ? 'Buy' : item.action === 'sell' ? 'Sell' : 'Hold',
+    entry: item.currentPrice || toFiniteNumber(item.targetPrice * 0.95, 0),
+    target: item.targetPrice || item.currentPrice || 0,
+    confidence: item.confidence
+  }));
+}
+
+function normalizeKpiHero(payload = {}) {
+  const source = isObject(payload) ? payload : {};
+  const raw = source.data || source.portfolioSummary || source.portfolio_summary || source.portfolio || {};
+  const percentLike = (value) => {
+    const normalized = normalizePercentValue(toFiniteNumber(value, NaN), NaN);
+    return Number.isFinite(normalized) ? normalized : null;
+  };
+  return {
+    portfolioValue: toFiniteNumber(raw.portfolio_value ?? raw.portfolioValue ?? raw.final_capital, FALLBACK_APP_DATA.hero.portfolioValue),
+    portfolioChange: percentLike(raw.total_return_pct ?? raw.portfolio_change ?? raw.portfolio_change_pct) ?? FALLBACK_APP_DATA.hero.portfolioChange,
+    forecastNext30d: percentLike(raw.forecast_next_30d_pct ?? raw.forecast30d ?? raw.forecast_next30d) ?? FALLBACK_APP_DATA.hero.forecastNext30d,
+    forecastConfidence: percentLike(raw.forecast_confidence_pct ?? raw.forecast_confidence ?? raw.confidence) ?? FALLBACK_APP_DATA.hero.forecastConfidence,
+    winRate: Math.round(percentLike(raw.win_rate_pct ?? raw.winRate ?? raw.win_rate ?? raw.winrate) ?? FALLBACK_APP_DATA.hero.winRate),
+    winRateChange: toFiniteNumber(raw.win_rate_change ?? raw.winRateChange ?? FALLBACK_APP_DATA.hero.winRateChange, FALLBACK_APP_DATA.hero.winRateChange)
+  };
+}
+
+function inferTopStocksFromMovers(rows, fallbackRows = []) {
+  const movers = sanitizeTopMovers(rows);
+  if (!movers.length) return toArray(fallbackRows, []).slice(0, 5);
+  return movers.slice(0, 5).map((item) => ({
+    symbol: item.symbol,
+    price: toFiniteNumber(item.price, 0),
+    change: toFiniteNumber(item.change30d || item.change, 0),
+    forecast: `${item.change >= 0 ? '+' : ''}${Math.abs(toFiniteNumber(item.change, 0)).toFixed(1)}%`,
+    confidence: item.confidence
+  }));
+}
+
+function sanitizeTopStockRows(rows) {
+  const fallback = toArray(fallbackRows, []);
+  const items = toArray(rows, fallback);
+  return items.map((item) => {
+    const forecast = toString(item.forecast, '');
+    return {
+      symbol: toString(item.symbol || item.ticker, 'UNKNOWN').toUpperCase(),
+      price: toFiniteNumber(item.price, 0),
+      change: toFiniteNumber(item.change, 0),
+      forecast: forecast,
+      confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70))))
+    };
+  });
 }
 
 function sanitizeNewsItems(items) {
@@ -1014,7 +1127,12 @@ function updateLiveProvenance(meta = {}) {
 }
 
 function syncDashboardCards() {
-  const hero = appData.hero || {};
+  const sourceHero = appData.hero || {};
+  const kpiHero = normalizeKpiHero(liveKpis || livePortfolioSummary || {});
+  const hero = {
+    ...sourceHero,
+    ...kpiHero
+  };
   const portfolioValue = toFiniteNumber(hero.portfolioValue, FALLBACK_APP_DATA.hero.portfolioValue);
   const portfolioChange = toFiniteNumber(hero.portfolioChange, FALLBACK_APP_DATA.hero.portfolioChange);
   const forecast30d = toFiniteNumber(hero.forecastNext30d, FALLBACK_APP_DATA.hero.forecastNext30d);
@@ -1067,8 +1185,128 @@ function renderLiveDashboardWidgets() {
   renderMarketDrivers();
   syncDashboardCards();
   updateLiveProvenance(liveDataMeta);
+  renderForecastScenarioWidget();
+  renderTopMoversWidget();
   drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));
   drawWinRateCircle();
+}
+
+function renderForecastScenarioWidget() {
+  const scenarioWidget = document.querySelector('.forecast-scenarios-widget');
+  if (!scenarioWidget) return;
+
+  const rows = sanitizeForecastRows(liveForecastRows);
+  const bars = scenarioWidget.querySelectorAll('.scenario-bar-item');
+  const barsByType = {
+    bull: bars[0],
+    base: bars[1],
+    bear: bars[2]
+  };
+  if (!rows.length || !bars.length) {
+    return;
+  }
+
+  const positive = rows.filter((row) => row.direction === 'up' || row.direction === 'bullish');
+  const negative = rows.filter((row) => row.direction === 'down' || row.direction === 'bearish');
+  const neutral = rows.filter((row) => row.direction === 'neutral' || row.direction === 'flat');
+
+  const avgReturn = rows.reduce((acc, row) => acc + row.expectedReturn, 0) / rows.length;
+  const bullRow = positive.sort((a, b) => b.expectedReturn - a.expectedReturn)[0];
+  const bearRow = negative.sort((a, b) => a.expectedReturn - b.expectedReturn)[0];
+
+  const topBull = toString((bullRow ? bullRow.ticker : 'SPY'), '').toUpperCase();
+  const topBear = toString((bearRow ? bearRow.ticker : 'QQQ'), '').toUpperCase();
+  const topBase = toString((neutral[0] ? neutral[0].ticker : rows[0].ticker), '').toUpperCase();
+
+  const makePercent = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+  const clamp = (value) => Math.max(8, Math.min(85, Math.round(Math.abs(value) * 100) / 100));
+  const bullValue = Math.abs((bullRow ? bullRow.expectedReturn : avgReturn > 0 ? avgReturn : 0));
+  const baseValue = Math.abs(avgReturn || 0);
+  const bearValue = Math.abs((bearRow ? Math.abs(bearRow.expectedReturn) : avgReturn < 0 ? Math.abs(avgReturn) : 2.1));
+
+  if (barsByType.bull) {
+    const fill = barsByType.bull.querySelector('.scenario-bar-fill');
+    const label = barsByType.bull.querySelector('.scenario-label');
+    if (label) label.textContent = `Bull Case (${topBull})`;
+    if (fill) {
+      fill.style.width = `${clamp(bullValue)}%`;
+      fill.textContent = makePercent(toFiniteNumber(bullRow?.expectedReturn || (avgReturn > 0 ? avgReturn : 1.2), 1.2));
+    }
+  }
+
+  if (barsByType.base) {
+    const fill = barsByType.base.querySelector('.scenario-bar-fill');
+    const label = barsByType.base.querySelector('.scenario-label');
+    if (label) label.textContent = `Base Case (${topBase})`;
+    if (fill) {
+      fill.style.width = `${clamp(baseValue)}%`;
+      fill.textContent = makePercent(toFiniteNumber(avgReturn, 2.1));
+    }
+  }
+
+  if (barsByType.bear) {
+    const fill = barsByType.bear.querySelector('.scenario-bar-fill');
+    const label = barsByType.bear.querySelector('.scenario-label');
+    if (label) label.textContent = `Bear Case (${topBear})`;
+    if (fill) {
+      fill.style.width = `${clamp(bearValue)}%`;
+      fill.textContent = `${toFiniteNumber(bearRow?.expectedReturn || (-1.5), -1.5).toFixed(1)}%`;
+    }
+  }
+
+  const scenarioContext = scenarioWidget.querySelector('.scenario-context');
+  if (scenarioContext) {
+    const liveTickers = rows.slice(0, 4).map((row) => row.ticker).join(', ');
+    scenarioContext.textContent = `Top live forecasts: ${liveTickers}`;
+  }
+}
+
+function renderTopMoversWidget(stocks = liveTopMovers) {
+  const widget = document.querySelector('.top-movers-widget');
+  if (!widget) return;
+
+  const movers = sanitizeTopMovers(stocks);
+  const rows = movers.slice(0, 5);
+  const list = widget.querySelector('.movers-table');
+  if (!list) return;
+
+  if (!rows.length) {
+    list.innerHTML = '';
+    return;
+  }
+
+  list.innerHTML = rows.map((item) => {
+    const symbol = toString(item.symbol, 'N/A');
+    const symbolId = symbol.replace(/[^A-Za-z0-9]/g, '') || 'stock';
+    const change = toFiniteNumber(item.change, 0);
+    const colorClass = change >= 0 ? 'positive' : 'negative';
+    const sign = change >= 0 ? '▲' : '▼';
+    return `
+      <div class="mover-row">
+        <div class="mover-stock">${symbol}</div>
+        <canvas class="table-sparkline" id="spark${symbolId}" width="80" height="30"></canvas>
+        <div class="mover-price">$${toFiniteNumber(item.price, 0).toFixed(2)}</div>
+        <div class="mover-change ${colorClass}">${sign} ${Math.abs(change).toFixed(1)}%</div>
+        <div class="mover-position">${toString(item.position, '0 shares')}</div>
+        <button class="mover-action-btn" onclick="showToast('Trading ${symbol}...')">Trade</button>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.table-sparkline').forEach((canvas, index) => {
+    const item = rows[index];
+    const clean = toString(item.symbol, `stock-${index}`).replace(/[^A-Za-z0-9]/g, '');
+    const updated = document.getElementById(`spark${clean}`);
+    if (!updated || !item.sparkline.length) return;
+    const points = item.sparkline;
+    const base = points.slice(-20);
+    const isPositive = toFiniteNumber(item.change, 0) >= 0;
+    drawMiniSparkline(updated.getContext('2d'), base, 80, 30, isPositive);
+  });
+  const footer = widget.querySelector('.widget-footer .widget-timestamp');
+  if (footer) {
+    footer.textContent = `Updated ${formatRelativeTime(liveDataMeta.generatedAt)}`;
+  }
 }
 
 function applyLiveDashboardData(payload = {}) {
@@ -1088,10 +1326,30 @@ function applyLiveDashboardData(payload = {}) {
   };
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
+  liveForecastRows = sanitizeForecastRows(data.forecasts || window.liveForecasts);
+  liveTopMovers = sanitizeTopMovers(data.topMovers || data.stocks || window.topMovers);
+  liveKpis = data.kpis || window.liveKpis;
+  livePortfolioSummary = data.portfolioSummary || window.livePortfolioSummary;
+
+  const kpiSource = normalizeKpiHero(liveKpis || {});
+  const summarySource = normalizeKpiHero(livePortfolioSummary || {});
+
   marketCalendar = sanitizeMarketCalendar(data.marketCalendar);
   newsItems = sanitizeNewsItems(data.newsItems);
   marketDrivers = sanitizeMarketDrivers(data.marketDrivers);
-  appData = normalizeAppData(data);
+  tradeIdeas = buildTradeIdeasFromForecasts(liveForecastRows);
+
+  const payloadTopStocks = toArray(data.topStocks, []);
+  const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
+  appData = normalizeAppData({
+    ...data,
+    hero: {
+      ...(isObject(data.hero) ? data.hero : {}),
+      ...kpiSource,
+      ...summarySource
+    },
+    topStocks: sanitizeTopStockRows(toArray(fallbackTopStocks, []))
+  });
   if (isObject(data.llmJudgeData)) {
     llmJudgeData = {
       ...FALLBACK_LLM_JUDGE_DATA,
@@ -1853,38 +2111,7 @@ function saveSettings() {
   showToast('Settings saved successfully');
 }
 
-function drawConfidenceGauge() {
-  const clampedValue = Math.max(0, Math.min(100, Math.round(toFiniteNumber(appData?.hero?.forecastConfidence, 82))));
 
-  // Background arc
-  const canvas = document.getElementById('confidenceGauge');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-
-  // Value arc
-  const percent = clampedValue / 100;
-  ctx.strokeStyle = '#10B981';
-  ctx.lineWidth = 8;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(60, 50, 35, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
-  ctx.stroke();
-}
-
-  setTimeout(() => {
-    hideLoading();
-    if (btn) {
-      btn.style.animation = '';
-    }
-    showToast('Data refreshed successfully');
-
-    // Update timestamp
-    document.querySelectorAll('.last-updated, .refresh-time').forEach(el => {
-      el.textContent = 'Updated just now';
-    });
-  }, 1500);
-}
 
 function toggleTheme() {
   appState.darkMode = !appState.darkMode;

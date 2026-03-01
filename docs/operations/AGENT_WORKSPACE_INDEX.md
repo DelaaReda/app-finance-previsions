@@ -35,6 +35,7 @@
 - Docs ops principales : [docs/ops/](/home/venom/analyse-financiere/docs/ops)
 - Orchestrations et crons : [docs/orchestrator-ops/](/home/venom/analyse-financiere/docs/orchestrator-ops)
 - Documentation opérationnelle ciblée (hub) : [docs/operations/](/home/venom/analyse-financiere/docs/operations)
+- Vérification QA navigateur : [OPENCLAW_BROWSER_QA.md](/home/venom/analyse-financiere/docs/ops/OPENCLAW_BROWSER_QA.md)
 - Plan produit / epics : [docs/product/](/home/venom/analyse-financiere/docs/product), [docs/product/planning/tasks.md](/home/venom/analyse-financiere/docs/product/planning/tasks.md)
 - Tâches en vue d’exécution : [docs/tasks-hub/](/home/venom/analyse-financiere/docs/tasks-hub)
 

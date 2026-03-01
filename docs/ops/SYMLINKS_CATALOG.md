@@ -63,6 +63,7 @@
 | `docs/ops/AGENT_ONBOARDING.md` | `docs/operations/AGENT_ONBOARDING.md` | Onboarding architecture |
 | `docs/ops/AGENTS_READY.md` | `docs/ops/AGENTS_READY.md` | État prêt agents (canonique) |
 | `docs/ops/ORCHESTRATION_AGENTS_READY.md` | `docs/ops/ORCHESTRATION_AGENTS_READY.md` | Orchestration prêt agents (canonique) |
+| `docs/ops/PRODUCT_VISION.md` | `docs/product/PRODUCT_VISION.md` | Vision produit (source de vérité produit) |
 | `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml` | `docs/ops/ops/ORCHESTRATION_COORDINATION_SPEC.yaml` | Spec orchestration |
 | `docs/ops/ADMIN_TEAM_CHAT.md` | `docs/operations/ops/ADMIN_TEAM_CHAT.md` | Journal d'intention/admin ops |
 | `docs/ops/ADMIN_TEAM_ITERATIONS.md` | `docs/operations/ops/ADMIN_TEAM_ITERATIONS.md` | Journal des itérations |

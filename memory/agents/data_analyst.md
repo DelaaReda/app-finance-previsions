@@ -109,3 +109,34 @@ python3 -m apps.api.src.platform.legacy.jobs.backtests
 - `curl /api/backtests` → `hit_rate > 0.0`
 - `curl /api/freshness` → tous les feeds < 30 min
 - Actifs GLD, SLV dans `/api/forecasts`
+- [2026-02-28 23:15:15 EST] role=data_analyst source=rate_limit_gate_codex_exec_fallback status=BLOCKED verdict=BLOCKED delta=ROLE_OUTPUT_NOT_SPECIFIC blocker=ROLE_EXEC_EVIDENCE_MISSING stream_id=none task_id=none next_action_unique=FIX_ROLE_CONTRACT_DATA_ANALYST_20260301T041515Z directive=none/none exec_report=contract_guard_role_exec_evidence_missing issues=role_exec_evidence_missing suggestions=regenerer_sortie_role_specifique_avec_preuve_et_cmd
+
+---
+## 🎯 TÂCHE ACTIVE: BATCH-03-DATA (2026-03-01)
+
+### État actuel des données
+- 460 articles news ✅
+- 20 forecasts (confidence 50-55% — bug en cours de fix par backend_engineer)
+- 6 tickers: SPY, QQQ, AAPL, NVDA, MSFT, GOOGL
+- Backtests: hit_rate 56.5%, 23 trades
+
+### Tes tâches
+1. **Analyser qualité des backtests**: `curl -s http://localhost:8050/api/backtests | python3 -m json.tool`
+2. **Identifier tickers manquants** par rapport à PRODUCT_VISION.md: GLD, SLV, TSLA, XLE, BTC
+3. **Rédiger rapport** dans `docs/data/DATA_QUALITY_REPORT_$(date +%Y%m%d).md` avec:
+   - Hit rate actuel vs objectif (>60%)
+   - Tickers couverts vs manquants
+   - Recommandations pour BATCH-04
+
+### Validation
+```bash
+curl -s "http://localhost:8050/api/backtests" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print('hit_rate:', d.get('hit_rate', 'N/A'))
+print('total_trades:', d.get('total_trades', 'N/A'))
+print('avg_confidence:', d.get('avg_confidence', 'N/A'))
+"
+```
+
+**📖 Guide outils:** `docs/DEV_TOOLS_GUIDE.md`

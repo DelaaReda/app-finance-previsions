@@ -20,11 +20,20 @@
   - `TMUX_ROLE_RECOVERY_THRESHOLD=2`
   - `TMUX_ROLE_NO_DELTA_THRESHOLD=12`
   - `TMUX_ROLE_STALL_ABORT_SECONDS=75`
+  - `TMUX_ROLE_RATE_LIMIT_PRECHECK=1`
+  - `TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT=18`
+  - `TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS=600`
+  - `TMUX_ROLE_RATE_LIMIT_CACHE_FILE=$HOME/.openclaw/cron/role-state/{codex|qwen}.rate_limit_gate_cache`
   - `TMUX_ROLE_AGENT_BIN=codex`
   - `TMUX_ROLE_RETRY_ENGINE_DEFAULT=sdk`
   - `TMUX_ROLE_CODEX_EXEC_RESUME=1`
   - `TMUX_ROLE_CODEX_EXEC_FALLBACK=1`
 - `TMUX_ROLE_CODEX_MODEL=openai-codex/gpt-5.3-codex-spark`
+
+Comportement anti-rate-limit:
+- le runner effectue un précheck de quota avant de lancer une session/tick role.
+- en cas de limite détectée (`rate_limit` / `429` / `too many requests`) il renvoie `STATUS: BLOCKED` + `BLOCKER_ID: AGENT_RATE_LIMIT_*`.
+- un cache local évite de retenter immédiatement (`TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS`).
 - `thinking=xhigh`
   - `timeoutSeconds=900` (all role jobs, incl. architect)
   - payload policy: runner-only (`bash scripts/cron_tmux_role_runner.sh <role>`)

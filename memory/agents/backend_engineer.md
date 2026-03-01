@@ -142,3 +142,49 @@
 - `curl /api/dashboard/kpis | jq .data.forecasts.high_confidence` → > 0
 - `curl /api/stocks/top | jq .data.stocks[0].change_percent` → != 0.0
 - `curl /api/backtests | jq .data.hit_rate` → > 0.0
+
+---
+## 🎯 TÂCHE ACTIVE: BATCH-03-BACKEND — Fix Forecast Confidence
+**Date:** 2026-03-01 | **Priorité:** P0
+
+### Problème
+`/api/forecasts` retourne tous les forecasts avec confidence 50-55% (inutilisable).
+**Cause racine:** `forecasts_simple.py` ligne ~95 lit `change_percent` de `/api/stocks/top` qui retourne toujours `0.0`.
+
+### Fichier à modifier
+```
+apps/api/src/platform/legacy/jobs/forecasts_simple.py
+```
+
+### Fix requis
+```python
+# AVANT (ligne ~95):
+recent_change_pct = price_info['change_percent']  # Toujours 0.0 !!
+
+# APRÈS: calculer depuis l'historique de prix
+import requests
+prices_resp = requests.get("http://localhost:8050/api/stocks/prices").json()
+ticker_prices = prices_resp.get('prices', {}).get(ticker, {})
+points = ticker_prices.get('points', [])
+if len(points) >= 2:
+    recent_change_pct = (points[-1]['close'] - points[0]['close']) / points[0]['close'] * 100
+else:
+    recent_change_pct = 0.0
+```
+
+### Validation
+```bash
+# Avant fix — tout à 50-55%
+curl -s "http://localhost:8050/api/forecasts?limit=5" | python3 -c "import sys,json; [print(f['ticker'], f['confidence']) for f in json.load(sys.stdin)['forecasts']]"
+
+# Après fix — certains >65%
+# NVDA devrait être ~68-75% car change +41.8% 30d
+# GOOGL devrait être ~70-80% car change +83% 30d
+```
+
+### Commit attendu
+```bash
+git commit -m "fix(forecasts): calculate confidence from price history, not /stocks/top [backend_engineer]"
+```
+
+**📖 Guide outils complet:** `docs/DEV_TOOLS_GUIDE.md`

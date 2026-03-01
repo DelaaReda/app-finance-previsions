@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-28T20:01:54Z",
+  "updated_at": "2026-03-01T04:19:30Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -47,8 +47,8 @@
     },
     {
       "id": "BATCH-03",
-      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es",
-      "state": "READY",
+      "title": "Connecter frontend API live + qualité données",
+      "state": "IN_PROGRESS",
       "priority": "P0",
       "owner_role": "planner",
       "blocker_id": "NONE",
@@ -59,7 +59,7 @@
       ],
       "created_at": "2026-02-28T20:01:54Z",
       "goals": [
-        "frontend_engineer: connecter news/forecasts/stocks \u00e0 l'API live (apiConnector.js d\u00e9j\u00e0 cr\u00e9\u00e9 par admin)",
+        "frontend_engineer: connecter news/forecasts/stocks à l'API live (apiConnector.js déjà créé par admin)",
         "backend_engineer: corriger confidence des forecasts (actuellement 0 high-confidence sur 19)",
         "data_analyst: activer backtests (actuellement null/pending)",
         "infra_engineer: ajouter monitoring cron et alerting si job fail"
@@ -68,7 +68,21 @@
         "DELTA",
         "VERDICT: PASS",
         "API_UI_PROOF"
-      ]
+      ],
+      "notes": "Frontend DONE (admin validated 2026-03-01). Backend fix confidence in progress.",
+      "updated_at": "2026-03-01T04:19:30Z"
+    },
+    {
+      "id": "BATCH-03-BACKEND",
+      "title": "Fix forecast confidence calculation",
+      "state": "READY",
+      "priority": "P0",
+      "owner_role": "backend_engineer",
+      "blocker_id": "NONE",
+      "next_action": "Fix forecasts_simple.py to use price history, not change_percent=0.0",
+      "depends_on": [],
+      "created_at": "2026-03-01T04:19:30Z",
+      "success_criteria": "curl /api/forecasts shows >0 forecasts with confidence >65%"
     }
   ]
 }

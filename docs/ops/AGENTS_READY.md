@@ -52,6 +52,7 @@
 3. **docs/ops/AGENT_ONBOARDING.md** – onboarding architecture
 4. **docs/product/planning/tasks.md** – tâches en cours
 5. **docs/ops/API_ENDPOINTS.md** – endpoints backend frontend
+6. **docs/ops/OPENCLAW_BROWSER_QA.md** – validation frontend avec navigateur OpenClaw
 
 ---
 

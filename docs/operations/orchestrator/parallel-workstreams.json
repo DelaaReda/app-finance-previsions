@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-28T20:44:00Z",
+  "updated_at": "2026-03-01T04:14:58Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -1175,10 +1175,10 @@
       "code": "FRONTEND",
       "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [FRONTEND]",
       "role": "frontend_engineer",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P0",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "frontend_engineer",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
@@ -1187,9 +1187,33 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-01T04:14:58Z",
+      "started_at": "2026-03-01T04:10:06Z",
+      "completed_at": "",
+      "prechange_plan_items": [
+        "scope: connecter news forecasts stocks kpis depuis apiconnector en ui",
+        "dependency impact: limiter la modification \u00e0 apps/web pages contracts et app.js sans toucher backend",
+        "risk: \u00e9viter r\u00e9gression de rendu si api lente ou indisponible",
+        "verification: valider rendering",
+        "fallback mockdata et badge live en nominal et degraded",
+        "rollback: conserver ancienne logique mock\u00e9e comme chemin de secours",
+        "verification: produire preuve front concr\u00e8te et logs d'execution"
+      ],
+      "prechange_architecture_checks": [
+        "ui_contract_source",
+        "domain_boundary",
+        "no_mock_nominal",
+        "widget_isolation",
+        "forecast_contract"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2
     },
     {
       "id": "BATCH-03-BACKEND",
@@ -1209,7 +1233,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1219,10 +1243,10 @@
       "code": "DATA",
       "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es [DATA]",
       "role": "data_analyst",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P0",
       "depends_on": [],
-      "assignee": "",
+      "assignee": "data_analyst",
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
@@ -1230,9 +1254,32 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-01T04:14:58Z",
+      "started_at": "2026-03-01T04:14:58Z",
+      "completed_at": "",
+      "prechange_plan_items": [
+        "scope: activer le calcul backtests hebdomadaires",
+        "dependency impact: d\u00e9pendre uniquement des endpoints existants",
+        "dependency impact: \u00e9viter les imports legacy et chemins obsol\u00e8tes",
+        "risk: si backend indisponible",
+        "mesurer et d\u00e9clencher reprise",
+        "verification: ex\u00e9cuter /api/backtests puis /api/freshness et contr\u00f4le actifs forecasts",
+        "rollback: consigner \u00e9chec et relancer apr\u00e8s red\u00e9marrage"
+      ],
+      "prechange_architecture_checks": [
+        "forecast_contract",
+        "schema_stability",
+        "observability",
+        "reusability"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2
     },
     {
       "id": "BATCH-03-PLAN",
@@ -1252,7 +1299,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "2026-02-28T20:43:30Z",
       "completed_at": ""
     },
@@ -1275,7 +1322,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1298,7 +1345,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1321,7 +1368,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1344,7 +1391,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1367,7 +1414,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1390,7 +1437,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1413,7 +1460,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1436,7 +1483,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1459,7 +1506,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1482,7 +1529,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1505,7 +1552,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1528,7 +1575,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1551,7 +1598,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1574,7 +1621,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     },
@@ -1597,7 +1644,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-02-28T20:44:00Z",
+      "updated_at": "2026-03-01T04:14:58Z",
       "started_at": "",
       "completed_at": ""
     }
@@ -2707,6 +2754,30 @@
           "BATCH-03-SENTINEL_CHECK",
           "BATCH-03-GOV_REVIEW"
         ]
+      }
+    },
+    {
+      "at": "2026-03-01T04:10:06Z",
+      "kind": "claim",
+      "details": {
+        "role": "frontend_engineer",
+        "task_id": "BATCH-03-FRONTEND",
+        "prechange_plan_count": "7",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-01T04:14:58Z",
+      "kind": "claim",
+      "details": {
+        "role": "data_analyst",
+        "task_id": "BATCH-03-DATA",
+        "prechange_plan_count": "7",
+        "prechange_arch_count": "4",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
       }
     }
   ]

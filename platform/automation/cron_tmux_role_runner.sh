@@ -43,6 +43,9 @@ AGENT_BIN_NAME="${AGENT_BIN_NAME,,}"
 PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-180}"
 RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-90}"
 STATE_DIR="${TMUX_ROLE_STATE_DIR:-/home/venom/.openclaw/cron/role-state}"
+RATE_LIMIT_PRECHECK="${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}"
+RATE_LIMIT_PROBE_TIMEOUT="${TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT:-18}"
+RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-600}"
 TRACE_DIR="${TMUX_ROLE_TRACE_DIR:-$ROOT/logs-codex-runs/role-runner}"
 ROLE_MEMORY_DIR="${TMUX_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
 TEAM_CHAT_FILE="${TMUX_ROLE_TEAM_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
@@ -92,6 +95,8 @@ LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
 TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
 LOCK_FILE="${STATE_DIR}/${ROLE}.run.lock"
 LOCK_META_FILE="${STATE_DIR}/${ROLE}.run.lock.meta"
+RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
+RATE_LIMIT_STATE_NOTE=""
 
 if ! [[ "$RECOVERY_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$RECOVERY_THRESHOLD" -lt 1 ]]; then
   RECOVERY_THRESHOLD=2
@@ -119,6 +124,15 @@ if ! [[ "$TMUX_POLL_INTERVAL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TMUX_POLL_INTERVAL_
 fi
 if ! [[ "$TMUX_STALL_ABORT_SECONDS" =~ ^[0-9]+$ ]]; then
   TMUX_STALL_ABORT_SECONDS=75
+fi
+if ! [[ "$RATE_LIMIT_PRECHECK" =~ ^[01]$ ]]; then
+  RATE_LIMIT_PRECHECK=1
+fi
+if ! [[ "$RATE_LIMIT_PROBE_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_PROBE_TIMEOUT" -lt 8 ]]; then
+  RATE_LIMIT_PROBE_TIMEOUT=18
+fi
+if ! [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" -lt 60 ]]; then
+  RATE_LIMIT_CACHE_TTL_SECONDS=600
 fi
 if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
   CODEX_EXEC_FALLBACK=1
@@ -385,6 +399,168 @@ build_codex_global_args() {
     args+=(--search)
   fi
   printf '%s\n' "${args[@]}"
+}
+
+detect_rate_limit_signal() {
+  local text="${1:-}"
+  printf '%s\n' "$text" | rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit|rate[[:space:]_-]*limit|rate limit|rate-limits|rate limits|rate-limit|429|too many requests|quota.*(exceeded|exhausted|limit)|model.*unavailable|please try again later|temporarily|unavailable due to rate'
+}
+
+sanitize_rate_limit_reason() {
+  local text="${1:-}"
+  local compact
+  compact="$(printf '%s' "$text" | tr '\n' ' ' | tr -s ' ')"
+  compact="$(printf '%s' "$compact" | sed 's/;/,/g' | sed 's/^ *//; s/ *$//')"
+  if [[ ${#compact} -gt 220 ]]; then
+    compact="${compact:0:220}"
+  fi
+  printf '%s' "${compact:-rate_limit_detected}"
+}
+
+rate_limit_cache_active() {
+  local cache_file="${1:-$RATE_LIMIT_CACHE_FILE}"
+  local payload
+  local until_ts
+  local reason
+
+  RATE_LIMIT_STATE_NOTE=""
+  if [[ ! -f "$cache_file" ]]; then
+    return 1
+  fi
+  payload="$(cat "$cache_file" 2>/dev/null || true)"
+  until_ts="${payload%%|*}"
+  reason="${payload#*|}"
+  if ! [[ "$until_ts" =~ ^[0-9]+$ ]]; then
+    rm -f "$cache_file"
+    return 1
+  fi
+
+  if [[ "$(date +%s)" -lt "$until_ts" ]]; then
+    RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "${reason:-rate_limit_detected}")"
+    return 0
+  fi
+
+  rm -f "$cache_file"
+  return 1
+}
+
+rate_limit_cache_set() {
+  local reason="${1:-rate_limit_detected}"
+  local cache_file="${2:-$RATE_LIMIT_CACHE_FILE}"
+  printf '%s|%s\n' "$(( $(date +%s) + RATE_LIMIT_CACHE_TTL_SECONDS ))" "$reason" > "$cache_file"
+}
+
+run_rate_limit_probe() {
+  if [[ "$RATE_LIMIT_PRECHECK" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$AGENT_BIN_NAME" != "codex" && "$AGENT_BIN_NAME" != "qwen" ]]; then
+    return 0
+  fi
+
+  local output=""
+  local probe_rc=0
+  local reason=""
+  local probe_msg=""
+  local probe_msg_file=""
+  set +e
+  if [[ "$AGENT_BIN_NAME" == "codex" ]]; then
+    local -a probe_cmd=(codex --sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
+    if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+      probe_cmd+=("--search")
+    fi
+    probe_msg_file="$(mktemp)"
+    probe_cmd+=("exec" "--model" "$CODEX_EXEC_MODEL" "--output-last-message" "$probe_msg_file" --json)
+    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "${probe_cmd[@]}" 'Réponds simplement "OK".' 2>&1)"
+    probe_rc=$?
+    if [[ -s "$probe_msg_file" ]]; then
+      probe_msg="$(cat "$probe_msg_file" 2>/dev/null || true)"
+      if [[ -n "$probe_msg" ]]; then
+        output="${output}
+${probe_msg}"
+      fi
+    fi
+    rm -f "$probe_msg_file"
+  else
+    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "$AGENT_BIN" --channel CI --approval-mode yolo --chat-recording false -o text 'Réponds simplement "OK".' 2>&1)"
+    probe_rc=$?
+  fi
+  set -e
+
+  if detect_rate_limit_signal "$output"; then
+    reason="$(sanitize_rate_limit_reason "$output")"
+    RATE_LIMIT_STATE_NOTE="$reason"
+    rate_limit_cache_set "$reason"
+    return 1
+  fi
+  if [[ $probe_rc -ne 0 ]]; then
+    trace_event "rate_limit_probe_error bin=${AGENT_BIN_NAME} rc=${probe_rc}"
+  fi
+  return 0
+}
+
+emit_rate_limit_gate_output() {
+  local reason="${1:-rate_limit_detected}"
+  local source="${2:-precheck}"
+  local artifact_key
+  local evidence_text
+  local output
+
+  reason="$(sanitize_rate_limit_reason "$reason")"
+  if declare -f required_artifact_marker_for_role >/dev/null 2>&1; then
+    artifact_key="$(required_artifact_marker_for_role "$ROLE")"
+  else
+    artifact_key="ROLE_ARTIFACT="
+  fi
+  if [[ -z "$artifact_key" ]]; then
+    artifact_key="ROLE_ARTIFACT="
+  fi
+
+  evidence_text="task_update=blocked; lock_check=ok; run_note=mode_precheck: modèle ${AGENT_BIN_NAME} indisponible pour ce tick suite au rate_limit; exec_report=skip_role_tick_due_to_rate_limit; issues=rate_limit_detected; suggestions=attendre le déblocage du quota avant nouveau lancement; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; channels_read=runtime_context; impact_assessment=low; impact_action=retry_after_cache_ttl; vision_rule=rate_limit_gate; arch_rule=observability; review_scope=${ROLE}_rate_limit; conformance=WARN; violations=rate_limit; tool_request=${AGENT_BIN_NAME}; skill_request=none; ${artifact_key}rate_limit_gate; queue_version=${RUNTIME_QUEUE_VERSION}; workboard_version=${RUNTIME_WORKBOARD_VERSION}; model=${CODEX_EXEC_MODEL}; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
+
+  output="$(cat <<EOF
+STATUS: BLOCKED
+DELTA: BLOCKED
+EVIDENCE: ${evidence_text}
+RISKS: model ${AGENT_BIN_NAME} inaccessible suite à une limite de quota temporaire; aucun travail fiable à exécuter ce tick
+NEXT: owner=adminapp-codex; action=model_not_accessible_rate_limit; wait_for_quota_recovery_before_retry
+VERDICT: BLOCKED
+BLOCKER_ID: AGENT_RATE_LIMIT_${AGENT_BIN_NAME^^}
+NEXT_ACTION_UNIQUE: RATE_LIMIT_${AGENT_BIN_NAME^^}_SKIP_${ROLE}_$(date +%s)
+EOF
+)"
+
+  if declare -f reconcile_runtime_truth >/dev/null 2>&1; then
+    output="$(printf "%s\n" "$output" | reconcile_runtime_truth)"
+  fi
+  output="$(apply_no_delta_gate "$output" "rate_limit_gate")"
+  if declare -f enforce_role_delivery_contract >/dev/null 2>&1 && declare -f required_artifact_marker_for_role >/dev/null 2>&1; then
+    output="$(printf "%s\n" "$output" | enforce_role_delivery_contract "rate_limit_gate_${source}")"
+  fi
+  if declare -f sanitize_tmux_logs >/dev/null 2>&1; then
+    sanitize_tmux_logs
+  fi
+  if declare -f persist_last_contract >/dev/null 2>&1; then
+    persist_last_contract "$output" "rate_limit_gate_${source}"
+  fi
+  if declare -f publish_execution_monitoring_if_enabled >/dev/null 2>&1; then
+    publish_execution_monitoring_if_enabled "$output" "rate_limit_gate_${source}"
+  fi
+  if declare -f trace_event >/dev/null 2>&1; then
+    trace_event "rate_limit_gate source=${source} model=${AGENT_BIN_NAME} reason=${reason}"
+  fi
+  printf "%s\n" "$output"
+  exit 0
+}
+
+handle_rate_limit_output() {
+  local source="${1:-unknown}"
+  local output_text="${2:-}"
+  if detect_rate_limit_signal "$output_text"; then
+    RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "$output_text")"
+    rate_limit_cache_set "$RATE_LIMIT_STATE_NOTE"
+    emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "$source"
+  fi
 }
 
 health_roles() {
@@ -1024,6 +1200,14 @@ recover_role_if_needed() {
 # Ensure target session exists, but avoid expensive full restart on every tick.
 TARGET_SESSION="$(target_session_name "$ROLE")"
 STARTUP_NOTE=""
+
+if rate_limit_cache_active; then
+  emit_rate_limit_gate_output "${RATE_LIMIT_STATE_NOTE:-rate_limit_cached}" "cache"
+fi
+if ! run_rate_limit_probe; then
+  emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "probe"
+fi
+
 if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
   if [[ "$CODEX_EXEC_RESUME" == "1" ]]; then
     STARTUP_NOTE="startup_mode=codex_exec_resume"
@@ -1876,6 +2060,7 @@ RAW_OUTPUT="$(prompt_once "$PROMPT_TIMEOUT_SECONDS" "$PROMPT_TEXT" "$PRIMARY_TIC
 RC_PRIMARY=$?
 set -e
 trace_event "primary_prompt_end tick=${PRIMARY_TICK} rc=${RC_PRIMARY} bytes=${#RAW_OUTPUT}"
+handle_rate_limit_output "primary_${PRIMARY_CHANNEL}" "$RAW_OUTPUT"
 if [[ $RC_PRIMARY -eq 0 ]]; then
   if STRUCTURED="$(printf "%s\n" "$RAW_OUTPUT" | normalize_output)"; then
     if response_has_tick "$STRUCTURED" "$PRIMARY_TICK" "$PRIMARY_CHANNEL"; then
@@ -1928,6 +2113,7 @@ RAW_RETRY="$(prompt_once "$RETRY_PROMPT_TIMEOUT_SECONDS" "$RETRY_PROMPT" "$RETRY
 RC_RETRY=$?
 set -e
 trace_event "retry_prompt_end tick=${RETRY_TICK} rc=${RC_RETRY} bytes=${#RAW_RETRY}"
+handle_rate_limit_output "retry_${RETRY_CHANNEL}" "$RAW_RETRY"
 if [[ $RC_RETRY -eq 0 ]]; then
   if STRUCTURED="$(printf "%s\n" "$RAW_RETRY" | normalize_output)"; then
     if response_has_tick "$STRUCTURED" "$RETRY_TICK" "$RETRY_CHANNEL"; then
@@ -1969,6 +2155,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
   RC_CODEX_FALLBACK=$?
   set -e
   trace_event "codex_fallback_end tick=${CODEX_TICK} rc=${RC_CODEX_FALLBACK} bytes=${#RAW_CODEX_FALLBACK}"
+  handle_rate_limit_output "codex_exec_fallback" "$RAW_CODEX_FALLBACK"
   if [[ $RC_CODEX_FALLBACK -eq 0 ]]; then
     if STRUCTURED="$(printf "%s\n" "$RAW_CODEX_FALLBACK" | normalize_output)"; then
       if response_has_tick "$STRUCTURED" "$CODEX_TICK" "codex_exec"; then
