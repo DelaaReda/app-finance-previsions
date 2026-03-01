@@ -78,12 +78,9 @@ PY
 
   # === API DATA FRESHNESS ===
   echo -e "${BOLD}DATA QUALITY${NC}"
-  api_data=$(curl -s "http://localhost:8050/api/health" 2>/dev/null)
-  if [[ -n "$api_data" ]]; then
-    news_count=$(echo "$api_data" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('news_count',0))" 2>/dev/null || echo "?")
-    forecast_count=$(echo "$api_data" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('forecast_count',0))" 2>/dev/null || echo "?")
-    echo -e "  News: ${GREEN}$news_count articles${NC}  Forecasts: ${GREEN}$forecast_count${NC}"
-  fi
+  news_total=$(curl -s "http://localhost:8050/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
+  forecast_total=$(curl -s "http://localhost:8050/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
+  echo -e "  News: ${GREEN}$news_total articles${NC}  Forecasts: ${GREEN}$forecast_total${NC}"
 }
 
 if [[ "${1:-}" == "--watch" ]]; then

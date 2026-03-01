@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-01T04:18:07Z",
+  "updated_at_utc": "2026-03-01T04:20:05Z",
   "roles": {
     "frontend_engineer": {
       "ts_utc": "2026-03-01T04:12:36Z",
@@ -74,28 +74,28 @@
       "workboard_version": "workboard_1772309428_73f642ff2075"
     },
     "backend_engineer": {
-      "ts_utc": "2026-02-28T18:49:19Z",
+      "ts_utc": "2026-03-01T04:20:05Z",
       "role": "backend_engineer",
-      "source": "fallback_checkpoint",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CONTINUE_BACKEND_FROM_TASKS",
-      "next": "maintenir la prochaine action backend executable avec preuve attendue",
-      "exec_report": "fallback_checkpoint_applique_sur_sortie_inexploitable",
-      "issues": "signal_unparseable",
-      "suggestions": "stabiliser_prompt_et_tmux_capture",
-      "stream_id": "none",
-      "task_id": "none",
-      "tool_request": "none",
+      "source": "rate_limit_gate_cache",
+      "status": "BLOCKED",
+      "delta": "BLOCKED",
+      "verdict": "BLOCKED",
+      "blocker_id": "AGENT_RATE_LIMIT_CODEX",
+      "next_action_unique": "RATE_LIMIT_CODEX_SKIP_backend_engineer_1772338805",
+      "next": "owner=adminapp-codex; action=model_not_accessible_rate_limit; wait_for_quota_recovery_before_retry",
+      "exec_report": "skip_role_tick_due_to_rate_limit",
+      "issues": "rate_limit_detected",
+      "suggestions": "attendre le d\u00e9blocage du quota avant nouveau lancement",
+      "stream_id": "RATELIMIT_backend_engineer",
+      "task_id": "RATELIMIT_backend_engineer",
+      "tool_request": "codex",
       "skill_request": "none",
       "tools_used": "",
       "channels_read": "runtime_context",
       "impact_assessment": "low",
-      "impact_action": "monitor_updates",
-      "queue_version": "queue_1772189937_8ac6c82bba4d",
-      "workboard_version": "workboard_1772196369_8e9aed5f9a04"
+      "impact_action": "retry_after_cache_ttl",
+      "queue_version": "queue_1772338770_142f0b790441",
+      "workboard_version": "workboard_1772338498_e7aabcbbb8de"
     },
     "integrator": {
       "ts_utc": "2026-02-28T20:25:58Z",
@@ -382,7 +382,7 @@
       "qa"
     ],
     "context_versions": {
-      "queue_version": "queue_1772309428_5903754b6142",
+      "queue_version": "queue_1772338770_751a72cf516e",
       "workboard_version": "workboard_1772338498_4181ba257e43"
     }
   }

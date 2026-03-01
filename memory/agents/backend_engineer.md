@@ -188,3 +188,4 @@ git commit -m "fix(forecasts): calculate confidence from price history, not /sto
 ```
 
 **📖 Guide outils complet:** `docs/DEV_TOOLS_GUIDE.md`
+- [2026-02-28 23:20:05 EST] role=backend_engineer source=rate_limit_gate_cache status=BLOCKED verdict=BLOCKED delta=BLOCKED blocker=AGENT_RATE_LIMIT_CODEX stream_id=RATELIMIT_backend_engineer task_id=RATELIMIT_backend_engineer next_action_unique=RATE_LIMIT_CODEX_SKIP_backend_engineer_1772338805 directive=none/none exec_report=skip_role_tick_due_to_rate_limit issues=rate_limit_detected suggestions=attendre le déblocage du quota avant nouveau lancement
