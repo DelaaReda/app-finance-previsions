@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/backend_regression_gate.sh
+../platform/policies/backend_regression_gate.sh

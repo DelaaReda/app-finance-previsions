@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/install-git-hooks.sh
+../platform/automation/install-git-hooks.sh

@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/admin_agents_refresh_process_issues.sh
+../platform/automation/admin_agents_refresh_process_issues.sh

@@ -1,0 +1,54 @@
+proof_id: "PRF-BATCH-04-BATCH-04-FRONTEND-20260301T130140Z-326"
+stream_id: "BATCH-04"
+task_id: "BATCH-04-FRONTEND"
+role: "frontend_engineer"
+produced_at_utc: "2026-03-01T13:01:40Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/frontend_engineer.last_contract"
+preconditions:
+  change_plan:
+    - "scope: inspecter le périmètre secteur et les ids attendus du market tab"
+    - "dependency impact: vérifier l\\047integration apiconnector vers app.js sans casser les autres widgets"
+    - "risk: gérer fallback si l\\047api renvoie un payload vide"
+    - "verification: confirmer rendernewsimpact et drawsectorperformance sur données réelles"
+    - "rollback: restaurer les fichiers modifiés en cas de regression"
+  architecture_checks:
+    - "forecast-first_from_financecopilot_event"
+    - "schema-stability_pour_normalizeappdata_et_sanitize_helpers"
+    - "observability_provenance_livedatameta"
+    - "reusability_helper_fonctions_existantes"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(editing_done)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-01T13:01:40Z"
+      ended_at_utc: "2026-03-01T13:01:40Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(not_requested)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/frontend_engineer.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/pages/app.js,apps/web/src/domains/forecasts/components/widgets/sector-performance.html"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "frontend_engineer"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "complete-BATCH-04-FRONTEND-sector-widget-20260301"
+  review_ref: "none"
+  note: "Sector widget now uses DOM ids and normalized sector payload for live rendering"

@@ -1,47 +1,37 @@
 {
-  "version": 2,
-  "note": "Active roles only - managed by fc_setup_crons.sh",
-  "updated_at": "2026-03-01",
+  "version": 3,
+  "note": "Active roles only - 3-role lean mode",
+  "updated_at": "2026-03-03",
   "roles": [
     {
       "role": "planner",
-      "lane": "orchestration",
-      "every": "15m",
+      "lane": "coordination",
+      "every": "22m",
       "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Planner - dispatches tasks to all roles",
+      "wip_limit": 1,
+      "description": "Planner lane (absorbs analyst/architect/po/scrum)",
       "session_name": "codex_planner_cron",
       "trace_file": "logs-codex-runs/role-runner/planner.live.log"
     },
     {
-      "role": "backend_engineer",
+      "role": "dev",
       "lane": "build",
-      "every": "20m",
-      "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Backend - API, forecasts, data quality",
-      "session_name": "codex_backend_engineer_cron",
-      "trace_file": "logs-codex-runs/role-runner/backend_engineer.live.log"
-    },
-    {
-      "role": "frontend_engineer",
-      "lane": "build",
-      "every": "20m",
-      "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Frontend - UI, apiConnector, widgets",
-      "session_name": "codex_frontend_engineer_cron",
-      "trace_file": "logs-codex-runs/role-runner/frontend_engineer.live.log"
-    },
-    {
-      "role": "data_analyst",
-      "lane": "data",
-      "every": "30m",
+      "every": "22m",
       "allow_file_edits": 1,
       "wip_limit": 1,
-      "description": "Data - backtests, quality, metrics",
-      "session_name": "codex_data_analyst_cron",
-      "trace_file": "logs-codex-runs/role-runner/data_analyst.live.log"
+      "description": "Delivery lane (absorbs backend/frontend/data/integrator/test/qa)",
+      "session_name": "codex_dev_cron",
+      "trace_file": "logs-codex-runs/role-runner/dev.live.log"
+    },
+    {
+      "role": "admin",
+      "lane": "ops",
+      "every": "22m",
+      "allow_file_edits": 1,
+      "wip_limit": 1,
+      "description": "Ops lane (health/unblock/recovery)",
+      "session_name": "codex_admin_cron",
+      "trace_file": "logs-codex-runs/role-runner/admin.live.log"
     }
   ]
 }

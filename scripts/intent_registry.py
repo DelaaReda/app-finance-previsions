@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/intent_registry.py
+../platform/automation/intent_registry.py

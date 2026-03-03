@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 WORKSTREAM = ROOT / "scripts" / "parallel_workstream.py"
 GOOD_CHANGE_PLAN = (
     "1 definir scope endpoint forecast ui; "

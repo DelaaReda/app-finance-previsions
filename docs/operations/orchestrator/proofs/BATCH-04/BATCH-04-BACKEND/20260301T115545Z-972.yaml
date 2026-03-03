@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-04-BATCH-04-BACKEND-20260301T115545Z-972"
+stream_id: "BATCH-04"
+task_id: "BATCH-04-BACKEND"
+role: "backend_engineer"
+produced_at_utc: "2026-03-01T11:55:45Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+preconditions:
+  change_plan:
+    - "scope: endpoint contract validation for /api/brief/daily module and payload fields"
+    - "dependency impact: unblock batch-04 dependency chain from batch-03 marker task"
+    - "risk: regression on existing brief route wrapper and alerting path"
+    - "verification: run targeted python payload assertions with storage mock"
+    - "rollback: revert dependency workaround and re-open task if test fails or payload is unstable"
+  architecture_checks:
+    - "forecast_contract"
+    - "schema_stability"
+    - "observability"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "bash scripts/preannounce_intent.sh preannounce --role backend_engineer --scope backend --files apps/api/src/domains/forecasts/api/brief.py,apps/api/src/domains/forecasts/tests/test_brief_route_contract.py --eta-minutes 30"
+      rc: "0"
+      started_at_utc: "2026-03-01T11:55:45Z"
+      ended_at_utc: "2026-03-01T11:55:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "cd apps/api && PYTHONPATH=src python3 -c \"from unittest.mock import patch; from storage import io as storage_io; from domains.forecasts.api import brief; snapshot={data: {daily: {title:Brief quotidien,summary:mot *250,market_sentiment:MIXED,top_signals:[],top_risks:[],picks:[],macro_signals:[{topic:Fed,state:neutral,score:0.1,confidence:0.8}], sector_rotation: {top:[{sector:or,momentum:0.7,direction:up}],bottom:[{sector:energie,momentum:-0.4,direction:down}]}, sources:[tests],generated_at:2026-03-01T10:00:00Z,freshness:fresh,source:[test_fixture]} }}; with patch.object(storage_io,load_json,lambda _key: snapshot): payload=brief.get_daily_brief().get(data, {}); assert isinstance(payload.get(macro_signals), list); assert isinstance(payload.get(sector_rotation), dict); assert isinstance(payload[sector_rotation].get(top), list); assert isinstance(payload[sector_rotation].get(bottom), list); assert len(str(payload.get(summary,).split())) <= 200; print(PASS)\""
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+  artifacts:
+    - "apps/api/src/domains/forecasts/tests/test_brief_route_contract.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "backend_engineer"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-0deb9fbaf771"
+  review_ref: "none"
+  note: "BATCH-04-BACKEND delivered: /api/brief/daily contract validated for macro signals and sector rotation with bounded summary."

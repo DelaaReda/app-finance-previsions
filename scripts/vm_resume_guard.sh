@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/venom/shared/analyse-financiere"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="${VM_RESUME_GUARD_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
 cd "$ROOT"
 
 STATE_DIR="${VM_RESUME_GUARD_STATE_DIR:-$HOME/.openclaw/state/vm_resume_guard}"

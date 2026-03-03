@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/openclaw_vm_tools.sh
+../platform/automation/openclaw_vm_tools.sh

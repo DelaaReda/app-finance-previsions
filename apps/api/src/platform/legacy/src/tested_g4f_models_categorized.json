@@ -1,0 +1,242 @@
+{
+  "forecast": [
+    {
+      "provider": "Perplexity",
+      "model": "turbo",
+      "task": "text",
+      "ok": true,
+      "ms": 1365.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "Perplexity",
+      "model": "claude2",
+      "task": "text",
+      "ok": true,
+      "ms": 1436.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "Perplexity",
+      "model": "gpt5",
+      "task": "text",
+      "ok": true,
+      "ms": 1848.5,
+      "answer": "OK",
+      "error": null
+    }
+  ],
+  "helper_json": [
+    {
+      "provider": "AnyProvider",
+      "model": "command-r-plus24",
+      "task": "text",
+      "ok": true,
+      "ms": 568.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b",
+      "task": "text",
+      "ok": true,
+      "ms": 583.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 585.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r7b-12-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 631.8,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b24",
+      "task": "text",
+      "ok": true,
+      "ms": 651.1,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r",
+      "task": "text",
+      "ok": true,
+      "ms": 656.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r",
+      "task": "text",
+      "ok": true,
+      "ms": 682.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a-03-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 694.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-a",
+      "task": "text",
+      "ok": true,
+      "ms": 707.7,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r7b-12-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 716.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r7b-arabic-02-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 756.3,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r24",
+      "task": "text",
+      "ok": true,
+      "ms": 760.4,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "PollinationsAI",
+      "model": "mistral",
+      "task": "text",
+      "ok": true,
+      "ms": 770.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 775.6,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-r7b-arabic-02-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 802.9,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-a",
+      "task": "text",
+      "ok": true,
+      "ms": 950.4,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "command-r7b-arabic25",
+      "task": "text",
+      "ok": true,
+      "ms": 1022.0,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "CohereForAI_C4AI_Command",
+      "model": "command-a-03-2025",
+      "task": "text",
+      "ok": true,
+      "ms": 1192.2,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "HuggingSpace",
+      "model": "command-r-plus-08-2024",
+      "task": "text",
+      "ok": true,
+      "ms": 1848.6,
+      "answer": "OK",
+      "error": null
+    }
+  ],
+  "basic": [
+    {
+      "provider": "AnyProvider",
+      "model": "gpt-oss-120b",
+      "task": "text",
+      "ok": true,
+      "ms": 549.5,
+      "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "kimi-k2",
+      "task": "text",
+      "ok": true,
+      "ms": 1005.2,
+      "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+      "error": null
+    },
+    {
+      "provider": "Perplexity",
+      "model": "experimental",
+      "task": "text",
+      "ok": true,
+      "ms": 1081.1,
+      "answer": "OK",
+      "error": null
+    },
+    {
+      "provider": "AnyProvider",
+      "model": "r1-1776",
+      "task": "text",
+      "ok": true,
+      "ms": 1796.6,
+      "answer": "OK",
+      "error": null
+    }
+  ]
+}

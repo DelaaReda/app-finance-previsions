@@ -1,0 +1,1091 @@
+#!/usr/bin/env python3
+"""Role contract guard extracted from cron_tmux_role_runner.sh.
+
+Input payload must be the 8-line contract. If payload is incomplete, it is
+returned unchanged to preserve the original fallback flow.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+KEYS = [
+    "STATUS",
+    "DELTA",
+    "EVIDENCE",
+    "RISKS",
+    "NEXT",
+    "VERDICT",
+    "BLOCKER_ID",
+    "NEXT_ACTION_UNIQUE",
+]
+
+ROLE_TOKENS = {
+    "planner": ["QUEUE", "READY", "PRIOR", "WORKSTATE", "PLAN"],
+    "analyst": ["ANALYSIS", "REQUIREMENT", "ASSUMPTION", "TASK_ID", "DISCOVERY"],
+    "dev": ["TASK", "STOR", "PATCH", "FILE=", "IMPLEMENT", "CODE"],
+    "backend_engineer": ["BACKEND", "API", "ENDPOINT", "TASK_ID", "PATCH", "SERVICE"],
+    "frontend_engineer": ["FRONTEND", "UI", "COMPONENT", "TASK_ID", "PATCH", "SCREEN"],
+    "integrator": ["INTEGRATION", "TASK_ID", "CONTRACT", "E2E", "MERGE", "PIPELINE"],
+    "data_analyst": ["DATA", "METRIC", "TASK_ID", "QUERY", "MODEL", "QUALITY"],
+    "infra_engineer": ["INFRA", "CI", "DEPLOY", "TASK_ID", "OBSERVABILITY", "PIPELINE"],
+    "tester": ["TEST", "PYTEST", "CASE", "SCENARIO", "COVER"],
+    "qa": ["QA", "GATE", "VERDICT", "BLOCKER", "COHER"],
+    "architect": ["ARCH", "CONTRAIN", "DEPEND", "RISK", "DESIGN", "CONFORMANCE", "ARCH_RULE", "VIOLATION"],
+    "po": ["PO", "BACKLOG", "PRIOR", "SCOPE", "VALEUR", "VALUE"],
+    "scrum_master": ["SCRUM", "SPRINT", "WIP", "BLOCKER", "CADENCE", "FLOW"],
+    "clawsentinel": ["SENTINEL", "CRON", "HEALTH", "DRIFT", "WATCHDOG", "RISK"],
+}
+
+ARTIFACT_MARKERS = {
+    "planner": "PLANNER_ARTIFACT=",
+    "analyst": "ANALYST_ARTIFACT=",
+    "dev": "DEV_ARTIFACT=",
+    "backend_engineer": "BACKEND_ARTIFACT=",
+    "frontend_engineer": "FRONTEND_ARTIFACT=",
+    "integrator": "INTEGRATOR_ARTIFACT=",
+    "data_analyst": "DATA_ARTIFACT=",
+    "infra_engineer": "INFRA_ARTIFACT=",
+    "tester": "TESTER_ARTIFACT=",
+    "qa": "QA_ARTIFACT=",
+    "architect": "ARCHITECT_ARTIFACT=",
+    "po": "PO_ARTIFACT=",
+    "scrum_master": "SCRUM_ARTIFACT=",
+    "clawsentinel": "SENTINEL_ARTIFACT=",
+}
+
+COMMON_ARCHITECTURE_EVIDENCE_KEYS = ("arch_rule", "review_scope", "conformance", "violations")
+ROLE_REQUIRED_EVIDENCE_KEYS = {
+    "planner": ("vision_rule", *COMMON_ARCHITECTURE_EVIDENCE_KEYS),
+    "analyst": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "dev": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "backend_engineer": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "frontend_engineer": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "integrator": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "data_analyst": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "infra_engineer": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "tester": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "qa": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "architect": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "po": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "scrum_master": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+    "clawsentinel": COMMON_ARCHITECTURE_EVIDENCE_KEYS,
+}
+REQUIRED_REFLECTION_DIMENSIONS = ("scope", "dependency_impact", "risk", "verification", "rollback")
+ARCHITECT_PLAN_EVIDENCE_KEYS = (
+    "batch_scope",
+    "task_breakdown",
+    "implementation_plan",
+    "validation_plan",
+    "handoff_plan",
+)
+REFLECTION_DIMENSION_ALIASES = {
+    "scope": "scope",
+    "perimeter": "scope",
+    "perimetre": "scope",
+    "dependency": "dependency_impact",
+    "dependencies": "dependency_impact",
+    "dependance": "dependency_impact",
+    "dependances": "dependency_impact",
+    "impact": "dependency_impact",
+    "dependency_impact": "dependency_impact",
+    "risk": "risk",
+    "risque": "risk",
+    "verification": "verification",
+    "validation": "verification",
+    "verify": "verification",
+    "test": "verification",
+    "tests": "verification",
+    "rollback": "rollback",
+    "revert": "rollback",
+    "fallback": "rollback",
+    "backout": "rollback",
+}
+
+
+def _safe_int(value: str, default: int = 0) -> int:
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def _parse_streak_value(raw: str) -> int:
+    value = (raw or "").strip()
+    if not value:
+        return 0
+    head = value.split("/", 1)[0].strip()
+    return _safe_int(head, 0)
+
+
+def _delivery_probe_threshold() -> int:
+    threshold = _safe_int(os.environ.get("TMUX_ROLE_DELIVERY_PROBE_THRESHOLD", "3"), 3)
+    if threshold < 2:
+        return 2
+    return threshold
+
+
+def _previous_delivery_probe_streak(role: str, current_task_id: str) -> int:
+    state_dir = Path(os.environ.get("TMUX_ROLE_STATE_DIR", "/home/venom/.openclaw/cron/role-state"))
+    last_contract_path = state_dir / f"{role}.last_contract"
+    if not last_contract_path.exists():
+        return 0
+    try:
+        prev_text = last_contract_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return 0
+    prev_values = _parse_contract(prev_text)
+    prev_delta = str(prev_values.get("DELTA", "")).strip().upper()
+    if prev_delta != "DELIVERY_PROBE_INCONSISTENT_CONTINUE":
+        return 0
+    prev_evidence = _parse_evidence_kv(prev_values.get("EVIDENCE", ""))
+    prev_task_id = (prev_evidence.get("task_id") or "none").strip() or "none"
+    current_task = (current_task_id or "none").strip() or "none"
+    if prev_task_id != current_task:
+        return 0
+    explicit = _parse_streak_value(prev_evidence.get("delivery_probe_streak", ""))
+    if explicit > 0:
+        return explicit
+    return 1
+
+
+def _parse_contract(text: str) -> dict[str, str]:
+    values = {k: "" for k in KEYS}
+    for raw in text.splitlines():
+        line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
+        if not line or ":" not in line:
+            continue
+        key, val = line.split(":", 1)
+        key = key.strip().upper()
+        if key in values and not values[key]:
+            values[key] = val.strip()
+    return values
+
+
+def _parse_evidence_kv(raw: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for fragment in raw.split(";"):
+        item = fragment.strip()
+        if not item or "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        key_norm = key.strip().lower()
+        if not key_norm:
+            continue
+        out[key_norm] = value.strip()
+    return out
+
+
+def _append_evidence(raw: str, fragment: str) -> str:
+    base = (raw or "").strip(" ;")
+    frag = fragment.strip(" ;")
+    if not frag:
+        return base
+    if not base:
+        return frag
+    if frag.lower() in base.lower():
+        return base
+    return f"{base}; {frag}"
+
+
+def _upsert_evidence_kv(raw: str, key: str, value: str) -> str:
+    kv = _parse_evidence_kv(raw)
+    key_norm = (key or "").strip().lower()
+    if not key_norm:
+        return (raw or "").strip()
+    kv[key_norm] = (value or "").strip()
+    preferred_order = [
+        "task_update",
+        "lock_check",
+        "run_note",
+        "exec_report",
+        "issues",
+        "suggestions",
+        "stream_id",
+        "task_id",
+        "handoff_to",
+        "handoff_ref",
+        "cmd",
+        "cmd_err_excerpt",
+        "tests_run",
+    ]
+    parts: list[str] = []
+    seen: set[str] = set()
+    for k in preferred_order:
+        if k in kv and kv[k]:
+            parts.append(f"{k}={kv[k]}")
+            seen.add(k)
+    for k in sorted(kv.keys()):
+        if k in seen:
+            continue
+        if kv[k]:
+            parts.append(f"{k}={kv[k]}")
+    return "; ".join(parts)
+
+
+def _normalize_reflection_dimension(token: str) -> str:
+    normalized = re.sub(r"[^a-z0-9_ -]+", "", (token or "").strip().lower())
+    normalized = normalized.replace("-", "_").replace(" ", "_")
+    return REFLECTION_DIMENSION_ALIASES.get(normalized, normalized)
+
+
+def _parse_reflection_dimensions(raw: str) -> set[str]:
+    dimensions: set[str] = set()
+    for fragment in re.split(r"[,/|]+", raw or ""):
+        normalized = _normalize_reflection_dimension(fragment)
+        if normalized:
+            dimensions.add(normalized)
+    return dimensions
+
+
+def _is_skip_with_reason(value: str) -> bool:
+    v = (value or "").strip()
+    upper = v.upper()
+    return upper.startswith("SKIP(") and v.endswith(")") and len(v) > len("SKIP()")
+
+
+def _looks_like_permission_error(value: str) -> bool:
+    upper = (value or "").strip().upper()
+    markers = (
+        "PERMISSION DENIED",
+        "READ_ONLY",
+        "READ-ONLY",
+        "NON_ECRIVABLE",
+        "WRITE_DENIED",
+        "EROFS",
+        "EPERM",
+    )
+    return any(marker in upper for marker in markers)
+
+
+def _is_yes_no(value: str) -> bool:
+    return (value or "").strip().lower() in {"yes", "no"}
+
+
+def _is_pass_fail_or_skip(value: str) -> bool:
+    upper = (value or "").strip().upper()
+    if upper in {"PASS", "FAIL"}:
+        return True
+    if upper.startswith("SKIP("):
+        return _is_skip_with_reason(value)
+    return False
+
+
+def _render_contract(values: dict[str, str]) -> str:
+    return "\n".join(f"{k}: {values[k]}" for k in KEYS)
+
+
+def main() -> int:
+    if len(sys.argv) != 9:
+        print(
+            "usage: role_contract_guard.py <role> <source> <payload_file> "
+            "<allow_file_edits:0|1> <workboard_has_work:0|1> "
+            "<workboard_has_in_progress:0|1> <queue_version> <workboard_version>",
+            file=sys.stderr,
+        )
+        return 2
+
+    role = sys.argv[1]
+    source = sys.argv[2]
+    payload_path = Path(sys.argv[3])
+    allow_file_edits = sys.argv[4] == "1"
+    workboard_role_has_work = sys.argv[5] == "1"
+    workboard_role_has_in_progress = sys.argv[6] == "1"
+    runtime_queue_version = sys.argv[7]
+    runtime_workboard_version = sys.argv[8]
+
+    text = payload_path.read_text(encoding="utf-8", errors="ignore")
+    values = _parse_contract(text)
+
+    if any(not values[k] for k in KEYS):
+        # Keep original flow unchanged on partial payloads.
+        print(text.strip())
+        return 0
+
+    evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", "").strip())
+
+    queue_states: dict[str, str] = {}
+    ready_ids: set[str] = set()
+    queue_path = Path("docs/orchestrator-ops/priority-queue.json")
+    if queue_path.exists():
+        try:
+            queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
+            for item in queue_obj.get("items", []):
+                item_id = str(item.get("id", "")).strip().upper()
+                state = str(item.get("state", "")).strip().upper()
+                if item_id:
+                    queue_states[item_id] = state
+                if item_id and state == "READY":
+                    ready_ids.add(item_id)
+        except Exception:
+            pass
+    queue_has_ready = bool(ready_ids)
+
+    def emit_blocked(blocker_id: str, reason: str) -> None:
+        now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        blocker_slug = re.sub(r"[^a-z0-9_]+", "_", blocker_id.lower()).strip("_") or "role_contract_guard"
+        reason_clean = re.sub(r"\s+", "_", str(reason or "").strip())
+        reason_clean = reason_clean.replace(";", ",")
+        reason_clean = re.sub(r"[^A-Za-z0-9_.,:/=+-]", "", reason_clean)[:260] or "none"
+        evidence = (
+            "task_update=blocked; lock_check=ok; "
+            "run_note=contract guard a bloque la sortie role pour incoherence; "
+            f"exec_report=contract_guard_{blocker_slug}; "
+            f"issues={blocker_slug}; "
+            "suggestions=regenerer_sortie_role_specifique_avec_preuve_et_cmd; "
+            "stream_id=none; task_id=none; "
+            "tool_request=none; skill_request=none; "
+            "channels_read=runtime_context; impact_assessment=medium; impact_action=regenerate_contract; "
+            f"arch_rule=api_contract; review_scope={role}_contract_guard; "
+            f"conformance=BLOCKED; violations={blocker_slug}; "
+            f"role_artifact=contract_guard_{blocker_slug}; blocker_reason={reason_clean}"
+        )
+        blocked = {
+            "STATUS": "BLOCKED",
+            "DELTA": "ROLE_OUTPUT_NOT_SPECIFIC",
+            "EVIDENCE": evidence,
+            "RISKS": "livraison de role non spécifique, iteration non fiable",
+            "NEXT": "regenerer une sortie avec preuve explicite liée au role et artefact concret",
+            "VERDICT": "BLOCKED",
+            "BLOCKER_ID": blocker_id,
+            "NEXT_ACTION_UNIQUE": f"FIX_ROLE_CONTRACT_{role.upper()}_{now}",
+        }
+        print(_render_contract(blocked))
+        raise SystemExit(0)
+
+    def emit_permission_continue(reason: str, writable_refs: list[str] | None = None) -> None:
+        now = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        reason_clean = re.sub(r"\s+", "_", str(reason or "").strip())
+        reason_clean = reason_clean.replace(";", ",")
+        reason_clean = re.sub(r"[^A-Za-z0-9_.,:/=+-]", "", reason_clean)[:260] or "none"
+        current_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+        stream_id = (current_kv.get("stream_id") or "none").strip() or "none"
+        task_id = (current_kv.get("task_id") or "none").strip() or "none"
+        threshold = _delivery_probe_threshold()
+        prev_streak = _previous_delivery_probe_streak(role, task_id)
+        streak = prev_streak + 1
+        run_note = "faux signal lock ignore, reprise livraison exigee"
+        if streak >= threshold:
+            evidence = (
+                "task_update=blocked; lock_check=ok; "
+                "run_note=boucle delivery probe detectee sans progression concrete; "
+                "exec_report=delivery_probe_streak_exceeded; "
+                "issues=delivery_probe_streak_exceeded; "
+                "suggestions=executer_claim_ou_complete_manuel_et_revoir_prompt_role; "
+                f"stream_id={stream_id}; task_id={task_id}; "
+                "tool_request=none; skill_request=none; "
+                "channels_read=runtime_context; impact_assessment=high; impact_action=escalate_admin_and_reassign; "
+                f"arch_rule=api_contract; review_scope={role}_delivery_probe; conformance=BLOCKED; violations=delivery_probe_streak_exceeded; "
+                f"{required_artifact_key}=delivery_probe_streak_exceeded; "
+                f"queue_version={runtime_queue_version}; workboard_version={runtime_workboard_version}; "
+                f"coordination_ref=delivery_probe_streak:{task_id}; probe_reason={reason_clean}; "
+                f"delivery_probe_streak={streak}/{threshold}"
+            )
+            if writable_refs:
+                evidence = _append_evidence(evidence, f"probe_writable_refs_count={len(writable_refs)}")
+            values["STATUS"] = "BLOCKED"
+            values["DELTA"] = "DELIVERY_PROBE_STREAK_EXCEEDED"
+            values["EVIDENCE"] = evidence
+            values["RISKS"] = "boucle de livraison sans progression concrete"
+            values["NEXT"] = (
+                "owner=adminapp-codex; action=force_recovery_role_et_reassigner_task_update_concret"
+            )
+            values["VERDICT"] = "BLOCKED"
+            values["BLOCKER_ID"] = "DELIVERY_PROBE_STREAK_EXCEEDED"
+            values["NEXT_ACTION_UNIQUE"] = f"ESCALATE_DELIVERY_PROBE_{role.upper()}_{now}"
+            print(_render_contract(values))
+            raise SystemExit(0)
+        evidence = (
+            "task_update=none_no_signal; lock_check=ok; "
+            f"run_note={run_note}; "
+            "exec_report=delivery_probe_inconsistent_lock_only; "
+            "issues=none; "
+            "suggestions=executer_commande_metier_reelle_et_fermer_tache; "
+            f"stream_id={stream_id}; task_id={task_id}; "
+            "tool_request=none; skill_request=none; "
+            "channels_read=runtime_context; impact_assessment=low; impact_action=resume_delivery; "
+            f"arch_rule=api_contract; review_scope={role}_delivery_probe; conformance=WARN; violations=lock_probe_false_positive; "
+            f"{required_artifact_key}=delivery_probe_lock_false_positive; "
+            f"queue_version={runtime_queue_version}; workboard_version={runtime_workboard_version}; "
+            f"coordination_ref=resume_delivery:{task_id}; probe_reason={reason_clean}; "
+            f"delivery_probe_streak={streak}/{threshold}"
+        )
+        if writable_refs:
+            evidence = _append_evidence(evidence, f"probe_writable_refs_count={len(writable_refs)}")
+        values["STATUS"] = "IN_PROGRESS"
+        values["DELTA"] = "DELIVERY_PROBE_INCONSISTENT_CONTINUE"
+        values["EVIDENCE"] = evidence
+        values["RISKS"] = "none"
+        values["NEXT"] = (
+            f"owner={role}; action=executer_cmd_metier_reel_puis_complete_ou_handoff"
+        )
+        values["VERDICT"] = "GO_WITH_CAUTION"
+        values["BLOCKER_ID"] = "NONE"
+        values["NEXT_ACTION_UNIQUE"] = f"RECHECK_DELIVERY_PROBE_{role.upper()}_{now}"
+        print(_render_contract(values))
+        raise SystemExit(0)
+
+    status_u = values["STATUS"].upper()
+    blocker_id_u = values["BLOCKER_ID"].strip().upper()
+    if status_u == "BLOCKED" and blocker_id_u in {"", "NONE", "N/A", "NULL"}:
+        emit_blocked(
+            "BLOCKER_ID_MISSING",
+            f"role={role}; source={source}; required=BLOCKER_ID != NONE when STATUS=BLOCKED",
+        )
+
+    tokens = ROLE_TOKENS.get(role, [])
+    required_marker = ARTIFACT_MARKERS.get(role, "ROLE_ARTIFACT=")
+    required_artifact_key = required_marker.rstrip("=").lower()
+    task_update = evidence_kv.get("task_update", "").strip().lower()
+    lock_check = evidence_kv.get("lock_check", "").strip().lower()
+
+    if not evidence_kv:
+        emit_blocked(
+            "EVIDENCE_KV_FORMAT_MISSING",
+            f"role={role}; source={source}; required=format key=value;key2=value2 in EVIDENCE",
+        )
+
+    allowed_task_updates = {
+        "claim",
+        "complete",
+        "handoff",
+        "blocked",
+        "analysis_only",
+        "none_no_ready",
+        "none_no_signal",
+    }
+    if not task_update:
+        emit_blocked(
+            "TASK_UPDATE_MISSING",
+            f"role={role}; source={source}; required=task_update in EVIDENCE",
+        )
+    if task_update and task_update not in allowed_task_updates:
+        emit_blocked(
+            "TASK_UPDATE_INVALID",
+            f"role={role}; source={source}; task_update={task_update}; allowed={','.join(sorted(allowed_task_updates))}",
+        )
+    if role in {"planner", "analyst", "architect", "po", "scrum_master", "clawsentinel"} and (not allow_file_edits) and task_update in {"claim", "complete", "handoff"}:
+        # Soft-normalize common model drift in read-only roles instead of hard-blocking
+        # the full orchestration loop.
+        values["EVIDENCE"] = _upsert_evidence_kv(values.get("EVIDENCE", ""), "task_update", "analysis_only")
+        values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), "autofix=read_only_task_update_to_analysis_only")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+        issues_now = evidence_kv.get("issues", "").strip()
+        if issues_now.lower() in {"", "none", "n/a", "na"}:
+            values["EVIDENCE"] = _upsert_evidence_kv(values.get("EVIDENCE", ""), "issues", "read_only_task_update_autofixed")
+        elif "read_only_task_update_autofixed" not in issues_now:
+            values["EVIDENCE"] = _upsert_evidence_kv(values.get("EVIDENCE", ""), "issues", f"{issues_now},read_only_task_update_autofixed")
+        suggestions_now = evidence_kv.get("suggestions", "").strip()
+        if suggestions_now.lower() in {"", "none", "n/a", "na"}:
+            values["EVIDENCE"] = _upsert_evidence_kv(values.get("EVIDENCE", ""), "suggestions", "respecter_task_update_read_only_sur_roles_non_editables")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+        task_update = "analysis_only"
+    if lock_check != "ok":
+        emit_blocked(
+            "LOCK_CHECK_MISSING",
+            f"role={role}; source={source}; required=lock_check=ok in EVIDENCE",
+        )
+
+    run_note = evidence_kv.get("run_note", "").strip()
+    if not run_note:
+        emit_blocked(
+            "RUN_NOTE_MISSING",
+            f"role={role}; source={source}; required=run_note (>=5 words) in EVIDENCE",
+        )
+    run_note_words = [w for w in re.split(r"\s+", run_note) if w]
+    if len(run_note_words) < 5:
+        emit_blocked(
+            "RUN_NOTE_TOO_SHORT",
+            f"role={role}; source={source}; run_note_words={len(run_note_words)}; required>=5",
+        )
+
+    exec_report = evidence_kv.get("exec_report", "").strip()
+    issues_summary = evidence_kv.get("issues", "").strip()
+    suggestions_summary = evidence_kv.get("suggestions", "").strip()
+    channels_read = evidence_kv.get("channels_read", "").strip().lower()
+    impact_assessment = evidence_kv.get("impact_assessment", "").strip().lower()
+    impact_action = evidence_kv.get("impact_action", "").strip().lower()
+    if not exec_report:
+        emit_blocked(
+            "EXEC_REPORT_MISSING",
+            f"role={role}; source={source}; required=exec_report in EVIDENCE",
+        )
+    if not issues_summary:
+        emit_blocked(
+            "ISSUES_SUMMARY_MISSING",
+            f"role={role}; source={source}; required=issues in EVIDENCE (use none if no issue)",
+        )
+    if not suggestions_summary:
+        emit_blocked(
+            "SUGGESTIONS_SUMMARY_MISSING",
+            f"role={role}; source={source}; required=suggestions in EVIDENCE (use none if no suggestion)",
+        )
+    issues_summary_l = issues_summary.strip().lower()
+    suggestions_summary_l = suggestions_summary.strip().lower()
+    if issues_summary_l and issues_summary_l not in {"none", "n/a", "na"} and suggestions_summary_l in {"none", "n/a", "na"}:
+        emit_blocked(
+            "SUGGESTIONS_REQUIRED_WITH_ISSUES",
+            f"role={role}; source={source}; issues={issues_summary}; required=suggestions actionable when issues!=none",
+        )
+
+    require_publication_check = queue_has_ready or workboard_role_has_work or workboard_role_has_in_progress
+    if require_publication_check:
+        none_like = {"none", "n/a", "na"}
+        if not channels_read:
+            emit_blocked(
+                "CHANNELS_READ_MISSING",
+                f"role={role}; source={source}; required=channels_read in EVIDENCE when queue_or_workboard_has_work=1",
+            )
+        if channels_read in none_like:
+            emit_blocked(
+                "CHANNELS_READ_INVALID",
+                f"role={role}; source={source}; channels_read={channels_read}; required=explicit_publication_channels",
+            )
+        if not impact_assessment:
+            emit_blocked(
+                "IMPACT_ASSESSMENT_MISSING",
+                f"role={role}; source={source}; required=impact_assessment in EVIDENCE when queue_or_workboard_has_work=1",
+            )
+        allowed_impact = {"none", "low", "medium", "high", "critical"}
+        if impact_assessment and impact_assessment not in allowed_impact:
+            emit_blocked(
+                "IMPACT_ASSESSMENT_INVALID",
+                f"role={role}; source={source}; impact_assessment={impact_assessment}; allowed={','.join(sorted(allowed_impact))}",
+            )
+        if not impact_action:
+            emit_blocked(
+                "IMPACT_ACTION_MISSING",
+                f"role={role}; source={source}; required=impact_action in EVIDENCE when queue_or_workboard_has_work=1",
+            )
+        if impact_assessment in {"medium", "high", "critical"} and impact_action in none_like:
+            emit_blocked(
+                "IMPACT_ACTION_INSUFFICIENT",
+                f"role={role}; source={source}; impact_assessment={impact_assessment}; impact_action={impact_action}; required=concrete_action",
+            )
+        if impact_assessment in {"high", "critical"} and impact_action in {"monitor", "monitor_updates"}:
+            emit_blocked(
+                "IMPACT_ACTION_INSUFFICIENT",
+                f"role={role}; source={source}; impact_assessment={impact_assessment}; impact_action={impact_action}; required=concrete_action",
+            )
+
+    if allow_file_edits and task_update in {"claim", "complete", "handoff"}:
+        preannounce_required = ("intent_id", "intent_chat_ref", "intent_memory_ref", "intent_registry_ref", "edit_scope")
+        missing_preannounce = [k for k in preannounce_required if not evidence_kv.get(k, "").strip()]
+        if missing_preannounce:
+            emit_blocked(
+                "PREANNOUNCE_EVIDENCE_MISSING",
+                f"role={role}; source={source}; task_update={task_update}; missing={','.join(missing_preannounce)}; required={','.join(preannounce_required)}",
+            )
+        reflection_passes_raw = evidence_kv.get("reflection_passes", "").strip()
+        reflection_passes = _safe_int(reflection_passes_raw, 0)
+        min_reflection_passes = _safe_int(
+            os.environ.get("TMUX_ROLE_MIN_REFLECTION_PASSES")
+            or os.environ.get("LM_USED_ROLE_MIN_REFLECTION_PASSES")
+            or os.environ.get("MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES")
+            or "2",
+            2,
+        )
+        if min_reflection_passes < 2:
+            min_reflection_passes = 2
+        if reflection_passes < min_reflection_passes:
+            emit_blocked(
+                "REFLECTION_PASSES_INVALID",
+                "role={role}; source={source}; task_update={task_update}; reflection_passes={value}; required>={minimum}".format(
+                    role=role,
+                    source=source,
+                    task_update=task_update,
+                    value=reflection_passes_raw or "missing",
+                    minimum=min_reflection_passes,
+                ),
+            )
+        reflection_dimensions_raw = evidence_kv.get("reflection_dimensions", "").strip()
+        if not reflection_dimensions_raw:
+            emit_blocked(
+                "REFLECTION_DIMENSIONS_MISSING",
+                f"role={role}; source={source}; task_update={task_update}; required=reflection_dimensions with {','.join(REQUIRED_REFLECTION_DIMENSIONS)}",
+            )
+        reflection_dimensions = _parse_reflection_dimensions(reflection_dimensions_raw)
+        missing_reflection_dimensions = [
+            dim for dim in REQUIRED_REFLECTION_DIMENSIONS if dim not in reflection_dimensions
+        ]
+        if missing_reflection_dimensions:
+            emit_blocked(
+                "REFLECTION_DIMENSIONS_INCOMPLETE",
+                f"role={role}; source={source}; task_update={task_update}; missing={','.join(missing_reflection_dimensions)}; reflection_dimensions={reflection_dimensions_raw}",
+            )
+
+    if allow_file_edits and workboard_role_has_in_progress and task_update in {"analysis_only", "none_no_ready", "none_no_signal"}:
+        emit_blocked(
+            "IN_PROGRESS_NO_RESUME",
+            f"role={role}; source={source}; task_update={task_update}; required=claim|complete|blocked|handoff when workboard_in_progress=1",
+        )
+
+    has_artifact_marker = required_marker in values.get("EVIDENCE", "").upper() or bool(evidence_kv.get(required_artifact_key))
+    if not has_artifact_marker:
+        emit_blocked(
+            "ROLE_ARTIFACT_MISSING",
+            f"role={role}; source={source}; required_marker={required_marker}",
+        )
+
+    required_evidence_keys = ROLE_REQUIRED_EVIDENCE_KEYS.get(role, tuple())
+    evidence_raw = values.get("EVIDENCE", "").upper()
+    is_fallback_checkpoint = source == "fallback_checkpoint" and "FALLBACK_MODE=CHECKPOINT" in evidence_raw
+    if required_evidence_keys and not is_fallback_checkpoint:
+        missing_required = [k for k in required_evidence_keys if not evidence_kv.get(k, "").strip()]
+        if missing_required:
+            emit_blocked(
+                "ROLE_MENTOR_EVIDENCE_MISSING",
+                f"role={role}; source={source}; missing={','.join(missing_required)}; required={','.join(required_evidence_keys)}",
+            )
+
+    if "conformance" in required_evidence_keys:
+        conformance = evidence_kv.get("conformance", "").strip().upper()
+        if conformance not in {"PASS", "WARN", "BLOCKED"}:
+            emit_blocked(
+                "ARCHITECTURE_CONFORMANCE_INVALID",
+                f"role={role}; source={source}; conformance={conformance or 'missing'}; allowed=PASS,WARN,BLOCKED",
+            )
+
+    if role == "planner":
+        if (queue_has_ready or workboard_role_has_in_progress) and not evidence_kv.get("task_id", "").strip():
+            emit_blocked(
+                "PLANNER_TASK_ID_MISSING",
+                f"role={role}; source={source}; required=task_id when queue_ready=1 or workboard_in_progress=1",
+            )
+    if role == "architect":
+        if (queue_has_ready or workboard_role_has_in_progress) and not evidence_kv.get("task_id", "").strip():
+            emit_blocked(
+                "ARCHITECT_TASK_ID_MISSING",
+                f"role={role}; source={source}; required=task_id when queue_ready=1 or workboard_in_progress=1",
+            )
+        if queue_has_ready or workboard_role_has_work or workboard_role_has_in_progress:
+            missing_architect_plan = [k for k in ARCHITECT_PLAN_EVIDENCE_KEYS if not evidence_kv.get(k, "").strip()]
+            if missing_architect_plan:
+                emit_blocked(
+                    "ARCHITECT_PLAN_EVIDENCE_MISSING",
+                    f"role={role}; source={source}; missing={','.join(missing_architect_plan)}; required={','.join(ARCHITECT_PLAN_EVIDENCE_KEYS)}",
+                )
+
+    if not evidence_kv.get("queue_version", "").strip():
+        values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), f"queue_version={runtime_queue_version}")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+    if not evidence_kv.get("workboard_version", "").strip():
+        values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), f"workboard_version={runtime_workboard_version}")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+    if not evidence_kv.get("coordination_ref", "").strip():
+        coord_task = evidence_kv.get("task_id", "").strip() or "none"
+        values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), f"coordination_ref={task_update}:{coord_task}")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+
+    if queue_has_ready or workboard_role_has_work:
+        phase1_missing = [k for k in ("stream_id", "task_id") if not evidence_kv.get(k, "").strip()]
+        if phase1_missing:
+            values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), f"phase1_should_missing={','.join(phase1_missing)}")
+            evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+
+    if task_update == "complete":
+        missing_phase2 = [k for k in ("stream_id", "task_id") if not evidence_kv.get(k, "").strip()]
+        cmd_value = evidence_kv.get("cmd", "").strip()
+        tests_value = evidence_kv.get("tests_run", "").strip()
+        if not cmd_value:
+            missing_phase2.append("cmd")
+        elif cmd_value.upper().startswith("SKIP(") and not _is_skip_with_reason(cmd_value):
+            missing_phase2.append("cmd_skip_reason")
+        if not tests_value:
+            missing_phase2.append("tests_run")
+        elif tests_value.upper().startswith("SKIP(") and not _is_skip_with_reason(tests_value):
+            missing_phase2.append("tests_run_skip_reason")
+        if missing_phase2:
+            emit_blocked(
+                "EVIDENCE_PHASE2_MISSING",
+                f"role={role}; source={source}; task_update=complete; missing={','.join(missing_phase2)}",
+            )
+
+    if task_update in {"claim", "handoff"}:
+        missing_phase_claim = [k for k in ("stream_id", "task_id") if not evidence_kv.get(k, "").strip()]
+        if missing_phase_claim:
+            emit_blocked(
+                "EVIDENCE_PHASE2_MISSING",
+                f"role={role}; source={source}; task_update={task_update}; missing={','.join(missing_phase_claim)}",
+            )
+
+    if role == "dev" and task_update == "complete":
+        self_qa = evidence_kv.get("self_qa", "").strip()
+        if not self_qa:
+            emit_blocked(
+                "DEV_SELF_QA_MISSING",
+                "role=dev; source={source}; required=self_qa for task_update=complete".format(source=source),
+            )
+        self_qa_norm = re.sub(r"\s+", "", self_qa.lower())
+        required_self_qa_fragments = ("lint:pass", "unit:pass", "integration:pass")
+        missing_fragments = [frag for frag in required_self_qa_fragments if frag not in self_qa_norm]
+        if missing_fragments:
+            emit_blocked(
+                "DEV_SELF_QA_INCOMPLETE",
+                "role=dev; source={source}; self_qa_missing={missing}; required=lint:PASS,unit:PASS,integration:PASS".format(
+                    source=source,
+                    missing=",".join(missing_fragments),
+                ),
+            )
+        if "real_data:pass" not in self_qa_norm and "real_data:skip(" not in self_qa_norm:
+            emit_blocked(
+                "DEV_SELF_QA_REAL_DATA_MISSING",
+                "role=dev; source={source}; required=self_qa contains real_data:PASS or real_data:SKIP(reason)".format(
+                    source=source
+                ),
+            )
+        for key_name in ("data_source_check", "arch_check", "real_data_check"):
+            key_value = evidence_kv.get(key_name, "").strip()
+            if not key_value:
+                emit_blocked(
+                    "DEV_{name}_MISSING".format(name=key_name.upper()),
+                    "role=dev; source={source}; required={name}".format(source=source, name=key_name),
+                )
+            if not _is_pass_fail_or_skip(key_value):
+                emit_blocked(
+                    "DEV_{name}_INVALID".format(name=key_name.upper()),
+                    "role=dev; source={source}; {name}={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                        source=source,
+                        name=key_name,
+                        value=key_value,
+                    ),
+                )
+        dev_ui_impact = evidence_kv.get("ui_impact", "").strip().lower()
+        if not _is_yes_no(dev_ui_impact):
+            emit_blocked(
+                "DEV_UI_IMPACT_INVALID",
+                "role=dev; source={source}; ui_impact={value}; allowed=yes|no".format(
+                    source=source,
+                    value=dev_ui_impact or "missing",
+                ),
+            )
+        if dev_ui_impact == "yes":
+            app_launch = evidence_kv.get("app_launch", "").strip()
+            browser_e2e = evidence_kv.get("browser_e2e", "").strip()
+            if not app_launch:
+                emit_blocked(
+                    "DEV_APP_LAUNCH_MISSING",
+                    "role=dev; source={source}; required=app_launch when ui_impact=yes".format(source=source),
+                )
+            if not _is_pass_fail_or_skip(app_launch):
+                emit_blocked(
+                    "DEV_APP_LAUNCH_INVALID",
+                    "role=dev; source={source}; app_launch={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                        source=source,
+                        value=app_launch,
+                    ),
+                )
+            if not browser_e2e:
+                emit_blocked(
+                    "DEV_BROWSER_E2E_MISSING",
+                    "role=dev; source={source}; required=browser_e2e when ui_impact=yes".format(source=source),
+                )
+            if not _is_pass_fail_or_skip(browser_e2e):
+                emit_blocked(
+                    "DEV_BROWSER_E2E_INVALID",
+                    "role=dev; source={source}; browser_e2e={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                        source=source,
+                        value=browser_e2e,
+                    ),
+                )
+
+    if role == "qa" and task_update in {"complete", "blocked", "handoff"}:
+        qa_scope = evidence_kv.get("qa_scope", "").strip().lower()
+        if not qa_scope or "global" not in qa_scope:
+            emit_blocked(
+                "QA_SCOPE_INVALID",
+                "role=qa; source={source}; qa_scope={value}; required contains global".format(
+                    source=source,
+                    value=qa_scope or "missing",
+                ),
+            )
+        self_qa_ref = evidence_kv.get("self_qa_ref", "").strip()
+        if not self_qa_ref:
+            emit_blocked(
+                "QA_SELF_QA_REF_MISSING",
+                "role=qa; source={source}; required=self_qa_ref in QA global gate".format(source=source),
+            )
+        qa_app_launch = evidence_kv.get("app_launch", "").strip()
+        qa_real_data = evidence_kv.get("real_data_check", "").strip()
+        if not qa_app_launch:
+            emit_blocked(
+                "QA_APP_LAUNCH_MISSING",
+                "role=qa; source={source}; required=app_launch".format(source=source),
+            )
+        if not _is_pass_fail_or_skip(qa_app_launch):
+            emit_blocked(
+                "QA_APP_LAUNCH_INVALID",
+                "role=qa; source={source}; app_launch={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                    source=source,
+                    value=qa_app_launch,
+                ),
+            )
+        if not qa_real_data:
+            emit_blocked(
+                "QA_REAL_DATA_CHECK_MISSING",
+                "role=qa; source={source}; required=real_data_check".format(source=source),
+            )
+        if not _is_pass_fail_or_skip(qa_real_data):
+            emit_blocked(
+                "QA_REAL_DATA_CHECK_INVALID",
+                "role=qa; source={source}; real_data_check={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                    source=source,
+                    value=qa_real_data,
+                ),
+            )
+        qa_ui_impact = evidence_kv.get("ui_impact", "").strip().lower()
+        if not _is_yes_no(qa_ui_impact):
+            emit_blocked(
+                "QA_UI_IMPACT_INVALID",
+                "role=qa; source={source}; ui_impact={value}; allowed=yes|no".format(
+                    source=source,
+                    value=qa_ui_impact or "missing",
+                ),
+            )
+        if qa_ui_impact == "yes":
+            qa_browser_e2e = evidence_kv.get("browser_e2e", "").strip()
+            if not qa_browser_e2e:
+                emit_blocked(
+                    "QA_BROWSER_E2E_MISSING",
+                    "role=qa; source={source}; required=browser_e2e when ui_impact=yes".format(source=source),
+                )
+            if not _is_pass_fail_or_skip(qa_browser_e2e):
+                emit_blocked(
+                    "QA_BROWSER_E2E_INVALID",
+                    "role=qa; source={source}; browser_e2e={value}; allowed=PASS|FAIL|SKIP(reason)".format(
+                        source=source,
+                        value=qa_browser_e2e,
+                    ),
+                )
+
+    if task_update == "handoff":
+        handoff_to = evidence_kv.get("handoff_to", "").strip()
+        if handoff_to in {"vision-architect-tasks-planner", "vision_architect_tasks_planner"}:
+            handoff_to = "planner"
+            values["EVIDENCE"] = _upsert_evidence_kv(values.get("EVIDENCE", ""), "handoff_to", handoff_to)
+            evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+        if not handoff_to:
+            emit_blocked(
+                "HANDOFF_TO_MISSING",
+                f"role={role}; source={source}; required=handoff_to for task_update=handoff",
+            )
+        valid_roles = set(ROLE_TOKENS.keys())
+        if handoff_to and handoff_to not in valid_roles:
+            emit_blocked(
+                "HANDOFF_TO_INVALID",
+                f"role={role}; source={source}; handoff_to={handoff_to}; allowed={','.join(sorted(valid_roles))}",
+            )
+        if not evidence_kv.get("handoff_ref", "").strip() and not evidence_kv.get("handoff_id", "").strip():
+            values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), "handoff_ref=pending")
+            evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+
+    scope_text = " ".join([values["DELTA"], values["EVIDENCE"], values["RISKS"], values["NEXT"], values["NEXT_ACTION_UNIQUE"]]).upper()
+    has_role_signal = any(tok in scope_text for tok in tokens)
+    chain_targets = set(re.findall(r"BATCH-[0-9]+", scope_text))
+    is_generic_dispatch = (
+        "DISPATCH_BATCH" in scope_text
+        or "LANCER" in scope_text and "DISPATCH" in scope_text
+        or "READY_DETECTE" in scope_text
+    )
+    target_ready = any(queue_states.get(t, "") == "READY" for t in chain_targets)
+    permission_claimed = _looks_like_permission_error(scope_text)
+
+    if is_generic_dispatch and not queue_has_ready:
+        emit_blocked(
+            "STALE_READY_ACTION",
+            f"role={role}; source={source}; queue_ready=0; observed_dispatch={','.join(sorted(chain_targets)) or 'none'}",
+        )
+    if is_generic_dispatch and chain_targets and not target_ready:
+        emit_blocked(
+            "STALE_READY_ACTION",
+            f"role={role}; source={source}; queue_ready_ids={','.join(sorted(ready_ids)) or 'none'}; observed_dispatch={','.join(sorted(chain_targets))}",
+        )
+
+    if role in {"dev", "backend_engineer", "frontend_engineer", "integrator", "data_analyst", "infra_engineer", "tester", "qa"} and allow_file_edits and queue_has_ready:
+        has_cmd_evidence = any(
+            token in scope_text
+            for token in ("CMD=", "COMMAND=", "EXEC_SAFE.SH", "PYTEST", "BACKEND_REGRESSION_GATE", "CURL ", "NPM ", "PNPM ", "YARN ", "UV ", "MAKE ")
+        )
+        if values["DELTA"].strip().upper() == "NO_DELTA":
+            emit_blocked(
+                "DELIVERY_NO_DELTA_WITH_READY",
+                f"role={role}; source={source}; queue_ready_ids={','.join(sorted(ready_ids))}; delta=NO_DELTA",
+            )
+        if not has_cmd_evidence:
+            if task_update == "blocked":
+                # Blocked states (quota, external dependency, upstream gate) are valid
+                # without command-proof in the same tick.
+                pass
+            elif source == "fallback_checkpoint":
+                values["STATUS"] = "IN_PROGRESS"
+                values["VERDICT"] = "GO_WITH_CAUTION"
+                values["BLOCKER_ID"] = "NONE"
+                values["DELTA"] = "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT"
+                values["RISKS"] = "signal de sortie non exploitable sur ce tick, preuve cmd a completer au prochain run"
+                values["EVIDENCE"] = _append_evidence(
+                    values.get("EVIDENCE", ""),
+                    f"cmd_evidence_pending=1; queue_ready_ids={','.join(sorted(ready_ids))}",
+                )
+                evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+            else:
+                emit_blocked(
+                    "ROLE_EXEC_EVIDENCE_MISSING",
+                    f"role={role}; source={source}; required=CMD evidence for delivery role; queue_ready_ids={','.join(sorted(ready_ids))}",
+                )
+
+    if role in {"planner", "dev", "backend_engineer", "frontend_engineer", "integrator", "data_analyst", "infra_engineer", "tester", "qa"} and allow_file_edits and task_update == "blocked" and permission_claimed:
+        cmd_value = evidence_kv.get("cmd", "").strip()
+        cmd_err_excerpt = evidence_kv.get("cmd_err_excerpt", "").strip()
+        if not (_looks_like_permission_error(cmd_value) or _looks_like_permission_error(cmd_err_excerpt)):
+            emit_permission_continue(
+                f"role={role}; source={source}; missing_write_error_evidence",
+            )
+
+        probe_sources = " ".join(
+            [
+                values.get("EVIDENCE", ""),
+                values.get("RISKS", ""),
+                values.get("NEXT", ""),
+                cmd_value,
+                cmd_err_excerpt,
+            ]
+        )
+        probe_sources_l = probe_sources.lower()
+        lock_markers = (
+            "openclaw-shared-locks",
+            "parallel-workstreams",
+            "intent-registry",
+            ".lock",
+        )
+        business_markers = (
+            "docs/planning/tasks.md",
+            "/docs/planning/tasks.md",
+            "copilot-app/",
+            "/copilot-app/",
+        )
+        mentions_lock = any(marker in probe_sources_l for marker in lock_markers)
+        mentions_business_target = any(marker in probe_sources_l for marker in business_markers)
+        if mentions_lock and not mentions_business_target:
+            emit_permission_continue(
+                f"role={role}; source={source}; lock_only_permission_signal",
+            )
+        path_candidates: set[str] = set()
+        for quoted in re.findall(r"[\"']([^\"']+)[\"']", probe_sources):
+            cand = quoted.strip()
+            if "/" in cand or cand.startswith(("docs/", "copilot-app/")):
+                path_candidates.add(cand)
+
+        known_probe_paths = {
+            "docs/orchestrator-ops/parallel-workstreams.json.lock",
+            "docs/orchestrator-ops/intent-registry.json.lock",
+            "docs/orchestrator-ops/parallel-workstreams.json",
+            "docs/planning/tasks.md",
+            "copilot-app/backend/logs/finance_analysis.log",
+            ".tmp/openclaw-shared-locks",
+            "/home/venom/analyse-financiere/.tmp/openclaw-shared-locks",
+            "/home/venom/shared/analyse-financiere/.tmp/openclaw-shared-locks",
+            "/home/venom/shared/analyse-financiere/copilot-app/backend/logs/finance_analysis.log",
+        }
+        path_candidates.update(known_probe_paths)
+
+        writable_refs: list[str] = []
+        cwd = Path.cwd()
+        for raw_path in sorted(path_candidates):
+            try:
+                p = Path(raw_path)
+                if not p.is_absolute():
+                    p = (cwd / p).resolve(strict=False)
+                else:
+                    p = p.resolve(strict=False)
+                probe_target = p if p.exists() else p.parent
+                if probe_target and os.access(probe_target, os.W_OK):
+                    writable_refs.append(str(p))
+            except Exception:
+                continue
+        if writable_refs:
+            emit_permission_continue(
+                f"role={role}; source={source}; lock_probe_failed_but_paths_writable",
+                writable_refs=writable_refs,
+            )
+
+    cmd_value_norm = evidence_kv.get("cmd", "").strip()
+    if "/home/venom/shared/analyse-financiere" in cmd_value_norm:
+        values["EVIDENCE"] = _append_evidence(values.get("EVIDENCE", ""), "workdir_alias=shared_ok")
+        evidence_kv = _parse_evidence_kv(values.get("EVIDENCE", ""))
+
+    if status_u == "BLOCKED":
+        print(_render_contract(values))
+        return 0
+
+    if (queue_has_ready or workboard_role_has_work) and role in {
+        "planner",
+        "analyst",
+        "architect",
+        "dev",
+        "backend_engineer",
+        "frontend_engineer",
+        "integrator",
+        "data_analyst",
+        "infra_engineer",
+        "tester",
+        "qa",
+        "po",
+        "scrum_master",
+        "clawsentinel",
+    }:
+        if not task_update:
+            emit_blocked(
+                "TASK_UPDATE_MISSING",
+                f"role={role}; source={source}; required=task_update marker when queue_or_workboard_has_work=1",
+            )
+        if lock_check != "ok":
+            emit_blocked(
+                "LOCK_CHECK_MISSING",
+                f"role={role}; source={source}; required=lock_check=ok marker when queue_or_workboard_has_work=1",
+            )
+
+    has_runtime_context = any(sig in scope_text for sig in ["RUNTIME_CONTEXT", "QUEUE_STATES", "BATCH-"])
+    generic_dispatch_weak = (
+        is_generic_dispatch
+        and role in {
+            "tester",
+            "qa",
+            "architect",
+            "po",
+            "scrum_master",
+            "clawsentinel",
+            "analyst",
+            "backend_engineer",
+            "frontend_engineer",
+            "integrator",
+            "data_analyst",
+            "infra_engineer",
+        }
+        and len(scope_text) < 260
+        and not has_runtime_context
+    )
+
+    if has_role_signal and has_artifact_marker and not generic_dispatch_weak:
+        print(_render_contract(values))
+        return 0
+
+    if is_fallback_checkpoint and has_artifact_marker:
+        print(_render_contract(values))
+        return 0
+
+    obs = re.sub(r"\s+", " ", scope_text).strip()[:140]
+    required = "|".join(tokens) if tokens else "ROLE_SPECIFIC_SIGNAL"
+    emit_blocked(
+        "ROLE_CONTRACT_MISSING",
+        f"role={role}; source={source}; required_any={required}; required_marker={required_marker}; observed={obs}",
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

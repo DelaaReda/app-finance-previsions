@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-05-BATCH-05-BACKEND-20260302T213107Z-394"
+stream_id: "BATCH-05"
+task_id: "BATCH-05-BACKEND"
+role: "backend_engineer"
+produced_at_utc: "2026-03-02T21:31:07Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+preconditions:
+  change_plan:
+    - "1) valider le scope batch-05-backend et vérifier les dépendances copilot"
+    - "market context et rag"
+    - "2) mesurer l'impact dependency risk en réutilisant context_service"
+    - "rag_store et ask_llm existants"
+    - "3) injecter le contexte marché auto dans le prompt ask avec fallback explicite si aucune source"
+    - "4) structurer retour ask avec action/verdict/reasoning/risk_caveat et source_count vérifié"
+    - "5) ajouter validation avec tests ciblés puis plan de rollback via restauration git et vérification smoke."
+  architecture_checks:
+    - "schema_stability"
+    - "forecast_contract"
+    - "reusability"
+    - "observability"
+    - "security"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "cd apps/api/src && python3 -m pytest -q domains/copilot/tests/test_copilot_service.py"
+      rc: "0"
+      started_at_utc: "2026-03-02T21:31:07Z"
+      ended_at_utc: "2026-03-02T21:31:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m py_compile apps/api/src/domains/copilot/application/copilot_service.py apps/api/src/domains/copilot/tests/test_copilot_service.py && cd apps/api/src && python3 -m pytest -q domains/copilot/tests/test_copilot_service.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+  artifacts:
+    - "apps/api/src/domains/copilot/application/copilot_service.py,apps/api/src/domains/copilot/tests/test_copilot_service.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "backend_engineer"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-c4bf0e763954"
+  review_ref: "none"
+  note: "Copilot ask now injects market context and returns structured verdict/risk."

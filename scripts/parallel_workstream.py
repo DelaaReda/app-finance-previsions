@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/parallel_workstream.py
+../platform/automation/parallel_workstream.py

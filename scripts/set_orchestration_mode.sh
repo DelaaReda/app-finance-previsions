@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/set_orchestration_mode.sh
+../platform/automation/set_orchestration_mode.sh

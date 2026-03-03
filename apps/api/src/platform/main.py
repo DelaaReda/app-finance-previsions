@@ -1542,6 +1542,56 @@ def register_routes(app: FastAPI):
                 "error": str(e),
             })
 
+    @app.get("/api/macro/series/latest")
+    async def macro_series_latest(
+        series_ids: Optional[str] = Query(None, description="Comma-separated FRED IDs (e.g. CPIAUCSL,DGS10,VIXCLS)"),
+        ids: Optional[str] = Query(None, description="Alias for series_ids"),
+        range: str = Query("5y", description="Range: 1m,3m,6m,1y,2y,3y,5y,10y,all"),
+        freq: Optional[str] = Query(None, description="Optional frequency hint (daily, weekly, monthly)"),
+    ):
+        """Latest macro datapoint by series (compat alias for legacy/front clients)."""
+        try:
+            base_payload = await macro_series(series_ids=series_ids, ids=ids, range=range, freq=freq)
+            data = (base_payload or {}).get("data", {}) if isinstance(base_payload, dict) else {}
+            series = data.get("series", []) if isinstance(data, dict) else []
+
+            latest_points: List[Dict[str, Any]] = []
+            for item in series if isinstance(series, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                points = item.get("data") or []
+                if not isinstance(points, list) or not points:
+                    continue
+                last = points[-1] if isinstance(points[-1], dict) else {}
+                latest_points.append(
+                    {
+                        "id": item.get("id"),
+                        "title": item.get("title"),
+                        "unit": item.get("unit"),
+                        "date": last.get("date"),
+                        "value": last.get("value"),
+                    }
+                )
+
+            return _ok(
+                {
+                    "series": latest_points,
+                    "count": len(latest_points),
+                    "updated_at": data.get("updated_at") or datetime.utcnow().isoformat() + "Z",
+                    "source": ["macro_series", "latest_alias"],
+                }
+            )
+        except Exception as exc:
+            return _ok(
+                {
+                    "series": [],
+                    "count": 0,
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
+                    "source": ["macro_series", "latest_alias_error_fallback"],
+                    "error": str(exc),
+                }
+            )
+
     @app.get("/api/macro/snapshot")
     async def macro_snapshot():
         """Get current macro snapshot (latest values) - reads from persisted macro series."""
@@ -3185,7 +3235,7 @@ def register_routes(app: FastAPI):
     async def copilot_ask(req: CopilotAskRequest):
         """Ask copilot service (route orchestrator only)."""
         try:
-            from services.copilot_service import build_ask_payload
+            from domains.copilot.application.copilot_service import build_ask_payload
 
             payload = await build_ask_payload(
                 question=req.question,
@@ -3210,7 +3260,7 @@ def register_routes(app: FastAPI):
     async def copilot_history(limit: int = Query(20, ge=1, le=100)):
         """Get conversation history via copilot service."""
         try:
-            from services.copilot_service import build_history_payload
+            from domains.copilot.application.copilot_service import build_history_payload
             return _ok(build_history_payload(limit=limit))
         except Exception as e:
             return _ok({
@@ -3349,7 +3399,7 @@ def register_routes(app: FastAPI):
 
             # Prepare LLM analysis using unified client
             try:
-                from research.llm_client import ask_llm  # type: ignore
+                from platform.legacy.research.llm_client import ask_llm  # type: ignore
             except Exception:
                 ask_llm = None  # type: ignore
             
@@ -3430,7 +3480,7 @@ def register_routes(app: FastAPI):
 
                 ranked_models: List[str] = []
                 try:
-                    from services.g4f_client import get_ranked_tested_models as _ranked_models  # type: ignore
+                    from domains.judge.application.g4f_client import get_ranked_tested_models as _ranked_models  # type: ignore
                     ranked_models = [
                         m
                         for _, m in _ranked_models(
@@ -3964,7 +4014,7 @@ def register_routes(app: FastAPI):
         import sys as _sys, importlib as _imp
         info = {"sys_path": _sys.path[:10], "modules_loaded": []}
         # Test import chain
-        for mod in ["services.g4f_client", "research.llm_client", "domains.judge.application.g4f_client"]:
+        for mod in ["domains.judge.application.g4f_client", "platform.legacy.research.llm_client", "services.g4f_client", "research.llm_client"]:
             try:
                 m = _imp.import_module(mod)
                 call_llm = getattr(m, "call_llm", None)
@@ -3973,7 +4023,7 @@ def register_routes(app: FastAPI):
                 info["modules_loaded"].append({"mod": mod, "ok": False, "error": str(e)[:120]})
         # Test call direct
         try:
-            from services.g4f_client import call_llm as _cl, get_ranked_tested_models as _gr
+            from domains.judge.application.g4f_client import call_llm as _cl, get_ranked_tested_models as _gr
             ranked = _gr(category_preference="forecast", limit=2)
             info["ranked_models"] = ranked[:2]
             res = _cl(messages=[{"role":"user","content":"Say OK in 3 words max"}], model="command-a25", timeout=25)

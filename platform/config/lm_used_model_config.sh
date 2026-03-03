@@ -1,29 +1,115 @@
 #!/usr/bin/env bash
-
-# Canonical LLM model config used across orchestration and runtime jobs.
-# Change here only to repoint all agent/cron behavior.
-# This file is the single source of truth for model choice (legacy MODEL_CONFIG_* vars are derived).
+# =============================================================================
+# lm_used_model_config.sh — SOURCE UNIQUE config modèles LLM
+#
+# POUR CHANGER UN MODÈLE → modifier un TIER (section 1) ou un rôle (section 2)
+# Les scripts ne lisent QUE ce fichier — aucun modèle hardcodé ailleurs.
+#
+# TIERS:
+#   ORCHESTRATION  planner, admin          gpt-5.2 + xhigh   (fiabilité dispatch)
+#   BUILD          dev                     gpt-5.3-codex-spark + xhigh  (~40% moins cher)
+#   ANALYSIS       data_analyst, integrator gpt-5.3-codex-spark + medium (read-only)
+#   VALIDATION     tester, qa              qwen (agent primaire, zéro quota codex)
+#   DEEP_DEBUG     override ponctuel       gpt-5.3-codex + xhigh
+#
+# MODÈLES valides : gpt-5.2 | gpt-5.3-codex-spark | gpt-5.3-codex | qwen
+# THINKING valides: xhigh | high | medium | low | "" (= défaut config codex)
+# FALLBACK chain  : codex rate-limited → qwen → skip
+# =============================================================================
 
 set -euo pipefail
 
-# Main agent (non-tmux OpenClaw/default lane)
-LM_USED_MAIN_MODEL="${LM_USED_MAIN_MODEL:-openai-codex/gpt-5.2}"
-LM_USED_MAIN_THINKING="${LM_USED_MAIN_THINKING:-xhigh}"
+# =============================================================================
+# SECTION 1 — TIERS  (modifier ici = tous les rôles du tier changent)
+# =============================================================================
 
-# Role lanes (tmux/crons / runner payloads)
-LM_USED_ROLE_MODEL="${LM_USED_ROLE_MODEL:-openai-codex/gpt-5.3-codex-spark}"
-LM_USED_ROLE_THINKING="${LM_USED_ROLE_THINKING:-xhigh}"
-LM_USED_ROLE_MIN_REFLECTION_PASSES="${LM_USED_ROLE_MIN_REFLECTION_PASSES:-5}"
+# ORCHESTRATION — dispatch, vision, sécurité — fiabilité > coût
+LM_TIER_ORCHESTRATION_MODEL="${LM_TIER_ORCHESTRATION_MODEL:-gpt-5.2}"
+LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-xhigh}"
 
-# Direct cron jobs and shared defaults
+# BUILD — génération code, patches, livraison — spark ~40% moins cher
+LM_TIER_BUILD_MODEL="${LM_TIER_BUILD_MODEL:-gpt-5.3-codex-spark}"
+LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-xhigh}"
+
+# ANALYSIS — lecture seule, métriques — medium suffit
+LM_TIER_ANALYSIS_MODEL="${LM_TIER_ANALYSIS_MODEL:-gpt-5.3-codex-spark}"
+LM_TIER_ANALYSIS_THINKING="${LM_TIER_ANALYSIS_THINKING:-xhigh}"
+
+# VALIDATION — tests, docs, QA — qwen natif, zéro quota codex
+LM_TIER_VALIDATION_MODEL="${LM_TIER_VALIDATION_MODEL:-qwen}"
+LM_TIER_VALIDATION_THINKING="${LM_TIER_VALIDATION_THINKING:-}"
+
+# DEEP_DEBUG — debug profond incidents (override ponctuel)
+# Usage: export LM_ROLE_DEV_MODEL="$LM_TIER_DEEP_DEBUG_MODEL"
+LM_TIER_DEEP_DEBUG_MODEL="${LM_TIER_DEEP_DEBUG_MODEL:-gpt-5.3-codex}"
+LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-xhigh}"
+
+# =============================================================================
+# SECTION 2 — PER-ROLE  (3 rôles lean actifs + legacy aliasés)
+# =============================================================================
+
+# --- RÔLES LEAN ACTIFS ---
+# planner: dispatch batches, mentor vision, coordination → fiabilité max
+LM_ROLE_PLANNER_MODEL="${LM_ROLE_PLANNER_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
+LM_ROLE_PLANNER_THINKING="${LM_ROLE_PLANNER_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
+
+# dev: code + tests + QA consolidé → spark xhigh
+LM_ROLE_DEV_MODEL="${LM_ROLE_DEV_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_DEV_THINKING="${LM_ROLE_DEV_THINKING:-${LM_TIER_BUILD_THINKING}}"
+
+# admin: santé système, déblocage, ops → fiabilité (même tier que planner)
+LM_ROLE_ADMIN_MODEL="${LM_ROLE_ADMIN_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
+LM_ROLE_ADMIN_THINKING="${LM_ROLE_ADMIN_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
+
+# --- RÔLES LEGACY (aliasés vers lean par fc_agent_tick.sh) ---
+# Ces vars sont lues si un ancien script invoque encore l'ancien nom
+LM_ROLE_BACKEND_ENGINEER_MODEL="${LM_ROLE_BACKEND_ENGINEER_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_BACKEND_ENGINEER_THINKING="${LM_ROLE_BACKEND_ENGINEER_THINKING:-${LM_TIER_BUILD_THINKING}}"
+LM_ROLE_FRONTEND_ENGINEER_MODEL="${LM_ROLE_FRONTEND_ENGINEER_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_FRONTEND_ENGINEER_THINKING="${LM_ROLE_FRONTEND_ENGINEER_THINKING:-${LM_TIER_BUILD_THINKING}}"
+LM_ROLE_DATA_ANALYST_MODEL="${LM_ROLE_DATA_ANALYST_MODEL:-${LM_TIER_ANALYSIS_MODEL}}"
+LM_ROLE_DATA_ANALYST_THINKING="${LM_ROLE_DATA_ANALYST_THINKING:-${LM_TIER_ANALYSIS_THINKING}}"
+LM_ROLE_ARCHITECT_MODEL="${LM_ROLE_ARCHITECT_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
+LM_ROLE_ARCHITECT_THINKING="${LM_ROLE_ARCHITECT_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
+LM_ROLE_TESTER_MODEL="${LM_ROLE_TESTER_MODEL:-${LM_TIER_VALIDATION_MODEL}}"
+LM_ROLE_TESTER_THINKING="${LM_ROLE_TESTER_THINKING:-${LM_TIER_VALIDATION_THINKING}}"
+LM_ROLE_QA_MODEL="${LM_ROLE_QA_MODEL:-${LM_TIER_VALIDATION_MODEL}}"
+LM_ROLE_QA_THINKING="${LM_ROLE_QA_THINKING:-${LM_TIER_VALIDATION_THINKING}}"
+LM_ROLE_INTEGRATOR_MODEL="${LM_ROLE_INTEGRATOR_MODEL:-${LM_TIER_ANALYSIS_MODEL}}"
+LM_ROLE_INTEGRATOR_THINKING="${LM_ROLE_INTEGRATOR_THINKING:-${LM_TIER_ANALYSIS_THINKING}}"
+LM_ROLE_INFRA_ENGINEER_MODEL="${LM_ROLE_INFRA_ENGINEER_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_INFRA_ENGINEER_THINKING="${LM_ROLE_INFRA_ENGINEER_THINKING:-${LM_TIER_BUILD_THINKING}}"
+LM_ROLE_CLAWSENTINEL_MODEL="${LM_ROLE_CLAWSENTINEL_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
+LM_ROLE_CLAWSENTINEL_THINKING="${LM_ROLE_CLAWSENTINEL_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
+LM_ROLE_ANALYST_MODEL="${LM_ROLE_ANALYST_MODEL:-${LM_TIER_ANALYSIS_MODEL}}"
+LM_ROLE_ANALYST_THINKING="${LM_ROLE_ANALYST_THINKING:-${LM_TIER_ANALYSIS_THINKING}}"
+
+# =============================================================================
+# SECTION 3 — FALLBACK CHAIN  (codex rate-limited → qwen → skip)
+# =============================================================================
+LM_FALLBACK_BIN="${LM_FALLBACK_BIN:-/home/venom/.npm-global/bin/qwen}"
+LM_FALLBACK_MODEL="${LM_FALLBACK_MODEL:-qwen}"
+
+# =============================================================================
+# SECTION 4 — GLOBAL DEFAULTS  (lus par scripts qui ne connaissent pas les rôles)
+# =============================================================================
+LM_USED_MAIN_MODEL="${LM_USED_MAIN_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
+LM_USED_MAIN_THINKING="${LM_USED_MAIN_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
+LM_USED_ROLE_MODEL="${LM_USED_ROLE_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_USED_ROLE_THINKING="${LM_USED_ROLE_THINKING:-${LM_TIER_BUILD_THINKING}}"
+LM_USED_ROLE_MIN_REFLECTION_PASSES="${LM_USED_ROLE_MIN_REFLECTION_PASSES:-2}"
+LM_USED_QWEN_BIN="${LM_USED_QWEN_BIN:-${LM_FALLBACK_BIN}}"
+LM_USED_QWEN_THINKING="${LM_USED_QWEN_THINKING:-}"
 LM_USED_DIRECT_CRON_MODEL="${LM_USED_DIRECT_CRON_MODEL:-${LM_USED_ROLE_MODEL}}"
 LM_USED_DIRECT_CRON_THINKING="${LM_USED_DIRECT_CRON_THINKING:-${LM_USED_ROLE_THINKING}}"
 LM_USED_GATEWAY_MODEL="${LM_USED_GATEWAY_MODEL:-${LM_USED_ROLE_MODEL}}"
 LM_USED_GATEWAY_THINKING="${LM_USED_GATEWAY_THINKING:-${LM_USED_ROLE_THINKING}}"
-LM_USED_FALLBACK_MODEL="${LM_USED_FALLBACK_MODEL:-${LM_USED_ROLE_MODEL}}"
-LM_USED_FALLBACK_THINKING="${LM_USED_FALLBACK_THINKING:-${LM_USED_ROLE_THINKING}}"
+LM_USED_FALLBACK_MODEL="${LM_USED_FALLBACK_MODEL:-qwen}"
+LM_USED_FALLBACK_THINKING="${LM_USED_FALLBACK_THINKING:-}"
 
-# Backward-compatible aliases kept for older variable names still used by some scripts.
+# =============================================================================
+# SECTION 5 — ALIASES backward-compat  (NE PAS MODIFIER — dérivés auto)
+# =============================================================================
 MODEL_CONFIG_MAIN_MODEL="${MODEL_CONFIG_MAIN_MODEL:-${LM_USED_MAIN_MODEL}}"
 MODEL_CONFIG_MAIN_THINKING="${MODEL_CONFIG_MAIN_THINKING:-${LM_USED_MAIN_THINKING}}"
 MODEL_CONFIG_PARALLEL_ROLE_MODEL="${MODEL_CONFIG_PARALLEL_ROLE_MODEL:-${LM_USED_ROLE_MODEL}}"

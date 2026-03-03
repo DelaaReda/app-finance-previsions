@@ -1,0 +1,8 @@
+STATUS: IN_PROGRESS
+DELTA: NO_DELTA
+EVIDENCE: task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable; auto_recovery=pending(1/2); fail_count=1/2; fallback_mode=checkpoint; output_channel=codex_exec; planner_artifact=docs/orchestrator-ops/priority-queue.json; rc_codex=-1; rc_primary=127; rc_retry=127; retry_mode=codex_exec; signal_unparseable=1; source_ok=docs/orchestrator-ops/priority-queue.json; t_codex=0s; t_primary=180s; t_retry=90s
+RISKS: réponse tmux non exploitable sur ce tick, continuité basée checkpoint
+NEXT: vérifier READY/BLOCKED puis prioriser une action unique
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: CONTINUE_PLANNER_FROM_PRIORITY_QUEUE

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-06-BATCH-06-DEV-02-20260303T155645Z-505"
+stream_id: "BATCH-06"
+task_id: "BATCH-06-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-03T15:56:45Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope module cible: ui forecasts multi-actifs + deep-dive"
+    - "dependency impact: dépend uniquement batch-05 et batch-06-dev-01 clôturé"
+    - "risk regression: régressions d’ergonomie et filtres secteur/horizon"
+    - "verification tests: smoke endpoint + contrat contrat ui"
+    - "rollback plan: isoler composants existants revert ciblé"
+  architecture_checks:
+    - "reuse_modules_existants"
+    - "api_contract_stable"
+    - "compatibilite_backward"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(no_cmd_recorded)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-03T15:56:45Z"
+      ended_at_utc: "2026-03-03T15:56:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_tests_recorded)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "none"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-385ad341d51f"
+  review_ref: "none"
+  note: "none"

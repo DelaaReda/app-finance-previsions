@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/update_direct_crons.sh
+../platform/automation/update_direct_crons.sh

@@ -26,11 +26,28 @@ except Exception:  # pragma: no cover
 
 
 def _backend_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    # Canonical backend assets live under apps/api/src/platform/legacy/.
+    return _src_root() / "platform" / "legacy"
 
 
 def _src_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    # apps/api/src/domains/judge/application/g4f_client.py -> parents[3] = apps/api/src
+    return Path(__file__).resolve().parents[3]
+
+
+def _api_root() -> Path:
+    return _src_root().parent
+
+
+def _runtime_llm_models_dir() -> Path:
+    return _api_root() / "runtime" / "data" / "llm" / "models"
+
+
+def _tested_models_path(filename: str) -> Path:
+    runtime_path = _runtime_llm_models_dir() / filename
+    if runtime_path.is_file():
+        return runtime_path
+    return _src_root() / filename
 
 
 def _safe_json_load(path: Path) -> Any:
@@ -326,7 +343,7 @@ def _working_fast_pairs(
 
 
 def _categorized_tested_pairs(category_preference: Optional[str]) -> List[Tuple[Optional[str], str]]:
-    path = _src_root() / "tested_g4f_models_categorized.json"
+    path = _tested_models_path("tested_g4f_models_categorized.json")
     payload = _safe_json_load(path)
     if not isinstance(payload, dict):
         return []
@@ -360,8 +377,8 @@ def _categorized_tested_pairs(category_preference: Optional[str]) -> List[Tuple[
 
 
 def _flat_tested_pairs(category_preference: Optional[str]) -> List[Tuple[Optional[str], str]]:
-    ok_path = _src_root() / "tested_g4f_models_ok.json"
-    full_path = _src_root() / "tested_g4f_models.json"
+    ok_path = _tested_models_path("tested_g4f_models_ok.json")
+    full_path = _tested_models_path("tested_g4f_models.json")
     payload = _safe_json_load(ok_path)
     if not isinstance(payload, list):
         payload = _safe_json_load(full_path)
@@ -403,9 +420,9 @@ def _path_signature(path: Path) -> Tuple[int, int, int]:
 def _ranked_models_signature(category_preference: Optional[str]) -> Tuple[Any, ...]:
     llm_settings = get_llm_settings() if get_llm_settings is not None else None
     working_path = _backend_root() / "data" / "llm" / "models" / "working.json"
-    categorized_path = _src_root() / "tested_g4f_models_categorized.json"
-    tested_ok_path = _src_root() / "tested_g4f_models_ok.json"
-    tested_full_path = _src_root() / "tested_g4f_models.json"
+    categorized_path = _tested_models_path("tested_g4f_models_categorized.json")
+    tested_ok_path = _tested_models_path("tested_g4f_models_ok.json")
+    tested_full_path = _tested_models_path("tested_g4f_models.json")
     normalized_category = (category_preference or "").strip().lower()
     return (
         normalized_category,
@@ -468,8 +485,8 @@ def get_ranked_tested_models(
 
     Ranking priority:
     1) data/llm/models/working.json (watcher output, refreshed at startup)
-    2) src/tested_g4f_models_categorized.json
-    3) src/tested_g4f_models_ok.json / src/tested_g4f_models.json
+    2) runtime/data/llm/models/tested_g4f_models_categorized.json (fallback: src/)
+    3) runtime/data/llm/models/tested_g4f_models_ok.json / tested_g4f_models.json (fallback: src/)
     """
     normalized_category = (category_preference or "").strip().lower()
     cache_key = (normalized_category,)

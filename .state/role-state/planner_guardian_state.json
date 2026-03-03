@@ -1,0 +1,13 @@
+{
+  "updated_at_utc": "2026-03-03T22:49:40Z",
+  "streaks": {
+    "ready_idle_streak": 0,
+    "low_score_streak": 0,
+    "runway_no_batch_streak": 1
+  },
+  "last_score": 85,
+  "last_level": "green",
+  "last_issues": [
+    "runway_short_without_batch_creation"
+  ]
+}

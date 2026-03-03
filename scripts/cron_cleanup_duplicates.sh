@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/cron_cleanup_duplicates.sh
+../platform/automation/cron_cleanup_duplicates.sh

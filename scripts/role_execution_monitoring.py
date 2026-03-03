@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/role_execution_monitoring.py
+../platform/automation/role_execution_monitoring.py

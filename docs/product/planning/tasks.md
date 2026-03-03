@@ -230,13 +230,13 @@ Pour toute tâche dans `docs/product/planning/tasks.md`, la section `Scope IN` e
 
 Tous les rôles doivent utiliser un `change-plan` explicite de 5+ étapes et un `architecture-checks` complet. Exemple compact (à adapter aux chemins/IDs réels):
 
-- **planner**: `python3 scripts/parallel_workstream.py claim --role planner --change-plan "1) revalider objectif migration; 2) lire batch cible; 3) valider dépendances; 4) choisir tâche la plus bloquante; 5) sécuriser rollback; 6) définir preuve attendue" --architecture-checks "target-arch-path,scope_boundaries,handoff_rules,forecast_contract_maturity,monitoring_readiness`
-- **dev/backend_engineer**: `python3 scripts/parallel_workstream.py claim --role backend_engineer --change-plan "1) verifier task IN/OUT; 2) confirmer domaine backend; 3) patch minimal; 4) tests endpoint; 5) verifier contract; 6) rollback" --architecture-checks "domain_boundary,contract_stability,migrations_invariant,mock_deprecation,artifact_visibility`
-- **frontend_engineer**: `python3 scripts/parallel_workstream.py claim --role frontend_engineer --change-plan "1) lire contrat UI; 2) limiter au scope; 3) patch composant cible; 4) test navigateur rapide; 5) verifier flux 2-3 clics; 6) rollback" --architecture-checks "ui_contract_source,domain_boundary,no_mock_nominal,widget_isolation,capture_required`
-- **tester**: `python3 scripts/parallel_workstream.py claim --role tester --change-plan "1) lire artefact attendu; 2) lancer tests ciblés; 3) valider EVIDENCE; 4) produire snapshot/trace; 5) proposer corrective; 6) confirmer preuve" --architecture-checks "e2e_smoke,contract_assert,proof_complete,ui_snapshot,blocking_issues`
-- **qa**: `python3 scripts/parallel_workstream.py claim --role qa --change-plan "1) lire lots et dépendances; 2) valider DELTA+EVIDENCE; 3) confirmer gates; 4) vérifier monitoring; 5) décider PASS/BLOCKED; 6) next action unique" --architecture-checks "delivery_gate,mandatory_evidence,blockers_explicit,traceability,rollback_status`
+- **planner**: `python3 scripts/parallel_workstream.py claim --role planner --change-plan "1) lire queue+workboard+workstate; 2) identifier le blocage prioritaire; 3) définir chaîne d'exécution; 4) fixer preuve attendue; 5) sécuriser rollback; 6) préparer next action unique" --architecture-checks "queue_workboard_sync,scope_boundaries,handoff_rules,reuse_gate,monitoring_readiness"`
+- **dev (lane unique)**: `python3 scripts/parallel_workstream.py claim --role dev --change-plan "1) relire task IN/OUT; 2) vérifier réutilisation existant (rg); 3) patch minimal sur fichier cible; 4) test ciblé; 5) valider contrat/runtime; 6) préparer complete/handoff" --architecture-checks "domain_boundary,contract_stability,reuse_first,no_sys_path_bridge,artifact_traceability"`
+- **admin**: `python3 scripts/parallel_workstream.py claim --role admin --change-plan "1) vérifier monitor/health; 2) confirmer cohérence queue/workboard; 3) valider preuves dev; 4) appliquer correction orchestration minimale; 5) revalider stabilité; 6) préparer gouvernance next step" --architecture-checks "runtime_health,cron_coverage,contract_guard,proof_integrity,rollback_status"`
+- **qa (si lane active)**: `python3 scripts/parallel_workstream.py claim --role qa --change-plan "1) lire lots et dépendances; 2) valider DELTA+EVIDENCE; 3) confirmer gates; 4) vérifier monitoring; 5) décider PASS/BLOCKED; 6) publier next action unique" --architecture-checks "delivery_gate,mandatory_evidence,blockers_explicit,traceability,rollback_status"`
 
-Pour les rôles additionnels (`architect`, `infra_engineer`, `analyst`, `data_analyst`, `integrator`, `po`, `scrum_master`), utiliser le modèle équivalent dans `docs/ops/AGENT_ROLE_INTEGRATION_MODEL.md`.
+Règle lane active: pour les tâches non clôturées, utiliser uniquement des IDs `PLAN`, `DEV-01/02/03`, `ADMIN-01`, `GOV-REVIEW` (pas de nouveaux labels actifs backend/frontend/data).
+Pour les rôles additionnels historiques (`architect`, `infra_engineer`, `analyst`, `data_analyst`, `integrator`, `po`, `scrum_master`), utiliser le modèle de `docs/ops/AGENT_ROLE_INTEGRATION_MODEL.md` uniquement si ces lanes sont réactivées explicitement.
 
 ### Monitoring post-lancement (obligatoire)
 
@@ -4213,6 +4213,60 @@ Basic-ready criteria (minimum functional baseline):
 - **Acceptation testable**:
   - gate retourne `PASS` seulement avec preuves techniques exécutées API->UI.
 - **Dependencies**: TV16-FF-08, TV16-FF-09, TV16-FF-05
+
+## Addendum (Audit 2026-03-03) — Architecture hardening pack P0/P1
+
+### A26-ARCH-01 - Restore forecast/judge import viability (F-001/F-002/F-003)
+
+- **Priority**: P0
+- **Objectif**: rendre les modules critiques importables sans fallback fantôme.
+- **Scope IN**:
+  - créer `apps/api/src/services/cache_layer.py` ou re-router `forecast_service.py` vers cache layer existant et testable
+  - corriger `_backend_root()` / `_src_root()` dans `apps/api/src/domains/judge/application/g4f_client.py`
+  - retirer les imports ghost `backend.*` de `apps/api/src/domains/forecasts/application/forecast_service.py`
+- **Acceptation testable**:
+  - `python3 -c "import apps.api.src.domains.forecasts.application.forecast_service"` passe sans ModuleNotFoundError
+  - `python3 -c "from apps.api.src.domains.judge.application.g4f_client import get_ranked_tested_models; print(bool(get_ranked_tested_models()))"` retourne vrai si fichiers présents
+
+### A26-ARCH-02 - Purge fake RAG + unify runtime path (F-004/F-005/F-006/F-008)
+
+- **Priority**: P0
+- **Objectif**: supprimer les doubles datastores et réaligner vers `apps/api/runtime/data`.
+- **Scope IN**:
+  - purger `apps/api/src/runtime/data/rag/news.jsonl` fake puis regénérer via job réel
+  - supprimer le dossier fantôme `apps/api/src/runtime/` après migration de son contenu utile
+  - aligner `path_resolver.py` et les readers forecast sur un unique `DATA_DIR` canonique
+- **Acceptation testable**:
+  - `test ! -d apps/api/src/runtime`
+  - `rg -n "test.com|fed.com" apps/api/runtime/data/rag/news.jsonl` retourne vide
+  - les endpoints forecast/judge lisent la même source runtime (preuve logs + paths)
+
+### A26-ARCH-03 - Layering cleanup and bridge reduction (F-007/F-010/F-011/F-012)
+
+- **Priority**: P1
+- **Objectif**: réduire la dette de couches et les bridges `sys.path` non déterministes.
+- **Scope IN**:
+  - sortir les schémas `market_data` de `api.schemas` vers `domains/market_data/contracts/*`
+  - supprimer bridges `sys.path` créés le 2026-03-03 (`services/*`, `platform/legacy/research/llm_client.py`)
+  - remplacer `api/main.py` private re-export shim par interface publique stable dans `platform/main.py`
+  - documenter plan de retrait progressif des stubs racine et alias chain (sans big-bang)
+- **Acceptation testable**:
+  - `rg -n "sys.path.insert\\(" apps/api/src/services apps/api/src/platform/legacy/research` retourne vide
+  - `rg -n "importlib.import_module\\(\"platform.main\"\\)" apps/api/src/api/main.py` retourne vide
+  - tests domaine `market_data` passent sans dépendre de `api.schemas`
+
+### A26-ARCH-04 - Legacy namespace migration plan (F-009)
+
+- **Priority**: P1
+- **Objectif**: planifier la migration de `platform/legacy` actif vers namespace cible sans casser runtime.
+- **Scope IN**:
+  - RFC court avec stratégie en 2 phases (alias compat + cutover)
+  - inventaire des modules actifs dans `platform/legacy/*` et mapping destination (`platform/core/*`)
+- **Scope OUT**:
+  - renommage global immédiat (risque élevé) dans ce lot
+- **Acceptation testable**:
+  - document de migration signé dans `docs/ops/`
+  - check-list de cutover et rollback prête avant exécution
 
 ## Changelog (all-epics decomposition)
 

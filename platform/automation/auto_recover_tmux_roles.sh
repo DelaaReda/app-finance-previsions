@@ -2,12 +2,56 @@
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_FROM_PARENT="$(cd "${SCRIPT_DIR}/.." && pwd -P 2>/dev/null || true)"
+ROOT_FROM_GRANDPARENT="$(cd "${SCRIPT_DIR}/../.." && pwd -P 2>/dev/null || true)"
+
+resolve_root() {
+  local candidate_a="${1:-}"
+  local candidate_b="${2:-}"
+  local a="/home/venom/shared/analyse-financiere"
+  local b="/home/venom/analyse-financiere"
+  local candidate=""
+  for candidate in "$candidate_a" "$candidate_b" "$a" "$b"; do
+    if [[ -z "$candidate" ]]; then
+      continue
+    fi
+    if [[ -d "$candidate/scripts" ]] && [[ -d "$candidate/platform" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s\n' "$candidate_a"
+}
+
+workspace_writable() {
+  local candidate="${1:-}"
+  [[ -n "$candidate" ]] || return 1
+  mkdir -p "$candidate/logs-codex-runs" >/dev/null 2>&1 || return 1
+  [[ -w "$candidate/logs-codex-runs" ]]
+}
+
+ROOT="$(resolve_root "$ROOT_FROM_PARENT" "$ROOT_FROM_GRANDPARENT")"
+if ! workspace_writable "$ROOT"; then
+  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
+    if [[ "$fallback" == "$ROOT" ]]; then
+      continue
+    fi
+    if [[ -d "$fallback/scripts" ]] && [[ -d "$fallback/platform" ]] && workspace_writable "$fallback"; then
+      ROOT="$fallback"
+      break
+    fi
+  done
+fi
 LOCK_FILE="${FC_ROLE_RECOVERY_LOCK_FILE:-/tmp/fc-codex-role-recovery.lock}"
 LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-$ROOT/logs-codex-runs}"
 LOG_FILE="${FC_ROLE_RECOVERY_LOG_FILE:-$LOG_DIR/role-recovery.log}"
-TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/orchestrator-ops/parallel-role-topology.json}"
+TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/operations/orchestrator/parallel-role-topology-active.json}"
 ROLES=()
+
+if [[ ! -f "$TOPOLOGY_FILE" ]]; then
+  TOPOLOGY_FILE="$ROOT/docs/orchestrator-ops/parallel-role-topology-active.json"
+fi
 
 load_roles_from_topology() {
   local topology_roles=()
@@ -35,7 +79,32 @@ normalize_role_list() {
   mapfile -t ROLES < <(printf '%s\n' "$line" 2>/dev/null || true)
 }
 
-mkdir -p "$LOG_DIR"
+cleanup_stale_runtime_locks() {
+  local role_state_dir="${HOME}/.openclaw/cron/role-state"
+  local shared_lock_dir="${ROOT}/.tmp/openclaw-shared-locks"
+  find /tmp/fc-agent-locks -name '*.lock' -mmin +20 -delete 2>/dev/null || true
+  if [[ -d "$role_state_dir" ]]; then
+    find "$role_state_dir" -name '*.run.lock' -mmin +20 -delete 2>/dev/null || true
+  fi
+  if [[ -d "$shared_lock_dir" ]]; then
+    find "$shared_lock_dir" -name '*.lock' -mmin +30 -delete 2>/dev/null || true
+  fi
+}
+
+if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
+  for fallback in \
+    "/home/venom/shared/analyse-financiere/logs-codex-runs" \
+    "/home/venom/analyse-financiere/logs-codex-runs" \
+    "${HOME}/.cache/fc/logs-codex-runs"
+  do
+    if mkdir -p "$fallback" 2>/dev/null; then
+      LOG_DIR="$fallback"
+      break
+    fi
+  done
+  LOG_FILE="${FC_ROLE_RECOVERY_LOG_FILE:-$LOG_DIR/role-recovery.log}"
+  printf '%s [WARN] log dir fallback applied root=%s log_dir=%s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$ROOT" "$LOG_DIR" >> "$LOG_FILE"
+fi
 
 ts() {
   date '+%Y-%m-%dT%H:%M:%S%z'
@@ -54,6 +123,7 @@ role_session_name() {
 
   case "$1" in
     planner) echo "codex_planner_cron" ;;
+    admin) echo "codex_admin_cron" ;;
     backend_engineer) echo "codex_backend_engineer_cron" ;;
     frontend_engineer) echo "codex_frontend_engineer_cron" ;;
     dev) echo "codex_dev_cron" ;;
@@ -93,14 +163,19 @@ session_ready() {
   fi
 
   cmd="$(pane_current_command "$target" || true)"
-  if [[ "$cmd" == *"codex"* || "$cmd" == "node" ]]; then
+  # Codex/Qwen can run as transient child processes. An idle shell pane is still a
+  # healthy role session and should not be force-restarted.
+  if [[ "$cmd" == *"codex"* || "$cmd" == *"qwen"* || "$cmd" == "node" ]]; then
+    return 0
+  fi
+  if [[ "$cmd" == "bash" || "$cmd" == "sh" || "$cmd" == "zsh" || "$cmd" == "fish" ]]; then
     return 0
   fi
 
   pid="$(pane_pid "$target" || true)"
   if [[ "$pid" =~ ^[0-9]+$ ]] && command -v pgrep >/dev/null 2>&1; then
     children="$(pgrep -P "$pid" -af 2>/dev/null || true)"
-    if printf '%s\n' "$children" | grep -Eiq '(codex|node.*codex|openai.*codex)'; then
+    if printf '%s\n' "$children" | grep -Eiq '(codex|qwen|node.*codex|openai.*codex)'; then
       return 0
     fi
   fi
@@ -128,13 +203,23 @@ start_or_restart_session() {
   fi
 }
 
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-  printf '%s [SKIP] auto-recovery already running\n' "$(ts)" >> "$LOG_FILE"
-  exit 0
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    printf '%s [SKIP] auto-recovery already running\n' "$(ts)" >> "$LOG_FILE"
+    exit 0
+  fi
+else
+  LOCK_DIR_FALLBACK="${LOCK_FILE}.dirlock"
+  if ! mkdir "$LOCK_DIR_FALLBACK" 2>/dev/null; then
+    printf '%s [SKIP] auto-recovery already running (mkdir lock fallback)\n' "$(ts)" >> "$LOG_FILE"
+    exit 0
+  fi
+  trap 'rmdir "$LOCK_DIR_FALLBACK" >/dev/null 2>&1 || true' EXIT
 fi
 
 cd "$ROOT"
+cleanup_stale_runtime_locks
 
 if ! command -v tmux >/dev/null 2>&1; then
   printf '%s [ERROR] tmux missing in PATH\n' "$(ts)" >> "$LOG_FILE"
@@ -147,7 +232,7 @@ if ! command -v codex >/dev/null 2>&1; then
 fi
 
 if ! load_roles_from_topology; then
-  ROLES=("planner" "backend_engineer" "frontend_engineer" "data_analyst" "infra_engineer" "integrator" "dev" "tester" "qa" "analyst" "architect" "clawsentinel")
+  ROLES=("planner" "dev" "admin")
 fi
 normalize_role_list
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAtUtc": "2026-03-01T04:18:00Z",
+  "updatedAtUtc": "2026-03-03T00:00:33Z",
   "intents": [
     {
       "intent_id": "INTENT_ADMINAPP_CODEX_20260228T053055Z",
@@ -49,12 +49,16 @@
         "apps/web/src/domains/forecasts/contracts/apiConnector.js"
       ],
       "eta_minutes": 40,
-      "status": "active",
+      "status": "done",
       "created_at_utc": "2026-03-01T04:09:45Z",
       "created_at_local": "2026-02-28 23:09:45 EST",
       "owner_note": "",
       "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:3",
-      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:3"
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:3",
+      "closed_at_utc": "2026-03-01T12:00:27Z",
+      "close_note": "resolve_stale_frontend_overlap_for_BATCH-04",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:13",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:6"
     },
     {
       "intent_id": "INTENT_DATA_ANALYST_20260301T041452Z",
@@ -86,6 +90,593 @@
       "owner_note": "",
       "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:5",
       "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:5"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260301T044254Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-03-BACKEND",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/forecasts_simple.py"
+      ],
+      "eta_minutes": 30,
+      "status": "done",
+      "created_at_utc": "2026-03-01T04:42:54Z",
+      "created_at_local": "2026-02-28 23:42:54 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:6",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:6",
+      "closed_at_utc": "2026-03-01T10:53:45Z",
+      "close_note": "",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:8",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:1"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260301T044626Z",
+      "role": "data_analyst",
+      "scope": "data_quality_report",
+      "planned_files": [
+        "docs/data/DATA_QUALITY_REPORT_20260301.md"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-01T04:46:26Z",
+      "created_at_local": "2026-02-28 23:46:26 EST",
+      "owner_note": "collect_backtests_news_forecast_coverage",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:7",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-02-28.md:7"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260301T105349Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-04-BACKEND_FORECAST_CONFIDENCE",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/forecasts_simple.py"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-01T10:53:49Z",
+      "created_at_local": "2026-03-01 05:53:49 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:9",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:2"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260301T110950Z",
+      "role": "backend_engineer",
+      "scope": "backend_daily_brief",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/market_brief.py"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-01T11:09:50Z",
+      "created_at_local": "2026-03-01 06:09:50 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:10",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:3"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260301T113143Z",
+      "role": "backend_engineer",
+      "scope": "backend_batch04_brief_daily",
+      "planned_files": [
+        "apps/api/src/platform/main.py",
+        "apps/api/src/domains/market_data/application/stocks_service.py"
+      ],
+      "eta_minutes": 120,
+      "status": "active",
+      "created_at_utc": "2026-03-01T11:31:43Z",
+      "created_at_local": "2026-03-01 06:31:43 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:11",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:4"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260301T115504Z",
+      "role": "backend_engineer",
+      "scope": "backend",
+      "planned_files": [
+        "apps/api/src/domains/forecasts/api/brief.py",
+        "apps/api/src/domains/forecasts/tests/test_brief_route_contract.py"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-01T11:55:04Z",
+      "created_at_local": "2026-03-01 06:55:04 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:12",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:5"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T120031Z",
+      "role": "frontend_engineer",
+      "scope": "BATCH-04-FRONTEND",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "apps/web/src/domains/forecasts/pages/app.js"
+      ],
+      "eta_minutes": 90,
+      "status": "active",
+      "created_at_utc": "2026-03-01T12:00:31Z",
+      "created_at_local": "2026-03-01 07:00:31 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:14",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:7"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260301T120843Z",
+      "role": "data_analyst",
+      "scope": "BATCH-04-DATA",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/backtests_simple.py",
+        "apps/api/src/platform/legacy/jobs/backtests_job.py",
+        "docs/orchestrator-ops/priority-queue.json"
+      ],
+      "eta_minutes": 35,
+      "status": "active",
+      "created_at_utc": "2026-03-01T12:08:43Z",
+      "created_at_local": "2026-03-01 07:08:43 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:15",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:8"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T123800Z",
+      "role": "frontend_engineer",
+      "scope": "frontend",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/sector-performance.html"
+      ],
+      "eta_minutes": 40,
+      "status": "active",
+      "created_at_utc": "2026-03-01T12:38:00Z",
+      "created_at_local": "2026-03-01 07:38:00 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:16",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:9"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T123943Z",
+      "role": "frontend_engineer",
+      "scope": "frontend_api_widget_contract",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/components/widgets/sector-performance.html"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-01T12:39:43Z",
+      "created_at_local": "2026-03-01 07:39:43 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:17",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:10"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T123945Z",
+      "role": "frontend_engineer",
+      "scope": "frontend_api_contracts",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "apps/web/src/domains/forecasts/pages/app.js"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-01T12:39:45Z",
+      "created_at_local": "2026-03-01 07:39:45 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:18",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:11"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T130012Z",
+      "role": "frontend_engineer",
+      "scope": "BATCH-04_frontend_dashboard_brief_sectors",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/sector-performance.html"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-01T13:00:12Z",
+      "created_at_local": "2026-03-01 08:00:12 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:19",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:12"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260301T130104Z",
+      "role": "frontend_engineer",
+      "scope": "dashboard-widget-sector-integration",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/sector-performance.html",
+        "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-01T13:01:04Z",
+      "created_at_local": "2026-03-01 08:01:04 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:20",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-01.md:13"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260302T212215Z",
+      "role": "planner",
+      "scope": "BATCH-05-PLAN",
+      "planned_files": [
+        "docs/planning/epics.md",
+        "docs/PRODUCT_VISION.md",
+        "evidence/gates/openclaw-gates"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:22:15Z",
+      "created_at_local": "2026-03-02 16:22:15 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:21",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:1"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T212819Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-05-BACKEND",
+      "planned_files": [
+        "apps/api/src/domains/copilot/application/copilot_service.py",
+        "apps/api/src/domains/copilot/api/copilot.py"
+      ],
+      "eta_minutes": 30,
+      "status": "done",
+      "created_at_utc": "2026-03-02T21:28:19Z",
+      "created_at_local": "2026-03-02 16:28:19 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:22",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:2",
+      "closed_at_utc": "2026-03-02T22:07:05Z",
+      "close_note": "BATCH-05-BACKEND already delivered earlier; closing stale local intent",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:33",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:13"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T213001Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-05-BACKEND",
+      "planned_files": [
+        "apps/api/src/domains/copilot/application/copilot_service.py",
+        "apps/api/src/domains/copilot/api/copilot.py"
+      ],
+      "eta_minutes": 45,
+      "status": "done",
+      "created_at_utc": "2026-03-02T21:30:01Z",
+      "created_at_local": "2026-03-02 16:30:01 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:23",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:3",
+      "closed_at_utc": "2026-03-02T22:07:05Z",
+      "close_note": "BATCH-05-BACKEND already delivered earlier; closing stale local intent",
+      "close_chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:34",
+      "close_memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:14"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260302T213534Z",
+      "role": "frontend_engineer",
+      "scope": "Copilot BATCH-05 Frontend Delivery",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "apps/web/src/platform/style.css"
+      ],
+      "eta_minutes": 90,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:35:34Z",
+      "created_at_local": "2026-03-02 16:35:34 EST",
+      "owner_note": "Patch copilot widget vers API copilot ask + UI verdict/sourcees visibles",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:24",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:4"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260302T213534Z",
+      "role": "frontend_engineer",
+      "scope": "copilot_widget_what_today",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "apps/web/src/platform/style.css"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:38:47Z",
+      "created_at_local": "2026-03-02 16:38:47 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:25",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:5"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260302T213534Z",
+      "role": "frontend_engineer",
+      "scope": "copilot_widget_what_today",
+      "planned_files": [
+        "apps/web/src/domains/forecasts/pages/app.js",
+        "apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "apps/web/src/platform/style.css"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:39:17Z",
+      "created_at_local": "2026-03-02 16:39:17 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:26",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:6"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260302T214838Z",
+      "role": "data_analyst",
+      "scope": "batch06_data_forecasts_readiness",
+      "planned_files": [
+        "data/forecast",
+        "data/prices",
+        "data/market_context_snapshot.json"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:48:38Z",
+      "created_at_local": "2026-03-02 16:48:38 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:27",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:7"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T215319Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-06-BACKEND",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/validate_and_generate_data.py",
+        "apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py"
+      ],
+      "eta_minutes": 90,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:53:19Z",
+      "created_at_local": "2026-03-02 16:53:19 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:28",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:8"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T215524Z",
+      "role": "backend_engineer",
+      "scope": "backend",
+      "planned_files": [
+        "apps/api/src/domains/forecasts/application/forecast_service.py",
+        "apps/api/src/domains/forecasts/api/forecasts.py"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:55:24Z",
+      "created_at_local": "2026-03-02 16:55:24 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:29",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:9"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T215707Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-06-BACKEND",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/validate_and_generate_data.py",
+        "apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py"
+      ],
+      "eta_minutes": 90,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:57:07Z",
+      "created_at_local": "2026-03-02 16:57:07 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:30",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:10"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T215801Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-06-BACKEND",
+      "planned_files": [
+        "apps/api/src/platform/legacy/jobs/forecasts_simple.py",
+        "apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py"
+      ],
+      "eta_minutes": 120,
+      "status": "active",
+      "created_at_utc": "2026-03-02T21:58:01Z",
+      "created_at_local": "2026-03-02 16:58:01 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:31",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:11"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260302T220013Z",
+      "role": "planner",
+      "scope": "BATCH-05-BACKEND-PLAN",
+      "planned_files": [
+        "docs/ops/AGENTS_READY.md",
+        "docs/WORKSPACE_MAP.md"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T22:00:13Z",
+      "created_at_local": "2026-03-02 17:00:13 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:32",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:12"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T220707Z",
+      "role": "backend_engineer",
+      "scope": "copilot_market_context",
+      "planned_files": [
+        "apps/api/src/domains/copilot/application/context_service.py",
+        "apps/api/src/domains/copilot/application/copilot_service.py"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T22:07:07Z",
+      "created_at_local": "2026-03-02 17:07:07 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:35",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:15"
+    },
+    {
+      "intent_id": "INTENT_BACKEND_ENGINEER_20260302T222816Z",
+      "role": "backend_engineer",
+      "scope": "BATCH-05-BACKEND",
+      "planned_files": [
+        "apps/api/src/domains/copilot",
+        "apps/api/src/domains/forecasts/service.py"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-02T22:28:16Z",
+      "created_at_local": "2026-03-02 17:28:16 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:36",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:16"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260302T224412Z",
+      "role": "planner",
+      "scope": "BATCH-05-PLAN",
+      "planned_files": [
+        "docs/product/planning/PRODUCT_VISION.md"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T22:44:12Z",
+      "created_at_local": "2026-03-02 17:44:12 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:37",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:17"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260302T224909Z",
+      "role": "data_analyst",
+      "scope": "BATCH-06-DATA",
+      "planned_files": [
+        "data/forecast/dt=20260228/forecasts.json"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T22:49:09Z",
+      "created_at_local": "2026-03-02 17:49:09 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:38",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:18"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260302T231256Z",
+      "role": "frontend_engineer",
+      "scope": "BATCH-06-FRONTEND",
+      "planned_files": [
+        "apps/web/src/components",
+        "apps/web/src/pages",
+        "apps/web/src/utils"
+      ],
+      "eta_minutes": 90,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:12:56Z",
+      "created_at_local": "2026-03-02 18:12:56 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:39",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:19"
+    },
+    {
+      "intent_id": "INTENT_FRONTEND_ENGINEER_20260302T231407Z",
+      "role": "frontend_engineer",
+      "scope": "BATCH-06-FRONTEND",
+      "planned_files": [
+        "apps/web/src/domains/forecasts"
+      ],
+      "eta_minutes": 30,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:14:07Z",
+      "created_at_local": "2026-03-02 18:14:07 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:40",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:20"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260302T231819Z",
+      "role": "data_analyst",
+      "scope": "BATCH-06-DATA",
+      "planned_files": [
+        "apps/api/runtime/data/forecasts/current.json",
+        "apps/api/runtime/backtests/latest.json"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:18:19Z",
+      "created_at_local": "2026-03-02 18:18:19 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:41",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:21"
+    },
+    {
+      "intent_id": "INTENT_DATA_ANALYST_20260302T231836Z",
+      "role": "data_analyst",
+      "scope": "BATCH-06-DATA",
+      "planned_files": [
+        "apps/api/runtime/data/forecasts.json",
+        "apps/api/runtime/data/intelligence_snapshot.json"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:18:36Z",
+      "created_at_local": "2026-03-02 18:18:36 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:42",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:22"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260302T232209Z",
+      "role": "planner",
+      "scope": "BATCH-06-PLAN",
+      "planned_files": [
+        "docs/planning/PRODUCT_VISION.md"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:22:09Z",
+      "created_at_local": "2026-03-02 18:22:09 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:43",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:23"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260302T232218Z",
+      "role": "planner",
+      "scope": "BATCH-05-PLAN-ANALYSIS",
+      "planned_files": [
+        "docs/ops/WORKSPACE_MAP.md"
+      ],
+      "eta_minutes": 20,
+      "status": "active",
+      "created_at_utc": "2026-03-02T23:22:18Z",
+      "created_at_local": "2026-03-02 18:22:18 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:44",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:24"
+    },
+    {
+      "intent_id": "INTENT_PLANNER_20260303T000033Z",
+      "role": "planner",
+      "scope": "BATCH-05-PLAN",
+      "planned_files": [
+        "docs/ops/AGENT_WORKSPACE_INDEX.md"
+      ],
+      "eta_minutes": 45,
+      "status": "active",
+      "created_at_utc": "2026-03-03T00:00:33Z",
+      "created_at_local": "2026-03-02 19:00:33 EST",
+      "owner_note": "",
+      "chat_ref": "/home/venom/shared/analyse-financiere/platform/docs/ops/ADMIN_TEAM_CHAT.md:45",
+      "memory_ref": "/home/venom/shared/analyse-financiere/platform/memory/2026-03-02.md:25"
     }
   ]
 }

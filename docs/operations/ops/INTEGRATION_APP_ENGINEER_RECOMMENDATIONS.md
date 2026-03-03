@@ -4,6 +4,11 @@ Objective: improve delivery quality and coordination by forcing "reuse-first" be
 across backend, frontend, and integration work. This is a lightweight checklist that
 should be copied into tasks and used as a review lens.
 
+Architecture note:
+- Canonical backend path: `apps/api/src`
+- Canonical frontend path: `apps/web/src`
+- Judge/API/cache reintegration guide: `docs/ops/JUDGE_RECOVERY_ADAPTED_PLAYBOOK.md`
+
 ## Tagging (stable marker)
 
 Use this prefix in task notes (workboard), planning docs, and PR descriptions:
@@ -15,9 +20,9 @@ Legacy alias (same meaning, accepted for search/backward compat):
 ## Rules (do these before writing new code)
 
 - Search for reuse candidates first:
-  - `rg -n \"<keyword>\" copilot-app/backend/src copilot-app/backend/services copilot-app/backend/storage copilot-app/backend/models copilot-app/backend/jobs copilot-app/frontend/app`
+  - `rg -n \"<keyword>\" apps/api/src apps/api/runtime apps/web/src`
 - Prefer wiring existing modules/services over creating new helpers.
-- Prefer extending canonical paths (`copilot-app/backend/src/...`) instead of adding a third location.
+- Prefer extending canonical paths (`apps/api/src/...`) instead of adding a third location.
 - If you must add a new module, update the reuse catalog:
   - `docs/ops/REUSE_MODULES_CATALOG.md`
 
@@ -34,18 +39,18 @@ Legacy alias (same meaning, accepted for search/backward compat):
   - `docs/ops/REUSE_MODULES_CATALOG.md`
 
 Judge reference stack (do not re-invent):
-- `copilot-app/backend/src/api/routes/judge.py`
-- `copilot-app/backend/src/services/judge_pipeline.py`
-- `copilot-app/backend/src/services/g4f_client.py`
-- `copilot-app/backend/src/services/judge_builder.py`
-- `copilot-app/backend/src/schemas/judge.py`
+- `apps/api/src/domains/judge/api/judge.py`
+- `apps/api/src/domains/judge/application/judge_pipeline.py`
+- `apps/api/src/domains/judge/application/g4f_client.py`
+- `apps/api/src/domains/judge/application/judge_builder.py`
+- `apps/api/src/domains/judge/contracts/schema.py`
 
 ## Frontend: reuse widgets/components first
 
 - Reuse existing widgets before creating new components:
-  - `copilot-app/frontend/app/components/widgets/*`
+  - `apps/web/src/domains/forecasts/components/widgets/*`
 - Reuse existing wiring patterns:
-  - `copilot-app/frontend/app/app.js`
+  - `apps/web/src/domains/forecasts/pages/app.js`
 - Any new UI component must justify why an existing widget cannot be adapted.
 
 ## Integration / QA: proof and gates
@@ -61,4 +66,3 @@ Judge reference stack (do not re-invent):
 - Reuse evidenced: notes mention the exact modules/components reused.
 - Contract parity: stable response shape + never-empty fallback + debug mode (when applicable).
 - Tests/gates: at least the backend regression gate is green, with a short human `run_note`.
-

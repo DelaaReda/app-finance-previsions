@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/directive_bus.sh
+../platform/automation/directive_bus.sh

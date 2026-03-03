@@ -30,10 +30,16 @@ async def get_current_context():
     Response structure matches frontend useMarketContext hook expectations.
     """
     try:
-        from services.context_service import ContextService
+        try:
+            from domains.copilot.application.context_service import ContextService
+        except Exception:
+            from services.context_service import ContextService  # type: ignore
 
         service = ContextService()
-        context = await service.get_current_context()
+        if hasattr(service, "get_current_market_context"):
+            context = await service.get_current_market_context()
+        else:
+            context = await service.get_current_context()  # type: ignore[attr-defined]
 
         return ok(context)
 

@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/dg_monitor_tick.sh
+../platform/automation/dg_monitor_tick.sh

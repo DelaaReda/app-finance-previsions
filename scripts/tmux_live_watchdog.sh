@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/tmux_live_watchdog.sh
+../platform/automation/tmux_live_watchdog.sh

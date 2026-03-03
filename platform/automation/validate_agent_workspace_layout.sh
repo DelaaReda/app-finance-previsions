@@ -20,6 +20,23 @@ pass() { echo "PASS: $*"; pass_count=$((pass_count + 1)); }
 warn() { echo "WARN: $*"; warn_count=$((warn_count + 1)); }
 fail() { echo "FAIL: $*"; fail_count=$((fail_count + 1)); }
 
+date_utc_with_offset_days() {
+  local offset_days="${1:-0}"
+  if [[ "$offset_days" == "0" ]]; then
+    date -u +%F
+    return
+  fi
+  if date -u -d "${offset_days} day" +%F >/dev/null 2>&1; then
+    date -u -d "${offset_days} day" +%F
+    return
+  fi
+  if [[ "$offset_days" == -* ]]; then
+    date -u -v"${offset_days}"d +%F
+  else
+    date -u -v+"${offset_days}"d +%F
+  fi
+}
+
 required_root_files=(
   "AGENTS.md"
   "SOUL.md"
@@ -59,8 +76,51 @@ for d in "${required_dirs[@]}"; do
   fi
 done
 
-today_utc="$(date -u +%F)"
-yesterday_utc="$(date -u -d 'yesterday' +%F)"
+if [[ -d "apps/api/src/runtime" ]]; then
+  fail "runtime ghost directory detected: apps/api/src/runtime (canonical path is apps/api/runtime)"
+else
+  pass "no runtime ghost directory under apps/api/src"
+fi
+
+if [[ -f "apps/api/src/runtime/data/rag/news.jsonl" ]]; then
+  fail "ghost RAG file detected: apps/api/src/runtime/data/rag/news.jsonl"
+else
+  pass "no ghost RAG file under apps/api/src/runtime/data/rag"
+fi
+
+src_bak_count="$(find apps/api/src -type f \( -name '*.bak' -o -name '*.bak-*' -o -name '*.bak*' \) 2>/dev/null | wc -l | tr -d ' ')"
+scripts_bak_count="$(find scripts -type f \( -name '*.bak' -o -name '*.bak-*' -o -name '*.bak*' \) 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "$src_bak_count" -eq 0 && "$scripts_bak_count" -eq 0 ]]; then
+  pass "no backup artifacts (*.bak*) in src/scripts"
+else
+  warn "backup artifacts found (*.bak*): src=${src_bak_count}, scripts=${scripts_bak_count}"
+fi
+
+for clutter in \
+  "apps/api/src/api.log" \
+  "apps/api/src/juge-appel.json" \
+  "apps/api/src/juge-appel2.json" \
+  "apps/api/src/tested_g4f_models.json" \
+  "apps/api/src/tested_g4f_models_ok.json" \
+  "apps/api/src/tested_g4f_models_categorized.json"
+do
+  if [[ -f "$clutter" ]]; then
+    warn "src root clutter file present: $clutter"
+  fi
+done
+
+for bridge in \
+  "apps/api/src/services/g4f_client.py" \
+  "apps/api/src/services/copilot_service.py" \
+  "apps/api/src/research/llm_client.py"
+do
+  if [[ -f "$bridge" ]]; then
+    warn "bridge module still present (sys.path debt candidate): $bridge"
+  fi
+done
+
+today_utc="$(date_utc_with_offset_days 0)"
+yesterday_utc="$(date_utc_with_offset_days -1)"
 
 if [[ -f "memory/${today_utc}.md" ]]; then
   pass "today memory exists: memory/${today_utc}.md"

@@ -16,12 +16,61 @@ from storage.io import load_json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+IMPACT_SCORE_SCALE_MAX = 10.0
+
+
+def _impact_threshold_to_ratio(impact_threshold: Optional[float]) -> float:
+    """Normalize threshold input to a 0..1 ratio, accepting either 0..1 or 0..10 scales."""
+    try:
+        threshold = float(impact_threshold)
+    except (TypeError, ValueError):
+        return 0.1
+    if threshold > 1.0:
+        threshold /= IMPACT_SCORE_SCALE_MAX
+    return max(0.0, min(1.0, threshold))
+
+
+def _impact_score_to_ratio(impact_score: float) -> float:
+    try:
+        score = float(impact_score)
+    except (TypeError, ValueError):
+        return 0.0
+    if score > 1.0:
+        score = score / IMPACT_SCORE_SCALE_MAX
+    return max(0.0, min(1.0, score))
+
+
+def _impact_score_10(impact_score: float) -> float:
+    return round(max(0.0, min(IMPACT_SCORE_SCALE_MAX, _impact_score_to_ratio(impact_score) * IMPACT_SCORE_SCALE_MAX)), 2)
+
+
+def _build_signal_trace(
+    article: Dict[str, Any],
+    sentiment_score: float,
+    relevance_score: float,
+    impact_score: float,
+    impact_categories: List[str],
+    confidence: float,
+    pub_date: str,
+    tickers: List[str],
+) -> Dict[str, Any]:
+    return {
+        "article_id": article.get("id", ""),
+        "source": article.get("source", article.get("publisher", "unknown")),
+        "published_at": pub_date,
+        "tickers": tickers,
+        "sentiment_score": sentiment_score,
+        "relevance_score": relevance_score,
+        "impact_score_10": _impact_score_10(impact_score),
+        "categories": impact_categories,
+        "confidence": confidence,
+    }
 
 @router.get("/news/analysis")
 def get_news_impact_analysis(
     tickers: Optional[List[str]] = Query(None, description="Filter by specific tickers (e.g., AAPL, MSFT)"),
     since: Optional[str] = Query("7d", description="Time window: 1h, 6h, 1d, 3d, 7d, 14d, 30d"),
-    impact_threshold: Optional[float] = Query(0.1, description="Minimum impact threshold (0.0-1.0)"),
+    impact_threshold: Optional[float] = Query(0.1, description="Minimum impact threshold (0.0-1.0 or 0.0-10.0)"),
     sentiment_filter: Optional[str] = Query("all", description="Filter by sentiment: positive, negative, neutral, all"),
     categories: Optional[List[str]] = Query(None, description="Filter by news categories (earnings, merger, ipo, etc.)"),
     limit: Optional[int] = Query(100, description="Limit number of results (max 500)")
@@ -31,10 +80,11 @@ def get_news_impact_analysis(
     Returns impact scores, correlation between news and price movements, and sentiment analysis.
     """
     try:
+        impact_threshold_ratio = _impact_threshold_to_ratio(impact_threshold)
         logger.info(f"🔬 GET /news/analysis - Impact analysis requested", extra={
             "tickers": tickers,
             "since": since,
-            "impact_threshold": impact_threshold,
+            "impact_threshold": impact_threshold_ratio,
             "sentiment_filter": sentiment_filter,
             "categories": categories,
             "limit": limit
@@ -48,7 +98,7 @@ def get_news_impact_analysis(
                 "filters": {
                     "tickers": tickers,
                     "since": since,
-                    "impact_threshold": impact_threshold
+                    "impact_threshold": impact_threshold_ratio
                 }
             })
             
@@ -67,7 +117,8 @@ def get_news_impact_analysis(
                 "parameters": {
                     "tickers": tickers,
                     "since": since,
-                    "impact_threshold": impact_threshold,
+                    "impact_threshold": impact_threshold_ratio,
+                    "impact_threshold_input": impact_threshold,
                     "sentiment_filter": sentiment_filter,
                     "categories": categories,
                     "limit": limit
@@ -142,7 +193,7 @@ def get_news_impact_analysis(
             impact_result = calculate_single_news_impact(article)
             
             # Only include if impact score exceeds threshold
-            if impact_result["impact_score"] >= impact_threshold:
+            if impact_result["impact_score"] >= impact_threshold_ratio:
                 impact_result["original_article"] = article  # Include original article data
                 impact_results.append(impact_result)
         
@@ -162,7 +213,8 @@ def get_news_impact_analysis(
             "parameters": {
                 "tickers": tickers,
                 "since": since,
-                "impact_threshold": impact_threshold,
+                "impact_threshold": impact_threshold_ratio,
+                "impact_threshold_input": impact_threshold,
                 "sentiment_filter": sentiment_filter,
                 "categories": categories,
                 "limit": limit
@@ -198,7 +250,8 @@ def get_news_impact_analysis(
             "parameters": {
                 "tickers": tickers,
                 "since": since,
-                "impact_threshold": impact_threshold,
+                "impact_threshold": impact_threshold_ratio,
+                "impact_threshold_input": impact_threshold,
                 "sentiment_filter": sentiment_filter,
                 "categories": categories,
                 "limit": limit
@@ -250,14 +303,26 @@ def calculate_single_news_impact(article: Dict[str, Any]) -> Dict[str, Any]:
         impact_categories = categorize_news_impact(article)
         
         # Combine sentiment and relevance for impact score
-        impact_score = (0.6 * abs(sentiment_score)) + (0.4 * relevance_score)  # Weighted combination
+        impact_score = min(1.0, max(0.0, (0.6 * abs(sentiment_score)) + (0.4 * relevance_score)))  # Weighted combination
         
         # Calculate confidence in impact prediction
         confidence = calculate_impact_confidence(article, impact_categories)
+        signal_trace = _build_signal_trace(
+            article=article,
+            sentiment_score=sentiment_score,
+            relevance_score=relevance_score,
+            impact_score=impact_score,
+            impact_categories=impact_categories,
+            confidence=confidence,
+            pub_date=pub_date.isoformat() if pub_date else "",
+            tickers=tickers_mentioned,
+        )
+        content_summary = (summary[:240] + "...") if len(summary) > 240 else summary
         
         return {
             "tickers": tickers_mentioned,
-            "impact_score": min(1.0, max(0.0, impact_score)),  # Clamp between 0 and 1
+            "impact_score": impact_score,  # 0..1
+            "impact_score_10": _impact_score_10(impact_score),
             "sentiment_score": sentiment_score,
             "correlation_score": 0.0,  # Would be calculated with market data correlation in production
             "relevance_score": relevance_score,
@@ -265,8 +330,10 @@ def calculate_single_news_impact(article: Dict[str, Any]) -> Dict[str, Any]:
             "timestamp": pub_date.isoformat() if pub_date else "",
             "title": title,
             "content_preview": summary[:100] + "..." if len(summary) > 100 else summary,
+            "content_summary": content_summary,
             "impact_categories": impact_categories,
             "confidence_in_impact": confidence,
+            "signal_trace": signal_trace,
             "estimated_price_impact_pct": estimate_price_impact(sentiment_score, impact_categories),
             "volatility_factor": calculate_volatility_factor(sentiment_score, impact_categories)
         }
@@ -277,6 +344,7 @@ def calculate_single_news_impact(article: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "tickers": [],
             "impact_score": 0.0,
+            "impact_score_10": 0.0,
             "sentiment_score": _get_sentiment_score(article),
             "correlation_score": 0.0,
             "relevance_score": 0.0,
@@ -284,8 +352,20 @@ def calculate_single_news_impact(article: Dict[str, Any]) -> Dict[str, Any]:
             "timestamp": article.get("pubDate", ""),
             "title": article.get("title", ""),
             "content_preview": (article.get("summary", "") or article.get("description", ""))[:100] + "..." if len(article.get("summary", "") or article.get("description", "")) > 100 else (article.get("summary", "") or article.get("description", "")),
+            "content_summary": (article.get("summary", "") or article.get("description", ""))[:240],
             "impact_categories": ["error_processing"],
             "confidence_in_impact": 0.3,  # Low confidence if processing error
+            "signal_trace": {
+                "article_id": article.get("id", ""),
+                "source": article.get("source", article.get("publisher", "unknown")),
+                "published_at": article.get("pubDate", ""),
+                "tickers": [],
+                "sentiment_score": _get_sentiment_score(article),
+                "relevance_score": 0.0,
+                "impact_score_10": 0.0,
+                "categories": ["error_processing"],
+                "confidence": 0.3,
+            },
             "estimated_price_impact_pct": 0.0,
             "volatility_factor": 0.1  # Conservative default
         }

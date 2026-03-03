@@ -29,6 +29,62 @@ LEGACY_DIR="$BACKEND_DIR/platform/legacy"
 # Frontend statique (pas de build npm)
 FRONTEND_DIR="$PROJECT_DIR/../web/src/domains/forecasts/pages"
 FRONTEND_DIST="$FRONTEND_DIR"
+PYTHON_BIN=""
+
+# Résoudre l'interpréteur Python canonique pour ce runtime
+resolve_python_bin() {
+    if [ -x "$BACKEND_DIR/.venv/bin/python3" ]; then
+        echo "$BACKEND_DIR/.venv/bin/python3"
+        return 0
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        command -v python3
+        return 0
+    fi
+    if command -v python >/dev/null 2>&1; then
+        command -v python
+        return 0
+    fi
+    return 1
+}
+
+ensure_python_bin() {
+    if [ -n "$PYTHON_BIN" ]; then
+        return 0
+    fi
+    if ! PYTHON_BIN="$(resolve_python_bin)"; then
+        log_error "Python introuvable (python3/python)."
+        log_error "Exécuter: $PROJECT_DIR/runtime/bootstrap_backend_env.sh"
+        exit 1
+    fi
+}
+
+validate_python_runtime_deps() {
+    ensure_python_bin
+    local missing
+    missing="$("$PYTHON_BIN" - <<'PY'
+import importlib.util
+
+required = {
+    "fastapi": "fastapi",
+    "uvicorn": "uvicorn",
+    "pandas": "pandas",
+    "yaml": "PyYAML",
+    "dotenv": "python-dotenv",
+    "duckdb": "duckdb",
+}
+
+missing = [pkg for mod, pkg in required.items() if importlib.util.find_spec(mod) is None]
+print(" ".join(missing))
+PY
+)"
+    if [ -n "$missing" ]; then
+        log_error "Dépendances Python manquantes: $missing"
+        log_error "Exécuter: $PROJECT_DIR/runtime/bootstrap_backend_env.sh"
+        return 1
+    fi
+    return 0
+}
 
 # Vérifier si un port est utilisé
 is_port_in_use() {
@@ -62,18 +118,8 @@ generate_initial_data() {
         log_warning "Job de seed introuvable: $LEGACY_DIR/jobs/validate_and_generate_data.py (skip)"
         return 0
     fi
-    # Choisir l'interpréteur Python le plus fiable (éviter venv corrompue)
-    PY=""
-    if [ -x ".venv/bin/python3" ]; then
-        PY=".venv/bin/python3"
-    elif command -v python3 >/dev/null 2>&1; then
-        PY="$(command -v python3)"
-    elif command -v python >/dev/null 2>&1; then
-        PY="$(command -v python)"
-    else
-        log_error "Python introuvable (python3/python). Installez Python 3."
-        exit 1
-    fi
+    ensure_python_bin
+    local PY="$PYTHON_BIN"
     # Lancer le job en arrière-plan
     nohup "$PY" "$LEGACY_DIR/jobs/validate_and_generate_data.py" > /tmp/data_generation.log 2>&1 &
     DATA_GEN_PID=$!
@@ -86,17 +132,8 @@ refresh_live_data() {
     log "Rafraîchissement des données (news, sentiment, macro, quality_gate, judge_enrich)..."
     cd "$BACKEND_DIR"
 
-    PY=""
-    if [ -x ".venv/bin/python3" ]; then
-        PY=".venv/bin/python3"
-    elif command -v python3 >/dev/null 2>&1; then
-        PY="$(command -v python3)"
-    elif command -v python >/dev/null 2>&1; then
-        PY="$(command -v python)"
-    else
-        log_error "Python introuvable (python3/python). Installez Python 3."
-        exit 1
-    fi
+    ensure_python_bin
+    local PY="$PYTHON_BIN"
 
     export PYTHONPATH="$BACKEND_DIR"
 
@@ -121,12 +158,8 @@ refresh_live_data() {
             log_warning "Job échoué: scripts/fetch_prices_yahoo.sh (on continue)"
         fi
     fi
-    if [ -x "$LEGACY_DIR/scripts/fetch_prices_stooq.sh" ]; then
-        log " → scripts/fetch_prices_stooq.sh"
-        if ! "$LEGACY_DIR/scripts/fetch_prices_stooq.sh"; then
-            log_warning "Job échoué: scripts/fetch_prices_stooq.sh (on continue)"
-        fi
-    fi
+    # Stooq fallback is handled directly in jobs/stocks_prices_refresh.py.
+    # Keep launcher lean: no separate legacy script dependency here.
     run_job "$LEGACY_DIR/jobs/stocks_prices_refresh.py"
 
     local quality_gate_ok=true
@@ -180,22 +213,13 @@ PY
     log_success "Rafraîchissement des données terminé."
 }
 
-# Tester les modèles G4F (écrit tested_g4f_models*.json)
+# Tester les modèles G4F (écrit runtime/data/llm/models/tested_g4f_models*.json)
 run_g4f_tests() {
     log "Test des modèles G4F..."
     cd "$BACKEND_DIR"
 
-    PY=""
-    if [ -x ".venv/bin/python3" ]; then
-        PY=".venv/bin/python3"
-    elif command -v python3 >/dev/null 2>&1; then
-        PY="$(command -v python3)"
-    elif command -v python >/dev/null 2>&1; then
-        PY="$(command -v python)"
-    else
-        log_warning "⚠️  Python introuvable (python3/python). Skip G4F tests."
-        return
-    fi
+    ensure_python_bin
+    local PY="$PYTHON_BIN"
 
     export PYTHONPATH="$BACKEND_DIR"
 
@@ -216,7 +240,7 @@ run_g4f_tests() {
         if [ $rc -ne 0 ]; then
             log_warning "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
         else
-            log_success "✅ Tests G4F terminés. Résultats dans src/tested_g4f_models*.json et /tmp/g4f_test.log"
+            log_success "✅ Tests G4F terminés. Résultats dans runtime/data/llm/models/tested_g4f_models*.json et /tmp/g4f_test.log"
         fi
     ) &
     log "G4F tests lancés en arrière-plan (voir /tmp/g4f_test.log)"
@@ -252,18 +276,8 @@ start_backend() {
     export FINANCE_COPILOT_RELOAD=0
     # Prefer src/ first so 'api' resolves to src/api (contains services, schemas, etc.)
     export PYTHONPATH="$BACKEND_DIR"
-    # Choisir l'interpréteur Python (éviter venv si corrompue)
-    PY=""
-    if [ -x ".venv/bin/python3" ]; then
-        PY=".venv/bin/python3"
-    elif command -v python3 >/dev/null 2>&1; then
-        PY="$(command -v python3)"
-    elif command -v python >/dev/null 2>&1; then
-        PY="$(command -v python)"
-    else
-        log_error "Python introuvable (python3/python). Installez Python 3."
-        exit 1
-    fi
+    ensure_python_bin
+    local PY="$PYTHON_BIN"
     
     # Démarrer en arrière-plan (logs dans runtime/)
     nohup "$PY" run_api.py > "$SCRIPT_DIR/api.log" 2>&1 &
@@ -349,6 +363,11 @@ start() {
         stop_services
     fi
     
+    # Vérification environnement runtime avant tout job
+    if ! validate_python_runtime_deps; then
+        exit 1
+    fi
+
     # Générer les données en arrière-plan
     generate_initial_data
 

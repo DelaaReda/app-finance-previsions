@@ -1,0 +1,47 @@
+proof_id: "PRF-BATCH-04-UNBLOCK-20260301T120000Z"
+stream_id: "BATCH-04"
+task_id: "BATCH-04-PLAN"
+role: "admin-claude"
+produced_at_utc: "2026-03-01T12:00:00Z"
+type: "blocker_removal"
+description: "Planner unblocked after being stuck since 05:48 EST waiting for API→UI proof"
+
+blocker_details:
+  blocker_id: "API_UI_PROOF_MISSING"
+  first_seen: "2026-03-01T05:48:00Z"
+  loop_count: 12
+  error_pattern: "READY_QUEUE_MONITORING_PREUVES_INSUFFISANTES"
+
+resolution:
+  backend_validated: true
+  backend_proof_ref: "docs/operations/orchestrator/proofs/BATCH-04/BATCH-04-BACKEND/20260301T115545Z-972.yaml"
+  test_result: "PASSED - test_brief_route_contract.py (1 passed in 2.66s)"
+  endpoint_contract:
+    - path: "/api/brief/daily"
+    - status: 200
+    - payload_fields:
+      - summary (str, <=200 mots)
+      - macro_signals (list)
+      - sector_rotation.top (list)
+      - sector_rotation.bottom (list)
+      - freshness
+      - generated_at
+  frontend_wiring:
+    - apiConnector.js: getDailyBrief() + transformBrief() → window.storyData
+    - app.js: window.storyData → appData.story → .ai-summary-content DOM
+  workboard_updated:
+    - BATCH-04 state: BLOCKED → IN_PROGRESS
+    - BATCH-04-BACKEND status: ready → done
+    - planner.md: blocker removal documented
+
+artifacts:
+  - "docs/operations/orchestrator/parallel-workstreams.json (updated)"
+  - "memory/agents/planner.md (updated)"
+
+signoff:
+  producer_agent: "admin-claude"
+  qa_verdict: "GO"
+
+meta:
+  idempotency_key: "IK-batch04-unblock-20260301T1200"
+  note: "BATCH-04 planner loop broken - ready for frontend validation"

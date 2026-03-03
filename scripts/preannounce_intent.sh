@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/preannounce_intent.sh
+../platform/automation/preannounce_intent.sh

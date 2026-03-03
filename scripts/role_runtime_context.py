@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/role_runtime_context.py
+../platform/automation/role_runtime_context.py

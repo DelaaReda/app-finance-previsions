@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/admin_vm_restore.sh
+../platform/automation/admin_vm_restore.sh

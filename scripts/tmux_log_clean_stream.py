@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/tmux_log_clean_stream.py
+../platform/automation/tmux_log_clean_stream.py

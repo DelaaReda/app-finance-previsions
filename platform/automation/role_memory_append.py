@@ -92,6 +92,40 @@ def trim_if_needed(mem_file: Path) -> None:
     mem_file.write_text("".join(head + ["\n"] + tail), encoding="utf-8")
 
 
+def extract_recent_entries(mem_file: Path, limit: int = 14) -> list[str]:
+    try:
+        lines = mem_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return []
+    entries = [line.strip() for line in lines if line.strip().startswith("- [")]
+    if limit <= 0:
+        return entries
+    return entries[-limit:]
+
+
+def refresh_role_summary(mem_file: Path, role: str) -> None:
+    entries = extract_recent_entries(mem_file, limit=14)
+    summary_dir = mem_file.parent / "summaries"
+    summary_file = summary_dir / f"{role}.summary.md"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+
+    lines = [
+        f"# {role} summary",
+        "",
+        f"source={mem_file}",
+        "purpose=compact_recent_role_memory",
+        "window=14_entries",
+        "",
+        "## recent_entries",
+    ]
+    if entries:
+        lines.extend(entries)
+    else:
+        lines.append("- none")
+    lines.append("")
+    summary_file.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) != 7:
         print(
@@ -125,6 +159,7 @@ def main() -> int:
         with memory_file.open("a", encoding="utf-8") as mem_fh:
             mem_fh.write(line + "\n")
         trim_if_needed(memory_file)
+        refresh_role_summary(memory_file, role)
         fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
     return 0
 

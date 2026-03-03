@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/cron_admin_lock.sh
+../platform/policies/cron_admin_lock.sh

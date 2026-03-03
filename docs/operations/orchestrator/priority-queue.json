@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-03T13:01:49.535081Z",
+  "updated_at": "2026-03-03T20:44:58.684171Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -47,7 +47,7 @@
     },
     {
       "id": "BATCH-03",
-      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es",
+      "title": "Connecter frontend API live + qualité données",
       "state": "CLOSED",
       "priority": "P0",
       "owner_role": "planner",
@@ -59,7 +59,7 @@
       ],
       "created_at": "2026-02-28T20:01:54Z",
       "goals": [
-        "frontend_engineer: connecter news/forecasts/stocks \u00e0 l'API live (apiConnector.js d\u00e9j\u00e0 cr\u00e9\u00e9 par admin)",
+        "frontend_engineer: connecter news/forecasts/stocks à l'API live (apiConnector.js déjà créé par admin)",
         "backend_engineer: corriger confidence des forecasts (actuellement 0 high-confidence sur 19)",
         "data_analyst: activer backtests (actuellement null/pending)",
         "infra_engineer: ajouter monitoring cron et alerting si job fail"
@@ -90,7 +90,7 @@
     },
     {
       "id": "BATCH-04",
-      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els",
+      "title": "Dashboard Vision — Brief quotidien + Secteurs réels",
       "state": "CLOSED",
       "priority": "P0",
       "closed_at": "2026-03-02T20:04:33.039712+00:00",
@@ -158,10 +158,10 @@
     {
       "id": "BATCH-06",
       "title": "Forecasts Multi-Assets + LLM Judge",
-      "state": "READY",
+      "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis ex\u00e9cuter BATCH-06-DEV-01/02/03 en lane dev unique.",
+      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis exécuter BATCH-06-DEV-01/02/03 en lane dev unique.",
       "depends_on": [
         "BATCH-05"
       ],
@@ -171,19 +171,31 @@
         "critical_scope_from_claude: F-001 forecast_service ghost imports/backend.* + compute cache sync mismatch.",
         "critical_scope_from_claude: F-002/F-003 news+market_data layering/imports a realigner vers domains/* et platform/legacy/* existants.",
         "critical_scope_from_claude: F-004/F-005 supprimer data RAG fake et supprimer chemin fantome apps/api/src/runtime au profit de apps/api/runtime.",
-        "reuse_targets: apps/api/src/domains/judge/application/g4f_client.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/market_data/application/cache_layer.py, apps/api/src/platform/legacy/storage/io.py"
-      ]
+        "reuse_targets: apps/api/src/domains/judge/application/g4f_client.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/market_data/application/cache_layer.py, apps/api/src/platform/legacy/storage/io.py",
+        "remaining_high_value_from_report: F-007/F-019 retirer bridges sys.path + resolution g4f circulaire; F-008/F-012 simplifier entrypoints (api/main shim + run_api wrapper); F-010 supprimer sitecustomize non deterministe.",
+        "remaining_high_value_from_report: F-015 renforcer platform/automation/validate_agent_workspace_layout.sh avec checks runtime fantome + .bak + RAG fake + stubs; F-016/F-017 cleanup .bak et fichiers parasites src root; F-020 unifier signatures save_json.",
+        "new_delta_useful: corriger F-002 path bug dans apps/api/src/domains/judge/application/g4f_client.py (_backend_root/_src_root) pour re-activer ranking LLM base fichiers working/tested.",
+        "new_delta_useful: traiter F-025/F-028 dans forecasts_simple.py (random fallback non deterministe + sys.path.insert) et F-026 dans domains/copilot/application/copilot_service.py (import cross-layer services.service_standard).",
+        "new_delta_useful: traiter F-029 (clarifier validate_agent_workspace_layout gate semantics) et schema alias hygiene dans apps/api/src/schemas/__init__.py pour éviter erreurs silencieuses.",
+        "deferred_careful: F-006/F-009 necessitent migration progressive (platform/legacy rename + stubs aliases) pour eviter regression massive; traiter apres stabilisation BATCH-06.",
+        "definition_of_done_hardening: publier un rapport court (F-id, statut, preuve, risque residuel) + commandes de verification executees + impact sur delivery cadence."
+      ],
+      "closed_at": "2026-03-03T15:18:01.915327+00:00",
+      "closed_by": "auto_batch_close"
     },
     {
       "id": "BATCH-07",
       "title": "Deep Dive + News Intelligence",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "attendre la cl\u00f4ture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec d\u00e9tails Deep Dive, recherche universelle et scoring d'impact.",
+      "next_action": "attendre la clôture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec détails Deep Dive, recherche universelle et scoring d'impact.",
       "depends_on": [
         "BATCH-06"
-      ]
+      ],
+      "updated_at": "2026-03-03T15:18:01.915327+00:00",
+      "closed_at": "2026-03-03T16:02:01.603336+00:00",
+      "closed_by": "auto_batch_close"
     },
     {
       "id": "BATCH-08",
@@ -192,11 +204,12 @@
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [
-        "BATCH-07"
+        "BATCH-07",
+        "BATCH-26"
       ],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
-      "next_action": "ouvrir BATCH-08-PLAN puis detailer lanes DEV-01/DEV-02/DEV-03 avec contrat decision et preuves UX/API.",
+      "updated_at": "2026-03-03T20:44:58.684171Z",
+      "next_action": "BATCH-26 (P0 architecture hotfix) must pass before reopening UX delivery on BATCH-08.",
       "goals": [
         "Unifier le contrat decision API->UI (verdict/confidence/why/risk).",
         "Reduire le parcours principal a 2-3 clics sur desktop et mobile.",
@@ -221,7 +234,8 @@
         "implementation_architecture: apps/api keep contracts in existing domains; apps/web consume same contract via shared connector.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets/contracts before creating new components.",
         "reuse_targets: apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/components/widgets/*.html, apps/api/src/domains/judge/application/intelligence_service.py",
-        "validation_path: claim planner -> dispatch dev lane -> targeted UI/API tests -> complete with proof."
+        "validation_path: claim planner -> dispatch dev lane -> targeted UI/API tests -> complete with proof.",
+        "blocked_by_architecture_audit_2026-03-03: F-001..F-012 P0/P1 fixes required before UX lane."
       ]
     },
     {
@@ -896,6 +910,48 @@
         "integration_contract: morning_brief output reuses current brief route schema and embeds degradation metadata.",
         "validation_path: scheduled run dry-tests + content contract checks + degraded mode simulation."
       ]
+    },
+    {
+      "id": "BATCH-26",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03)",
+      "state": "CLOSED",
+      "priority": "P0",
+      "owner_role": "planner",
+      "depends_on": [],
+      "created_at": "2026-03-03T20:44:58.684171Z",
+      "updated_at": "2026-03-03T20:57:20Z",
+      "next_action": "Claim BATCH-26-PLAN, dispatch BATCH-26-DEV-01/02/03 in strict order, then execute BATCH-26-ADMIN-01 and BATCH-26-GOV-REVIEW with runtime proofs.",
+      "goals": [
+        "Restore forecast/judge runtime determinism by fixing missing imports, wrong roots, and ghost paths.",
+        "Eliminate fake/runtime-split data paths and unblock real data flow to APIs.",
+        "Reduce architectural drift by removing fragile shims/bridges and clarifying domain boundaries."
+      ],
+      "success_criteria": [
+        "F-001/F-002/F-003 fixed with import-time proof (python import + endpoint smoke PASS).",
+        "F-004/F-005/F-006 fixed with single runtime data path and no fake RAG artifacts.",
+        "F-007/F-008/F-010/F-011/F-012 reduced to documented, test-covered state with no silent fallback behavior."
+      ],
+      "gate_reference": "docs/product/planning/tasks.md#addendum-audit-2026-03-03-architecture-hardening-pack-p0p1",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "Execution chain (lean canonical): BATCH-26-PLAN -> BATCH-26-DEV-01 -> BATCH-26-DEV-02 -> BATCH-26-DEV-03 -> BATCH-26-ADMIN-01 -> BATCH-26-GOV-REVIEW.",
+        "BATCH-26-DEV-01 scope: F-001/F-002/F-003 module-load and cross-layer import fixes with import-time proofs.",
+        "BATCH-26-DEV-02 scope: F-004/F-005/F-006/F-008 runtime data-path unification and fake-data purge verification.",
+        "BATCH-26-DEV-03 scope: F-010/F-011/F-012/F-015/F-020 hardening, validator guardrails, and bridge reduction without regressions.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing domain modules (judge, copilot, market_data, legacy storage) before any new file/module.",
+        "Do not start feature work from BATCH-08 until BATCH-26 verdict PASS or explicit risk accept by owner.",
+        "Proof commands must include: import checks, targeted pytest, workboard status transitions, and runtime monitor snapshot."
+      ],
+      "closed_at": "2026-03-03T21:02:01.504948+00:00",
+      "closed_by": "auto_batch_close"
     }
   ]
 }

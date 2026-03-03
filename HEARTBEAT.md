@@ -14,9 +14,9 @@ Role agents now auto-load 3-day context window to prevent architecture regressio
 - Guards: Auto-blocks copilot-app/*, backend/src/backend/src/*, legacy imports
 
 **First Run Check:**
-- [ ] Monitor: tail -f logs-codex-runs/role-runner/backend_engineer.live.log | grep Memory:
-- [ ] Expected: "Memory: 2026-02-28", "Memory: 2026-02-27", "Memory: 2026-02-26" loaded
-- [ ] Guards active: No "copilot-app" in agent output
+- [ ] Note: current role-runner does not log the injected memory context text, so grepping logs for it is not a reliable verification.
+- [ ] Guard check (reliable): No "copilot-app" appears in role-runner logs.
+- [ ] If you want positive verification: add a temporary `trace_event "MemoryContext loaded days=3"` inside `load_3day_memory_context()` in `scripts/cron_tmux_role_runner.sh`, then confirm it appears in `logs-codex-runs/role-runner/<role>.live.log`.
 
 Details: docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md
 

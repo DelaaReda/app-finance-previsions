@@ -7,18 +7,18 @@
 - `docs/orchestrator-ops/priority-queue.json`
 
 ## État courant
-- **BATCH-01**: CLOSE
-- **BATCH-02**: CLOSE
-- **BATCH-03**: IN_PROGRESS
-- **BATCH-04**: READY (planifié)
-- **BATCH-05**: READY (planifié)
-- **BATCH-06**: READY (planifié)
-- **BATCH-07**: READY (planifié)
+- **BATCH-01**: CLOSED
+- **BATCH-02**: CLOSED
+- **BATCH-03**: CLOSED
+- **BATCH-04**: CLOSED
+- **BATCH-05**: CLOSED
+- **BATCH-06**: READY (actif)
+- **BATCH-07**: WAITING_DEP (bloqué tant que BATCH-06 non clôturé)
 
 ## Priorité opérationnelle immédiate
-1. Poursuivre BATCH-03 avec tâches prêtes pour `frontend_engineer`, `backend_engineer`, `data_analyst`.
-2. Valider completion avec workboard + queue avant ouverture de `BATCH-04`.
-3. Maintenir la règle: `planner` ne doit pas réouvrir/fermer de batch sans preuve d'achèvement dans les deux sources.
+1. Exécuter `BATCH-06-DEV-01`, `BATCH-06-DEV-02`, `BATCH-06-DEV-03` en lane `dev` unique avec preuves (`cmd`, `tests_run`, artefact).
+2. Garder `BATCH-06-PLAN` en pilotage court: scope, dépendances, ordre de claim, critères d'acceptation.
+3. N'ouvrir `BATCH-07` qu'après clôture factuelle BATCH-06 dans queue + workboard.
 
 ## Risques à surveiller
 - État de tâche incohérent entre queue et workboard.
@@ -26,7 +26,7 @@
 - Tâches de batch suivant non bloquées par dépendance batch parent.
 
 ## Checklist de route
-- [ ] Vérifier `docs/orchestrator-ops/parallel-workstreams.json` (stream/taskes BATCH-03)
-- [ ] Vérifier `docs/orchestrator-ops/priority-queue.json` (item BATCH-03)
+- [ ] Vérifier `docs/orchestrator-ops/parallel-workstreams.json` (stream/tasks BATCH-06, IDs `DEV-01/02/03`)
+- [ ] Vérifier `docs/orchestrator-ops/priority-queue.json` (item BATCH-06)
 - [ ] Vérifier preuves `docs/orchestrator-ops/proofs/...`
 - [ ] Mettre `docs/product/planning/WORKSTATE.md` à jour après chaque transition.

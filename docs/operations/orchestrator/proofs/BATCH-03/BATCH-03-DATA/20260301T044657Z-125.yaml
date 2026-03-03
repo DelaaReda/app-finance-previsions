@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-03-BATCH-03-DATA-20260301T044657Z-125"
+stream_id: "BATCH-03"
+task_id: "BATCH-03-DATA"
+role: "data_analyst"
+produced_at_utc: "2026-03-01T04:46:57Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/data_analyst.last_contract"
+preconditions:
+  change_plan:
+    - "scope check in progress assets"
+    - "dependency impact downstream readiness"
+    - "risk check stale ingestion schedule"
+    - "verification validate coverage and freshness"
+    - "rollback fallback to batch note for backend"
+  architecture_checks:
+    - "forecast_contract_stability"
+    - "data_path_integrity"
+    - "evidence_gate_readiness"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 -c \"import json;from pathlib import Path; d=json.loads(Path(\"apps/api/runtime/data/forecasts.json\").read_text()); n=json.loads(Path(\"apps/api/runtime/data/news_feed.json\").read_text()); print(len(d.get(\"rows\") or [])); print(n.get(\"data\",{}).get(\"count\")); print(Path(\"docs/data/DATA_QUALITY_REPORT_20260301.md\").exists())\""
+      rc: "0"
+      started_at_utc: "2026-03-01T04:46:57Z"
+      ended_at_utc: "2026-03-01T04:46:57Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP_api_unreachable_for_live_backtests"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/data_analyst.last_contract"
+  artifacts:
+    - "docs/data/DATA_QUALITY_REPORT_20260301.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "data_analyst"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "DATA_QUALITY_REPORT_20260301"
+  review_ref: "none"
+  note: "Generated runtime quality report for backtests and news coverage"

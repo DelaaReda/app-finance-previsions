@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/venom/analyse-financiere"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
+ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
+if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
+  ROOT="$VM_SHARED_ROOT"
+fi
 STATE_DIR="${DG_MONITOR_STATE_DIR:-$HOME/.openclaw/state/dg_monitor}"
 EXEC_LATEST_FILE="${DG_EXEC_LATEST_FILE:-docs/orchestrator-ops/executors-monitoring-latest.json}"
 mkdir -p "$STATE_DIR"

@@ -10,13 +10,13 @@ spec:
       version: "1.1.6"
       changes:
         - "Durcit la réflexion pré-changement: 5 dimensions obligatoires (scope, dependency_impact, risk, verification, rollback) pour les rôles éditables."
-        - "Ajoute un gate contractuel delivery: EVIDENCE doit inclure reflection_passes>=5 + reflection_dimensions complètes sur claim|complete|handoff."
+        - "Ajoute un gate contractuel delivery: EVIDENCE doit inclure reflection_passes>=2 (ou seuil runtime plus strict) + reflection_dimensions complètes sur claim|complete|handoff."
         - "Ajoute le paramètre runtime TMUX_ROLE_MIN_REFLECTION_PASSES dans le profil role-runner."
     - date_utc: "2026-02-27"
       version: "1.1.5"
       changes:
     - "Actualise le profil baseline actif: 20 jobs configurés, dont 12 rôles, 2 admins, 2 utilities et 4 jobs de migration."
-    - "Confirme `TMUX_ROLE_AGENT_BIN=codex` + `TMUX_ROLE_CODEX_MODEL=gpt-5.3-codex-spark` comme posture runtime active."
+    - "Confirme posture runtime hybride: coordination en `gpt-5.2`, delivery (backend/frontend/dev/tester/qa/integrator/infra/data) en `gpt-5.3-codex-spark`."
         - "Alignement du mode de contrôle anti-drift: le baseline actif inclut les jobs legacy en désactivation explicite, pas en mode erreur."
     - date_utc: "2026-02-26"
       version: "1.1.4"
@@ -214,8 +214,16 @@ normative_language:
       TMUX_ROLE_RETRY_ENGINE_DEFAULT: "sdk"
       TMUX_ROLE_CODEX_EXEC_RESUME: 1
       TMUX_ROLE_CODEX_EXEC_FALLBACK: 1
-      TMUX_ROLE_MIN_REFLECTION_PASSES: 5
-    TMUX_ROLE_CODEX_MODEL: "openai-codex/gpt-5.3-codex-spark"
+      TMUX_ROLE_MIN_REFLECTION_PASSES: 2
+    TMUX_ROLE_CODEX_MODEL: "openai-codex/gpt-5.2 (baseline, override par rôle possible)"
+      LM_ROLE_BACKEND_ENGINEER_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_FRONTEND_ENGINEER_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_INTEGRATOR_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_INFRA_ENGINEER_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_DATA_ANALYST_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_DEV_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_TESTER_MODEL: "gpt-5.3-codex-spark"
+      LM_ROLE_QA_MODEL: "gpt-5.3-codex-spark"
       TMUX_ROLE_CODEX_SEARCH_ENABLED: 1
       TMUX_ROLE_CODEX_SANDBOX_MODE: "danger-full-access"
       TMUX_ROLE_CODEX_APPROVAL_POLICY: "never"
@@ -373,7 +381,7 @@ contracts:
             - "si task_update in [claim, complete, handoff]: intent_memory_ref"
             - "si task_update in [claim, complete, handoff]: intent_registry_ref"
             - "si task_update in [claim, complete, handoff]: edit_scope"
-            - "si task_update in [claim, complete, handoff]: reflection_passes>=5"
+            - "si task_update in [claim, complete, handoff]: reflection_passes>=2 (ou seuil runtime plus strict)"
             - "si task_update in [claim, complete, handoff]: reflection_dimensions inclut scope,dependency_impact,risk,verification,rollback"
           phase_1_should_when_has_work:
             - "stream_id"

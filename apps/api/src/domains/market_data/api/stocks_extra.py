@@ -15,15 +15,20 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 try:
-    from src.services.correlation_service import get_correlation_matrix as load_correlation_matrix
+    from domains.market_data.application.correlation_service import (
+        get_correlation_matrix as load_correlation_matrix,
+    )
 except ImportError:  # pragma: no cover
     try:
-        from services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
+        from src.services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
     except ImportError:  # pragma: no cover
         try:
-            from backend.services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
+            from services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
         except ImportError:  # pragma: no cover
-            load_correlation_matrix = None
+            try:
+                from backend.services.correlation_service import get_correlation_matrix as load_correlation_matrix  # type: ignore
+            except ImportError:  # pragma: no cover
+                load_correlation_matrix = None
 
 
 def _normalize_ticker_list(raw_tickers: Optional[List[str]]) -> List[str]:

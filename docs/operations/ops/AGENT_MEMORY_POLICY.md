@@ -13,6 +13,20 @@ Make OpenClaw cron agents reliably persistent by writing their operational conte
   - stream_id / task_id / next_action_unique
   - exec_report / issues / suggestions
   - directive_id / directive_ack (if directives_tail present)
+- Auto-generate compact summary:
+  - `memory/agents/summaries/<role>.summary.md`
+  - window: last 14 entries
+  - consumed by runner as preferred role-memory source
+
+### Context profiles (token-aware)
+- `coordination`: planner/architect/po/scrum_master/clawsentinel
+- `analysis`: analyst/qa/integrator/data_analyst
+- `delivery`: dev/backend/frontend/infra/tester
+
+Defaults in lean mode are profile-specific:
+- daily memory lines
+- role history lines
+- runtime tail level (`summary` vs `omitted`)
 
 ### Admins
 - `memory/agents/adminapp-codex.md`

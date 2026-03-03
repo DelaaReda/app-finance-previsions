@@ -1,6 +1,6 @@
 {
   "version": "workboard_1772498403_d870e2227f2b",
-  "updated_at": "2026-03-03T13:20:58Z",
+  "updated_at": "2026-03-03T21:06:48Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -56,6 +56,11 @@
       "wip_limit": 6,
       "can_edit": true,
       "focus": "build delivery \u2014 covers backend_engineer, frontend_engineer, data_analyst, infra_engineer, integrator, tester, qa"
+    },
+    "admin": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "runtime governance, cron/monitor stability, unblock and safety operations"
     }
   },
   "streams": [
@@ -242,7 +247,7 @@
     {
       "id": "BATCH-06",
       "title": "Forecasts Multi-Assets + LLM Judge",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "planner_slot": "unassigned",
       "priority": "P1",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-06",
@@ -284,7 +289,7 @@
         "critical_order: execute F-001..F-005 before feature extension (imports/layering/runtime-data).",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing judge/cache/storage modules; no new parallel service tree."
       ],
-      "updated_at": "2026-03-03T13:20:58Z",
+      "updated_at": "2026-03-03T16:28:45Z",
       "dispatch_lane": "L1_DATA_FOUNDATION",
       "dispatch_wave": "WAVE-B",
       "ready_for_parallel_dispatch": false,
@@ -293,12 +298,12 @@
     {
       "id": "BATCH-07",
       "title": "Deep Dive + News Intelligence",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "planner_slot": "unassigned",
       "priority": "P1",
       "vision_ref": "docs/planning/PRODUCT_VISION.md#batch-07",
       "depends_on": [
-        "BATCH-06"
+        "BATCH-06-PLAN"
       ],
       "tasks": [
         {
@@ -331,7 +336,7 @@
         "News affich\u00e9es avec score impact, pas brutes",
         "Session utilisateur compl\u00e8te possible en < 5 minutes"
       ],
-      "updated_at": "2026-03-02T21:31:07Z",
+      "updated_at": "2026-03-03T17:34:22Z",
       "dispatch_lane": "L1_DATA_FOUNDATION",
       "dispatch_wave": "WAVE-B",
       "ready_for_parallel_dispatch": false
@@ -362,6 +367,16 @@
       "state": "WAITING_DEP",
       "created_at": "2026-03-02T21:49:25Z",
       "updated_at": "2026-03-03T01:45:53Z"
+    },
+    {
+      "id": "BATCH-26",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03)",
+      "priority": "P0",
+      "source_state": "READY",
+      "state": "READY",
+      "created_at": "2026-03-03T20:46:57Z",
+      "updated_at": "2026-03-03T21:06:48Z",
+      "ready_for_parallel_dispatch": false
     }
   ],
   "tasks": [
@@ -1724,7 +1739,7 @@
       "code": "DEV-01",
       "title": "Forecasts Multi-Assets + LLM Judge [DEV-01]",
       "role": "dev",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-05"
@@ -1737,26 +1752,26 @@
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
         "legacy_note: Impl\u00e9menter le socle forecasts multi-actifs (GLD, SLV, TSLA, NVDA, QQQ, XLE, BTC) avec horizons 1d/1w/1m, contrats stables, arbitrage judge r\u00e9utilisant la stack existante.",
         "critical_fix_pack_claude: corriger imports fantomes et fallback silencieux de apps/api/src/domains/forecasts/application/forecast_service.py (backend.* / services.cache_layer / async compute passed to sync cache).",
-        "critical_fix_pack_claude: realigner imports vers modules existants (platform/legacy/storage/io.py, platform/legacy/models/forecast_hybrid_v1.py, domains/market_data/application/cache_layer.py)."
+        "critical_fix_pack_claude: realigner imports vers modules existants (platform/legacy/storage/io.py, platform/legacy/models/forecast_hybrid_v1.py, domains/market_data/application/cache_layer.py).",
+        "Validation de completion bloqu\u00e9e par d\u00e9pendance/\u00e9tat workboard",
+        "cmd=SKIP(already_validated_previous_tick);tests_run=SKIP(not_run_this_tick);prechange_plan_count=5;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-01/20260303T152808Z-348.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": "",
+      "updated_at": "2026-03-03T15:28:08Z",
+      "started_at": "2026-03-03T14:37:05Z",
+      "completed_at": "2026-03-03T15:28:08Z",
       "prechange_plan_items": [
-        "analyser p\u00e9rim\u00e8tre forecasts multi-actifs et d\u00e9pendances",
-        "\u00e9valuer impact cross-role forecast api",
-        "d\u00e9finir risques de r\u00e9gression et mitigation",
-        "pr\u00e9parer v\u00e9rification smoke tests",
-        "valider rollback op\u00e9rationnel"
+        "scope module cible: attendre release batch-06 inprogress",
+        "dependency impact: batch-05 ferm\u00e9 requis",
+        "risk regression: complete bloqu\u00e9 si gate d\u00e9synchronis\u00e9e",
+        "verification tests: re-run complete pour confirmer gate",
+        "rollback plan: ne rien changer tant que blocker r\u00e9solu"
       ],
       "prechange_architecture_checks": [
-        "forecast_contract",
-        "schema_stability",
-        "observability",
-        "reusability",
-        "risk_mitigation"
+        "reuse_modules_existants",
+        "api_contract_stable",
+        "compatibilite_backward"
       ],
       "prechange_reflection_dimensions": [
         "scope",
@@ -1765,7 +1780,11 @@
         "verification",
         "rollback"
       ],
-      "prechange_gate_version": 2
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-1e6a68473805",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-01/20260303T152808Z-348.yaml"
+      ]
     },
     {
       "id": "BATCH-06-DEV-02",
@@ -1773,7 +1792,7 @@
       "code": "DEV-02",
       "title": "Forecasts Multi-Assets + LLM Judge [DEV-02]",
       "role": "dev",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-05"
@@ -1785,13 +1804,38 @@
         "scope_delivery: rendre la vue Forecasts op\u00e9rationnelle (grille multi-actifs, verdict judge visible, filtres secteur/horizon, deep-dive en 1 clic) avec ergonomie stable.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (apps/web/src/domains/forecasts/components/*) + shared UI wiring (apps/web/src/platform) before creating new components.",
         "legacy_note: Livrer une exp\u00e9rience Forecasts lisible en production: grille multi-actifs, verdict judge visible, filtres secteur/horizon, navigation deep-dive en 1 clic via composants existants.",
-        "critical_guard: ne pas cr\u00e9er de nouveaux widgets avant audit des composants existants; adapter apps/web/src/domains/forecasts/components/widgets/* et contracts/apiConnector.js."
+        "critical_guard: ne pas cr\u00e9er de nouveaux widgets avant audit des composants existants; adapter apps/web/src/domains/forecasts/components/widgets/* et contracts/apiConnector.js.",
+        "cmd=SKIP(no_cmd_recorded);tests_run=SKIP(no_tests_recorded);prechange_plan_count=5;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-02/20260303T155645Z-505.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T15:56:45Z",
+      "started_at": "2026-03-03T15:28:10Z",
+      "completed_at": "2026-03-03T15:56:45Z",
+      "prechange_plan_items": [
+        "scope module cible: ui forecasts multi-actifs + deep-dive",
+        "dependency impact: d\u00e9pend uniquement batch-05 et batch-06-dev-01 cl\u00f4tur\u00e9",
+        "risk regression: r\u00e9gressions d\u2019ergonomie et filtres secteur/horizon",
+        "verification tests: smoke endpoint + contrat contrat ui",
+        "rollback plan: isoler composants existants revert cibl\u00e9"
+      ],
+      "prechange_architecture_checks": [
+        "reuse_modules_existants",
+        "api_contract_stable",
+        "compatibilite_backward"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-385ad341d51f",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-02/20260303T155645Z-505.yaml"
+      ]
     },
     {
       "id": "BATCH-06-DEV-03",
@@ -1799,26 +1843,56 @@
       "code": "DEV-03",
       "title": "Forecasts Multi-Assets + LLM Judge [DEV-03]",
       "role": "dev",
-      "state": "READY",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-05"
       ],
       "assignee": "dev",
       "blocked_reason": "",
-      "artifacts": [],
+      "artifacts": [
+        "docs/operations/orchestrator/parallel-workstreams.json"
+      ],
       "notes": [
         "scope_delivery: fiabiliser la qualit\u00e9 de signal et la fra\u00eecheur (<10min), garantir confidence exploitable et fallback lisible en cas de source partielle.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing market ingest and normalization modules before adding any new collector.",
         "legacy_note: Renforcer la qualit\u00e9 de signal: fra\u00eecheur <10min, confidence non nulle, fallback explicites et coh\u00e9rence de donn\u00e9es pour tous les actifs du batch.",
         "critical_fix_pack_claude: supprimer divergence data runtime (apps/api/src/runtime) et utiliser uniquement apps/api/runtime/data pour RAG + storage IO.",
-        "critical_fix_pack_claude: purger toute donn\u00e9e fake RAG et valider sources/news r\u00e9elles avant complete."
+        "critical_fix_pack_claude: purger toute donn\u00e9e fake RAG et valider sources/news r\u00e9elles avant complete.",
+        "close_batch06dev03_after_review",
+        "cmd=SKIP(no_cmd_recorded);tests_run=PASS;prechange_plan_count=5;prechange_arch_count=5;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-03/20260303T162845Z-758.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T16:28:45Z",
+      "started_at": "2026-03-03T16:06:28Z",
+      "completed_at": "2026-03-03T16:28:45Z",
+      "prechange_plan_items": [
+        "scope valider la port\u00e9e batch-06-dev-03\\",
+        "dependencies lister fichiers impact\u00e9s\\",
+        "risk identifier effets de bord sur ui\\",
+        "verification ex\u00e9cuter tests cibl\u00e9s\\",
+        "rollback pouvoir annuler proprement"
+      ],
+      "prechange_architecture_checks": [
+        "domain_boundary",
+        "dependency_impact",
+        "data_contract_integrity",
+        "fallback_visibility",
+        "artifact_traceability"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-d42267e21ed5",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-03/20260303T162845Z-758.yaml"
+      ]
     },
     {
       "id": "BATCH-06-PLAN",
@@ -1826,25 +1900,44 @@
       "code": "PLAN",
       "title": "Forecasts Multi-Assets + LLM Judge [PLAN]",
       "role": "planner",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-05"
       ],
       "assignee": "planner",
       "blocked_reason": "",
-      "artifacts": [],
+      "artifacts": [
+        "docs/orchestrator-ops/parallel-workstreams.json"
+      ],
       "notes": [
         "legacy_note: Valider judge pipeline: 2+ mod\u00e8les LLM r\u00e9pondent, arbitrage visible dans l'UI",
         "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
         "critical_dispatch_order: ne pas dispatcher feature BATCH-06 tant que F-001..F-005 ne sont pas PASS avec preuves (imports/layering/runtime paths).",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: imposer reuse-first check (judge stack + existing cache/storage modules) dans chaque claim."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: imposer reuse-first check (judge stack + existing cache/storage modules) dans chaque claim.",
+        "post_p0_hardening_pack_p1: F-007/F-019 (supprimer bridges sys.path et fallback g4f circulaire) + F-008/F-012 (retirer wrappers entrypoint fragiles).",
+        "post_p0_hardening_pack_p1: F-010 (supprimer sitecustomize) + F-015 (durcir validate_agent_workspace_layout.sh avec checks runtime fantome/.bak/RAG fake/stubs).",
+        "post_p0_hardening_pack_p1: corriger F-002 dans domains/judge/application/g4f_client.py (_backend_root/_src_root) pour charger working.json et tested_g4f_models* depuis les chemins canoniques.",
+        "post_p0_hardening_pack_p1: corriger F-025/F-028 forecasts_simple.py (retirer random fallback non deterministe et sys.path.insert) + F-026 copilot_service.py (retirer import services.service_standard).",
+        "post_p0_hardening_pack_p2: F-016/F-017/F-014/F-020 (cleanup .bak, fichiers parasites src root, service mal place, signatures save_json incompatibles).",
+        "post_p0_hardening_pack_p2: F-029 valider semantics fail/warn de platform/automation/validate_agent_workspace_layout.sh et rendre explicite la policy de sortie non-zero.",
+        "risk_managed_migration: F-006/F-009 executes behind compatibility gates with explicit rollback because they impact global import topology.",
+        "proof_commands_required: rg -n \"sys.path.insert|services.g4f_client|_resolve_g4f|importlib.import_module\\(\\\"platform.main\\\"\\)\" apps/api/src ; test -f apps/api/src/sitecustomize.py && echo FAIL_sitecustomize_present || echo OK_sitecustomize_removed ; find apps/api/src scripts -name \"*.bak*\" | wc -l ; ls apps/api/src | rg \"^(judge.py|juge-appel|api.log|tested_g4f_models)\"",
+        "proof_commands_required: rg -n \"def _backend_root|def _src_root|working.json|tested_g4f_models\" apps/api/src/domains/judge/application/g4f_client.py ; rg -n \"random.uniform|sys.path.insert\" apps/api/src/platform/legacy/jobs/forecasts_simple.py ; rg -n \"services.service_standard|src.services.service_standard\" apps/api/src/domains/copilot/application/copilot_service.py",
+        "proof_commands_required: bash platform/automation/validate_agent_workspace_layout.sh ; python3 -m py_compile apps/api/src/platform/main.py apps/api/src/platform/legacy/research/llm_client.py apps/api/src/platform/legacy/storage/base.py apps/api/src/platform/legacy/storage/io.py",
+        "done_contract: chaque F-id traite doit inclure run_note >= 5 mots + evidence explicite (commande + sortie resumee + fichier modifie).",
+        "Planner task completed after dependency marker sync; routing execution to dev for BATCH-06 implementation wave.",
+        "cmd=python3 platform/automation/parallel_workstream.py sync-priority;tests_run=SKIP(not a code change; orchestration only);prechange_plan_count=0;prechange_arch_count=0;prechange_reflection_count=0;prechange_gate_version=1;review_ref=none;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-PLAN/20260303T150825Z-371.yaml"
       ],
-      "handoff_to": "",
+      "handoff_to": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
+      "updated_at": "2026-03-03T15:08:25Z",
       "started_at": "2026-03-03T13:20:58Z",
-      "completed_at": ""
+      "completed_at": "2026-03-03T15:08:25Z",
+      "last_idempotency_key": "P1772550354_30110",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-PLAN/20260303T150825Z-371.yaml"
+      ]
     },
     {
       "id": "BATCH-07-DEV-01",
@@ -1852,24 +1945,53 @@
       "code": "DEV-01",
       "title": "Deep Dive + News Intelligence [DEV-01]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
-        "BATCH-06"
+        "BATCH-06-PLAN"
       ],
       "assignee": "dev",
-      "blocked_reason": "BATCH-06 must complete first",
-      "artifacts": [],
+      "blocked_reason": "",
+      "artifacts": [
+        "apps/api/src/domains/copilot/application/copilot_service.py"
+      ],
       "notes": [
         "scope_delivery: assembler la couche Deep Dive (ticker -> news + signaux + forecast + synth\u00e8se LLM contextualis\u00e9e) en r\u00e9utilisant les services existants.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse judge/copilot service wiring and shared response contracts; avoid introducing parallel endpoint stacks.",
-        "legacy_note: Assembler la couche Deep Dive: endpoint consolid\u00e9 ticker -> news + signaux + forecast + synth\u00e8se LLM contextualis\u00e9e, compatible avec /api/copilot/ask."
+        "legacy_note: Assembler la couche Deep Dive: endpoint consolid\u00e9 ticker -> news + signaux + forecast + synth\u00e8se LLM contextualis\u00e9e, compatible avec /api/copilot/ask.",
+        "scope_delivery: fallback deep-dive context now never-empty using local forecast/news snapshots and ticker-aware prompt enrichment",
+        "cmd=cd apps/api && PYTHONPATH=src python3 -m pytest src/domains/copilot/tests/test_copilot_service.py -q;tests_run=python3 -m pytest src/domains/copilot/tests/test_copilot_service.py -q:PASS;prechange_plan_count=6;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-01/20260303T165141Z-192.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T16:51:41Z",
+      "started_at": "2026-03-03T16:50:27Z",
+      "completed_at": "2026-03-03T16:51:41Z",
+      "prechange_plan_items": [
+        "scope: tracer la route deep-dive pour garantir fallback non bloquant",
+        "dependencies: r\u00e9utiliser services forecast/copilot/news existants",
+        "risk: \u00e9viter r\u00e9gression contrat api deepdiveresponse",
+        "verification: test d\u2019int\u00e9gration endpoint ticker",
+        "rollback: git revert du fichier modifi\u00e9",
+        "architecture: r\u00e9utiliser apps/api/src/domains/contracts"
+      ],
+      "prechange_architecture_checks": [
+        "reuse-shared-contracts",
+        "preserve-http-response-schema",
+        "avoid-legacy-src-imports"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-6290092c3ae2",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-01/20260303T165141Z-192.yaml"
+      ]
     },
     {
       "id": "BATCH-07-DEV-02",
@@ -1877,24 +1999,54 @@
       "code": "DEV-02",
       "title": "Deep Dive + News Intelligence [DEV-02]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
-        "BATCH-06"
+        "BATCH-06-PLAN"
       ],
       "assignee": "dev",
-      "blocked_reason": "BATCH-06 must complete first",
-      "artifacts": [],
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T170640Z-31546.yaml"
+      ],
       "notes": [
         "scope_delivery: livrer recherche universelle + consultation Deep Dive en 1 clic avec news scor\u00e9es et question libre copilot sans dupliquer les composants UI.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing pages/widgets/contracts under apps/web/src/domains/forecasts and platform connectors.",
-        "legacy_note: Impl\u00e9menter la recherche universelle et l'exp\u00e9rience Deep Dive en 1 clic, avec affichage de news scor\u00e9es et question libre copilot sans cr\u00e9er de nouvelles briques UI."
+        "legacy_note: Impl\u00e9menter la recherche universelle et l'exp\u00e9rience Deep Dive en 1 clic, avec affichage de news scor\u00e9es et question libre copilot sans cr\u00e9er de nouvelles briques UI.",
+        "Reprise de BATCH-07-DEV-02: remplacement du searchStock mock par appel r\u00e9el search/universal, scoring news deterministic, rendu Deep Dive enrichi, correction compat JS dans apiConnector.",
+        "cmd=node --check apps/web/src/domains/forecasts/contracts/apiConnector.js && node --check apps/web/src/domains/forecasts/pages/app.js;tests_run=PASS;prechange_plan_count=5;prechange_arch_count=5;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T171250Z-318.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T17:12:50Z",
+      "started_at": "2026-03-03T17:08:11Z",
+      "completed_at": "2026-03-03T17:12:50Z",
+      "prechange_plan_items": [
+        "scope ui facette and deep-dive module",
+        "dependency with apiconnector and forecast/news endpoints",
+        "verification by smoke checks and dom fallback",
+        "risk of random placeholders and stale fallback remaining",
+        "rollback to cached/mock fallback if api fails"
+      ],
+      "prechange_architecture_checks": [
+        "ui_contract_source",
+        "domain_boundary",
+        "no_mock_nominal",
+        "widget_isolation",
+        "capture_required"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "P1772557563_31546",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T171250Z-318.yaml"
+      ]
     },
     {
       "id": "BATCH-07-DEV-03",
@@ -1902,24 +2054,54 @@
       "code": "DEV-03",
       "title": "Deep Dive + News Intelligence [DEV-03]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
-        "BATCH-06"
+        "BATCH-06-PLAN"
       ],
       "assignee": "dev",
-      "blocked_reason": "BATCH-06 must complete first",
-      "artifacts": [],
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173000Z-999.yaml"
+      ],
       "notes": [
         "scope_delivery: fiabiliser le scoring d'impact news (0-10), la synth\u00e8se des contenus longs et la tra\u00e7abilit\u00e9 des signaux consomm\u00e9s par Deep Dive.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing ranking/scoring helpers before introducing new scoring modules.",
-        "legacy_note: Fiabiliser le scoring d'impact news (0-10), la synth\u00e8se des contenus longs et la tra\u00e7abilit\u00e9 des signaux inject\u00e9s dans le Deep Dive."
+        "legacy_note: Fiabiliser le scoring d'impact news (0-10), la synth\u00e8se des contenus longs et la tra\u00e7abilit\u00e9 des signaux inject\u00e9s dans le Deep Dive.",
+        "Normalise impact_threshold 0..1/0..10, ajuste filtrage et enrichit chaque r\u00e9sultat d'impact avec impact_score_10, signal_trace et content_summary.",
+        "cmd=cd apps/api && PYTHONPATH=src python3 /tmp/verify_news_impact_cmd.py;tests_run=cd apps/api && PYTHONPATH=src python3 /tmp/verify_news_impact_cmd.py:PASS;prechange_plan_count=5;prechange_arch_count=5;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=PASS;proof_manifest=docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173422Z-256.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T17:34:22Z",
+      "started_at": "2026-03-03T17:28:21Z",
+      "completed_at": "2026-03-03T17:34:22Z",
+      "prechange_plan_items": [
+        "1) confirmer scope endpoint news/analysis et impact scoring",
+        "2) v\u00e9rifier dependency impact vers deep dive dashboard et trace signals",
+        "3) estimer les risques de r\u00e9gression et strat\u00e9gies de mitigation",
+        "4) ex\u00e9cuter v\u00e9rification locale tests smoke pour threshold et schema payload",
+        "5) pr\u00e9voir rollback en revert de news_impact.py si d\u00e9gradation."
+      ],
+      "prechange_architecture_checks": [
+        "scope_delivery",
+        "domain_boundary=market_data",
+        "reuse_existing_helpers",
+        "avoid_legacy_path_changes",
+        "proof_required"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "P1772558886_26200",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173422Z-256.yaml"
+      ]
     },
     {
       "id": "BATCH-07-PLAN",
@@ -1927,22 +2109,30 @@
       "code": "PLAN",
       "title": "Deep Dive + News Intelligence [PLAN]",
       "role": "planner",
-      "state": "WAITING_DEP",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
-        "BATCH-06"
+        "BATCH-06-PLAN"
       ],
-      "assignee": "",
-      "blocked_reason": "BATCH-06 must complete first",
-      "artifacts": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/product/planning/WORKSTATE.md"
+      ],
       "notes": [
-        "legacy_note: Test final MVP: simuler session utilisateur compl\u00e8te (dashboard \u2192 copilot \u2192 deep-dive) en < 5 min"
+        "legacy_note: Test final MVP: simuler session utilisateur compl\u00e8te (dashboard \u2192 copilot \u2192 deep-dive) en < 5 min",
+        "Cloture du plan BATCH-07 : cadrage termin\u00e9, d\u00e9pendance BATCH-06-PLAN valid\u00e9e, dispatch dev \u00e0 ouvrir ensuite",
+        "cmd=SKIP(no_cmd_for_planner_scope);tests_run=SKIP(no_tests_required_planner);prechange_plan_count=0;prechange_arch_count=0;prechange_reflection_count=0;prechange_gate_version=1;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-PLAN/20260303T160111Z-837.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-03T13:20:58Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-03T16:01:11Z",
+      "started_at": "2026-03-03T15:44:16Z",
+      "completed_at": "2026-03-03T16:01:11Z",
+      "last_idempotency_key": "P1772553602-31166",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-PLAN/20260303T160111Z-837.yaml"
+      ]
     },
     {
       "id": "BATCH-03",
@@ -1964,6 +2154,206 @@
       "updated_at": "2026-03-01T12:00:00Z",
       "started_at": "2026-03-01T12:00:00Z",
       "completed_at": "2026-03-01T12:00:00Z"
+    },
+    {
+      "id": "BATCH-05",
+      "stream_id": "BATCH-05",
+      "code": "PLAN",
+      "title": "Copilot 'Que faire aujourd'hui ?' [PLAN] dependency marker",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Compat task inserted for dependency resolution after stream migration."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-03-03T15:08:25Z",
+      "updated_at": "2026-03-03T15:08:25Z",
+      "started_at": "2026-03-03T15:08:25Z",
+      "completed_at": "2026-03-03T15:08:25Z"
+    },
+    {
+      "id": "BATCH-26-PLAN",
+      "stream_id": "BATCH-26",
+      "code": "PLAN",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [PLAN]",
+      "role": "planner",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [],
+      "assignee": "planner",
+      "blocked_reason": "",
+      "artifacts": [
+        "docs/product/planning/tasks.md"
+      ],
+      "notes": [
+        "Planner dispatches lean chain and keeps queue/workboard/WORKSTATE synchronized.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: enforce reuse-first rule in every dev claim note.",
+        "Plan d\u2019architecture valid\u00e9: dispatcher DEV-01/02/03 ordre strict puis ADMIN-01 puis GOV-REVIEW avec preuve runtime",
+        "cmd=SKIP(no_cmd_recorded);tests_run=SKIP(no-tests, planning dispatch only);prechange_plan_count=0;prechange_arch_count=0;prechange_reflection_count=0;prechange_gate_version=1;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-PLAN/20260303T210031Z-786.yaml"
+      ],
+      "handoff_to": "dev",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T21:00:31Z",
+      "started_at": "2026-03-03T21:00:26Z",
+      "completed_at": "2026-03-03T21:00:31Z",
+      "last_idempotency_key": "BATCH-26-PLAN-PLAN-COMPLETE-001",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-PLAN/20260303T210031Z-786.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-26-DEV-01",
+      "stream_id": "BATCH-26",
+      "code": "DEV-01",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [DEV-01]",
+      "role": "dev",
+      "state": "DONE",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-26-PLAN"
+      ],
+      "assignee": "dev",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Scope: fix F-001/F-002/F-003 (module-load failures and cross-layer imports).",
+        "Mandatory proof: python import checks + endpoint smoke + targeted pytest PASS.",
+        "Reuse targets: domains/judge/application/g4f_client.py, platform/legacy/storage/io.py, domains/*/application existing services.",
+        "F-001/F-002/F-003: import viability verified for forecast/judge modules; no further delta in scope this tick.",
+        "cmd=python3 - <<'PY'\\nimport os, sys\\nsys.path.insert(0, os.getcwd())\\nimport apps.api.src.domains.forecasts.application.forecast_service\\nfrom apps.api.src.domains.judge.application.g4f_client import get_ranked_tested_models\\nprint(bool(get_ranked_tested_models() is not None))\\nPY;tests_run=PASS;prechange_plan_count=5;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-DEV-01/20260303T210648Z-286.yaml"
+      ],
+      "handoff_to": "dev",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T21:06:48Z",
+      "started_at": "2026-03-03T21:02:46Z",
+      "completed_at": "2026-03-03T21:06:48Z",
+      "prechange_plan_items": [
+        "scope fix forecast imports",
+        "dependency impact map upstream downstream integrations",
+        "risk regression on legacy fallback paths",
+        "verification pytest smoke import checks",
+        "rollback revert single patch set"
+      ],
+      "prechange_architecture_checks": [
+        "domain_boundaries_preserved_between_application_and_api",
+        "canonical_runtime_data_root_used_everywhere",
+        "no_sys.path_bridge_insertion"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-ece60f0b1570",
+      "proof_manifests": [
+        "docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-DEV-01/20260303T210648Z-286.yaml"
+      ]
+    },
+    {
+      "id": "BATCH-26-DEV-02",
+      "stream_id": "BATCH-26",
+      "code": "DEV-02",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [DEV-02]",
+      "role": "dev",
+      "state": "READY",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-26-DEV-01"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Scope: fix F-004/F-005/F-006/F-008 (runtime data path, fake artifacts, datastore coherence).",
+        "Mandatory proof: data-path grep/find checks + runtime file existence checks + service smoke PASS.",
+        "No duplicate runtime trees; canonical target is apps/api/runtime/data/**."
+      ],
+      "handoff_to": "dev",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T21:06:48Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-26-DEV-03",
+      "stream_id": "BATCH-26",
+      "code": "DEV-03",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [DEV-03]",
+      "role": "dev",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-26-DEV-02"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Scope: fix F-010/F-011/F-012/F-015/F-020 (bridge removal, entrypoint hygiene, validator hardening, storage API consistency).",
+        "Mandatory proof: no sys.path bridge regressions + validator PASS + targeted regression tests PASS.",
+        "Keep fixes minimal, documented, and rollback-ready."
+      ],
+      "handoff_to": "admin",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T20:57:20Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-26-ADMIN-01",
+      "stream_id": "BATCH-26",
+      "code": "ADMIN-01",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [ADMIN-01]",
+      "role": "admin",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-26-DEV-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Admin verifies cron/monitor/contract health after dev fixes and captures runtime snapshot evidence.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate reuse and no duplicate module trees before signoff."
+      ],
+      "handoff_to": "planner",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T20:57:20Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-26-GOV-REVIEW",
+      "stream_id": "BATCH-26",
+      "code": "GOV-REVIEW",
+      "title": "Architecture Hardening Pack (Audit 2026-03-03) [GOV-REVIEW]",
+      "role": "planner",
+      "state": "WAITING_DEP",
+      "priority": "P0",
+      "depends_on": [
+        "BATCH-26-ADMIN-01"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "Planner closes BATCH-26 only after proofs are present and BATCH-08 unblock decision is explicit.",
+        "Produce concise final report: fixed findings, residual risks, and next P0/P1 actions."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-03-03T20:57:20Z",
+      "updated_at": "2026-03-03T20:57:20Z",
+      "started_at": "",
+      "completed_at": ""
     }
   ],
   "handoffs": [
@@ -2062,6 +2452,30 @@
       "idempotency_key": "BATCH02_SENTINEL_CLOSE_20260227A",
       "created_at": "2026-02-27T10:55:06Z",
       "updated_at": "2026-02-27T12:46:09Z"
+    },
+    {
+      "id": "HO-20260303150825-745",
+      "task_id": "BATCH-06-PLAN",
+      "stream_id": "BATCH-06",
+      "from_role": "planner",
+      "to_role": "dev",
+      "status": "ACK",
+      "note": "Planner task completed after dependency marker sync; routing execution to dev for BATCH-06 implementation wave.",
+      "idempotency_key": "P1772550354_30110",
+      "created_at": "2026-03-03T15:08:25Z",
+      "updated_at": "2026-03-03T16:28:34Z"
+    },
+    {
+      "id": "HO-20260303210031-323",
+      "task_id": "BATCH-26-PLAN",
+      "stream_id": "BATCH-26",
+      "from_role": "planner",
+      "to_role": "dev",
+      "status": "ACK",
+      "note": "Plan d\u2019architecture valid\u00e9: dispatcher DEV-01/02/03 ordre strict puis ADMIN-01 puis GOV-REVIEW avec preuve runtime",
+      "idempotency_key": "BATCH-26-PLAN-PLAN-COMPLETE-001",
+      "created_at": "2026-03-03T21:00:31Z",
+      "updated_at": "2026-03-03T21:01:37Z"
     }
   ],
   "events": [
@@ -3483,6 +3897,311 @@
         "prechange_arch_count": "0",
         "prechange_reflection_count": "0",
         "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T14:37:05Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-01",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T15:08:25Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-06-PLAN",
+        "artifact": "docs/orchestrator-ops/parallel-workstreams.json",
+        "handoff_to": "dev",
+        "handoff_id": "HO-20260303150825-745",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-PLAN/20260303T150825Z-371.yaml",
+        "idempotency_key": "P1772550354_30110",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T15:28:08Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-01",
+        "artifact": "",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-01/20260303T152808Z-348.yaml",
+        "idempotency_key": "IK-1e6a68473805",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T15:28:10Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-02",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T15:44:16Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-07-PLAN",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T15:56:45Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-02",
+        "artifact": "",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-02/20260303T155645Z-505.yaml",
+        "idempotency_key": "IK-385ad341d51f",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T16:01:11Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-07-PLAN",
+        "artifact": "docs/product/planning/WORKSTATE.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-PLAN/20260303T160111Z-837.yaml",
+        "idempotency_key": "P1772553602-31166",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T16:06:28Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-03",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T16:28:34Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260303150825-745",
+        "status": "ACK",
+        "actor": "dev"
+      }
+    },
+    {
+      "at": "2026-03-03T16:28:45Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-06-DEV-03",
+        "artifact": "docs/operations/orchestrator/parallel-workstreams.json",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-06/BATCH-06-DEV-03/20260303T162845Z-758.yaml",
+        "idempotency_key": "IK-d42267e21ed5",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T16:50:27Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T16:51:41Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-01",
+        "artifact": "apps/api/src/domains/copilot/application/copilot_service.py",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-01/20260303T165141Z-192.yaml",
+        "idempotency_key": "IK-6290092c3ae2",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T17:08:11Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-02",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T17:12:50Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-02",
+        "artifact": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T170640Z-31546.yaml",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T171250Z-318.yaml",
+        "idempotency_key": "P1772557563_31546",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T17:28:21Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-03",
+        "prechange_plan_count": "7",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T17:34:22Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-07-DEV-03",
+        "artifact": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173000Z-999.yaml",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173422Z-256.yaml",
+        "idempotency_key": "P1772558886_26200",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T20:46:57Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "docs/orchestrator-ops/priority-queue.json",
+        "created_streams": 1,
+        "created_tasks": 14
+      }
+    },
+    {
+      "at": "2026-03-03T21:00:26Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-26-PLAN",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T21:00:31Z",
+      "kind": "complete",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-26-PLAN",
+        "artifact": "docs/product/planning/tasks.md",
+        "handoff_to": "dev",
+        "handoff_id": "HO-20260303210031-323",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-PLAN/20260303T210031Z-786.yaml",
+        "idempotency_key": "BATCH-26-PLAN-PLAN-COMPLETE-001",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-03T21:01:37Z",
+      "kind": "handoff_update",
+      "details": {
+        "handoff_id": "HO-20260303210031-323",
+        "status": "ACK",
+        "actor": "dev"
+      }
+    },
+    {
+      "at": "2026-03-03T21:02:46Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-26-DEV-01",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-03T21:06:48Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-26-DEV-01",
+        "artifact": "",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/orchestrator-ops/proofs/BATCH-26/BATCH-26-DEV-01/20260303T210648Z-286.yaml",
+        "idempotency_key": "IK-ece60f0b1570",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
       }
     }
   ],

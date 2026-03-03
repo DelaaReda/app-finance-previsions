@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/validate_roles_sequential.sh
+../platform/policies/validate_roles_sequential.sh

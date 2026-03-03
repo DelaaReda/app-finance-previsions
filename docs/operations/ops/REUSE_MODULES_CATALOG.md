@@ -6,6 +6,9 @@ Les entrées historiques sont encore utiles pour retrouver les modules, en rempl
 - `copilot-app/backend` → `apps/api`
 - `copilot-app/frontend` → `apps/web`
 
+For Judge/API/cache architecture-correct guidance, use:
+- `docs/ops/JUDGE_RECOVERY_ADAPTED_PLAYBOOK.md`
+
 Objectif: aider l’equipe a **reutiliser** les modules deja presents (helpers, services, schemas, widgets) au lieu de recreer des variantes.
 
 Checklist (reuse-first marker):

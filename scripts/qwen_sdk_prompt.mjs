@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/qwen_sdk_prompt_not_used.mjs
+../platform/automation/qwen_sdk_prompt_not_used.mjs

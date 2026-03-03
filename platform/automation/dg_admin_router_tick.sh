@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/venom/analyse-financiere"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
+ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
+if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
+  ROOT="$VM_SHARED_ROOT"
+fi
 cd "$ROOT"
 
 STATE_DIR="${DG_ROUTER_STATE_DIR:-$HOME/.openclaw/state/dg_router}"

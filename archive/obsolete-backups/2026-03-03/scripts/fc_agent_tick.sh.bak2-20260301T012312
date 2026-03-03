@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# ============================================================
+# fc_agent_tick.sh — Lance un tick d'agent via cron_tmux_role_runner
+# Usage: fc_agent_tick.sh <role>
+# Features:
+#   - Fallback automatique vers qwen-code si codex est rate-limited
+#   - Timeout réduit pour éviter stale locks (360s)
+#   - Détection VM resume et kill des sessions stales
+# ============================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROLE="${1:-}"
+LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
+LOCK_DIR="/tmp/fc-agent-locks"
+QWEN_BIN="/home/venom/.npm-global/bin/qwen"
+CODEX_RL_CACHE_DIR="/home/venom/.openclaw/cron/role-state"
+CODEX_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/codex.rate_limit_gate_cache"
+QWEN_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/qwen.rate_limit_gate_cache"
+
+# Assure que qwen est accessible même dans un shell non-login
+export PATH="/home/venom/.npm-global/bin:$PATH"
+
+mkdir -p "$LOG_DIR" "$LOCK_DIR"
+
+if [[ -z "$ROLE" ]]; then
+  echo "Usage: $0 <role>" >&2
+  exit 1
+fi
+
+# Only run these 4 active roles
+case "$ROLE" in
+  planner|backend_engineer|frontend_engineer|data_analyst) ;;
+  *)
+    echo "[fc_tick] Role '$ROLE' not in active set, skipping" >&2
+    exit 0
+    ;;
+esac
+
+LOCK="$LOCK_DIR/$ROLE.lock"
+LOG="$LOG_DIR/$ROLE.tick.log"
+
+# Prevent overlap
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "[fc_tick] $ROLE already running, skip" >> "$LOG"
+  exit 0
+fi
+
+ts() { date '+%Y-%m-%dT%H:%M:%S'; }
+
+echo "" >> "$LOG"
+echo "$(ts) [START] role=$ROLE" >> "$LOG"
+
+# ============================================================
+# VM Resume detection
+# ============================================================
+RESUME_FILE="/tmp/fc_last_tick_$ROLE"
+NOW_EPOCH="$(date +%s)"
+LAST_EPOCH=0
+[[ -f "$RESUME_FILE" ]] && LAST_EPOCH="$(cat "$RESUME_FILE" 2>/dev/null || echo 0)"
+echo "$NOW_EPOCH" > "$RESUME_FILE"
+
+GAP=$((NOW_EPOCH - LAST_EPOCH))
+SESSION="codex_${ROLE}_cron"
+[[ "$ROLE" == "planner" ]] && SESSION="codex_planner_cron"
+
+# If gap > 10 min, VM likely woke from sleep — kill stale session
+if [[ "$LAST_EPOCH" -gt 0 && "$GAP" -gt 600 ]]; then
+  echo "$(ts) [RESUME] gap=${GAP}s, killing stale session $SESSION" >> "$LOG"
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  sleep 1
+fi
+
+# ============================================================
+# Qwen fallback gate
+# Vérifie si codex est rate-limited → bascule vers qwen
+# Vérifie aussi si qwen lui-même est rate-limited → skip
+# ============================================================
+is_rl_cache_active() {
+  local cache_file="$1"
+  [[ ! -f "$cache_file" ]] && return 1
+  local payload until_ts
+  payload="$(cat "$cache_file" 2>/dev/null || true)"
+  until_ts="${payload%%|*}"
+  [[ "$until_ts" =~ ^[0-9]+$ ]] || { rm -f "$cache_file"; return 1; }
+  [[ "$(date +%s)" -lt "$until_ts" ]] && return 0
+  rm -f "$cache_file"
+  return 1
+}
+
+AGENT_MODE="codex"
+AGENT_BIN_EFFECTIVE="codex"
+
+if is_rl_cache_active "$CODEX_RL_CACHE_FILE"; then
+  RL_REASON="$(cat "$CODEX_RL_CACHE_FILE" 2>/dev/null | cut -d'|' -f2 | cut -c1-80 || echo 'rate_limit_cached')"
+  echo "$(ts) [QWEN_FALLBACK] codex rate-limited (${RL_REASON}), switching to qwen" >> "$LOG"
+
+  if is_rl_cache_active "$QWEN_RL_CACHE_FILE"; then
+    echo "$(ts) [SKIP] qwen also rate-limited, skipping tick for $ROLE" >> "$LOG"
+    exit 0
+  fi
+
+  if [[ ! -x "$QWEN_BIN" ]]; then
+    echo "$(ts) [SKIP] qwen not executable at $QWEN_BIN, skipping tick" >> "$LOG"
+    exit 0
+  fi
+
+  AGENT_MODE="qwen"
+  AGENT_BIN_EFFECTIVE="$QWEN_BIN"
+  SESSION="qwen_${ROLE}_cron"
+  echo "$(ts) [AGENT] using qwen fallback: $QWEN_BIN" >> "$LOG"
+fi
+
+# ============================================================
+# Ensure tmux session exists
+# ============================================================
+LAUNCH_CMD="codex --no-alt-screen"
+if [[ "$AGENT_MODE" == "qwen" ]]; then
+  LAUNCH_CMD="${QWEN_BIN} --channel CI --approval-mode yolo --chat-recording false -o text"
+fi
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "$(ts) [START_SESSION] $SESSION agent=$AGENT_MODE" >> "$LOG"
+  tmux new-session -d -s "$SESSION" -c "$ROOT" \
+    "bash -lc 'export PATH=/home/venom/.npm-global/bin:\$PATH; unset NO_COLOR; export TERM=xterm-256color FORCE_COLOR=1; exec $LAUNCH_CMD'"
+  sleep 3
+fi
+
+# ============================================================
+# Source config et lancer le tick
+# Timeout réduit à 360s pour éviter stale locks (cadence ~20-25min)
+# PROMPT_TIMEOUT_SECONDS=200s pour laisser le temps à xhigh thinking
+# ============================================================
+cd "$ROOT"
+source platform/config/lm_used_model_config.sh 2>/dev/null || true
+
+export TMUX_ROLE_AGENT_BIN="$AGENT_BIN_EFFECTIVE"
+export PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-200}"
+export RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-100}"
+export TMUX_ROLE_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-90}"
+
+echo "$(ts) [TICK] role=$ROLE agent=$AGENT_MODE session=$SESSION timeout=360s" >> "$LOG"
+
+RESULT=$(timeout 360 bash scripts/cron_tmux_role_runner.sh "$ROLE" 2>&1 || true)
+RC=$?
+
+echo "$(ts) [END] role=$ROLE agent=$AGENT_MODE rc=$RC" >> "$LOG"
+
+# Log dernière ligne du résultat pour diagnostic rapide
+if [[ -n "$RESULT" ]]; then
+  LAST_LINE="$(echo "$RESULT" | tail -1 | cut -c1-160)"
+  echo "$(ts) [RESULT_TAIL] $LAST_LINE" >> "$LOG"
+fi

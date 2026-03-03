@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/dg_alert_15m.sh
+../platform/automation/dg_alert_15m.sh

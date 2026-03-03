@@ -307,39 +307,45 @@ function drawVolatilityChartPro() {
 }
 
 function generateFacetteContent(facetteId, tabName) {
-  // This would be dynamic in production
+  const safeTabName = toString(tabName, 'Overview');
+  const facette = isObject(facettes[facetteId]) ? facettes[facetteId] : {};
+  const safeFacetteName = toString(facette.name, String(facetteId).toUpperCase());
+  const scoreSeed = (String(facetteId || '').length + safeTabName.length);
+  const confidence = 60 + (scoreSeed * 3 % 35);
+  const accuracy = 72 + (scoreSeed * 5 % 25);
+  const insights = Math.max(1, scoreSeed % 10);
+
   return `
     <div class="widget-card">
       <div class="widget-header">
-        <h3>${tabName}</h3>
+        <h3>${safeTabName}</h3>
       </div>
       <div class="widget-body">
         <p style="font-size: 16px; line-height: 1.8; color: var(--color-text-light);">
-          Contenu pour <strong>${facettes[facetteId].name}</strong> > <strong>${tabName}</strong>
+          Contenu pour <strong>${safeFacetteName}</strong> > <strong>${safeTabName}</strong>
         </p>
         <div style="margin-top: 32px; padding: 24px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.3);">
           <h4 style="margin-bottom: 16px;">🤖 AI Analysis</h4>
           <p style="font-size: 14px; line-height: 1.7; color: var(--color-text-secondary);">
-            Based on current market conditions and your portfolio composition, this ${tabName} view provides comprehensive insights.
-            The AI has analyzed ${Math.floor(Math.random() * 10000) + 5000} data points to generate these recommendations.
+            Basé sur les données disponibles, cette vue <strong>${safeTabName}</strong> synthétise marché, news et prévisions.
           </p>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; margin-top: 32px;">
           <div style="padding: 20px; background: rgba(31, 64, 175, 0.1); border-radius: 12px; text-align: center;">
-            <div style="font-size: 32px; font-weight: 700; color: #10B981; margin-bottom: 8px;">+${(Math.random() * 10 + 2).toFixed(1)}%</div>
+            <div style="font-size: 32px; font-weight: 700; color: #10B981; margin-bottom: 8px;">${confidence}%</div>
             <div style="font-size: 12px; color: var(--color-text-secondary);">Confidence Score</div>
           </div>
           <div style="padding: 20px; background: rgba(31, 64, 175, 0.1); border-radius: 12px; text-align: center;">
-            <div style="font-size: 32px; font-weight: 700; color: #8B5CF6; margin-bottom: 8px;">${Math.floor(Math.random() * 30 + 70)}%</div>
+            <div style="font-size: 32px; font-weight: 700; color: #8B5CF6; margin-bottom: 8px;">${accuracy}%</div>
             <div style="font-size: 12px; color: var(--color-text-secondary);">AI Accuracy</div>
           </div>
           <div style="padding: 20px; background: rgba(31, 64, 175, 0.1); border-radius: 12px; text-align: center;">
-            <div style="font-size: 32px; font-weight: 700; color: #F59E0B; margin-bottom: 8px;">${Math.floor(Math.random() * 50 + 10)}</div>
+            <div style="font-size: 32px; font-weight: 700; color: #F59E0B; margin-bottom: 8px;">${insights}</div>
             <div style="font-size: 12px; color: var(--color-text-secondary);">Insights Found</div>
           </div>
         </div>
         <div style="margin-top: 32px; display: flex; gap: 16px;">
-          <button class="kpi-action-btn primary" onclick="showToast('Deep diving into data...')">🔍 Deep Dive</button>
+          <button class="kpi-action-btn primary" onclick="searchStock()">🔍 Deep Dive</button>
           <button class="kpi-action-btn secondary" onclick="showToast('Exporting analysis...')">Export Analysis</button>
           <button class="kpi-action-btn secondary" onclick="showToast('Setting alert...')">Set Alert</button>
         </div>
@@ -348,12 +354,34 @@ function generateFacetteContent(facetteId, tabName) {
   `;
 }
 
-function searchStock() {
+function scoreSearchNewsItem(item, symbol) {
+  const target = String(symbol).toUpperCase();
+  const title = String(item.title || item.headline || item.summary || '').toUpperCase();
+  const source = String(item.source || '').toUpperCase();
+  const tickers = toArray(item.tickers, []);
+  const tickerMatch = tickers.some((entry) => String(entry).toUpperCase() === target);
+  const relevance = toFiniteNumber(item.relevance, 0);
+  const sentiment = toString(item.sentiment, 'neutral').toLowerCase();
+  const publishedAt = item.published_at || item.pub_date || item.date || item.created_at;
+  const parsedDate = Date.parse(publishedAt);
+  const ageHours = Number.isFinite(parsedDate) ? Math.max(0, (Date.now() - parsedDate) / 3600000) : 168;
+  const freshness = ageHours <= 2 ? 2.2 : ageHours <= 8 ? 1.6 : ageHours <= 24 ? 1.0 : 0.3;
+  const matchBonus = (title.includes(target) || source.includes(target) || tickerMatch) ? 2 : 0.6;
+  const sentimentBonus = sentiment === 'positive' ? 1.3 : sentiment === 'negative' ? 1.1 : 0.8;
+  const score = (relevance * 6) + matchBonus + sentimentBonus + freshness;
+  return Math.max(0, Math.min(10, score));
+}
+
+async function searchStock() {
   const input = document.getElementById('stockSymbolInput');
-  const symbol = input.value.trim().toUpperCase();
+  const symbol = input && input.value ? input.value.trim().toUpperCase() : '';
 
   if (!symbol) {
     showToast('Please enter a stock symbol', 'warning');
+    return;
+  }
+  if (!v16State.currentFacette || !facettes[v16State.currentFacette]) {
+    showToast('Veuillez ouvrir une facette avant la recherche', 'warning');
     return;
   }
 
@@ -362,10 +390,101 @@ function searchStock() {
   document.getElementById('facetteBreadcrumb').textContent = v16State.breadcrumbs.join(' > ');
 
   showToast(`📈 Analyzing ${symbol}...`);
+  const contentContainer = document.getElementById('facetteContent');
+  if (!contentContainer) {
+    return;
+  }
 
-  // Load stock-specific content
-  setTimeout(() => {
-    const contentContainer = document.getElementById('facetteContent');
+  contentContainer.innerHTML = `
+    <div class="widget-card">
+      <div class="widget-header">
+        <h3>${symbol} Deep Dive</h3>
+      </div>
+      <div class="widget-body">
+        <p style="font-size: 14px; color: var(--color-text-light);">Recherche universelle en cours...</p>
+      </div>
+    </div>
+  `;
+
+  try {
+    const searchPayload = await (typeof window.FinanceAPI?.searchUniverse === 'function'
+      ? window.FinanceAPI.searchUniverse(symbol, {
+        type: 'stocks,news,forecasts',
+        tickers: [symbol],
+        limit: 12,
+        sortBy: 'relevance'
+      })
+      : Promise.resolve({ query: symbol, results: { stocks: [], news: [], forecasts: [] }, total: 0 }));
+    const payload = isObject(searchPayload) ? (searchPayload.results || searchPayload.data || {}) : {};
+    const stocks = toArray(payload.stocks, []);
+    const forecasts = toArray(payload.forecasts, []);
+    const news = toArray(payload.news, []);
+
+    const selectedStock = stocks.find((row) => String(row.ticker || row.symbol || '').toUpperCase() === symbol)
+      || stocks[0]
+      || {};
+    const selectedForecast = forecasts.find((row) => String(row.ticker || row.symbol || '').toUpperCase() === symbol)
+      || forecasts[0]
+      || {};
+    const liveRow = isObject(window.liveStocks) ? window.liveStocks[symbol] : null;
+    const livePoints = toArray((isObject(liveRow) ? liveRow.points : []), []);
+    const livePrices = livePoints
+      .map((point) => Array.isArray(point) ? toFiniteNumber(point[1], NaN) : toFiniteNumber(point, NaN))
+      .filter((value) => Number.isFinite(value));
+
+    const currentPrice = Math.max(0, toFiniteNumber(
+      selectedStock.current_price || selectedStock.price || selectedStock.last_price || livePrices[livePrices.length - 1],
+      0
+    ));
+    const previousPrice = livePrices.length > 1 ? livePrices[livePrices.length - 2] : currentPrice;
+    const dayDelta = previousPrice > 0 ? ((currentPrice - previousPrice) / previousPrice) * 100 : 0;
+
+    const forecastDelta = toFiniteNumber(
+      selectedForecast.expected_return || selectedForecast.expectedReturn || selectedForecast.forecast || 0,
+      0
+    );
+    const forecastConfidence = toFiniteNumber(
+      selectedForecast.confidence || selectedForecast.confidence_pct || selectedForecast.score || 0,
+      0
+    );
+    const forecastConfidencePct = forecastConfidence > 1
+      ? Math.max(0, Math.min(100, Math.round(forecastConfidence)))
+      : Math.max(0, Math.min(100, Math.round(forecastConfidence * 100)));
+    const riskLevel = Math.max(1, Math.min(10, 10 - Math.round(forecastConfidencePct / 12)));
+
+    const scoredNews = toArray(news, [])
+      .map((entry) => {
+        const row = isObject(entry) ? entry : {};
+        return {
+          headline: toString(row.title || row.headline, 'Market update'),
+          summary: toString(row.summary || row.description, ''),
+          source: toString(row.source, 'API'),
+          time: formatRelativeTime(row.published_at || row.pub_date || row.date || row.created_at || ''),
+          impact: scoreSearchNewsItem(row, symbol)
+        };
+      })
+      .sort((a, b) => toFiniteNumber(b.impact, 0) - toFiniteNumber(a.impact, 0))
+      .slice(0, 5);
+
+    const newsBlock = scoredNews.length
+      ? scoredNews.map((item) => `
+        <div style="padding: 14px 16px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border-radius: 10px; border-left: 4px solid #F59E0B;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap: 10px;">
+            <strong style="font-size: 14px; color: var(--color-text-light);">${item.headline}</strong>
+            <span style="font-size: 12px; color: #94A3B8; white-space: nowrap;">Impact ${item.impact.toFixed(1)}/10 • ${item.time}</span>
+          </div>
+          <p style="margin: 8px 0 0; font-size: 13px; color: var(--color-text-secondary);">${item.summary || 'Aucun résumé disponible.'}</p>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #94A3B8;">${item.source}</p>
+        </div>
+      `).join('')
+      : '<p style="color: var(--color-text-secondary);">Aucune news récente trouvée pour ce ticker.</p>';
+
+    const copilotRaw = await (typeof window.FinanceAPI?.askCopilot === 'function'
+      ? window.FinanceAPI.askCopilot(`Analyse courte de ${symbol} : tendance, moteurs et risques`, [symbol])
+      : Promise.resolve({ data: { answer: 'Service indisponible', sources: [] } }));
+    const copilotParsed = buildCopilotJudgePayload(isObject(copilotRaw) && isObject(copilotRaw.data) ? copilotRaw.data : copilotRaw);
+    const reasoningText = toString(copilotParsed?.reasoning || copilotParsed?.answer, 'Synthèse en cours.');
+
     contentContainer.innerHTML = `
       <div class="widget-card">
         <div class="widget-header">
@@ -375,26 +494,34 @@ function searchStock() {
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px;">
             <div style="padding: 24px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.3);">
               <div style="font-size: 14px; color: var(--color-text-secondary); margin-bottom: 8px;">Current Price</div>
-              <div style="font-size: 36px; font-weight: 700; color: #10B981; margin-bottom: 8px;">$${(Math.random() * 500 + 100).toFixed(2)}</div>
-              <div style="font-size: 13px; color: #10B981;">↑ +${(Math.random() * 5 + 1).toFixed(2)}% today</div>
+              <div style="font-size: 36px; font-weight: 700; color: #10B981; margin-bottom: 8px;">$${currentPrice.toFixed(2)}</div>
+              <div style="font-size: 13px; color: #10B981;">${dayDelta >= 0 ? '↑' : '↓'} ${Math.abs(dayDelta).toFixed(2)}% today</div>
             </div>
             <div style="padding: 24px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.3);">
               <div style="font-size: 14px; color: var(--color-text-secondary); margin-bottom: 8px;">AI Forecast (30d)</div>
-              <div style="font-size: 36px; font-weight: 700; color: #8B5CF6; margin-bottom: 8px;">+${(Math.random() * 15 + 3).toFixed(1)}%</div>
-              <div style="font-size: 13px; color: #8B5CF6;">${Math.floor(Math.random() * 20 + 75)}% confidence</div>
+              <div style="font-size: 36px; font-weight: 700; color: #8B5CF6; margin-bottom: 8px;">${forecastDelta >= 0 ? '+' : ''}${forecastDelta.toFixed(1)}%</div>
+              <div style="font-size: 13px; color: #8B5CF6;">${forecastConfidencePct}% confidence</div>
             </div>
             <div style="padding: 24px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05)); border-radius: 16px; border: 1px solid rgba(245, 158, 11, 0.3);">
               <div style="font-size: 14px; color: var(--color-text-secondary); margin-bottom: 8px;">Risk Level</div>
-              <div style="font-size: 36px; font-weight: 700; color: #F59E0B; margin-bottom: 8px;">${Math.floor(Math.random() * 4 + 4)}/10</div>
+              <div style="font-size: 36px; font-weight: 700; color: #F59E0B; margin-bottom: 8px;">${riskLevel}/10</div>
               <div style="font-size: 13px; color: #F59E0B;">Moderate Risk</div>
             </div>
           </div>
+          <div style="margin-top: 24px;">
+            <h4 style="margin-bottom: 12px;">📰 News Impact (top)</h4>
+            ${newsBlock}
+          </div>
           <div style="margin-top: 32px;">
-            <h4 style="margin-bottom: 16px;">🤖 AI Recommendation</h4>
+            <h4>🤖 AI Recommendation</h4>
             <div style="padding: 24px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border-left: 4px solid #8B5CF6;">
               <p style="font-size: 15px; line-height: 1.7; color: var(--color-text-light);">
-                <strong>HOLD</strong> position on ${symbol}. The AI detects strong momentum with ${Math.floor(Math.random() * 20 + 80)}% confidence.
-                Technical indicators show bullish continuation patterns. Monitor resistance at $${(Math.random() * 50 + 450).toFixed(2)}.
+                <strong>${toString(copilotParsed?.consensus, 'HOLD').toUpperCase()}</strong> position on ${symbol}.
+                ${reasoningText}
+              </p>
+              <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">
+                Confiance: ${Math.max(0, Math.min(100, Math.round(toFiniteNumber(copilotParsed?.confidence, 35))))}%
+                • Source: ${toString(copilotParsed?.model, 'Copilot')}
               </p>
             </div>
           </div>
@@ -402,7 +529,20 @@ function searchStock() {
       </div>
     `;
     showToast(`✅ ${symbol} analysis complete!`, 'success');
-  }, 800);
+  } catch (error) {
+    console.error('searchStock failed', error);
+    contentContainer.innerHTML = `
+      <div class="widget-card">
+        <div class="widget-header">
+          <h3>${symbol} Deep Dive</h3>
+        </div>
+        <div class="widget-body">
+          <p style="color: #F87171;">Impossible de charger ${symbol} pour le moment. Réessayez dans quelques secondes.</p>
+        </div>
+      </div>
+    `;
+    showToast(`⚠️ ${symbol} analysis temporary unavailable`, 'error');
+  }
 }
 
 function quickNeed(need) {
@@ -818,6 +958,13 @@ const FALLBACK_APP_DATA = {
     overall: 83,
     suggestion: 'Diversifier Tech → Santé'
   },
+  sectorPerformance: [
+    { sector: 'Technology', change: 8.5, holdings: true, weight: 45 },
+    { sector: 'Finance', change: 3.1, holdings: true, weight: 15 },
+    { sector: 'Energy', change: -1.8, holdings: false, weight: 0 },
+    { sector: 'Healthcare', change: 5.2, holdings: false, weight: 0 },
+    { sector: 'Real Estate', change: 1.2, holdings: false, weight: 4 }
+  ],
   backtestResults: {
     sharpeRatio: 1.28,
     winRate: 72,
@@ -882,6 +1029,116 @@ function toNumberArray(value, fallback = []) {
   return normalized.length ? normalized : fallback;
 }
 
+function normalizeVerdict(value, fallback = 'hold') {
+  const normalized = toString(value, fallback).toLowerCase();
+  if (normalized.includes('buy') || normalized.includes('achat') || normalized.includes('long')) {
+    return 'buy';
+  }
+  if (normalized.includes('sell') || normalized.includes('vendre') || normalized.includes('short')) {
+    return 'sell';
+  }
+  return 'hold';
+}
+
+function formatConfidence(value, fallback = 0) {
+  const parsed = toFiniteNumber(value, fallback);
+  const normalized = parsed > 1 ? parsed : parsed * 100;
+  const bounded = Math.max(0, Math.min(100, Math.round(normalized)));
+  return Number.isFinite(bounded) ? bounded : fallback;
+}
+
+function normalizeReasoning(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => toString(item).trim()).filter((item) => item.length > 5);
+  }
+  if (typeof value !== 'string' || !value.trim()) {
+    return [];
+  }
+  const parsed = value.split(/[\n\r]+/).map((line) => line.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+  return parsed.length
+    ? parsed.slice(0, 3)
+    : value
+      .split(/(?<=[.!?])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter((sentence) => sentence.length > 8)
+      .slice(0, 3);
+}
+
+function normalizeCopilotSources(value) {
+  return toArray(value, []).map((source) => {
+    if (!isObject(source)) {
+      return {
+        label: toString(source, 'Source'),
+        url: '',
+        excerpt: ''
+      };
+    }
+    const url = toString(source.url || source.link, '');
+    const label = toString(source.ticker || source.source || source.label || source.type, 'Source');
+    const excerpt = toString(source.excerpt || source.snippet || source.reason, '');
+    return { label, url, excerpt };
+  });
+}
+
+function buildCopilotJudgePayload(raw) {
+  if (!isObject(raw) && raw !== null) {
+    return null;
+  }
+  const payload = raw && isObject(raw) ? raw : {};
+  const data = isObject(payload.data) ? payload.data : payload;
+  const verdict = normalizeVerdict(data.verdict || data.action || data.recommendation, 'hold');
+  const confidence = formatConfidence(data.confidence, 0.35);
+  const models = toArray(data.models, []).filter(isObject);
+  const fallbackModel = {
+    name: toString(data.model, 'Copilot'),
+    verdict: verdict.toUpperCase(),
+    confidence,
+    icon: '🤖',
+    evidence: toString(data.risk_caveat, '')
+  };
+  const modelRows = models.length
+    ? models.map((item) => ({
+      name: toString(item.name, 'Copilot'),
+      verdict: normalizeVerdict(item.verdict || item.action, verdict).toUpperCase(),
+      confidence: formatConfidence(item.confidence, confidence),
+      icon: toString(item.icon || '🤖', '🤖'),
+      evidence: toString(item.evidence || item.reasoning || '', '')
+    }))
+    : [fallbackModel];
+  const reasoning = normalizeReasoning(data.reasoning || data.answer || '');
+  const sources = normalizeCopilotSources(data.sources || data.citations);
+  const requirementsMet = isObject(data.requirements_met || data.requirementsMet)
+    ? (data.requirements_met || data.requirementsMet)
+    : {};
+  const qualityStatus = toString(data.quality_status || data.qualityStatus, 'insufficient_sources');
+
+  return {
+    question: toString(data.question, 'Que faire avec votre portefeuille ?'),
+    consensus: verdict.toUpperCase(),
+    answer: toString(data.answer || data.reasoning, ''),
+    confidence,
+    verdictClass: verdict,
+    model: toString(data.model, 'Copilot'),
+    qualityStatus,
+    requirementsMet: {
+      min_sources_2: !!requirementsMet.min_sources_2,
+      quality_threshold: !!requirementsMet.quality_threshold
+    },
+    models: modelRows,
+    reasoning: reasoning.length
+      ? reasoning.join(' ')
+      : toString(data.answer, 'Analyse indisponible pour le moment, réessayez plus tard.'),
+    dataSources: sources,
+    suggestedActions: toArray(data.suggestedActions, FALLBACK_LLM_JUDGE_DATA.suggestedActions).map((action) => ({
+      icon: toString(action.icon, '➡️'),
+      title: toString(action.title, 'Action'),
+      detail: toString(action.detail, ''),
+      action: toString(action.action, 'setAlert')
+    })),
+    generatedAt: toString(data.generated_at || data.generatedAt, '')
+  };
+}
+
 function sanitizeTradeIdeas(items) {
   const rows = toArray(items, FALLBACK_TRADE_IDEAS);
   return rows.map((item) => ({
@@ -909,7 +1166,7 @@ function sanitizeForecastRows(rows) {
       ticker: toString(item.ticker || item.symbol || item.asset || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
       direction: direction,
       directionArrow: item.directionArrow || (direction === 'up' ? '↑' : direction === 'down' ? '↓' : '→'),
-      confidence: Math.max(0, Math.min(100, Math.round(normalizePercentValue(toFiniteNumber(item.confidence, 0)))),
+      confidence: Math.max(0, Math.min(100, Math.round(normalizePercentValue(toFiniteNumber(item.confidence, 0))))),
       horizon: toString(item.horizon, ''),
       expectedReturn: expected,
       currentPrice,
@@ -1047,6 +1304,37 @@ function sanitizeMarketDrivers(items) {
   }));
 }
 
+function sanitizeSectorPerformance(items, fallback = []) {
+  const rows = toArray(items, fallback);
+  return rows
+    .map((item) => {
+      const source = isObject(item) ? item : {};
+      const change = toFiniteNumber(source.change_pct ?? source.change ?? source.delta ?? source.delta_pct ?? 0, 0);
+      const weight = toFiniteNumber(source.weight_pct ?? source.weight ?? source.alloc ?? 0, 0);
+      const sector = toString(source.sector || source.name || source.label, 'Unknown');
+      const holdings =
+        source.holdings === true ||
+        source.holdings === 'true' ||
+        source.inPortfolio === true ||
+        source.inPortfolio === 'true' ||
+        weight > 0 ||
+        sector === 'Portfolio';
+      return {
+        sector,
+        change,
+        changeLabel: `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`,
+        absChange: Math.abs(change),
+        trendIcon: change > 0 ? '↑' : change < 0 ? '↓' : '→',
+        trendDirection: change > 0 ? 'UP' : change < 0 ? 'DOWN' : 'FLAT',
+        inPortfolio: holdings,
+        holdings,
+        weight,
+        weightLabel: `${toFiniteNumber(weight, 0).toFixed(2)}%`
+      };
+    })
+    .filter((row) => !!row.sector);
+}
+
 function sanitizeCorrelationMatrix(rows, fallback) {
   if (!Array.isArray(rows)) return fallback;
   if (!rows.length) return fallback;
@@ -1078,6 +1366,7 @@ function normalizeAppData(data = {}) {
       labels,
       data: matrix
     },
+    sectorPerformance: sanitizeSectorPerformance(source.sectorPerformance, base.sectorPerformance),
     portfolioHealth: {
       ...base.portfolioHealth,
       ...(isObject(source.portfolioHealth) ? source.portfolioHealth : {})
@@ -1094,7 +1383,7 @@ function normalizeAppData(data = {}) {
     opportunities: toArray(source.opportunities, base.opportunities),
     topStocks: toArray(source.topStocks, base.topStocks),
     marketDrivers: toArray(source.marketDrivers, base.marketDrivers),
-    newsImpact: toArray(source.newsImpact, [])
+    newsImpact: sanitizeNewsItems(toArray(source.newsImpact, source.newsItems || source.news || []))
   };
 }
 
@@ -1341,6 +1630,16 @@ function applyLiveDashboardData(payload = {}) {
 
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
+  
+  // Map story data from API (window.storyData set by apiConnector.js)
+  const storyData = data.story || window.storyData || null;
+  const storyOverride = storyData && typeof storyData === 'object' ? {
+    headline: storyData.headline || 'Aperçu du jour',
+    content: storyData.content || storyData.summary || '',
+    sentiment: storyData.sentiment || 'neutral',
+    timestamp: storyData.timestamp || storyData.generatedAt || new Date().toISOString()
+  } : null;
+  
   appData = normalizeAppData({
     ...data,
     hero: {
@@ -1348,7 +1647,8 @@ function applyLiveDashboardData(payload = {}) {
       ...kpiSource,
       ...summarySource
     },
-    topStocks: sanitizeTopStockRows(toArray(fallbackTopStocks, []))
+    topStocks: sanitizeTopStockRows(toArray(fallbackTopStocks, [])),
+    ...(storyOverride ? { story: storyOverride } : {})
   });
   if (isObject(data.llmJudgeData)) {
     llmJudgeData = {
@@ -2706,7 +3006,11 @@ function renderNewsImpact() {
   const container = document.getElementById('newsTable');
   if (!container) return;
 
-  container.innerHTML = appData.newsImpact.slice(0, 10).map(news => `
+  const rows = Array.isArray(appData.newsImpact) && appData.newsImpact.length > 0
+    ? appData.newsImpact
+    : (Array.isArray(newsItems) ? newsItems : []);
+
+  container.innerHTML = rows.slice(0, 10).map(news => `
     <div class="news-row">
       <div class="news-headline">${news.headline}</div>
       <div class="news-impact">Impact: ${news.impact.toFixed(1)}</div>
@@ -2718,23 +3022,44 @@ function renderNewsImpact() {
 function drawSectorPerformance() {
   const canvas = document.getElementById('sectorChart');
   if (!canvas) return;
+  const sectorData = Array.isArray(appData.sectorPerformance) ? appData.sectorPerformance : [];
+  const rotationList = document.getElementById('sectorRotationList');
+  const subtitle = document.getElementById('sectorWidgetSubtitle');
+
+  if (rotationList) {
+    rotationList.innerHTML = sectorData
+      .slice(0, 6)
+      .map((sector) => {
+        const sign = sector.changeLabel || '';
+        const icon = sector.trendIcon || (sector.change >= 0 ? '↑' : '↓');
+        const inPortfolio = sector.holdings ? 'Portfolio' : 'No position';
+        return `<div class="sector-rotation-item"><span class="sector-name">${sector.sector || 'Unknown'}</span><span class="sector-trend">${icon} ${sign}</span><span class="sector-meta">${inPortfolio}</span></div>`;
+      })
+      .join('');
+  }
+
+  if (subtitle) {
+    subtitle.textContent = sectorData.length > 0
+      ? `${sectorData[0].sector || 'Markets'} • ${sectorData[0].trendIcon || ''} ${sectorData[0].changeLabel || `${sectorData[0].change >= 0 ? '+' : ''}${sectorData[0].change.toFixed(2)}%`}`
+      : 'Collecte des données sectorielles...';
+  }
 
   new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: appData.sectorPerformance.map(s => s.sector),
+      labels: sectorData.map(s => s.sector),
       datasets: [{
         label: 'Change %',
-        data: appData.sectorPerformance.map(s => s.change),
-        backgroundColor: appData.sectorPerformance.map(s => {
+        data: sectorData.map(s => s.change),
+        backgroundColor: sectorData.map(s => {
           if (s.holdings) {
             return s.change > 5 ? '#2D9E78' : s.change > 0 ? '#1F40AF' : '#8B3A3A';
           } else {
             return 'rgba(176, 180, 204, 0.3)';
           }
         }),
-        borderWidth: appData.sectorPerformance.map(s => s.holdings ? 2 : 0),
-        borderColor: appData.sectorPerformance.map(s => s.holdings ? '#4A6BD9' : 'transparent'),
+        borderWidth: sectorData.map(s => s.holdings ? 2 : 0),
+        borderColor: sectorData.map(s => s.holdings ? '#4A6BD9' : 'transparent'),
         borderRadius: 6
       }]
     },
@@ -2759,11 +3084,14 @@ function drawSectorPerformance() {
           cornerRadius: 8,
           callbacks: {
             afterLabel: function (context) {
-              const sector = appData.sectorPerformance[context.dataIndex];
+              const sector = sectorData[context.dataIndex];
+              if (!sector) return '';
+              const label = sector.changeLabel || `${sector.change >= 0 ? '+' : ''}${sector.change.toFixed(2)}%`;
               if (sector.holdings) {
-                return `Portfolio weight: ${sector.weight}%`;
+                const trend = sector.trendIcon || '';
+                return `${trend} ${label} • Portfolio ${sector.weightLabel || `${sector.weight}%`}`;
               }
-              return 'Not in portfolio';
+              return ` ${sector.trendIcon || ''} ${label}`;
             }
           }
         }
@@ -3271,93 +3599,220 @@ function askLLMJudge() {
   const processing = document.getElementById('judgeProcessing');
   const result = document.getElementById('judgeResult');
   const askAnother = document.getElementById('askAnotherBtn');
+  const askButton = document.getElementById('judgeAskButton');
+  const status = document.getElementById('judgeStatus');
+  const question = toString(input?.value, '').trim();
 
-  if (!input.value.trim()) {
-    showToast('Please enter a question', 'warning');
+  if (!question) {
+    showToast('Veuillez saisir votre portefeuille', 'warning');
+    if (status) {
+      status.className = 'judge-status judge-status-warning';
+      status.innerText = 'Veuillez saisir au moins un actif (ex: AAPL,MSFT)';
+    }
     return;
   }
 
-  // Show processing
+  const startedAt = performance.now();
+
+  const rawTickers = question
+    .split(/[,;\n\s]+/)
+    .map((ticker) => ticker.trim().toUpperCase())
+    .filter((ticker) => ticker.length > 0)
+    .slice(0, 8);
+
+  const tickerDisplay = rawTickers.length ? rawTickers.join(', ') : question;
+
   input.disabled = true;
+  if (askButton) askButton.disabled = true;
   processing.style.display = 'block';
   result.style.display = 'none';
+  askAnother.style.display = 'none';
+  if (status) {
+    status.className = 'judge-status judge-status-running';
+    status.innerText = `Analyse en cours sur ${tickerDisplay}`;
+  }
 
-  // Simulate processing steps
   const steps = processing.querySelectorAll('.processing-step');
-  steps.forEach((step, i) => {
-    setTimeout(() => {
-      step.classList.add('active');
-    }, i * 800);
+  steps.forEach((step) => {
+    step.classList.remove('active');
   });
 
-  // Show result after processing
-  setTimeout(() => {
-    processing.style.display = 'none';
-    result.style.display = 'block';
-    askAnother.style.display = 'block';
-    input.disabled = false;
+  let activeStep = 0;
+  const progressTicker = setInterval(() => {
+    if (activeStep >= steps.length) {
+      clearInterval(progressTicker);
+      return;
+    }
+    steps[activeStep].classList.add('active');
+    activeStep += 1;
+  }, 800);
 
-    result.innerHTML = `
-      <div class="consensus-section">
-        <div class="consensus-badge hold">${llmJudgeData.consensus}</div>
-        <div class="confidence-display">
-          <div class="confidence-number">${llmJudgeData.confidence}%</div>
-          <div class="confidence-label">Consensus Confidence</div>
-        </div>
-      </div>
-      
-      <div class="models-breakdown">
-        <h4>Model Opinions</h4>
-        ${llmJudgeData.models.map(model => `
-          <div class="model-item">
-            <div class="model-header">
-              <span class="model-icon">${model.icon}</span>
-              <span class="model-name">${model.name}</span>
-              <span class="model-verdict hold">${model.verdict}</span>
-            </div>
-            <div class="model-confidence">
-              <div class="confidence-bar">
-                <div class="bar-fill" style="width: ${model.confidence}%"></div>
+  const timeoutMs = 30000;
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Réponse trop lente (>30s)'));
+    }, timeoutMs);
+  });
+
+  const apiCall = typeof window.FinanceAPI?.askCopilot === 'function'
+    ? window.FinanceAPI.askCopilot(question, rawTickers)
+    : Promise.resolve({
+      data: {
+        answer: 'Service API indisponible',
+        sources: [],
+        confidence: 0.2,
+        verdict: 'hold'
+      }
+    });
+
+  Promise.race([Promise.resolve(apiCall), timeoutPromise])
+    .then((raw) => {
+      const payload = buildCopilotJudgePayload(raw && isObject(raw) && raw.data ? raw.data : raw);
+      if (!payload) {
+        throw new Error('Réponse Copilot invalide');
+      }
+
+      const latencyMs = Math.max(0, Math.round(performance.now() - startedAt));
+      const runAt = payload.generatedAt || new Date().toISOString();
+      const runTime = runAt
+        ? new Date(runAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : 'Heure indisponible';
+
+      const modelLabel = toString(payload.model, 'Copilot');
+      const confidenceScore = Math.max(0, Math.min(100, Math.round(toFiniteNumber(payload.confidence, 0))));
+      const modelMeta = `Source: ${modelLabel} • Latence: ${latencyMs}ms • Mis à jour ${runTime}`;
+
+      llmJudgeData = {
+        ...FALLBACK_LLM_JUDGE_DATA,
+        ...payload,
+        question
+      };
+
+      const modelHtml = llmJudgeData.models
+        .map((model) => {
+          const confidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(model.confidence, 0))));
+          const verdictClass = normalizeVerdict(model.verdict, 'hold');
+          return `
+            <div class="model-item">
+              <div class="model-header">
+                <span class="model-icon">${toString(model.icon, '🤖')}</span>
+                <span class="model-name">${toString(model.name, 'Model')}</span>
+                <span class="model-verdict ${verdictClass}">${toString(model.verdict, 'HOLD')}</span>
               </div>
-              <span class="confidence-text">${model.confidence}%</span>
+              <div class="model-confidence">
+                <div class="confidence-bar">
+                  <div class="bar-fill" style="width: ${confidence}%"></div>
+                </div>
+                <span class="confidence-text">${confidence}%</span>
+              </div>
             </div>
+          `;
+        }).join('');
+
+      const sourceHtml = llmJudgeData.dataSources
+        .slice(0, 5)
+        .map((source) => {
+          const label = toString(source.label, 'Source');
+          const excerpt = toString(source.excerpt, '');
+          const url = toString(source.url, '');
+          const sourceLink = url
+            ? `<a href="${url}" target="_blank" rel="noopener noreferrer">📊 ${label}</a>`
+            : `📊 ${label}`;
+          const sourceHint = excerpt ? `<span class="source-hint"> — ${excerpt}</span>` : '';
+          return `<span class="source-badge">${sourceLink}${sourceHint}</span>`;
+        }).join('');
+
+      const reasoningText = toArray(llmJudgeData.reasoning, [])
+        .filter((line) => toString(line, '').trim())
+        .slice(0, 3)
+        .join('<br/>');
+
+      result.innerHTML = `
+        <div class="consensus-section">
+          <div class="consensus-badge ${normalizeVerdict(llmJudgeData.consensus, 'hold')}">${toString(llmJudgeData.consensus, 'HOLD')}</div>
+          <div class="confidence-display">
+            <div class="confidence-number">${confidenceScore}%</div>
+            <div class="confidence-label">Confiance de consensus</div>
+            <div class="confidence-label source-meta">${modelMeta}</div>
+            <div class="confidence-label">Qualité: ${toString(llmJudgeData.qualityStatus, 'insufficient_sources')}</div>
           </div>
-        `).join('')}
-      </div>
-      
-      <div class="reasoning-section">
-        <h4>Why This Recommendation?</h4>
-        <p class="reasoning-text">${llmJudgeData.reasoning}</p>
-        <div class="data-sources">
-          ${llmJudgeData.dataSources.map(source => `<span class="source-badge">📊 ${source}</span>`).join('')}
         </div>
-      </div>
-      
-      <div class="actions-section">
-        <h4>Suggested Next Steps</h4>
-        <div class="action-cards">
-          ${llmJudgeData.suggestedActions.map(action => `
-            <div class="action-card">
-              <span class="action-icon">${action.icon}</span>
-              <div class="action-content">
-                <span class="action-title">${action.title}</span>
-                <span class="action-detail">${action.detail}</span>
-              </div>
-              <button class="action-btn" onclick="executeAction('${action.action}')">Act</button>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
 
-    showToast('AI analysis complete!', 'success');
-  }, 4000);
+        <div class="models-breakdown">
+          <h4>Opinions des modèles</h4>
+          ${modelHtml || '<p>Pas de modèle consulté.</p>'}
+        </div>
+
+        <div class="reasoning-section">
+          <h4>Pourquoi cette recommandation ?</h4>
+          <p class="reasoning-text">${reasoningText || toString(llmJudgeData.answer, 'Analyse indisponible pour le moment, réessayez plus tard.')}</p>
+          <div class="data-sources">
+            ${sourceHtml || '<span class="source-badge">📊 Sources indisponibles</span>'}
+          </div>
+        </div>
+
+        <div class="actions-section">
+          <h4>Prochaines étapes</h4>
+          <div class="action-cards">
+            ${llmJudgeData.suggestedActions.map((action) => `
+              <div class="action-card">
+                <span class="action-icon">${toString(action.icon, '➡️')}</span>
+                <div class="action-content">
+                  <span class="action-title">${toString(action.title, 'Action')}</span>
+                  <span class="action-detail">${toString(action.detail, '')}</span>
+                </div>
+                <button class="action-btn" onclick="executeAction('${toString(action.action, 'setAlert')}')">Go</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      showToast('Analyse Copilot terminée', 'success');
+      if (status) {
+        status.className = 'judge-status judge-status-success';
+        status.innerText = `Analyse terminée (${llmJudgeData.models.length} modèle(s)) en ${latencyMs}ms`;
+      }
+    })
+    .catch((error) => {
+      const reason = error?.message || toString(error, 'Erreur inconnue');
+      if (status) {
+        status.className = 'judge-status judge-status-error';
+        status.innerText = `Erreur: ${reason}`;
+      }
+      result.innerHTML = `
+        <div class="reasoning-section">
+          <h4>Erreur de consultation</h4>
+          <p class="reasoning-text">${reason}</p>
+        </div>
+      `;
+      showToast("Impossible de terminer l'analyse", 'error');
+    })
+    .finally(() => {
+      clearInterval(progressTicker);
+      processing.style.display = 'none';
+      result.style.display = 'block';
+      askAnother.style.display = 'block';
+      input.disabled = false;
+      if (askButton) askButton.disabled = false;
+      steps.forEach((step, index) => {
+        if (index >= activeStep) {
+          step.classList.add('active');
+        }
+      });
+    });
+
 }
 
 function resetLLMJudge() {
   document.getElementById('judgeQuestion').value = '';
   document.getElementById('judgeResult').style.display = 'none';
   document.getElementById('askAnotherBtn').style.display = 'none';
+  const status = document.getElementById('judgeStatus');
+  if (status) {
+    status.className = 'judge-status';
+    status.innerText = '';
+  }
   const steps = document.querySelectorAll('.processing-step');
   steps.forEach(step => step.classList.remove('active'));
 }

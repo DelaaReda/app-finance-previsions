@@ -74,7 +74,7 @@ except Exception:
 
 # Judge pipeline helpers (scoring, payload, validation)
 try:
-    from services.judge_pipeline import (
+    from domains.judge.application.judge_pipeline import (
         score_news,
         build_payload,
         parse_llm_answer,
@@ -95,7 +95,7 @@ except Exception:
     call_codestral = None
 # Typed verdict builder (Pydantic schemas)
 try:
-    from services.judge_builder import build_judge_verdict  # type: ignore
+    from domains.judge.application.judge_builder import build_judge_verdict  # type: ignore
 except Exception:
     build_judge_verdict = None
 try:
@@ -104,7 +104,7 @@ except Exception:
     JudgeResponse = None  # type: ignore
 # G4F fallback client
 try:
-    from services.g4f_client import call_llm, get_ranked_tested_models  # type: ignore
+    from domains.judge.application.g4f_client import call_llm, get_ranked_tested_models  # type: ignore
 except Exception:
     call_llm = None
     get_ranked_tested_models = None

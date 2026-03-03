@@ -74,7 +74,69 @@
   - sans checks live : `./scripts/backend_regression_gate.sh --no-live`
   - avec checks live : `./scripts/backend_regression_gate.sh`
 
+## Mise a Jour 2026-03-03 (Hotfix)
+- Orchestration resynchronisee:
+  - `BATCH-05`: `IN_PROGRESS`
+  - `BATCH-06`: `WAITING_DEP` (`depends_on=BATCH-05`)
+  - `BATCH-07`: `WAITING_DEP` (`depends_on=BATCH-06`)
+- Fichiers source de verite:
+  - `docs/operations/orchestrator/priority-queue.json`
+  - `docs/operations/orchestrator/parallel-workstreams.json`
+  - `docs/product/planning/WORKSTATE.md`
+- Forecast fallback corrige (`apps/api/src/platform/legacy/jobs/forecasts_simple.py`):
+  - ordre de fallback: history/cache -> `price` vs `previous_close` -> `change_percent`.
+  - evite les inversions de direction quand l'historique est absent.
+- Validation rapide:
+  ```bash
+  cd apps/api/src
+  PYTHONPATH=. pytest -q platform/legacy/jobs/tests/test_forecasts_simple.py
+  ```
+
 ## Notes
 - Pas de build frontend : le script sert directement `apps/web/src` via `python -m http.server 5173`.
 - Les jobs s'exécutent au démarrage (news, sentiment, judge_enrich, macro).
 - **Migration Feb 2026:** Architecture refactorisée vers domain-driven design. Voir `docs/ops/MIGRATION_SUMMARY.md`.
+
+## Claude Desktop Deep Troubleshoot
+- Runbook: `docs/ops/CLAUDE_DESKTOP_DEEP_TROUBLESHOOT.md`
+- Primary command:
+  ```bash
+  scripts/use-claude-deep-troubleshoot.sh
+  ```
+- Compatibility alias:
+  ```bash
+  scripts/use-claude-deep-troobleshoot.sh
+  ```
+
+## Claude Desktop UI I/O (Input -> Output)
+- Runbook: `docs/ops/CLAUDE_DESKTOP_UI_IO.md`
+- One command:
+  ```bash
+  scripts/claude_desktop_ui_io.sh --input "repond pong puis liste actions en 3 puces"
+  ```
+- Choose chat behavior:
+  ```bash
+  scripts/claude_desktop_ui_io.sh --input "..." --chat-mode same
+  scripts/claude_desktop_ui_io.sh --input "..." --chat-mode new
+  ```
+- Long task tracking:
+  ```bash
+  scripts/claude_desktop_ui_io.sh --input "..." --max-wait 420 --poll 15
+  ```
+- Auto-handle permission prompts while running:
+  ```bash
+  scripts/claude_desktop_ui_io.sh --input "..." --auto-always-allow
+  ```
+- Permanent MCP config (no repeated authorization popups):
+  ```bash
+  scripts/claude_desktop_configure_always_allow.sh
+  ```
+- YOLO mode (aggressive no-permission flow):
+  ```bash
+  scripts/claude_desktop_enable_yolo_mode.sh
+  ```
+- Output artifacts:
+  - `*.input.txt`
+  - `*.response.txt`
+  - `*.actions.txt`
+  - `*.meta.env`

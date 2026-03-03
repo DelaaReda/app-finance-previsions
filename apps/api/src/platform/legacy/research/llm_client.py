@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Client LLM générique avec priorités:
 - OpenAI si OPENAI_API_KEY configurée
@@ -9,6 +11,8 @@ from typing import List, Dict, Any, Optional
 import sys
 from pathlib import Path
 import re
+import logging
+logger = logging.getLogger(__name__)
 
 # Add src to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -27,17 +31,40 @@ try:
 except Exception:  # pragma: no cover
     get_llm_settings = None  # type: ignore
 
-try:
-    from services.g4f_client import call_llm, get_ranked_tested_models
-except Exception:  # pragma: no cover
-    call_llm = None  # type: ignore
-    get_ranked_tested_models = None  # type: ignore
+# g4f_client résolu lazily à chaque appel (évite sys.modules stale au startup)
+call_llm = None
+get_ranked_tested_models = None
 
-
-def _get_tested_g4f_model() -> tuple[None | str, None | str]:
-    if get_ranked_tested_models is not None:
+def _resolve_g4f():
+    """Retourne (call_llm, get_ranked_tested_models) frais à chaque appel."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    _legacy = _Path(__file__).resolve().parent.parent        # platform/legacy
+    _src    = _legacy.parent.parent                          # apps/api/src
+    for _p in [str(_legacy), str(_src), str(_src/"domains"), str(_src/"services")]:
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    for _mod, _names in [
+        ("services.g4f_client", ("call_llm", "get_ranked_tested_models")),
+        ("domains.judge.application.g4f_client", ("call_llm", "get_ranked_tested_models")),
+    ]:
         try:
-            ranked = get_ranked_tested_models(category_preference="forecast", limit=1)
+            import importlib as _il
+            m = _il.import_module(_mod)
+            cl = getattr(m, "call_llm", None)
+            gr = getattr(m, "get_ranked_tested_models", None)
+            if cl is not None:
+                return cl, gr
+        except Exception:
+            pass
+    return None, None
+
+
+def _get_tested_g4f_model() -> tuple[Optional[str], Optional[str]]:
+    _, ranked_fn = _resolve_g4f()
+    if ranked_fn is not None:
+        try:
+            ranked = ranked_fn(category_preference="forecast", limit=1)
             if ranked:
                 return ranked[0][0], ranked[0][1]
         except Exception:
@@ -61,7 +88,7 @@ def get_llm_client():
 def ask_llm(
     question: str,
     context_chunks: List[Dict[str, Any]],
-    model: str = None,
+    model: Optional[str] = None,
     max_tokens: int = 1000
 ) -> Dict[str, Any]:
     """
@@ -82,14 +109,13 @@ def ask_llm(
         }
     """
     llm_settings = get_llm_settings() if get_llm_settings is not None else None
-    tested_provider, tested_model = _get_tested_g4f_model()
+    # command-a25 = only reliably working free model (tested 2026-03-03)
+    # Ignore ranked_models: DeepInfra/llama always times out
     if not model:
         model = (
-            (llm_settings.llm_model if llm_settings is not None else None)
-            or tested_model
-            or os.getenv("LLM_MODEL")
+            os.getenv("LLM_MODEL")
             or os.getenv("G4F_MODEL")
-            or "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+            or "command-a25"
         )
     
     # Construct context
@@ -99,13 +125,15 @@ def ask_llm(
     ])
     
     # System prompt
-    system_prompt = """Tu es un analyste financier expert. 
-    
-Réponds aux questions en te basant UNIQUEMENT sur le contexte fourni.
-- Cite TOUJOURS tes sources avec [numéro]
-- Si l'information n'est pas dans le contexte, dis "Je n'ai pas cette information"
-- Sois concis et précis
-- Utilise des chiffres quand disponibles"""
+    system_prompt = """Tu es un copilot financier personnel. Ton role: aider l'utilisateur a prendre des decisions d'investissement rapides et claires.
+
+Regles:
+- Reponds en 3-5 phrases maximum, orientees action
+- Commence toujours par: HOLD / BUY / SELL / REDUIRE / AUGMENTER selon le contexte
+- Cite tes sources avec [numero] quand pertinent
+- Si les donnees manquent, dis-le en 1 phrase et donne quand meme une direction probable
+- Pas de disclaimers juridiques, l'utilisateur sait que c'est une aide et non un conseil officiel
+- Utilise les chiffres disponibles (%, prix, tendances)"""
     
     # User prompt
     user_prompt = f"""Contexte (sources de données):
@@ -121,14 +149,17 @@ Réponse (avec citations [1], [2], etc.):"""
     ]
     last_err = None
 
-    if call_llm is not None:
-        llm_res = call_llm(
+    _call_llm, _ = _resolve_g4f()
+    if _call_llm is not None:
+        logger.warning("[ask_llm] calling with model=%s", model)
+        llm_res = _call_llm(
             messages=messages,
             mode=os.getenv("LLM_RAG_MODE") or os.getenv("LLM_MODEL_MODE"),
             model=model,
             timeout=max(20, int(os.getenv("G4F_TIMEOUT_SECONDS", "60") or "60")),
             category_preference="forecast",
         )
+        logger.warning("[ask_llm] result: ok=%s model=%s err=%s", llm_res.get('ok'), llm_res.get('model'), str(llm_res.get('error',''))[:100])
         if llm_res.get("ok"):
             answer = str(llm_res.get("answer") or "").strip()
             cited_indices = set(int(g.group(1)) - 1 for g in re.finditer(r"\[(\d+)\]", answer or ""))

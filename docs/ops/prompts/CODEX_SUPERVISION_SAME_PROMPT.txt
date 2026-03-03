@@ -1,0 +1,82 @@
+Projet cible: /Users/venom/Documents/analyse-financiere
+Mode: SAME CHAT (continuité)
+
+Contexte runtime:
+- Orchestration canonique: planner / dev / admin
+- Objectif: delivery efficace, architecture lean, specs cohérentes
+- Priorité: unblock des batches actifs avec preuves de livraison
+- Règle: réutiliser modules/API/composants existants avant toute création
+
+SSH VM (si vérification runtime nécessaire):
+- ssh venom@dev-vm-utm
+- cd ~/analyse-financiere
+- Vérifier:
+  1) git status --short
+  2) crontab -l | grep -E 'fc_agent_tick|cleanup_monitoring_noise|vm_resume_guard|auto_recover_tmux_roles|watchdog_chromium' | grep -v '^#'
+  3) bash scripts/monitor_agents.sh
+  4) bash scripts/fc_health_check.sh
+
+Actions à faire:
+1) Révision batches:
+- Auditer priority-queue / parallel-workstreams / WORKSTATE
+- Corriger mismatchs d'états
+- Unblock minimal des items READY
+- Interdire les tâches ambiguës: pas de labels backend/frontend/data dans les IDs actifs (utiliser DEV-01/02/03 + description détaillée)
+- Appliquer la chaîne active BATCH-26: `BATCH-26-PLAN -> BATCH-26-DEV-01 -> BATCH-26-DEV-02 -> BATCH-26-DEV-03 -> BATCH-26-ADMIN-01 -> BATCH-26-GOV-REVIEW`
+
+2) Monitoring logs:
+- Analyser 24h de logs (fc-ticks + role-runner + monitor)
+- Produire top 5 causes racines (impact + correctif)
+
+3) Tester livraison:
+- Exécuter claim -> patch -> test -> complete sur un item READY
+- Fournir preuves (commandes, tests, statuts avant/après)
+- Refuser "analysis_only" si un item READY/IN_PROGRESS existe pour le rôle
+
+4) Lean architecture:
+- Réduire bruit et overhead sans perdre observabilité
+- Renforcer guards simples et maintenables
+
+5) Agents:
+- Vérifier logs agents et améliorer prompts planner/dev/admin
+- Forcer sorties concrètes et actionnables
+- run_note obligatoire en mini paragraphe (>= 5 mots)
+- Forcer boucle par tick: root_cause concret -> fix_applied concret -> verify concret
+- Spécialisation dev stricte:
+  - DEV-01 = API/back service/contracts
+  - DEV-02 = UI/composants/intégration front
+  - DEV-03 = data quality/scoring/freshness
+
+6) Specs + orchestration:
+- Mettre à jour specs/docs selon runtime réel
+- Ajouter recommandations INTEGRATION-APP-EENGINEER-RECOMMENDATIONS
+- Supprimer/adapter documentation obsolète
+- Ajouter les règles anti-stall dans les specs (pas de blockers historiques, preuve fresh obligatoire)
+
+7) P0 architecture hardening (ordre strict):
+- Traiter en premier les points critiques de charge module et data path:
+  - g4f paths (working.json/tested_g4f_models) alignés au runtime réel
+  - imports ghost/cross-layer dans services domaines critiques
+  - path runtime fantôme + fichiers fake éventuels
+- Pour chaque correction: ajouter preuve technique concise (commande + résultat + impact runtime)
+- Interdire les patches "bridge temporaire" via sys.path.insert: corriger le chemin source directement.
+
+8) Reuse-first delivery contract (obligatoire):
+- Avant tout nouveau fichier/module: prouver la recherche de réutilisation (rg + module ciblé réutilisé)
+- Si création inévitable: justifier en 1 ligne "pourquoi l'existant ne couvre pas le besoin"
+- Ajouter la section `INTEGRATION-APP-EENGINEER-RECOMMENDATIONS` dans la note de tâche mise à jour.
+- Dans `EVIDENCE`, ajouter `reuse_check=<module_reused|NONE(raison)>` pour chaque claim/complete.
+
+Format de sortie:
+A) Baseline factuelle
+B) Actions appliquées (fichiers + pourquoi)
+C) Résultats mesurés (tests/logs/qualité)
+D) Blocages restants + plan P0/P1/P2
+E) Prochaine itération (3 actions max)
+
+Footer obligatoire:
+Execution Trace
+- Actions: ...
+- Files changed: ...
+- Files read: ...
+- Network/API calls: ...

@@ -42,6 +42,23 @@
 - Runtime pinned on current user-global install path (not `/usr/lib/node_modules`):
   - `/home/venom/.npm-global/lib/node_modules/openclaw`
 - Current validated runtime version: `2026.2.24`.
+
+## SSH MCP Architecture (2026-03-01)
+- **Socket Server Infrastructure:**
+  - Persistent Unix socket server at `~/.ssh/mcp.sock` (zero-churn design)
+  - LaunchAgent `com.venom.ssh-mcp` keeps server alive with `KeepAlive=true`
+  - Wrapper proxy `/Users/venom/ssh_mcp_wrapper.sh` relays Claude stdin/stdout → socket
+  - Claude Desktop config: `mcpServers.ssh` calls wrapper (not socket directly)
+  - Auto-restart on crash, persists across reboot (`RunAtLoad=true`)
+
+- **File Sharing Between Mac & VM:**
+  - SSH MCP can pull files from VM to Mac for image/data analysis
+  - **Workflow:** VM → scp/ssh → `/Users/venom/Documents/analyse-financiere` (shared sync'd path)
+  - This folder is mounted in VM as `/home/venom/analyse-financiere`
+  - For Claude to view/analyze images: copy to analyse-financière workspace first, then upload to chat
+  - **Example:** `scp /vm/path/image.png venom@mac:/Users/venom/Documents/analyse-financiere/evidence/` then reference in chat
+  - Canonical location for images: `evidence/gates/*` (gates evidence), `evidence/proofs/*` (validation proofs), `evidence/runtime/*` (runtime artifacts)
+
 - Persistent role-agent baseline is now formalized:
   - catalog: `docs/orchestrator-ops/openclaw-agent-catalog.json`
   - bootstrap: `scripts/bootstrap_openclaw_agents.sh`

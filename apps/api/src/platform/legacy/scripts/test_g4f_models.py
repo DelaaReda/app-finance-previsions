@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import tempfile
 
@@ -27,9 +28,10 @@ from g4f.client import Client
 WORKING_RESULTS_URL = (
     "https://raw.githubusercontent.com/Free-AI-Things/g4f-working/main/working/working_results.txt"
 )
-OUTPUT_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "src", "tested_g4f_models.json"
-)
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_API_ROOT = _SCRIPT_DIR.parents[3]
+_RUNTIME_MODELS_DIR = _API_ROOT / "runtime" / "data" / "llm" / "models"
+OUTPUT_PATH = str(_RUNTIME_MODELS_DIR / "tested_g4f_models.json")
 
 PROMPT = "Salut, réponds strictement après ce message par: OK"
 
@@ -101,7 +103,7 @@ def main():
     print("\n=== JSON RESULTS ===")
     print(json.dumps(results, indent=2))
 
-    # Sauvegarde dans src/tested_g4f_models.json pour consultation ultérieure
+    # Save under canonical runtime data directory.
     try:
         os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
         with open(OUTPUT_PATH, "w", encoding="utf-8") as f:

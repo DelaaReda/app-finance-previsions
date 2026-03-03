@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/bootstrap_openclaw_agents.sh
+../platform/automation/bootstrap_openclaw_agents.sh

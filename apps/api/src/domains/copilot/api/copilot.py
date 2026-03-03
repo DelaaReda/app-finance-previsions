@@ -13,14 +13,20 @@ from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
 try:
-    from services.context_service import ContextService
+    from domains.copilot.application.context_service import ContextService
 except Exception:  # pragma: no cover
-    ContextService = None  # type: ignore
+    try:
+        from services.context_service import ContextService  # type: ignore
+    except Exception:
+        ContextService = None  # type: ignore
 
 try:
-    from services import copilot_service
+    from domains.copilot.application import copilot_service
 except Exception:  # pragma: no cover
-    from src.services import copilot_service  # type: ignore
+    try:
+        from services import copilot_service  # type: ignore
+    except Exception:
+        from src.services import copilot_service  # type: ignore
 
 
 router = APIRouter(tags=["copilot"])

@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/admin_vm_snapshot.sh
+../platform/automation/admin_vm_snapshot.sh

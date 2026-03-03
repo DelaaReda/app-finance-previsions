@@ -4,6 +4,8 @@ Validate and Generate All Required Data Files
 Ensures all necessary data is present for the dashboard and API endpoints
 Includes LLM Judge data generation for non-empty pages
 """
+from __future__ import annotations
+
 import sys
 import os
 from pathlib import Path
@@ -116,7 +118,10 @@ def _is_stale(data: Dict[str, Any], max_age_hours: int) -> bool:
 def generate_forecasts() -> bool:
     """Generate forecasts data"""
     try:
-        from jobs.forecasts import run_forecasts_job
+        try:
+            from jobs.forecasts import run_forecasts_job  # type: ignore
+        except ImportError:
+            from jobs.forecasts_simple import run_forecasts_job  # type: ignore
         tickers = ["SPY", "QQQ", "AAPL", "MSFT", "TSLA", "NVDA", "GOOGL", "META"]
         result = run_forecasts_job(tickers)
         if result and result.get('status') == 'completed':

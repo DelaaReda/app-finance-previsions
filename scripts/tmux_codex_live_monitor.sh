@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/tmux_codex_live_monitor.sh
+../platform/automation/tmux_codex_live_monitor.sh

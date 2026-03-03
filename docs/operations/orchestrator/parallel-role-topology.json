@@ -1,126 +1,36 @@
 {
-  "version": 1,
-  "updated_at": "2026-02-26T21:19:35Z",
+  "version": 3,
+  "updated_at": "2026-03-03T01:40:00Z",
   "roles": [
     {
       "role": "planner",
-      "lane": "analysis",
-      "every": "12m",
+      "lane": "coordination",
+      "every": "22m",
       "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Planner dispatch and dependency orchestration",
+      "wip_limit": 1,
+      "description": "vision/planning lane (absorbs analyst/architect/po/scrum)",
       "session_name": "codex_planner_cron",
       "trace_file": "logs-codex-runs/role-runner/planner.live.log"
     },
     {
-      "role": "analyst",
-      "lane": "analysis",
-      "every": "14m",
-      "allow_file_edits": 0,
-      "wip_limit": 3,
-      "description": "Business analysis and requirement clarity",
-      "session_name": "codex_analyst_cron",
-      "trace_file": "logs-codex-runs/role-runner/analyst.live.log"
-    },
-    {
-      "role": "architect",
-      "lane": "analysis",
-      "every": "18m",
-      "allow_file_edits": 0,
-      "wip_limit": 2,
-      "description": "Architecture constraints and guardrails",
-      "session_name": "codex_architect_cron",
-      "trace_file": "logs-codex-runs/role-runner/architect.live.log"
-    },
-    {
-      "role": "backend_engineer",
-      "lane": "build",
-      "every": "12m",
-      "allow_file_edits": 1,
-      "wip_limit": 3,
-      "description": "Backend implementation lane",
-      "session_name": "codex_backend_engineer_cron",
-      "trace_file": "logs-codex-runs/role-runner/backend_engineer.live.log"
-    },
-    {
-      "role": "frontend_engineer",
-      "lane": "build",
-      "every": "12m",
-      "allow_file_edits": 1,
-      "wip_limit": 3,
-      "description": "Frontend implementation lane",
-      "session_name": "codex_frontend_engineer_cron",
-      "trace_file": "logs-codex-runs/role-runner/frontend_engineer.live.log"
-    },
-    {
-      "role": "data_analyst",
-      "lane": "build",
-      "every": "17m",
-      "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Data validation and metrics lane",
-      "session_name": "codex_data_analyst_cron",
-      "trace_file": "logs-codex-runs/role-runner/data_analyst.live.log"
-    },
-    {
-      "role": "infra_engineer",
-      "lane": "build",
-      "every": "20m",
-      "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Infra and CI/CD acceleration lane",
-      "session_name": "codex_infra_engineer_cron",
-      "trace_file": "logs-codex-runs/role-runner/infra_engineer.live.log"
-    },
-    {
-      "role": "integrator",
-      "lane": "integration",
-      "every": "15m",
-      "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Cross-team integration lane",
-      "session_name": "codex_integrator_cron",
-      "trace_file": "logs-codex-runs/role-runner/integrator.live.log"
-    },
-    {
       "role": "dev",
       "lane": "build",
-      "every": "16m",
+      "every": "22m",
       "allow_file_edits": 1,
-      "wip_limit": 2,
-      "description": "Legacy generalist dev lane",
+      "wip_limit": 1,
+      "description": "delivery lane (absorbs backend/frontend/data/integrator/test/qa)",
       "session_name": "codex_dev_cron",
       "trace_file": "logs-codex-runs/role-runner/dev.live.log"
     },
     {
-      "role": "tester",
-      "lane": "validation",
-      "every": "15m",
+      "role": "admin",
+      "lane": "ops",
+      "every": "22m",
       "allow_file_edits": 1,
-      "wip_limit": 3,
-      "description": "Test automation lane",
-      "session_name": "codex_tester_cron",
-      "trace_file": "logs-codex-runs/role-runner/tester.live.log"
-    },
-    {
-      "role": "qa",
-      "lane": "validation",
-      "every": "20m",
-      "allow_file_edits": 1,
-      "wip_limit": 3,
-      "description": "Quality gate and release lane",
-      "session_name": "codex_qa_cron",
-      "trace_file": "logs-codex-runs/role-runner/qa.live.log"
-    },
-    {
-      "role": "clawsentinel",
-      "lane": "safety",
-      "every": "25m",
-      "allow_file_edits": 0,
-      "wip_limit": 2,
-      "description": "Safety and anti-drift lane",
-      "session_name": "clawsentinel",
-      "trace_file": "logs-codex-runs/role-runner/clawsentinel.live.log"
+      "wip_limit": 1,
+      "description": "ops lane (health/recovery/unblock)",
+      "session_name": "codex_admin_cron",
+      "trace_file": "logs-codex-runs/role-runner/admin.live.log"
     }
   ]
 }

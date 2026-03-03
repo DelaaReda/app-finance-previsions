@@ -83,6 +83,44 @@ async function getTopMovers() {
   return payload;
 }
 
+async function getDashboardPerformance() {
+  const payload = getResponseData(await fetchWithCache('/dashboard/performance', 'dashboard_performance'));
+  return payload || {};
+}
+
+async function getDailyBrief() {
+  const payload = getResponseData(await fetchWithCache('/brief/daily', 'brief_daily'));
+  return payload || {};
+}
+
+async function getSectorPerformanceData() {
+  const payload = getResponseData(await fetchWithCache('/dashboard/allocation', 'dashboard_allocation'));
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+  return { sectors: extractArray(payload, ['sectors', 'data', 'sector_data']) };
+}
+
+async function getLlmJudgeSnapshot() {
+  try {
+    const response = await fetch(API_BASE + '/llm/judge/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: "Quel est le jugement de marché le plus fiable pour un investisseur aujourd'hui ?",
+        tickers: 'NVDA,META,AAPL,MSFT,GOOGL',
+        max_er: 0.08,
+        min_conf: 0.6
+      })
+    });
+    if (!response.ok) return null;
+    return getResponseData(await response.json());
+  } catch (error) {
+    console.warn('[API] Error fetching llm judge:', error.message);
+    return null;
+  }
+}
+
 async function getHealth() {
   return await fetchWithCache('/health', 'health');
 }
@@ -131,6 +169,65 @@ async function askCopilot(question, tickers) {
   }
 }
 
+async function searchUniverse(query, options) {
+  if (!query) {
+    return {
+      query: '',
+      results: { stocks: [], news: [], briefs: [], forecasts: [] },
+      total: 0,
+      search_metadata: { types_searched: [], sort_by: 'relevance' }
+    };
+  }
+
+  const safeOptions = options && typeof options === 'object' ? options : {};
+  const limit = safeOptions.limit
+    ? Math.min(100, Math.max(1, Math.floor(Number(safeOptions.limit) || 20)))
+    : 20;
+  const type = (safeOptions.type || safeOptions.types || 'all').toString().trim() || 'all';
+  const sortBy = (safeOptions.sortBy || safeOptions.sort_by || 'relevance').toString().trim() || 'relevance';
+  const tickersInput = Array.isArray(safeOptions.tickers)
+    ? safeOptions.tickers.filter(Boolean).map((ticker) => String(ticker).trim().toUpperCase()).filter(Boolean).join(',')
+    : (safeOptions.tickers || '').toString().trim();
+
+  const params = new URLSearchParams({
+    q: String(query).trim(),
+    type,
+    limit: String(limit),
+    sort_by: sortBy
+  });
+  if (tickersInput) {
+    params.set('tickers', tickersInput);
+  }
+
+  const endpoint = `/search/universal?${params.toString()}`;
+  const cacheKey = `search-universal-${String(query).trim().toLowerCase()}-${type}-${limit}-${sortBy}-${tickersInput || 'all'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  if (!payload || typeof payload !== 'object') {
+    return {
+      query: String(query).trim(),
+      results: { stocks: [], news: [], briefs: [], forecasts: [] },
+      total: 0,
+      search_metadata: { types_searched: [type] }
+    };
+  }
+
+  const data = payload.data ? payload.data : payload;
+  const results = data.results || {};
+  const safeResults = {
+    stocks: Array.isArray(results.stocks) ? results.stocks : [],
+    news: Array.isArray(results.news) ? results.news : [],
+    briefs: Array.isArray(results.brefs) ? results.brefs : (Array.isArray(results.briefs) ? results.briefs : []),
+    forecasts: Array.isArray(results.forecasts) ? results.forecasts : []
+  };
+
+  return {
+    query: data.query || String(query).trim(),
+    results: safeResults,
+    total: Number(data.total) || 0,
+    search_metadata: data.search_metadata || { types_searched: [type], tickers_filtered: tickersInput || null, sort_by: sortBy }
+  };
+}
+
 // ─── Transform API data → app.js format ──────────────────────────────────────
 
 function transformNewsItem(item) {
@@ -177,6 +274,129 @@ function transformForecast(row) {
   };
 }
 
+function transformSectorPerformance(payload) {
+  const sectors = extractArray(payload, ['sectors', 'data', 'sector_data']) || [];
+  return sectors
+    .map((sector) => {
+      const rawSector = sector || {};
+      const sectorName = (rawSector.sector || rawSector.name || 'Unknown');
+      const change = normalizeNumber(rawSector.change_pct ?? rawSector.change ?? rawSector.change_7d ?? rawSector.delta_pct, 0);
+      const weight = normalizeNumber(rawSector.weight_pct ?? rawSector.weight ?? rawSector.weight_percent ?? 0, 0);
+      const absChange = Math.abs(change);
+      const direction = change > 0 ? 'UP' : change < 0 ? 'DOWN' : 'FLAT';
+      const icon = change > 0 ? '↑' : change < 0 ? '↓' : '→';
+      return {
+        sector: sectorName,
+        change,
+        changeLabel: `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`,
+        trendDirection: direction,
+        trendIcon: icon,
+        absChange,
+        weightLabel: `${weight.toFixed(2)}%`,
+        holdings: weight > 0,
+        weight
+      };
+    })
+    .filter((sector) => !!sector.sector);
+}
+
+function transformTopStocks(payload) {
+  const topStocks = extractArray(payload, ['top_stocks']) || [];
+  return topStocks
+    .map((row) => {
+      const rawRow = row || {};
+      const symbol = (rawRow.symbol || rawRow.ticker || 'UNKNOWN').toUpperCase();
+      const forecast = normalizeNumber(rawRow.forecast_pct ?? rawRow.forecast ?? 0, 0);
+      const confidence = normalizeNumber(rawRow.confidence_pct ?? rawRow.confidence ?? 0, 0);
+      return {
+        symbol,
+        price: normalizeNumber(rawRow.price, 0),
+        change: normalizeNumber(rawRow.change_pct ?? rawRow.change ?? 0, 0),
+        forecast: `${normalizeNumber(forecast, 0) >= 0 ? '+' : ''}${normalizeNumber(forecast, 0).toFixed(1)}%`,
+        confidence: Math.max(0, Math.min(100, Math.round(normalizeNumber(confidence, 0))))
+      };
+    })
+    .filter((stock) => !!stock.symbol);
+}
+
+function transformOpportunities(payload) {
+  const opportunities = extractArray(payload, ['opportunities']) || [];
+  return opportunities.map((row) => {
+    const rawRow = row || {};
+    return {
+      conviction: rawRow.conviction || 'Medium',
+      return: normalizeNumber(rawRow.expected_return_pct ?? rawRow.return_pct ?? 0, 0),
+      confidence: Math.max(0, Math.min(100, Math.round(normalizeNumber(rawRow.confidence_pct ?? rawRow.confidence ?? 60, 60))))
+    };
+  });
+}
+
+function transformBrief(payload) {
+  const payloadSummary = payload.summary || payload.message || payload.overview;
+  const sectorRotation = payload.sector_rotation || payload.sectorRotation || {};
+  const topSectors = toArray(sectorRotation.top).map((entry) => String(entry || '').trim()).filter(Boolean);
+  const bottomSectors = toArray(sectorRotation.bottom).map((entry) => String(entry || '').trim()).filter(Boolean);
+  const summary = payloadSummary || 'Le marché reste actif avec une lecture mitigée.';
+  const headline = payload.title || payload.headline || 'Aperçu du marché';
+  const sentiment = payload.sentiment || 'neutral';
+  const timestamp = payload.generated_at || payload.generatedAt || payload.generated_at_iso || new Date().toISOString();
+  const rotationText = [];
+  if (topSectors.length > 0) {
+    rotationText.push(`Top secteurs : ${topSectors.slice(0, 3).join(' · ')}`);
+  }
+  if (bottomSectors.length > 0) {
+    rotationText.push(`Sectors faibles : ${bottomSectors.slice(0, 3).join(' · ')}`);
+  }
+  const content = [summary, ...rotationText].filter(Boolean).join('\n\n');
+  return {
+    headline,
+    content,
+    sentiment,
+    timestamp,
+    sectorRotationTop: topSectors,
+    sectorRotationBottom: bottomSectors,
+    sectorRotationSummary: rotationText.join(' | ')
+  };
+}
+
+function transformJudgeData(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const stdout = payload.stdout || {};
+  const derived = payload.derived || {};
+  const stats = derived.stats || {};
+  const topBuys = extractArray(derived, ['top_buys']) || [];
+  const topRisks = extractArray(derived, ['top_risks']) || [];
+  const confidence = Math.round(normalizeNumber(stats.avg_confidence ?? stats.avg_er_high_conf ?? 0, 0) * 100);
+  let consensus = 'HOLD';
+  if (topBuys.length > topRisks.length) {
+    consensus = 'BUY';
+  } else if (topRisks.length > topBuys.length) {
+    consensus = 'SELL';
+  }
+  const reasoning = stdout.forecast || stdout.context || 'Le jugement de marché est en cours de calcul.';
+  const modelName = payload.model_used || 'EconomicAnalyst';
+  return {
+    question: "Quel est mon meilleur plan de marché aujourd'hui ?",
+    consensus,
+    confidence: Math.max(0, Math.min(100, confidence)),
+    models: [
+      {
+        name: modelName,
+        verdict: consensus,
+        confidence: Math.max(0, Math.min(100, confidence)),
+        icon: '🤖'
+      }
+    ],
+    reasoning,
+    dataSources: ['Forecasts', 'LLM Judge', 'Model ensemble'],
+    suggestedActions: [
+      { icon: '📈', title: 'Allouer', detail: 'Renforcer la couverture des zones fortes', action: 'reviewRisk' },
+      { icon: '⚖️', title: 'Sécuriser', detail: 'Vérifier les risques de concentration', action: 'reviewRisk' },
+      { icon: '🔔', title: 'Alerte', detail: 'Alerter au franchissement de seuil', action: 'setAlert' }
+    ]
+  };
+}
+
 // ─── Populate window globals used by app.js ──────────────────────────────────
 
 async function populateWindowGlobals() {
@@ -187,7 +407,7 @@ async function populateWindowGlobals() {
     const rawNews = await getNewsFeed(20);
     if (rawNews.length > 0) {
       window.newsItems = rawNews.map(transformNewsItem);
-      console.log('[API] ✅ ' + window.newsItems.length + ' news chargées depuis l\\'API');
+      console.log("[API] ✅ " + window.newsItems.length + " news chargées depuis l'API");
     }
 
     // Forecasts
@@ -217,6 +437,40 @@ async function populateWindowGlobals() {
       }).sort((a, b) => Math.abs(b.change30d) - Math.abs(a.change30d)).slice(0, 8);
       window.topMovers = movers;
       console.log('[API] ✅ ' + tickers.length + ' stocks, top movers: ' + movers.slice(0,3).map(m => m.ticker + ' (' + (m.change30d > 0 ? '+' : '') + m.change30d + '% 30d)').join(', '));
+    }
+
+    // Dashboard performance -> topStocks + opportunities
+    const performance = await getDashboardPerformance();
+    if (performance) {
+      const topStocks = transformTopStocks(performance);
+      const opportunities = transformOpportunities(performance);
+      if (topStocks.length > 0) {
+        window.topStocks = topStocks;
+      }
+      if (opportunities.length > 0) {
+        window.liveOpportunities = opportunities;
+      }
+    }
+
+    // Daily brief -> Story panel
+    const brief = await getDailyBrief();
+    if (brief && typeof brief === 'object') {
+      window.storyData = transformBrief(brief);
+    }
+
+    // Sector performance -> Sector widget
+    const sectorPayload = await getSectorPerformanceData();
+    if (sectorPayload && typeof sectorPayload === 'object') {
+      window.sectorPerformance = transformSectorPerformance(sectorPayload);
+    }
+
+    // LLM Judge snapshot
+    const judgePayload = await getLlmJudgeSnapshot();
+    if (judgePayload) {
+      const judgeData = transformJudgeData(judgePayload);
+      if (judgeData) {
+        window.llmJudgeData = judgeData;
+      }
     }
 
     // Portfolio KPIs
@@ -266,6 +520,11 @@ async function populateWindowGlobals() {
           forecasts: window.liveForecasts || [],
           topMovers: window.topMovers || [],
           stocks: window.liveStocks || {},
+          topStocks: window.topStocks || [],
+          opportunities: window.liveOpportunities || [],
+          sectorPerformance: window.sectorPerformance || [],
+          story: window.storyData || null,
+          llmJudgeData: window.llmJudgeData || null,
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
           stockSummaryFreshness: window.livePortfolioSummaryFreshness || null,
@@ -292,6 +551,10 @@ function startAutoRefresh(intervalMs) {
     delete cache.data.news;
     delete cache.data.forecasts;
     delete cache.data.stocks;
+    delete cache.data.dashboard_performance;
+    delete cache.data.brief_daily;
+    delete cache.data.dashboard_allocation;
+    delete cache.data.movers;
     await populateWindowGlobals();
   }, intervalMs);
 }
@@ -306,6 +569,7 @@ window.FinanceAPI = {
   getHealth,
   getJudgeAnalysis,
   askCopilot,
+  searchUniverse,
   startAutoRefresh,
   getCacheStats: () => ({ keys: Object.keys(cache.data), TTL: cache.TTL })
 };
@@ -316,6 +580,10 @@ window.getLiveDashboardData = () => ({
     forecasts: window.liveForecasts || [],
     topMovers: window.topMovers || [],
     stocks: window.liveStocks || {},
+    topStocks: window.topStocks || [],
+    opportunities: window.liveOpportunities || [],
+    sectorPerformance: window.sectorPerformance || [],
+    story: window.storyData || null,
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
     llmJudgeData: window.llmJudgeData || null

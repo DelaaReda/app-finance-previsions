@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/analyze_orchestrator_runs.py
+../platform/automation/analyze_orchestrator_runs.py

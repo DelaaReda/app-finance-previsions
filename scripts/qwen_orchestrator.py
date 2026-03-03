@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/qwen_orchestrator_not_used.py
+../platform/automation/qwen_orchestrator_not_used.py

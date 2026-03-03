@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from services import g4f_client
+from domains.judge.application import g4f_client
 
 
 def test_ranked_models_prefers_working_json(monkeypatch, tmp_path: Path):

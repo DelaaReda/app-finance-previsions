@@ -2,6 +2,24 @@
 
 **Validé par:** admin principal  
 **Date:** 2026-02-28  
+**Derniere mise a jour operationnelle:** 2026-03-03
+
+---
+
+## 🔄 Mise a Jour Operationnelle 2026-03-03
+
+- Resync effectue entre queue/workboard:
+  - `BATCH-05=IN_PROGRESS`
+  - `BATCH-06=WAITING_DEP` (`depends_on=BATCH-05`)
+  - `BATCH-07=WAITING_DEP` (`depends_on=BATCH-06`)
+- Correction backend appliquee sur les forecasts:
+  - fallback directionnel base sur `price` vs `previous_close` si historique indisponible.
+  - tests forecasts simples maintenant passants.
+- Hygiene workspace:
+  - artefacts racine malformes deplaces vers `.trash/root-garbage-20260303/`.
+- Clarification cron critique:
+  - la normalisation par lanes (`planner/dev/admin`) ne doit pas masquer l'absence des rôles delivery spécialisés.
+  - en phase delivery, le crontab doit inclure explicitement: `planner`, `backend_engineer`, `frontend_engineer`, `data_analyst` (stagger recommandé dans `docs/ops/ORCHESTRATION_AGENTS_READY.md`).
 
 ---
 
@@ -32,14 +50,23 @@
 
 ## Mémoire & Contexte (3-Day Continuity)
 
-**Strategy:** Agents chargent les 3 derniers jours de memory pour éviter régression architecturale.
+**Strategy:** Agents chargent une fenêtre 3 jours, profilée par rôle, pour limiter les tokens sans perdre la continuité utile.
 
-- **Daily logs:** `memory/YYYY-MM-DD.md` (assemblés automatiquement, 150 lignes max/jour)
-- **Role history:** `memory/agents/${ROLE}.md` (50 lignes dernières décisions)
+- **Default mode:** `TMUX_ROLE_CONTEXT_MODE=lean`
+- **Role profiles:** `coordination`, `analysis`, `delivery` (auto par rôle dans le runner)
+- **Memory budgets (lean):**
+  - coordination: daily=24, role_history=18
+  - analysis: daily=14, role_history=12
+  - delivery: daily=8, role_history=8
+- **Retry compaction:** dispatch `retry` utilise un protocole orchestration compact (moins de token burn/timeouts)
+- **Daily logs:** `memory/YYYY-MM-DD.md` (ou `memory/summaries/YYYY-MM-DD.summary.md` si présent)
+- **Role history source:** `memory/agents/summaries/${ROLE}.summary.md` (sinon fallback `memory/agents/${ROLE}.md`)
+- **Auto role summary:** `scripts/role_memory_append.py` génère `memory/agents/summaries/${ROLE}.summary.md` (fenêtre 14 entrées)
 - **Injection point:** `scripts/cron_tmux_role_runner.sh` fonction `load_3day_memory_context()`
 - **Anti-regression guards:** Inclus dans SYSTEM_PROMPT (références copilot-app/ → archive/, backend/src/backend/src → apps/api/src/)
+- **Monitoring traces:** `dispatch_prompt scope=primary|retry ... bytes=<n>` + `prompt_memory_context ... bytes=<n>`
 
-**Archit benefit:** Agents comprennent les 3 derniers jours de décisions sans charger full MEMORY.md.
+**Archit benefit:** Continuity conservée avec coût token fortement réduit, surtout pour rôles delivery.
 
 **Reference:** `docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md`
 
@@ -53,6 +80,7 @@
 4. **docs/product/planning/tasks.md** – tâches en cours
 5. **docs/ops/API_ENDPOINTS.md** – endpoints backend frontend
 6. **docs/ops/OPENCLAW_BROWSER_QA.md** – validation frontend avec navigateur OpenClaw
+7. **docs/ops/DEV_AGENT_AUTONOMY_PROTOCOL.md** – protocole autonomie dev (architecture-first, reuse-first, QA proofs)
 
 ---
 

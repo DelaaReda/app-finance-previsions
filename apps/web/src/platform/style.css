@@ -2587,6 +2587,41 @@ canvas {
   margin-bottom: var(--space-2xl);
 }
 
+.judge-status {
+  margin: 0 0 var(--space-lg);
+  padding: var(--space-lg);
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  color: var(--color-text-secondary);
+}
+
+.judge-status-success {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34D399;
+}
+
+.judge-status-running {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--color-royal-blue);
+}
+
+.judge-status-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #F59E0B;
+}
+
+.judge-status-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #F87171;
+}
+
 .judge-question-input {
   flex: 1;
   background: var(--glass-bg);
@@ -2667,13 +2702,13 @@ canvas {
 
 .consensus-badge {
   display: inline-block;
-  background: rgba(16, 185, 129, 0.15);
-  border: 2px solid var(--color-success);
+  background: rgba(31, 64, 175, 0.15);
+  border: 2px solid var(--color-royal-blue);
   border-radius: 12px;
   padding: var(--space-lg) var(--space-2xl);
   font-size: 20px;
   font-weight: 700;
-  color: var(--color-success);
+  color: var(--color-royal-blue);
   margin-bottom: var(--space-xl);
 }
 
@@ -2681,6 +2716,18 @@ canvas {
   background: rgba(31, 64, 175, 0.15);
   border-color: var(--color-royal-blue);
   color: var(--color-royal-blue);
+}
+
+.consensus-badge.buy {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.consensus-badge.sell {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
 }
 
 .confidence-display {
@@ -2747,6 +2794,16 @@ canvas {
   color: var(--color-royal-blue);
 }
 
+.model-verdict.buy {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--color-success);
+}
+
+.model-verdict.sell {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 .model-confidence {
   display: flex;
   align-items: center;
@@ -2785,6 +2842,15 @@ canvas {
   padding: 6px 12px;
   border-radius: 6px;
   color: var(--color-royal-blue);
+}
+
+.source-badge a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.source-badge a:hover {
+  text-decoration: none;
 }
 
 .actions-section h4 {

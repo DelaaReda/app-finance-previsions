@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/admin_agents_tmux_tick.sh
+../platform/automation/admin_agents_tmux_tick.sh

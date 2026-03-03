@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/openclaw_cron_runs_normalize.py
+../platform/automation/openclaw_cron_runs_normalize.py

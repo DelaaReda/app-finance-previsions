@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/export_orchestration_kpi.sh
+../platform/automation/export_orchestration_kpi.sh

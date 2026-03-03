@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/dev_qa_tooling_check.sh
+../platform/automation/dev_qa_tooling_check.sh

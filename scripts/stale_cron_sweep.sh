@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/stale_cron_sweep.sh
+../platform/automation/stale_cron_sweep.sh

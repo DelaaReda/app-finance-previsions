@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 WORKSTREAM = ROOT / "scripts" / "parallel_workstream.py"
 
 
@@ -41,6 +41,7 @@ class ParallelWorkstreamChannelsTests(unittest.TestCase):
             )
             self.assertEqual(init.returncode, 0, msg=init.stderr)
             for role in roles:
+                expected_role = "planner" if role in {"analyst", "architect", "po", "scrum_master"} else role
                 cp = subprocess.run(
                     [sys.executable, str(WORKSTREAM), "--board", str(board_path), "channels", "--role", role, "--limit", "2"],
                     cwd=ROOT,
@@ -49,7 +50,7 @@ class ParallelWorkstreamChannelsTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(cp.returncode, 0, msg=f"role={role} stderr={cp.stderr}")
-                self.assertIn(f"CHANNELS_CONTEXT role={role}", cp.stdout)
+                self.assertIn(f"CHANNELS_CONTEXT role={expected_role}", cp.stdout)
                 self.assertIn("impact_level=", cp.stdout)
                 self.assertIn("impact_action=", cp.stdout)
                 self.assertIn("status_ready=", cp.stdout)

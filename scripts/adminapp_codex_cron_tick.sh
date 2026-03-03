@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/adminapp_codex_cron_tick.sh
+../platform/automation/adminapp_codex_cron_tick.sh

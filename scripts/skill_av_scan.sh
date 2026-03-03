@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/skill_av_scan.sh
+../platform/automation/skill_av_scan.sh

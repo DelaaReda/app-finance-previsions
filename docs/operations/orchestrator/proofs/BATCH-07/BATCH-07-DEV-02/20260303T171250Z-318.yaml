@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-07-BATCH-07-DEV-02-20260303T171250Z-318"
+stream_id: "BATCH-07"
+task_id: "BATCH-07-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-03T17:12:50Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope ui facette and deep-dive module"
+    - "dependency with apiconnector and forecast/news endpoints"
+    - "verification by smoke checks and dom fallback"
+    - "risk of random placeholders and stale fallback remaining"
+    - "rollback to cached/mock fallback if api fails"
+  architecture_checks:
+    - "ui_contract_source"
+    - "domain_boundary"
+    - "no_mock_nominal"
+    - "widget_isolation"
+    - "capture_required"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js && node --check apps/web/src/domains/forecasts/pages/app.js"
+      rc: "0"
+      started_at_utc: "2026-03-03T17:12:50Z"
+      ended_at_utc: "2026-03-03T17:12:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-02/20260303T170640Z-31546.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "P1772557563_31546"
+  review_ref: "none"
+  note: "Reprise de BATCH-07-DEV-02: remplacement du searchStock mock par appel réel search/universal, scoring news deterministic, rendu Deep Dive enrichi, correction compat JS dans apiConnector."

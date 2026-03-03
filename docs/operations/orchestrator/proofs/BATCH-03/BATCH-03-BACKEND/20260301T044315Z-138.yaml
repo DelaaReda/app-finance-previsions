@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-03-BATCH-03-BACKEND-20260301T044315Z-138"
+stream_id: "BATCH-03"
+task_id: "BATCH-03-BACKEND"
+role: "backend_engineer"
+produced_at_utc: "2026-03-01T04:43:15Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+preconditions:
+  change_plan:
+    - "scope: valider task batch-03-backend et périmètre"
+    - "dependency_impact: vérifier interaction /api/stocks/prices et route forecasts"
+    - "risk: évaluer impact confidence/forecast contract"
+    - "verification: exécuter validation ciblée post-patch"
+    - "rollback: planifier retour au comportement précédent si anomalie"
+  architecture_checks:
+    - "scope_boundary"
+    - "dependency_impact_mapping"
+    - "risk_mitigation"
+    - "verification_commands"
+    - "rollback_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 -m py_compile apps/api/src/platform/legacy/jobs/forecasts_simple.py"
+      rc: "0"
+      started_at_utc: "2026-03-01T04:43:15Z"
+      ended_at_utc: "2026-03-01T04:43:15Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m py_compile apps/api/src/platform/legacy/jobs/forecasts_simple.py:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/backend_engineer.last_contract"
+  artifacts:
+    - "apps/api/src/platform/legacy/jobs/forecasts_simple.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "backend_engineer"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-53671959cf94"
+  review_ref: "none"
+  note: "Use /api/stocks/prices historical points close for recent_change_pct in forecast generation; avoid stale change_percent=0.0 path."

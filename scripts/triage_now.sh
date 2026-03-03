@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/triage_now.sh
+../platform/automation/triage_now.sh

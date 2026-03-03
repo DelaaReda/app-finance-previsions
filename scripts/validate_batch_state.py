@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/validate_batch_state.py
+../platform/policies/validate_batch_state.py

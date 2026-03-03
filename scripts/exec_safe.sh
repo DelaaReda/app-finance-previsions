@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/exec_safe.sh
+../platform/policies/exec_safe.sh

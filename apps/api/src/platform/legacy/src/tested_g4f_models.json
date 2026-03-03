@@ -1,0 +1,1352 @@
+[
+  {
+    "provider": "BlackForestLabs_Flux1Dev",
+    "model": "flux-dev",
+    "task": "text",
+    "ok": false,
+    "ms": 689.4,
+    "answer": "",
+    "error": "You have exceeded your GPU quota (75s requested vs. 0s left). Try again in 0:00:00"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-12-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 716.2,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 756.3,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 775.6,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-r7b-arabic-02-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 802.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "gemma3-270m:free",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "step-3.5-flash:free",
+    "task": "text",
+    "ok": false,
+    "ms": 1011.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "dirtberry",
+    "task": "text",
+    "ok": false,
+    "ms": 1009.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "ApiAirforce",
+    "model": "gpt-5.1-chat",
+    "task": "text",
+    "ok": false,
+    "ms": 1016.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "CohereForAI_C4AI_Command",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 1192.2,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "flux",
+    "task": "text",
+    "ok": false,
+    "ms": 326.8,
+    "answer": "",
+    "error": "You have exceeded your GPU quota (75s requested vs. 0s left). Try again in 0:00:00"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r7b-12-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 631.8,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-a-03-2025",
+    "task": "text",
+    "ok": true,
+    "ms": 694.2,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-a",
+    "task": "text",
+    "ok": true,
+    "ms": 707.7,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 682.2,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 585.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1011.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.4,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "cowboy",
+    "task": "text",
+    "ok": false,
+    "ms": 771.0,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "noir_detective",
+    "task": "text",
+    "ok": false,
+    "ms": 885.6,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "scientific_style",
+    "task": "text",
+    "ok": false,
+    "ms": 880.8,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "patient_teacher",
+    "task": "text",
+    "ok": false,
+    "ms": 351.8,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "ash",
+    "task": "text",
+    "ok": false,
+    "ms": 352.3,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "qwen-3-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1009.8,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "alloy",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "calm",
+    "task": "text",
+    "ok": false,
+    "ms": 298.7,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "HuggingSpace",
+    "model": "command-r-plus-08-2024",
+    "task": "text",
+    "ok": true,
+    "ms": 1848.6,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "friendly",
+    "task": "text",
+    "ok": false,
+    "ms": 251.5,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "verse",
+    "task": "text",
+    "ok": false,
+    "ms": 274.0,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "echo",
+    "task": "text",
+    "ok": false,
+    "ms": 285.4,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "fable",
+    "task": "text",
+    "ok": false,
+    "ms": 327.1,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "nova",
+    "task": "text",
+    "ok": false,
+    "ms": 321.5,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "sage",
+    "task": "text",
+    "ok": false,
+    "ms": 327.7,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "shimmer",
+    "task": "text",
+    "ok": false,
+    "ms": 298.8,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "coral",
+    "task": "text",
+    "ok": false,
+    "ms": 297.5,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "ballad",
+    "task": "text",
+    "ok": false,
+    "ms": 346.2,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OpenAIFM",
+    "model": "onyx",
+    "task": "text",
+    "ok": false,
+    "ms": 842.2,
+    "answer": "",
+    "error": "Unsupported media type: text/html; charset=utf-8"
+  },
+  {
+    "provider": "OperaAria",
+    "model": "aria",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "experimental",
+    "task": "text",
+    "ok": true,
+    "ms": 1081.1,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "Perplexity",
+    "model": "turbo",
+    "task": "text",
+    "ok": true,
+    "ms": 1365.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude2",
+    "task": "text",
+    "ok": true,
+    "ms": 1436.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude45sonnetthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 1943.9,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "gpt41",
+    "task": "text",
+    "ok": false,
+    "ms": 2221.8,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 1257.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-coder",
+    "task": "text",
+    "ok": false,
+    "ms": 179.6,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai-large",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.9,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "gpt5",
+    "task": "text",
+    "ok": true,
+    "ms": 1848.5,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude40opus",
+    "task": "text",
+    "ok": false,
+    "ms": 2413.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "perplexity-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 156.5,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "kimi",
+    "task": "text",
+    "ok": false,
+    "ms": 183.0,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "nomnom",
+    "task": "text",
+    "ok": false,
+    "ms": 182.9,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "openai",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "grok",
+    "task": "text",
+    "ok": false,
+    "ms": 184.3,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude-large",
+    "task": "text",
+    "ok": false,
+    "ms": 207.0,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 123.0,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "mistral",
+    "task": "text",
+    "ok": true,
+    "ms": 770.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "nova-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 169.1,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-safety",
+    "task": "text",
+    "ok": false,
+    "ms": 137.1,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "qwen-character",
+    "task": "text",
+    "ok": false,
+    "ms": 185.7,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "perplexity-reasoning",
+    "task": "text",
+    "ok": false,
+    "ms": 246.4,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "deepseek",
+    "task": "text",
+    "ok": false,
+    "ms": 147.8,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "polly",
+    "task": "text",
+    "ok": false,
+    "ms": 239.9,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "Perplexity",
+    "model": "claude37sonnetthinking",
+    "task": "text",
+    "ok": false,
+    "ms": 2700.8,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "claude",
+    "task": "text",
+    "ok": false,
+    "ms": 171.9,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "glm",
+    "task": "text",
+    "ok": false,
+    "ms": 185.4,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 208.7,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "Perplexity",
+    "model": "o3",
+    "task": "text",
+    "ok": false,
+    "ms": 2058.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "wan",
+    "task": "text",
+    "ok": false,
+    "ms": 179.8,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "midijourney",
+    "task": "text",
+    "ok": false,
+    "ms": 273.2,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "grok-video",
+    "task": "text",
+    "ok": false,
+    "ms": 238.1,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "ltx-2",
+    "task": "text",
+    "ok": false,
+    "ms": 117.0,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "klein",
+    "task": "text",
+    "ok": false,
+    "ms": 173.0,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "veo",
+    "task": "text",
+    "ok": false,
+    "ms": 245.2,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "PollinationsAI",
+    "model": "klein-large",
+    "task": "text",
+    "ok": false,
+    "ms": 223.2,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 5 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-235b-a22b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen2.5-vl-32b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-max-latest",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-turbo-2025-02-11",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.1,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen-plus-2025-01-25",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen2.5-coder-32b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen",
+    "model": "qwen3-coder-30b-a3b-instruct",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Perplexity",
+    "model": "pplx_pro_upgraded",
+    "task": "text",
+    "ok": false,
+    "ms": 3910.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Yqcloud",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.1,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-oss-120b",
+    "task": "text",
+    "ok": true,
+    "ms": 549.5,
+    "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-4",
+    "task": "text",
+    "ok": false,
+    "ms": 1009.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.6,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1006.1,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "Qwen_Qwen_3",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b",
+    "task": "text",
+    "ok": true,
+    "ms": 583.9,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "default",
+    "task": "text",
+    "ok": false,
+    "ms": 1331.4,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "mistral-small-3.1-24b",
+    "task": "text",
+    "ok": false,
+    "ms": 1317.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "llama-4-maverick",
+    "task": "text",
+    "ok": false,
+    "ms": 1326.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r",
+    "task": "text",
+    "ok": true,
+    "ms": 656.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "llama-4-scout",
+    "task": "text",
+    "ok": false,
+    "ms": 1766.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-a",
+    "task": "text",
+    "ok": true,
+    "ms": 950.4,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sonar",
+    "task": "text",
+    "ok": false,
+    "ms": 220.5,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1218.8,
+    "answer": "",
+    "error": "Failed to decode JSON: Expecting value: line 1 column 1 (char 0)"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sonar-reasoning",
+    "task": "text",
+    "ok": false,
+    "ms": 247.2,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-235b",
+    "task": "text",
+    "ok": false,
+    "ms": 1299.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-14b",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.4,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5.2",
+    "task": "text",
+    "ok": false,
+    "ms": 208.1,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-v3",
+    "task": "text",
+    "ok": false,
+    "ms": 1352.0,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-r1",
+    "task": "text",
+    "ok": false,
+    "ms": 1307.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-30b",
+    "task": "text",
+    "ok": false,
+    "ms": 1298.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "chickytutor",
+    "task": "text",
+    "ok": false,
+    "ms": 158.4,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1210.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "mistral-small",
+    "task": "text",
+    "ok": false,
+    "ms": 195.5,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "flux-kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 688.4,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "openai",
+    "task": "text",
+    "ok": false,
+    "ms": 211.8,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-haiku-4-5",
+    "task": "text",
+    "ok": false,
+    "ms": 259.4,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "grok-fast",
+    "task": "text",
+    "ok": false,
+    "ms": 196.7,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "kimi-k2",
+    "task": "text",
+    "ok": true,
+    "ms": 1005.2,
+    "answer": "The model does not exist in https://api.airforce discord.gg/airforce",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-opus-4.5",
+    "task": "text",
+    "ok": false,
+    "ms": 195.5,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "midijourney",
+    "task": "text",
+    "ok": false,
+    "ms": 261.6,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "aria",
+    "task": "text",
+    "ok": false,
+    "ms": 1011.9,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5",
+    "task": "text",
+    "ok": false,
+    "ms": 379.3,
+    "answer": "",
+    "error": "No .har file found"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder",
+    "task": "text",
+    "ok": false,
+    "ms": 512.6,
+    "answer": "",
+    "error": "API key is required for Puter.js API"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-2.5-coder-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 2588.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "gpt-5-thinking",
+    "task": "text",
+    "ok": false,
+    "ms": 438.6,
+    "answer": "",
+    "error": "No .har file found"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "amazon-nova-micro",
+    "task": "text",
+    "ok": false,
+    "ms": 239.4,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "seedream-pro",
+    "task": "text",
+    "ok": false,
+    "ms": 175.2,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "kontext",
+    "task": "text",
+    "ok": false,
+    "ms": 273.5,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 191.5,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "seedream",
+    "task": "text",
+    "ok": false,
+    "ms": 215.4,
+    "answer": "",
+    "error": "Request limit (5 per minute) exceeded. Made: 6 requests. Sign up at g4f.dev/members.html for higher limits."
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "r1-1776",
+    "task": "text",
+    "ok": true,
+    "ms": 1796.6,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "claude-sonnet-4-5",
+    "task": "text",
+    "ok": false,
+    "ms": 752.5,
+    "answer": "",
+    "error": "Add a \"api_key\""
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "sdxl-turbo",
+    "task": "text",
+    "ok": false,
+    "ms": 1644.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek",
+    "task": "text",
+    "ok": false,
+    "ms": 2169.8,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "glm-4.7",
+    "task": "text",
+    "ok": false,
+    "ms": 1531.4,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-max",
+    "task": "text",
+    "ok": false,
+    "ms": 1004.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1005.7,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-plus",
+    "task": "text",
+    "ok": false,
+    "ms": 1002.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-2.5-vl-32b",
+    "task": "text",
+    "ok": false,
+    "ms": 1224.8,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-235b-a22b",
+    "task": "text",
+    "ok": false,
+    "ms": 1430.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1600.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r-plus24",
+    "task": "text",
+    "ok": true,
+    "ms": 568.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-coder-30b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1467.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b24",
+    "task": "text",
+    "ok": true,
+    "ms": 651.1,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "pplx_pro",
+    "task": "text",
+    "ok": false,
+    "ms": 341.6,
+    "answer": "",
+    "error": "Response 429: {'status': 'failed', 'error_code': 'RATE_LIMITED', '_response_type': 'RATE_LIMITED', 'text': 'Query rate limit exceeded. Please try Perplexity again later.'}"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "perplexity",
+    "task": "text",
+    "ok": false,
+    "ms": 344.2,
+    "answer": "",
+    "error": "Response 429: {'status': 'failed', 'error_code': 'RATE_LIMITED', '_response_type': 'RATE_LIMITED', 'text': 'Query rate limit exceeded. Please try Perplexity again later.'}"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r24",
+    "task": "text",
+    "ok": true,
+    "ms": 760.4,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "deepseek-v3.2-thinking",
+    "task": "text",
+    "ok": false,
+    "ms": 1003.3,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-next-80b-a3b",
+    "task": "text",
+    "ok": false,
+    "ms": 1900.2,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-a25",
+    "task": "text",
+    "ok": false,
+    "ms": 1286.1,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "command-r7b-arabic25",
+    "task": "text",
+    "ok": true,
+    "ms": 1022.0,
+    "answer": "OK",
+    "error": null
+  },
+  {
+    "provider": "AnyProvider",
+    "model": "qwen-3-8b",
+    "task": "text",
+    "ok": false,
+    "ms": 1499.5,
+    "answer": "",
+    "error": "The operation timed out after 1 seconds"
+  }
+]

@@ -56,11 +56,16 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
     # (imports verified via tests; avoid noisy debug output in production)
 
     # Prefer the full featured API in api.main, fallback handled below
+    import os as _os
+    from pathlib import Path as _Path
+    _src = _Path(__file__).resolve().parents[1]
+    _reload_dirs = [str(_src)] if reload_enabled else None
     uvicorn.run(
         "api.main:create_app",
         host="127.0.0.1",
         port=8050,
         reload=reload_enabled,
+        reload_dirs=_reload_dirs,
         factory=True,
         log_level="info",
     )

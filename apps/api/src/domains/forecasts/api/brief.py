@@ -31,6 +31,8 @@ def _fallback_brief(message: str) -> Dict[str, Any]:
         "top_signals": [],
         "top_risks": [],
         "key_events": [],
+        "macro_signals": [],
+        "sector_rotation": {"top": [], "bottom": []},
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "source": ["fallback_empty"],
     }
@@ -41,6 +43,24 @@ def get_daily_brief() -> Dict[str, Any]:
     brief = _load_brief_snapshot("brief_daily") or _load_brief_snapshot("brief_weekly")
     if not brief:
         brief = _fallback_brief("No daily brief available yet.")
+
+    brief.setdefault("macro_signals", brief.get("macro", brief.get("macro_signals", [])))
+    if not isinstance(brief["macro_signals"], list):
+        brief["macro_signals"] = []
+
+    brief.setdefault("sector_rotation", brief.get("sector_rotation", {"top": [], "bottom": []}))
+    if not isinstance(brief["sector_rotation"], dict):
+        brief["sector_rotation"] = {"top": [], "bottom": []}
+    else:
+        brief["sector_rotation"].setdefault("top", [])
+        brief["sector_rotation"].setdefault("bottom", [])
+
+    summary = brief.get("summary", "")
+    if isinstance(summary, str):
+        words = summary.split()
+        if len(words) > 200:
+            brief["summary"] = " ".join(words[:200])
+
     return ok(brief)
 
 

@@ -5,20 +5,23 @@ Author: AUTO-FULLSTACK-DEVELOPER-SPIDERMAN-77
 """
 from typing import Dict, Any
 from pathlib import Path
-import sys
+from datetime import datetime, timezone
 import logging
-
-# Add backend to path
-backend_root = Path(__file__).resolve().parents[1]
-if str(backend_root) not in sys.path:
-    sys.path.insert(0, str(backend_root))
 
 logger = logging.getLogger(__name__)
 
-try:
-    from services.service_standard import utc_now_iso, unwrap_storage_payload
-except Exception:  # pragma: no cover
-    from src.services.service_standard import utc_now_iso, unwrap_storage_payload  # type: ignore
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def unwrap_storage_payload(raw: Any) -> Any:
+    if isinstance(raw, dict):
+        if "data" in raw and raw.get("data") is not None:
+            return raw.get("data")
+        if "payload" in raw and raw.get("payload") is not None:
+            return raw.get("payload")
+    return raw
 
 try:
     from storage.io import load_json

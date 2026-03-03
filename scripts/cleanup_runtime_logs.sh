@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/cleanup_runtime_logs.sh
+../platform/automation/cleanup_runtime_logs.sh

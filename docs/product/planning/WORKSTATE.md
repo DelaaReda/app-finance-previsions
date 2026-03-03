@@ -1,5 +1,5 @@
 # WORKSTATE (MVP Planner Continuity)
-_Mis à jour: 2026-02-28 par admin-claude après intervention système_
+_Mis à jour: 2026-03-03 par planner/admin (alignement lean BATCH-26)_
 
 ## ⚡ LECTURE OBLIGATOIRE À CHAQUE RUN
 
@@ -9,12 +9,12 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 
 ---
 
-## État Actuel (2026-02-28)
+## État Actuel (2026-03-03 16:15 EST)
 
-- **Phase:** batch03_in_progress
-- **Batch actif:** BATCH-03 (voir workboard)
-- **Slot planner:** ASSIGNÉ dans BATCH-03 (task BATCH-03-PLAN = in_progress)
-- **Action immédiate:** Dispatcher BATCH-03 aux rôles et monitorer la livraison
+- **Phase:** architecture_hardening_blocker
+- **Batch actif:** BATCH-26 (Architecture Hardening Pack — audit 2026-03-03)
+- **Slot planner:** claim `BATCH-26-PLAN` puis dispatch strict `BATCH-26-DEV-01/02/03`
+- **Action immédiate:** exécuter la chaîne `PLAN -> DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV-REVIEW` avec preuves runtime
 
 ## Gate Truth
 
@@ -22,11 +22,57 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 |-------|------|---------|
 | BATCH-01 | ✅ CLOSED/PASS | `finance-app/openclaw-gates/batch-01-20260225-000127.md` |
 | BATCH-02 | ✅ CLOSED/PASS | `finance-app/openclaw-gates/batch-02-20260225-202042.md` |
-| BATCH-03 | 🔄 IN_PROGRESS | workboard: state=OPEN |
-| BATCH-04 | 📋 PLANNED | workboard: state=PLANNED |
-| BATCH-05 | 📋 PLANNED | workboard: state=PLANNED |
-| BATCH-06 | 📋 PLANNED | workboard: state=PLANNED |
-| BATCH-07 | 📋 PLANNED | workboard: state=PLANNED |
+| BATCH-03 | ✅ CLOSED/PASS | priority-queue.json state=CLOSED |
+| BATCH-04 | ✅ CLOSED/PASS | `docs/operations/orchestrator/proofs/BATCH-04/BATCH-04-COMPLETION-20260302T002500Z.yaml` |
+| BATCH-05 | ✅ CLOSED | priority-queue + workboard: fermé (handoff vers BATCH-06) |
+| BATCH-06 | ✅ CLOSED | priority-queue: CLOSED (batch terminé) |
+| BATCH-07 | ✅ CLOSED | priority-queue + workboard: fermé |
+| BATCH-08 | 📋 WAITING_DEP | bloqué par BATCH-26 (hardening architecture) |
+| BATCH-26 | 🟢 READY | priorité P0 — corriger findings F-001..F-012 avant reprise feature UX |
+
+---
+
+## BATCH-26 — Tâches en cours
+
+**Objectif:** hardening architecture P0/P1 avant reprise features UX/delivery
+
+| Rôle | Tâche | Status |
+|------|-------|--------|
+| planner | `BATCH-26-PLAN` — cadrer/dispatcher la chaîne hardening + garder queue/workboard synchronisés | done |
+| dev | `BATCH-26-DEV-01` — corriger charge module/imports cross-layer (F-001/F-002/F-003) | ready |
+| dev | `BATCH-26-DEV-02` — unifier data path runtime + purge fake/runtime fantôme (F-004/F-005/F-006/F-008) | waiting_dep |
+| dev | `BATCH-26-DEV-03` — retirer bridges fragiles + durcir validator/spec/runtime (F-010/F-011/F-012/F-015/F-020) | waiting_dep |
+| admin | `BATCH-26-ADMIN-01` — valider santé runtime/monitor/cron après patchs dev | waiting_dep |
+| planner | `BATCH-26-GOV-REVIEW` — conclure PASS/BLOCKED et débloquer BATCH-08 | waiting_dep |
+
+**Success criteria BATCH-26:**
+1. Les corrections F-001..F-012 critiques sont appliquées avec preuves techniques courtes (imports/tests/smoke).
+2. Les chemins runtime sont unifiés (`apps/api/runtime/**` canonique) sans artefacts fake actifs.
+3. Les prompts/guards empêchent `analysis_only` quand du travail actionnable existe.
+
+**Vision Reference:** `docs/product/planning/tasks.md#addendum-audit-2026-03-03-architecture-hardening-pack-p0p1`
+
+---
+
+## BATCH-04 — Résumé (CLOSED)
+
+**Objectif:** Dashboard Vision — Brief quotidien + Secteurs réels
+
+| Rôle | Tâche | Status |
+|------|-------|--------|
+| planner | Valider vision conformance (2-3 clics, lisible en 30s) | done ✅ |
+| backend_engineer | Endpoint /api/brief/daily avec macro signals + secteurs | done ✅ |
+| frontend_engineer | Brief en header + secteurs avec flèches (↑↓→) | done ✅ |
+| data_analyst | Pipeline macro indicators fraîcheur < 10min | done ✅ |
+
+**Success criteria BATCH-04:**
+1. `curl /api/brief/daily` → texte synthèse < 200 mots ✅
+2. Dashboard affiche brief en haut sans scroll ✅
+3. Secteurs (or, IA, énergie) ont direction visible (↑↓→) ✅
+
+**Proofs:**
+- BACKEND: `docs/operations/orchestrator/proofs/BATCH-04/BATCH-04-BACKEND/20260301T115545Z-972.yaml`
+- COMPLETION: `docs/operations/orchestrator/proofs/BATCH-04/BATCH-04-COMPLETION-20260302T002500Z.yaml`
 
 ---
 
@@ -39,6 +85,11 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 4. Si batch actif = IN_PROGRESS → monitorer et débloquer
 5. Si batch actif = DONE/PASS → ouvrir le batch suivant (PLANNED → OPEN)
 6. Si aucun batch OPEN → créer le prochain selon la roadmap vision
+
+### Check anti-desync (obligatoire avant dispatch)
+1. Vérifier queue: `jq -r '.items[] | [.id,.state] | @tsv' docs/operations/orchestrator/priority-queue.json`
+2. Vérifier workstreams: `jq -r '.streams[] | [.id,.state] | @tsv' docs/operations/orchestrator/parallel-workstreams.json`
+3. Si mismatch sur le batch actif, corriger les états avant tout nouveau claim role.
 
 ### Comment ouvrir un batch suivant
 ```
@@ -73,28 +124,12 @@ _Mis à jour: 2026-02-28 par admin-claude après intervention système_
 
 ---
 
-## BATCH-03 — Tâches en cours
-
-**Objectif:** Connecter le frontend aux données réelles + corriger qualité données
-
-**Note admin:** `apiConnector.js` déjà créé dans `apps/web/src/domains/forecasts/contracts/apiConnector.js`
-
-| Rôle | Tâche | Status |
-|------|-------|--------|
-| planner | Dispatcher + monitorer | in_progress |
-| frontend_engineer | Étendre apiConnector.js à tous les widgets | ready |
-| backend_engineer | Corriger confidence forecasts (0/19 high), stocks change=0 | ready |
-| data_analyst | Activer backtests (actuellement null/pending) | ready |
-
-**Success criteria BATCH-03:**
-1. News widget affiche des vraies news (pas mock)
-2. Forecasts widget affiche 19 forecasts avec confidence > 0 pour certains
-3. Stocks top movers affiche les vrais prix avec % change
-4. Backtests: hit_rate > 0 (pas 0.0)
-
----
-
 ## Changelog
 
 - 2026-02-25 20:20 — BATCH-02 clôturé
 - 2026-02-28 (admin-claude) — BATCH-03 créé + workboard rempli jusqu'à BATCH-07. PRODUCT_VISION.md créé. Cron path corrigé. apiConnector.js créé.
+- 2026-03-01 (admin-claude) — BATCH-03 CLOSED, BATCH-04 ouvert
+- 2026-03-02 (planner) — BATCH-04 CLOSED, BATCH-05 ouvert et dispatché
+- 2026-03-03 (planner/admin) — BATCH-05 clos, BATCH-06 READY, renommage des sous-tâches actives en lane dev (`DEV-01/02/03`) pour éviter la confusion de labels.
+- 2026-03-03 (planner/admin) — Ajout BATCH-26 (P0 architecture hardening) suite audit live; BATCH-08 remis en WAITING_DEP jusqu'à PASS hardening.
+- 2026-03-03 (planner/admin) — BATCH-26 aligné en chaîne lean `PLAN -> DEV-01/02/03 -> ADMIN-01 -> GOV-REVIEW` (suppression des labels actifs backend/frontend/data).

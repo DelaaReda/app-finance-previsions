@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-07-BATCH-07-DEV-03-20260303T173422Z-256"
+stream_id: "BATCH-07"
+task_id: "BATCH-07-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-03T17:34:22Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "1) confirmer scope endpoint news/analysis et impact scoring"
+    - "2) vérifier dependency impact vers deep dive dashboard et trace signals"
+    - "3) estimer les risques de régression et stratégies de mitigation"
+    - "4) exécuter vérification locale tests smoke pour threshold et schema payload"
+    - "5) prévoir rollback en revert de news_impact.py si dégradation."
+  architecture_checks:
+    - "scope_delivery"
+    - "domain_boundary=market_data"
+    - "reuse_existing_helpers"
+    - "avoid_legacy_path_changes"
+    - "proof_required"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "cd apps/api && PYTHONPATH=src python3 /tmp/verify_news_impact_cmd.py"
+      rc: "0"
+      started_at_utc: "2026-03-03T17:34:22Z"
+      ended_at_utc: "2026-03-03T17:34:22Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "cd apps/api && PYTHONPATH=src python3 /tmp/verify_news_impact_cmd.py:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/orchestrator-ops/proofs/BATCH-07/BATCH-07-DEV-03/20260303T173000Z-999.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "P1772558886_26200"
+  review_ref: "none"
+  note: "Normalise impact_threshold 0..1/0..10, ajuste filtrage et enrichit chaque résultat d'impact avec impact_score_10, signal_trace et content_summary."

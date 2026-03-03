@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/workboard_stale_task_sweep.py
+../platform/automation/workboard_stale_task_sweep.py

@@ -12,10 +12,19 @@ from core.response import ok, err
 import logging
 
 try:
-    from backend.services.recommendations_service import RecommendationsService  # type: ignore
+    try:
+        from domains.forecasts.application.recommendations_service import RecommendationsService  # type: ignore
+    except ImportError:  # pragma: no cover
+        try:
+            from services.recommendations_service import RecommendationsService  # type: ignore
+        except ImportError as exc:  # pragma: no cover
+            RecommendationsService = None  # type: ignore
+            _IMPORT_ERROR = exc
+        else:
+            _IMPORT_ERROR = None
 except ImportError:  # pragma: no cover
     try:
-        from services.recommendations_service import RecommendationsService  # type: ignore
+        from backend.services.recommendations_service import RecommendationsService  # type: ignore
     except ImportError as exc:  # pragma: no cover
         RecommendationsService = None  # type: ignore
         _IMPORT_ERROR = exc

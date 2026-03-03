@@ -51,14 +51,12 @@ ROLE_AGENT_BIN="${PARALLEL_ROLE_AGENT_BIN:-codex}"
 ROLE_CODEX_EXEC_FALLBACK="${PARALLEL_ROLE_CODEX_EXEC_FALLBACK:-1}"
 ROLE_CODEX_MODEL="${PARALLEL_ROLE_CODEX_MODEL:-${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}}"
 ROLE_CODEX_EXEC_RESUME="${PARALLEL_ROLE_CODEX_EXEC_RESUME:-1}"
-ROLE_MIN_REFLECTION_PASSES="${PARALLEL_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-${MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES:-5}}}"
+ROLE_MIN_REFLECTION_PASSES="${PARALLEL_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-${MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES:-2}}}"
 BACKUP_DIR="/home/venom/.openclaw/cron/backups"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 DEFAULT_ROLE_PROFILES=(
-  "planner|12m|1|Planner dispatch and dependency orchestration"
-  "analyst|14m|0|Business analysis and requirement clarity"
-  "architect|18m|0|Architecture constraints and guardrails"
+  "planner|12m|1|vision-architect-tasks-planner: dispatch + analyst/architect/po/scrum regrouped lane"
   "backend_engineer|12m|1|Backend implementation lane"
   "frontend_engineer|12m|1|Frontend implementation lane"
   "integrator|15m|1|Cross-team integration lane"
@@ -213,8 +211,8 @@ fi
 if ! [[ "$ROLE_CODEX_EXEC_RESUME" =~ ^[01]$ ]]; then
   ROLE_CODEX_EXEC_RESUME=1
 fi
-if ! [[ "$ROLE_MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$ROLE_MIN_REFLECTION_PASSES" -lt 5 ]]; then
-  ROLE_MIN_REFLECTION_PASSES=5
+if ! [[ "$ROLE_MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$ROLE_MIN_REFLECTION_PASSES" -lt 2 ]]; then
+  ROLE_MIN_REFLECTION_PASSES=2
 fi
 if [[ "${ROLE_AGENT_BIN,,}" != "codex" ]]; then
   if [[ "$ROLE_RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
@@ -307,13 +305,25 @@ thinking_level_for_role() {
   esac
 }
 
+model_for_role() {
+  local role="$1"
+  local varname="LM_ROLE_${role^^}_MODEL"
+  varname="${varname//-/_}"
+  printf '%s\n' "${!varname:-${ROLE_CODEX_MODEL}}"
+}
+
 message_for_role() {
   local role="$1"
   local allow_edits="$2"
+  local role_model="$3"
+  local role_runner_arg="$role"
+  if [[ "$role" == "planner" ]]; then
+    role_runner_arg="vision-architect-tasks-planner"
+  fi
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${ROLE_CODEX_MODEL} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/cron_tmux_role_runner.sh ${role}
+Command: TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
 EOF
 }
 
@@ -338,6 +348,20 @@ find_job_id_by_name() {
   openclaw cron list --json | jq -r --arg n "$name" '.jobs[]? | select(.name==$n) | .id' | head -n 1
 }
 
+disable_job_if_exists() {
+  local name="$1"
+  local id=""
+  id="$(find_job_id_by_name "$name" || true)"
+  if [[ "$APPLY" -eq 0 ]]; then
+    echo "PLAN legacy_job_disable name=${name} existing_id=${id:-none}"
+    return 0
+  fi
+  if [[ -n "$id" ]]; then
+    openclaw cron disable "$id" >/dev/null 2>&1 || true
+    echo "APPLIED legacy_job_disable name=${name} id=${id}"
+  fi
+}
+
 upsert_job() {
   local role="$1"
   local every="$2"
@@ -349,6 +373,7 @@ upsert_job() {
   local agent_id=""
   local id=""
   local msg=""
+  local role_model=""
 
   name="$(job_name_for_role "$role")"
   agent_id="$(agent_for_role "$role")"
@@ -360,11 +385,12 @@ upsert_job() {
   if ! [[ "$role_timeout" =~ ^[0-9]+$ ]] || [[ "$role_timeout" -lt 60 ]]; then
     role_timeout="$TIMEOUT_SECONDS"
   fi
-  msg="$(message_for_role "$role" "$allow_edits")"
+  role_model="$(model_for_role "$role")"
+  msg="$(message_for_role "$role" "$allow_edits" "$role_model")"
   id="$(find_job_id_by_name "$name" || true)"
 
   if [[ "$APPLY" -eq 0 ]]; then
-    echo "PLAN role=${role} name=${name} agent=${agent_id} every=${every} allow_file_edits=${allow_edits} existing_id=${id:-none}"
+    echo "PLAN role=${role} name=${name} agent=${agent_id} model=${role_model} every=${every} allow_file_edits=${allow_edits} existing_id=${id:-none}"
     return 0
   fi
 
@@ -375,7 +401,7 @@ upsert_job() {
       --agent "$agent_id" \
       --every "$every" \
       --thinking "$role_thinking" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$role_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -388,7 +414,7 @@ upsert_job() {
       --agent "$agent_id" \
       --every "$every" \
       --thinking "$role_thinking" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$role_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -401,7 +427,7 @@ upsert_job() {
     openclaw cron enable "$id" >/dev/null 2>&1 || true
   fi
 
-  echo "APPLIED role=${role} name=${name} agent=${agent_id} id=${id:-unknown} every=${every} allow_file_edits=${allow_edits} timeout=${role_timeout} thinking=${role_thinking}"
+  echo "APPLIED role=${role} name=${name} agent=${agent_id} model=${role_model} id=${id:-unknown} every=${every} allow_file_edits=${allow_edits} timeout=${role_timeout} thinking=${role_thinking}"
 }
 
 upsert_stale_sweep_job() {
@@ -543,6 +569,16 @@ for line in "${ROLE_PROFILES[@]}"; do
   sleep 1
 done
 
+# Coordination lanes merged into planner: disable old dedicated loops when present.
+disable_job_if_exists "analyst-tmux-loop"
+disable_job_if_exists "architect-tmux-loop"
+disable_job_if_exists "po-tmux-loop"
+disable_job_if_exists "scrum-master-tmux-loop"
+disable_job_if_exists "analyst-tmux-14m"
+disable_job_if_exists "architect-tmux-25m"
+disable_job_if_exists "po-tmux-25m"
+disable_job_if_exists "scrum-master-tmux-25m"
+
 upsert_stale_sweep_job
 sleep 1
 upsert_dg_alert_job
@@ -571,6 +607,7 @@ map_tmp="$(mktemp)"
     trace_file="$(trace_for_role "$role" || true)"
     role_timeout="$(timeout_seconds_for_role "$role")"
     role_thinking="$(thinking_level_for_role "$role")"
+    role_model="$(model_for_role "$role")"
     if [[ -z "$role_thinking" ]]; then
       role_thinking="$THINKING_LEVEL"
     fi
@@ -603,11 +640,12 @@ map_tmp="$(mktemp)"
       --arg trace_file "$trace_file" \
       --arg lane "$lane" \
       --arg role_thinking "$role_thinking" \
+      --arg role_model "$role_model" \
       --argjson role_timeout "$role_timeout" \
       --argjson wip_limit "$wip_limit" \
       --argjson provisioned "$provisioned" \
       --argjson allow_file_edits "$allow_edits" \
-      '{role:$role,id:$id,name:$name,agent_id:$agent_id,every:$every,thinking:$role_thinking,timeout_seconds:$role_timeout,lane:$lane,wip_limit:$wip_limit,allow_file_edits:$allow_file_edits,provisioned:$provisioned,session_name:$session_name,trace_file:$trace_file}'
+      '{role:$role,id:$id,name:$name,agent_id:$agent_id,every:$every,model:$role_model,thinking:$role_thinking,timeout_seconds:$role_timeout,lane:$lane,wip_limit:$wip_limit,allow_file_edits:$allow_file_edits,provisioned:$provisioned,session_name:$session_name,trace_file:$trace_file}'
   done
 
   echo '  ],'

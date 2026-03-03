@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/configure_parallel_team_crons.sh
+../platform/automation/configure_parallel_team_crons.sh

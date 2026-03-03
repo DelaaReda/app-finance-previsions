@@ -1,0 +1,2330 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
+cd "$ROOT"
+MODEL_CONFIG_FILE="${ROOT}/platform/config/lm_used_model_config.sh"
+if [[ ! -f "$MODEL_CONFIG_FILE" ]]; then
+  MODEL_CONFIG_FILE="${ROOT}/platform/config/model-config.sh"
+fi
+if [[ -f "$MODEL_CONFIG_FILE" ]]; then
+  # shellcheck source=../platform/config/model-config.sh
+  source "$MODEL_CONFIG_FILE"
+fi
+
+ROLE="${1:-}"
+if [[ -z "$ROLE" ]]; then
+  echo "Usage: $0 <planner|dev|tester|qa|architect|po|scrum_master|clawsentinel>"
+  exit 2
+fi
+
+case "$ROLE" in
+  planner|dev|tester|qa|architect|po|scrum_master|clawsentinel|analyst|backend_engineer|frontend_engineer|integrator|data_analyst|infra_engineer) ;;
+  *)
+    echo "Unsupported role: $ROLE"
+    exit 3
+    ;;
+esac
+
+# Role-local temp dir prevents flaky pytest/tmpdir failures in cron runs.
+ROLE_TMPDIR="${TMUX_ROLE_TMPDIR:-$ROOT/.tmp/role-runner/${ROLE}}"
+if mkdir -p "$ROLE_TMPDIR" >/dev/null 2>&1 && [[ -d "$ROLE_TMPDIR" && -w "$ROLE_TMPDIR" ]]; then
+  export TMPDIR="$ROLE_TMPDIR"
+else
+  export TMPDIR="${TMPDIR:-/tmp}"
+fi
+export TMP="${TMP:-$TMPDIR}"
+export TEMP="${TEMP:-$TMPDIR}"
+
+AGENT_BIN="${TMUX_ROLE_AGENT_BIN:-codex}"
+AGENT_BIN_NAME="${AGENT_BIN##*/}"
+AGENT_BIN_NAME="${AGENT_BIN_NAME,,}"
+PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-180}"
+RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-90}"
+STATE_DIR="${TMUX_ROLE_STATE_DIR:-/home/venom/.openclaw/cron/role-state}"
+RATE_LIMIT_PRECHECK="${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}"
+RATE_LIMIT_PROBE_TIMEOUT="${TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT:-18}"
+RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-600}"
+TRACE_DIR="${TMUX_ROLE_TRACE_DIR:-$ROOT/logs-codex-runs/role-runner}"
+ROLE_MEMORY_DIR="${TMUX_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
+TEAM_CHAT_FILE="${TMUX_ROLE_TEAM_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
+TEAM_ITER_FILE="${TMUX_ROLE_TEAM_ITER_FILE:-$ROOT/docs/ops/ADMIN_TEAM_ITERATIONS.md}"
+DIRECTIVE_BUS_FILE="${TMUX_ROLE_DIRECTIVE_BUS_FILE:-$ROOT/docs/ops/DIRECTIVE_BUS.jsonl}"
+WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$ROOT/docs/orchestrator-ops/parallel-workstreams.json}"
+MEMORY_LOCK_FILE="${TMUX_ROLE_MEMORY_LOCK_FILE:-${STATE_DIR}/${ROLE}.memory.lock}"
+RECOVERY_THRESHOLD="${TMUX_ROLE_RECOVERY_THRESHOLD:-2}"
+SKIP_RETRY_ON_TIMEOUT="${SKIP_RETRY_ON_TIMEOUT:-1}"
+RETRY_ENGINE_DEFAULT="${TMUX_ROLE_RETRY_ENGINE_DEFAULT:-tmux}"
+NO_DELTA_THRESHOLD="${TMUX_ROLE_NO_DELTA_THRESHOLD:-10}"
+TMUX_CAPTURE_LINES="${TMUX_ROLE_CAPTURE_LINES:-2600}"
+TMUX_READY_WAIT_SECONDS="${TMUX_ROLE_READY_WAIT_SECONDS:-8}"
+TMUX_POLL_INTERVAL_SECONDS="${TMUX_ROLE_POLL_INTERVAL_SECONDS:-1}"
+TMUX_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-75}"
+CODEX_EXEC_FALLBACK="${TMUX_ROLE_CODEX_EXEC_FALLBACK:-1}"
+DEFAULT_CODEX_MODEL="${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}"
+CODEX_EXEC_MODEL="${TMUX_ROLE_CODEX_MODEL:-${DEFAULT_CODEX_MODEL}}"
+CODEX_TRUST_PROJECT="${TMUX_ROLE_CODEX_TRUST_PROJECT:-$ROOT}"
+CODEX_TRUST_CONFIG_ARG='projects."'${CODEX_TRUST_PROJECT}'".trust_level="trusted"'
+CODEX_NO_ALT_SCREEN="${TMUX_ROLE_CODEX_NO_ALT_SCREEN:-1}"
+CODEX_EXEC_RESUME="${TMUX_ROLE_CODEX_EXEC_RESUME:-0}"
+CODEX_SEARCH_ENABLED="${TMUX_ROLE_CODEX_SEARCH_ENABLED:-1}"
+CODEX_SANDBOX_MODE="${TMUX_ROLE_CODEX_SANDBOX_MODE:-danger-full-access}"
+CODEX_APPROVAL_POLICY="${TMUX_ROLE_CODEX_APPROVAL_POLICY:-never}"
+ROLE_ALLOW_FILE_EDITS="${TMUX_ROLE_ALLOW_FILE_EDITS:-auto}"
+ALLOW_WORKBOARD_ONLY_DELIVERY="${TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY:-0}"
+TOOL_REQUEST_DEFAULT="${TMUX_ROLE_TOOL_REQUEST_DEFAULT:-none}"
+SKILL_REQUEST_DEFAULT="${TMUX_ROLE_SKILL_REQUEST_DEFAULT:-none}"
+MIN_REFLECTION_PASSES="${TMUX_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-${MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES:-5}}}"
+PUBLISH_EXEC_MONITORING="${TMUX_ROLE_PUBLISH_MONITORING:-1}"
+EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ROOT/docs/orchestrator-ops/executors-monitoring-latest.json}"
+EXEC_MONITORING_EVENTS_FILE="${TMUX_ROLE_EXEC_MONITORING_EVENTS_FILE:-$ROOT/logs-codex-runs/executor-monitoring/events.jsonl}"
+TOOL_REQUESTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_FILE:-$ROOT/docs/ops/AGENT_TOOL_REQUESTS.md}"
+TOOL_REQUESTS_EVENTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_EVENTS_FILE:-$ROOT/docs/orchestrator-ops/agent-tool-requests.jsonl}"
+mkdir -p \
+  "$STATE_DIR" \
+  "$TRACE_DIR" \
+  "$(dirname "$EXEC_MONITORING_LATEST_FILE")" \
+  "$(dirname "$EXEC_MONITORING_EVENTS_FILE")" \
+  "$(dirname "$TOOL_REQUESTS_FILE")" \
+  "$(dirname "$TOOL_REQUESTS_EVENTS_FILE")"
+FAIL_FILE="${STATE_DIR}/${ROLE}.fail_count"
+NO_DELTA_FILE="${STATE_DIR}/${ROLE}.no_delta_count"
+CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
+LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
+TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
+LOCK_FILE="${STATE_DIR}/${ROLE}.run.lock"
+LOCK_META_FILE="${STATE_DIR}/${ROLE}.run.lock.meta"
+RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
+RATE_LIMIT_STATE_NOTE=""
+
+if ! [[ "$RECOVERY_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$RECOVERY_THRESHOLD" -lt 1 ]]; then
+  RECOVERY_THRESHOLD=2
+fi
+if ! [[ "$PROMPT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$PROMPT_TIMEOUT_SECONDS" -lt 1 ]]; then
+  PROMPT_TIMEOUT_SECONDS=180
+fi
+if ! [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 1 ]]; then
+  RETRY_PROMPT_TIMEOUT_SECONDS=90
+fi
+if ! [[ "$SKIP_RETRY_ON_TIMEOUT" =~ ^[01]$ ]]; then
+  SKIP_RETRY_ON_TIMEOUT=1
+fi
+if ! [[ "$NO_DELTA_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$NO_DELTA_THRESHOLD" -lt 1 ]]; then
+  NO_DELTA_THRESHOLD=10
+fi
+if ! [[ "$TMUX_CAPTURE_LINES" =~ ^[0-9]+$ ]] || [[ "$TMUX_CAPTURE_LINES" -lt 400 ]]; then
+  TMUX_CAPTURE_LINES=2600
+fi
+if ! [[ "$TMUX_READY_WAIT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TMUX_READY_WAIT_SECONDS" -lt 1 ]]; then
+  TMUX_READY_WAIT_SECONDS=8
+fi
+if ! [[ "$TMUX_POLL_INTERVAL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TMUX_POLL_INTERVAL_SECONDS" -lt 1 ]]; then
+  TMUX_POLL_INTERVAL_SECONDS=1
+fi
+if ! [[ "$TMUX_STALL_ABORT_SECONDS" =~ ^[0-9]+$ ]]; then
+  TMUX_STALL_ABORT_SECONDS=75
+fi
+if ! [[ "$RATE_LIMIT_PRECHECK" =~ ^[01]$ ]]; then
+  RATE_LIMIT_PRECHECK=1
+fi
+if ! [[ "$RATE_LIMIT_PROBE_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_PROBE_TIMEOUT" -lt 8 ]]; then
+  RATE_LIMIT_PROBE_TIMEOUT=18
+fi
+if ! [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" -lt 60 ]]; then
+  RATE_LIMIT_CACHE_TTL_SECONDS=600
+fi
+if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
+  CODEX_EXEC_FALLBACK=1
+fi
+if ! [[ "$CODEX_NO_ALT_SCREEN" =~ ^[01]$ ]]; then
+  CODEX_NO_ALT_SCREEN=1
+fi
+if ! [[ "$CODEX_EXEC_RESUME" =~ ^[01]$ ]]; then
+  CODEX_EXEC_RESUME=0
+fi
+if ! [[ "$CODEX_SEARCH_ENABLED" =~ ^[01]$ ]]; then
+  CODEX_SEARCH_ENABLED=1
+fi
+case "$CODEX_SANDBOX_MODE" in
+  read-only|workspace-write|danger-full-access) ;;
+  *) CODEX_SANDBOX_MODE="danger-full-access" ;;
+esac
+case "$CODEX_APPROVAL_POLICY" in
+  untrusted|on-failure|on-request|never) ;;
+  *) CODEX_APPROVAL_POLICY="never" ;;
+esac
+if [[ "$ROLE_ALLOW_FILE_EDITS" != "0" && "$ROLE_ALLOW_FILE_EDITS" != "1" && "$ROLE_ALLOW_FILE_EDITS" != "auto" ]]; then
+  ROLE_ALLOW_FILE_EDITS="auto"
+fi
+if ! [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" =~ ^[01]$ ]]; then
+  ALLOW_WORKBOARD_ONLY_DELIVERY=0
+fi
+TOOL_REQUEST_DEFAULT="$(printf '%s' "$TOOL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
+SKILL_REQUEST_DEFAULT="$(printf '%s' "$SKILL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
+if [[ -z "$TOOL_REQUEST_DEFAULT" ]]; then
+  TOOL_REQUEST_DEFAULT="none"
+fi
+if [[ -z "$SKILL_REQUEST_DEFAULT" ]]; then
+  SKILL_REQUEST_DEFAULT="none"
+fi
+if ! [[ "$MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$MIN_REFLECTION_PASSES" -lt 5 ]]; then
+  MIN_REFLECTION_PASSES=5
+fi
+if [[ "$RETRY_ENGINE_DEFAULT" != "tmux" && "$RETRY_ENGINE_DEFAULT" != "sdk" ]]; then
+  RETRY_ENGINE_DEFAULT="tmux"
+fi
+
+normalize_model() {
+  local model="$1"
+  if [[ "$model" == openai-codex/* ]]; then
+    model="${model#openai-codex/}"
+  fi
+  printf '%s\n' "$model"
+}
+
+DEFAULT_CODEX_MODEL="$(normalize_model "${DEFAULT_CODEX_MODEL}")"
+CODEX_EXEC_MODEL="$(normalize_model "${CODEX_EXEC_MODEL}")"
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "tmux is not available in PATH" >&2
+  exit 5
+fi
+if ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
+  echo "${AGENT_BIN} is not available in PATH" >&2
+  exit 4
+fi
+if [[ "$AGENT_BIN_NAME" != "codex" && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
+  RETRY_ENGINE_DEFAULT="tmux"
+fi
+
+CODEX_EXEC_AVAILABLE=0
+CODEX_EXEC_PRIMARY=0
+PRIMARY_CHANNEL="tmux"
+OUTPUT_CHANNEL_LABEL="tmux"
+if [[ "$AGENT_BIN_NAME" == "codex" && "$CODEX_EXEC_FALLBACK" == "1" ]]; then
+  CODEX_EXEC_AVAILABLE=1
+fi
+# Respect tmux history by default; codex_exec is primary only when explicitly requested.
+if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
+  CODEX_EXEC_PRIMARY=1
+  PRIMARY_CHANNEL="codex_exec"
+  OUTPUT_CHANNEL_LABEL="codex_exec"
+fi
+if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
+  # codex exec resume often needs longer wall time than tmux prompt scraping.
+  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 180 ]]; then
+    PROMPT_TIMEOUT_SECONDS=180
+  fi
+  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 90 ]]; then
+    RETRY_PROMPT_TIMEOUT_SECONDS=90
+  fi
+fi
+
+ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+if [[ "$ROLE_ALLOW_FILE_EDITS" == "1" ]]; then
+  ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+elif [[ "$ROLE_ALLOW_FILE_EDITS" == "auto" ]]; then
+  case "$ROLE" in
+    dev|tester|qa|backend_engineer|frontend_engineer|integrator|data_analyst|infra_engineer)
+      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+      ;;
+    *)
+      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+      ;;
+  esac
+fi
+
+runtime_queue_has_ready() {
+  if [[ ! -f "docs/orchestrator-ops/priority-queue.json" ]]; then
+    echo "0"
+    return 0
+  fi
+  jq -r '[.items[]? | select((.state // "")=="READY")] | if length>0 then "1" else "0" end' \
+    docs/orchestrator-ops/priority-queue.json 2>/dev/null || echo "0"
+}
+
+runtime_workboard_role_has_work() {
+  if [[ ! -f "$WORKBOARD_FILE" ]]; then
+    echo "0"
+    return 0
+  fi
+  python3 - "$WORKBOARD_FILE" "$ROLE" <<'PY' 2>/dev/null || echo "0"
+import json
+import sys
+from pathlib import Path
+
+board_path = Path(sys.argv[1])
+role = sys.argv[2]
+try:
+    board = json.loads(board_path.read_text(encoding="utf-8"))
+except Exception:
+    print("0")
+    raise SystemExit(0)
+
+states = {"READY", "IN_PROGRESS", "REVIEW"}
+for task in board.get("tasks", []):
+    if str(task.get("role", "")) != role:
+        continue
+    if str(task.get("state", "")).upper() in states:
+        print("1")
+        break
+else:
+    print("0")
+PY
+}
+
+runtime_workboard_role_has_in_progress() {
+  if [[ ! -f "$WORKBOARD_FILE" ]]; then
+    echo "0"
+    return 0
+  fi
+  python3 - "$WORKBOARD_FILE" "$ROLE" <<'PY' 2>/dev/null || echo "0"
+import json
+import sys
+from pathlib import Path
+
+board_path = Path(sys.argv[1])
+role = sys.argv[2]
+try:
+    board = json.loads(board_path.read_text(encoding="utf-8"))
+except Exception:
+    print("0")
+    raise SystemExit(0)
+
+for task in board.get("tasks", []):
+    if str(task.get("role", "")) != role:
+        continue
+    if str(task.get("state", "")).upper() == "IN_PROGRESS":
+        print("1")
+        break
+else:
+    print("0")
+PY
+}
+
+runtime_source_version() {
+  local path="$1"
+  local prefix="$2"
+  local checksum=""
+  local mtime=""
+  if [[ ! -f "$path" ]]; then
+    echo "${prefix}_missing"
+    return 0
+  fi
+  checksum="$(sha256sum "$path" 2>/dev/null | awk '{print $1}' | cut -c1-12)"
+  mtime="$(stat -c %Y "$path" 2>/dev/null || echo 0)"
+  if [[ -z "$checksum" ]]; then
+    checksum="unknown"
+  fi
+  if [[ ! "$mtime" =~ ^[0-9]+$ ]]; then
+    mtime=0
+  fi
+  echo "${prefix}_${mtime}_${checksum}"
+}
+
+RUNTIME_QUEUE_HAS_READY="$(runtime_queue_has_ready)"
+if [[ ! "$RUNTIME_QUEUE_HAS_READY" =~ ^[01]$ ]]; then
+  RUNTIME_QUEUE_HAS_READY="0"
+fi
+RUNTIME_WORKBOARD_ROLE_HAS_WORK="$(runtime_workboard_role_has_work)"
+if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" =~ ^[01]$ ]]; then
+  RUNTIME_WORKBOARD_ROLE_HAS_WORK="0"
+fi
+RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="$(runtime_workboard_role_has_in_progress)"
+if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" =~ ^[01]$ ]]; then
+  RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="0"
+fi
+RUNTIME_QUEUE_VERSION="$(runtime_source_version "docs/orchestrator-ops/priority-queue.json" "queue")"
+RUNTIME_WORKBOARD_VERSION="$(runtime_source_version "$WORKBOARD_FILE" "workboard")"
+# Auto-delivery roles only run in write mode when their lane has actionable work.
+if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+  if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" ]]; then
+    ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+  elif [[ "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" != "1" ]]; then
+    ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+  elif [[ "$RUNTIME_QUEUE_HAS_READY" == "1" ]]; then
+    ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+  elif [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" == "1" ]]; then
+    ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+  else
+    ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+  fi
+fi
+
+target_session_name() {
+  case "$1" in
+    planner) echo "codex_planner_cron" ;;
+    dev) echo "codex_dev_cron" ;;
+    tester) echo "codex_tester_cron" ;;
+    qa) echo "codex_qa_cron" ;;
+    architect) echo "codex_architect_cron" ;;
+    po) echo "codex_po_cron" ;;
+    scrum_master) echo "codex_scrum_master_cron" ;;
+    analyst) echo "codex_analyst_cron" ;;
+    backend_engineer) echo "codex_backend_engineer_cron" ;;
+    frontend_engineer) echo "codex_frontend_engineer_cron" ;;
+    integrator) echo "codex_integrator_cron" ;;
+    data_analyst) echo "codex_data_analyst_cron" ;;
+    infra_engineer) echo "codex_infra_engineer_cron" ;;
+    manager) echo "codex_manager_cron" ;;
+    clawsentinel) echo "clawsentinel" ;;
+  esac
+}
+
+agent_launch_command() {
+  if [[ "$AGENT_BIN_NAME" != "codex" ]]; then
+    # qwen is used when codex budget is low. Ensure non-interactive stability.
+    if [[ "${AGENT_BIN_NAME,,}" == "qwen" ]]; then
+      printf '%s' "$AGENT_BIN --channel CI --approval-mode yolo --chat-recording false -o text"
+      return 0
+    fi
+    printf '%s' "$AGENT_BIN"
+    return 0
+  fi
+  local cmd="$AGENT_BIN"
+  if [[ "$CODEX_NO_ALT_SCREEN" == "1" ]]; then
+    cmd="${cmd} --no-alt-screen"
+  fi
+  cmd="${cmd} --sandbox ${CODEX_SANDBOX_MODE} -a ${CODEX_APPROVAL_POLICY}"
+  if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+    cmd="${cmd} --search"
+  fi
+  printf '%s' "$cmd"
+}
+
+build_codex_global_args() {
+  local -a args=()
+  args+=(--sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
+  if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+    args+=(--search)
+  fi
+  printf '%s\n' "${args[@]}"
+}
+
+detect_rate_limit_signal() {
+  local text="${1:-}"
+  printf '%s\n' "$text" | rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit|rate[[:space:]_-]*limit|rate limit|rate-limits|rate limits|rate-limit|429|too many requests|quota.*(exceeded|exhausted|limit)|model.*unavailable|please try again later|temporarily|unavailable due to rate'
+}
+
+sanitize_rate_limit_reason() {
+  local text="${1:-}"
+  local compact
+  compact="$(printf '%s' "$text" | tr '\n' ' ' | tr -s ' ')"
+  compact="$(printf '%s' "$compact" | sed 's/;/,/g' | sed 's/^ *//; s/ *$//')"
+  if [[ ${#compact} -gt 220 ]]; then
+    compact="${compact:0:220}"
+  fi
+  printf '%s' "${compact:-rate_limit_detected}"
+}
+
+rate_limit_cache_active() {
+  local cache_file="${1:-$RATE_LIMIT_CACHE_FILE}"
+  local payload
+  local until_ts
+  local reason
+
+  RATE_LIMIT_STATE_NOTE=""
+  if [[ ! -f "$cache_file" ]]; then
+    return 1
+  fi
+  payload="$(cat "$cache_file" 2>/dev/null || true)"
+  until_ts="${payload%%|*}"
+  reason="${payload#*|}"
+  if ! [[ "$until_ts" =~ ^[0-9]+$ ]]; then
+    rm -f "$cache_file"
+    return 1
+  fi
+
+  if [[ "$(date +%s)" -lt "$until_ts" ]]; then
+    RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "${reason:-rate_limit_detected}")"
+    return 0
+  fi
+
+  rm -f "$cache_file"
+  return 1
+}
+
+rate_limit_cache_set() {
+  local reason="${1:-rate_limit_detected}"
+  local cache_file="${2:-$RATE_LIMIT_CACHE_FILE}"
+  printf '%s|%s\n' "$(( $(date +%s) + RATE_LIMIT_CACHE_TTL_SECONDS ))" "$reason" > "$cache_file"
+}
+
+run_rate_limit_probe() {
+  if [[ "$RATE_LIMIT_PRECHECK" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$AGENT_BIN_NAME" != "codex" && "$AGENT_BIN_NAME" != "qwen" ]]; then
+    return 0
+  fi
+
+  local output=""
+  local probe_rc=0
+  local reason=""
+  local probe_msg=""
+  local probe_msg_file=""
+  set +e
+  if [[ "$AGENT_BIN_NAME" == "codex" ]]; then
+    local -a probe_cmd=(codex --sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
+    if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
+      probe_cmd+=("--search")
+    fi
+    probe_msg_file="$(mktemp)"
+    probe_cmd+=("exec" "--model" "$CODEX_EXEC_MODEL" "--output-last-message" "$probe_msg_file" --json)
+    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "${probe_cmd[@]}" 'Réponds simplement "OK".' 2>&1)"
+    probe_rc=$?
+    if [[ -s "$probe_msg_file" ]]; then
+      probe_msg="$(cat "$probe_msg_file" 2>/dev/null || true)"
+      if [[ -n "$probe_msg" ]]; then
+        output="${output}
+${probe_msg}"
+      fi
+    fi
+    rm -f "$probe_msg_file"
+  else
+    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "$AGENT_BIN" --channel CI --approval-mode yolo --chat-recording false -o text 'Réponds simplement "OK".' 2>&1)"
+    probe_rc=$?
+  fi
+  set -e
+
+  if detect_rate_limit_signal "$output"; then
+    reason="$(sanitize_rate_limit_reason "$output")"
+    RATE_LIMIT_STATE_NOTE="$reason"
+    rate_limit_cache_set "$reason"
+    return 1
+  fi
+  if [[ $probe_rc -ne 0 ]]; then
+    trace_event "rate_limit_probe_error bin=${AGENT_BIN_NAME} rc=${probe_rc}"
+  fi
+  return 0
+}
+
+emit_rate_limit_gate_output() {
+  local reason="${1:-rate_limit_detected}"
+  local source="${2:-precheck}"
+  local artifact_key
+  local evidence_text
+  local output
+
+  reason="$(sanitize_rate_limit_reason "$reason")"
+  if declare -f required_artifact_marker_for_role >/dev/null 2>&1; then
+    artifact_key="$(required_artifact_marker_for_role "$ROLE")"
+  else
+    artifact_key="ROLE_ARTIFACT="
+  fi
+  if [[ -z "$artifact_key" ]]; then
+    artifact_key="ROLE_ARTIFACT="
+  fi
+
+  evidence_text="task_update=blocked; lock_check=ok; run_note=mode_precheck: modèle ${AGENT_BIN_NAME} indisponible pour ce tick suite au rate_limit; exec_report=skip_role_tick_due_to_rate_limit; issues=rate_limit_detected; suggestions=attendre le déblocage du quota avant nouveau lancement; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; channels_read=runtime_context; impact_assessment=low; impact_action=retry_after_cache_ttl; vision_rule=rate_limit_gate; arch_rule=observability; review_scope=${ROLE}_rate_limit; conformance=WARN; violations=rate_limit; tool_request=${AGENT_BIN_NAME}; skill_request=none; ${artifact_key}rate_limit_gate; queue_version=${RUNTIME_QUEUE_VERSION}; workboard_version=${RUNTIME_WORKBOARD_VERSION}; model=${CODEX_EXEC_MODEL}; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
+
+  output="$(cat <<EOF
+STATUS: BLOCKED
+DELTA: BLOCKED
+EVIDENCE: ${evidence_text}
+RISKS: model ${AGENT_BIN_NAME} inaccessible suite à une limite de quota temporaire; aucun travail fiable à exécuter ce tick
+NEXT: owner=adminapp-codex; action=model_not_accessible_rate_limit; wait_for_quota_recovery_before_retry
+VERDICT: BLOCKED
+BLOCKER_ID: AGENT_RATE_LIMIT_${AGENT_BIN_NAME^^}
+NEXT_ACTION_UNIQUE: RATE_LIMIT_${AGENT_BIN_NAME^^}_SKIP_${ROLE}_$(date +%s)
+EOF
+)"
+
+  if declare -f reconcile_runtime_truth >/dev/null 2>&1; then
+    output="$(printf "%s\n" "$output" | reconcile_runtime_truth)"
+  fi
+  output="$(apply_no_delta_gate "$output" "rate_limit_gate")"
+  if declare -f enforce_role_delivery_contract >/dev/null 2>&1 && declare -f required_artifact_marker_for_role >/dev/null 2>&1; then
+    output="$(printf "%s\n" "$output" | enforce_role_delivery_contract "rate_limit_gate_${source}")"
+  fi
+  if declare -f sanitize_tmux_logs >/dev/null 2>&1; then
+    sanitize_tmux_logs
+  fi
+  if declare -f persist_last_contract >/dev/null 2>&1; then
+    persist_last_contract "$output" "rate_limit_gate_${source}"
+  fi
+  if declare -f publish_execution_monitoring_if_enabled >/dev/null 2>&1; then
+    publish_execution_monitoring_if_enabled "$output" "rate_limit_gate_${source}"
+  fi
+  if declare -f trace_event >/dev/null 2>&1; then
+    trace_event "rate_limit_gate source=${source} model=${AGENT_BIN_NAME} reason=${reason}"
+  fi
+  printf "%s\n" "$output"
+  exit 0
+}
+
+handle_rate_limit_output() {
+  local source="${1:-unknown}"
+  local output_text="${2:-}"
+  if detect_rate_limit_signal "$output_text"; then
+    RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "$output_text")"
+    rate_limit_cache_set "$RATE_LIMIT_STATE_NOTE"
+    emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "$source"
+  fi
+}
+
+health_roles() {
+  printf '%s\n' planner analyst architect backend_engineer frontend_engineer data_analyst infra_engineer integrator dev tester qa po scrum_master clawsentinel
+}
+
+trace_event() {
+  local msg="$1"
+  printf '%s role=%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" "$msg" >> "$TRACE_FILE"
+}
+
+one_line() {
+  printf '%s' "$1" | tr '\n' ' ' | tr -s ' ' | cut -c1-180
+}
+
+ensure_role_memory_file() {
+  local path="${ROLE_MEMORY_DIR}/${ROLE}.md"
+  mkdir -p "$ROLE_MEMORY_DIR"
+  if [[ -f "$path" ]]; then
+    return 0
+  fi
+  cat > "$path" <<EOF
+# Agent Memory: ${ROLE}
+
+- Role focus:
+- Stable decisions:
+- Useful commands:
+- Recurring blockers:
+- Handoff expectations:
+EOF
+}
+
+append_role_memory() {
+  local payload="$1"
+  local source="${2:-unknown}"
+  local mem_file="${ROLE_MEMORY_DIR}/${ROLE}.md"
+  local ts_local=""
+  local tmp=""
+
+  mkdir -p "$ROLE_MEMORY_DIR"
+  ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S %Z')"
+
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_memory_append.py" ]]; then
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  printf '%s\n' "$payload" > "$tmp"
+  python3 scripts/role_memory_append.py \
+    "$ROLE" \
+    "$source" \
+    "$tmp" \
+    "$mem_file" \
+    "$MEMORY_LOCK_FILE" \
+    "$ts_local" >/dev/null 2>&1 || true
+  rm -f "$tmp"
+}
+
+persist_last_contract() {
+  local payload="$1"
+  local source="${2:-unknown}"
+  printf '%s\n' "$payload" > "$LAST_CONTRACT_FILE"
+  append_role_memory "$payload" "$source"
+}
+
+publish_execution_monitoring() {
+  local payload="$1"
+  local source="${2:-unknown}"
+  local tmp_payload=""
+
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_execution_monitoring.py" ]]; then
+    return 0
+  fi
+
+  tmp_payload="$(mktemp)"
+  printf '%s\n' "$payload" > "$tmp_payload"
+  python3 scripts/role_execution_monitoring.py \
+    "$ROLE" \
+    "$source" \
+    "$tmp_payload" \
+    "$EXEC_MONITORING_LATEST_FILE" \
+    "$EXEC_MONITORING_EVENTS_FILE" \
+    "$TOOL_REQUESTS_FILE" \
+    "$TOOL_REQUESTS_EVENTS_FILE" \
+    "$STATE_DIR" >/dev/null 2>&1 || true
+  rm -f "$tmp_payload"
+}
+
+publish_execution_monitoring_if_enabled() {
+  local contract="$1"
+  local source="${2:-unknown}"
+  if [[ "$PUBLISH_EXEC_MONITORING" == "0" ]]; then
+    trace_event "monitoring_publish_skipped role=${ROLE} source=${source} reason=disabled"
+    return 0
+  fi
+  publish_execution_monitoring "$contract" "$source"
+}
+
+acquire_role_lock() {
+  local holder_meta=""
+  if ! command -v flock >/dev/null 2>&1; then
+    return 0
+  fi
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    if [[ -f "$LOCK_META_FILE" ]]; then
+      holder_meta="$(one_line "$(cat "$LOCK_META_FILE" 2>/dev/null || true)")"
+    else
+      holder_meta="unknown_holder"
+    fi
+    cat <<EOF
+STATUS: IN_PROGRESS
+DELTA: LOCK_SKIP
+EVIDENCE: overlapping_run_detected=1; lock_file=${LOCK_FILE}; holder=${holder_meta}
+RISKS: concurrence role-runner, risque de timeout et de sorties croisées
+NEXT: laisser finir le run en cours puis reprendre au prochain tick
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: RUN_LOCK_BUSY
+NEXT_ACTION_UNIQUE: WAIT_RUN_LOCK_${ROLE}_$(date +%s)
+EOF
+    exit 0
+  fi
+  printf 'pid=%s host=%s start_utc=%s role=%s\n' "$$" "${HOSTNAME:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" > "$LOCK_META_FILE"
+  trap 'rm -f "$LOCK_META_FILE"' EXIT
+}
+
+acquire_role_lock
+
+ensure_role_memory_file
+
+sanitize_evidence_fragment() {
+  local text="$1"
+  printf '%s' "$text" \
+    | tr '\n' ' ' \
+    | tr -s ' ' \
+    | sed -E \
+      -e 's/STATUS[[:space:]]*:/STATUS=/g' \
+      -e 's/DELTA[[:space:]]*:/DELTA=/g' \
+      -e 's/EVIDENCE[[:space:]]*:/EVIDENCE=/g' \
+      -e 's/RISKS[[:space:]]*:/RISKS=/g' \
+      -e 's/NEXT[[:space:]]*:/NEXT=/g' \
+      -e 's/VERDICT[[:space:]]*:/VERDICT=/g' \
+      -e 's/BLOCKER_ID[[:space:]]*:/BLOCKER_ID=/g' \
+      -e 's/NEXT_ACTION_UNIQUE[[:space:]]*:/NEXT_ACTION_UNIQUE=/g'
+}
+
+read_fail_count() {
+  if [[ -f "$FAIL_FILE" ]]; then
+    cat "$FAIL_FILE"
+  else
+    echo "0"
+  fi
+}
+
+write_fail_count() {
+  printf '%s\n' "$1" > "$FAIL_FILE"
+}
+
+read_no_delta_count() {
+  if [[ -f "$NO_DELTA_FILE" ]]; then
+    cat "$NO_DELTA_FILE"
+  else
+    echo "0"
+  fi
+}
+
+write_no_delta_count() {
+  printf '%s\n' "$1" > "$NO_DELTA_FILE"
+}
+
+read_codex_session_id() {
+  if [[ -f "$CODEX_SESSION_FILE" ]]; then
+    tr -d '[:space:]' < "$CODEX_SESSION_FILE"
+  else
+    printf ''
+  fi
+}
+
+write_codex_session_id() {
+  local sid="$1"
+  if [[ -n "$sid" ]]; then
+    printf '%s\n' "$sid" > "$CODEX_SESSION_FILE"
+  fi
+}
+
+clear_codex_session_id() {
+  rm -f "$CODEX_SESSION_FILE"
+}
+
+apply_no_delta_gate() {
+  local payload="$1"
+  local source="$2"
+  local no_delta=0
+  local streak=0
+  if printf '%s\n' "$payload" | rg -q '^DELTA:[[:space:]]*NO_DELTA([[:space:]]*)$'; then
+    no_delta=1
+  fi
+  if [[ "$no_delta" -eq 1 ]]; then
+    if [[ "${RUNTIME_QUEUE_HAS_READY:-0}" != "1" ]]; then
+      # NO_DELTA is expected while no queue item is READY; avoid false escalation.
+      write_no_delta_count 0
+      printf '%s\n' "$payload"
+      return 0
+    fi
+    streak="$(( $(read_no_delta_count) + 1 ))"
+    write_no_delta_count "$streak"
+  else
+    write_no_delta_count 0
+    printf '%s\n' "$payload"
+    return 0
+  fi
+  if [[ "$streak" -ge "$NO_DELTA_THRESHOLD" ]]; then
+    cat <<EOF
+STATUS: BLOCKED
+DELTA: NO_DELTA
+EVIDENCE: no_delta_streak=${streak}/${NO_DELTA_THRESHOLD}; gate_source=${source}
+RISKS: aucune progression détectée, boucle improductive
+NEXT: escalader et corriger prompts/cadence avant prochain tick
+VERDICT: BLOCKED
+BLOCKER_ID: NO_PROGRESS_STREAK
+NEXT_ACTION_UNIQUE: ESCALATE_NO_PROGRESS_${ROLE}
+EOF
+    return 0
+  fi
+  printf '%s\n' "$payload"
+}
+
+enforce_role_delivery_contract() {
+  local source="${1:-unknown}"
+  local tmp=""
+  local guard_rc=0
+  tmp="$(mktemp)"
+  cat > "$tmp"
+
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_contract_guard.py" ]]; then
+    trace_event "contract_guard_unavailable source=${source}; fallback=raw_payload"
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  # Auto-fix trivial formatting issues to avoid roles stalling on minor contract mistakes.
+  python3 - "$tmp" <<'PY' 2>/dev/null || true
+import re
+import sys
+from pathlib import Path
+
+p=Path(sys.argv[1])
+text=p.read_text(encoding='utf-8',errors='ignore')
+lines=text.splitlines(True)
+
+# Find EVIDENCE line
+for i,raw in enumerate(lines):
+    m=re.match(r'^(\s*EVIDENCE\s*:\s*)(.*)$', raw)
+    if not m:
+        continue
+    prefix=m.group(1)
+    ev=m.group(2).strip()
+    # parse kv ; separated
+    kv={}
+    for frag in ev.split(';'):
+        item=frag.strip()
+        if '=' not in item:
+            continue
+        k,v=item.split('=',1)
+        k=k.strip().lower()
+        if not k: continue
+        kv[k]=v.strip()
+    run_note=(kv.get('run_note') or '').strip()
+    words=[w for w in re.split(r'\s+', run_note) if w]
+    # pad run_note if missing/too short
+    if len(words) < 5:
+        # Keep meaning minimal: indicate auto padding for compliance.
+        kv['run_note'] = 'tick automatique pour conformité du contrat'
+        # preserve/augment issues
+        issues=(kv.get('issues') or '').strip()
+        if issues and issues.lower() not in {'none','n/a','na'}:
+            if 'run_note_auto_fixed' not in issues:
+                kv['issues'] = issues + ',run_note_auto_fixed'
+        else:
+            kv['issues'] = 'run_note_auto_fixed'
+        # suggestions must be actionable when issues!=none
+        sugg=(kv.get('suggestions') or '').strip()
+        if not sugg or sugg.lower() in {'none','n/a','na'}:
+            kv['suggestions'] = 'regenerer_role_contract_avec_run_note>=5_mots'
+    # rebuild evidence preserving a stable key order first
+    preferred=['task_update','lock_check','run_note','exec_report','issues','suggestions','stream_id','task_id','reflection_passes','reflection_dimensions','intent_id','directive_id','directive_ack','cmd','tests_run']
+    seen=set()
+    parts=[]
+    for k in preferred:
+        if k in kv:
+            parts.append(f"{k}={kv[k]}")
+            seen.add(k)
+    for k in sorted(kv.keys()):
+        if k in seen: continue
+        parts.append(f"{k}={kv[k]}")
+    lines[i]=prefix + '; '.join(parts) + '\n'
+    break
+
+p.write_text(''.join(lines),encoding='utf-8')
+PY
+
+  set +e
+  python3 scripts/role_contract_guard.py \
+    "$ROLE" \
+    "$source" \
+    "$tmp" \
+    "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" \
+    "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" \
+    "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" \
+    "$RUNTIME_QUEUE_VERSION" \
+    "$RUNTIME_WORKBOARD_VERSION"
+  guard_rc=$?
+  set -e
+  if [[ "$guard_rc" -ne 0 ]]; then
+    trace_event "contract_guard_external_failed source=${source} rc=${guard_rc}; fallback=raw_payload"
+    cat "$tmp"
+  fi
+  rm -f "$tmp"
+}
+reconcile_runtime_truth() {
+  local tmp=""
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  python3 - "$ROLE" "$tmp" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+role = sys.argv[1]
+payload_path = Path(sys.argv[2])
+text = payload_path.read_text(encoding="utf-8", errors="ignore")
+
+keys = [
+    "STATUS",
+    "DELTA",
+    "EVIDENCE",
+    "RISKS",
+    "NEXT",
+    "VERDICT",
+    "BLOCKER_ID",
+    "NEXT_ACTION_UNIQUE",
+]
+
+values = {k: "" for k in keys}
+for raw in text.splitlines():
+    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
+    if not line or ":" not in line:
+        continue
+    key, val = line.split(":", 1)
+    key = key.strip().upper()
+    if key in values and not values[key]:
+        values[key] = val.strip()
+
+queue_has_ready = False
+ready_actions = []
+queue_states = {}
+queue_path = Path("docs/orchestrator-ops/priority-queue.json")
+if queue_path.exists():
+    try:
+        queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
+        for item in queue_obj.get("items", []):
+            item_id = str(item.get("id", "")).strip()
+            state = str(item.get("state", "")).strip()
+            if item_id:
+                queue_states[item_id] = state
+            if state == "READY":
+                queue_has_ready = True
+                action = str(item.get("next_action", "")).strip()
+                if item_id and action:
+                    ready_actions.append(f"{item_id}:{action}")
+                elif item_id:
+                    ready_actions.append(f"{item_id}:NEXT_ACTION_MISSING")
+    except Exception:
+        pass
+
+batch01_signoff_pass = False
+gate_dir = Path("evidence/gates/openclaw-gates")
+if gate_dir.exists():
+    for md in sorted(gate_dir.glob("batch-01-*.md")):
+        try:
+            gate_text = md.read_text(encoding="utf-8", errors="ignore").upper()
+        except Exception:
+            continue
+        if "QA_SIGNOFF: YES" in gate_text and "VERDICT: PASS" in gate_text:
+            batch01_signoff_pass = True
+            break
+
+delta = values.get("DELTA", "").strip().upper()
+if queue_has_ready and delta == "NO_DELTA":
+    values["DELTA"] = "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT"
+    if ready_actions:
+        values["NEXT"] = f"executer action READY: {ready_actions[0]}"
+    status = values.get("STATUS", "").strip().upper()
+    verdict = values.get("VERDICT", "").strip().upper()
+    blocker = values.get("BLOCKER_ID", "").strip().upper()
+    if status == "BLOCKED" and blocker in {"NONE", "NO_PROGRESS_STREAK"}:
+        values["STATUS"] = "IN_PROGRESS"
+    if verdict == "BLOCKED" and blocker in {"NONE", "NO_PROGRESS_STREAK"}:
+        values["VERDICT"] = "GO_WITH_CAUTION"
+
+stale_blockers = {
+    "QA_PASS_SIGNATURE_UNVERIFIED",
+    "MISSING_BATCH01_MD_ARTEFACTS",
+    "BATCH01_INVALID_STATE_IN_SPRINT",
+    "BATCH01_INVALID_STATE_IN_SPRINT_AND_MISSING_BATCH01_MD",
+}
+blocker = values.get("BLOCKER_ID", "").strip().upper()
+b01_pass = queue_states.get("BATCH-01", "").upper() == "PASS"
+b02_ready = queue_states.get("BATCH-02", "").upper() == "READY"
+if blocker in stale_blockers and b01_pass and b02_ready and batch01_signoff_pass:
+    values["BLOCKER_ID"] = "NONE"
+    if values.get("STATUS", "").strip().upper() == "BLOCKED":
+        values["STATUS"] = "IN_PROGRESS"
+    if values.get("VERDICT", "").strip().upper() == "BLOCKED":
+        values["VERDICT"] = "GO_WITH_CAUTION"
+    evidence = values.get("EVIDENCE", "").strip()
+    suffix = "stale_blocker_filtered_by_runtime_truth"
+    if suffix.lower() not in evidence.lower():
+        values["EVIDENCE"] = (evidence + "; " + suffix).strip(" ;")
+
+# Canonicalize malformed blocker field like "NONE|QUEUE=..."
+blocker_raw = values.get("BLOCKER_ID", "").strip()
+blocker_up = blocker_raw.upper()
+for clear in ("NONE", "AUCUN"):
+    if blocker_up.startswith(clear + "|") or blocker_up.startswith(clear + ";") or blocker_up.startswith(clear + ",") or blocker_up.startswith(clear + " "):
+        tail = blocker_raw[len(clear):].strip(" |;,")
+        values["BLOCKER_ID"] = clear
+        if tail:
+            evidence = values.get("EVIDENCE", "").strip()
+            suffix = f"blocker_context={tail}"
+            if suffix.lower() not in evidence.lower():
+                values["EVIDENCE"] = (evidence + "; " + suffix).strip(" ;")
+        break
+
+action_text = " ".join(
+    [
+        values.get("DELTA", ""),
+        values.get("EVIDENCE", ""),
+        values.get("NEXT", ""),
+        values.get("NEXT_ACTION_UNIQUE", ""),
+    ]
+).upper()
+action_targets = set(re.findall(r"BATCH-[0-9]+", action_text))
+dispatch_signal = (
+    "DISPATCH_BATCH" in action_text
+    or ("LANCER" in action_text and "DISPATCH" in action_text)
+    or "READY_DETECTE" in action_text
+)
+if dispatch_signal:
+    if not queue_has_ready:
+        values["STATUS"] = "BLOCKED"
+        values["VERDICT"] = "BLOCKED"
+        values["BLOCKER_ID"] = "STALE_READY_ACTION"
+        values["RISKS"] = "action de dispatch detectee alors que queue_has_ready=0"
+        values["NEXT"] = "rafraichir queue puis proposer une action non-stale"
+    elif action_targets and not any(queue_states.get(t, "").upper() == "READY" for t in action_targets):
+        values["STATUS"] = "BLOCKED"
+        values["VERDICT"] = "BLOCKED"
+        values["BLOCKER_ID"] = "STALE_READY_ACTION"
+        values["RISKS"] = "action de dispatch cible un batch qui n'est plus READY"
+        values["NEXT"] = "reprendre le prochain item READY depuis la queue runtime"
+
+if not values.get("NEXT_ACTION_UNIQUE", "").strip():
+    values["NEXT_ACTION_UNIQUE"] = f"CONTINUE_{role}_RUNTIME_TRUTH"
+
+for k in keys:
+    print(f"{k}: {values.get(k, '').strip()}")
+PY
+  rm -f "$tmp"
+}
+
+tmux_target() {
+  printf '%s:0.0' "$1"
+}
+
+tmux_has_session() {
+  tmux has-session -t "$1" >/dev/null 2>&1
+}
+
+tmux_pane_current_command() {
+  tmux display-message -p -t "$(tmux_target "$1")" "#{pane_current_command}" 2>/dev/null | tr '[:upper:]' '[:lower:]'
+}
+
+tmux_pane_pid() {
+  tmux display-message -p -t "$(tmux_target "$1")" "#{pane_pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+tmux_capture() {
+  local session="$1"
+  local lines="${2:-$TMUX_CAPTURE_LINES}"
+  tmux capture-pane -p -J -S "-${lines}" -E -1 -t "$(tmux_target "$session")" 2>/dev/null || true
+}
+
+tmux_send_multiline() {
+  local session="$1"
+  local text="$2"
+  local buffer_name="role_runner_$(date +%s)_$$"
+  local tmp_path
+  tmp_path="$(mktemp)"
+  printf '%s' "$text" > "$tmp_path"
+  tmux load-buffer -b "$buffer_name" "$tmp_path"
+  tmux paste-buffer -d -b "$buffer_name" -t "$(tmux_target "$session")"
+  tmux send-keys -t "$(tmux_target "$session")" C-m
+  rm -f "$tmp_path"
+}
+
+tmux_agent_ready() {
+  local session="$1"
+  local cmd=""
+  local pane_pid=""
+  local children=""
+  local child_regex=""
+  cmd="$(tmux_pane_current_command "$session" || true)"
+  if [[ -n "$cmd" ]]; then
+    if [[ "$cmd" == *"${AGENT_BIN_NAME}"* ]]; then
+      return 0
+    fi
+  fi
+  pane_pid="$(tmux_pane_pid "$session" || true)"
+  if [[ "$pane_pid" =~ ^[0-9]+$ ]] && command -v pgrep >/dev/null 2>&1; then
+    children="$(pgrep -P "$pane_pid" -af 2>/dev/null || true)"
+    case "$AGENT_BIN_NAME" in
+      codex) child_regex='(codex|openai.*codex|node.*codex)' ;;
+      qwen) child_regex='(qwen|qwen-code|@qwen-code|node.*qwen)' ;;
+      *) child_regex="(${AGENT_BIN_NAME}|node.*${AGENT_BIN_NAME})" ;;
+    esac
+    if printf '%s\n' "$children" | rg -qi "$child_regex"; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+start_role_session() {
+  local session="$1"
+  local launch_cmd=""
+  local agent_cmd=""
+  agent_cmd="$(agent_launch_command)"
+  tmux start-server >/dev/null 2>&1 || true
+  if ! tmux_has_session "$session"; then
+    printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec %s' "$ROOT" "$agent_cmd"
+    tmux new-session -d -s "$session" "bash -lc $(printf '%q' "$launch_cmd")"
+    sleep 1
+  fi
+  tmux set-option -t "$session" history-limit 200000 >/dev/null 2>&1 || true
+  if ! tmux_agent_ready "$session"; then
+    tmux send-keys -t "$(tmux_target "$session")" C-c >/dev/null 2>&1 || true
+    sleep 1
+    tmux_send_multiline "$session" "$agent_cmd"
+  fi
+}
+
+ensure_role_session_ready() {
+  local role="$1"
+  local session=""
+  local i=0
+  session="$(target_session_name "$role")"
+  if [[ -z "$session" ]]; then
+    return 1
+  fi
+  start_role_session "$session"
+  for ((i=0; i<TMUX_READY_WAIT_SECONDS; i++)); do
+    if tmux_agent_ready "$session"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+restart_role_session() {
+  local role="$1"
+  local session=""
+  session="$(target_session_name "$role")"
+  if [[ -z "$session" ]]; then
+    return 1
+  fi
+  if tmux_has_session "$session"; then
+    tmux kill-session -t "$session" >/dev/null 2>&1 || true
+  fi
+  start_role_session "$session"
+  return 0
+}
+
+health_snapshot_compact() {
+  local role=""
+  local session=""
+  local state=""
+  local cmd=""
+  local pieces=()
+  for role in $(health_roles); do
+    session="$(target_session_name "$role")"
+    if [[ -z "$session" ]] || ! tmux_has_session "$session"; then
+      pieces+=("${role}:DOWN")
+      continue
+    fi
+    if tmux_agent_ready "$session"; then
+      pieces+=("${role}:UP")
+    else
+      cmd="$(tmux_pane_current_command "$session" || true)"
+      state="IDLE"
+      if [[ -n "$cmd" ]]; then
+        state="IDLE(${cmd})"
+      fi
+      pieces+=("${role}:${state}")
+    fi
+  done
+  (IFS=','; printf 'health_roles=%s' "${pieces[*]}")
+}
+
+recover_role_if_needed() {
+  local count="$1"
+  local restart_out=""
+  local health_out=""
+  local note="auto_recovery=pending(${count}/${RECOVERY_THRESHOLD})"
+  if [[ "$count" -ge "$RECOVERY_THRESHOLD" ]]; then
+    if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
+      clear_codex_session_id
+      restart_out="codex_exec_session_reset"
+      health_out="codex_exec_mode"
+    else
+      if restart_role_session "$ROLE"; then
+        restart_out="ok"
+      else
+        restart_out="failed"
+      fi
+      health_out="$(health_snapshot_compact)"
+    fi
+    write_fail_count 0
+    note="auto_recovery=triggered restart=[${restart_out}] health=[${health_out}]"
+  fi
+  printf '%s' "$note"
+}
+
+# Ensure target session exists, but avoid expensive full restart on every tick.
+TARGET_SESSION="$(target_session_name "$ROLE")"
+STARTUP_NOTE=""
+
+if rate_limit_cache_active; then
+  emit_rate_limit_gate_output "${RATE_LIMIT_STATE_NOTE:-rate_limit_cached}" "cache"
+fi
+if ! run_rate_limit_probe; then
+  emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "probe"
+fi
+
+if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
+  if [[ "$CODEX_EXEC_RESUME" == "1" ]]; then
+    STARTUP_NOTE="startup_mode=codex_exec_resume"
+  else
+    STARTUP_NOTE="startup_mode=codex_exec_fresh"
+  fi
+else
+  if ! tmux_has_session "$TARGET_SESSION"; then
+    START_RC=0
+    START_OUT=""
+    set +e
+    if ensure_role_session_ready "$ROLE"; then
+      START_OUT="started"
+    else
+      START_OUT="failed_to_start_or_ready"
+      START_RC=1
+    fi
+    set -e
+    if [[ $START_RC -ne 0 ]]; then
+      STARTUP_NOTE="startup_rc=${START_RC}; startup_err=[$(one_line "$START_OUT")]"
+    else
+      STARTUP_NOTE="startup_rc=0"
+    fi
+  else
+    if ! ensure_role_session_ready "$ROLE"; then
+      STARTUP_NOTE="startup_rc=1; startup_err=[session_not_ready]"
+    fi
+  fi
+fi
+trace_event "startup session=${TARGET_SESSION} agent=${AGENT_BIN_NAME} primary_channel=${PRIMARY_CHANNEL} startup_note=${STARTUP_NOTE:-none}"
+
+sanitize_tmux_logs() {
+  # Optional maintenance pass; disabled by default to keep per-iteration logs intact.
+  if [[ "${TMUX_ROLE_AUTO_SANITIZE_LOGS:-0}" != "1" ]]; then
+    return 0
+  fi
+  if [[ -x "scripts/clean_tmux_logs.sh" ]]; then
+    bash scripts/clean_tmux_logs.sh --mode compact evidence/runtime/orchestrator-runs >/dev/null 2>&1 || true
+  fi
+}
+
+load_3day_memory_context() {
+  # Load last 3 days of memory + role-specific decisions.
+  # This prevents agents from regressing to old architecture and preserves recent decision context.
+  local ROLE_MEMORY_CONTEXT=""
+  local MEMORY_DIR="${ROLE_MEMORY_DIR}/.."  # memory/ directory
+  
+  # Assemble last 3 days of daily memory files
+  for days_ago in 0 1 2; do
+    # Try macOS date format first (with -v), then GNU coreutils fallback
+    local DATE
+    if date -v-${days_ago}d +%Y-%m-%d >/dev/null 2>&1; then
+      DATE=$(date -v-${days_ago}d +%Y-%m-%d)
+    else
+      DATE=$(date -d "$days_ago days ago" +%Y-%m-%d 2>/dev/null || echo "")
+    fi
+    
+    if [[ -n "$DATE" ]]; then
+      local MEMORY_FILE="$MEMORY_DIR/${DATE}.md"
+      if [[ -f "$MEMORY_FILE" ]]; then
+        # Load only first 150 lines per day to keep context lean but informative
+        ROLE_MEMORY_CONTEXT+="
+## Architecture Context: ${DATE}
+$(head -150 "$MEMORY_FILE" 2>/dev/null | sed 's/^/  /')
+---"
+      fi
+    fi
+  done
+  
+  # Add role-specific decision history (last 50 lines)
+  if [[ -f "$ROLE_MEMORY_DIR/${ROLE}.md" ]]; then
+    ROLE_MEMORY_CONTEXT+="
+
+## Role History: ${ROLE}
+$(tail -50 "$ROLE_MEMORY_DIR/${ROLE}.md" 2>/dev/null | sed 's/^/  /')
+"
+  fi
+  
+  printf '%s\n' "$ROLE_MEMORY_CONTEXT"
+}
+
+build_prompt() {
+  local role="$1"
+  case "$role" in
+    planner)
+      cat <<'PROMPT'
+ROLE=planner.
+Read docs/planning/PRODUCT_VISION.md, docs/planning/epics.md, docs/planning/tasks.md, docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, and evidence/gates/openclaw-gates.
+Do not modify product source files.
+Role mentor: valider que le travail READY/IN_PROGRESS est conforme a la vision produit (forecast-first, prevision API->UI visible, decision en 2-3 clics, cout runtime raisonnable).
+Analyser au moins un task READY/IN_PROGRESS par tick et publier un verdict de conformite avec regle explicite.
+Si une tache planner est READY/IN_PROGRESS dans le workboard: autorise task_update=claim|complete|handoff (mise a jour workboard uniquement) pour debloquer les deps.
+Si workboard_role_has_in_progress=1 pour planner, task_update=analysis_only est interdit: utiliser complete|handoff (ou blocked avec cmd_err_excerpt reel).
+Si aucune tache planner actionnable: utiliser task_update=analysis_only ou none_no_ready.
+Obligatoire: EVIDENCE doit contenir planner_artifact=<preuve_mentor>, stream_id=<stream>, task_id=<task>, vision_rule=<regle_verifiee>, conformance=<PASS|WARN|BLOCKED>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+    analyst)
+      cat <<'PROMPT'
+ROLE=analyst.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, and docs/planning/stories.md.
+Do not modify files.
+Focus: clarifier hypotheses/metier, dependances inter-equipes, et criteres d'acceptance reutilisables par backend/frontend/qa.
+Obligatoire: EVIDENCE doit contenir analyst_artifact=<brief_ou_decision> et task_id=<id_stream_ou_task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+    backend_engineer)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=backend_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and apps/api/src.
+Execution mode=delivery: prendre un task backend pret et livrer un patch/test concret.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir backend_artifact=<fichier_ou_test>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=backend_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and apps/api/src.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir backend_artifact=<fichier_cible_ou_plan>, task_id=<task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    frontend_engineer)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=frontend_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and finance-app.
+Execution mode=delivery: prendre un task frontend pret et livrer une modification UI/UX concrete.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir frontend_artifact=<fichier_ou_capture>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=frontend_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and finance-app.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir frontend_artifact=<fichier_cible_ou_plan>, task_id=<task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    integrator)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=integrator.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and docs/scrum/sprint-current.md.
+Execution mode=delivery: integrer les sorties backend/frontend/infra et verifier les interfaces.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir integrator_artifact=<preuve_integration>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=integrator.
+Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and docs/scrum/sprint-current.md.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir integrator_artifact=<plan_integration>, task_id=<task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    data_analyst)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=data_analyst.
+Read docs/orchestrator-ops/priority-queue.json, data, and docs/planning/tasks.md.
+Execution mode=delivery: produire une preuve data exploitable (requete, metrique, controle qualite) en support des equipes.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir data_artifact=<requete_ou_resultat>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=data_analyst.
+Read docs/orchestrator-ops/priority-queue.json, data, and docs/planning/tasks.md.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir data_artifact=<analyse_ou_metric>, task_id=<task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    infra_engineer)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=infra_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/ops, and scripts.
+Execution mode=delivery: appliquer une amelioration infra/CI/observabilite qui accelere la livraison.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir infra_artifact=<fichier_ou_check_infra>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=infra_engineer.
+Read docs/orchestrator-ops/priority-queue.json, docs/ops, and scripts.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir infra_artifact=<plan_infra>, task_id=<task>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    dev)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=dev.
+Read docs/planning/tasks.md, docs/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
+Read workboard lane context first: python3 scripts/parallel_workstream.py context --role dev --limit 5.
+WORKDIR obligatoire pour toute commande: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere).
+Execution mode=delivery: exécute une boucle complète claim -> patch minimal -> test ciblé -> complete/handoff.
+Si une tâche dev est READY: claim explicite via scripts/parallel_workstream.py claim --role dev avant patch.
+Si une tâche dev est IN_PROGRESS: reprendre/fermer cette tâche avant toute autre action.
+Si aucune tâche dev READY/IN_PROGRESS n'existe: ne pas inventer de travail, utiliser task_update=none_no_ready.
+Avant un blocker read-only/permission, valide d'abord une ecriture sur le fichier metier cible (pas sur *.lock) et capture cmd_err_excerpt du meme tick.
+Une erreur isolee sur *.lock n'est pas une preuve suffisante de blocage permission.
+Ne pas recycler un ancien blocker read-only sans preuve fraîche du tick courant.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_modifie_ou_patch>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Si task_update=blocked avec un motif permission/read-only, ajouter cmd_err_excerpt=<stderr_reel>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=dev.
+Read docs/planning/tasks.md, docs/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
+Mode analyse (read-only): Do not modify files.
+Si queue_has_ready=1 mais workboard_role_has_work=0 et workboard_role_has_in_progress=0: utiliser task_update=none_no_ready.
+Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_cible_ou_patch_plan>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    tester)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=tester.
+Read tests, docs/planning/tasks.md, and docs/orchestrator-ops/priority-queue.json.
+Execution mode=delivery: exécute réellement les tests minimaux liés à l'item READY.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir tester_artifact=<suite_test_ou_commande>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=tester.
+Read tests, docs/planning/tasks.md, and docs/orchestrator-ops/priority-queue.json.
+Mode analyse (read-only): Do not modify files.
+Obligatoire: EVIDENCE doit contenir tester_artifact=<suite_test_ou_commande>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    qa)
+      if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+      cat <<'PROMPT'
+ROLE=qa.
+Read evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json, and docs/scrum/sprint-current.md.
+Read workboard lane context first: python3 scripts/parallel_workstream.py context --role qa --limit 5.
+Execution mode=delivery: vérifie la cohérence gate/queue/workboard et livre un verdict actionnable.
+Si aucune tâche QA n'est READY/IN_PROGRESS: utiliser task_update=none_no_ready et expliciter les deps restantes (ex: depends_on) dans RISKS/NEXT.
+Commandes shell via scripts/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation|doc_fix>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      else
+      cat <<'PROMPT'
+ROLE=qa.
+Read evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json, and docs/scrum/sprint-current.md.
+Read workboard lane context first: python3 scripts/parallel_workstream.py context --role qa --limit 5.
+Mode analyse (read-only): Do not modify files.
+Validate gate coherence and blockers.
+Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      fi
+      ;;
+    architect)
+      cat <<'PROMPT'
+ROLE=architect.
+Read docs/planning/epics.md, docs/planning/stories.md, docs/planning/tasks.md, docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/orchestrator-ops/priority-queue.json.
+Do not modify files.
+Validate architecture best-practices compliance for the current delivery scope.
+If queue_has_ready=1 or workboard_role_has_in_progress=1, anchor review to that scope and include stream_id/task_id.
+Obligatoire: EVIDENCE doit contenir architect_artifact=<decision_ou_contrainte_archi>; arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>; task_update=<analysis_only|blocked|none_no_ready|none_no_signal>; lock_check=ok.
+If conformance=BLOCKED, STATUS/VERDICT must be BLOCKED with a non-NONE BLOCKER_ID.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+    po)
+      cat <<'PROMPT'
+ROLE=po.
+Read docs/planning/mvp-plan.md, docs/planning/epics.md, and docs/orchestrator-ops/priority-queue.json.
+Do not modify files.
+Verify backlog priority and scope alignment, then propose one PO decision.
+Mode read-only strict: task_update autorises=analysis_only|blocked|none_no_ready|none_no_signal.
+Interdit en mode read-only: task_update=claim|complete|handoff.
+Si aucune tache PO n'est READY/IN_PROGRESS, utiliser task_update=none_no_ready.
+Obligatoire: EVIDENCE doit contenir po_artifact=<decision_backlog_ou_scope>, task_id=<task_ou_stream>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+    scrum_master)
+      cat <<'PROMPT'
+ROLE=scrum_master.
+Read docs/scrum/sprint-current.md, docs/orchestrator-ops/priority-queue.json, and docs/planning/WORKSTATE.md.
+Do not modify files.
+Check WIP, blockers, and sprint hygiene, then propose one next scrum action.
+Obligatoire: EVIDENCE doit contenir scrum_artifact=<action_wip_ou_blocage>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+    clawsentinel)
+      cat <<'PROMPT'
+ROLE=clawsentinel.
+Read docs/ops/ADMIN_TEAM_CHAT.md, docs/ops/ADMIN_TEAM_ITERATIONS.md, docs/orchestrator-ops/agent-watchdog.md, and docs/orchestrator-ops/priority-queue.json.
+Do not modify files.
+As safety/quality owner, provide one concrete anti-drift or reliability action for the current READY flow.
+Obligatoire: EVIDENCE doit contenir sentinel_artifact=<controle_ou_action_antidrift>.
+Return at most 10 lines with keys:
+STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+If nothing changed, set DELTA: NO_DELTA.
+PROMPT
+      ;;
+  esac
+}
+
+required_artifact_marker_for_role() {
+  case "$1" in
+    planner) echo "PLANNER_ARTIFACT=" ;;
+    analyst) echo "ANALYST_ARTIFACT=" ;;
+    dev) echo "DEV_ARTIFACT=" ;;
+    backend_engineer) echo "BACKEND_ARTIFACT=" ;;
+    frontend_engineer) echo "FRONTEND_ARTIFACT=" ;;
+    integrator) echo "INTEGRATOR_ARTIFACT=" ;;
+    data_analyst) echo "DATA_ARTIFACT=" ;;
+    infra_engineer) echo "INFRA_ARTIFACT=" ;;
+    tester) echo "TESTER_ARTIFACT=" ;;
+    qa) echo "QA_ARTIFACT=" ;;
+    architect) echo "ARCHITECT_ARTIFACT=" ;;
+    po) echo "PO_ARTIFACT=" ;;
+    scrum_master) echo "SCRUM_ARTIFACT=" ;;
+    clawsentinel) echo "SENTINEL_ARTIFACT=" ;;
+    *) echo "ROLE_ARTIFACT=" ;;
+  esac
+}
+
+# Load 3-day memory context to prevent architecture regression
+ROLE_MEMORY_CONTEXT="$(load_3day_memory_context)"
+
+PROMPT_TEXT="$(build_prompt "$ROLE")"
+
+# Inject architecture anchors and 3-day memory context
+SYSTEM_PROMPT="## ARCHITECTURE CONTINUITY (Last 3 Days)
+${ROLE_MEMORY_CONTEXT}
+
+## ANTI-REGRESSION GUARDS
+Do NOT regress to:
+❌ copilot-app/* paths (archived in archive/structure-migrations/)
+❌ backend/src/backend/src nesting (flattened to apps/api/src/)
+❌ Legacy src.* imports (use absolute from apps/api/src/)
+
+Reference instead:
+✅ apps/api/src/domains/* for backend code
+✅ apps/web/src for frontend
+✅ apps/api/runtime/ for data + cache
+✅ docs/ops/AGENTS_READY.md for current state validation
+
+---
+
+Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail, directives_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>, exec_report=<resume_execution_concret>, issues=<none_ou_liste_priorisee>, suggestions=<none_ou_liste_actionnable>. Si directives_tail!=none, tu dois la prendre en compte et ajouter directive_id=<id_dernier> et directive_ack=<applied|blocked> dans EVIDENCE. Si un outil/skill manque pour livrer, ajoute tool_request=<outil_ou_none> et skill_request=<skill_ou_none> dans EVIDENCE. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, intent_registry_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. RISKS doit prioriser le principal probleme rencontre (ou none). Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>) et inclure une suggestion d'amelioration si issues!=none. Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. N'effectue jamais de probe d'ecriture artificielle (ni sur *.lock ni sur fichier metier). Un blocker read-only/permission n'est valide que si une commande metier reelle du tick courant echoue avec cmd_err_excerpt exact. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
+SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu dois lire publication_channels dans RUNTIME_CONTEXT pour savoir sur quoi travaillent les autres agents et evaluer l'impact sur ta tache. EVIDENCE doit inclure channels_read=<liste_canaux_lus>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none_ou_action_concrete>."
+SYSTEM_PROMPT="${SYSTEM_PROMPT} Si task_update=claim|complete|handoff, EVIDENCE doit prouver la réflexion en 5 passes minimum: reflection_passes>=${MIN_REFLECTION_PASSES} et reflection_dimensions=scope,dependency_impact,risk,verification,rollback."
+if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
+else
+  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode analyse: n'édite pas de fichiers et ne déclenche pas d'actions externes. Si workboard_role_has_work=0 et workboard_role_has_in_progress=0, utilise task_update=none_no_ready."
+fi
+
+ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
+PROTOCOLE_ORCHESTRATION_COMMUN:
+- Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
+- Lecture des canaux de publication obligatoire au debut du tick: `python3 scripts/parallel_workstream.py channels --role <role> --limit 5`.
+- Interdit: faire des probes directes sur `*.lock` (ex: `parallel-workstreams.json.lock`, `intent-registry.json.lock`). Utilise uniquement des commandes métier (`preannounce`, `claim`, tests) pour prouver un blocage réel.
+- Pré-annonce obligatoire avant toute action delivery (claim/édition): exécuter `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`; réutiliser les refs générées dans EVIDENCE (`intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`).
+- Co-édition: si workboard_role_has_in_progress=1, reprendre/fermer cette tâche d'abord (sans nouveau claim). Sinon, après pré-annonce, claim d'abord avec arguments pré-définis (`scripts/parallel_workstream.py claim --role <role> --change-plan "<au_moins_5_étapes_concrètes couvrant scope/dependency_impact/risk/verification/rollback>" --architecture-checks "<au_moins_3_checks_concrets>"`), puis patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
+- Réflexion obligatoire avant changement delivery: EVIDENCE doit contenir `reflection_passes>=5` et `reflection_dimensions=scope,dependency_impact,risk,verification,rollback`.
+- Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
+- Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
+- Impact inter-rôles: EVIDENCE doit inclure channels_read, impact_assessment, impact_action; si impact_assessment=high|critical, impact_action ne doit jamais être none.
+- Gate architecture commun: chaque rôle doit vérifier forecast-first (API prévisions -> UI visible), stabilité de schéma, réutilisation modules existants et observabilité minimale; refléter ces checks dans arch_rule/review_scope/conformance/violations.
+- Si aucun slot rôle READY/IN_PROGRESS: task_update=none_no_ready (pas de faux blocker).
+PROMPT
+)"
+
+build_runtime_context() {
+  local context=""
+  local queue_version="${RUNTIME_QUEUE_VERSION:-queue_unknown}"
+  local workboard_version="${RUNTIME_WORKBOARD_VERSION:-workboard_unknown}"
+  local workboard_role_has_work="${RUNTIME_WORKBOARD_ROLE_HAS_WORK:-0}"
+  local workboard_role_has_in_progress="${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}"
+
+  if command -v python3 >/dev/null 2>&1 && [[ -f "scripts/role_runtime_context.py" ]]; then
+    context="$(python3 scripts/role_runtime_context.py \
+      "$ROLE" \
+      "$ROOT" \
+      "$STATE_DIR" \
+      "$ROLE_MEMORY_DIR" \
+      "$TEAM_CHAT_FILE" \
+      "$TEAM_ITER_FILE" \
+      "$DIRECTIVE_BUS_FILE" \
+      "$TRACE_FILE" \
+      "$LAST_CONTRACT_FILE" \
+      "$queue_version" \
+      "$workboard_version" \
+      "$workboard_role_has_work" \
+      "$workboard_role_has_in_progress" 2>/dev/null || true)"
+    if [[ -n "$context" ]]; then
+      printf '%s' "$context"
+      return 0
+    fi
+  fi
+
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$queue_version" \
+    "$workboard_version" \
+    "$workboard_role_has_work" \
+    "$workboard_role_has_in_progress"
+}
+RUNTIME_CONTEXT="$(build_runtime_context)"
+
+capture_has_contract() {
+  local text="$1"
+  printf '%s\n' "$text" | rg -qi 'status\s*[:=]' \
+    && printf '%s\n' "$text" | rg -qi 'delta\s*[:=]' \
+    && printf '%s\n' "$text" | rg -qi 'verdict\s*[:=]' \
+    && printf '%s\n' "$text" | rg -qi 'blocker_id\s*[:=]' \
+    && printf '%s\n' "$text" | rg -qi 'next_action_unique\s*[:=]'
+}
+
+build_dispatch_prompt() {
+  local prompt_text="$1"
+  local tick="$2"
+  cat <<EOF
+${SYSTEM_PROMPT}
+${ORCHESTRATION_SHARED_PROMPT}
+${RUNTIME_CONTEXT}
+
+${prompt_text}
+
+Freshness constraint: NEXT_ACTION_UNIQUE must end with _${tick}
+EOF
+}
+
+extract_codex_exec_thread_id() {
+  local tmp=""
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  python3 - "$tmp" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+payload_path = Path(sys.argv[1])
+text = payload_path.read_text(encoding="utf-8", errors="ignore")
+thread_id = ""
+for raw in text.splitlines():
+    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
+    if not line:
+        continue
+    start = line.find("{")
+    end = line.rfind("}")
+    if start < 0 or end < start:
+        continue
+    line = line[start : end + 1]
+    try:
+        obj = json.loads(line)
+    except Exception:
+        continue
+    if obj.get("type") == "thread.started":
+        tid = obj.get("thread_id") or ""
+        if tid:
+            thread_id = tid
+if thread_id:
+    print(thread_id)
+PY
+  rm -f "$tmp"
+}
+
+extract_codex_exec_message() {
+  local tmp=""
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  python3 - "$tmp" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+payload_path = Path(sys.argv[1])
+text = payload_path.read_text(encoding="utf-8", errors="ignore")
+msg = ""
+for raw in text.splitlines():
+    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
+    if not line:
+        continue
+    start = line.find("{")
+    end = line.rfind("}")
+    if start < 0 or end < start:
+        continue
+    line = line[start : end + 1]
+    try:
+        obj = json.loads(line)
+    except Exception:
+        continue
+    if obj.get("type") != "item.completed":
+        continue
+    item = obj.get("item") or {}
+    if item.get("type") == "agent_message":
+        text = item.get("text") or ""
+        if text:
+            msg = text
+if msg:
+    print(msg)
+PY
+  rm -f "$tmp"
+}
+
+codex_exec_prompt_once() {
+  local timeout_seconds="$1"
+  local prompt_text="$2"
+  local tick="$3"
+  local prompt_payload=""
+  local session_id=""
+  local allow_resume=0
+  local output=""
+  local rc=0
+  local sid_new=""
+  local msg=""
+  local used_resume=0
+  local msg_file=""
+  local -a codex_cmd=()
+
+  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick")"
+  while IFS= read -r token; do
+    [[ -z "$token" ]] && continue
+    codex_cmd+=("$token")
+  done < <(build_codex_global_args)
+
+  if [[ "$CODEX_EXEC_RESUME" == "1" ]]; then
+    allow_resume=1
+    session_id="$(read_codex_session_id)"
+  else
+    clear_codex_session_id
+  fi
+
+  msg_file="$(mktemp)"
+  if [[ "$allow_resume" -eq 1 && -n "$session_id" ]]; then
+    used_resume=1
+    set +e
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    rc=$?
+    set -e
+    if [[ $rc -ne 0 ]] && printf '%s\n' "$output" | rg -qi 'session.*not found|unknown session|invalid session|no such session'; then
+      clear_codex_session_id
+      session_id=""
+    fi
+    # Resume can timeout or fail without producing a usable message; fallback to a fresh thread.
+    if [[ $rc -ne 0 ]]; then
+      clear_codex_session_id
+      session_id=""
+    fi
+  fi
+
+  if [[ -z "$session_id" ]]; then
+    set +e
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    rc=$?
+    set -e
+  fi
+
+  sid_new=""
+  if [[ "$allow_resume" -eq 1 ]]; then
+    sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"
+  fi
+  if [[ "$allow_resume" -eq 1 && -n "$sid_new" ]]; then
+    write_codex_session_id "$sid_new"
+  fi
+
+  if [[ -s "$msg_file" ]]; then
+    msg="$(cat "$msg_file" 2>/dev/null || true)"
+  fi
+  if [[ -z "$msg" ]]; then
+    msg="$(printf '%s\n' "$output" | extract_codex_exec_message || true)"
+  fi
+  if [[ "$allow_resume" -eq 1 && $rc -eq 0 && -z "$msg" && "$used_resume" -eq 1 ]]; then
+    # Resume can occasionally return an empty content turn; retry once on a fresh thread.
+    clear_codex_session_id
+    set +e
+    rm -f "$msg_file"
+    msg_file="$(mktemp)"
+    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    rc=$?
+    set -e
+    sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"
+    if [[ -n "$sid_new" ]]; then
+      write_codex_session_id "$sid_new"
+    fi
+    if [[ -s "$msg_file" ]]; then
+      msg="$(cat "$msg_file" 2>/dev/null || true)"
+    fi
+    if [[ -z "$msg" ]]; then
+      msg="$(printf '%s\n' "$output" | extract_codex_exec_message || true)"
+    fi
+  fi
+  rm -f "$msg_file"
+
+  if [[ $rc -ne 0 ]]; then
+    printf '%s\n' "$output"
+    return $rc
+  fi
+
+  if [[ -n "$msg" ]]; then
+    printf '%s\n' "$msg"
+    return 0
+  fi
+
+  printf '%s\n' "$output" > "${STATE_DIR}/${ROLE}.codex_exec_last_raw.jsonl"
+  printf '%s\n' "$output"
+  return 65
+}
+
+prompt_once() {
+  local timeout_seconds="$1"
+  local prompt_text="$2"
+  local tick="$3"
+  local channel="${4:-${PRIMARY_CHANNEL:-tmux}}"
+  local prompt_payload=""
+  local deadline=0
+  local now=0
+  local capture=""
+  local capture_sig=""
+  local last_capture_sig=""
+  local last_progress_at=0
+  local stalled_for=0
+
+  if [[ "$channel" == "codex_exec" ]]; then
+    codex_exec_prompt_once "$timeout_seconds" "$prompt_text" "$tick"
+    return $?
+  fi
+
+  if ! ensure_role_session_ready "$ROLE"; then
+    printf 'session_not_ready role=%s session=%s\n' "$ROLE" "$TARGET_SESSION"
+    return 43
+  fi
+
+  tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" C-l >/dev/null 2>&1 || true
+  tmux clear-history -t "$(tmux_target "$TARGET_SESSION")" >/dev/null 2>&1 || true
+  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick")"
+  tmux_send_multiline "$TARGET_SESSION" "$prompt_payload"
+
+  deadline=$(( $(date +%s) + timeout_seconds ))
+  last_progress_at="$(date +%s)"
+  while true; do
+    capture="$(tmux_capture "$TARGET_SESSION" "$TMUX_CAPTURE_LINES")"
+    if [[ -n "$capture" ]] && capture_has_contract "$capture"; then
+      printf '%s\n' "$capture"
+      return 0
+    fi
+    # Auto-dismiss interactive menus: rate limit switch, trust project, etc.
+    if printf '%s\n' "$capture" | grep -qE "Approaching rate limits|Switch to .* for lower credit|Press enter to confirm or esc"; then
+      trace_event "autodismiss_ratelimit_menu session=${TARGET_SESSION} tick=${tick}"
+      tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "2" Enter >/dev/null 2>&1 || true
+      last_progress_at="$(date +%s)"
+      sleep 2
+    fi
+    if printf '%s\n' "$capture" | grep -qE "Trust this project|Allow all file|trust_level"; then
+      trace_event "autodismiss_trust_menu session=${TARGET_SESSION} tick=${tick}"
+      tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "1" Enter >/dev/null 2>&1 || true
+      last_progress_at="$(date +%s)"
+      sleep 2
+    fi
+    now="$(date +%s)"
+    capture_sig="${#capture}:$(printf '%s\n' "$capture" | tail -n 4 | tr '\n' ' ' | tr -s ' ' | cut -c1-180)"
+    if [[ "$capture_sig" != "$last_capture_sig" ]]; then
+      last_capture_sig="$capture_sig"
+      last_progress_at="$now"
+    fi
+    if [[ "$TMUX_STALL_ABORT_SECONDS" -gt 0 ]]; then
+      stalled_for="$(( now - last_progress_at ))"
+      if [[ "$stalled_for" -ge "$TMUX_STALL_ABORT_SECONDS" ]]; then
+        trace_event "prompt_stall_abort tick=${tick} channel=${channel} stalled_for=${stalled_for}s bytes=${#capture}"
+        printf '%s\n' "$capture"
+        return 124
+      fi
+    fi
+    if [[ "$now" -ge "$deadline" ]]; then
+      printf '%s\n' "$capture"
+      return 124
+    fi
+    sleep "$TMUX_POLL_INTERVAL_SECONDS"
+  done
+}
+
+normalize_output() {
+  local tmp=""
+  tmp="$(mktemp)"
+  cat > "$tmp"
+  python3 - "$ROLE" "$tmp" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+role = sys.argv[1]
+payload_path = Path(sys.argv[2])
+lines = payload_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+text_all = "\n".join(lines)
+keys = [
+    "STATUS",
+    "DELTA",
+    "EVIDENCE",
+    "RISKS",
+    "NEXT",
+    "VERDICT",
+    "BLOCKER_ID",
+    "NEXT_ACTION_UNIQUE",
+]
+values = {k: "" for k in keys}
+defaults_partial = {
+    "STATUS": "IN_PROGRESS",
+    "DELTA": "NO_DELTA",
+    "EVIDENCE": "Réponse tmux partielle; champs manquants complétés automatiquement.",
+    "RISKS": f"signal incomplet pour {role}, à reconfirmer au prochain tick",
+    "NEXT": "poursuivre le prochain cycle avec même rôle",
+    "VERDICT": "GO_WITH_CAUTION",
+    "BLOCKER_ID": "NONE",
+    "NEXT_ACTION_UNIQUE": f"CONTINUE_{role}_TMUX_ROLE_RUNNER",
+}
+
+key_token_pat = re.compile(
+    r"(status|delta|evidence|risks|next|verdict|blocker_id|next_action_unique)\s*[:：=]",
+    re.IGNORECASE,
+)
+
+# Reject idle Codex banner/prompt replies that are not role outputs.
+if not key_token_pat.search(text_all):
+    if re.search(
+        r"OpenAI Codex|100% context left|/model to change|Tip:|directory:",
+        text_all,
+        re.IGNORECASE,
+    ):
+        sys.exit(2)
+
+for raw in lines:
+    line = raw.strip()
+    if not line:
+        continue
+    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
+    matches = list(key_token_pat.finditer(line))
+    if not matches:
+        continue
+    for idx, m in enumerate(matches):
+        key = m.group(1).upper()
+        start = m.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(line)
+        val = line[start:end].strip(" ,;|")
+        if val and not values.get(key):
+            values[key] = val
+
+found = sum(1 for v in values.values() if v)
+if found == 0:
+    text = "\n".join(lines)
+    inline_pat = re.compile(
+        r"(status|delta|evidence|risks|next|verdict|blocker_id|next_action_unique)\s*[:：=]\s*([^,\n]+)",
+        re.IGNORECASE,
+    )
+    for m in inline_pat.finditer(text):
+        key = m.group(1).upper()
+        val = m.group(2).strip()
+        if val and not values.get(key):
+            values[key] = val
+    found = sum(1 for v in values.values() if v)
+if found == 0:
+    sys.exit(2)
+
+required = ("STATUS", "DELTA", "VERDICT", "BLOCKER_ID", "NEXT_ACTION_UNIQUE")
+if any(not values.get(k) for k in required):
+    sys.exit(2)
+
+for k in keys:
+    v = values[k] if values[k] else defaults_partial[k]
+    print(f"{k}: {v}")
+PY
+  rm -f "$tmp"
+}
+
+response_has_tick() {
+  local payload="$1"
+  local tick="$2"
+  local channel="${3:-${PRIMARY_CHANNEL:-tmux}}"
+  if [[ "$channel" == "codex_exec" ]]; then
+    return 0
+  fi
+  printf '%s\n' "$payload" | rg -q "^NEXT_ACTION_UNIQUE:[[:space:]].*_${tick}[[:space:]]*$"
+}
+
+RAW_OUTPUT=""
+STRUCTURED=""
+RC_PRIMARY=0
+PRIMARY_TICK="P$(date +%s)_$RANDOM"
+trace_event "primary_prompt_begin tick=${PRIMARY_TICK} timeout=${PROMPT_TIMEOUT_SECONDS}s channel=${PRIMARY_CHANNEL}"
+set +e
+RAW_OUTPUT="$(prompt_once "$PROMPT_TIMEOUT_SECONDS" "$PROMPT_TEXT" "$PRIMARY_TICK" "$PRIMARY_CHANNEL" 2>&1)"
+RC_PRIMARY=$?
+set -e
+trace_event "primary_prompt_end tick=${PRIMARY_TICK} rc=${RC_PRIMARY} bytes=${#RAW_OUTPUT}"
+handle_rate_limit_output "primary_${PRIMARY_CHANNEL}" "$RAW_OUTPUT"
+if [[ $RC_PRIMARY -eq 0 ]]; then
+  if STRUCTURED="$(printf "%s\n" "$RAW_OUTPUT" | normalize_output)"; then
+    if response_has_tick "$STRUCTURED" "$PRIMARY_TICK" "$PRIMARY_CHANNEL"; then
+      trace_event "primary_structured_ok tick=${PRIMARY_TICK}"
+      write_fail_count 0
+      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | reconcile_runtime_truth)"
+      STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "primary_structured")"
+      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
+      sanitize_tmux_logs
+      persist_last_contract "$STRUCTURED" "primary_structured"
+      publish_execution_monitoring_if_enabled "$STRUCTURED" "primary_structured"
+      trace_event "final_output source=primary"
+      printf "%s\n" "$STRUCTURED"
+      exit 0
+    fi
+    RC_PRIMARY=65
+    RAW_OUTPUT="${RAW_OUTPUT}"$'\n'"tick_mismatch=${PRIMARY_TICK}"
+  fi
+fi
+
+REQUIRED_ARTIFACT_MARKER="$(required_artifact_marker_for_role "$ROLE")"
+RETRY_PROMPT="$(cat <<EOF
+${PROMPT_TEXT}
+Rappel critique:
+- Réponds avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+- Une seule valeur utile par ligne, sans commentaire ni texte hors contrat.
+- Obligatoire: EVIDENCE doit contenir ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>.
+- Obligatoire: EVIDENCE doit contenir task_update=<...>, lock_check=ok, run_note=<...>, exec_report=<...>, issues=<none|...>, suggestions=<none|...>.
+- Obligatoire: EVIDENCE doit contenir channels_read=<...>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none|action>.
+- Si task_update=claim|complete|handoff: inclure reflection_passes>=${MIN_REFLECTION_PASSES} et reflection_dimensions=scope,dependency_impact,risk,verification,rollback.
+- Optionnel (si blocage outillage): EVIDENCE peut contenir tool_request=<outil_requis> et/ou skill_request=<skill_requise> (sinon mettre none).
+- Si queue_has_ready=1 ou workboard_role_has_work=1: inclure stream_id=<...> et task_id=<...>.
+- Si task_update=complete: inclure cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>.
+- Interdit: sortie générique READY/DISPATCH sans preuve explicite du rôle.
+EOF
+)"
+
+RAW_RETRY=""
+RC_RETRY=0
+RETRY_MODE="$PRIMARY_CHANNEL"
+RETRY_CHANNEL="$PRIMARY_CHANNEL"
+if [[ $RC_PRIMARY -eq 124 && "$SKIP_RETRY_ON_TIMEOUT" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
+  RETRY_MODE="tmux_on_timeout"
+  RETRY_CHANNEL="tmux"
+fi
+RETRY_TICK="R$(date +%s)_$RANDOM"
+trace_event "retry_prompt_begin tick=${RETRY_TICK} timeout=${RETRY_PROMPT_TIMEOUT_SECONDS}s channel=${RETRY_CHANNEL} mode=${RETRY_MODE}"
+set +e
+RAW_RETRY="$(prompt_once "$RETRY_PROMPT_TIMEOUT_SECONDS" "$RETRY_PROMPT" "$RETRY_TICK" "$RETRY_CHANNEL" 2>&1)"
+RC_RETRY=$?
+set -e
+trace_event "retry_prompt_end tick=${RETRY_TICK} rc=${RC_RETRY} bytes=${#RAW_RETRY}"
+handle_rate_limit_output "retry_${RETRY_CHANNEL}" "$RAW_RETRY"
+if [[ $RC_RETRY -eq 0 ]]; then
+  if STRUCTURED="$(printf "%s\n" "$RAW_RETRY" | normalize_output)"; then
+    if response_has_tick "$STRUCTURED" "$RETRY_TICK" "$RETRY_CHANNEL"; then
+      trace_event "retry_structured_ok tick=${RETRY_TICK}"
+      write_fail_count 0
+      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | reconcile_runtime_truth)"
+      STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
+      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
+      sanitize_tmux_logs
+      persist_last_contract "$STRUCTURED" "retry_structured"
+      publish_execution_monitoring_if_enabled "$STRUCTURED" "retry_structured"
+      trace_event "final_output source=retry"
+      printf "%s\n" "$STRUCTURED"
+      exit 0
+    fi
+    RC_RETRY=65
+    RAW_RETRY="${RAW_RETRY}"$'\n'"tick_mismatch=${RETRY_TICK}"
+  fi
+fi
+
+RAW_CODEX_FALLBACK=""
+RC_CODEX_FALLBACK=-1
+CODEX_FALLBACK_TIMEOUT=0
+if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
+  OUTPUT_CHANNEL_LABEL="tmux+codex_exec_fallback"
+  CODEX_FALLBACK_TIMEOUT="$PROMPT_TIMEOUT_SECONDS"
+  if [[ "$CODEX_FALLBACK_TIMEOUT" -lt "$RETRY_PROMPT_TIMEOUT_SECONDS" ]]; then
+    CODEX_FALLBACK_TIMEOUT="$RETRY_PROMPT_TIMEOUT_SECONDS"
+  fi
+  # Codex exec JSON mode can stream for longer than tmux scrape windows.
+  # Keep a higher floor to avoid false timeout fallbacks.
+  if [[ "$CODEX_FALLBACK_TIMEOUT" -lt 180 ]]; then
+    CODEX_FALLBACK_TIMEOUT=180
+  fi
+  CODEX_TICK="C$(date +%s)_$RANDOM"
+  trace_event "codex_fallback_begin tick=${CODEX_TICK} timeout=${CODEX_FALLBACK_TIMEOUT}s"
+  set +e
+  RAW_CODEX_FALLBACK="$(prompt_once "$CODEX_FALLBACK_TIMEOUT" "$RETRY_PROMPT" "$CODEX_TICK" "codex_exec" 2>&1)"
+  RC_CODEX_FALLBACK=$?
+  set -e
+  trace_event "codex_fallback_end tick=${CODEX_TICK} rc=${RC_CODEX_FALLBACK} bytes=${#RAW_CODEX_FALLBACK}"
+  handle_rate_limit_output "codex_exec_fallback" "$RAW_CODEX_FALLBACK"
+  if [[ $RC_CODEX_FALLBACK -eq 0 ]]; then
+    if STRUCTURED="$(printf "%s\n" "$RAW_CODEX_FALLBACK" | normalize_output)"; then
+      if response_has_tick "$STRUCTURED" "$CODEX_TICK" "codex_exec"; then
+        trace_event "codex_fallback_structured_ok tick=${CODEX_TICK}"
+        write_fail_count 0
+        RETRY_MODE="codex_exec_fallback"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | reconcile_runtime_truth)"
+        STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "codex_exec_fallback")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
+        sanitize_tmux_logs
+        persist_last_contract "$STRUCTURED" "codex_exec_fallback"
+        publish_execution_monitoring_if_enabled "$STRUCTURED" "codex_exec_fallback"
+        trace_event "final_output source=codex_fallback"
+        printf "%s\n" "$STRUCTURED"
+        exit 0
+      fi
+      RC_CODEX_FALLBACK=65
+      RAW_CODEX_FALLBACK="${RAW_CODEX_FALLBACK}"$'\n'"tick_mismatch=${CODEX_TICK}"
+    fi
+  fi
+fi
+
+PRIMARY_PREVIEW="$(sanitize_evidence_fragment "$(one_line "${RAW_OUTPUT:-}")")"
+RETRY_PREVIEW="$(sanitize_evidence_fragment "$(one_line "${RAW_RETRY:-}")")"
+CODEX_PREVIEW="$(sanitize_evidence_fragment "$(one_line "${RAW_CODEX_FALLBACK:-}")")"
+STARTUP_NOTE_SAFE="$(sanitize_evidence_fragment "${STARTUP_NOTE:-startup_skipped=1}")"
+
+FALLBACK_SOURCE=""
+FALLBACK_NEXT=""
+FALLBACK_ACTION=""
+FALLBACK_ARCH_RULE="observability"
+FALLBACK_REVIEW_SCOPE="${ROLE}_checkpoint"
+FALLBACK_CONFORMANCE="WARN"
+FALLBACK_VIOLATIONS="signal_unparseable"
+case "$ROLE" in
+  planner)
+    FALLBACK_SOURCE="docs/orchestrator-ops/priority-queue.json"
+    FALLBACK_NEXT="vérifier READY/BLOCKED puis prioriser une action unique"
+    FALLBACK_ACTION="CONTINUE_PLANNER_FROM_PRIORITY_QUEUE"
+    FALLBACK_ARCH_RULE="forecast_contract"
+    FALLBACK_VISION_RULE="forecast_contract"
+    ;;
+  analyst)
+    FALLBACK_SOURCE="docs/planning/stories.md"
+    FALLBACK_NEXT="maintenir un brief d'analyse actionnable pour les equipes parallelisees"
+    FALLBACK_ACTION="CONTINUE_ANALYST_FROM_STORIES"
+    FALLBACK_ARCH_RULE="reusability"
+    ;;
+  dev)
+    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_NEXT="préparer l'action dev exécutable du prochain item READY"
+    FALLBACK_ACTION="CONTINUE_DEV_FROM_TASKS"
+    FALLBACK_ARCH_RULE="api_contract"
+    ;;
+  backend_engineer)
+    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_NEXT="maintenir la prochaine action backend executable avec preuve attendue"
+    FALLBACK_ACTION="CONTINUE_BACKEND_FROM_TASKS"
+    FALLBACK_ARCH_RULE="api_contract"
+    ;;
+  frontend_engineer)
+    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_NEXT="maintenir la prochaine action frontend executable avec preuve attendue"
+    FALLBACK_ACTION="CONTINUE_FRONTEND_FROM_TASKS"
+    FALLBACK_ARCH_RULE="forecast_contract"
+    ;;
+  integrator)
+    FALLBACK_SOURCE="docs/scrum/sprint-current.md"
+    FALLBACK_NEXT="maintenir le plan d'integration inter-equipes et de handoff"
+    FALLBACK_ACTION="CONTINUE_INTEGRATOR_FROM_SPRINT"
+    FALLBACK_ARCH_RULE="schema_stability"
+    ;;
+  data_analyst)
+    FALLBACK_SOURCE="data"
+    FALLBACK_NEXT="maintenir la prochaine action data exploitable pour produit/qa"
+    FALLBACK_ACTION="CONTINUE_DATA_ANALYST_FROM_DATASET"
+    FALLBACK_ARCH_RULE="forecast_contract"
+    ;;
+  infra_engineer)
+    FALLBACK_SOURCE="docs/ops"
+    FALLBACK_NEXT="maintenir la prochaine action infra/cicd pour accelerer la livraison"
+    FALLBACK_ACTION="CONTINUE_INFRA_FROM_OPS"
+    FALLBACK_ARCH_RULE="observability"
+    ;;
+  tester)
+    FALLBACK_SOURCE="tests"
+    FALLBACK_NEXT="maintenir plan de tests minimal pour prochain item READY"
+    FALLBACK_ACTION="CONTINUE_TESTER_FROM_TEST_TREE"
+    FALLBACK_ARCH_RULE="schema_stability"
+    ;;
+  qa)
+    FALLBACK_SOURCE="evidence/gates/openclaw-gates"
+    FALLBACK_NEXT="contrôler cohérence VERDICT/BLOCKER_ID au prochain tick"
+    FALLBACK_ACTION="CONTINUE_QA_FROM_GATES"
+    FALLBACK_ARCH_RULE="forecast_contract"
+    ;;
+  architect)
+    FALLBACK_SOURCE="docs/ops/API_ENDPOINT_BEST_PRACTICES.md"
+    FALLBACK_NEXT="produire un gate architecture aligné best-practices sur le prochain scope READY"
+    FALLBACK_ACTION="CONTINUE_ARCHITECT_ARCH_GUARDRAIL_REVIEW"
+    FALLBACK_ARCH_RULE="reusability"
+    ;;
+  po)
+    FALLBACK_SOURCE="docs/planning/mvp-plan.md"
+    FALLBACK_NEXT="reconfirmer les priorités backlog orientées valeur"
+    FALLBACK_ACTION="CONTINUE_PO_FROM_MVP_PLAN"
+    FALLBACK_ARCH_RULE="forecast_contract"
+    ;;
+  scrum_master)
+    FALLBACK_SOURCE="docs/scrum/sprint-current.md"
+    FALLBACK_NEXT="maintenir cadence et réduction des blockers/WIP"
+    FALLBACK_ACTION="CONTINUE_SCRUM_MASTER_FROM_SPRINT_STATE"
+    FALLBACK_ARCH_RULE="observability"
+    ;;
+  clawsentinel)
+    FALLBACK_SOURCE="docs/orchestrator-ops/agent-watchdog.md"
+    FALLBACK_NEXT="vérifier dérive cron et publier action anti-drift unique"
+    FALLBACK_ACTION="CONTINUE_CLAWSENTINEL_FROM_WATCHDOG"
+    FALLBACK_ARCH_RULE="security"
+    ;;
+esac
+
+  FALLBACK_ARTIFACT_MARKER="$(required_artifact_marker_for_role "$ROLE")"
+  FALLBACK_ARTIFACT_VALUE="${FALLBACK_SOURCE:-unknown}"
+  FALLBACK_VISION_RULE="${FALLBACK_VISION_RULE:-forecast_contract}"
+
+  if [[ -n "$FALLBACK_SOURCE" && -e "$FALLBACK_SOURCE" ]]; then
+    FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
+    write_fail_count "$FAIL_COUNT"
+    RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; vision_rule=${FALLBACK_VISION_RULE}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+else
+  FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
+  write_fail_count "$FAIL_COUNT"
+  RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; vision_rule=${FALLBACK_VISION_RULE}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+fi
+trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
+
+FALLBACK_OUTPUT="$(cat <<EOF
+STATUS: IN_PROGRESS
+DELTA: NO_DELTA
+EVIDENCE: ${EVIDENCE_TEXT}
+RISKS: réponse tmux non exploitable sur ce tick, continuité basée checkpoint
+NEXT: ${FALLBACK_NEXT:-relancer le prochain tick}
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: ${FALLBACK_ACTION:-CONTINUE_${ROLE}_FROM_CHECKPOINT}
+EOF
+)"
+
+FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | reconcile_runtime_truth)"
+FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")"
+FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
+sanitize_tmux_logs
+persist_last_contract "$FALLBACK_OUTPUT" "fallback_checkpoint"
+publish_execution_monitoring_if_enabled "$FALLBACK_OUTPUT" "fallback_checkpoint"
+trace_event "final_output source=checkpoint"
+printf "%s\n" "$FALLBACK_OUTPUT"

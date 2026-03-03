@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/role_contract_guard.py
+../platform/policies/role_contract_guard.py

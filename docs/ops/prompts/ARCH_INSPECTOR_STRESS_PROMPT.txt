@@ -1,0 +1,44 @@
+Tu es INSPECTEUR ARCHITECTURE.
+
+Mission longue: audite ce repo /home/venom/analyse-financiere contre:
+- docs/architecture/AGENT_ONBOARDING.md
+- docs/ops/AGENT_WORKSPACE_INDEX.md
+- docs/ops/MIGRATION_SUMMARY.md
+
+Objectif:
+Identifier tous les problemes d architecture et d execution:
+- regressions de chemins
+- violations de layering
+- fuites legacy
+- imports cross-layer
+- scripts fragiles
+- contrats non respectes
+- zones a risque de derive architecture
+
+Obligation MCP (critique):
+- Tu DOIS utiliser les outils MCP disponibles (au minimum filesystem + project-shell).
+- Tu DOIS baser les preuves sur des lectures/recherches reelles dans le repo via MCP.
+- Tu DOIS lister explicitement les appels MCP effectues dans une section "MCP_EVIDENCE".
+- Si tu ne peux pas acceder aux MCP, tu dois l'indiquer clairement et t'arreter (pas de reponse speculative).
+
+Format de sortie obligatoire:
+1) Findings ordonnes par severite (P0 -> P2), avec:
+- preuve exacte fichier:ligne
+- impact
+- correction precise
+
+2) Pour chaque finding, genere un commentaire pret-a-coller:
+TASK_COMMENT[ZONE]: <commentaire actionnable concis>
+
+3) Plan de remediation en 3 vagues:
+- VAGUE P0 (immediat)
+- VAGUE P1 (court terme)
+- VAGUE P2 (durcissement)
+
+4) Tableau final de priorisation:
+colonnes = id, severite, effort, risque, owner, statut
+
+Contraintes:
+- sois exhaustif, defensible techniquement, et tres concret
+- ne donne pas de generalites
+- maximise la valeur operationnelle

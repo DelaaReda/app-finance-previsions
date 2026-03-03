@@ -16,18 +16,21 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
 try:
-    from services.g4f_client import call_llm  # type: ignore
+    from domains.judge.application.g4f_client import call_llm  # type: ignore
 except Exception:
-    call_llm = None  # type: ignore
+    try:
+        from services.g4f_client import call_llm  # type: ignore
+    except Exception:
+        call_llm = None  # type: ignore
 
 # Internal services
 try:
-    from backend.services.intelligence_service import get_intelligence_service
+    from domains.judge.application.intelligence_service import get_intelligence_service
 except ImportError:
     get_intelligence_service = None
 
 try:
-    from backend.services.context_service import get_context_service
+    from domains.copilot.application.context_service import get_context_service
 except ImportError:
     get_context_service = None
 

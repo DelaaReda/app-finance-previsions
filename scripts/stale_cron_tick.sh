@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/stale_cron_tick.sh
+../platform/automation/stale_cron_tick.sh

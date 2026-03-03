@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/orchestration_circuit_breaker.sh
+../platform/automation/orchestration_circuit_breaker.sh

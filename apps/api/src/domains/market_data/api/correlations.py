@@ -12,9 +12,14 @@ from typing import Optional, List
 from fastapi import APIRouter, Query, HTTPException
 
 try:
-    from backend.services.correlation_intelligence_service import get_correlation_intelligence_service
+    from domains.market_data.application.correlation_intelligence_service import (
+        get_correlation_intelligence_service,
+    )
 except ImportError:
-    get_correlation_intelligence_service = None
+    try:
+        from backend.services.correlation_intelligence_service import get_correlation_intelligence_service  # type: ignore
+    except ImportError:
+        get_correlation_intelligence_service = None
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -32,7 +32,8 @@ DEFAULT_SHARED_LOCK_DIR = Path(
 
 INTEGRATION_REUSE_TAG = "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS"
 INTEGRATION_REUSE_TAG_ALIAS = "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS"
-DEPRECATED_ROLES = {"po", "scrum_master"}
+PUBLIC_PLANNER_ROLE = "vision-architect-tasks-planner"
+DEPRECATED_ROLES = {"analyst", "architect", "po", "scrum_master"}
 DEPRECATED_TASK_CODES = {"PO_REVIEW", "SCRUM_REVIEW"}
 MIN_CHANGE_PLAN_STEPS = 5
 MIN_ARCHITECTURE_CHECKS = 3
@@ -132,19 +133,46 @@ STATE_BLOCKED = "BLOCKED"
 
 ACTIVE_STATES = {STATE_IN_PROGRESS, STATE_REVIEW}
 READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY}
+PLANNER_GROUP_ROLES = {
+    "planner",
+    "vision_architect_tasks_planner",
+    "vision-architect-tasks-planner",
+    "analyst",
+    "architect",
+    "po",
+    "scrum_master",
+    "product_owner",
+    "owner",
+    "po_engineer",
+}
+
+# Lean team consolidation: 3 rôles actifs couvrent tous les anciens rôles.
+# dev couvre les rôles build/validation; admin couvre les rôles ops/safety.
+DEV_GROUP_ROLES = {
+    "dev",
+    "backend_engineer",
+    "frontend_engineer",
+    "data_analyst",
+    "infra_engineer",
+    "integrator",
+    "tester",
+    "qa",
+}
+ADMIN_GROUP_ROLES = {
+    "admin",
+    "clawsentinel",
+    "infra",
+}
 
 ROLE_CATALOG: Dict[str, Dict[str, object]] = {
-    "planner": {"wip_limit": 2, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
-    "analyst": {"wip_limit": 3, "can_edit": False, "focus": "requirements and assumptions"},
-    "architect": {"wip_limit": 2, "can_edit": False, "focus": "constraints and design"},
-    "po": {"wip_limit": 2, "can_edit": False, "focus": "value prioritization, acceptance criteria, and release decisions"},
-    "scrum_master": {"wip_limit": 2, "can_edit": False, "focus": "flow health, WIP governance, cadence, and blocker removal"},
+    "planner": {"wip_limit": 4, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
     "backend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "api and backend impl"},
     "frontend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "ui and frontend impl"},
     "data_analyst": {"wip_limit": 2, "can_edit": True, "focus": "data quality and metrics"},
     "infra_engineer": {"wip_limit": 2, "can_edit": True, "focus": "infra and ci/cd"},
     "integrator": {"wip_limit": 2, "can_edit": True, "focus": "cross-team integration"},
-    "dev": {"wip_limit": 2, "can_edit": True, "focus": "cross-cutting implementation and debt"},
+    "dev": {"wip_limit": 6, "can_edit": True, "focus": "build delivery — covers backend_engineer, frontend_engineer, data_analyst, infra_engineer, integrator, tester, qa"},
+    "admin": {"wip_limit": 3, "can_edit": True, "focus": "runtime governance, cron/monitor stability, unblock and safety operations"},
     "tester": {"wip_limit": 3, "can_edit": True, "focus": "test automation and checks"},
     "qa": {"wip_limit": 3, "can_edit": True, "focus": "quality gate and validation"},
     "clawsentinel": {"wip_limit": 2, "can_edit": False, "focus": "anti-drift and safety"},
@@ -160,8 +188,8 @@ class TemplateStep:
 
 STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
     TemplateStep("PLAN", "planner", tuple()),
-    TemplateStep("ANALYSIS", "analyst", ("PLAN",)),
-    TemplateStep("ARCH", "architect", ("ANALYSIS",)),
+    TemplateStep("ANALYSIS", "planner", ("PLAN",)),
+    TemplateStep("ARCH", "planner", ("ANALYSIS",)),
     TemplateStep("QA_PREP", "qa", ("PLAN",)),
     TemplateStep("TEST_PLAN", "tester", ("PLAN",)),
     TemplateStep("DATA", "data_analyst", ("ANALYSIS",)),
@@ -573,6 +601,19 @@ def ensure_stream(
     legacy_task_codes: set[str] | None = None,
     legacy_stream_depends_on: List[str] | None = None,
 ) -> int:
+    # GUARD: Prevent recursive micro-task explosion.
+    # Only top-level streams (BATCH-NN format, max 2 segments) are allowed.
+    # Streams like BATCH-05-PLAN-BACKEND are invalid and create workboard bloat.
+    import re as _re
+    _sid = str(stream_id).strip().upper()
+    _parts = _sid.split('-')
+    if _parts[0] == 'BATCH' and len(_parts) >= 4:
+        # e.g. BATCH-05-PLAN-BACKEND has 4 parts → reject
+        raise ValueError(
+            f"ensure_stream guard: stream_id '{stream_id}' looks like a micro-task ID "
+            f"(4+ segments). Only top-level streams allowed. "
+            f"Use the existing role task directly instead of creating a sub-stream."
+        )
     streams = stream_index(board)
     tasks = task_index(board)
     created = 0
@@ -713,11 +754,17 @@ def _legacy_task_state_to_board_state(raw_state: str) -> str:
 
 
 def _canonical_role(value: str) -> str:
-    role = str(value or "").strip()
+    role = str(value or "").strip().replace("-", "_").lower()
+    if not role:
+        return ""
+    if role in PLANNER_GROUP_ROLES:
+        return "planner"
+    if role in DEV_GROUP_ROLES:
+        return "dev"
+    if role in ADMIN_GROUP_ROLES:
+        return "admin"
     if role in ROLE_CATALOG:
         return role
-    if role.lower() in {"product_owner", "owner", "po", "po_engineer"}:
-        return "planner"
     return ""
 
 
@@ -970,14 +1017,36 @@ def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
     return closed_count, opened_batch
 
 
-def recompute_states(board: dict) -> None:
+def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) -> None:
     tasks_by_id = task_index(board)
+    # Charger la priority-queue pour résoudre les dépendances de haut niveau (BATCH-NN)
+    if queue_states is None:
+        queue_states = {}
+        try:
+            _pq = json.loads(DEFAULT_PRIORITY_QUEUE.read_text(encoding="utf-8"))
+            for _item in _pq.get("items", []):
+                _sid = str(_item.get("id", "")).strip().upper()
+                _st  = str(_item.get("state", "")).strip().upper()
+                if _sid:
+                    queue_states[_sid] = _st
+        except Exception:
+            pass
+    _queue_closed = {"CLOSED", "DONE", "PASS"}
     for task in board.get("tasks", []):
         state = str(task.get("state", ""))
         if state in {STATE_DONE, STATE_BLOCKED, STATE_IN_PROGRESS, STATE_REVIEW}:
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
-        deps_done = all(tasks_by_id.get(dep, {}).get("state") == STATE_DONE for dep in deps)
+        def _dep_satisfied(dep: str) -> bool:
+            dep_u = dep.strip().upper()
+            # Priorité 1: dans le workboard
+            wb_task = tasks_by_id.get(dep_u) or tasks_by_id.get(dep)
+            if wb_task:
+                return wb_task.get("state") == STATE_DONE
+            # Priorité 2: dans la priority-queue (BATCH-NN)
+            q_state = queue_states.get(dep_u, "")
+            return q_state in _queue_closed
+        deps_done = all(_dep_satisfied(dep) for dep in deps)
         new_state = task.get("state", STATE_BACKLOG)
         if deps_done:
             if state in READY_LIKE_STATES:
@@ -1097,7 +1166,14 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
 
 
 def iter_tasks_for_role(board: dict, role: str) -> Iterable[dict]:
-    return (task for task in board.get("tasks", []) if str(task.get("role", "")) == role)
+    role_canonical = _canonical_role(role)
+    if not role_canonical:
+        return iter(())
+    return (
+        task
+        for task in board.get("tasks", [])
+        if _canonical_role(str(task.get("role", ""))) == role_canonical
+    )
 
 
 def role_wip_count(board: dict, role: str) -> int:
@@ -1111,6 +1187,21 @@ def claim_task(
     change_plan: str = "",
     architecture_checks: str = "",
 ) -> dict:
+    # WIP GUARD: Prevent workboard explosion.
+    # If active tasks (READY+IN_PROGRESS) exceed 60, block claim and alert.
+    _wip_limit = 60
+    _active_count = sum(
+        1 for t in board.get("tasks", [])
+        if str(t.get("state", "")) in (STATE_READY, STATE_IN_PROGRESS)
+    )
+    if _active_count > _wip_limit:
+        raise RuntimeError(
+            f"WIP limit exceeded: {_active_count} active tasks > {_wip_limit} allowed. "
+            f"Complete or archive tasks before claiming new ones. "
+            f"Run: python3 scripts/parallel_workstream.py list --state READY,IN_PROGRESS"
+        )
+    # Keep claim behavior consistent with status/context outputs.
+    recompute_states(board)
     tasks = list(iter_tasks_for_role(board, role))
     candidates = [task for task in tasks if str(task.get("state", "")) == STATE_READY]
     candidates.sort(key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("stream_id", "")), str(t.get("code", ""))))
@@ -1188,7 +1279,7 @@ def complete_task(
     task = tasks.get(task_id_value)
     if task is None:
         raise SystemExit(f"COMPLETE_ERROR: task_not_found={task_id_value}")
-    task_role = str(task.get("role", ""))
+    task_role = _canonical_role(str(task.get("role", "")))
     if task_role != role:
         raise SystemExit(f"COMPLETE_ERROR: role_mismatch task_role={task_role} caller_role={role}")
 
@@ -1343,12 +1434,13 @@ def handoff_update(board: dict, handoff_id: str, status: str, actor_role: str) -
     if not handoffs:
         raise SystemExit(f"HANDOFF_NOT_FOUND: {handoff_id}")
     handoff = handoffs[0]
-    to_role = str(handoff.get("to_role", ""))
-    if status == "ACK" and actor_role and actor_role != to_role:
+    to_role = _canonical_role(str(handoff.get("to_role", "")))
+    actor_role_canonical = _canonical_role(actor_role)
+    if status == "ACK" and actor_role_canonical and actor_role_canonical != to_role:
         raise SystemExit(f"HANDOFF_ACK_ROLE_MISMATCH: expected={to_role} got={actor_role}")
     handoff["status"] = status
     handoff["updated_at"] = now_iso()
-    append_event(board, "handoff_update", {"handoff_id": handoff_id, "status": status, "actor": actor_role})
+    append_event(board, "handoff_update", {"handoff_id": handoff_id, "status": status, "actor": actor_role_canonical or actor_role})
     return handoff
 
 
@@ -1551,9 +1643,10 @@ def validate_board(
         if tid in seen:
             errors.append(f"DUPLICATE_TASK_ID:{tid}")
         seen.add(tid)
-        role = str(task.get("role", ""))
+        role_raw = str(task.get("role", ""))
+        role = _canonical_role(role_raw)
         if role not in ROLE_CATALOG:
-            errors.append(f"UNKNOWN_ROLE:{tid}:{role}")
+            errors.append(f"UNKNOWN_ROLE:{tid}:{role_raw}")
         for dep in task.get("depends_on", []):
             if dep not in idx:
                 errors.append(f"MISSING_DEP:{tid}:{dep}")
@@ -1702,12 +1795,15 @@ def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
 
     if compact:
         if role:
-            r_tasks = list(iter_tasks_for_role(board, role))
+            role_canonical = _canonical_role(role)
+            if not role_canonical:
+                raise SystemExit(f"UNKNOWN_ROLE: {role}")
+            r_tasks = list(iter_tasks_for_role(board, role_canonical))
             r_ready = [t for t in r_tasks if t.get("state") == STATE_READY]
             r_active = [t for t in r_tasks if t.get("state") in ACTIVE_STATES]
             r_blocked = [t for t in r_tasks if t.get("state") == STATE_BLOCKED]
             head = (
-                f"ROLE={role} total={len(r_tasks)} ready={len(r_ready)} in_progress={len(r_active)} "
+                f"ROLE={role_canonical} total={len(r_tasks)} ready={len(r_ready)} in_progress={len(r_active)} "
                 f"blocked={len(r_blocked)} open_handoffs={summary['open_handoffs']}"
             )
             lines = [head]
@@ -1729,7 +1825,8 @@ def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
         "by_role": {},
         "open_handoffs": [h for h in board.get("handoffs", []) if h.get("status") == "OPEN"],
     }
-    for role_name in ROLE_CATALOG:
+    canonical_roles = sorted({_canonical_role(role_name) for role_name in ROLE_CATALOG if _canonical_role(role_name)})
+    for role_name in canonical_roles:
         role_tasks = list(iter_tasks_for_role(board, role_name))
         out["by_role"][role_name] = {
             "total": len(role_tasks),
@@ -1738,19 +1835,28 @@ def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
             "blocked": [t for t in role_tasks if t.get("state") == STATE_BLOCKED][:limit],
         }
     if role:
+        role_canonical = _canonical_role(role)
+        if not role_canonical:
+            raise SystemExit(f"UNKNOWN_ROLE: {role}")
         out = {
-            "role": role,
-            "summary": out["by_role"].get(role, {"total": 0, "ready": [], "in_progress": [], "blocked": []}),
-            "open_handoffs": [h for h in out["open_handoffs"] if h.get("to_role") == role or h.get("from_role") == role],
+            "role": role_canonical,
+            "summary": out["by_role"].get(role_canonical, {"total": 0, "ready": [], "in_progress": [], "blocked": []}),
+            "open_handoffs": [
+                h
+                for h in out["open_handoffs"]
+                if _canonical_role(str(h.get("to_role", ""))) == role_canonical
+                or _canonical_role(str(h.get("from_role", ""))) == role_canonical
+            ],
         }
     print(json.dumps(out, ensure_ascii=True, indent=2))
 
 
 def print_role_context(board: dict, role: str, limit: int) -> None:
-    if role not in ROLE_CATALOG:
+    role_canonical = _canonical_role(role)
+    if role_canonical not in ROLE_CATALOG:
         raise SystemExit(f"UNKNOWN_ROLE: {role}")
     recompute_states(board)
-    role_tasks = list(iter_tasks_for_role(board, role))
+    role_tasks = list(iter_tasks_for_role(board, role_canonical))
     ready_tasks = sorted(
         [t for t in role_tasks if str(t.get("state", "")) == STATE_READY],
         key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("id", ""))),
@@ -1760,8 +1866,8 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
     blocked_tasks = [t for t in role_tasks if str(t.get("state", "")) == STATE_BLOCKED]
 
     open_handoffs = [h for h in board.get("handoffs", []) if str(h.get("status", "")) == "OPEN"]
-    open_to = [h for h in open_handoffs if str(h.get("to_role", "")) == role]
-    open_from = [h for h in open_handoffs if str(h.get("from_role", "")) == role]
+    open_to = [h for h in open_handoffs if _canonical_role(str(h.get("to_role", ""))) == role_canonical]
+    open_from = [h for h in open_handoffs if _canonical_role(str(h.get("from_role", ""))) == role_canonical]
 
     recent_peer_events: List[str] = []
     for event in reversed(board.get("events", [])):
@@ -1769,8 +1875,8 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
         if not kind:
             continue
         details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
-        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip()
-        if actor == role:
+        actor = _canonical_role(str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip())
+        if actor == role_canonical:
             continue
         ref = str(details.get("task_id") or details.get("handoff_id") or details.get("stream_id") or actor or "none").strip()
         recent_peer_events.append(f"{kind}:{ref}")
@@ -1791,7 +1897,7 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
 
     print(
         "ROLE_CONTEXT "
-        f"role={role} "
+        f"role={role_canonical} "
         f"total={len(role_tasks)} "
         f"ready={len(ready_tasks)} "
         f"in_progress={len(active_tasks)} "
@@ -1811,7 +1917,8 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
 
 
 def print_publication_channels_context(board: dict, role: str, limit: int) -> None:
-    if role not in ROLE_CATALOG:
+    role_canonical = _canonical_role(role)
+    if role_canonical not in ROLE_CATALOG:
         raise SystemExit(f"UNKNOWN_ROLE: {role}")
     recompute_states(board)
     idx = task_index(board)
@@ -1819,7 +1926,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
     actionable_states = {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
     peer_active_states = {STATE_IN_PROGRESS, STATE_REVIEW}
 
-    role_tasks = list(iter_tasks_for_role(board, role))
+    role_tasks = list(iter_tasks_for_role(board, role_canonical))
     own_actionable = [t for t in role_tasks if str(t.get("state", "")) in actionable_states]
     own_ids = {str(t.get("id", "")) for t in own_actionable}
     own_streams = {str(t.get("stream_id", "")) for t in own_actionable}
@@ -1827,7 +1934,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
     peer_active = [
         t
         for t in board.get("tasks", [])
-        if str(t.get("role", "")) != role and str(t.get("state", "")) in peer_active_states
+        if _canonical_role(str(t.get("role", ""))) != role_canonical and str(t.get("state", "")) in peer_active_states
     ]
 
     shared_stream_impacts: List[str] = []
@@ -1846,23 +1953,24 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
                 continue
             dep_role = str(dep_task.get("role", ""))
             dep_state = str(dep_task.get("state", ""))
-            if dep_role == role or dep_state == STATE_DONE:
+            dep_role_canonical = _canonical_role(dep_role)
+            if dep_role_canonical == role_canonical or dep_state == STATE_DONE:
                 continue
-            upstream_impacts.append(f"{dep_task.get('id')}:{dep_role}:{dep_state}")
+            upstream_impacts.append(f"{dep_task.get('id')}:{dep_role_canonical}:{dep_state}")
 
     downstream_impacts: List[str] = []
     for task in board.get("tasks", []):
-        task_role = str(task.get("role", ""))
+        task_role = _canonical_role(str(task.get("role", "")))
         task_state = str(task.get("state", ""))
-        if task_role == role or task_state not in actionable_states:
+        if task_role == role_canonical or task_state not in actionable_states:
             continue
         deps = {str(dep) for dep in task.get("depends_on", []) if dep}
         if own_ids.intersection(deps):
             downstream_impacts.append(f"{task.get('id')}:{task_role}:{task_state}")
 
     open_handoffs = [h for h in board.get("handoffs", []) if str(h.get("status", "")) == "OPEN"]
-    open_to = [h for h in open_handoffs if str(h.get("to_role", "")) == role]
-    open_from = [h for h in open_handoffs if str(h.get("from_role", "")) == role]
+    open_to = [h for h in open_handoffs if _canonical_role(str(h.get("to_role", ""))) == role_canonical]
+    open_from = [h for h in open_handoffs if _canonical_role(str(h.get("from_role", ""))) == role_canonical]
 
     recent_peer_events: List[str] = []
     for event in reversed(board.get("events", [])):
@@ -1870,8 +1978,8 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
         if not kind:
             continue
         details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
-        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip()
-        if actor == role:
+        actor = _canonical_role(str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip())
+        if actor == role_canonical:
             continue
         ref = str(details.get("task_id") or details.get("handoff_id") or details.get("stream_id") or "none").strip()
         recent_peer_events.append(f"{kind}:{ref}")
@@ -1908,7 +2016,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
 
     print(
         "CHANNELS_CONTEXT "
-        f"role={role} "
+        f"role={role_canonical} "
         "channels=workboard_tasks,workboard_handoffs,workboard_events,role_contracts,admin_chat,admin_iterations "
         f"self_active={len(own_actionable)} "
         f"peer_active={len(peer_active)} "
@@ -1939,7 +2047,7 @@ def replay_events(board: dict, limit: int, kind_filter: str, role_filter: str) -
         if kind_filter and kind_filter != kind:
             continue
         details = event.get("details", {}) if isinstance(event.get("details", {}), dict) else {}
-        actor = str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip()
+        actor = _canonical_role(str(details.get("role") or details.get("from_role") or details.get("actor") or "").strip())
         if role_filter and role_filter != actor:
             continue
         selected.append(event)
@@ -2088,32 +2196,39 @@ def main() -> int:
 
         if args.cmd == "status":
             recompute_states(board)
-            print_status(board, role=str(args.role or ""), compact=bool(args.compact), limit=max(1, int(args.limit)))
+            role_filter = str(args.role or "").strip()
+            role_filter = _canonical_role(role_filter) if role_filter else ""
+            print_status(board, role=role_filter, compact=bool(args.compact), limit=max(1, int(args.limit)))
             return 0
 
         if args.cmd == "context":
-            role = str(args.role).strip()
+            role = _canonical_role(str(args.role).strip())
+            if role not in ROLE_CATALOG:
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
             print_role_context(board, role=role, limit=max(1, int(args.limit)))
             return 0
 
         if args.cmd == "channels":
-            role = str(args.role).strip()
+            role = _canonical_role(str(args.role).strip())
+            if role not in ROLE_CATALOG:
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
             print_publication_channels_context(board, role=role, limit=max(1, int(args.limit)))
             return 0
 
         if args.cmd == "replay":
+            role_filter = _canonical_role(str(args.role or "").strip()) if str(args.role or "").strip() else ""
             replay_events(
                 board,
                 limit=max(1, int(args.limit)),
                 kind_filter=str(args.kind or "").strip(),
-                role_filter=str(args.role or "").strip(),
+                role_filter=role_filter,
             )
             return 0
 
         if args.cmd == "claim":
-            role = str(args.role).strip()
+            role = _canonical_role(str(args.role).strip())
             if role not in ROLE_CATALOG:
-                raise SystemExit(f"UNKNOWN_ROLE: {role}")
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
             task = claim_task(
                 board,
                 role=role,
@@ -2128,12 +2243,12 @@ def main() -> int:
             return 0
 
         if args.cmd == "complete":
-            role = str(args.role).strip()
+            role = _canonical_role(str(args.role).strip())
             if role not in ROLE_CATALOG:
-                raise SystemExit(f"UNKNOWN_ROLE: {role}")
-            handoff_to = str(args.handoff_to or "").strip()
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
+            handoff_to = _canonical_role(str(args.handoff_to or "").strip()) if str(args.handoff_to or "").strip() else ""
             if handoff_to and handoff_to not in ROLE_CATALOG:
-                raise SystemExit(f"UNKNOWN_HANDOFF_ROLE: {handoff_to}")
+                raise SystemExit(f"UNKNOWN_HANDOFF_ROLE: {args.handoff_to}")
             task = complete_task(
                 board,
                 role=role,
@@ -2170,13 +2285,19 @@ def main() -> int:
             return 0
 
         if args.cmd == "handoff-ack":
-            handoff = handoff_update(board, handoff_id=str(args.handoff).strip(), status="ACK", actor_role=str(args.role).strip())
+            actor_role = _canonical_role(str(args.role).strip())
+            if actor_role not in ROLE_CATALOG:
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
+            handoff = handoff_update(board, handoff_id=str(args.handoff).strip(), status="ACK", actor_role=actor_role)
             save_board(board_path, board)
             print(f"HANDOFF_ACK_OK handoff={handoff.get('id')} task={handoff.get('task_id')} to={handoff.get('to_role')}")
             return 0
 
         if args.cmd == "handoff-close":
-            handoff = handoff_update(board, handoff_id=str(args.handoff).strip(), status="CLOSED", actor_role=str(args.role or "").strip())
+            actor_role = _canonical_role(str(args.role or "").strip()) if str(args.role or "").strip() else ""
+            if actor_role and actor_role not in ROLE_CATALOG:
+                raise SystemExit(f"UNKNOWN_ROLE: {args.role}")
+            handoff = handoff_update(board, handoff_id=str(args.handoff).strip(), status="CLOSED", actor_role=actor_role)
             save_board(board_path, board)
             print(f"HANDOFF_CLOSE_OK handoff={handoff.get('id')} task={handoff.get('task_id')}")
             return 0

@@ -2,8 +2,52 @@
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_FROM_PARENT="$(cd "${SCRIPT_DIR}/.." && pwd -P 2>/dev/null || true)"
+ROOT_FROM_GRANDPARENT="$(cd "${SCRIPT_DIR}/../.." && pwd -P 2>/dev/null || true)"
+
+resolve_root() {
+  local candidate_a="${1:-}"
+  local candidate_b="${2:-}"
+  local a="/home/venom/shared/analyse-financiere"
+  local b="/home/venom/analyse-financiere"
+  local candidate=""
+  for candidate in "$candidate_a" "$candidate_b" "$a" "$b"; do
+    if [[ -z "$candidate" ]]; then
+      continue
+    fi
+    if [[ -d "$candidate/scripts" ]] && [[ -d "$candidate/platform" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s\n' "$candidate_a"
+}
+
+workspace_writable() {
+  local candidate="${1:-}"
+  [[ -n "$candidate" ]] || return 1
+  mkdir -p "$candidate/logs-codex-runs" >/dev/null 2>&1 || return 1
+  [[ -w "$candidate/logs-codex-runs" ]]
+}
+
+ROOT="$(resolve_root "$ROOT_FROM_PARENT" "$ROOT_FROM_GRANDPARENT")"
+if ! workspace_writable "$ROOT"; then
+  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
+    if [[ "$fallback" == "$ROOT" ]]; then
+      continue
+    fi
+    if [[ -d "$fallback/scripts" ]] && [[ -d "$fallback/platform" ]] && workspace_writable "$fallback"; then
+      ROOT="$fallback"
+      break
+    fi
+  done
+fi
 cd "$ROOT"
+ORCHESTRATOR_DIR_DEFAULT="${ROOT}/docs/operations/orchestrator"
+if [[ ! -d "$ORCHESTRATOR_DIR_DEFAULT" ]] && [[ -d "${ROOT}/docs/orchestrator-ops" ]]; then
+  ORCHESTRATOR_DIR_DEFAULT="${ROOT}/docs/orchestrator-ops"
+fi
 MODEL_CONFIG_FILE="${ROOT}/platform/config/lm_used_model_config.sh"
 if [[ ! -f "$MODEL_CONFIG_FILE" ]]; then
   MODEL_CONFIG_FILE="${ROOT}/platform/config/model-config.sh"
@@ -15,14 +59,22 @@ fi
 
 ROLE="${1:-}"
 if [[ -z "$ROLE" ]]; then
-  echo "Usage: $0 <planner|dev|tester|qa|architect|po|scrum_master|clawsentinel>"
+  echo "Usage: $0 <vision-architect-tasks-planner|planner|dev|tester|qa|architect|po|scrum_master|clawsentinel>"
   exit 2
 fi
 
+ROLE_INPUT="$ROLE"
+if [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
+  ROLE="planner"
+elif [[ "$ROLE" == "analyst" || "$ROLE" == "architect" || "$ROLE" == "po" || "$ROLE" == "scrum_master" ]]; then
+  # Coordination lanes legacy are now grouped under planner runtime lane.
+  ROLE="planner"
+fi
+
 case "$ROLE" in
-  planner|dev|tester|qa|architect|po|scrum_master|clawsentinel|analyst|backend_engineer|frontend_engineer|integrator|data_analyst|infra_engineer) ;;
+  dev|planner|admin|backend_engineer|frontend_engineer|data_analyst|integrator|infra_engineer|tester|qa|architect|po|scrum_master|clawsentinel|analyst) ;;
   *)
-    echo "Unsupported role: $ROLE"
+    echo "Unsupported role: $ROLE_INPUT"
     exit 3
     ;;
 esac
@@ -44,25 +96,32 @@ PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-180}"
 RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-90}"
 STATE_DIR="${TMUX_ROLE_STATE_DIR:-/home/venom/.openclaw/cron/role-state}"
 RATE_LIMIT_PRECHECK="${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}"
-RATE_LIMIT_PROBE_TIMEOUT="${TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT:-18}"
-RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-600}"
+RATE_LIMIT_PROBE_TIMEOUT="${TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT:-10}"
+RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-180}"
+RATE_LIMIT_QWEN_FALLBACK="${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}"
 TRACE_DIR="${TMUX_ROLE_TRACE_DIR:-$ROOT/logs-codex-runs/role-runner}"
+TRACE_EVENTS_ENABLED="${TMUX_ROLE_TRACE_EVENTS_ENABLED:-1}"
+TRACE_EVENT_DEDUPE_SECONDS="${TMUX_ROLE_TRACE_EVENT_DEDUPE_SECONDS:-4}"
 ROLE_MEMORY_DIR="${TMUX_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
 TEAM_CHAT_FILE="${TMUX_ROLE_TEAM_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
 TEAM_ITER_FILE="${TMUX_ROLE_TEAM_ITER_FILE:-$ROOT/docs/ops/ADMIN_TEAM_ITERATIONS.md}"
 DIRECTIVE_BUS_FILE="${TMUX_ROLE_DIRECTIVE_BUS_FILE:-$ROOT/docs/ops/DIRECTIVE_BUS.jsonl}"
-WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$ROOT/docs/orchestrator-ops/parallel-workstreams.json}"
+WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$ORCHESTRATOR_DIR_DEFAULT/parallel-workstreams.json}"
 MEMORY_LOCK_FILE="${TMUX_ROLE_MEMORY_LOCK_FILE:-${STATE_DIR}/${ROLE}.memory.lock}"
 RECOVERY_THRESHOLD="${TMUX_ROLE_RECOVERY_THRESHOLD:-2}"
 SKIP_RETRY_ON_TIMEOUT="${SKIP_RETRY_ON_TIMEOUT:-1}"
-RETRY_ENGINE_DEFAULT="${TMUX_ROLE_RETRY_ENGINE_DEFAULT:-tmux}"
+SKIP_TMUX_RETRY_IF_CODEX="${TMUX_ROLE_SKIP_TMUX_RETRY_IF_CODEX:-1}"
+RETRY_ENGINE_DEFAULT="${TMUX_ROLE_RETRY_ENGINE_DEFAULT:-sdk}"
 NO_DELTA_THRESHOLD="${TMUX_ROLE_NO_DELTA_THRESHOLD:-10}"
 TMUX_CAPTURE_LINES="${TMUX_ROLE_CAPTURE_LINES:-2600}"
 TMUX_READY_WAIT_SECONDS="${TMUX_ROLE_READY_WAIT_SECONDS:-8}"
 TMUX_POLL_INTERVAL_SECONDS="${TMUX_ROLE_POLL_INTERVAL_SECONDS:-1}"
 TMUX_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-75}"
 CODEX_EXEC_FALLBACK="${TMUX_ROLE_CODEX_EXEC_FALLBACK:-1}"
-DEFAULT_CODEX_MODEL="${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}"
+ROLE_MODEL_VAR="LM_ROLE_${ROLE^^}_MODEL"
+ROLE_MODEL_VAR="${ROLE_MODEL_VAR//-/_}"
+ROLE_DEFAULT_CODEX_MODEL="${!ROLE_MODEL_VAR:-${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}}"
+DEFAULT_CODEX_MODEL="${ROLE_DEFAULT_CODEX_MODEL}"
 CODEX_EXEC_MODEL="${TMUX_ROLE_CODEX_MODEL:-${DEFAULT_CODEX_MODEL}}"
 CODEX_TRUST_PROJECT="${TMUX_ROLE_CODEX_TRUST_PROJECT:-$ROOT}"
 CODEX_TRUST_CONFIG_ARG='projects."'${CODEX_TRUST_PROJECT}'".trust_level="trusted"'
@@ -75,17 +134,54 @@ ROLE_ALLOW_FILE_EDITS="${TMUX_ROLE_ALLOW_FILE_EDITS:-auto}"
 ALLOW_WORKBOARD_ONLY_DELIVERY="${TMUX_ROLE_ALLOW_WORKBOARD_ONLY_DELIVERY:-0}"
 TOOL_REQUEST_DEFAULT="${TMUX_ROLE_TOOL_REQUEST_DEFAULT:-none}"
 SKILL_REQUEST_DEFAULT="${TMUX_ROLE_SKILL_REQUEST_DEFAULT:-none}"
-MIN_REFLECTION_PASSES="${TMUX_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-${MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES:-5}}}"
+MIN_REFLECTION_PASSES="${TMUX_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-${MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES:-2}}}"
+TMUX_ROLE_CONTEXT_MODE="${TMUX_ROLE_CONTEXT_MODE:-lean}"
+TMUX_ROLE_MEMORY_PROFILE="${TMUX_ROLE_MEMORY_PROFILE:-auto}"
+TMUX_ROLE_MEMORY_DAILY_LINES="${TMUX_ROLE_MEMORY_DAILY_LINES:-}"
+TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES="${TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES:-}"
+TMUX_ROLE_MEMORY_MAX_LINE_CHARS="${TMUX_ROLE_MEMORY_MAX_LINE_CHARS:-180}"
 PUBLISH_EXEC_MONITORING="${TMUX_ROLE_PUBLISH_MONITORING:-1}"
-EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ROOT/docs/orchestrator-ops/executors-monitoring-latest.json}"
+EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/executors-monitoring-latest.json}"
 EXEC_MONITORING_EVENTS_FILE="${TMUX_ROLE_EXEC_MONITORING_EVENTS_FILE:-$ROOT/logs-codex-runs/executor-monitoring/events.jsonl}"
 TOOL_REQUESTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_FILE:-$ROOT/docs/ops/AGENT_TOOL_REQUESTS.md}"
-TOOL_REQUESTS_EVENTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_EVENTS_FILE:-$ROOT/docs/orchestrator-ops/agent-tool-requests.jsonl}"
+TOOL_REQUESTS_EVENTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_EVENTS_FILE:-$ORCHESTRATOR_DIR_DEFAULT/agent-tool-requests.jsonl}"
+
+resolve_helper_script() {
+  local primary="$1"
+  local fallback="$2"
+  if [[ -f "$ROOT/$primary" ]]; then
+    printf '%s\n' "$ROOT/$primary"
+    return 0
+  fi
+  if [[ -f "$ROOT/$fallback" ]]; then
+    printf '%s\n' "$ROOT/$fallback"
+    return 0
+  fi
+  printf '%s\n' "$ROOT/$primary"
+}
+
+ROLE_MEMORY_APPEND_SCRIPT="$(resolve_helper_script "platform/automation/role_memory_append.py" "scripts/role_memory_append.py")"
+ROLE_EXEC_MONITORING_SCRIPT="$(resolve_helper_script "platform/automation/role_execution_monitoring.py" "scripts/role_execution_monitoring.py")"
+PLANNER_GUARDIAN_SCRIPT="$(resolve_helper_script "platform/automation/planner_guardian.py" "scripts/planner_guardian.py")"
+ROLE_CONTRACT_GUARD_SCRIPT="$(resolve_helper_script "platform/policies/role_contract_guard.py" "scripts/role_contract_guard.py")"
+ROLE_RUNTIME_CONTEXT_SCRIPT="$(resolve_helper_script "platform/automation/role_runtime_context.py" "scripts/role_runtime_context.py")"
+PLANNER_GUARDIAN_ENABLED="${TMUX_ROLE_PLANNER_GUARDIAN_ENABLED:-1}"
+PLANNER_GUARDIAN_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_GUARDIAN_INCLUDE_IN_PROMPT:-1}"
+PLANNER_GUARDIAN_LATEST_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-latest.json}"
+PLANNER_GUARDIAN_EVENTS_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_EVENTS_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-events.jsonl}"
+PLANNER_AUDIT_ENABLED="${TMUX_ROLE_PLANNER_AUDIT_ENABLED:-1}"
+PLANNER_AUDIT_FILE="${TMUX_ROLE_PLANNER_AUDIT_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-audit-events.jsonl}"
+PLANNER_TIMELINE_FILE="${TMUX_ROLE_PLANNER_TIMELINE_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-timeline.log}"
+
 mkdir -p \
   "$STATE_DIR" \
   "$TRACE_DIR" \
+  "$(dirname "$PLANNER_AUDIT_FILE")" \
+  "$(dirname "$PLANNER_TIMELINE_FILE")" \
   "$(dirname "$EXEC_MONITORING_LATEST_FILE")" \
   "$(dirname "$EXEC_MONITORING_EVENTS_FILE")" \
+  "$(dirname "$PLANNER_GUARDIAN_LATEST_FILE")" \
+  "$(dirname "$PLANNER_GUARDIAN_EVENTS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_EVENTS_FILE")"
 FAIL_FILE="${STATE_DIR}/${ROLE}.fail_count"
@@ -93,9 +189,11 @@ NO_DELTA_FILE="${STATE_DIR}/${ROLE}.no_delta_count"
 CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
 LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
 TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
+TRACE_EVENTS_FILE="${TMUX_ROLE_TRACE_EVENTS_FILE:-${TRACE_DIR}/${ROLE}.events.log}"
 LOCK_FILE="${STATE_DIR}/${ROLE}.run.lock"
 LOCK_META_FILE="${STATE_DIR}/${ROLE}.run.lock.meta"
 RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
+TRACE_LAST_EVENT_FILE="${STATE_DIR}/${ROLE}.trace_event_last"
 RATE_LIMIT_STATE_NOTE=""
 
 if ! [[ "$RECOVERY_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$RECOVERY_THRESHOLD" -lt 1 ]]; then
@@ -109,6 +207,9 @@ if ! [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RETRY_PROMPT_TIME
 fi
 if ! [[ "$SKIP_RETRY_ON_TIMEOUT" =~ ^[01]$ ]]; then
   SKIP_RETRY_ON_TIMEOUT=1
+fi
+if ! [[ "$SKIP_TMUX_RETRY_IF_CODEX" =~ ^[01]$ ]]; then
+  SKIP_TMUX_RETRY_IF_CODEX=1
 fi
 if ! [[ "$NO_DELTA_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$NO_DELTA_THRESHOLD" -lt 1 ]]; then
   NO_DELTA_THRESHOLD=10
@@ -125,14 +226,23 @@ fi
 if ! [[ "$TMUX_STALL_ABORT_SECONDS" =~ ^[0-9]+$ ]]; then
   TMUX_STALL_ABORT_SECONDS=75
 fi
+if ! [[ "$TRACE_EVENTS_ENABLED" =~ ^[01]$ ]]; then
+  TRACE_EVENTS_ENABLED=1
+fi
+if ! [[ "$TRACE_EVENT_DEDUPE_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TRACE_EVENT_DEDUPE_SECONDS" -lt 0 ]]; then
+  TRACE_EVENT_DEDUPE_SECONDS=4
+fi
 if ! [[ "$RATE_LIMIT_PRECHECK" =~ ^[01]$ ]]; then
   RATE_LIMIT_PRECHECK=1
 fi
-if ! [[ "$RATE_LIMIT_PROBE_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_PROBE_TIMEOUT" -lt 8 ]]; then
-  RATE_LIMIT_PROBE_TIMEOUT=18
+if ! [[ "$RATE_LIMIT_PROBE_TIMEOUT" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_PROBE_TIMEOUT" -lt 5 ]]; then
+  RATE_LIMIT_PROBE_TIMEOUT=10
 fi
 if ! [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" =~ ^[0-9]+$ ]] || [[ "$RATE_LIMIT_CACHE_TTL_SECONDS" -lt 60 ]]; then
-  RATE_LIMIT_CACHE_TTL_SECONDS=600
+  RATE_LIMIT_CACHE_TTL_SECONDS=180
+fi
+if ! [[ "$RATE_LIMIT_QWEN_FALLBACK" =~ ^[01]$ ]]; then
+  RATE_LIMIT_QWEN_FALLBACK=1
 fi
 if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
   CODEX_EXEC_FALLBACK=1
@@ -160,6 +270,15 @@ fi
 if ! [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" =~ ^[01]$ ]]; then
   ALLOW_WORKBOARD_ONLY_DELIVERY=0
 fi
+if ! [[ "$PLANNER_GUARDIAN_ENABLED" =~ ^[01]$ ]]; then
+  PLANNER_GUARDIAN_ENABLED=1
+fi
+if ! [[ "$PLANNER_GUARDIAN_INCLUDE_IN_PROMPT" =~ ^[01]$ ]]; then
+  PLANNER_GUARDIAN_INCLUDE_IN_PROMPT=1
+fi
+if ! [[ "$PLANNER_AUDIT_ENABLED" =~ ^[01]$ ]]; then
+  PLANNER_AUDIT_ENABLED=1
+fi
 TOOL_REQUEST_DEFAULT="$(printf '%s' "$TOOL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
 SKILL_REQUEST_DEFAULT="$(printf '%s' "$SKILL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
 if [[ -z "$TOOL_REQUEST_DEFAULT" ]]; then
@@ -168,11 +287,23 @@ fi
 if [[ -z "$SKILL_REQUEST_DEFAULT" ]]; then
   SKILL_REQUEST_DEFAULT="none"
 fi
-if ! [[ "$MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$MIN_REFLECTION_PASSES" -lt 5 ]]; then
-  MIN_REFLECTION_PASSES=5
+# Minimum 2 passes (analyse/idle), 3 pour delivery — 5 uniquement si explicitement demandé.
+if ! [[ "$MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$MIN_REFLECTION_PASSES" -lt 2 ]]; then
+  MIN_REFLECTION_PASSES=2
+fi
+case "$TMUX_ROLE_CONTEXT_MODE" in
+  lean|full) ;;
+  *) TMUX_ROLE_CONTEXT_MODE="lean" ;;
+esac
+case "$TMUX_ROLE_MEMORY_PROFILE" in
+  auto|coordination|analysis|delivery) ;;
+  *) TMUX_ROLE_MEMORY_PROFILE="auto" ;;
+esac
+if ! [[ "$TMUX_ROLE_MEMORY_MAX_LINE_CHARS" =~ ^[0-9]+$ ]] || [[ "$TMUX_ROLE_MEMORY_MAX_LINE_CHARS" -lt 80 ]]; then
+  TMUX_ROLE_MEMORY_MAX_LINE_CHARS=180
 fi
 if [[ "$RETRY_ENGINE_DEFAULT" != "tmux" && "$RETRY_ENGINE_DEFAULT" != "sdk" ]]; then
-  RETRY_ENGINE_DEFAULT="tmux"
+  RETRY_ENGINE_DEFAULT="sdk"
 fi
 
 normalize_model() {
@@ -192,6 +323,10 @@ fi
 if ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
   echo "${AGENT_BIN} is not available in PATH" >&2
   exit 4
+fi
+if [[ "${AGENT_BIN_NAME,,}" == "qwen" && "$TMUX_STALL_ABORT_SECONDS" -lt 180 ]]; then
+  # Qwen can stream less frequently on heavy prompts; avoid premature stall abort.
+  TMUX_STALL_ABORT_SECONDS=180
 fi
 if [[ "$AGENT_BIN_NAME" != "codex" && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
   RETRY_ENGINE_DEFAULT="tmux"
@@ -219,6 +354,16 @@ if [[ "$CODEX_EXEC_PRIMARY" -eq 1 ]]; then
     RETRY_PROMPT_TIMEOUT_SECONDS=90
   fi
 fi
+# Admin prompts are often larger (ops/runtime triage) and need a wider timeout floor.
+if [[ "$ROLE" == "admin" ]]; then
+  if [[ "$PROMPT_TIMEOUT_SECONDS" -lt 300 ]]; then
+    PROMPT_TIMEOUT_SECONDS=300
+  fi
+  if [[ "$RETRY_PROMPT_TIMEOUT_SECONDS" -lt 120 ]]; then
+    RETRY_PROMPT_TIMEOUT_SECONDS=120
+  fi
+fi
+PRIMARY_CHANNEL="${PRIMARY_CHANNEL:-tmux}"
 
 ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
 if [[ "$ROLE_ALLOW_FILE_EDITS" == "1" ]]; then
@@ -233,6 +378,56 @@ elif [[ "$ROLE_ALLOW_FILE_EDITS" == "auto" ]]; then
       ;;
   esac
 fi
+
+resolve_role_memory_profile() {
+  local requested="${1:-auto}"
+  local role_name="${2:-unknown}"
+  if [[ "$requested" != "auto" ]]; then
+    printf '%s\n' "$requested"
+    return 0
+  fi
+  case "$role_name" in
+    planner|admin|architect|po|scrum_master|clawsentinel)
+      printf 'coordination\n'
+      ;;
+    analyst|qa|integrator|data_analyst)
+      printf 'analysis\n'
+      ;;
+    *)
+      printf 'delivery\n'
+      ;;
+  esac
+}
+
+default_role_memory_lines() {
+  case "$1" in
+    coordination)
+      printf '12 10\n'
+      ;;
+    analysis)
+      printf '10 8\n'
+      ;;
+    *)
+      printf '6 6\n'
+      ;;
+  esac
+}
+
+ROLE_MEMORY_PROFILE_EFFECTIVE="$(resolve_role_memory_profile "$TMUX_ROLE_MEMORY_PROFILE" "$ROLE")"
+read -r ROLE_MEMORY_DAILY_DEFAULT ROLE_MEMORY_ROLE_HISTORY_DEFAULT <<<"$(default_role_memory_lines "$ROLE_MEMORY_PROFILE_EFFECTIVE")"
+if [[ "$TMUX_ROLE_CONTEXT_MODE" == "full" ]]; then
+  ROLE_MEMORY_DAILY_DEFAULT="$(( ROLE_MEMORY_DAILY_DEFAULT * 3 ))"
+  ROLE_MEMORY_ROLE_HISTORY_DEFAULT="$(( ROLE_MEMORY_ROLE_HISTORY_DEFAULT * 3 ))"
+fi
+ROLE_MEMORY_DAILY_LINES_EFFECTIVE="$ROLE_MEMORY_DAILY_DEFAULT"
+ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE="$ROLE_MEMORY_ROLE_HISTORY_DEFAULT"
+if [[ -n "$TMUX_ROLE_MEMORY_DAILY_LINES" && "$TMUX_ROLE_MEMORY_DAILY_LINES" =~ ^[0-9]+$ && "$TMUX_ROLE_MEMORY_DAILY_LINES" -ge 4 ]]; then
+  ROLE_MEMORY_DAILY_LINES_EFFECTIVE="$TMUX_ROLE_MEMORY_DAILY_LINES"
+fi
+if [[ -n "$TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES" && "$TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES" =~ ^[0-9]+$ && "$TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES" -ge 4 ]]; then
+  ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE="$TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES"
+fi
+ROLE_MEMORY_MAX_LINE_CHARS_EFFECTIVE="$TMUX_ROLE_MEMORY_MAX_LINE_CHARS"
 
 runtime_queue_has_ready() {
   if [[ ! -f "docs/orchestrator-ops/priority-queue.json" ]]; then
@@ -261,9 +456,48 @@ except Exception:
     print("0")
     raise SystemExit(0)
 
+PLANNER_GROUP = {
+    "planner",
+    "vision_architect_tasks_planner",
+    "vision-architect-tasks-planner",
+    "analyst",
+    "architect",
+    "po",
+    "scrum_master",
+    "product_owner",
+    "owner",
+    "po_engineer",
+}
+DEV_GROUP = {
+    "dev",
+    "backend_engineer",
+    "frontend_engineer",
+    "data_analyst",
+    "infra_engineer",
+    "integrator",
+    "tester",
+    "qa",
+}
+ADMIN_GROUP = {"admin", "clawsentinel", "infra"}
+
+def canonical_role(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if not token:
+        return ""
+    if token in PLANNER_GROUP:
+        return "planner"
+    if token in DEV_GROUP:
+        return "dev"
+    if token in ADMIN_GROUP:
+        return "admin"
+    return token
+
 states = {"READY", "IN_PROGRESS", "REVIEW"}
+role_canonical = canonical_role(role)
 for task in board.get("tasks", []):
-    if str(task.get("role", "")) != role:
+    task_role = canonical_role(task.get("role", ""))
+    task_assignee = canonical_role(task.get("assignee", ""))
+    if role_canonical not in {task_role, task_assignee}:
         continue
     if str(task.get("state", "")).upper() in states:
         print("1")
@@ -291,8 +525,47 @@ except Exception:
     print("0")
     raise SystemExit(0)
 
+PLANNER_GROUP = {
+    "planner",
+    "vision_architect_tasks_planner",
+    "vision-architect-tasks-planner",
+    "analyst",
+    "architect",
+    "po",
+    "scrum_master",
+    "product_owner",
+    "owner",
+    "po_engineer",
+}
+DEV_GROUP = {
+    "dev",
+    "backend_engineer",
+    "frontend_engineer",
+    "data_analyst",
+    "infra_engineer",
+    "integrator",
+    "tester",
+    "qa",
+}
+ADMIN_GROUP = {"admin", "clawsentinel", "infra"}
+
+def canonical_role(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if not token:
+        return ""
+    if token in PLANNER_GROUP:
+        return "planner"
+    if token in DEV_GROUP:
+        return "dev"
+    if token in ADMIN_GROUP:
+        return "admin"
+    return token
+
+role_canonical = canonical_role(role)
 for task in board.get("tasks", []):
-    if str(task.get("role", "")) != role:
+    task_role = canonical_role(task.get("role", ""))
+    task_assignee = canonical_role(task.get("assignee", ""))
+    if role_canonical not in {task_role, task_assignee}:
         continue
     if str(task.get("state", "")).upper() == "IN_PROGRESS":
         print("1")
@@ -352,22 +625,26 @@ if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
 fi
 
 target_session_name() {
+  local prefix="codex"
+  if [[ "${AGENT_BIN_NAME,,}" == "qwen" ]]; then
+    prefix="qwen"
+  fi
   case "$1" in
-    planner) echo "codex_planner_cron" ;;
-    dev) echo "codex_dev_cron" ;;
-    tester) echo "codex_tester_cron" ;;
-    qa) echo "codex_qa_cron" ;;
-    architect) echo "codex_architect_cron" ;;
-    po) echo "codex_po_cron" ;;
-    scrum_master) echo "codex_scrum_master_cron" ;;
-    analyst) echo "codex_analyst_cron" ;;
-    backend_engineer) echo "codex_backend_engineer_cron" ;;
-    frontend_engineer) echo "codex_frontend_engineer_cron" ;;
-    integrator) echo "codex_integrator_cron" ;;
-    data_analyst) echo "codex_data_analyst_cron" ;;
-    infra_engineer) echo "codex_infra_engineer_cron" ;;
-    manager) echo "codex_manager_cron" ;;
-    clawsentinel) echo "clawsentinel" ;;
+    planner) echo "${prefix}_planner_cron" ;;
+    dev) echo "${prefix}_dev_cron" ;;
+    tester) echo "${prefix}_tester_cron" ;;
+    qa) echo "${prefix}_qa_cron" ;;
+    architect) echo "${prefix}_architect_cron" ;;
+    po) echo "${prefix}_po_cron" ;;
+    scrum_master) echo "${prefix}_scrum_master_cron" ;;
+    analyst) echo "${prefix}_analyst_cron" ;;
+    backend_engineer) echo "${prefix}_backend_engineer_cron" ;;
+    frontend_engineer) echo "${prefix}_frontend_engineer_cron" ;;
+    integrator) echo "${prefix}_integrator_cron" ;;
+    data_analyst) echo "${prefix}_data_analyst_cron" ;;
+    infra_engineer) echo "${prefix}_infra_engineer_cron" ;;
+    manager) echo "${prefix}_manager_cron" ;;
+    clawsentinel) echo "${prefix}_clawsentinel_cron" ;;
   esac
 }
 
@@ -403,7 +680,21 @@ build_codex_global_args() {
 
 detect_rate_limit_signal() {
   local text="${1:-}"
-  printf '%s\n' "$text" | rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit|rate[[:space:]_-]*limit|rate limit|rate-limits|rate limits|rate-limit|429|too many requests|quota.*(exceeded|exhausted|limit)|model.*unavailable|please try again later|temporarily|unavailable due to rate'
+  [[ -z "$text" ]] && return 1
+  # Exclure les faux positifs connus (bannières UI / prompts menu)
+  local clean_text
+  clean_text="$(printf '%s\n' "$text" \
+    | grep -v -i -E 'openai codex|qwen code|approaching rate limits|switch to .* for lower credit|press enter to confirm or esc|^╭|^╰|^│' || true)"
+  # Signatures provider/API strictes seulement (évite faux positifs sur sorties reasoning).
+  if ! printf '%s\n' "$clean_text" | rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit[[:space:]_-]*reached|api-rate-limit-reached|insufficient_quota|quota[[:space:]_-]*(exceeded|exhausted|reached)|rate[[:space:]_-]*limit[[:space:]_-]*(exceeded|exhausted|reached)|((http|status|code|error)[^0-9]{0,8}429([^0-9]|$))|(^|[^0-9])429([^0-9]|$)|too many requests'; then
+    return 1
+  fi
+  # "too many requests" sans 429 ni code explicite est trop ambigu -> ignore.
+  if printf '%s\n' "$clean_text" | rg -qi 'too many requests' \
+    && ! printf '%s\n' "$clean_text" | rg -qi '429|http|status|code|insufficient_quota|api-rate-limit-reached'; then
+    return 1
+  fi
+  return 0
 }
 
 sanitize_rate_limit_reason() {
@@ -471,7 +762,7 @@ run_rate_limit_probe() {
     fi
     probe_msg_file="$(mktemp)"
     probe_cmd+=("exec" "--model" "$CODEX_EXEC_MODEL" "--output-last-message" "$probe_msg_file" --json)
-    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "${probe_cmd[@]}" 'Réponds simplement "OK".' 2>&1)"
+    output="$(run_with_timeout "$RATE_LIMIT_PROBE_TIMEOUT" "${probe_cmd[@]}" 'Réponds simplement "OK".' 2>&1)"
     probe_rc=$?
     if [[ -s "$probe_msg_file" ]]; then
       probe_msg="$(cat "$probe_msg_file" 2>/dev/null || true)"
@@ -482,13 +773,13 @@ ${probe_msg}"
     fi
     rm -f "$probe_msg_file"
   else
-    output="$(timeout "$RATE_LIMIT_PROBE_TIMEOUT" "$AGENT_BIN" --channel CI --approval-mode yolo --chat-recording false -o text 'Réponds simplement "OK".' 2>&1)"
+    output="$(run_with_timeout "$RATE_LIMIT_PROBE_TIMEOUT" "$AGENT_BIN" --channel CI --approval-mode yolo --chat-recording false -o text 'Réponds simplement "OK".' 2>&1)"
     probe_rc=$?
   fi
   set -e
 
   if detect_rate_limit_signal "$output"; then
-    reason="$(sanitize_rate_limit_reason "$output")"
+    reason="$(sanitize_rate_limit_reason "$(printf '%s\n' "$output" | rg -i '429|api-rate-limit-reached|insufficient_quota|quota|rate[[:space:]_-]*limit|too many requests' | head -n 6)")"
     RATE_LIMIT_STATE_NOTE="$reason"
     rate_limit_cache_set "$reason"
     return 1
@@ -497,6 +788,48 @@ ${probe_msg}"
     trace_event "rate_limit_probe_error bin=${AGENT_BIN_NAME} rc=${probe_rc}"
   fi
   return 0
+}
+
+run_with_timeout() {
+  local timeout_seconds="${1:-0}"
+  shift || true
+
+  if [[ "$timeout_seconds" =~ ^[0-9]+$ ]] && [[ "$timeout_seconds" -gt 0 ]]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$timeout_seconds" "$@"
+      return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+      gtimeout "$timeout_seconds" "$@"
+      return $?
+    fi
+    # Portable fallback (macOS): kill process after timeout and return 124.
+    local timeout_flag=""
+    timeout_flag="$(mktemp)"
+    "$@" &
+    local cmd_pid=$!
+    (
+      sleep "$timeout_seconds"
+      if kill -0 "$cmd_pid" >/dev/null 2>&1; then
+        echo "timeout" > "$timeout_flag"
+        kill -TERM "$cmd_pid" >/dev/null 2>&1 || true
+        sleep 1
+        kill -KILL "$cmd_pid" >/dev/null 2>&1 || true
+      fi
+    ) &
+    local watcher_pid=$!
+    local rc=0
+    wait "$cmd_pid" || rc=$?
+    kill "$watcher_pid" >/dev/null 2>&1 || true
+    wait "$watcher_pid" >/dev/null 2>&1 || true
+    if [[ -s "$timeout_flag" ]]; then
+      rc=124
+    fi
+    rm -f "$timeout_flag"
+    return "$rc"
+  fi
+
+  "$@"
 }
 
 emit_rate_limit_gate_output() {
@@ -516,17 +849,17 @@ emit_rate_limit_gate_output() {
     artifact_key="ROLE_ARTIFACT="
   fi
 
-  evidence_text="task_update=blocked; lock_check=ok; run_note=mode_precheck: modèle ${AGENT_BIN_NAME} indisponible pour ce tick suite au rate_limit; exec_report=skip_role_tick_due_to_rate_limit; issues=rate_limit_detected; suggestions=attendre le déblocage du quota avant nouveau lancement; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; channels_read=runtime_context; impact_assessment=low; impact_action=retry_after_cache_ttl; vision_rule=rate_limit_gate; arch_rule=observability; review_scope=${ROLE}_rate_limit; conformance=WARN; violations=rate_limit; tool_request=${AGENT_BIN_NAME}; skill_request=none; ${artifact_key}rate_limit_gate; queue_version=${RUNTIME_QUEUE_VERSION}; workboard_version=${RUNTIME_WORKBOARD_VERSION}; model=${CODEX_EXEC_MODEL}; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
+  evidence_text="task_update=none_no_signal; lock_check=ok; run_note=mode backoff temporaire suite rate limit; issues=rate_limit_detected; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; ${artifact_key}rate_limit_gate; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
 
-  output="$(cat <<EOF
-STATUS: BLOCKED
-DELTA: BLOCKED
+output="$(cat <<EOF
+STATUS: RATE_LIMIT_SKIP
+DELTA: RATE_LIMIT_BACKOFF
 EVIDENCE: ${evidence_text}
-RISKS: model ${AGENT_BIN_NAME} inaccessible suite à une limite de quota temporaire; aucun travail fiable à exécuter ce tick
-NEXT: owner=adminapp-codex; action=model_not_accessible_rate_limit; wait_for_quota_recovery_before_retry
-VERDICT: BLOCKED
-BLOCKER_ID: AGENT_RATE_LIMIT_${AGENT_BIN_NAME^^}
-NEXT_ACTION_UNIQUE: RATE_LIMIT_${AGENT_BIN_NAME^^}_SKIP_${ROLE}_$(date +%s)
+RISKS: model ${AGENT_BIN_NAME} temporairement indisponible suite à une limite de quota; le tick est différé
+NEXT: owner=admin; action=attendre la fin du backoff puis relancer automatiquement
+VERDICT: WAIT
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: RATE_LIMIT_${AGENT_BIN_NAME^^}_WAIT_${ROLE}_$(date +%s)
 EOF
 )"
 
@@ -556,20 +889,107 @@ EOF
 handle_rate_limit_output() {
   local source="${1:-unknown}"
   local output_text="${2:-}"
-  if detect_rate_limit_signal "$output_text"; then
-    RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "$output_text")"
-    rate_limit_cache_set "$RATE_LIMIT_STATE_NOTE"
-    emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "$source"
+  local rc="${3:-0}"
+  # Un output valide (rc=0) ne doit pas être écrasé par un faux positif de quota.
+  if [[ "$rc" -eq 0 ]]; then
+    return 0
   fi
+  local provider_excerpt=""
+  provider_excerpt="$(printf '%s\n' "$output_text" | rg -i '429|too many requests|api[[:space:]_-]*rate[[:space:]_-]*limit|api-rate-limit-reached|quota|insufficient_quota|rate[[:space:]_-]*limit[[:space:]_-]*(exceeded|exhausted|reached)' | head -n 8 || true)"
+  if ! detect_rate_limit_signal "$provider_excerpt"; then
+    return 0
+  fi
+  RATE_LIMIT_STATE_NOTE="$(sanitize_rate_limit_reason "$provider_excerpt")"
+  rate_limit_cache_set "$RATE_LIMIT_STATE_NOTE"
+  fallback_to_qwen_on_rate_limit "$RATE_LIMIT_STATE_NOTE" "$source" || true
+  emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "$source"
+}
+
+fallback_to_qwen_on_rate_limit() {
+  local reason="${1:-rate_limit_detected}"
+  local source="${2:-precheck}"
+  if [[ "$RATE_LIMIT_QWEN_FALLBACK" != "1" ]]; then
+    return 1
+  fi
+  if [[ "$AGENT_BIN_NAME" != "codex" ]]; then
+    return 1
+  fi
+  local qwen_bin="${TMUX_ROLE_QWEN_BIN:-${LM_USED_QWEN_BIN:-qwen}}"
+  if [[ "$qwen_bin" == */* ]]; then
+    if [[ ! -x "$qwen_bin" ]]; then
+      # Cross-env safety: configured VM path may be absent locally, fallback to PATH.
+      local base="${qwen_bin##*/}"
+      if [[ -n "$base" ]] && command -v "$base" >/dev/null 2>&1; then
+        qwen_bin="$(command -v "$base")"
+      elif command -v qwen >/dev/null 2>&1; then
+        qwen_bin="$(command -v qwen)"
+      else
+        return 1
+      fi
+    fi
+  else
+    if ! command -v "$qwen_bin" >/dev/null 2>&1; then
+      return 1
+    fi
+    qwen_bin="$(command -v "$qwen_bin")"
+  fi
+  trace_event "rate_limit_qwen_fallback source=${source} reason=$(sanitize_rate_limit_reason "$reason") qwen_bin=${qwen_bin}"
+  exec env \
+    TMUX_ROLE_AGENT_BIN="${qwen_bin}" \
+    TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK=0 \
+    TMUX_ROLE_RATE_LIMIT_GATE_REASON="$(sanitize_rate_limit_reason "$reason")" \
+    bash "${SCRIPT_PATH}" "${ROLE_INPUT}"
 }
 
 health_roles() {
-  printf '%s\n' planner analyst architect backend_engineer frontend_engineer data_analyst infra_engineer integrator dev tester qa po scrum_master clawsentinel
+  printf '%s\n' planner backend_engineer frontend_engineer data_analyst infra_engineer integrator dev tester qa clawsentinel
 }
 
 trace_event() {
   local msg="$1"
-  printf '%s role=%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" "$msg" >> "$TRACE_FILE"
+  local ts_utc=""
+  local msg_clean=""
+  local event=""
+  local detail=""
+  local now_epoch=0
+  local last_epoch=0
+  local last_msg=""
+  local dedupe=0
+
+  ts_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s role=%s %s\n' "$ts_utc" "$ROLE" "$msg" >> "$TRACE_FILE"
+
+  if [[ "$TRACE_EVENTS_ENABLED" != "1" ]]; then
+    return 0
+  fi
+
+  msg_clean="$(printf '%s' "$msg" | tr '\n' ' ' | tr '\t' ' ' | tr -s ' ' | sed 's/^ *//; s/ *$//' | cut -c1-420)"
+  if [[ -z "$msg_clean" ]]; then
+    return 0
+  fi
+  event="${msg_clean%% *}"
+  if [[ "$msg_clean" == *" "* ]]; then
+    detail="${msg_clean#* }"
+  fi
+
+  now_epoch="$(date +%s)"
+  if [[ -f "$TRACE_LAST_EVENT_FILE" ]]; then
+    IFS=$'\t' read -r last_epoch last_msg < "$TRACE_LAST_EVENT_FILE" || true
+    if [[ "$last_epoch" =~ ^[0-9]+$ ]] && [[ "$last_msg" == "$msg_clean" ]]; then
+      if (( now_epoch - last_epoch <= TRACE_EVENT_DEDUPE_SECONDS )); then
+        dedupe=1
+      fi
+    fi
+  fi
+  printf '%s\t%s\n' "$now_epoch" "$msg_clean" > "$TRACE_LAST_EVENT_FILE"
+  if [[ "$dedupe" -eq 1 ]]; then
+    return 0
+  fi
+
+  printf '%s role=%s event=%s detail=%s\n' "$ts_utc" "$ROLE" "$event" "$detail" >> "$TRACE_EVENTS_FILE"
+  if [[ "$ROLE" == "planner" ]]; then
+    printf '%s event=%s detail=%s\n' "$ts_utc" "$event" "$detail" >> "$PLANNER_TIMELINE_FILE"
+  fi
 }
 
 one_line() {
@@ -603,13 +1023,13 @@ append_role_memory() {
   mkdir -p "$ROLE_MEMORY_DIR"
   ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S %Z')"
 
-  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_memory_append.py" ]]; then
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$ROLE_MEMORY_APPEND_SCRIPT" ]]; then
     return 0
   fi
 
   tmp="$(mktemp)"
   printf '%s\n' "$payload" > "$tmp"
-  python3 scripts/role_memory_append.py \
+  python3 "$ROLE_MEMORY_APPEND_SCRIPT" \
     "$ROLE" \
     "$source" \
     "$tmp" \
@@ -631,13 +1051,13 @@ publish_execution_monitoring() {
   local source="${2:-unknown}"
   local tmp_payload=""
 
-  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_execution_monitoring.py" ]]; then
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$ROLE_EXEC_MONITORING_SCRIPT" ]]; then
     return 0
   fi
 
   tmp_payload="$(mktemp)"
   printf '%s\n' "$payload" > "$tmp_payload"
-  python3 scripts/role_execution_monitoring.py \
+  python3 "$ROLE_EXEC_MONITORING_SCRIPT" \
     "$ROLE" \
     "$source" \
     "$tmp_payload" \
@@ -649,14 +1069,153 @@ publish_execution_monitoring() {
   rm -f "$tmp_payload"
 }
 
+publish_planner_guardian_if_enabled() {
+  local contract="$1"
+  local source="${2:-unknown}"
+  local tmp_payload=""
+  local tmp_runtime=""
+
+  if [[ "$ROLE" != "planner" ]]; then
+    return 0
+  fi
+  if [[ "$PLANNER_GUARDIAN_ENABLED" == "0" ]]; then
+    trace_event "planner_guardian_skipped role=${ROLE} source=${source} reason=disabled"
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_GUARDIAN_SCRIPT" ]]; then
+    trace_event "planner_guardian_skipped role=${ROLE} source=${source} reason=script_missing"
+    return 0
+  fi
+
+  tmp_payload="$(mktemp)"
+  tmp_runtime="$(mktemp)"
+  printf '%s\n' "$contract" > "$tmp_payload"
+  printf '%s\n' "$RUNTIME_CONTEXT" > "$tmp_runtime"
+  python3 "$PLANNER_GUARDIAN_SCRIPT" \
+    "$ROLE" \
+    "$source" \
+    "$tmp_payload" \
+    "$tmp_runtime" \
+    "$PLANNER_GUARDIAN_LATEST_FILE" \
+    "$PLANNER_GUARDIAN_EVENTS_FILE" \
+    "$STATE_DIR" \
+    "$DIRECTIVE_BUS_FILE" >/dev/null 2>&1 || true
+  rm -f "$tmp_payload" "$tmp_runtime"
+}
+
+publish_planner_audit_if_enabled() {
+  local contract="$1"
+  local source="${2:-unknown}"
+  local tmp_payload=""
+
+  if [[ "$ROLE" != "planner" ]]; then
+    return 0
+  fi
+  if [[ "$PLANNER_AUDIT_ENABLED" == "0" ]]; then
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  tmp_payload="$(mktemp)"
+  printf '%s\n' "$contract" > "$tmp_payload"
+  python3 - "$source" "$tmp_payload" "$PLANNER_GUARDIAN_LATEST_FILE" "$PLANNER_AUDIT_FILE" <<'PY' >/dev/null 2>&1 || true
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+source = sys.argv[1]
+payload_file = Path(sys.argv[2])
+guardian_latest_file = Path(sys.argv[3])
+out_file = Path(sys.argv[4])
+
+def read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+def one_line(value: str, limit: int = 320) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) > limit:
+        return text[:limit]
+    return text
+
+def parse_contract(text: str):
+    out = {}
+    for raw in text.splitlines():
+        m = re.match(r"^\s*([A-Z_]+)\s*:\s*(.*)$", raw.strip())
+        if not m:
+            continue
+        key = m.group(1).upper()
+        if key in {"STATUS", "DELTA", "EVIDENCE", "RISKS", "NEXT", "VERDICT", "BLOCKER_ID", "NEXT_ACTION_UNIQUE"} and key not in out:
+            out[key] = m.group(2).strip()
+    return out
+
+def parse_evidence(raw: str):
+    out = {}
+    for frag in (raw or "").split(";"):
+        if "=" not in frag:
+            continue
+        k, v = frag.split("=", 1)
+        key = k.strip().lower()
+        if key and key not in out:
+            out[key] = v.strip()
+    return out
+
+contract = parse_contract(read_text(payload_file))
+evidence = parse_evidence(contract.get("EVIDENCE", ""))
+guardian = {}
+try:
+    data = json.loads(read_text(guardian_latest_file))
+    if isinstance(data, dict):
+        guardian = data
+except Exception:
+    guardian = {}
+
+record = {
+    "ts_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "role": "planner",
+    "source": source,
+    "status": one_line(contract.get("STATUS", "")),
+    "delta": one_line(contract.get("DELTA", "")),
+    "verdict": one_line(contract.get("VERDICT", "")),
+    "blocker_id": one_line(contract.get("BLOCKER_ID", "")),
+    "next_action_unique": one_line(contract.get("NEXT_ACTION_UNIQUE", "")),
+    "task_update": one_line(evidence.get("task_update", "")),
+    "stream_id": one_line(evidence.get("stream_id", "")),
+    "task_id": one_line(evidence.get("task_id", "")),
+    "planner_artifact": one_line(evidence.get("planner_artifact", "")),
+    "batch_created": one_line(evidence.get("batch_created", "")),
+    "vision_alignment": one_line(evidence.get("vision_alignment", ""), 420),
+    "architecture_plan_ref": one_line(evidence.get("architecture_plan_ref", ""), 420),
+    "architecture_audit": one_line(evidence.get("architecture_audit", ""), 420),
+    "run_note": one_line(evidence.get("run_note", ""), 420),
+    "guardian_score": int(guardian.get("score", -1)) if str(guardian.get("score", "")).strip() not in {"", "None"} else -1,
+    "guardian_level": one_line(str(guardian.get("level", ""))),
+    "guardian_issues": one_line(",".join([str(x) for x in guardian.get("issues", [])[:6]]) if isinstance(guardian.get("issues"), list) else "", 420),
+}
+
+out_file.parent.mkdir(parents=True, exist_ok=True)
+with out_file.open("a", encoding="utf-8") as fh:
+    fh.write(json.dumps(record, ensure_ascii=True) + "\n")
+PY
+  rm -f "$tmp_payload"
+}
+
 publish_execution_monitoring_if_enabled() {
   local contract="$1"
   local source="${2:-unknown}"
   if [[ "$PUBLISH_EXEC_MONITORING" == "0" ]]; then
     trace_event "monitoring_publish_skipped role=${ROLE} source=${source} reason=disabled"
-    return 0
+  else
+    publish_execution_monitoring "$contract" "$source"
   fi
-  publish_execution_monitoring "$contract" "$source"
+  publish_planner_guardian_if_enabled "$contract" "$source"
+  publish_planner_audit_if_enabled "$contract" "$source"
 }
 
 acquire_role_lock() {
@@ -795,7 +1354,7 @@ enforce_role_delivery_contract() {
   tmp="$(mktemp)"
   cat > "$tmp"
 
-  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "scripts/role_contract_guard.py" ]]; then
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$ROLE_CONTRACT_GUARD_SCRIPT" ]]; then
     trace_event "contract_guard_unavailable source=${source}; fallback=raw_payload"
     cat "$tmp"
     rm -f "$tmp"
@@ -842,12 +1401,8 @@ for i,raw in enumerate(lines):
                 kv['issues'] = issues + ',run_note_auto_fixed'
         else:
             kv['issues'] = 'run_note_auto_fixed'
-        # suggestions must be actionable when issues!=none
-        sugg=(kv.get('suggestions') or '').strip()
-        if not sugg or sugg.lower() in {'none','n/a','na'}:
-            kv['suggestions'] = 'regenerer_role_contract_avec_run_note>=5_mots'
     # rebuild evidence preserving a stable key order first
-    preferred=['task_update','lock_check','run_note','exec_report','issues','suggestions','stream_id','task_id','reflection_passes','reflection_dimensions','intent_id','directive_id','directive_ack','cmd','tests_run']
+    preferred=['task_update','lock_check','run_note','issues','stream_id','task_id','cmd','tests_run','handoff_to','cmd_err_excerpt']
     seen=set()
     parts=[]
     for k in preferred:
@@ -864,7 +1419,7 @@ p.write_text(''.join(lines),encoding='utf-8')
 PY
 
   set +e
-  python3 scripts/role_contract_guard.py \
+  python3 "$ROLE_CONTRACT_GUARD_SCRIPT" \
     "$ROLE" \
     "$source" \
     "$tmp" \
@@ -1202,9 +1757,11 @@ TARGET_SESSION="$(target_session_name "$ROLE")"
 STARTUP_NOTE=""
 
 if rate_limit_cache_active; then
+  fallback_to_qwen_on_rate_limit "${RATE_LIMIT_STATE_NOTE:-rate_limit_cached}" "cache" || true
   emit_rate_limit_gate_output "${RATE_LIMIT_STATE_NOTE:-rate_limit_cached}" "cache"
 fi
 if ! run_rate_limit_probe; then
+  fallback_to_qwen_on_rate_limit "${RATE_LIMIT_STATE_NOTE:-rate_limit_probe}" "probe" || true
   emit_rate_limit_gate_output "$RATE_LIMIT_STATE_NOTE" "probe"
 fi
 
@@ -1250,43 +1807,100 @@ sanitize_tmux_logs() {
 }
 
 load_3day_memory_context() {
-  # Load last 3 days of memory + role-specific decisions.
-  # This prevents agents from regressing to old architecture and preserves recent decision context.
-  local ROLE_MEMORY_CONTEXT=""
-  local MEMORY_DIR="${ROLE_MEMORY_DIR}/.."  # memory/ directory
-  
-  # Assemble last 3 days of daily memory files
+  local role_memory_context=""
+  local memory_dir="${ROLE_MEMORY_DIR}/.."
+  local daily_lines="${ROLE_MEMORY_DAILY_LINES_EFFECTIVE}"
+  local role_history_lines="${ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE}"
+  local max_chars="${ROLE_MEMORY_MAX_LINE_CHARS_EFFECTIVE}"
+  local has_content=0
+
   for days_ago in 0 1 2; do
-    # Try macOS date format first (with -v), then GNU coreutils fallback
-    local DATE
-    if date -v-${days_ago}d +%Y-%m-%d >/dev/null 2>&1; then
-      DATE=$(date -v-${days_ago}d +%Y-%m-%d)
+    local date_str=""
+    if date -v-"${days_ago}"d +%Y-%m-%d >/dev/null 2>&1; then
+      date_str="$(date -v-"${days_ago}"d +%Y-%m-%d)"
     else
-      DATE=$(date -d "$days_ago days ago" +%Y-%m-%d 2>/dev/null || echo "")
+      date_str="$(date -d "$days_ago days ago" +%Y-%m-%d 2>/dev/null || echo "")"
     fi
-    
-    if [[ -n "$DATE" ]]; then
-      local MEMORY_FILE="$MEMORY_DIR/${DATE}.md"
-      if [[ -f "$MEMORY_FILE" ]]; then
-        # Load only first 150 lines per day to keep context lean but informative
-        ROLE_MEMORY_CONTEXT+="
-## Architecture Context: ${DATE}
-$(head -150 "$MEMORY_FILE" 2>/dev/null | sed 's/^/  /')
+    if [[ -z "$date_str" ]]; then
+      continue
+    fi
+    local memory_file="${memory_dir}/${date_str}.md"
+    local summary_file="${memory_dir}/summaries/${date_str}.summary.md"
+    if [[ "$TMUX_ROLE_CONTEXT_MODE" == "lean" && -f "$summary_file" ]]; then
+      memory_file="$summary_file"
+    fi
+    if [[ -f "$memory_file" ]]; then
+      has_content=1
+      role_memory_context+="
+## Memory ${date_str}
+$(head -n "$daily_lines" "$memory_file" 2>/dev/null | awk -v max="$max_chars" '{gsub(/\r/, ""); line=$0; if (length(line) > max) line=substr(line, 1, max); print "  " line}')
 ---"
-      fi
     fi
   done
-  
-  # Add role-specific decision history (last 50 lines)
-  if [[ -f "$ROLE_MEMORY_DIR/${ROLE}.md" ]]; then
-    ROLE_MEMORY_CONTEXT+="
 
-## Role History: ${ROLE}
-$(tail -50 "$ROLE_MEMORY_DIR/${ROLE}.md" 2>/dev/null | sed 's/^/  /')
+  local role_memory_file="${ROLE_MEMORY_DIR}/${ROLE}.md"
+  local role_summary_file="${ROLE_MEMORY_DIR}/summaries/${ROLE}.summary.md"
+  if [[ "$TMUX_ROLE_CONTEXT_MODE" == "lean" && -f "$role_summary_file" ]]; then
+    role_memory_file="$role_summary_file"
+  fi
+  if [[ -f "$role_memory_file" ]]; then
+    has_content=1
+    role_memory_context+="
+
+## Role History ${ROLE}
+$(tail -n "$role_history_lines" "$role_memory_file" 2>/dev/null | awk -v max="$max_chars" '{gsub(/\r/, ""); line=$0; if (length(line) > max) line=substr(line, 1, max); print "  " line}')
 "
   fi
-  
-  printf '%s\n' "$ROLE_MEMORY_CONTEXT"
+
+  if [[ "$has_content" -eq 0 ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  printf '%s\n' "$role_memory_context"
+}
+
+load_planner_guardian_context() {
+  if [[ "$ROLE" != "planner" || "$PLANNER_GUARDIAN_INCLUDE_IN_PROMPT" == "0" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_GUARDIAN_LATEST_FILE" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  python3 - "$PLANNER_GUARDIAN_LATEST_FILE" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+except Exception:
+    print("none")
+    raise SystemExit(0)
+
+if not isinstance(data, dict):
+    print("none")
+    raise SystemExit(0)
+
+ts = str(data.get("ts_utc") or "unknown")
+score = str(data.get("score") or "unknown")
+level = str(data.get("level") or "unknown")
+issues = data.get("issues")
+reco = data.get("recommendations")
+if not isinstance(issues, list):
+    issues = []
+if not isinstance(reco, list):
+    reco = []
+
+issues_s = ",".join(str(x) for x in issues[:4]) or "none"
+reco_s = "; ".join(str(x) for x in reco[:2]) or "none"
+msg = f"ts={ts} | score={score} | level={level} | issues={issues_s} | recos={reco_s}"
+msg = re.sub(r"\s+", " ", msg).strip()
+print(msg[:420])
+PY
 }
 
 build_prompt() {
@@ -1295,17 +1909,71 @@ build_prompt() {
     planner)
       cat <<'PROMPT'
 ROLE=planner.
-Read docs/planning/PRODUCT_VISION.md, docs/planning/epics.md, docs/planning/tasks.md, docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, and evidence/gates/openclaw-gates.
-Do not modify product source files.
-Role mentor: valider que le travail READY/IN_PROGRESS est conforme a la vision produit (forecast-first, prevision API->UI visible, decision en 2-3 clics, cout runtime raisonnable).
-Analyser au moins un task READY/IN_PROGRESS par tick et publier un verdict de conformite avec regle explicite.
-Si une tache planner est READY/IN_PROGRESS dans le workboard: autorise task_update=claim|complete|handoff (mise a jour workboard uniquement) pour debloquer les deps.
-Si workboard_role_has_in_progress=1 pour planner, task_update=analysis_only est interdit: utiliser complete|handoff (ou blocked avec cmd_err_excerpt reel).
-Si aucune tache planner actionnable: utiliser task_update=analysis_only ou none_no_ready.
-Obligatoire: EVIDENCE doit contenir planner_artifact=<preuve_mentor>, stream_id=<stream>, task_id=<task>, vision_rule=<regle_verifiee>, conformance=<PASS|WARN|BLOCKED>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+Mission: agir comme owner autonome du backlog (détection des gaps, alignement architecture, création/dispatch des batches).
+Objectif: débloquer la livraison réelle avec une action concrète unique par tick.
+Budget strict:
+- maximum 1 commande shell par tick, maximum 15s
+- commande autorisée: python3 platform/automation/parallel_workstream.py context --role planner --limit 5
+- interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
+Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json.
+Ne modifie pas apps/** ni les fichiers de sécurité. Tu peux modifier uniquement orchestration/docs/json de pilotage.
+
+Décision tick (ordre strict):
+1) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
+2) tâche planner READY -> claim puis dispatch vers dev avec task cible + fichiers cibles + test cible.
+3) si queue/workboard indiquent un gap critique non couvert (architecture, dépendance, acceptance gate), créer 1 batch top-level BATCH-XX même si runway_short=0.
+4) planner_batch_runway_short=1 -> créer au plus 1 batch top-level BATCH-XX.
+5) sinon task_update=none_no_ready.
+6) si les preuves runtime sont incomplètes -> task_update=blocked avec cause explicite (pas d'invention).
+
+Création batch (si step 3/4):
+- ID unique BATCH-XX (2 chiffres, top-level uniquement).
+- Lier explicitement au target de vision: feature, endpoint, domaine, critère done.
+- Inclure architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate dans EVIDENCE.
+- Pas de sous-tâches récursives ni stream à 4 segments.
+
+EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, stream_id+task_id si claim/complete/handoff.
+Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+PROMPT
+      ;;
+    admin)
+      cat <<'PROMPT'
+ROLE=admin.
+Mission: admin des batches (pas création), debottleneck planner/dev, hygiene runtime/docs.
+Règle produit: seul planner crée les batches top-level; admin coordonne et débloque.
+Autonomie autorisée: tu peux adapter tes propres consignes admin si elles causent des blocages récurrents.
+Pré-analyse obligatoire avant décision:
+- bash scripts/fc_health_check.sh
+- python3 platform/automation/parallel_workstream.py context --role admin --limit 5
+- bash scripts/dev_parent_monitor.sh
+Lis docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json, docs/orchestrator-ops/executors-monitoring-latest.json et logs-codex-runs/fc-ticks/*.tick.log.
+Budget strict:
+- maximum 3 commandes shell par tick, max 20s chacune
+- pas de scans globaux sur tout le repo
+
+Décision tick (ordre strict):
+1) blocker runtime réel -> fix immédiat + vérification.
+2) dérive orchestration (queue/workboard/prompt/cron/docs) -> correction ciblée + preuve.
+3) si une lane planner/dev est bloquée -> action de déblocage concrète ce tick (pas d'analyse passive).
+4) sinon task_update=none_no_signal avec preuve santé explicite.
+5) N'utilise task_update=blocked que pour panne runtime vérifiable ce tick (jamais pour drift documentaire).
+6) Ne déclare jamais `CRON_SCHEDULE_MISSING` sans double preuve:
+   - `crontab -l | rg "fc_agent_tick|cron_tmux_role_runner"` retourne 0 ligne
+   - et `logs-codex-runs/fc-ticks/admin.cron.log` n'a pas d'activité récente
+   - inclure `crontab_agent_jobs=<n>` et `cron_log_recent=<0|1>` dans EVIDENCE.
+7) Si le même blocker revient >=2 ticks et que la cause est prompt/contrat:
+   - tu peux modifier `platform/automation/cron_tmux_role_runner.sh` (section ROLE=admin)
+   - tu synchronises `scripts/cron_tmux_role_runner.sh` si nécessaire
+   - tu ajoutes une note d'audit dans `docs/ops/ADMIN_TEAM_CHAT.md` (TYPE:PROMPT_PATCH)
+   - tu ajoutes une note d'itération dans `docs/ops/ADMIN_TEAM_ITERATIONS.md`
+   - `admin_artifact` référence au moins un fichier prompt + un fichier d'audit.
+
+Commandes shell via platform/policies/exec_safe.sh.
+EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), admin_artifact, root_cause, fix_applied, verify.
+Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
+Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Si task_update=blocked avec motif permission/read-only: cmd_err_excerpt requis.
+Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       ;;
     analyst)
@@ -1324,23 +1992,20 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=backend_engineer.
-Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and apps/api/src.
-Execution mode=delivery: prendre un task backend pret et livrer un patch/test concret.
-Commandes shell via scripts/exec_safe.sh.
-Obligatoire: EVIDENCE doit contenir backend_artifact=<fichier_ou_test>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+Lis docs/orchestrator-ops/priority-queue.json et apps/api/src/domains/.
+Exécute: claim tâche READY → patch minimal dans apps/api/src/domains/ → test ciblé → complete.
+Commandes via platform/policies/exec_safe.sh. Apps: FastAPI (apps/api), domaines dans apps/api/src/domains/.
+
+EVIDENCE: task_update, lock_check=ok, run_note (3+ mots), backend_artifact=<fichier_modifié>, stream_id, task_id, cmd=<cmd|SKIP(raison)>.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       else
       cat <<'PROMPT'
-ROLE=backend_engineer.
-Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and apps/api/src.
-Mode analyse (read-only): Do not modify files.
-Obligatoire: EVIDENCE doit contenir backend_artifact=<fichier_cible_ou_plan>, task_id=<task>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+ROLE=backend_engineer (mode read-only).
+Lis docs/orchestrator-ops/priority-queue.json et apps/api/src/domains/.
+Analyse la tâche backend READY et prépare le plan de patch minimal.
+EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), backend_artifact=<plan_ou_fichier_cible>, task_id.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       fi
       ;;
@@ -1348,23 +2013,20 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=frontend_engineer.
-Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and finance-app.
-Execution mode=delivery: prendre un task frontend pret et livrer une modification UI/UX concrete.
-Commandes shell via scripts/exec_safe.sh.
-Obligatoire: EVIDENCE doit contenir frontend_artifact=<fichier_ou_capture>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+Lis docs/orchestrator-ops/priority-queue.json et apps/web/src/domains/.
+Exécute: claim tâche READY → composant/page dans apps/web/src/ → test visuel → complete.
+Commandes via platform/policies/exec_safe.sh. Framework: React/Vite (finance-app ou apps/web).
+
+EVIDENCE: task_update, lock_check=ok, run_note (3+ mots), frontend_artifact=<fichier_modifié>, stream_id, task_id, cmd=<cmd|SKIP(raison)>.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       else
       cat <<'PROMPT'
-ROLE=frontend_engineer.
-Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and finance-app.
-Mode analyse (read-only): Do not modify files.
-Obligatoire: EVIDENCE doit contenir frontend_artifact=<fichier_cible_ou_plan>, task_id=<task>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+ROLE=frontend_engineer (mode read-only).
+Lis docs/orchestrator-ops/priority-queue.json et apps/web/src/domains/.
+Analyse la tâche UI READY et prépare le plan de composants à modifier.
+EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), frontend_artifact=<plan_ou_composant_cible>, task_id.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       fi
       ;;
@@ -1374,7 +2036,7 @@ PROMPT
 ROLE=integrator.
 Read docs/orchestrator-ops/priority-queue.json, docs/planning/tasks.md, and docs/scrum/sprint-current.md.
 Execution mode=delivery: integrer les sorties backend/frontend/infra et verifier les interfaces.
-Commandes shell via scripts/exec_safe.sh.
+Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir integrator_artifact=<preuve_integration>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -1396,23 +2058,20 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=data_analyst.
-Read docs/orchestrator-ops/priority-queue.json, data, and docs/planning/tasks.md.
-Execution mode=delivery: produire une preuve data exploitable (requete, metrique, controle qualite) en support des equipes.
-Commandes shell via scripts/exec_safe.sh.
-Obligatoire: EVIDENCE doit contenir data_artifact=<requete_ou_resultat>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+Lis docs/orchestrator-ops/priority-queue.json et apps/api/src/domains/market_data/.
+Exécute: claim tâche data READY → vérifier pipeline prix/forecasts → produire résultat exploitable → complete.
+Commandes via platform/policies/exec_safe.sh. Sources prix: Yahoo Finance (yfinance), stooq.
+
+EVIDENCE: task_update, lock_check=ok, run_note (3+ mots), data_artifact=<fichier_ou_résultat_data>, stream_id, task_id, cmd=<cmd|SKIP(raison)>.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       else
       cat <<'PROMPT'
-ROLE=data_analyst.
-Read docs/orchestrator-ops/priority-queue.json, data, and docs/planning/tasks.md.
-Mode analyse (read-only): Do not modify files.
-Obligatoire: EVIDENCE doit contenir data_artifact=<analyse_ou_metric>, task_id=<task>.
-Return at most 10 lines with keys:
-STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-If nothing changed, set DELTA: NO_DELTA.
+ROLE=data_analyst (mode read-only).
+Lis docs/orchestrator-ops/priority-queue.json et apps/api/src/domains/market_data/.
+Analyse la disponibilité et qualité des données pour la tâche READY.
+EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), data_artifact=<analyse_ou_metric>, task_id.
+Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       fi
       ;;
@@ -1422,7 +2081,7 @@ PROMPT
 ROLE=infra_engineer.
 Read docs/orchestrator-ops/priority-queue.json, docs/ops, and scripts.
 Execution mode=delivery: appliquer une amelioration infra/CI/observabilite qui accelere la livraison.
-Commandes shell via scripts/exec_safe.sh.
+Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir infra_artifact=<fichier_ou_check_infra>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -1444,18 +2103,39 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=dev.
-Read docs/planning/tasks.md, docs/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
-Read workboard lane context first: python3 scripts/parallel_workstream.py context --role dev --limit 5.
-WORKDIR obligatoire pour toute commande: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere).
-Execution mode=delivery: exécute une boucle complète claim -> patch minimal -> test ciblé -> complete/handoff.
-Si une tâche dev est READY: claim explicite via scripts/parallel_workstream.py claim --role dev avant patch.
-Si une tâche dev est IN_PROGRESS: reprendre/fermer cette tâche avant toute autre action.
-Si aucune tâche dev READY/IN_PROGRESS n'existe: ne pas inventer de travail, utiliser task_update=none_no_ready.
-Avant un blocker read-only/permission, valide d'abord une ecriture sur le fichier metier cible (pas sur *.lock) et capture cmd_err_excerpt du meme tick.
-Une erreur isolee sur *.lock n'est pas une preuve suffisante de blocage permission.
-Ne pas recycler un ancien blocker read-only sans preuve fraîche du tick courant.
-Commandes shell via scripts/exec_safe.sh.
-Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_modifie_ou_patch>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Pré-analyse obligatoire:
+- python3 platform/automation/parallel_workstream.py context --role dev --limit 5
+- python3 platform/automation/parallel_workstream.py status --role dev --compact
+- lis docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/orchestrator-ops/priority-queue.json
+- lis docs/ops/API_ENDPOINT_BEST_PRACTICES.md et docs/ops/REUSE_MODULES_CATALOG.md avant patch
+- lis docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md avant patch
+- vérifier architecture target avant code: docs/architecture/ARCHITECTURE_MAP.md + docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml
+WORKDIR obligatoire: racine du repo courant (détectée automatiquement par le runner).
+
+Mode delivery strict:
+- priorité absolue à IN_PROGRESS, sinon READY.
+- boucle complète: claim -> root_cause -> patch minimal -> test ciblé -> complete/handoff.
+- si aucune tâche READY/IN_PROGRESS: task_update=none_no_ready.
+- une seule tâche par tick, pas de scope mixte.
+- aucun patch doc-only pour une tâche DEV-* (sauf si la tâche demande explicitement un fix spec/doc).
+- avant création de fichier/module: preuve reuse-first obligatoire (`rg` + module réutilisé ou justification `NONE(reason)`).
+- architecture-first obligatoire avant patch: confirmer la couche cible (domain/application/api/platform) et éviter imports cross-layer.
+- appliquer le modèle JUDGE endpoint comme référence de qualité d'intégration: réutiliser clients/modules existants avant création.
+
+Spécialisation par task_id:
+- DEV-01 => API/contracts + module-load/layering fixes (apps/api/src/**)
+- DEV-02 => runtime-path/integration coherence (+ UI wiring si demandé)
+- DEV-03 => data quality/scoring/guardrails/spec hardening (apps/api/src/** + docs/ops/**)
+
+Blocker permission/read-only: preuve fraîche obligatoire du tick courant sur fichier métier (cmd_err_excerpt). Pas de preuve sur *.lock uniquement.
+Commandes shell via platform/policies/exec_safe.sh.
+EVIDENCE: dev_artifact, task_update, lock_check=ok, run_note (>=5 mots), root_cause, fix_applied, verify, reuse_check, architecture_check, vision_alignment, qa_proof.
+reuse_check format: <module_reused> ou NONE(<raison courte>).
+architecture_check format: layer=<domain|application|api|platform>; imports_ok=<yes|no>; path_target=<fichier>.
+vision_alignment format: batch=<BATCH-XX>; target=<objectif_livraison>; impact=<courte_phrase>.
+qa_proof format: test=<cmd_ou_suite>; result=<PASS|FAIL|SKIP(reason)>.
+Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
+Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Si task_update=blocked avec un motif permission/read-only, ajouter cmd_err_excerpt=<stderr_reel>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -1464,7 +2144,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=dev.
-Read docs/planning/tasks.md, docs/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
+Read docs/product/planning/tasks.md, docs/product/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
 Mode analyse (read-only): Do not modify files.
 Si queue_has_ready=1 mais workboard_role_has_work=0 et workboard_role_has_in_progress=0: utiliser task_update=none_no_ready.
 Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_cible_ou_patch_plan>.
@@ -1480,7 +2160,7 @@ PROMPT
 ROLE=tester.
 Read tests, docs/planning/tasks.md, and docs/orchestrator-ops/priority-queue.json.
 Execution mode=delivery: exécute réellement les tests minimaux liés à l'item READY.
-Commandes shell via scripts/exec_safe.sh.
+Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir tester_artifact=<suite_test_ou_commande>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -1503,11 +2183,14 @@ PROMPT
       cat <<'PROMPT'
 ROLE=qa.
 Read evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json, and docs/scrum/sprint-current.md.
-Read workboard lane context first: python3 scripts/parallel_workstream.py context --role qa --limit 5.
-Execution mode=delivery: vérifie la cohérence gate/queue/workboard et livre un verdict actionnable.
+Read docs/DEV_TOOLS_GUIDE.md for browser/openclaw validation commands.
+Read workboard lane context first: python3 platform/automation/parallel_workstream.py context --role qa --limit 5.
+Execution mode=delivery: QA global gate (intégration/régression/qualité finale) avec checks globaux cross-role.
 Si aucune tâche QA n'est READY/IN_PROGRESS: utiliser task_update=none_no_ready et expliciter les deps restantes (ex: depends_on) dans RISKS/NEXT.
-Commandes shell via scripts/exec_safe.sh.
-Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation|doc_fix>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
+Commandes shell via platform/policies/exec_safe.sh.
+Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation|doc_fix>, task_update=<...>, lock_check=ok, run_note=<action concrete >=5 mots>.
+Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
+Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -1516,7 +2199,7 @@ PROMPT
       cat <<'PROMPT'
 ROLE=qa.
 Read evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json, and docs/scrum/sprint-current.md.
-Read workboard lane context first: python3 scripts/parallel_workstream.py context --role qa --limit 5.
+Read workboard lane context first: python3 platform/automation/parallel_workstream.py context --role qa --limit 5.
 Mode analyse (read-only): Do not modify files.
 Validate gate coherence and blockers.
 Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation>.
@@ -1530,11 +2213,16 @@ PROMPT
       cat <<'PROMPT'
 ROLE=architect.
 Read docs/planning/epics.md, docs/planning/stories.md, docs/planning/tasks.md, docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/orchestrator-ops/priority-queue.json.
+Read docs/product/planning/ARCHITECTURE_FORECAST_FREE_DATA_BLUEPRINT.md and docs/product/planning/FREE_DATA_SOURCE_KEY_MATRIX.md.
 Do not modify files.
-Validate architecture best-practices compliance for the current delivery scope.
+Mission détaillée:
+1) clarifier le batch/scope prioritaire,
+2) découper en tâches concrètes par rôle,
+3) expliciter comment implémenter (ordre, dépendances, fichiers/sources),
+4) expliciter validation (tests, données réelles, critères done),
+5) proposer handoff exécutable.
 If queue_has_ready=1 or workboard_role_has_in_progress=1, anchor review to that scope and include stream_id/task_id.
-Obligatoire: EVIDENCE doit contenir architect_artifact=<decision_ou_contrainte_archi>; arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>; task_update=<analysis_only|blocked|none_no_ready|none_no_signal>; lock_check=ok.
-If conformance=BLOCKED, STATUS/VERDICT must be BLOCKED with a non-NONE BLOCKER_ID.
+Obligatoire: EVIDENCE doit contenir architect_artifact=<decision_ou_contrainte_archi>, task_update=<analysis_only|blocked|none_no_ready|none_no_signal>, lock_check=ok, run_note=<action concrete >=5 mots>.
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -1585,6 +2273,7 @@ PROMPT
 required_artifact_marker_for_role() {
   case "$1" in
     planner) echo "PLANNER_ARTIFACT=" ;;
+    admin) echo "ADMIN_ARTIFACT=" ;;
     analyst) echo "ANALYST_ARTIFACT=" ;;
     dev) echo "DEV_ARTIFACT=" ;;
     backend_engineer) echo "BACKEND_ARTIFACT=" ;;
@@ -1603,50 +2292,89 @@ required_artifact_marker_for_role() {
 }
 
 # Load 3-day memory context to prevent architecture regression
+REQUIRED_ARTIFACT_MARKER="$(required_artifact_marker_for_role "$ROLE")"
 ROLE_MEMORY_CONTEXT="$(load_3day_memory_context)"
-
+if [[ "$ROLE" == "admin" ]]; then
+  # Keep minimal memory by default; allow opt-out via env for deep runtime incidents.
+  if [[ "${TMUX_ROLE_ADMIN_DISABLE_MEMORY_CONTEXT:-0}" == "1" ]]; then
+    ROLE_MEMORY_CONTEXT="none"
+  fi
+fi
+PLANNER_GUARDIAN_CONTEXT="$(load_planner_guardian_context)"
 PROMPT_TEXT="$(build_prompt "$ROLE")"
+trace_event "prompt_memory_context role=${ROLE} mode=${TMUX_ROLE_CONTEXT_MODE} profile=${ROLE_MEMORY_PROFILE_EFFECTIVE} daily_lines=${ROLE_MEMORY_DAILY_LINES_EFFECTIVE} role_history_lines=${ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE} bytes=${#ROLE_MEMORY_CONTEXT}"
+if [[ "$ROLE" == "planner" ]]; then
+  trace_event "planner_guardian_context role=${ROLE} enabled=${PLANNER_GUARDIAN_INCLUDE_IN_PROMPT} bytes=${#PLANNER_GUARDIAN_CONTEXT}"
+fi
 
-# Inject architecture anchors and 3-day memory context
-SYSTEM_PROMPT="## ARCHITECTURE CONTINUITY (Last 3 Days)
+PLANNER_GUARDIAN_PROMPT_SECTION=""
+if [[ "$ROLE" == "planner" ]]; then
+  PLANNER_GUARDIAN_PROMPT_SECTION="$(cat <<EOF
+PLANNER_GUARDIAN_FEEDBACK:
+${PLANNER_GUARDIAN_CONTEXT}
+
+EOF
+)"
+fi
+
+SYSTEM_PROMPT="$(cat <<EOF
+ARCHITECTURE_CONTINUITY_3DAYS:
 ${ROLE_MEMORY_CONTEXT}
 
-## ANTI-REGRESSION GUARDS
-Do NOT regress to:
-❌ copilot-app/* paths (archived in archive/structure-migrations/)
-❌ backend/src/backend/src nesting (flattened to apps/api/src/)
-❌ Legacy src.* imports (use absolute from apps/api/src/)
+${PLANNER_GUARDIAN_PROMPT_SECTION}
+ANTI_REGRESSION_GUARDS:
+- Interdits: copilot-app/*, backend/src/backend/src/*, imports legacy src.*
+- References: apps/api/src/domains/*, apps/web/src, apps/api/runtime/, docs/ops/AGENTS_READY.md
 
-Reference instead:
-✅ apps/api/src/domains/* for backend code
-✅ apps/web/src for frontend
-✅ apps/api/runtime/ for data + cache
-✅ docs/ops/AGENTS_READY.md for current state validation
+CONTRAT_SORTIE_STRICT:
+- Reponds en francais avec exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+- Une seule valeur utile par ligne, aucun texte hors contrat.
+- EVIDENCE au format key=value;key2=value2.
 
----
+REGLES_RUNTIME:
+- Avant toute décision: exécute le contexte de lane (parallel_workstream.py context --role <role> --limit 5) et lis WORKSTATE courant.
+- Si divergence entre docs/planning/* et docs/product/planning/*: priorise docs/product/planning/*.
+- Base-toi sur RUNTIME_CONTEXT (queue/workboard/contracts/directives).
+- Si queue_has_ready=1: DELTA != NO_DELTA et NEXT_ACTION_UNIQUE cible un item READY.
+- Si queue_has_ready=0 et workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS (pas analysis_only).
+- Reprendre self_last_contract recent, sauf blocker read-only/permission non prouve sur ce tick.
+- Interdit: inventer des blockers historiques.
+- Interdit: probe artificielle sur *.lock/fichier metier; blocker permission valide seulement avec cmd_err_excerpt exact du tick.
 
-Ignore l'historique non pertinent. Réponds uniquement en français avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE. Une seule valeur par ligne et aucun texte hors contrat. Appuie-toi sur les états fournis dans RUNTIME_CONTEXT (queue_states, queue_has_ready, workboard_role_has_work, workboard_role_has_in_progress, queue_version, workboard_version, now_iso, agent_memory, self_last_contract, peer_contracts, workboard_context, team_chat_tail, team_iteration_tail, directives_tail). Si queue_has_ready=1, DELTA ne doit pas être NO_DELTA et NEXT_ACTION_UNIQUE doit cibler un item READY actuel. Si queue_has_ready=0 mais workboard_role_has_in_progress=1, tu dois reprendre/fermer cette tache IN_PROGRESS (pas analysis_only). Tu dois reprendre le travail interrompu s'il existe un self_last_contract récent, sauf si ce contrat évoque un blocker read-only/permission non prouvé pour ce tick. EVIDENCE doit etre en format kv key=value;key2=value2. EVIDENCE doit inclure task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>, lock_check=ok, run_note=<phrase (>=5 mots) décrivant l'action du tick, sans ';'>, exec_report=<resume_execution_concret>, issues=<none_ou_liste_priorisee>, suggestions=<none_ou_liste_actionnable>. Si directives_tail!=none, tu dois la prendre en compte et ajouter directive_id=<id_dernier> et directive_ack=<applied|blocked> dans EVIDENCE. Si un outil/skill manque pour livrer, ajoute tool_request=<outil_ou_none> et skill_request=<skill_ou_none> dans EVIDENCE. Si task_update=claim|complete|handoff en mode delivery, EVIDENCE doit aussi inclure intent_id=<...>, intent_chat_ref=<...>, intent_memory_ref=<...>, intent_registry_ref=<...>, edit_scope=<...> (preuve de pre-annonce avant edition). EVIDENCE doit aussi inclure le gate architecture commun: arch_rule=<api_contract|forecast_contract|schema_stability|reusability|observability|security>; review_scope=<stream_task_ou_composant>; conformance=<PASS|WARN|BLOCKED>; violations=<none_ou_liste>. RISKS doit prioriser le principal probleme rencontre (ou none). Quand queue_has_ready=1 ou workboard_role_has_work=1, ajoute stream_id=<...> et task_id=<...>. Si task_update=claim|complete|handoff, stream_id/task_id sont obligatoires. Si task_update=handoff, ajoute handoff_to=<role> et handoff_ref=<id|pending>. Si task_update=complete, ajoute cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>. NEXT doit nommer explicitement le owner suivant (format owner=<role>; action=<...>) et inclure une suggestion d'amelioration si issues!=none. Si STATUS=BLOCKED alors BLOCKER_ID ne doit jamais etre NONE. N'effectue jamais de probe d'ecriture artificielle (ni sur *.lock ni sur fichier metier). Un blocker read-only/permission n'est valide que si une commande metier reelle du tick courant echoue avec cmd_err_excerpt exact. WORKDIR attendu: /home/venom/analyse-financiere (alias OK: /home/venom/shared/analyse-financiere). N'invente pas de blocker historique non présent dans queue_states."
-SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu dois lire publication_channels dans RUNTIME_CONTEXT pour savoir sur quoi travaillent les autres agents et evaluer l'impact sur ta tache. EVIDENCE doit inclure channels_read=<liste_canaux_lus>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none_ou_action_concrete>."
-SYSTEM_PROMPT="${SYSTEM_PROMPT} Si task_update=claim|complete|handoff, EVIDENCE doit prouver la réflexion en 5 passes minimum: reflection_passes>=${MIN_REFLECTION_PASSES} et reflection_dimensions=scope,dependency_impact,risk,verification,rollback."
+EVIDENCE (champs requis):
+- task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>
+- lock_check=ok
+- run_note=<5+ mots — action concrète faite ce tick>
+- ${REQUIRED_ARTIFACT_MARKER}<fichier_ou_preuve>
+- stream_id + task_id (si task_update=claim|complete|handoff)
+- cmd=<commande|SKIP(raison)> (si task_update=complete)
+NEXT: owner=<role>; action=<…>. Si BLOCKED: BLOCKER_ID != NONE.
+
+WORKDIR_ATTENDU=${ROOT}.
+EOF
+)"
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
-  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode delivery: exécute réellement les commandes nécessaires (via scripts/exec_safe.sh), évite les plans fictifs, mets à jour les tâches/handoffs via scripts/parallel_workstream.py, et fournis des preuves concrètes."
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=delivery: execute des commandes reelles via platform/policies/exec_safe.sh, evite les plans fictifs, mets a jour claims/handoffs via python3 platform/automation/parallel_workstream.py, et fournis des preuves concretes."
 else
-  SYSTEM_PROMPT="${SYSTEM_PROMPT} Tu es en mode analyse: n'édite pas de fichiers et ne déclenche pas d'actions externes. Si workboard_role_has_work=0 et workboard_role_has_in_progress=0, utilise task_update=none_no_ready."
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=analyse: n'edite pas de fichiers et ne declenche pas d'actions externes. Si workboard_role_has_work=0 et workboard_role_has_in_progress=0, utilise task_update=none_no_ready."
 fi
 
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
-- Source unique des tâches: docs/planning/tasks.md (pas de création de tâches dans docs Scrum/backlog).
-- Lecture des canaux de publication obligatoire au debut du tick: `python3 scripts/parallel_workstream.py channels --role <role> --limit 5`.
-- Interdit: faire des probes directes sur `*.lock` (ex: `parallel-workstreams.json.lock`, `intent-registry.json.lock`). Utilise uniquement des commandes métier (`preannounce`, `claim`, tests) pour prouver un blocage réel.
-- Pré-annonce obligatoire avant toute action delivery (claim/édition): exécuter `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`; réutiliser les refs générées dans EVIDENCE (`intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`).
-- Co-édition: si workboard_role_has_in_progress=1, reprendre/fermer cette tâche d'abord (sans nouveau claim). Sinon, après pré-annonce, claim d'abord avec arguments pré-définis (`scripts/parallel_workstream.py claim --role <role> --change-plan "<au_moins_5_étapes_concrètes couvrant scope/dependency_impact/risk/verification/rollback>" --architecture-checks "<au_moins_3_checks_concrets>"`), puis patch minimal sur la section claimée, collision => merge explicite (jamais écraser).
-- Réflexion obligatoire avant changement delivery: EVIDENCE doit contenir `reflection_passes>=5` et `reflection_dimensions=scope,dependency_impact,risk,verification,rollback`.
-- Handoffs: ack/close prioritaire si handoffs_to_ids!=none, puis documenter handoff_to/handoff_ref dans EVIDENCE.
-- Communication inter-rôles: NEXT doit avoir owner explicite (owner=<role>; action=<...>) pour éviter les ambiguïtés.
-- Impact inter-rôles: EVIDENCE doit inclure channels_read, impact_assessment, impact_action; si impact_assessment=high|critical, impact_action ne doit jamais être none.
-- Gate architecture commun: chaque rôle doit vérifier forecast-first (API prévisions -> UI visible), stabilité de schéma, réutilisation modules existants et observabilité minimale; refléter ces checks dans arch_rule/review_scope/conformance/violations.
-- Si aucun slot rôle READY/IN_PROGRESS: task_update=none_no_ready (pas de faux blocker).
+- Source taches: docs/product/planning/tasks.md (fallback docs/planning/tasks.md) — IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
+- WIP max 60 taches actives (guard dans parallel_workstream.py).
+- Blocker permission valide UNIQUEMENT avec cmd_err_excerpt du tick courant (pas d'historique).
+- MODE DELIVERY: claim via python3 platform/automation/parallel_workstream.py claim, root_cause concret, patch minimal, tests ciblés, complete/handoff.
+- Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
+- Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.
+- Si aucun slot READY/IN_PROGRESS: task_update=none_no_ready.
+PROMPT
+)"
+
+ORCHESTRATION_RETRY_PROMPT="$(cat <<'PROMPT'
+RETRY: Retourne exactement 8 lignes (STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE).
+EVIDENCE: task_update + lock_check=ok + run_note (>=5 mots) + artifact_rôle + root_cause + fix_applied + verify.
+Priorité: IN_PROGRESS > READY > none_no_ready. Pas de blockers inventés.
 PROMPT
 )"
 
@@ -1657,8 +2385,8 @@ build_runtime_context() {
   local workboard_role_has_work="${RUNTIME_WORKBOARD_ROLE_HAS_WORK:-0}"
   local workboard_role_has_in_progress="${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}"
 
-  if command -v python3 >/dev/null 2>&1 && [[ -f "scripts/role_runtime_context.py" ]]; then
-    context="$(python3 scripts/role_runtime_context.py \
+  if command -v python3 >/dev/null 2>&1 && [[ -f "$ROLE_RUNTIME_CONTEXT_SCRIPT" ]]; then
+    context="$(python3 "$ROLE_RUNTIME_CONTEXT_SCRIPT" \
       "$ROLE" \
       "$ROOT" \
       "$STATE_DIR" \
@@ -1678,7 +2406,7 @@ build_runtime_context() {
     fi
   fi
 
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | top_level_total=0 | top_level_non_closed=0 | top_level_ready=0 | planner_batch_runway_short=1 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_in_progress=%s | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$queue_version" \
     "$workboard_version" \
@@ -1699,9 +2427,14 @@ capture_has_contract() {
 build_dispatch_prompt() {
   local prompt_text="$1"
   local tick="$2"
+  local dispatch_scope="${3:-primary}"
+  local orchestration_prompt="$ORCHESTRATION_SHARED_PROMPT"
+  if [[ "$dispatch_scope" == "retry" ]]; then
+    orchestration_prompt="$ORCHESTRATION_RETRY_PROMPT"
+  fi
   cat <<EOF
 ${SYSTEM_PROMPT}
-${ORCHESTRATION_SHARED_PROMPT}
+${orchestration_prompt}
 ${RUNTIME_CONTEXT}
 
 ${prompt_text}
@@ -1789,6 +2522,7 @@ codex_exec_prompt_once() {
   local timeout_seconds="$1"
   local prompt_text="$2"
   local tick="$3"
+  local dispatch_scope="${4:-primary}"
   local prompt_payload=""
   local session_id=""
   local allow_resume=0
@@ -1800,7 +2534,8 @@ codex_exec_prompt_once() {
   local msg_file=""
   local -a codex_cmd=()
 
-  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick")"
+  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick" "$dispatch_scope")"
+  trace_event "dispatch_prompt scope=${dispatch_scope} channel=codex_exec tick=${tick} bytes=${#prompt_payload}"
   while IFS= read -r token; do
     [[ -z "$token" ]] && continue
     codex_cmd+=("$token")
@@ -1817,7 +2552,7 @@ codex_exec_prompt_once() {
   if [[ "$allow_resume" -eq 1 && -n "$session_id" ]]; then
     used_resume=1
     set +e
-    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
     if [[ $rc -ne 0 ]] && printf '%s\n' "$output" | rg -qi 'session.*not found|unknown session|invalid session|no such session'; then
@@ -1833,7 +2568,7 @@ codex_exec_prompt_once() {
 
   if [[ -z "$session_id" ]]; then
     set +e
-    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
   fi
@@ -1858,7 +2593,7 @@ codex_exec_prompt_once() {
     set +e
     rm -f "$msg_file"
     msg_file="$(mktemp)"
-    output="$(timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
     sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"
@@ -1894,6 +2629,7 @@ prompt_once() {
   local prompt_text="$2"
   local tick="$3"
   local channel="${4:-${PRIMARY_CHANNEL:-tmux}}"
+  local dispatch_scope="${5:-primary}"
   local prompt_payload=""
   local deadline=0
   local now=0
@@ -1904,7 +2640,7 @@ prompt_once() {
   local stalled_for=0
 
   if [[ "$channel" == "codex_exec" ]]; then
-    codex_exec_prompt_once "$timeout_seconds" "$prompt_text" "$tick"
+    codex_exec_prompt_once "$timeout_seconds" "$prompt_text" "$tick" "$dispatch_scope"
     return $?
   fi
 
@@ -1915,7 +2651,8 @@ prompt_once() {
 
   tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" C-l >/dev/null 2>&1 || true
   tmux clear-history -t "$(tmux_target "$TARGET_SESSION")" >/dev/null 2>&1 || true
-  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick")"
+  prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick" "$dispatch_scope")"
+  trace_event "dispatch_prompt scope=${dispatch_scope} channel=${channel} tick=${tick} bytes=${#prompt_payload}"
   tmux_send_multiline "$TARGET_SESSION" "$prompt_payload"
 
   deadline=$(( $(date +%s) + timeout_seconds ))
@@ -1925,6 +2662,19 @@ prompt_once() {
     if [[ -n "$capture" ]] && capture_has_contract "$capture"; then
       printf '%s\n' "$capture"
       return 0
+    fi
+    # Auto-dismiss interactive menus: rate limit switch, trust project, etc.
+    if printf '%s\n' "$capture" | grep -qE "Approaching rate limits|Switch to .* for lower credit|Press enter to confirm or esc"; then
+      trace_event "autodismiss_ratelimit_menu session=${TARGET_SESSION} tick=${tick}"
+      tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "2" Enter >/dev/null 2>&1 || true
+      last_progress_at="$(date +%s)"
+      sleep 2
+    fi
+    if printf '%s\n' "$capture" | grep -qE "Trust this project|Allow all file|trust_level"; then
+      trace_event "autodismiss_trust_menu session=${TARGET_SESSION} tick=${tick}"
+      tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "1" Enter >/dev/null 2>&1 || true
+      last_progress_at="$(date +%s)"
+      sleep 2
     fi
     now="$(date +%s)"
     capture_sig="${#capture}:$(printf '%s\n' "$capture" | tail -n 4 | tr '\n' ' ' | tr -s ' ' | cut -c1-180)"
@@ -2056,11 +2806,11 @@ RC_PRIMARY=0
 PRIMARY_TICK="P$(date +%s)_$RANDOM"
 trace_event "primary_prompt_begin tick=${PRIMARY_TICK} timeout=${PROMPT_TIMEOUT_SECONDS}s channel=${PRIMARY_CHANNEL}"
 set +e
-RAW_OUTPUT="$(prompt_once "$PROMPT_TIMEOUT_SECONDS" "$PROMPT_TEXT" "$PRIMARY_TICK" "$PRIMARY_CHANNEL" 2>&1)"
+RAW_OUTPUT="$(prompt_once "$PROMPT_TIMEOUT_SECONDS" "$PROMPT_TEXT" "$PRIMARY_TICK" "$PRIMARY_CHANNEL" "primary" 2>&1)"
 RC_PRIMARY=$?
 set -e
 trace_event "primary_prompt_end tick=${PRIMARY_TICK} rc=${RC_PRIMARY} bytes=${#RAW_OUTPUT}"
-handle_rate_limit_output "primary_${PRIMARY_CHANNEL}" "$RAW_OUTPUT"
+handle_rate_limit_output "primary_${PRIMARY_CHANNEL}" "$RAW_OUTPUT" "$RC_PRIMARY"
 if [[ $RC_PRIMARY -eq 0 ]]; then
   if STRUCTURED="$(printf "%s\n" "$RAW_OUTPUT" | normalize_output)"; then
     if response_has_tick "$STRUCTURED" "$PRIMARY_TICK" "$PRIMARY_CHANNEL"; then
@@ -2081,56 +2831,60 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
   fi
 fi
 
-REQUIRED_ARTIFACT_MARKER="$(required_artifact_marker_for_role "$ROLE")"
 RETRY_PROMPT="$(cat <<EOF
 ${PROMPT_TEXT}
-Rappel critique:
-- Réponds avec exactement 8 lignes dans cet ordre: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
-- Une seule valeur utile par ligne, sans commentaire ni texte hors contrat.
-- Obligatoire: EVIDENCE doit contenir ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>.
-- Obligatoire: EVIDENCE doit contenir task_update=<...>, lock_check=ok, run_note=<...>, exec_report=<...>, issues=<none|...>, suggestions=<none|...>.
-- Obligatoire: EVIDENCE doit contenir channels_read=<...>, impact_assessment=<none|low|medium|high|critical>, impact_action=<none|action>.
-- Si task_update=claim|complete|handoff: inclure reflection_passes>=${MIN_REFLECTION_PASSES} et reflection_dimensions=scope,dependency_impact,risk,verification,rollback.
-- Optionnel (si blocage outillage): EVIDENCE peut contenir tool_request=<outil_requis> et/ou skill_request=<skill_requise> (sinon mettre none).
-- Si queue_has_ready=1 ou workboard_role_has_work=1: inclure stream_id=<...> et task_id=<...>.
-- Si task_update=complete: inclure cmd=<...|SKIP(raison)> et tests_run=<...|SKIP(raison)>.
-- Interdit: sortie générique READY/DISPATCH sans preuve explicite du rôle.
+Reponse precedente invalide ou incomplete. Reemets uniquement le contrat valide.
+Checklist minimale:
+- 8 lignes strictes dans l'ordre contractuel.
+- EVIDENCE contient ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>, task_update, lock_check=ok, run_note>=5 mots.
+- Si queue/workboard actif: stream_id et task_id.
+- Si task_update=complete: cmd et tests_run.
+- Aucun texte hors contrat.
 EOF
 )"
 
 RAW_RETRY=""
 RC_RETRY=0
-RETRY_MODE="$PRIMARY_CHANNEL"
-RETRY_CHANNEL="$PRIMARY_CHANNEL"
-if [[ $RC_PRIMARY -eq 124 && "$SKIP_RETRY_ON_TIMEOUT" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
-  RETRY_MODE="tmux_on_timeout"
-  RETRY_CHANNEL="tmux"
+RETRY_MODE="${PRIMARY_CHANNEL:-tmux}"
+RETRY_CHANNEL="${PRIMARY_CHANNEL:-tmux}"
+DO_RETRY=1
+if [[ "$PRIMARY_CHANNEL" == "tmux" && "$CODEX_EXEC_AVAILABLE" -eq 1 && "$SKIP_TMUX_RETRY_IF_CODEX" -eq 1 ]]; then
+  DO_RETRY=0
+  RETRY_MODE="skipped_tmux_retry_codex_available"
+  RC_RETRY=88
+  trace_event "retry_prompt_skipped reason=codex_available_after_tmux_primary"
 fi
-RETRY_TICK="R$(date +%s)_$RANDOM"
-trace_event "retry_prompt_begin tick=${RETRY_TICK} timeout=${RETRY_PROMPT_TIMEOUT_SECONDS}s channel=${RETRY_CHANNEL} mode=${RETRY_MODE}"
-set +e
-RAW_RETRY="$(prompt_once "$RETRY_PROMPT_TIMEOUT_SECONDS" "$RETRY_PROMPT" "$RETRY_TICK" "$RETRY_CHANNEL" 2>&1)"
-RC_RETRY=$?
-set -e
-trace_event "retry_prompt_end tick=${RETRY_TICK} rc=${RC_RETRY} bytes=${#RAW_RETRY}"
-handle_rate_limit_output "retry_${RETRY_CHANNEL}" "$RAW_RETRY"
-if [[ $RC_RETRY -eq 0 ]]; then
-  if STRUCTURED="$(printf "%s\n" "$RAW_RETRY" | normalize_output)"; then
-    if response_has_tick "$STRUCTURED" "$RETRY_TICK" "$RETRY_CHANNEL"; then
-      trace_event "retry_structured_ok tick=${RETRY_TICK}"
-      write_fail_count 0
-      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | reconcile_runtime_truth)"
-      STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
-      STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
-      sanitize_tmux_logs
-      persist_last_contract "$STRUCTURED" "retry_structured"
-      publish_execution_monitoring_if_enabled "$STRUCTURED" "retry_structured"
-      trace_event "final_output source=retry"
-      printf "%s\n" "$STRUCTURED"
-      exit 0
+if [[ "$DO_RETRY" -eq 1 ]]; then
+  if [[ $RC_PRIMARY -eq 124 && "$SKIP_RETRY_ON_TIMEOUT" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
+    RETRY_MODE="tmux_on_timeout"
+    RETRY_CHANNEL="tmux"
+  fi
+  RETRY_TICK="R$(date +%s)_$RANDOM"
+  trace_event "retry_prompt_begin tick=${RETRY_TICK} timeout=${RETRY_PROMPT_TIMEOUT_SECONDS}s channel=${RETRY_CHANNEL} mode=${RETRY_MODE}"
+  set +e
+  RAW_RETRY="$(prompt_once "$RETRY_PROMPT_TIMEOUT_SECONDS" "$RETRY_PROMPT" "$RETRY_TICK" "$RETRY_CHANNEL" "retry" 2>&1)"
+  RC_RETRY=$?
+  set -e
+  trace_event "retry_prompt_end tick=${RETRY_TICK} rc=${RC_RETRY} bytes=${#RAW_RETRY}"
+  handle_rate_limit_output "retry_${RETRY_CHANNEL}" "$RAW_RETRY" "$RC_RETRY"
+  if [[ $RC_RETRY -eq 0 ]]; then
+    if STRUCTURED="$(printf "%s\n" "$RAW_RETRY" | normalize_output)"; then
+      if response_has_tick "$STRUCTURED" "$RETRY_TICK" "$RETRY_CHANNEL"; then
+        trace_event "retry_structured_ok tick=${RETRY_TICK}"
+        write_fail_count 0
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | reconcile_runtime_truth)"
+        STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
+        sanitize_tmux_logs
+        persist_last_contract "$STRUCTURED" "retry_structured"
+        publish_execution_monitoring_if_enabled "$STRUCTURED" "retry_structured"
+        trace_event "final_output source=retry"
+        printf "%s\n" "$STRUCTURED"
+        exit 0
+      fi
+      RC_RETRY=65
+      RAW_RETRY="${RAW_RETRY}"$'\n'"tick_mismatch=${RETRY_TICK}"
     fi
-    RC_RETRY=65
-    RAW_RETRY="${RAW_RETRY}"$'\n'"tick_mismatch=${RETRY_TICK}"
   fi
 fi
 
@@ -2151,11 +2905,11 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
   CODEX_TICK="C$(date +%s)_$RANDOM"
   trace_event "codex_fallback_begin tick=${CODEX_TICK} timeout=${CODEX_FALLBACK_TIMEOUT}s"
   set +e
-  RAW_CODEX_FALLBACK="$(prompt_once "$CODEX_FALLBACK_TIMEOUT" "$RETRY_PROMPT" "$CODEX_TICK" "codex_exec" 2>&1)"
+  RAW_CODEX_FALLBACK="$(prompt_once "$CODEX_FALLBACK_TIMEOUT" "$RETRY_PROMPT" "$CODEX_TICK" "codex_exec" "retry" 2>&1)"
   RC_CODEX_FALLBACK=$?
   set -e
   trace_event "codex_fallback_end tick=${CODEX_TICK} rc=${RC_CODEX_FALLBACK} bytes=${#RAW_CODEX_FALLBACK}"
-  handle_rate_limit_output "codex_exec_fallback" "$RAW_CODEX_FALLBACK"
+  handle_rate_limit_output "codex_exec_fallback" "$RAW_CODEX_FALLBACK" "$RC_CODEX_FALLBACK"
   if [[ $RC_CODEX_FALLBACK -eq 0 ]]; then
     if STRUCTURED="$(printf "%s\n" "$RAW_CODEX_FALLBACK" | normalize_output)"; then
       if response_has_tick "$STRUCTURED" "$CODEX_TICK" "codex_exec"; then
@@ -2286,14 +3040,14 @@ esac
     FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
     write_fail_count "$FAIL_COUNT"
     RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-    EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable; suggestions=stabiliser_prompt_et_tmux_capture; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; vision_rule=${FALLBACK_VISION_RULE}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-    EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; raw_primary=[${PRIMARY_PREVIEW:-n/a}]; raw_retry=[${RETRY_PREVIEW:-n/a}]; raw_codex=[${CODEX_PREVIEW:-n/a}]; task_update=none_no_signal; lock_check=ok; channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; run_note=fallback checkpoint car sortie non exploitable; exec_report=fallback_checkpoint_applique_sur_sortie_inexploitable; issues=signal_unparseable_source_missing; suggestions=verifier_sources_et_stabiliser_prompt; tool_request=${TOOL_REQUEST_DEFAULT}; skill_request=${SKILL_REQUEST_DEFAULT}; arch_rule=${FALLBACK_ARCH_RULE}; review_scope=${FALLBACK_REVIEW_SCOPE}; conformance=${FALLBACK_CONFORMANCE}; violations=${FALLBACK_VIOLATIONS}; vision_rule=${FALLBACK_VISION_RULE}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${STARTUP_NOTE_SAFE}; ${RECOVERY_NOTE}"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable_source_missing; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
 fi
-trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE}"
+trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE} raw_primary=[${PRIMARY_PREVIEW:-n/a}] raw_retry=[${RETRY_PREVIEW:-n/a}] raw_codex=[${CODEX_PREVIEW:-n/a}]"
 
 FALLBACK_OUTPUT="$(cat <<EOF
 STATUS: IN_PROGRESS

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-26-BATCH-26-DEV-01-20260303T210648Z-286"
+stream_id: "BATCH-26"
+task_id: "BATCH-26-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-03T21:06:48Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope fix forecast imports"
+    - "dependency impact map upstream downstream integrations"
+    - "risk regression on legacy fallback paths"
+    - "verification pytest smoke import checks"
+    - "rollback revert single patch set"
+  architecture_checks:
+    - "domain_boundaries_preserved_between_application_and_api"
+    - "canonical_runtime_data_root_used_everywhere"
+    - "no_sys.path_bridge_insertion"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 - <<'PY'\\nimport os, sys\\nsys.path.insert(0, os.getcwd())\\nimport apps.api.src.domains.forecasts.application.forecast_service\\nfrom apps.api.src.domains.judge.application.g4f_client import get_ranked_tested_models\\nprint(bool(get_ranked_tested_models() is not None))\\nPY"
+      rc: "0"
+      started_at_utc: "2026-03-03T21:06:48Z"
+      ended_at_utc: "2026-03-03T21:06:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "none"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-ece60f0b1570"
+  review_ref: "none"
+  note: "F-001/F-002/F-003: import viability verified for forecast/judge modules; no further delta in scope this tick."

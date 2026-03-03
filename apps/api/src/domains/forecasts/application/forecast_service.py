@@ -6,11 +6,21 @@ Updated to use hybrid ML + G4F system (FC-P1-013).
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
 from pathlib import Path
+import logging
+import sys
 import pandas as pd
 from datetime import datetime
 
-from platform.legacy.models.forecast_hybrid_v1 import ForecastHybridV1
-from platform.legacy.storage.io import load_json, save_json
+backend_root = Path(__file__).resolve().parent.parent.parent.parent
+legacy_root = backend_root / "platform" / "legacy"
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
+if str(legacy_root) not in sys.path:
+    sys.path.insert(0, str(legacy_root))
+
+from domains.market_data.application.cache_layer import CacheLayerService
+from models.forecast_hybrid_v1 import ForecastHybridV1
+from storage.io import load_json, save_json
 
 
 def _load_or_compute(
@@ -42,6 +52,8 @@ def _load_or_compute(
 
 class ForecastService:
     def __init__(self):
+        self._cache_layer = CacheLayerService()
+        self.logger = logging.getLogger(__name__)
         self.cache_ttl = 300  # 5 minutes
         self.data_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "forecast"
     
@@ -92,22 +104,23 @@ class ForecastService:
                 }
         
         # Use load_or_compute to get data with persistent caching (sync function, no await)
-        result = _load_or_compute(
+        result = self._cache_layer.load_or_compute(
             key,
             compute_forecasts,
-            source=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]
+            source=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"],
+            ttl_minutes=5
         )
         
         # Prepare the response with freshness info at the top level
         if result and isinstance(result, dict) and "data" in result:
             # This is cached data with metadata, return with freshness info
             api_response = result["data"].copy() if isinstance(result["data"], dict) else {"rows": [], "count": 0}
-            api_response["freshness"] = result.get("freshness", "unknown")
-            api_response["last_update"] = result.get("last_update")
-            api_response["source"] = result.get("source", [])
+            api_response["freshness"] = result.get("freshness", "fresh")
+            api_response["last_update"] = result.get("generated_at") or result.get("last_update")
+            api_response["source"] = result.get("source", api_response.get("source", []))
             
             return {
-                "ok": "error" not in (result.get("data", {}) or {}),
+                "ok": "error" not in (result or {}),
                 "data": api_response
             }
         else:
@@ -136,8 +149,8 @@ class ForecastService:
                 return forecasts_data
             return {}
         except Exception as e:
-            print(f"Error loading hybrid forecasts: {e}")
-            return {}
+            self.logger.error(f"Error loading hybrid forecasts: {e}")
+            return {"rows": [], "count": 0, "source": ["forecast_service", "hybrid_load_error"], "error": str(e), "generated_at": datetime.utcnow().isoformat()}
     
     def _generate_hybrid_forecasts(self) -> Dict[str, Any]:
         """
@@ -149,8 +162,8 @@ class ForecastService:
             tickers = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "TSLA", "META"]
             return forecast_model.run_forecast_job(tickers)
         except Exception as e:
-            print(f"Error generating hybrid forecasts: {e}")
-            return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"]}
+            self.logger.error(f"Error generating hybrid forecasts: {e}")
+            return {"rows": [], "count": 0, "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"], "error": str(e)}
     
     def _load_cached_forecasts(self) -> List[Dict[str, Any]]:
         """Load forecasts from parquet cache."""

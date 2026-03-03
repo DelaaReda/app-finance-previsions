@@ -1,0 +1,37 @@
+{
+  "ts_utc": "2026-03-03T23:44:09Z",
+  "guardian_version": "2026-03-03.v1",
+  "role": "planner",
+  "source": "primary_structured",
+  "score": 85,
+  "level": "green",
+  "issues": [
+    "runway_short_without_batch_creation"
+  ],
+  "recommendations": [
+    "Creer un batch top-level BATCH-XX pour maintenir la runway planner."
+  ],
+  "streaks": {
+    "ready_idle_streak": 0,
+    "low_score_streak": 0,
+    "runway_no_batch_streak": 8
+  },
+  "runtime": {
+    "queue_has_ready": 0,
+    "workboard_role_has_in_progress": 0,
+    "planner_batch_runway_short": 1
+  },
+  "summary": {
+    "status": "WAIT",
+    "delta": "NO_DELTA",
+    "verdict": "PASS",
+    "blocker_id": "NONE",
+    "next_action_unique": "NONE_NO_READY_P1772581442_24066",
+    "task_update": "none_no_ready",
+    "planner_artifact": "parallel_workstream.py_context_planner_limit_5",
+    "batch_created": "NONE",
+    "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md",
+    "vision_alignment": "respecte_WORKSTATE_priorisation",
+    "architecture_audit": "aucun_ecart_architectural_detecte"
+  }
+}

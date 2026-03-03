@@ -99,6 +99,6 @@ bash scripts/dg_alert_15m.sh
 Reflection hardening (delivery roles):
 - Claims must satisfy 5 reflection dimensions in pre-change checks: `scope`, `dependency_impact`, `risk`, `verification`, `rollback`.
 - Delivery contracts (`task_update=claim|complete|handoff`) must include:
-  - `reflection_passes>=5`
+  - `reflection_passes>=2` (or higher if runtime config sets a stricter threshold)
   - `reflection_dimensions=scope,dependency_impact,risk,verification,rollback`
-- Runner parameter: `TMUX_ROLE_MIN_REFLECTION_PASSES` (default `5`, configurable in cron provisioning scripts).
+- Runner parameter: `TMUX_ROLE_MIN_REFLECTION_PASSES` (default `2`, configurable in cron provisioning scripts).

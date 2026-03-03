@@ -57,6 +57,9 @@ HIGH_CONFIDENCE_THRESHOLD = max(
 FORECASTS_STALE_SECONDS = max(
     30, int(os.getenv("FORECASTS_STALE_SECONDS", "600") or "600")
 )
+FORECASTS_MIN_CONFIDENCE = max(
+    0.0, min(1.0, float(os.getenv("FORECASTS_MIN_CONFIDENCE", "0.01") or "0.01"))
+)
 FORECASTS_BLOCK_MOCK_NOMINAL = str(
     os.getenv("FORECASTS_BLOCK_MOCK_NOMINAL", "1")
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -73,6 +76,15 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return float(default)
+
+
+def _normalize_confidence(value: Any, *, default: float = 0.5) -> float:
+    confidence = _safe_float(value, default=default)
+    if confidence <= 0:
+        return max(FORECASTS_MIN_CONFIDENCE, _safe_float(default, default=0.5))
+    if confidence > 1.0:
+        confidence = confidence / 100.0 if confidence <= 100.0 else 1.0
+    return max(0.0, min(1.0, confidence))
 
 
 def _safe_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -183,7 +195,10 @@ def _normalize_forecast_row(
     normalized["asset_type"] = str(normalized.get("asset_type", "all") or "all").strip().lower()
     normalized["horizon"] = str(normalized.get("horizon", "all") or "all").strip().lower()
 
-    normalized["confidence"] = _safe_float(normalized.get("confidence", 0.0))
+    normalized["confidence"] = _normalize_confidence(
+        normalized.get("confidence", 0.0),
+        default=0.5,
+    )
     normalized["score"] = _safe_float(normalized.get("score", 0.0))
     normalized["expected_return"] = _safe_float(
         normalized.get("expected_return", normalized.get("return", 0.0))
@@ -539,6 +554,8 @@ async def get_forecasts_payload(
                 or snapshot_generated_at
             )
             snapshot_source = _normalize_source(forecasts_data.get("source"))
+            snapshot_age = _freshness_age_seconds(snapshot_generated_at, now_iso)
+            stale_snapshot = snapshot_age > float(FORECASTS_STALE_SECONDS)
 
             mock_detected = _contains_mock_marker(snapshot_source) or any(
                 _contains_mock_marker(_normalize_source(row.get("source")))
@@ -546,7 +563,6 @@ async def get_forecasts_payload(
                 if isinstance(row, dict)
             )
             if mock_detected and FORECASTS_BLOCK_MOCK_NOMINAL and not debug:
-                snapshot_age = _freshness_age_seconds(snapshot_generated_at, now_iso)
                 blocked = _base_forecasts_payload(
                     now_iso=now_iso,
                     source=["forecasts_route", *snapshot_source, "mock_blocked_nominal"],
@@ -576,6 +592,12 @@ async def get_forecasts_payload(
                 )
                 return blocked
 
+            confidence_issues = [
+                row
+                for row in raw_rows
+                if _safe_float(row.get("confidence", 0.0), default=0.0) <= 0
+                or _safe_float(row.get("confidence", 0.0), default=0.0) > 1.0
+            ]
             rows = [
                 _normalize_forecast_row(
                     row,
@@ -659,9 +681,9 @@ async def get_forecasts_payload(
                     "count": len(paginated_rows),
                     "total": filtered_count,
                     "freshness": snapshot_generated_at,
-                    "freshness_age": _freshness_age_seconds(snapshot_generated_at, now_iso),
+                    "freshness_age": snapshot_age,
                     "freshness_status": _freshness_status_from_age(
-                        _freshness_age_seconds(snapshot_generated_at, now_iso)
+                        snapshot_age
                     ),
                     "last_update": snapshot_last_update,
                     "stats": {
@@ -694,12 +716,30 @@ async def get_forecasts_payload(
             payload["provider_chain"] = provider_chain
             payload["fallback_used"] = bool(fallback_used)
             payload["latency_ms"] = round(avg_latency_ms, 3)
+            payload["freshness_status"] = _freshness_status_from_age(snapshot_age)
             payload["observability"] = {
                 "provider_chain": provider_chain,
                 "fallback_used": bool(fallback_used),
                 "latency_ms": round(avg_latency_ms, 3),
                 "freshness_age": payload.get("freshness_age", -1.0),
             }
+            if stale_snapshot:
+                payload["fallback_used"] = True
+                payload["observability"]["fallback_used"] = True
+                payload["warnings"].append(
+                    f"Forecast snapshot stale ({snapshot_age:.0f}s > {FORECASTS_STALE_SECONDS}s); results are degraded."
+                )
+                append_source_tag(
+                    payload,
+                    "forecasts_stale_data",
+                    default_source="forecasts_route",
+                )
+            if confidence_issues:
+                payload["fallback_used"] = True
+                payload["observability"]["fallback_used"] = True
+                payload["warnings"].append(
+                    f"{len(confidence_issues)} rows had invalid confidence and were normalized."
+                )
 
             if len(paginated_rows) == 0:
                 payload["message"] = "No forecasts matched current filters."

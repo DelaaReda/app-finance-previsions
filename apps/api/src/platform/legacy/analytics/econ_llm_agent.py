@@ -35,9 +35,12 @@ except Exception:  # pragma: no cover
     get_llm_settings = None  # type: ignore
 
 try:
-    from services.g4f_client import get_ranked_tested_models
+    from domains.judge.application.g4f_client import get_ranked_tested_models
 except Exception:  # pragma: no cover
-    get_ranked_tested_models = None  # type: ignore
+    try:
+        from services.g4f_client import get_ranked_tested_models  # type: ignore
+    except Exception:
+        get_ranked_tested_models = None  # type: ignore
 
 # Optional API keys (read from env; support both spellings). Canonical: OPEN_ROUTER_API_KEY
 OPEN_ROUTER_API_KEY = os.getenv("OPEN_ROUTER_API_KEY") or os.getenv("OPEN_ROUTER_API_KEY")

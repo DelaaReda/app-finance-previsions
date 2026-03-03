@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/no_pivot_apply_baseline.sh
+../platform/automation/no_pivot_apply_baseline.sh

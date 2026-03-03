@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/smoke.sh
+../platform/automation/smoke.sh

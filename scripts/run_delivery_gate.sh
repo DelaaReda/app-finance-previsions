@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/run_delivery_gate.sh
+../platform/policies/run_delivery_gate.sh

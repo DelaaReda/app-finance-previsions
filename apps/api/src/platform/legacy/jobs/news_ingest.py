@@ -5,6 +5,8 @@ Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
 Task: DATA-GEN-001 - Create real news generation job
 Uses: Standard library only (urllib + xml.etree.ElementTree)
 """
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 import logging
 import os

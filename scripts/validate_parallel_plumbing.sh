@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/validate_parallel_plumbing.sh
+../platform/policies/validate_parallel_plumbing.sh

@@ -116,7 +116,7 @@ class ContextService:
                 'metadata': {
                     'generated_at': datetime.utcnow().isoformat() + 'Z',
                     'sources': ['intelligence', 'macro', 'forecasts', 'news'],
-                    'intelligence_snapshot_age': intel['metadata'].get('generated_at'),
+                    'intelligence_snapshot_age': (intel.get('metadata') or {}).get('generated_at'),
                     'confidence_breakdown': self._get_confidence_breakdown(intel, regime_info)
                 }
             }

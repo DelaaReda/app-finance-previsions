@@ -20,23 +20,22 @@ Règle absolue: toute action de livraison doit contribuer à un état plus proch
 ### Delivery
 | Role | Mandat | Output attendu |
 |---|---|---|
-| `planner` | piloter la fin migration + ordre de valeur (P0, P1...) + arbitrage WIP/handoffs | verdict conformité + `PLANNER_ARTIFACT=` + `next_owner=` |
-| `dev` | implémenter l’item READY | patch/commande + `DEV_ARTIFACT=` + `cmd=` |
+| `vision-architect-tasks-planner` (`planner` canonique) | piloter la fin migration + ordre de valeur (P0, P1...) + arbitrage WIP/handoffs + clarification batch/task/how + absorption lanes `analyst/architect/po/scrum_master` | verdict conformité + `PLANNER_ARTIFACT=` + `next_owner=` + `batch_scope` + `task_breakdown` + `execution_plan` + `handoff_plan` |
+| `dev` | implémenter l’item READY + auto-contrôle local | patch/commande + `DEV_ARTIFACT=` + `cmd=` + preuve `self_qa`/`data_source_check`/`arch_check`/`real_data_check`/`ui_impact` |
 | `backend_engineer` | implémentation backend de migration (API/contracts/services) | patch/commande + `BACKEND_ARTIFACT=` + `cmd=` |
 | `frontend_engineer` | implémentation UI migration (DOMAINE + contrats frontend) | patch/commande + `FRONTEND_ARTIFACT=` + `cmd=` |
 | `integrator` | assembly/finalisation cross-domain de la migration | intégration + `INTEGRATOR_ARTIFACT=` + `cmd=` |
-| `analyst` | revue fonctionnelle du plan de migration | notes de faisabilité + `ANALYST_ARTIFACT=` |
 | `data_analyst` | validation pipeline data/feeds + qualité de données | rapport + `DATA_ARTIFACT=` |
 | `infra_engineer` | infra/runbook/monitoring migration | scripts/ops + `INFRA_ARTIFACT=` |
 | `tester` | vérifier exécution/tests | tests + `TESTER_ARTIFACT=` + `cmd=` |
-| `qa` | verdict gate final | verdict + `QA_ARTIFACT=` + `cmd=` |
-| `architect` | gardien architecture anti-dérive | décision contrainte + `ARCHITECT_ARTIFACT=` |
+| `qa` | gate global final (intégration/régression) | verdict + `QA_ARTIFACT=` + `cmd=` + `qa_scope=global_gate` + `self_qa_ref` + checks `app_launch`/`real_data_check` |
+| `analyst` / `architect` / `po` / `scrum_master` | lanes legacy regroupées dans `vision-architect-tasks-planner` | utiliser `--role planner` (ou alias public) pour claim/complete |
 
 ## Prompts obligatoires par rôle (copier-coller)
 
 Chaque rôle doit envoyer un prompt structuré via `claim`/`complete` avec au moins 5 étapes (scope, dépendances, risque, vérification, rollback) et 3 checks d'architecture distincts.
 
-### Planner / Chef de flux
+### vision-architect-tasks-planner / Chef de flux
 ```bash
 python3 scripts/parallel_workstream.py claim --role planner --change-plan "1) lire board + verifier priorite visée migration; 2) confirmer proprietaire et fichier impacte; 3) identifier dependances cross-domain; 4) choisir livraison minimale qui fait progresser architecture cible; 5) definir rollback si regressions; 6) prevoir preuve de completion;" --architecture-checks "target-arch-path; task_scope_match; no_cross_scope_without_handoff; forecast_contract_unchanged_or_updated"
 ```
@@ -63,16 +62,14 @@ python3 scripts/parallel_workstream.py claim --role tester --change-plan "1) lir
 python3 scripts/parallel_workstream.py claim --role qa --change-plan "1) collecter artefacts delivery; 2) vérifier 8 clés contrat; 3) confirmer gates (mock/coverage/freshness) ; 4) valider monitoring post-livraison; 5) décider PASS/BLOCKED avec rationale; 6) définir next_action unique;" --architecture-checks "blockers_explicit; verdict_ready; mandatory_evidence; evidence_hash"
 ```
 
-### Architect / Data / Infra / Analyst
+### Data / Infra (lanes autonomes)
 ```bash
-python3 scripts/parallel_workstream.py claim --role architect --change-plan "1) lire tâche + dépendances; 2) vérifier limites architecture; 3) détecter cross-scope implicite; 4) proposer garde-fous; 5) produire décision court terme+rollback;" --architecture-checks "anti_chevauchement; dependency_map; migration_readiness"
-
 python3 scripts/parallel_workstream.py claim --role data_analyst --change-plan "1) cartographier flux data/feeds; 2) confirmer fallback de fraîcheur; 3) mesurer gaps forecast/coverage; 4) proposer correction ciblée; 5) définir checks data;" --architecture-checks "freshness_contract; signal_coverage; no_direct_data_access_without_domain"
 
 python3 scripts/parallel_workstream.py claim --role infra_engineer --change-plan "1) vérifier pipeline tmux/crons; 2) valider scripts/monitoring; 3) corriger point de panne isolé; 4) tester runbook; 5) confirmer restauration;" --architecture-checks "monitoring_kpi; recovery_path; runtime_stability"
-
-python3 scripts/parallel_workstream.py claim --role analyst --change-plan "1) evaluer impact produit; 2) verifier cohérence vision/value; 3) arbitrer priorité de lot; 4) valider risques métier; 5) noter décisions dans evidence;" --architecture-checks "vision_alignment; priority_order; migration_goal"
 ```
+Pour les checks `analyst/architect/po/scrum_master`, utiliser la lane unifiée:
+`python3 scripts/parallel_workstream.py claim --role planner ...`
 ```
 
 ### Contrôle commun de fermeture (complete)
@@ -99,7 +96,7 @@ python3 scripts/parallel_workstream.py complete --role <role> --task <task_id> -
      - l’ensemble `change-plan + architecture-checks` doit couvrir 5 dimensions de réflexion: `scope`, `dependency_impact`, `risk`, `verification`, `rollback`.
 4. Si un autre intent actif cible les memes fichiers/sections, la pre-annonce est `BLOCKED` (pas d’ecrasement); l’agent doit reduire le scope ou faire un handoff explicite.
 5. Les preuves de livraison (`EVIDENCE`) doivent contenir `intent_id`, `intent_chat_ref`, `intent_memory_ref`, `intent_registry_ref`, `edit_scope`.
-   - Pour `task_update=claim|complete|handoff`, ajouter aussi `reflection_passes>=5` et `reflection_dimensions=scope,dependency_impact,risk,verification,rollback`.
+   - Pour `task_update=claim|complete|handoff`, ajouter aussi `reflection_passes>=2` (ou plus selon config runtime) et `reflection_dimensions=scope,dependency_impact,risk,verification,rollback`.
 6. A la fin de la livraison, fermer l’intent:
    - `bash scripts/preannounce_intent.sh close --intent-id <id> --status done`
 

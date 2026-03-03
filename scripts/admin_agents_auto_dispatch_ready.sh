@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/admin_agents_auto_dispatch_ready.sh
+../platform/automation/admin_agents_auto_dispatch_ready.sh

@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/cron_run_manager.sh
+../platform/automation/cron_run_manager.sh

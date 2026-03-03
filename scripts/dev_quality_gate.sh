@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/dev_quality_gate.sh
+../platform/automation/dev_quality_gate.sh

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # ---------- paths & helpers ----------
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 CACHE_FILE_INTEL = DATA_DIR / "intelligence_snapshot.json"
 CACHE_FILE_CONTEXT = DATA_DIR / "market_context_snapshot.json"
 

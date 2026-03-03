@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/policies/preflight_dispatch.sh
+../platform/policies/preflight_dispatch.sh

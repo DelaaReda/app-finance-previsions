@@ -161,6 +161,47 @@ def test_forecasts_contract_rows_include_required_keys(monkeypatch):
     assert row["freshness_status"] in {"fresh", "stale", "unknown"}
 
 
+def test_forecasts_normalizes_invalid_confidence_values(monkeypatch):
+    forecasts_route._FORECASTS_RESPONSE_CACHE.clear()
+    forecasts_route._FORECASTS_INFLIGHT.clear()
+
+    snapshot = {
+        "generated_at": "2026-02-27T00:00:00Z",
+        "last_update": "2026-02-27T00:00:00Z",
+        "source": ["forecasts_job"],
+        "rows": [
+            {
+                "ticker": "AAPL",
+                "asset_type": "equity",
+                "horizon": "1w",
+                "score": 0.9,
+                "confidence": 0,
+            },
+            {
+                "ticker": "MSFT",
+                "asset_type": "equity",
+                "horizon": "1w",
+                "score": 0.8,
+                "confidence": 80,
+            },
+        ],
+    }
+
+    monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
+    client = _client()
+    resp = client.get("/forecasts?asset_type=equity&horizon=1w&limit=10")
+    assert resp.status_code == 200
+    payload = resp.json()["data"]
+    rows = payload.get("rows") or []
+    assert len(rows) == 2
+    assert rows[0]["confidence"] > 0
+    assert rows[0]["confidence"] <= 1
+    assert rows[1]["confidence"] > 0
+    assert rows[1]["confidence"] <= 1
+    assert payload["fallback_used"] is True
+    assert payload["warnings"]
+
+
 def test_forecasts_blocks_mock_source_in_nominal_mode(monkeypatch):
     forecasts_route._FORECASTS_RESPONSE_CACHE.clear()
     forecasts_route._FORECASTS_INFLIGHT.clear()

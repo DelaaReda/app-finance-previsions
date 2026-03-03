@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/architect_cron_watch.sh
+../platform/automation/architect_cron_watch.sh

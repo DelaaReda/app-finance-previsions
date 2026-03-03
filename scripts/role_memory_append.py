@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/role_memory_append.py
+../platform/automation/role_memory_append.py

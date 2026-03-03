@@ -1,1 +1,1 @@
-/home/venom/shared/analyse-financiere/platform/automation/new_safe_skill.py
+../platform/automation/new_safe_skill.py
