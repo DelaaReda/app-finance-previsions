@@ -12,8 +12,8 @@ from typing import List, Optional, Dict, Any, Tuple
 import pandas as pd
 import numpy as np
 
-from core.market_data import get_price_history, get_fundamentals
-from api.schemas import (
+from platform.legacy.core.market_data import get_price_history, get_fundamentals
+from domains.market_data.contracts.schema import (
     StockOverviewData, PriceData, PricePoint, TechnicalIndicators,
     StockSignal, SignalType, CompositeScore, TraceMetadata,
     StockUniverseData
@@ -21,7 +21,7 @@ from api.schemas import (
 
 # Try to import phase2 functions
 try:
-    from analytics.phase2_technical import (
+    from platform.legacy.analytics.phase2_technical import (
         load_prices,
         compute_indicators,
         technical_signals,

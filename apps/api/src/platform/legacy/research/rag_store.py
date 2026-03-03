@@ -13,7 +13,11 @@ class RAGStore:
     """Store minimal pour RAG avec news et facts séries."""
     
     def __init__(self, storage_dir: str = "data/rag"):
-        self.storage_dir = Path(storage_dir)
+        # Résoudre en chemin absolu si relatif — évite erreurs selon le cwd
+        _p = Path(storage_dir)
+        if not _p.is_absolute():
+            _p = Path(__file__).resolve().parents[4] / "runtime" / storage_dir
+        self.storage_dir = _p
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         
         self.news_file = self.storage_dir / "news.jsonl"

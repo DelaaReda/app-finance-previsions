@@ -6,6 +6,7 @@ Serves all 5 pillars according to VISION.md
 from __future__ import annotations
 
 import os
+import inspect
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
@@ -2367,7 +2368,17 @@ def register_routes(app: FastAPI):
             try:
                 from .services.news_service import get_news_feed
                 news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
-                news_count = news_data.count if hasattr(news_data, 'count') else 0
+                if isinstance(news_data, dict):
+                    data_block = news_data.get("data") if isinstance(news_data.get("data"), dict) else news_data
+                    if isinstance(data_block, dict):
+                        news_count = int(
+                            data_block.get("count")
+                            or len(data_block.get("articles") or data_block.get("items") or [])
+                        )
+                    else:
+                        news_count = 0
+                else:
+                    news_count = int(getattr(news_data, "count", 0) or 0)
             except Exception:
                 # If news service is not available, use a fallback
                 news_count = 0
@@ -2523,7 +2534,17 @@ def register_routes(app: FastAPI):
             try:
                 from .services.news_service import get_news_feed
                 news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
-                news_count = news_data.count if hasattr(news_data, 'count') else 0
+                if isinstance(news_data, dict):
+                    data_block = news_data.get("data") if isinstance(news_data.get("data"), dict) else news_data
+                    if isinstance(data_block, dict):
+                        news_count = int(
+                            data_block.get("count")
+                            or len(data_block.get("articles") or data_block.get("items") or [])
+                        )
+                    else:
+                        news_count = 0
+                else:
+                    news_count = int(getattr(news_data, "count", 0) or 0)
                 # Calculate sentiment from news data if available
             except Exception:
                 # If news service is not available, use a fallback
@@ -2669,12 +2690,14 @@ def register_routes(app: FastAPI):
                 from .services.news_service import get_news_feed as _get_news_feed
 
                 fetch_limit = min(400, max(limit * 3, limit))
-                svc = await _get_news_feed(
+                svc = _get_news_feed(
                     tickers=requested_tickers or None,
                     q=None,
                     limit=fetch_limit,
                     window="last_week",
                 )
+                if inspect.isawaitable(svc):
+                    svc = await svc
             except Exception as svc_error:
                 svc = {"ok": False, "error": str(svc_error)}
 
@@ -3883,6 +3906,23 @@ def register_routes(app: FastAPI):
                 payload.setdefault("freshness", snap.get("freshness", "unknown"))
                 payload.setdefault("source", snap.get("source", ["brief_cache"]))
 
+                payload.setdefault("macro_signals", payload.get("macro", payload.get("macro_signals", [])))
+                if not isinstance(payload["macro_signals"], list):
+                    payload["macro_signals"] = []
+
+                payload.setdefault("sector_rotation", payload.get("sector_rotation", {"top": [], "bottom": []}))
+                if not isinstance(payload["sector_rotation"], dict):
+                    payload["sector_rotation"] = {"top": [], "bottom": []}
+                else:
+                    payload["sector_rotation"].setdefault("top", [])
+                    payload["sector_rotation"].setdefault("bottom", [])
+
+                summary = payload.get("summary", "")
+                if isinstance(summary, str):
+                    words = summary.split()
+                    if len(words) > 200:
+                        payload["summary"] = " ".join(words[:200])
+
                 return _ok(payload)
 
             # 2) Fallback: return quick placeholder while background job can populate cache
@@ -3893,6 +3933,8 @@ def register_routes(app: FastAPI):
                 "top_risks": [],
                 "picks": [],
                 "sources": [],
+                "macro_signals": [],
+                "sector_rotation": {"top": [], "bottom": []},
                 "generated_at": datetime.utcnow().isoformat(),
                 "freshness": "empty",
                 "source": ["placeholder"],
@@ -3908,11 +3950,37 @@ def register_routes(app: FastAPI):
                 "top_risks": [],
                 "picks": [],
                 "sources": [],
+                "macro_signals": [],
+                "sector_rotation": {"top": [], "bottom": []},
                 "generated_at": datetime.utcnow().isoformat(),
                 "freshness": "error",
                 "source": ["error_fallback"],
                 "error": str(e)
             })
+
+
+    @app.get("/api/debug/llm")
+    async def debug_llm():
+        import sys as _sys, importlib as _imp
+        info = {"sys_path": _sys.path[:10], "modules_loaded": []}
+        # Test import chain
+        for mod in ["services.g4f_client", "research.llm_client", "domains.judge.application.g4f_client"]:
+            try:
+                m = _imp.import_module(mod)
+                call_llm = getattr(m, "call_llm", None)
+                info["modules_loaded"].append({"mod": mod, "ok": True, "call_llm_is_none": call_llm is None})
+            except Exception as e:
+                info["modules_loaded"].append({"mod": mod, "ok": False, "error": str(e)[:120]})
+        # Test call direct
+        try:
+            from services.g4f_client import call_llm as _cl, get_ranked_tested_models as _gr
+            ranked = _gr(category_preference="forecast", limit=2)
+            info["ranked_models"] = ranked[:2]
+            res = _cl(messages=[{"role":"user","content":"Say OK in 3 words max"}], model="command-a25", timeout=25)
+            info["call_llm_test"] = {"ok": res.get("ok"), "model": res.get("model"), "answer": str(res.get("answer",""))[:100]}
+        except Exception as e:
+            info["call_llm_test"] = {"error": str(e)[:200]}
+        return _ok(info)
 
     # =========================== SIGNALS =================================
 

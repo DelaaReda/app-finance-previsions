@@ -20,15 +20,10 @@ import os
 import re
 
 
-# Import path resolver to ensure consistent path resolution regardless of working directory
-try:
-    from src.core.path_resolver import get_data_directory
-    BASE_PATH = get_data_directory()  # Use consistent path resolution
-    _BACKEND_ROOT = Path(__file__).resolve().parent.parent  # Define consistently for both cases
-except ImportError:
-    # Fallback: Compute path relative to this file
-    _BACKEND_ROOT = Path(__file__).resolve().parent.parent
-    BASE_PATH = _BACKEND_ROOT / "data"  # gitignored
+# Canonical runtime data root: apps/api/runtime/data
+_API_ROOT = Path(__file__).resolve().parents[4]
+_BACKEND_ROOT = _API_ROOT
+BASE_PATH = _API_ROOT / "runtime" / "data"
 BASE_PATH.mkdir(exist_ok=True, parents=True)
 
 # Initialize logger

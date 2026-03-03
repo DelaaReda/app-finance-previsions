@@ -7,38 +7,37 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 import pandas as pd
-import json
-from datetime import datetime, timedelta
-import asyncio
+from datetime import datetime
 
-# New imports for persistent caching
-from backend.storage.io import load_json, save_json
-from services.cache_layer import load_or_compute
+from platform.legacy.models.forecast_hybrid_v1 import ForecastHybridV1
+from platform.legacy.storage.io import load_json, save_json
 
-# Corrected imports for existing modules that might be in the codebase
-try:
-    from backend.analytics.forecaster import forecast_ticker, ForecastResult
-except ImportError:
-    # Fallback if module doesn't exist yet
-    forecast_ticker = None
-    ForecastResult = None
 
-try:
-    from backend.core.data_store import query_duckdb, write_parquet
-except ImportError:
-    # Fallback if module doesn't exist yet
-    query_duckdb = None
-    write_parquet = None
+def _load_or_compute(
+    key: str,
+    compute_fn,
+    source: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    cached = load_json(key)
+    if isinstance(cached, dict):
+        return {
+            "data": cached,
+            "freshness": "cached",
+            "last_update": cached.get("generated_at") or cached.get("last_update"),
+            "source": cached.get("source") or (source or []),
+        }
 
-# Use our existing hybrid forecasting system
-try:
-    from backend.models.forecast_hybrid_v1 import ForecastHybridV1
-except ImportError:
-    # Fallback if our module doesn't exist yet
-    class ForecastHybridV1:
-        def run_forecast_job(self, tickers=None):
-            # Minimal fallback implementation
-            return {"rows": [], "last_update": datetime.utcnow().isoformat(), "source": ["fallback"]}
+    computed = compute_fn()
+    if isinstance(computed, dict):
+        save_json(key, computed, source=source or ["forecast_service"])
+        return {
+            "data": computed,
+            "freshness": "fresh",
+            "last_update": computed.get("generated_at") or datetime.utcnow().isoformat(),
+            "source": computed.get("source") or (source or []),
+        }
+
+    return {"data": {"rows": [], "count": 0}, "freshness": "fresh", "source": source or []}
 
 
 class ForecastService:
@@ -58,7 +57,7 @@ class ForecastService:
         # Use the persistent cache mechanism
         key = f"forecasts_{asset_type}_{horizon}_{sort_by}"
         
-        async def compute_forecasts():
+        def compute_forecasts():
             try:
                 # Try to load from the hybrid system's saved forecasts first
                 forecasts_data = self._load_hybrid_forecasts()
@@ -93,7 +92,7 @@ class ForecastService:
                 }
         
         # Use load_or_compute to get data with persistent caching (sync function, no await)
-        result = load_or_compute(
+        result = _load_or_compute(
             key,
             compute_forecasts,
             source=["forecast_service", "hybrid_ml_g4f", "realtime_calculation"]

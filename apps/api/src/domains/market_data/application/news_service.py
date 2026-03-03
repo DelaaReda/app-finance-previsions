@@ -1,5 +1,3 @@
-import feedparser
-import requests
 import time
 from datetime import datetime, timedelta
 import re
@@ -7,15 +5,25 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 import json
 
-# Import the same caching mechanism we used for forecasts
-from storage.io import load_json, save_json
-from models.forecast_hybrid_v1 import ForecastHybridV1
+from domains.market_data.application.cache_layer import load_or_compute
+
+try:
+    import requests
+except Exception:
+    requests = None
+
+try:
+    import feedparser
+except Exception:
+    feedparser = None
 
 def fetch_rss_feed(url: str) -> List[Dict]:
     """
     Fetch and parse an RSS feed
     """
     try:
+        if feedparser is None or requests is None:
+            return []
         headers = {
             'User-Agent': 'Finance-Copilot/1.0 (for educational/research purposes)'
         }
@@ -251,13 +259,163 @@ async def get_sentiment(limit: int = 100) -> Dict[str, Any]:
     }
 
 
-def get_news_feed(cache):
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
+def _window_to_cutoff(window: str) -> Optional[datetime]:
+    normalized = (window or "").strip().lower()
+    if not normalized:
+        return None
+    hours_map = {
+        "1h": 1,
+        "6h": 6,
+        "12h": 12,
+        "1d": 24,
+        "3d": 72,
+        "7d": 24 * 7,
+        "14d": 24 * 14,
+        "30d": 24 * 30,
+        "90d": 24 * 90,
+        "last_day": 24,
+        "last_week": 24 * 7,
+        "last_month": 24 * 30,
+    }
+    hours = hours_map.get(normalized)
+    if hours is None:
+        return None
+    return datetime.utcnow() - timedelta(hours=hours)
+
+
+def get_news_feed(
+    tickers: Optional[List[str]] = None,
+    q: Optional[str] = None,
+    limit: int = 50,
+    window: str = "last_week",
+    cache=None,
+    since: Optional[str] = None,
+    score_min: float = 0.0,
+    region: str = "all",
+):
     """
-    Get news feed using cache layer, computes if cache unavailable
+    Canonical news service contract.
+    Returns an `ok/data` envelope while preserving legacy top-level fields.
     """
-    # Use the cache system to get news feed
-    if cache:
-        return cache("news_feed", compute_news_feed, source=["rss_ingestion", "real_time"])
-    else:
-        # Fallback to direct computation
-        return compute_news_feed()
+    try:
+        # Legacy compatibility: some callers still pass cache callable as first positional arg.
+        if callable(tickers) and cache is None and q is None:
+            cache = tickers
+            tickers = None
+
+        safe_limit = max(1, min(int(limit), 400))
+        requested_tickers = [str(t).upper() for t in (tickers or []) if str(t).strip()]
+        query = (q or "").strip().lower()
+        min_score = float(score_min or 0.0)
+        cutoff = _window_to_cutoff(since or window)
+
+        if callable(cache):
+            cached = cache("news_feed", compute_news_feed, source=["rss_ingestion", "real_time"])
+        else:
+            cached = load_or_compute(
+                "news_feed",
+                compute_news_feed,
+                source=["rss_ingestion", "real_time"],
+                ttl_minutes=10,
+            )
+
+        if isinstance(cached, dict) and isinstance(cached.get("data"), dict):
+            payload = cached.get("data") or {}
+        else:
+            payload = cached if isinstance(cached, dict) else {}
+
+        articles = payload.get("articles") if isinstance(payload, dict) else []
+        articles = articles if isinstance(articles, list) else []
+
+        filtered: List[Dict[str, Any]] = []
+        for row in articles:
+            if not isinstance(row, dict):
+                continue
+
+            row_tickers = [str(t).upper() for t in (row.get("tickers") or []) if str(t).strip()]
+            if requested_tickers and not set(requested_tickers).intersection(row_tickers):
+                continue
+
+            if query:
+                haystack = f"{row.get('title', '')} {row.get('description', '')}".lower()
+                if query not in haystack:
+                    continue
+
+            row_score = row.get("score", row.get("relevance_score", row.get("sentiment_score", 0.0)))
+            if _to_float(row_score, 0.0) < min_score:
+                continue
+
+            if cutoff is not None:
+                published_at = (
+                    row.get("published_at")
+                    or row.get("pub_date")
+                    or row.get("published")
+                    or row.get("date")
+                )
+                parsed_dt = _parse_datetime(published_at)
+                if parsed_dt and parsed_dt < cutoff:
+                    continue
+
+            filtered.append(row)
+
+        result_articles = filtered[:safe_limit]
+        generated_at = payload.get("generated_at") if isinstance(payload, dict) else None
+        last_update = payload.get("last_update") if isinstance(payload, dict) else None
+        source = payload.get("source") if isinstance(payload, dict) else None
+
+        data = {
+            "articles": result_articles,
+            "items": result_articles,
+            "count": len(result_articles),
+            "total_articles": len(result_articles),
+            "generated_at": generated_at or datetime.utcnow().isoformat(),
+            "last_update": last_update or datetime.utcnow().isoformat(),
+            "freshness": payload.get("freshness") if isinstance(payload, dict) else None,
+            "source": source if isinstance(source, list) else ["news_service", "rss_ingestion"],
+            "filters_applied": {
+                "tickers": requested_tickers,
+                "q": q,
+                "since": since,
+                "window": window,
+                "score_min": min_score,
+                "region": region,
+                "limit": safe_limit,
+            },
+        }
+        return {"ok": True, "data": data, **data}
+    except Exception as exc:
+        data = {
+            "articles": [],
+            "items": [],
+            "count": 0,
+            "total_articles": 0,
+            "generated_at": datetime.utcnow().isoformat(),
+            "last_update": datetime.utcnow().isoformat(),
+            "freshness": None,
+            "source": ["news_service", "error_fallback"],
+            "filters_applied": {
+                "tickers": tickers or [],
+                "q": q,
+                "since": since,
+                "window": window,
+                "score_min": score_min,
+                "region": region,
+                "limit": limit,
+            },
+            "error": str(exc),
+        }
+        return {"ok": False, "error": str(exc), "data": data, **data}

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-01T04:19:30Z",
+  "updated_at": "2026-03-03T13:01:49.535081Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -47,8 +47,8 @@
     },
     {
       "id": "BATCH-03",
-      "title": "Connecter frontend API live + qualité données",
-      "state": "IN_PROGRESS",
+      "title": "Connecter frontend API live + qualit\u00e9 donn\u00e9es",
+      "state": "CLOSED",
       "priority": "P0",
       "owner_role": "planner",
       "blocker_id": "NONE",
@@ -59,7 +59,7 @@
       ],
       "created_at": "2026-02-28T20:01:54Z",
       "goals": [
-        "frontend_engineer: connecter news/forecasts/stocks à l'API live (apiConnector.js déjà créé par admin)",
+        "frontend_engineer: connecter news/forecasts/stocks \u00e0 l'API live (apiConnector.js d\u00e9j\u00e0 cr\u00e9\u00e9 par admin)",
         "backend_engineer: corriger confidence des forecasts (actuellement 0 high-confidence sur 19)",
         "data_analyst: activer backtests (actuellement null/pending)",
         "infra_engineer: ajouter monitoring cron et alerting si job fail"
@@ -70,19 +70,832 @@
         "API_UI_PROOF"
       ],
       "notes": "Frontend DONE (admin validated 2026-03-01). Backend fix confidence in progress.",
-      "updated_at": "2026-03-01T04:19:30Z"
+      "updated_at": "2026-03-01T04:19:30Z",
+      "closed_at": "2026-03-02T20:04:33.039712+00:00",
+      "closed_reason": "all_workboard_tasks_done"
     },
     {
       "id": "BATCH-03-BACKEND",
       "title": "Fix forecast confidence calculation",
-      "state": "READY",
+      "state": "CLOSED",
       "priority": "P0",
       "owner_role": "backend_engineer",
       "blocker_id": "NONE",
       "next_action": "Fix forecasts_simple.py to use price history, not change_percent=0.0",
       "depends_on": [],
       "created_at": "2026-03-01T04:19:30Z",
-      "success_criteria": "curl /api/forecasts shows >0 forecasts with confidence >65%"
+      "success_criteria": "curl /api/forecasts shows >0 forecasts with confidence >65%",
+      "closed_at": "2026-03-02T20:04:33.039712+00:00",
+      "closed_reason": "all_workboard_tasks_done"
+    },
+    {
+      "id": "BATCH-04",
+      "title": "Dashboard Vision \u2014 Brief quotidien + Secteurs r\u00e9els",
+      "state": "CLOSED",
+      "priority": "P0",
+      "closed_at": "2026-03-02T20:04:33.039712+00:00",
+      "closed_reason": "all_workboard_tasks_done",
+      "next_action": "",
+      "depends_on": [
+        "BATCH-03"
+      ]
+    },
+    {
+      "id": "BATCH-05",
+      "title": "Copilot 'Que faire aujourd'hui ?'",
+      "state": "CLOSED",
+      "priority": "P0",
+      "created_at": "2026-03-02T20:04:33.039712+00:00",
+      "next_action": "planner=BATCH-05-PLAN READY; backend=BATCH-05-BACKEND READY; frontend=BATCH-05-FRONTEND READY",
+      "depends_on": [
+        "BATCH-04"
+      ],
+      "closed_at": "2026-03-03T01:09:05.384438+00:00",
+      "closed_by": "admin_reconcile"
+    },
+    {
+      "id": "BATCH-05-PLAN",
+      "title": "Copilot 'Que faire aujourd'hui ?' [PLAN]",
+      "state": "CLOSED",
+      "priority": "P0",
+      "role": "planner",
+      "created_at": "2026-03-02T20:04:33.039712+00:00",
+      "next_action": "planner: prendre BATCH-05 workboard task et livrer",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "closed_at": "2026-03-03T01:15:12.730249+00:00",
+      "closed_by": "admin_reconcile_batch05_done"
+    },
+    {
+      "id": "BATCH-05-BACKEND",
+      "title": "Copilot 'Que faire aujourd'hui ?' [BACKEND]",
+      "state": "CLOSED",
+      "priority": "P0",
+      "role": "backend_engineer",
+      "created_at": "2026-03-02T20:04:33.039712+00:00",
+      "next_action": "backend_engineer: prendre BATCH-05 workboard task et livrer",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "closed_at": "2026-03-03T01:15:12.730249+00:00",
+      "closed_by": "admin_reconcile_batch05_done"
+    },
+    {
+      "id": "BATCH-05-FRONTEND",
+      "title": "Copilot 'Que faire aujourd'hui ?' [FRONTEND]",
+      "state": "CLOSED",
+      "priority": "P0",
+      "role": "frontend_engineer",
+      "created_at": "2026-03-02T20:04:33.039712+00:00",
+      "next_action": "frontend_engineer: prendre BATCH-05 workboard task et livrer",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "closed_at": "2026-03-03T01:15:12.730249+00:00",
+      "closed_by": "admin_reconcile_batch05_done"
+    },
+    {
+      "id": "BATCH-06",
+      "title": "Forecasts Multi-Assets + LLM Judge",
+      "state": "READY",
+      "priority": "P1",
+      "created_at": "2026-03-03T01:10:00Z",
+      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis ex\u00e9cuter BATCH-06-DEV-01/02/03 en lane dev unique.",
+      "depends_on": [
+        "BATCH-05"
+      ],
+      "updated_at": "2026-03-03T01:09:05.384438+00:00",
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: prioriser corrections critiques sur modules existants avant toute nouvelle feature.",
+        "critical_scope_from_claude: F-001 forecast_service ghost imports/backend.* + compute cache sync mismatch.",
+        "critical_scope_from_claude: F-002/F-003 news+market_data layering/imports a realigner vers domains/* et platform/legacy/* existants.",
+        "critical_scope_from_claude: F-004/F-005 supprimer data RAG fake et supprimer chemin fantome apps/api/src/runtime au profit de apps/api/runtime.",
+        "reuse_targets: apps/api/src/domains/judge/application/g4f_client.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/market_data/application/cache_layer.py, apps/api/src/platform/legacy/storage/io.py"
+      ]
+    },
+    {
+      "id": "BATCH-07",
+      "title": "Deep Dive + News Intelligence",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "created_at": "2026-03-03T01:10:00Z",
+      "next_action": "attendre la cl\u00f4ture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec d\u00e9tails Deep Dive, recherche universelle et scoring d'impact.",
+      "depends_on": [
+        "BATCH-06"
+      ]
+    },
+    {
+      "id": "BATCH-08",
+      "title": "Decision UX 2-3 clics + Flux portefeuille",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-07"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-08-PLAN puis detailer lanes DEV-01/DEV-02/DEV-03 avec contrat decision et preuves UX/API.",
+      "goals": [
+        "Unifier le contrat decision API->UI (verdict/confidence/why/risk).",
+        "Reduire le parcours principal a 2-3 clics sur desktop et mobile.",
+        "Stabiliser le mode degrade avec messages actionnables."
+      ],
+      "success_criteria": [
+        "Clickpath valide: dashboard -> recommendation <= 3 actions.",
+        "Payload UI conforme au contrat decision unique sans mapping ad hoc.",
+        "Tests smoke UI passes sur viewport desktop + mobile."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-08",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: apps/api keep contracts in existing domains; apps/web consume same contract via shared connector.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets/contracts before creating new components.",
+        "reuse_targets: apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/components/widgets/*.html, apps/api/src/domains/judge/application/intelligence_service.py",
+        "validation_path: claim planner -> dispatch dev lane -> targeted UI/API tests -> complete with proof."
+      ]
+    },
+    {
+      "id": "BATCH-09",
+      "title": "Alertes et surveillance orientees decision",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-08"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "preparer BATCH-09-PLAN avec matrice severite, dedupe strategy et runbook de verification SLA.",
+      "goals": [
+        "Introduire alerting priorise actif+macro avec deduplication.",
+        "Definir un SLA runtime pour latence alerte et faux positifs.",
+        "Rendre les alertes exploitables directement dans le flux decision."
+      ],
+      "success_criteria": [
+        "Alertes dedupes et ordonnees par impact dans l UI.",
+        "SLA d alerte mesure et publie dans monitoring.",
+        "Aucune alerte critique perdue sur fenetre 24h de test."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-09",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: extend existing monitor + notification pipeline, avoid parallel alert stack.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse jobs and monitor endpoints already in apps/api/src/platform/legacy/jobs and apps/monitor/server.py.",
+        "reuse_targets: apps/api/src/platform/legacy/jobs/market_brief.py, apps/api/src/platform/legacy/jobs/forecasts_simple.py, scripts/fc_health_check.sh, scripts/monitor_agents.sh",
+        "validation_path: signal generation tests + monitor visibility + end-to-end alert acknowledgment."
+      ]
+    },
+    {
+      "id": "BATCH-10",
+      "title": "Cost runtime governance et release gate MVP",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-09"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-10-PLAN et cadrer gate GO/NO-GO avec checklist et rollback testable.",
+      "goals": [
+        "Plafonner cout runtime via cache/fallback/quotas/timeouts.",
+        "Formaliser gate release API+UI+robustesse avec preuves.",
+        "Produire decision GO/NO-GO avec rollback explicite."
+      ],
+      "success_criteria": [
+        "Budget runtime journalise et respecte sur fenetre canary.",
+        "Gate release complete avec evidences traceables.",
+        "Rollback rehearse avec procedure validee."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-10",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: centralize runtime guard logic in existing orchestration scripts, no duplicate quota logic per endpoint.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: mirror Judge API pattern for endpoint gating and provider fallback orchestration.",
+        "reuse_targets: platform/config/lm_used_model_config.sh, scripts/fc_agent_tick.sh, platform/automation/cron_tmux_role_runner.sh, apps/api/src/domains/judge/application/intelligence_service.py",
+        "validation_path: stress run + rate-limit simulation + release checklist artifacts."
+      ]
+    },
+    {
+      "id": "BATCH-11",
+      "title": "Data ingestion core et freshness SLO",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-10"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-11-PLAN et preparer lanes backend/data/infra avec contrat de fraicheur.",
+      "goals": [
+        "Stabiliser ingestion multi-source prix/news/macro.",
+        "Exposer endpoint ingestion health et observabilite erreurs.",
+        "Garantir un SLO de fraicheur exploitable en UI."
+      ],
+      "success_criteria": [
+        "Ingestion continue sans rupture sur 24h.",
+        "health endpoint expose statut source par source.",
+        "Freshness visible dans payload API et UI."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-11",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: keep ingestion in existing legacy jobs + domain services, normalize outputs before UI.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing market_data + forecasts modules and avoid parallel ingestion frameworks.",
+        "reuse_targets: apps/api/src/platform/legacy/jobs/forecasts_simple.py, apps/api/src/platform/legacy/jobs/market_brief.py, apps/api/src/domains/forecasts",
+        "validation_path: ingest smoke + freshness assertions + degraded mode checks."
+      ]
+    },
+    {
+      "id": "BATCH-12",
+      "title": "Portfolio state et risk profile core",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-11"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-12-PLAN avec schema portefeuille/risk profile et plan de migration.",
+      "goals": [
+        "Rendre portefeuille/watchlist/risk profile persistants.",
+        "Brancher copilot sur portefeuille sauvegarde sans resaisie.",
+        "Durcir edition UI en nominal et degrade."
+      ],
+      "success_criteria": [
+        "Etat portefeuille persiste et recharge sans corruption.",
+        "Copilot answers utilisent le contexte portefeuille sauve.",
+        "Fallback UX fiable en cas indisponibilite source."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-12",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: persistence adapter behind existing copilot context service; avoid duplicate portfolio stores.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and existing web state contracts before adding new storage abstractions.",
+        "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/pages/app.js",
+        "validation_path: persistence tests + copilot context injection tests + UI recovery scenario."
+      ]
+    },
+    {
+      "id": "BATCH-13",
+      "title": "Decision journal et outcome feedback loop",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-12"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-13-PLAN avec schema journal, outcomes, et cadence review hebdo.",
+      "goals": [
+        "Journaliser recommandations et contexte de decision.",
+        "Mesurer outcomes sur horizons 1d/1w/1m.",
+        "Fermer la boucle produit par revue hebdo mesurable."
+      ],
+      "success_criteria": [
+        "Journal complet consultable par actif et horizon.",
+        "KPI hit-rate et calibration calcules automatiquement.",
+        "Review hebdo genere un backlog actionnable."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-13",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: append-only decision log + analytics pass on top, no mutation-heavy workflow.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing judge outputs and forecasts artifacts for journaling keys.",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/kpi-history.jsonl, docs/operations/orchestrator/proofs/",
+        "validation_path: event integrity checks + KPI recomputation consistency."
+      ]
+    },
+    {
+      "id": "BATCH-14",
+      "title": "Finalisation core v2 robustesse et GO NO-GO",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-13"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-14-PLAN et cadrer gate final production avec preuves obligatoires.",
+      "goals": [
+        "Executer drills robustesse provider down/stale/timeout/restart.",
+        "Valider parcours complet nominal + degrade.",
+        "Produire gate final GO/NO-GO avec plan J+7."
+      ],
+      "success_criteria": [
+        "Drills executes avec preuves et resultats conserves.",
+        "Parcours utilisateur valide en bout en bout.",
+        "Decision GO/NO-GO signee avec rollback et suivi J+7."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-14",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: orchestrate drills via existing cron/health scripts and monitor APIs; avoid custom one-off harness.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse fc_health_check, monitor_agents, and role proof manifests as release evidence backbone.",
+        "reuse_targets: scripts/fc_health_check.sh, scripts/monitor_agents.sh, platform/automation/parallel_workstream.py, docs/orchestrator-ops/proofs/",
+        "validation_path: resilience suite + release checklist + rollback rehearsal."
+      ]
+    },
+    {
+      "id": "BATCH-15",
+      "title": "Strategy playbooks engine",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-14"
+      ],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "next_action": "ouvrir BATCH-15-PLAN puis decomposer en lanes backend/frontend/data avec contrat playbook commun.",
+      "goals": [
+        "Formaliser playbooks decision par regime et risque.",
+        "Rendre la recommandation explicable par strategie active.",
+        "Signaler les conflits strategie vs signal brut."
+      ],
+      "success_criteria": [
+        "Playbook selection deterministe exposee en API/UI.",
+        "Every recommendation references strategy rationale.",
+        "Conflict warning rendered with actionable next step."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-15",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: strategy layer wraps existing signal/judge outputs instead of replacing them.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API decision format and copilot context pipeline to inject strategy constraints.",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "validation_path: strategy conflict tests + end-to-end recommendation coherence checks."
+      ]
+    },
+    {
+      "id": "BATCH-16",
+      "title": "Scenario and Stress Testing Lite",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-15"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-16-PLAN et cadrer scenarios standards + impacts portefeuille avec contrat de restitution unique.",
+      "goals": [
+        "Mettre en place un moteur what-if sur chocs macro et actifs.",
+        "Estimer impact portefeuille avec recommandations actionnables.",
+        "Rendre comparables au moins 5 scenarios standards."
+      ],
+      "success_criteria": [
+        "Comparateur UI affiche >=5 scenarios avec deltas explicites.",
+        "Chaque scenario produit une recommendation avec rationale traceable.",
+        "Tests API/UI valident format de sortie unique et stable."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-16",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: branch stress layer on top of existing judge + forecasts pipeline, no separate scoring engine.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API endpoint orchestration pattern (input normalization, fallback, verdict payload).",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/forecasts, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "integration_contract: scenario_input + portfolio_snapshot -> decision_payload(verdict,confidence,risks,actions) identical to existing UI contracts.",
+        "validation_path: scenario fixture tests + API contract tests + mobile/desktop rendering smoke."
+      ]
+    },
+    {
+      "id": "BATCH-17",
+      "title": "Regime Detection and Allocation Drift Alerts",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-16"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-17-PLAN et definir matrice regime->posture + alertes de derive allocation.",
+      "goals": [
+        "Detecter changements de regime risk-on/risk-off/transition.",
+        "Signaler derive allocation versus posture cible.",
+        "Exposer posture recommandee avec niveau de confiance."
+      ],
+      "success_criteria": [
+        "Detection regime disponible en API et visible en UI.",
+        "Alertes derivees dedupees avec severite explicite.",
+        "Matrice posture validee sur jeux de donnees historiques."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-17",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: extend current signal scoring and alert channels instead of introducing a new alert subsystem.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor/status surfaces and existing forecast factors before new abstractions.",
+        "reuse_targets: apps/api/src/platform/legacy/jobs/forecasts_simple.py, scripts/monitor_agents.sh, apps/web/src/domains/forecasts/pages/app.js",
+        "integration_contract: regime_state + drift_metrics must map to existing alert card format consumed by dashboard.",
+        "validation_path: drift threshold tests + alert ranking assertions + UX smoke for acknowledgment flow."
+      ]
+    },
+    {
+      "id": "BATCH-18",
+      "title": "Event Driven Copilot",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-17"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-18-PLAN pour integrer calendrier macro/earnings dans le contexte copilot avec fenetre 24-48h.",
+      "goals": [
+        "Injecter calendrier macro et earnings dans le raisonnement.",
+        "Produire timeline impact 24-48h orientee decision.",
+        "Rendre le copilot sensible a la proximite evenementielle."
+      ],
+      "success_criteria": [
+        "Timeline evenementielle exposee dans payload copilot.",
+        "Recommandation change lorsqu un event critique approche.",
+        "Tests de non-regression sur endpoint copilot passes."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-18",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: enrich copilot context service and keep response schema compatible with judge-style decision outputs.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and llm_client/g4f integration already proven in judge/coprocess flows.",
+        "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/platform/legacy/research/llm_client.py, apps/api/src/domains/judge/application/intelligence_service.py",
+        "integration_contract: event_timeline appended to existing copilot context without breaking current frontend connector parsing.",
+        "validation_path: context injection tests + endpoint contract tests + canary prompt quality checks."
+      ]
+    },
+    {
+      "id": "BATCH-19",
+      "title": "Explainability Graph and Source Traceability",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-18"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-19-PLAN et formaliser graphe d explication avec poids/fraicheur/sources.",
+      "goals": [
+        "Rendre chaque recommendation traçable jusqu aux sources.",
+        "Afficher poids, fraicheur et contribution par signal.",
+        "Ajouter indicateurs de qualite source visibles en UI."
+      ],
+      "success_criteria": [
+        "Graph explainability disponible pour chaque verdict.",
+        "Source traceability complete sans trou dans les champs requis.",
+        "UI affiche contribution/fraicheur avec code couleur cohérent."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-19",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: build explainability layer from existing judge/forecast intermediate artifacts, no parallel provenance store.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align with Judge API verdict object and reuse its normalization path.",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/proofs/, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
+        "integration_contract: explanation_graph nodes and edges must remain serializable in current API connector payload shape.",
+        "validation_path: provenance completeness checks + explainability snapshot tests + UI rendering tests."
+      ]
+    },
+    {
+      "id": "BATCH-20",
+      "title": "Personal Policy Guardrails",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-19"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-20-PLAN et definir politique utilisateur (risque/exclusions/limites) avec downgrade explicite.",
+      "goals": [
+        "Encadrer recommandations par politiques personnelles.",
+        "Bloquer ou downgrader suggestions hors limites.",
+        "Tracer tout override dans journal auditable."
+      ],
+      "success_criteria": [
+        "Violations policy detectees avant publication recommendation.",
+        "Downgrade explicite affiche en UI + API.",
+        "Overrides historises avec auteur et motif."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-20",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: policy guard wraps existing decision object post-judge and pre-ui serialization.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse current decision payload and add guard fields instead of a separate policy endpoint.",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "integration_contract: policy_verdict and override_reason appended to existing contract keys consumed by monitor and dashboard.",
+        "validation_path: policy boundary tests + override audit tests + UI downgrade behavior checks."
+      ]
+    },
+    {
+      "id": "BATCH-21",
+      "title": "Paper Trading Simulator and Execution Journal",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-20"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-21-PLAN et preparer simulation execution + journal outcome pour boucle apprentissage.",
+      "goals": [
+        "Simuler execution paper trading depuis recommandations.",
+        "Enregistrer slippage, fees et qualite de fill.",
+        "Relier outcome execution au moteur de recommandations."
+      ],
+      "success_criteria": [
+        "Scenario paper trade complet de recommendation a outcome.",
+        "Journal execution expose KPI slippage/fees par decision.",
+        "Feedback loop exploitable par batch analytics suivant."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-21",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: simulate fills in lightweight domain service while reusing decision journal schema.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing journaling and judge identifiers as primary foreign keys.",
+        "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/kpi-history.jsonl, apps/web/src/domains/forecasts/pages/app.js",
+        "integration_contract: execution_journal entries must reference recommendation_id and preserve current timeline display contract.",
+        "validation_path: simulation deterministic tests + journal integrity checks + dashboard summary snapshots."
+      ]
+    },
+    {
+      "id": "BATCH-22",
+      "title": "Rebalancing Optimizer Lite",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-21"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-22-PLAN et cadrer proposition de rebalancing en un ecran avec contraintes policy.",
+      "goals": [
+        "Proposer rebalancing simple sous contraintes utilisateur.",
+        "Afficher turnover, delta risque et couts attendus.",
+        "Permettre decision rapide en quelques minutes."
+      ],
+      "success_criteria": [
+        "Optimizer fournit proposition unique et explicable.",
+        "Contraintes policy appliquees avant proposition finale.",
+        "UI one-screen validee desktop et mobile."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-22",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: optimize from current portfolio state and existing risk policy service, no separate optimizer microservice.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse policy guardrails and portfolio context contracts already in copilot path.",
+        "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/contracts/apiConnector.js",
+        "integration_contract: rebalancing proposal payload extends current recommendation card schema with turnover and risk_delta fields.",
+        "validation_path: optimizer constraint tests + end-to-end policy compliance checks + UI acceptance flow."
+      ]
+    },
+    {
+      "id": "BATCH-23",
+      "title": "Tax Fees and Slippage Awareness",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-22"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-23-PLAN pour estimer impact net et activer alertes edge-net insuffisant.",
+      "goals": [
+        "Estimer fiscalite, fees et slippage par decision.",
+        "Afficher impact brut versus impact net.",
+        "Alerter lorsque edge net devient non pertinent."
+      ],
+      "success_criteria": [
+        "Chaque recommendation expose cout estime et edge net.",
+        "Alerte edge-net faible activee avec seuil configurable.",
+        "Regression tests garantissent coherence des calculs net."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-23",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: cost awareness computed as post-processing stage over existing recommendation payload.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse execution journal outputs and avoid duplicating transaction models.",
+        "reuse_targets: docs/operations/orchestrator/kpi-history.jsonl, apps/api/src/domains/judge/application/intelligence_service.py, apps/web/src/domains/forecasts/components/widgets/sector-performance.html",
+        "integration_contract: cost_breakdown fields added to existing decision response and consumed by current frontend cards.",
+        "validation_path: edge-net threshold tests + snapshot tests + UX alert verification."
+      ]
+    },
+    {
+      "id": "BATCH-24",
+      "title": "Alerting Intelligence V2",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-23"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-24-PLAN et finaliser file alertes priorisee avec controle fatigue et urgences top queue.",
+      "goals": [
+        "Prioriser alertes selon impact decisionnel reel.",
+        "Reduire bruit via dedupe et controle fatigue.",
+        "Conserver surface d urgence claire en top queue."
+      ],
+      "success_criteria": [
+        "Backlog alertes montre priorite/severite sans doublons.",
+        "Snooze/ack fonctionnent sans perte d alertes critiques.",
+        "Mesure bruit reduit sur fenetre 24h compare baseline."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-24",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: iterate on existing monitor + alert channels; preserve single ingestion and dispatch pipeline.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor server and existing fc health checks before adding new daemons.",
+        "reuse_targets: apps/monitor/server.py, scripts/monitor_agents.sh, scripts/fc_health_check.sh, apps/api/src/platform/legacy/jobs/market_brief.py",
+        "integration_contract: alert_v2 schema must stay backward-compatible with current monitor dashboard cards.",
+        "validation_path: dedupe rate tests + urgent queue checks + monitor API regression tests."
+      ]
+    },
+    {
+      "id": "BATCH-25",
+      "title": "Autonomous Morning Brief Pipeline",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-24"
+      ],
+      "created_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-03T14:12:00Z",
+      "next_action": "ouvrir BATCH-25-PLAN pour pipeline brief matinal automatique avec top actions/risques et fallback degrade.",
+      "goals": [
+        "Automatiser generation du brief matinal decisionnel.",
+        "Mettre en avant top 3 actions et risques cles.",
+        "Garantir fallback explicite en cas d echec source/provider."
+      ],
+      "success_criteria": [
+        "Brief matinal produit automatiquement a cadence definie.",
+        "Sections actions/risques coherees avec etat runtime reel.",
+        "Fallback degrade visible et actionnable lorsqu un composant echoue."
+      ],
+      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-25",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "implementation_architecture: compose morning brief from existing forecasts + judge + monitor data without separate pipeline stack.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse generate_brief flow and Judge API fallback strategy for robust brief synthesis.",
+        "reuse_targets: scripts/generate_brief.py, apps/api/src/domains/forecasts/api/brief.py, apps/api/src/platform/legacy/research/llm_client.py, apps/api/src/domains/judge/application/intelligence_service.py",
+        "integration_contract: morning_brief output reuses current brief route schema and embeds degradation metadata.",
+        "validation_path: scheduled run dry-tests + content contract checks + degraded mode simulation."
+      ]
     }
   ]
 }
