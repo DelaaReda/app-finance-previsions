@@ -2521,6 +2521,9 @@ Ne modifie pas apps/** ni les fichiers de sécurité. Tu peux modifier uniquemen
 
 Décision tick (ordre strict):
 1) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
+   EXCEPTION CRITIQUE: si la tâche IN_PROGRESS est de type GOV_REVIEW, PLAN, ANALYSIS, ou ARCH (task_id contient ces codes),
+   elle t'appartient — tu dois la compléter toi-même (task_update=complete) après avoir vérifié que tous les depends_on sont DONE.
+   NE PAS utiliser task_update=handoff sur ces tâches. Handoff = passer à un autre rôle. GOV_REVIEW = vérification finale planner.
 2) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
 3) si une tâche planner est READY -> claim puis dispatch vers dev avec task cible + fichiers cibles + test cible.
 4) si queue/workboard indiquent un gap critique non couvert (architecture, dépendance, acceptance gate), créer 1 batch top-level BATCH-XX même si runway_short=0.

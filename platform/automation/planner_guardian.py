@@ -236,7 +236,20 @@ def update_streaks(
     streaks["runway_no_batch_streak"] = (
         int(streaks.get("runway_no_batch_streak", 0)) + 1 if runway_no_batch else 0
     )
-    return {k: int(v) for k, v in streaks.items()}
+
+    # Detect planner handoff-loop: same task_id handoffed repeatedly without progress.
+    # Triggers when task_update=handoff on the same task >=3 consecutive ticks.
+    current_task = evidence.get("task_id", "").strip()
+    last_handoff_task = str(streaks.get("_last_handoff_task", "")).strip()
+    is_handoff = evidence.get("task_update", "").strip().lower() == "handoff"
+    if is_handoff and current_task and current_task == last_handoff_task:
+        streaks["handoff_same_task_streak"] = int(streaks.get("handoff_same_task_streak", 0)) + 1
+    else:
+        streaks["handoff_same_task_streak"] = 0
+    streaks["_last_handoff_task"] = current_task if is_handoff else ""
+
+    return {k: int(v) for k, v in streaks.items() if not k.startswith("_")}, \
+           {"_last_handoff_task": streaks.get("_last_handoff_task", "")}
 
 
 def recommendations(issues: List[str]) -> List[str]:
@@ -271,21 +284,32 @@ def maybe_emit_directive(
     bus_file: Path,
     state_dir: Path,
 ) -> None:
+    handoff_loop = streaks.get("handoff_same_task_streak", 0) >= 3
     need_directive = (
         streaks.get("ready_idle_streak", 0) >= 3
         or streaks.get("low_score_streak", 0) >= 3
         or streaks.get("runway_no_batch_streak", 0) >= 3
+        or handoff_loop
     )
     if not need_directive:
         return
 
-    message = (
-        f"planner_guardian escalation: score={score}; issues={','.join(issues) or 'none'}; "
-        f"ready_idle_streak={streaks.get('ready_idle_streak', 0)}; "
-        f"low_score_streak={streaks.get('low_score_streak', 0)}; "
-        f"runway_no_batch_streak={streaks.get('runway_no_batch_streak', 0)}. "
-        "Action attendue: claim READY ou creation batch top-level aligne vision+architecture."
-    )
+    if handoff_loop:
+        last_task = streaks.get("_last_handoff_task", "unknown")
+        message = (
+            f"planner_guardian HANDOFF_LOOP: tache '{last_task}' handoffee {streaks['handoff_same_task_streak']} fois sans cloture. "
+            "Si la tache est de type GOV_REVIEW ou role=planner, completer toi-meme via task_update=complete. "
+            "Ne pas handoff une tache dont tu es l assignee. "
+            "Verifier que tous les depends_on sont DONE, puis marquer complete."
+        )
+    else:
+        message = (
+            f"planner_guardian escalation: score={score}; issues={','.join(issues) or 'none'}; "
+            f"ready_idle_streak={streaks.get('ready_idle_streak', 0)}; "
+            f"low_score_streak={streaks.get('low_score_streak', 0)}; "
+            f"runway_no_batch_streak={streaks.get('runway_no_batch_streak', 0)}. "
+            "Action attendue: claim READY ou creation batch top-level aligne vision+architecture."
+        )
     fp = hashlib.sha256(message.encode("utf-8")).hexdigest()
     fp_file = state_dir / f"{role}.planner_guardian.last_directive_fp"
     prev = read_text(fp_file).strip()
@@ -354,7 +378,8 @@ def main() -> int:
 
     state_file = state_dir / "planner_guardian_state.json"
     state = load_state(state_file)
-    streaks = update_streaks(state, runtime, contract, evidence, score)
+    streaks_result = update_streaks(state, runtime, contract, evidence, score)
+    streaks, meta = streaks_result if isinstance(streaks_result, tuple) else (streaks_result, {})
     recos = recommendations(issues)
 
     payload: Dict[str, object] = {
@@ -384,7 +409,7 @@ def main() -> int:
     }
 
     state["updated_at_utc"] = payload["ts_utc"]
-    state["streaks"] = streaks
+    state["streaks"] = {**streaks, **meta}  # persist _last_handoff_task alongside streak counts
     state["last_score"] = score
     state["last_level"] = level
     state["last_issues"] = issues[:12]

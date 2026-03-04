@@ -7,6 +7,7 @@ Remplace l'ancienne version 1091-lignes qui bloquait plus qu'elle n'aidait.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import subprocess
@@ -59,9 +60,36 @@ ADMIN_RUNTIME_BLOCKER_PREFIXES = (
 )
 
 EMPTY_VALUE_MARKERS = {"", "none", "n/a", "null", "-", "na", "non", "aucun", "aucune"}
+WEAK_EVIDENCE_MARKERS = {
+    "?",
+    "??",
+    "???",
+    "tbd",
+    "todo",
+    "to_do",
+    "fixme",
+    "a_faire",
+    "coming_soon",
+    "unknown",
+    "pending",
+    "later",
+}
+ISSUE_SEVERITY_VALUES = {"none", "low", "medium", "high", "critical"}
+ISSUE_BLOCKED_MIN_SEVERITIES = {"medium", "high", "critical"}
+ISSUE_CODE_RE = re.compile(r"^[a-z0-9_]{3,64}$")
+FALLBACK_CHANNELS_ALLOWED = {"runtime_context"}
+FALLBACK_IMPACT_ALLOWED = {"low"}
+FALLBACK_IMPACT_ACTION_ALLOWED = {"monitor_updates"}
+FALLBACK_CHANNELS_ISSUE_CODE = "channels_autofill_fallback"
 ROLE_ALIAS_MAP = {
     "vision-architect-tasks-planner": "planner",
     "vision_architect_tasks_planner": "planner",
+}
+
+PLANNER_SOFT_BLOCKERS = {
+    "HANDOFF_TO_MISSING",
+    "PLANNER_BATCH_ID_INVALID",
+    "MODE_ANALYSE_NO_EDITS",
 }
 
 
@@ -86,6 +114,26 @@ def _parse_kv(raw: str) -> dict[str, str]:
             k, _, v = frag.partition("=")
             kv[k.strip().lower()] = v.strip()
     return kv
+
+
+def _parse_issue_codes(raw: str) -> tuple[list[str], list[str], bool]:
+    text = (raw or "").strip()
+    if not text:
+        return [], [], False
+    if text.lower() == "none":
+        return [], [], True
+
+    valid: list[str] = []
+    invalid: list[str] = []
+    for token in text.split(","):
+        code = token.strip().lower()
+        if not code:
+            continue
+        if ISSUE_CODE_RE.fullmatch(code):
+            valid.append(code)
+        else:
+            invalid.append(code)
+    return valid, invalid, False
 
 
 def _crontab_agent_jobs() -> int:
@@ -116,6 +164,38 @@ def _recent_admin_cron_log(max_age_minutes: int = 120) -> bool:
         return False
 
 
+def _is_normalized_fallback_issue_report(ev: dict[str, str], source: str) -> bool:
+    source_l = str(source or "").strip().lower()
+    source_match = (
+        "rate_limit_gate" in source_l
+        or "fallback_checkpoint" in source_l
+        or "no_delta" in source_l
+    )
+    marker_match = any(
+        key in ev
+        for key in (
+            "fallback_mode",
+            "rate_limit_source",
+            "rate_limit_reason",
+            "no_delta_streak",
+        )
+    )
+    if not (source_match or marker_match):
+        return False
+    issues_raw = str(ev.get("issues", "") or "").strip().lower()
+    issue_codes = [tok.strip() for tok in issues_raw.split(",") if tok.strip()]
+    if FALLBACK_CHANNELS_ISSUE_CODE not in issue_codes:
+        return False
+    channels = str(ev.get("channels_read", "") or "").strip().lower()
+    impact_assessment = str(ev.get("impact_assessment", "") or "").strip().lower()
+    impact_action = str(ev.get("impact_action", "") or "").strip().lower()
+    return (
+        channels in FALLBACK_CHANNELS_ALLOWED
+        and impact_assessment in FALLBACK_IMPACT_ALLOWED
+        and impact_action in FALLBACK_IMPACT_ACTION_ALLOWED
+    )
+
+
 def _render(values: dict[str, str]) -> str:
     return "\n".join(f"{k}: {values[k]}" for k in KEYS)
 
@@ -126,11 +206,14 @@ def _now() -> str:
 
 def _blocked(role: str, source: str, blocker_id: str, reason: str, values: dict[str, str]) -> None:
     slug = re.sub(r"[^a-z0-9_]+", "_", blocker_id.lower()).strip("_")
+    issue_code = f"contract_guard_{slug}" if slug else "contract_guard_block"
+    artifact_key = ARTIFACT_MARKERS.get(role, "role_artifact")
     ev = (
         f"task_update=blocked; lock_check=ok; "
         f"run_note=contract guard bloque {slug}; "
-        f"role_artifact=contract_guard; "
-        f"stream_id=none; task_id=none"
+        f"{artifact_key}=platform/policies/role_contract_guard.py; "
+        f"stream_id=none; task_id=none; "
+        f"issues={issue_code}; issue_count=1; issue_severity=high"
     )
     out = {
         "STATUS": "BLOCKED",
@@ -200,6 +283,43 @@ def _is_empty_marker(raw: str) -> bool:
     return (raw or "").strip().lower() in EMPTY_VALUE_MARKERS
 
 
+def _is_placeholder_marker(raw: str) -> bool:
+    token = re.sub(r"\s+", "", (raw or "").strip().lower())
+    if token in WEAK_EVIDENCE_MARKERS:
+        return True
+    return bool(re.fullmatch(r"[?.!_~\-]+", token))
+
+
+def _is_empty_or_placeholder(raw: str) -> bool:
+    return _is_empty_marker(raw) or _is_placeholder_marker(raw)
+
+
+def _is_weak_evidence(raw: str) -> bool:
+    text = (raw or "").strip()
+    if _is_empty_marker(text) or _is_placeholder_marker(text):
+        return True
+    return len(text) < 3
+
+
+def _default_channels_read_for_role(role: str) -> str:
+    token = (role or "").strip().lower()
+    if token == "admin":
+        return "runtime_context,workboard_tasks,workboard_handoffs,role_contracts,admin_chat,admin_iterations"
+    if token == "dev":
+        return "runtime_context,workboard_tasks,workboard_handoffs,workboard_events,role_contracts"
+    return "runtime_context,workboard_tasks,role_contracts"
+
+
+def _has_required_kv_markers(raw: str, required_keys: tuple[str, ...]) -> bool:
+    text = (raw or "").strip().lower()
+    if not text:
+        return False
+    for key in required_keys:
+        if not re.search(rf"(^|[;,\s]){re.escape(key.lower())}=", text):
+            return False
+    return True
+
+
 def _planner_batch_created_ids(raw: str) -> tuple[list[str], list[str]]:
     """
     Parse planner batch_created evidence into:
@@ -253,6 +373,282 @@ def _canonical_role(role: str) -> str:
     return ROLE_ALIAS_MAP.get(token, token)
 
 
+def _safe_int(raw: str | None, default: int) -> int:
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return default
+
+
+def _previous_probe_streak(role: str) -> int:
+    state_dir = Path(
+        os.environ.get(
+            "TMUX_ROLE_STATE_DIR",
+            str(Path.home() / ".openclaw" / "cron" / "role-state"),
+        )
+    ).expanduser()
+    previous_contract_path = state_dir / f"{role}.last_contract"
+    if not previous_contract_path.exists():
+        return 0
+    try:
+        previous_text = previous_contract_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return 0
+    evidence_line = ""
+    for line in previous_text.splitlines():
+        if line.startswith("EVIDENCE:"):
+            evidence_line = line.split(":", 1)[1].strip()
+            break
+    if not evidence_line:
+        return 0
+    m = re.search(r"delivery_probe_streak=(\d+)\s*/\s*(\d+)", evidence_line)
+    if not m:
+        return 0
+    return _safe_int(m.group(1), 0)
+
+
+def _set_delivery_probe_continue(
+    *,
+    values: dict[str, str],
+    role: str,
+    artifact_key: str,
+    stream_id: str,
+    task_id: str,
+    threshold: int,
+    streak: int,
+    reason: str,
+) -> dict[str, str]:
+    values["STATUS"] = "IN_PROGRESS"
+    values["DELTA"] = "DELIVERY_PROBE_INCONSISTENT_CONTINUE"
+    values["VERDICT"] = "GO_WITH_CAUTION"
+    values["BLOCKER_ID"] = "NONE"
+    values["RISKS"] = "permission blocker non confirme converti en probe continue"
+    values["NEXT"] = f"owner={role}; action=executer_cmd_metier_reel_puis_complete_ou_handoff"
+    values["NEXT_ACTION_UNIQUE"] = f"RECHECK_DELIVERY_PROBE_{role.upper()}_{_now()}"
+    values["EVIDENCE"] = (
+        "task_update=none_no_signal; lock_check=ok; "
+        "run_note=permission blocker non confirme converti en delivery probe continue; "
+        f"{artifact_key}=platform/policies/role_contract_guard.py; "
+        f"stream_id={stream_id}; task_id={task_id}; "
+        f"permission_probe=unverified_continue; probe_reason={reason}; "
+        f"delivery_probe_streak={streak}/{threshold}; "
+        "issues=none; issue_count=0; issue_severity=none"
+    )
+    return _parse_kv(values.get("EVIDENCE", ""))
+
+
+def _set_delivery_probe_streak_exceeded(
+    *,
+    values: dict[str, str],
+    role: str,
+    artifact_key: str,
+    stream_id: str,
+    task_id: str,
+    threshold: int,
+    streak: int,
+    reason: str,
+) -> dict[str, str]:
+    values["STATUS"] = "BLOCKED"
+    values["DELTA"] = "DELIVERY_PROBE_STREAK_EXCEEDED"
+    values["VERDICT"] = "BLOCKED"
+    values["BLOCKER_ID"] = "DELIVERY_PROBE_STREAK_EXCEEDED"
+    values["RISKS"] = (
+        f"delivery probe streak exceeded ({streak}/{threshold}); execution proof concrete requise avant nouveau blocage."
+    )
+    values["NEXT"] = f"owner={role}; action=fournir cmd+cmd_err_excerpt ou completer/handoff avec preuve concrete"
+    values["NEXT_ACTION_UNIQUE"] = f"ESCALATE_DELIVERY_PROBE_{role.upper()}_{_now()}"
+    values["EVIDENCE"] = (
+        "task_update=blocked; lock_check=ok; "
+        "run_note=delivery probe streak depasse le seuil, blocage conserve avec evidence explicite; "
+        f"{artifact_key}=platform/policies/role_contract_guard.py; "
+        f"stream_id={stream_id}; task_id={task_id}; "
+        f"probe_reason={reason}; delivery_probe_streak={streak}/{threshold}; "
+        "issues=delivery_probe_streak_exceeded; issue_count=1; issue_severity=high"
+    )
+    return _parse_kv(values.get("EVIDENCE", ""))
+
+
+def _min_reflection_passes() -> int:
+    raw = (
+        os.environ.get("TMUX_ROLE_MIN_REFLECTION_PASSES")
+        or os.environ.get("LM_USED_ROLE_MIN_REFLECTION_PASSES")
+        or os.environ.get("MODEL_CONFIG_PARALLEL_ROLE_MIN_REFLECTION_PASSES")
+        or "2"
+    )
+    return max(1, _safe_int(raw, 2))
+
+
+def _should_convert_to_delivery_probe(
+    *,
+    role: str,
+    task_update: str,
+    values: dict[str, str],
+    ev: dict[str, str],
+) -> tuple[bool, str]:
+    if task_update != "blocked":
+        return False, ""
+    if role not in DELIVERY_ROLES and role != "planner":
+        return False, ""
+
+    blocker = (values.get("BLOCKER_ID", "") or "").strip().lower()
+    delta = (values.get("DELTA", "") or "").strip().lower()
+    risk = (values.get("RISKS", "") or "").strip().lower()
+    cmd = (ev.get("cmd", "") or "").strip().lower()
+    cmd_err = (ev.get("cmd_err_excerpt", "") or "").strip().lower()
+    violations = (ev.get("violations", "") or "").strip().lower()
+    issue = (ev.get("issues", "") or "").strip().lower()
+    suggestion = (ev.get("suggestions", "") or "").strip().lower()
+    scope = " ".join([blocker, delta, risk, cmd, cmd_err, violations, issue, suggestion])
+
+    is_permission = ("permission" in scope) or ("read_only" in scope) or ("readonly" in scope)
+    if not is_permission:
+        return False, ""
+
+    if "lock" in scope:
+        return True, "permission_lock_probe"
+    return True, "permission_probe"
+
+
+def _validate_issue_report(
+    *,
+    role: str,
+    source: str,
+    values: dict[str, str],
+    ev: dict[str, str],
+    task_update: str,
+) -> dict[str, str]:
+    """Validate issue reporting fields without masking higher-priority blockers."""
+    required_issue_fields = ("issues", "issue_count", "issue_severity")
+    missing_issue_fields = [key for key in required_issue_fields if key not in ev]
+    if missing_issue_fields:
+        provided_issue_fields = [key for key in required_issue_fields if key in ev]
+        if not provided_issue_fields:
+            # Compat path: historical contracts often omitted issue fields entirely.
+            # Keep strictness for partial reports, but auto-fill fully absent blocks.
+            ev = _upsert_evidence(values, ev, "issues", "none")
+            ev = _upsert_evidence(values, ev, "issue_count", "0")
+            ev = _upsert_evidence(values, ev, "issue_severity", "none")
+        else:
+            _blocked(
+                role,
+                source,
+                "ISSUE_REPORT_MISSING",
+                (
+                    "issue reporting manquant: "
+                    f"{','.join(missing_issue_fields)} (role={role})"
+                ),
+                values,
+            )
+
+    issues_raw = ev.get("issues", "").strip()
+    issue_count_raw = ev.get("issue_count", "").strip()
+    issue_severity = ev.get("issue_severity", "").strip().lower()
+
+    if not re.fullmatch(r"\d+", issue_count_raw):
+        _blocked(
+            role,
+            source,
+            "ISSUE_REPORT_INVALID",
+            f"issue_count invalide '{issue_count_raw}' (role={role})",
+            values,
+        )
+    issue_count = int(issue_count_raw)
+    if issue_count < 0:
+        _blocked(
+            role,
+            source,
+            "ISSUE_REPORT_INVALID",
+            f"issue_count negatif '{issue_count_raw}' (role={role})",
+            values,
+        )
+
+    if issue_severity not in ISSUE_SEVERITY_VALUES:
+        _blocked(
+            role,
+            source,
+            "ISSUE_REPORT_INVALID",
+            (
+                "issue_severity invalide "
+                f"'{issue_severity}' (attendu={','.join(sorted(ISSUE_SEVERITY_VALUES))})"
+            ),
+            values,
+        )
+
+    issue_codes, invalid_issue_codes, issues_is_none = _parse_issue_codes(issues_raw)
+    if invalid_issue_codes:
+        _blocked(
+            role,
+            source,
+            "ISSUE_REPORT_INVALID",
+            f"issues contient des codes invalides: {','.join(invalid_issue_codes[:5])}",
+            values,
+        )
+    if not issues_is_none and not issue_codes:
+        _blocked(
+            role,
+            source,
+            "ISSUE_REPORT_INVALID",
+            "issues doit contenir au moins un code valide ou la valeur 'none'",
+            values,
+        )
+
+    if issues_is_none:
+        if issue_count != 0 or issue_severity != "none":
+            _blocked(
+                role,
+                source,
+                "ISSUE_REPORT_INCONSISTENT",
+                (
+                    "issues=none exige issue_count=0 et issue_severity=none "
+                    f"(got count={issue_count}, severity={issue_severity})"
+                ),
+                values,
+            )
+    else:
+        if issue_count <= 0:
+            _blocked(
+                role,
+                source,
+                "ISSUE_REPORT_INCONSISTENT",
+                f"issue_count doit etre >0 quand issues!=none (got {issue_count})",
+                values,
+            )
+        if issue_count != len(issue_codes):
+            _blocked(
+                role,
+                source,
+                "ISSUE_REPORT_INCONSISTENT",
+                (
+                    f"issue_count={issue_count} ne correspond pas au nombre de codes "
+                    f"({len(issue_codes)})"
+                ),
+                values,
+            )
+        if issue_severity == "none":
+            _blocked(
+                role,
+                source,
+                "ISSUE_REPORT_INCONSISTENT",
+                "issue_severity=none interdit quand issues!=none",
+                values,
+            )
+
+    blocker_present = values["BLOCKER_ID"].strip().upper() not in {"", "NONE", "N/A", "NULL"}
+    if task_update == "blocked" or blocker_present:
+        if issues_is_none or issue_count < 1 or issue_severity not in ISSUE_BLOCKED_MIN_SEVERITIES:
+            _blocked(
+                role,
+                source,
+                "BLOCKED_WITHOUT_ISSUE_REPORT",
+                (
+                    "blocked/blocker exige issue valide: "
+                    "issue_count>=1 et issue_severity in {medium,high,critical}"
+                ),
+                values,
+            )
+    return ev
+
+
 def main() -> int:
     if len(sys.argv) != 9:
         print(
@@ -269,6 +665,8 @@ def main() -> int:
     allow_file_edits = sys.argv[4] == "1"
     workboard_has_work = sys.argv[5] == "1"
     workboard_has_in_progress = sys.argv[6] == "1"
+    queue_version = (sys.argv[7] or "").strip()
+    workboard_version = (sys.argv[8] or "").strip()
 
     text = payload_path.read_text(encoding="utf-8", errors="ignore")
     values = _parse_contract(text)
@@ -287,11 +685,9 @@ def main() -> int:
     # ── PRE-NORMALIZATION : planner blocker drift ───────────────────────────
     # Keep planner lane active when model emits known soft blockers as hard BLOCKED.
     blocker_upper = values["BLOCKER_ID"].strip().upper()
-    if role == "planner" and task_update == "blocked" and blocker_upper in {
-        "HANDOFF_TO_MISSING",
-        "PLANNER_BATCH_ID_INVALID",
-        "MODE_ANALYSE_NO_EDITS",
-    }:
+    if role == "planner" and blocker_upper in PLANNER_SOFT_BLOCKERS and (
+        task_update == "blocked" or values["STATUS"].strip().upper() == "BLOCKED"
+    ):
         risk_map = {
             "HANDOFF_TO_MISSING": "handoff planner sans cible explicite converti en attente active",
             "PLANNER_BATCH_ID_INVALID": "batch_created invalide converti en attente active",
@@ -325,7 +721,8 @@ def main() -> int:
             "run_note=guard neutralise un soft blocker planner et maintient le flux actif; "
             "planner_artifact=platform/policies/role_contract_guard.py; "
             f"{evidence_note.get(blocker_upper, 'guard_soft_blocker_normalized=1')}; "
-            f"original_blocker={blocker_upper}"
+            f"original_blocker={blocker_upper}; "
+            "issues=none; issue_count=0; issue_severity=none"
         )
         ev = _parse_kv(values.get("EVIDENCE", ""))
         task_update = ev.get("task_update", "").strip().lower()
@@ -380,15 +777,82 @@ def main() -> int:
             _blocked(role, source, "COMPLETE_CMD_MISSING",
                      f"cmd requise pour task_update=complete (role={role})", values)
 
+    # ── CHECK 8a : channels/impact checks (avant delivery gate strict) ──────
+    if role in DELIVERY_ROLES and task_update in {"analysis_only", "none_no_ready", "none_no_signal"}:
+        fallback_issue_report = _is_normalized_fallback_issue_report(ev, source)
+        channels_read = ev.get("channels_read", "").strip()
+        if not fallback_issue_report and _is_empty_or_placeholder(channels_read):
+            ev = _upsert_evidence(values, ev, "channels_read", _default_channels_read_for_role(role))
+            channels_read = ev.get("channels_read", "").strip()
+
+        impact_assessment = ev.get("impact_assessment", "").strip().lower()
+        if not fallback_issue_report and impact_assessment not in {"none", "low", "medium", "high", "critical"}:
+            ev = _upsert_evidence(values, ev, "impact_assessment", "low")
+            impact_assessment = "low"
+
+        impact_action = ev.get("impact_action", "").strip()
+        if (not fallback_issue_report) and impact_assessment in {"medium", "high", "critical"} and (
+            _is_empty_or_placeholder(impact_action) or impact_action.lower() in {"none", "noop", "n/a", "na"}
+        ):
+            ev = _upsert_evidence(values, ev, "impact_action", "claim_ready_when_available")
+        elif (not fallback_issue_report) and _is_empty_or_placeholder(impact_action):
+            ev = _upsert_evidence(values, ev, "impact_action", "monitor_updates")
+
+    # ── CHECK 8a-ter : permission faux positif -> probe continue/streak ─────
+    should_convert_probe, probe_reason = _should_convert_to_delivery_probe(
+        role=role,
+        task_update=task_update,
+        values=values,
+        ev=ev,
+    )
+    if should_convert_probe:
+        threshold = max(1, _safe_int(os.environ.get("TMUX_ROLE_DELIVERY_PROBE_THRESHOLD"), 3))
+        previous_streak = _previous_probe_streak(role)
+        streak = previous_streak + 1
+        stream_id = ev.get("stream_id", "").strip() or "none"
+        task_id = ev.get("task_id", "").strip() or "none"
+        if streak >= threshold:
+            ev = _set_delivery_probe_streak_exceeded(
+                values=values,
+                role=role,
+                artifact_key=artifact_key,
+                stream_id=stream_id,
+                task_id=task_id,
+                threshold=threshold,
+                streak=streak,
+                reason=probe_reason,
+            )
+        else:
+            ev = _set_delivery_probe_continue(
+                values=values,
+                role=role,
+                artifact_key=artifact_key,
+                stream_id=stream_id,
+                task_id=task_id,
+                threshold=threshold,
+                streak=streak,
+                reason=probe_reason,
+            )
+        task_update = ev.get("task_update", "").strip().lower()
+        lock_check = ev.get("lock_check", "").strip().lower()
+        run_note = ev.get("run_note", "").strip()
+
     # ── CHECK 8b : dev must provide architecture/reuse/qa evidence ──────────
     if role == "dev" and task_update in {"claim", "complete", "handoff"}:
         if task_update == "claim":
-            required_dev_fields = (
+            # Claim payloads may be lightweight; however, if deep evidence fields are
+            # provided, they must not be placeholders.
+            optional_claim_fields = (
                 "root_cause",
                 "architecture_check",
                 "vision_alignment",
                 "reuse_check",
             )
+            weak_or_missing_dev = [
+                field
+                for field in optional_claim_fields
+                if field in ev and (ev.get(field, "").strip() and _is_weak_evidence(ev.get(field, "")))
+            ]
         else:
             required_dev_fields = (
                 "root_cause",
@@ -399,19 +863,118 @@ def main() -> int:
                 "vision_alignment",
                 "qa_proof",
             )
-        missing_dev = [
-            field
-            for field in required_dev_fields
-            if _is_empty_marker(ev.get(field, ""))
-        ]
-        if missing_dev:
+            weak_or_missing_dev = []
+            for field in required_dev_fields:
+                raw_val = ev.get(field, "")
+                # Keep explicit NONE for reuse_check to route to the dedicated
+                # DEV_REUSE_CHECK_INVALID blocker with clearer remediation.
+                if field == "reuse_check" and (raw_val or "").strip().lower() == "none":
+                    continue
+                if _is_weak_evidence(raw_val):
+                    weak_or_missing_dev.append(field)
+        if weak_or_missing_dev:
             _blocked(
                 role,
                 source,
                 "DEV_DELIVERY_EVIDENCE_MISSING",
                 (
-                    "dev evidence incomplet pour delivery; "
-                    f"task_update={task_update}; missing={','.join(missing_dev)}"
+                    "dev evidence incomplet/faible pour delivery; "
+                    f"task_update={task_update}; weak_or_missing={','.join(weak_or_missing_dev)}"
+                ),
+                values,
+            )
+        reuse_check = ev.get("reuse_check", "")
+        reuse_norm = reuse_check.strip().lower()
+        if task_update != "claim" and reuse_norm == "none":
+            _blocked(
+                role,
+                source,
+                "DEV_REUSE_CHECK_INVALID",
+                (
+                    "reuse_check doit être un module concret ou NONE(<raison courte>); "
+                    f"task_update={task_update}"
+                ),
+                values,
+            )
+        if task_update != "claim" and not _is_weak_evidence(reuse_check):
+            # Prevent ambiguous NONE without rationale.
+            if reuse_norm.startswith("none") and not re.match(
+                r"^none\(.{3,}\)$", reuse_check.strip(), flags=re.IGNORECASE
+            ):
+                _blocked(
+                    role,
+                    source,
+                    "DEV_REUSE_CHECK_INVALID",
+                    (
+                        "reuse_check doit être un module concret ou NONE(<raison courte>); "
+                        f"task_update={task_update}"
+                    ),
+                    values,
+                )
+        if task_update != "claim" and not _has_required_kv_markers(
+            ev.get("architecture_check", ""), ("layer", "imports_ok", "path_target")
+        ):
+            _blocked(
+                role,
+                source,
+                "DEV_ARCH_CHECK_FORMAT_INVALID",
+                (
+                    "architecture_check invalide; attendu "
+                    "layer=<...>; imports_ok=<yes|no>; path_target=<...>"
+                ),
+                values,
+            )
+        if task_update != "claim" and not _has_required_kv_markers(
+            ev.get("vision_alignment", ""), ("batch", "target", "impact")
+        ):
+            _blocked(
+                role,
+                source,
+                "DEV_VISION_ALIGNMENT_INVALID",
+                (
+                    "vision_alignment invalide; attendu "
+                    "batch=<BATCH-XX>; target=<...>; impact=<...>"
+                ),
+                values,
+            )
+        if task_update in {"complete", "handoff"}:
+            if not _has_required_kv_markers(ev.get("verify", ""), ("before", "after", "test")):
+                _blocked(
+                    role,
+                    source,
+                    "DEV_VERIFY_FORMAT_INVALID",
+                    "verify invalide; attendu before=<...>; after=<...>; test=<...>",
+                    values,
+                )
+            if not _has_required_kv_markers(ev.get("qa_proof", ""), ("test", "result")):
+                _blocked(
+                    role,
+                    source,
+                    "DEV_QA_PROOF_FORMAT_INVALID",
+                    "qa_proof invalide; attendu test=<...>; result=<PASS|FAIL|SKIP(reason)>",
+                    values,
+                )
+
+    # ── CHECK 8c : réflexion obligatoire (claim/handoff delivery lanes) ─────
+    if role in DELIVERY_ROLES and task_update in {"claim", "handoff"}:
+        min_passes = _min_reflection_passes()
+        reflection_passes = _safe_int(ev.get("reflection_passes"), -1)
+        dimensions_raw = ev.get("reflection_dimensions", "")
+        dimensions = {
+            d.strip().lower()
+            for d in re.split(r"[,\s|]+", dimensions_raw)
+            if d.strip()
+        }
+        required_dimensions = {"scope", "dependency_impact", "risk", "verification", "rollback"}
+        if reflection_passes < min_passes or not required_dimensions.issubset(dimensions):
+            _blocked(
+                role,
+                source,
+                "REFLECTION_PASSES_INVALID",
+                (
+                    f"reflection invalide pour task_update={task_update}; "
+                    f"passes={reflection_passes} min={min_passes} "
+                    f"dimensions={','.join(sorted(dimensions)) or 'none'}"
                 ),
                 values,
             )
@@ -420,11 +983,27 @@ def main() -> int:
     if task_update == "handoff":
         # Planner handoff defaults to dev lane when target omitted.
         # This avoids unnecessary lane-wide BLOCKED while preserving explicit handoff intent.
-        if role == "planner" and _is_empty_marker(ev.get("handoff_to", "")):
+        if role == "planner" and _is_empty_or_placeholder(ev.get("handoff_to", "")):
             ev = _upsert_evidence(values, ev, "handoff_to", "dev")
-        if _is_empty_marker(ev.get("handoff_to", "")):
+        if _is_empty_or_placeholder(ev.get("handoff_to", "")):
             _blocked(role, source, "HANDOFF_TO_MISSING",
                      f"handoff_to requis pour task_update=handoff (role={role})", values)
+
+    # ── CHECK 9b : planner ne peut pas handoff ses propres tâches (GOV_REVIEW, ARCH, PLAN, ANALYSIS) ──
+    # Ces tâches sont assignées au planner — les compléter avec task_update=complete, pas handoff.
+    if task_update == "handoff" and role == "planner":
+        task_id_raw = ev.get("task_id", "").upper()
+        PLANNER_OWNED_CODES = ("GOV_REVIEW", "-PLAN", "-ANALYSIS", "-ARCH")
+        if any(code in task_id_raw for code in PLANNER_OWNED_CODES):
+            _blocked(
+                role, source,
+                "PLANNER_SELF_HANDOFF_INVALID",
+                (
+                    f"task_id='{ev.get('task_id','')}' est une tâche planner (GOV_REVIEW/PLAN/ANALYSIS/ARCH); "
+                    "utiliser task_update=complete après vérification des depends_on, pas handoff."
+                ),
+                values,
+            )
 
     # ── CHECK 10 : blocked avec motif permission doit avoir cmd_err_excerpt ──
     if task_update == "blocked":
@@ -494,7 +1073,8 @@ def main() -> int:
                 "task_update=none_no_signal; lock_check=ok; "
                 "run_note=guard convertit faux blocage mode analyse en attente active; "
                 "planner_artifact=platform/policies/role_contract_guard.py; "
-                f"original_blocker={blocker}"
+                f"original_blocker={blocker}; "
+                "issues=none; issue_count=0; issue_severity=none"
             )
             ev = _parse_kv(values["EVIDENCE"])
             task_update = "none_no_signal"
@@ -512,7 +1092,8 @@ def main() -> int:
                 "task_update=none_no_signal; lock_check=ok; "
                 "run_note=guard convertit planner_batch_id_invalid en attente active; "
                 "planner_artifact=platform/policies/role_contract_guard.py; "
-                "batch_created_sanitized=1; original_blocker=PLANNER_BATCH_ID_INVALID"
+                "batch_created_sanitized=1; original_blocker=PLANNER_BATCH_ID_INVALID; "
+                "issues=none; issue_count=0; issue_severity=none"
             )
             ev = _parse_kv(values["EVIDENCE"])
             task_update = "none_no_signal"
@@ -530,7 +1111,8 @@ def main() -> int:
                 "task_update=none_no_signal; lock_check=ok; "
                 "run_note=guard neutralise handoff_to_missing planner et conserve lane active; "
                 "planner_artifact=platform/policies/role_contract_guard.py; "
-                "handoff_to_autofill=dev; original_blocker=HANDOFF_TO_MISSING"
+                "handoff_to_autofill=dev; original_blocker=HANDOFF_TO_MISSING; "
+                "issues=none; issue_count=0; issue_severity=none"
             )
             ev = _parse_kv(values["EVIDENCE"])
             task_update = "none_no_signal"
@@ -567,7 +1149,8 @@ def main() -> int:
                 "task_update=none_no_signal; lock_check=ok; "
                 "run_note=guard retire auto-blocker non-runtime et force supervision active; "
                 "admin_artifact=platform/policies/role_contract_guard.py; "
-                f"original_blocker={blocker}"
+                f"original_blocker={blocker}; "
+                "issues=none; issue_count=0; issue_severity=none"
             )
             ev = _parse_kv(values["EVIDENCE"])
             task_update = "none_no_signal"
@@ -593,7 +1176,8 @@ def main() -> int:
                 "task_update=none_no_signal; lock_check=ok; "
                 "run_note=guard valide cron actifs et retire faux blocage; "
                 "admin_artifact=scripts/fc_health_check.sh; "
-                f"crontab_agent_jobs={jobs}; cron_log_recent={int(recent_log)}"
+                f"crontab_agent_jobs={jobs}; cron_log_recent={int(recent_log)}; "
+                "issues=none; issue_count=0; issue_severity=none"
             )
             ev = _parse_kv(values["EVIDENCE"])
             task_update = "none_no_signal"
@@ -602,23 +1186,40 @@ def main() -> int:
     # Si un rôle delivery se met BLOCKED sans preuve d'exécution du tick courant,
     # on bloque explicitement le contrat au lieu de le convertir en analyse.
     if role in DELIVERY_ROLES and task_update == "blocked" and (workboard_has_work or workboard_has_in_progress):
-        cmd_val = ev.get("cmd", "").strip()
-        cmd_err = ev.get("cmd_err_excerpt", "").strip()
-        stream_val = ev.get("stream_id", "").strip().lower()
-        task_val = ev.get("task_id", "").strip().lower()
-        has_scope = bool(stream_val and stream_val != "none" and task_val and task_val != "none")
-        has_exec_proof = bool(cmd_val or cmd_err)
-        if not has_exec_proof or not has_scope:
-            _blocked(
-                role,
-                source,
-                "BLOCKED_WITHOUT_FRESH_PROOF",
-                (
-                    "task_update=blocked sans preuve d'execution du tick courant "
-                    "(cmd/cmd_err_excerpt + stream_id/task_id requis)."
-                ),
-                values,
-            )
+        if values.get("BLOCKER_ID", "").strip().upper() == "DELIVERY_PROBE_STREAK_EXCEEDED":
+            pass
+        else:
+            cmd_val = ev.get("cmd", "").strip()
+            cmd_err = ev.get("cmd_err_excerpt", "").strip()
+            stream_val = ev.get("stream_id", "").strip().lower()
+            task_val = ev.get("task_id", "").strip().lower()
+            has_scope = bool(stream_val and stream_val != "none" and task_val and task_val != "none")
+            has_exec_proof = bool(cmd_val or cmd_err)
+            if not has_exec_proof or not has_scope:
+                _blocked(
+                    role,
+                    source,
+                    "BLOCKED_WITHOUT_FRESH_PROOF",
+                    (
+                        "task_update=blocked sans preuve d'execution du tick courant "
+                        "(cmd/cmd_err_excerpt + stream_id/task_id requis)."
+                    ),
+                    values,
+                )
+
+    # ── CHECK ISSUE REPORTING (strict, non-masking) ─────────────────────────
+    ev = _validate_issue_report(
+        role=role,
+        source=source,
+        values=values,
+        ev=ev,
+        task_update=task_update,
+    )
+
+    if queue_version:
+        ev = _upsert_evidence(values, ev, "queue_version", queue_version)
+    if workboard_version:
+        ev = _upsert_evidence(values, ev, "workboard_version", workboard_version)
 
     values["EVIDENCE"] = _sanitize_evidence(values.get("EVIDENCE", ""))
 
