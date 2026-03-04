@@ -2,6 +2,7 @@
 """Finance Copilot — Monitor Web Server — http://localhost:7779"""
 from __future__ import annotations
 import json, os, re, subprocess, time
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
@@ -20,18 +21,64 @@ def _latest_mtime(paths: list[Path]) -> float:
             continue
     return latest
 
+def _workspace_writable(p: Path) -> bool:
+    log_dir = p / "logs-codex-runs"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return False
+    return os.access(log_dir, os.W_OK)
+
+def _load_json_file(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def _orchestrator_root_for_workspace(p: Path) -> Path | None:
+    canonical = p / "docs" / "operations" / "orchestrator"
+    legacy = p / "docs" / "orchestrator-ops"
+    if canonical.exists() and legacy.exists():
+        try:
+            return canonical if canonical.stat().st_mtime >= legacy.stat().st_mtime else legacy
+        except Exception:
+            return canonical
+    if canonical.exists():
+        return canonical
+    if legacy.exists():
+        return legacy
+    return None
+
 def _score_root_candidate(p: Path) -> float:
     score = 0.0
-    ops_orch = p / "docs" / "operations" / "orchestrator"
-    legacy_orch = p / "docs" / "orchestrator-ops"
-    if ops_orch.exists() or legacy_orch.exists():
+    orch = _orchestrator_root_for_workspace(p)
+    if orch is not None:
         score += 100.0
+        queue_file = orch / "priority-queue.json"
+        workboard_file = orch / "parallel-workstreams.json"
+        queue_data = _load_json_file(queue_file) if queue_file.exists() else {}
+        workboard_data = _load_json_file(workboard_file) if workboard_file.exists() else {}
+        queue_items = queue_data.get("items", [])
+        workboard_tasks = workboard_data.get("tasks", [])
+        if isinstance(queue_items, list):
+            score += min(40.0, float(len(queue_items)))
+        if isinstance(workboard_tasks, list):
+            score += min(40.0, float(len(workboard_tasks)))
+        if queue_file.exists():
+            score += 8.0
+        if workboard_file.exists():
+            score += 8.0
     tick_dir = p / "logs-codex-runs" / "fc-ticks"
     runner_dir = p / "logs-codex-runs" / "role-runner"
     if tick_dir.exists():
         score += 60.0
     if runner_dir.exists():
         score += 25.0
+    if _workspace_writable(p):
+        score += 55.0
+    else:
+        score -= 80.0
     # Bias toward the workspace that has the freshest runtime traces.
     tick_logs = list(tick_dir.glob("*.tick.log")) if tick_dir.exists() else []
     runner_logs = list(runner_dir.glob("*.live.log")) if runner_dir.exists() else []
@@ -40,9 +87,9 @@ def _score_root_candidate(p: Path) -> float:
         # More recent is better: invert by subtracting age bucket.
         age_minutes = max(0.0, (time.time() - latest) / 60.0)
         score += max(0.0, 80.0 - min(80.0, age_minutes))
-    # Prefer shared repo when both trees exist, to match cron runtime path.
-    if "/shared/" in str(p):
-        score += 8.0
+    # Very light preference for shared VM mapping only when writable.
+    if "/shared/" in str(p) and _workspace_writable(p):
+        score += 3.0
     return score
 
 def resolve_root() -> Path:
@@ -70,7 +117,13 @@ def resolve_root() -> Path:
 
 ROOT = resolve_root()
 STATE = Path(os.environ.get("FC_MONITOR_STATE_DIR", "/home/venom/.openclaw/cron/role-state")).expanduser()
+INSTANCE_ID = os.environ.get(
+    "FC_MONITOR_INSTANCE_ID",
+    f"{socket.gethostname()}:{ROOT}",
+)
 CORE_ROLES = ("planner", "dev", "admin")
+ERROR_FEED_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_ERROR_FEED_RECENT_MINUTES", "90")))
+RUNTIME_DIAG_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_RUNTIME_DIAG_RECENT_MINUTES", "90")))
 DEFAULT_SCHEDULE_MAP = {
     "planner": [0, 22, 44],
     "dev": [6, 28, 50],
@@ -171,6 +224,70 @@ def discover_roles() -> tuple[str, ...]:
 def active_roles() -> tuple[str, ...]:
     roles = discover_roles()
     return roles if roles else CORE_ROLES
+
+
+ROLE_CANONICAL_MAP = {
+    "analyst": "planner",
+    "architect": "planner",
+    "po": "planner",
+    "scrum_master": "planner",
+    "backend_engineer": "dev",
+    "frontend_engineer": "dev",
+    "data_analyst": "dev",
+    "infra_engineer": "dev",
+    "integrator": "dev",
+    "tester": "dev",
+    "qa": "dev",
+    "clawsentinel": "admin",
+}
+
+
+def canonical_role(role: str) -> str:
+    raw = (role or "").strip()
+    if not raw:
+        return "?"
+    return ROLE_CANONICAL_MAP.get(raw, raw)
+
+
+def _batch_sort_key(batch_id: str) -> tuple[int, str]:
+    m = re.search(r"BATCH-(\d+)", str(batch_id or ""))
+    return (int(m.group(1)) if m else 10**9, str(batch_id or ""))
+
+
+def _merge_queue_display_rows(queue_items: list[dict], derived_batches: list[dict]) -> list[dict]:
+    """Use queue as source-of-truth for list coverage and derived batches for live task counters."""
+    derived_map: dict[str, dict] = {
+        str(b.get("id", "")).strip(): b for b in derived_batches if str(b.get("id", "")).strip()
+    }
+    rows: list[dict] = []
+    seen: set[str] = set()
+
+    for item in queue_items:
+        batch_id = str(item.get("id", "")).strip()
+        if not batch_id:
+            continue
+        row = {
+            "id": batch_id,
+            "state": str(item.get("state", "")).upper() or "UNKNOWN",
+        }
+        if batch_id in derived_map:
+            row.update(derived_map[batch_id])
+            row["state"] = str(row.get("state", "")).upper() or "UNKNOWN"
+        rows.append(row)
+        seen.add(batch_id)
+
+    for batch_id, derived in derived_map.items():
+        if batch_id in seen:
+            continue
+        row = dict(derived)
+        row["id"] = batch_id
+        row["state"] = str(row.get("state", "")).upper() or "UNKNOWN"
+        rows.append(row)
+
+    rows.sort(key=lambda r: _batch_sort_key(str(r.get("id", ""))))
+    return rows
+
+
 LOG_KIND_LABELS = {
     "tick": "fc-ticks",
     "cron": "fc-cron",
@@ -589,8 +706,13 @@ def classify_log_line(line: str) -> str:
         return "error"
     if any(k in u for k in ("[ERROR]", "ERROR:", "TRACEBACK", "EXCEPTION", "MODULE NOT FOUND", "UNEXPECTED EOF", "SYNTAX ERROR")):
         return "error"
-    if any(k in u for k in ("[BLOCKED]", "BLOCKER_ID:", "VERDICT: BLOCKED", "STATUS: BLOCKED")):
+    if any(k in u for k in ("[BLOCKED]", "VERDICT: BLOCKED", "STATUS: BLOCKED")):
         return "error"
+    if "BLOCKER_ID:" in u:
+        m_blocker = re.search(r"BLOCKER_ID:\s*([A-Z0-9_\-?]+)", u)
+        blocker = (m_blocker.group(1) if m_blocker else "").strip()
+        if blocker and blocker not in {"NONE", "NO_BLOCKER", "?"}:
+            return "error"
     if any(k in u for k in ("[BACKOFF]", "RATE_LIMIT", "[SKIP]", "GO_WITH_CAUTION", "WARN", "WARNING")):
         return "warn"
     if "[ACTION]" in u:
@@ -606,6 +728,49 @@ def classify_log_line(line: str) -> str:
 def _extract_ts(line: str) -> str:
     m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", line or "")
     return m.group(1) if m else ""
+
+
+def _extract_ts_epoch(line: str) -> float | None:
+    txt = (line or "").strip()
+    if not txt:
+        return None
+    # 2026-03-03T23:40:09Z
+    m_z = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", txt)
+    if m_z:
+        try:
+            return datetime.strptime(m_z.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+        except Exception:
+            pass
+    # 2026-03-03T19:06:04-0500
+    m_off = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4})", txt)
+    if m_off:
+        try:
+            return datetime.strptime(m_off.group(1), "%Y-%m-%dT%H:%M:%S%z").timestamp()
+        except Exception:
+            pass
+    # 2026-03-03T19:02:37 (naive, assume local tz)
+    m_local = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", txt)
+    if m_local:
+        try:
+            dt = datetime.strptime(m_local.group(1), "%Y-%m-%dT%H:%M:%S")
+            local_tz = datetime.now().astimezone().tzinfo
+            if local_tz is None:
+                local_tz = timezone.utc
+            return dt.replace(tzinfo=local_tz).timestamp()
+        except Exception:
+            return None
+    return None
+
+
+def _is_recent_line(line: str, recent_minutes: int, now_epoch: float | None = None) -> bool:
+    if recent_minutes <= 0:
+        return True
+    epoch = _extract_ts_epoch(line)
+    if epoch is None:
+        return True
+    if now_epoch is None:
+        now_epoch = time.time()
+    return (now_epoch - epoch) <= (recent_minutes * 60)
 
 def resolve_role_log_path(role: str, kind: str) -> Path | None:
     role = (role or "").strip()
@@ -666,21 +831,17 @@ def status():
     wb=jload(orchestrator_file("parallel-workstreams.json"))
     tasks=wb.get("tasks",[])
     derived_batches = _derive_batches_from_workboard(tasks)
-    queue_batch_items = [
-        i for i in qi
-        if re.fullmatch(r"BATCH-\d{2}", str(i.get("id", "")).strip() or "")
-    ]
-    queue_items = queue_batch_items
+    # Canonical source: priority-queue.json -> items[].
+    # Keep derived fallback only when queue is empty/unavailable.
+    queue_items = qi if isinstance(qi, list) else []
     if not queue_items and derived_batches:
         queue_items = [{"id": b.get("id"), "state": b.get("state")} for b in derived_batches]
-    if not queue_items:
-        queue_items = qi
     qa=[i for i in queue_items if i.get("state") not in ("CLOSED","DONE","PASS")]
     bs=defaultdict(int)
     for t in tasks: bs[t.get("state","?")] += 1
     done=bs["DONE"]+bs["CLOSED"]+bs["PASS"]
-    ready_t=[{"id":t["id"],"role":t.get("assignee") or t.get("role","?"),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="READY"]
-    ip_t=[{"id":t["id"],"role":t.get("assignee") or t.get("role","?"),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="IN_PROGRESS"]
+    ready_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="READY"]
+    ip_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="IN_PROGRESS"]
     queue_state_counts = _state_counts(queue_items, key="state")
     workboard_state_counts = _state_counts(tasks, key="state")
     mismatches = _queue_workboard_mismatches(queue_items, tasks)
@@ -694,8 +855,8 @@ def status():
         queue_total = int(hs_queue.get("total") or 0)
         queue_closed = int(hs_queue.get("closed") or 0)
 
-    queue_active_rows = [{"id": i["id"], "state": i["state"]} for i in qa]
-    queue_display_rows = derived_batches if derived_batches else queue_active_rows
+    queue_active_rows = [{"id": i["id"], "state": str(i.get("state", "")).upper()} for i in qa]
+    queue_display_rows = _merge_queue_display_rows(queue_items, derived_batches)
     queue_display_total = len(queue_display_rows)
     queue_display_closed = sum(
         1 for b in queue_display_rows
@@ -781,6 +942,9 @@ def status():
             health = "OK"
 
     return {"ts_utc":now.isoformat(),"health":health,
+            "instance":INSTANCE_ID,
+            "root":str(ROOT),
+            "state_dir":str(STATE),
             "roles":list(roles),
             "queue":{"total":queue_total,"closed":queue_closed,"active":queue_active_rows,
                      "display_total":queue_display_total,
@@ -981,9 +1145,12 @@ def log_view(role: str = "planner", kind: str = "tick", n: int = 180):
     }
 
 @app.get("/api/error-feed")
-def error_feed(n: int = 120):
+def error_feed(n: int = 120, recent_minutes: int = ERROR_FEED_RECENT_MINUTES):
     max_lines = max(40, min(int(n), 400))
+    recent_minutes = max(0, min(int(recent_minutes), 24 * 60))
     rows: list[dict] = []
+    dropped_stale = 0
+    now_epoch = time.time()
     for role in active_roles():
         for kind in ("tick", "cron", "runner", "events", "contract"):
             p = resolve_role_log_path(role, kind)
@@ -992,6 +1159,9 @@ def error_feed(n: int = 120):
             for ln in _tail_lines(p, max_lines):
                 sev = classify_log_line(ln)
                 if sev not in {"error", "warn"}:
+                    continue
+                if not _is_recent_line(ln, recent_minutes, now_epoch):
+                    dropped_stale += 1
                     continue
                 rows.append({
                     "ts": _extract_ts(ln),
@@ -1002,7 +1172,12 @@ def error_feed(n: int = 120):
                 })
     # ISO timestamps are lexicographically sortable.
     rows.sort(key=lambda x: x.get("ts", ""), reverse=True)
-    return {"count": len(rows), "items": rows[:max_lines]}
+    return {
+        "count": len(rows),
+        "items": rows[:max_lines],
+        "recent_minutes": recent_minutes,
+        "dropped_stale": dropped_stale,
+    }
 
 @app.get("/api/runtime-diagnostics")
 def runtime_diagnostics():
@@ -1018,6 +1193,7 @@ def runtime_diagnostics():
     historical_perm_hits: list[str] = []
     last_ts_epoch: float | None = None
     now_epoch = time.time()
+    recent_window_seconds = RUNTIME_DIAG_RECENT_MINUTES * 60
     for ln in role_recovery_lines:
         m_ts = ts_re.match((ln or "").strip())
         if m_ts:
@@ -1027,7 +1203,7 @@ def runtime_diagnostics():
                 last_ts_epoch = None
         if not perm_re.search(ln):
             continue
-        if last_ts_epoch is not None and (now_epoch - last_ts_epoch) <= 48 * 3600:
+        if last_ts_epoch is not None and (now_epoch - last_ts_epoch) <= recent_window_seconds:
             recent_perm_hits.append(ln)
         else:
             historical_perm_hits.append(ln)
@@ -1059,7 +1235,10 @@ def runtime_diagnostics():
 
     timeout_re = re.compile(r"event=(primary_prompt_end|retry_prompt_end).*rc=124", re.I)
     admin_timeout_events = [ln for ln in admin_event_lines if timeout_re.search(ln)]
-    admin_timeout_recent = len(admin_timeout_events[-40:])
+    admin_timeout_recent_lines = [
+        ln for ln in admin_timeout_events if _is_recent_line(ln, RUNTIME_DIAG_RECENT_MINUTES, now_epoch)
+    ]
+    admin_timeout_recent = len(admin_timeout_recent_lines)
 
     planner_c = contract("planner")
     planner_blocker = (planner_c.get("BLOCKER_ID", "") or "").strip()
@@ -1092,7 +1271,7 @@ def runtime_diagnostics():
             "severity": "high",
             "title": "Admin prompt timeout bursts",
             "detail": f"{admin_timeout_recent} timeout event(s) rc=124 (recent window)",
-            "sample": admin_timeout_events[-1] if admin_timeout_events else "",
+            "sample": admin_timeout_recent_lines[-1] if admin_timeout_recent_lines else "",
         })
     if max_gap_s >= 1800:
         findings.append({
@@ -1126,6 +1305,7 @@ def runtime_diagnostics():
             "admin_events_lines": len(admin_event_lines),
         },
         "signals": {
+            "recent_window_minutes": RUNTIME_DIAG_RECENT_MINUTES,
             "permission_errors_recent": len(recent_perm_hits),
             "permission_errors_historical": len(historical_perm_hits),
             "health_degraded_recent": degraded_recent,
@@ -1134,6 +1314,7 @@ def runtime_diagnostics():
             "resume_detected_count": len(resume_events),
             "resume_max_gap_s": max_gap_s,
             "admin_timeout_events_recent": admin_timeout_recent,
+            "admin_timeout_events_historical": max(0, len(admin_timeout_events) - admin_timeout_recent),
             "planner_guard_blocked": planner_guard_block,
             "planner_blocker_id": planner_blocker or "NONE",
         },
@@ -1143,7 +1324,7 @@ def runtime_diagnostics():
 @app.get("/api/workboard")
 def workboard():
     wb=jload(orchestrator_file("parallel-workstreams.json"))
-    return {"tasks":[{"id":t["id"],"state":t.get("state"),"role":t.get("assignee") or t.get("role"),
+    return {"tasks":[{"id":t["id"],"state":t.get("state"),"role":canonical_role(t.get("assignee") or t.get("role")),
                       "title":t.get("title","")[:60],"updated_at":t.get("updated_at","")} for t in wb.get("tasks",[])]}
 
 
@@ -1439,7 +1620,9 @@ function classifyLineClient(line){
   if(/[⠁-⣿]/.test(t))return'meta';
   if(/\brc=(1|2|124|13|22|43)\b/.test(t))return'err';
   if(/TRACEBACK|EXCEPTION|ERROR:|MODULE NOT FOUND|SYNTAX ERROR|UNEXPECTED EOF/.test(u))return'err';
-  if(/\[BLOCKED\]|BLOCKER_ID:|VERDICT:\s*BLOCKED|STATUS:\s*BLOCKED/.test(u))return'err';
+  if(/\[BLOCKED\]|VERDICT:\s*BLOCKED|STATUS:\s*BLOCKED/.test(u))return'err';
+  const blockerMatch=u.match(/BLOCKER_ID:\s*([A-Z0-9_\-?]+)/);
+  if(blockerMatch&&blockerMatch[1]&&!['NONE','NO_BLOCKER','?'].includes(blockerMatch[1]))return'err';
   if(/\[BACKOFF\]|RATE_LIMIT|\[SKIP\]|GO_WITH_CAUTION|WARN|WARNING/.test(u))return'warn';
   if(/\[ACTION\]/.test(u))return'action';
   if(/\[CONTRACT\]/.test(u))return'contract';

@@ -166,13 +166,22 @@ for f in "$LOG_DIR"/fc-ticks/*.cron.log; do
   rotate_large_file "$f"
 done
 
+for f in "$LOG_DIR"/monitor-guard.cron.log; do
+  [[ -f "$f" ]] || continue
+  trim_file_to_lines "$f" "$KEEP_CRON_LINES"
+  rotate_large_file "$f"
+done
+
 for f in \
   "$LOG_DIR"/health-snapshot.log \
   "$LOG_DIR"/vm-resume.log \
   "$LOG_DIR"/watchdog_chromium.log \
   "$LOG_DIR"/role-recovery.log \
   "$LOG_DIR"/auto-batch-close.log \
-  "$LOG_DIR"/qwen-monitor.log; do
+  "$LOG_DIR"/qwen-monitor.log \
+  "$LOG_DIR"/monitor-guard.log \
+  "$LOG_DIR"/monitor-server.log \
+  "$LOG_DIR"/monitor-tunnel.log; do
   [[ -f "$f" ]] || continue
   if [[ "$(basename "$f")" == "health-snapshot.log" ]]; then
     trim_file_to_lines "$f" "$KEEP_HEALTH_LINES"

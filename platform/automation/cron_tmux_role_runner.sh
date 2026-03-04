@@ -3,46 +3,15 @@ set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
-ROOT_FROM_PARENT="$(cd "${SCRIPT_DIR}/.." && pwd -P 2>/dev/null || true)"
-ROOT_FROM_GRANDPARENT="$(cd "${SCRIPT_DIR}/../.." && pwd -P 2>/dev/null || true)"
-
-resolve_root() {
-  local candidate_a="${1:-}"
-  local candidate_b="${2:-}"
-  local a="/home/venom/shared/analyse-financiere"
-  local b="/home/venom/analyse-financiere"
-  local candidate=""
-  for candidate in "$candidate_a" "$candidate_b" "$a" "$b"; do
-    if [[ -z "$candidate" ]]; then
-      continue
-    fi
-    if [[ -d "$candidate/scripts" ]] && [[ -d "$candidate/platform" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  printf '%s\n' "$candidate_a"
-}
-
-workspace_writable() {
-  local candidate="${1:-}"
-  [[ -n "$candidate" ]] || return 1
-  mkdir -p "$candidate/logs-codex-runs" >/dev/null 2>&1 || return 1
-  [[ -w "$candidate/logs-codex-runs" ]]
-}
-
-ROOT="$(resolve_root "$ROOT_FROM_PARENT" "$ROOT_FROM_GRANDPARENT")"
-if ! workspace_writable "$ROOT"; then
-  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
-    if [[ "$fallback" == "$ROOT" ]]; then
-      continue
-    fi
-    if [[ -d "$fallback/scripts" ]] && [[ -d "$fallback/platform" ]] && workspace_writable "$fallback"; then
-      ROOT="$fallback"
-      break
-    fi
-  done
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ ! -f "$WORKSPACE_HELPER" ]]; then
+  echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
+  exit 2
 fi
+# shellcheck source=/dev/null
+source "$WORKSPACE_HELPER"
+
+ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 cd "$ROOT"
 ORCHESTRATOR_DIR_DEFAULT="${ROOT}/docs/operations/orchestrator"
 if [[ ! -d "$ORCHESTRATOR_DIR_DEFAULT" ]] && [[ -d "${ROOT}/docs/orchestrator-ops" ]]; then
@@ -89,12 +58,20 @@ fi
 export TMP="${TMP:-$TMPDIR}"
 export TEMP="${TEMP:-$TMPDIR}"
 
-AGENT_BIN="${TMUX_ROLE_AGENT_BIN:-codex}"
+AGENT_BIN_RAW="${TMUX_ROLE_AGENT_BIN:-codex}"
+AGENT_BIN="$(printf '%s' "$AGENT_BIN_RAW" | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+[[ -n "$AGENT_BIN" ]] || AGENT_BIN="codex"
 AGENT_BIN_NAME="${AGENT_BIN##*/}"
 AGENT_BIN_NAME="${AGENT_BIN_NAME,,}"
+case "$AGENT_BIN_NAME" in
+  true|false|1|0|yes|no|on|off|null|none)
+    AGENT_BIN="codex"
+    AGENT_BIN_NAME="codex"
+    ;;
+esac
 PROMPT_TIMEOUT_SECONDS="${PROMPT_TIMEOUT_SECONDS:-180}"
 RETRY_PROMPT_TIMEOUT_SECONDS="${RETRY_PROMPT_TIMEOUT_SECONDS:-90}"
-STATE_DIR="${TMUX_ROLE_STATE_DIR:-/home/venom/.openclaw/cron/role-state}"
+STATE_DIR="${TMUX_ROLE_STATE_DIR:-${HOME}/.openclaw/cron/role-state}"
 RATE_LIMIT_PRECHECK="${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}"
 RATE_LIMIT_PROBE_TIMEOUT="${TMUX_ROLE_RATE_LIMIT_PROBE_TIMEOUT:-10}"
 RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-180}"
@@ -126,7 +103,7 @@ CODEX_EXEC_MODEL="${TMUX_ROLE_CODEX_MODEL:-${DEFAULT_CODEX_MODEL}}"
 CODEX_TRUST_PROJECT="${TMUX_ROLE_CODEX_TRUST_PROJECT:-$ROOT}"
 CODEX_TRUST_CONFIG_ARG='projects."'${CODEX_TRUST_PROJECT}'".trust_level="trusted"'
 CODEX_NO_ALT_SCREEN="${TMUX_ROLE_CODEX_NO_ALT_SCREEN:-1}"
-CODEX_EXEC_RESUME="${TMUX_ROLE_CODEX_EXEC_RESUME:-0}"
+CODEX_EXEC_RESUME="${TMUX_ROLE_CODEX_EXEC_RESUME:-1}"
 CODEX_SEARCH_ENABLED="${TMUX_ROLE_CODEX_SEARCH_ENABLED:-1}"
 CODEX_SANDBOX_MODE="${TMUX_ROLE_CODEX_SANDBOX_MODE:-danger-full-access}"
 CODEX_APPROVAL_POLICY="${TMUX_ROLE_CODEX_APPROVAL_POLICY:-never}"
@@ -251,7 +228,7 @@ if ! [[ "$CODEX_NO_ALT_SCREEN" =~ ^[01]$ ]]; then
   CODEX_NO_ALT_SCREEN=1
 fi
 if ! [[ "$CODEX_EXEC_RESUME" =~ ^[01]$ ]]; then
-  CODEX_EXEC_RESUME=0
+  CODEX_EXEC_RESUME=1
 fi
 if ! [[ "$CODEX_SEARCH_ENABLED" =~ ^[01]$ ]]; then
   CODEX_SEARCH_ENABLED=1
@@ -320,10 +297,24 @@ if ! command -v tmux >/dev/null 2>&1; then
   echo "tmux is not available in PATH" >&2
   exit 5
 fi
-if ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
-  echo "${AGENT_BIN} is not available in PATH" >&2
-  exit 4
+if [[ "$AGENT_BIN_NAME" != "codex" && "$AGENT_BIN_NAME" != "qwen" ]]; then
+  if command -v codex >/dev/null 2>&1; then
+    echo "Unsupported TMUX_ROLE_AGENT_BIN='${AGENT_BIN_RAW:-$AGENT_BIN}' (normalized=${AGENT_BIN_NAME}); falling back to codex" >&2
+    AGENT_BIN="codex"
+    AGENT_BIN_NAME="codex"
+  fi
 fi
+if ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
+  if [[ "$AGENT_BIN" != "codex" ]] && command -v codex >/dev/null 2>&1; then
+    echo "${AGENT_BIN} not found; falling back to codex" >&2
+    AGENT_BIN="codex"
+    AGENT_BIN_NAME="codex"
+  else
+    echo "${AGENT_BIN} is not available in PATH" >&2
+    exit 4
+  fi
+fi
+RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
 if [[ "${AGENT_BIN_NAME,,}" == "qwen" && "$TMUX_STALL_ABORT_SECONDS" -lt 180 ]]; then
   # Qwen can stream less frequently on heavy prompts; avoid premature stall abort.
   TMUX_STALL_ABORT_SECONDS=180
@@ -338,6 +329,12 @@ PRIMARY_CHANNEL="tmux"
 OUTPUT_CHANNEL_LABEL="tmux"
 if [[ "$AGENT_BIN_NAME" == "codex" && "$CODEX_EXEC_FALLBACK" == "1" ]]; then
   CODEX_EXEC_AVAILABLE=1
+  case "$ROLE" in
+    planner|dev|admin)
+      # Canonical production lanes run on codex_exec to avoid tmux parser drift.
+      RETRY_ENGINE_DEFAULT="sdk"
+      ;;
+  esac
 fi
 # Respect tmux history by default; codex_exec is primary only when explicitly requested.
 if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
@@ -756,7 +753,7 @@ run_rate_limit_probe() {
   local probe_msg_file=""
   set +e
   if [[ "$AGENT_BIN_NAME" == "codex" ]]; then
-    local -a probe_cmd=(codex --sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
+    local -a probe_cmd=("$AGENT_BIN" --sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
     if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
       probe_cmd+=("--search")
     fi
@@ -1924,7 +1921,7 @@ Décision tick (ordre strict):
 3) si queue/workboard indiquent un gap critique non couvert (architecture, dépendance, acceptance gate), créer 1 batch top-level BATCH-XX même si runway_short=0.
 4) planner_batch_runway_short=1 -> créer au plus 1 batch top-level BATCH-XX.
 5) sinon task_update=none_no_ready.
-6) si les preuves runtime sont incomplètes -> task_update=blocked avec cause explicite (pas d'invention).
+6) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete (ne pas auto-bloquer la lane planner).
 
 Création batch (si step 3/4):
 - ID unique BATCH-XX (2 chiffres, top-level uniquement).
@@ -1932,7 +1929,8 @@ Création batch (si step 3/4):
 - Inclure architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate dans EVIDENCE.
 - Pas de sous-tâches récursives ni stream à 4 segments.
 
-EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, stream_id+task_id si claim/complete/handoff.
+EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+Interdit planner: BLOCKER_ID=HANDOFF_TO_MISSING, BLOCKER_ID=PLANNER_BATCH_ID_INVALID, BLOCKER_ID=MODE_ANALYSE_NO_EDITS. Convertir en WAIT/PASS avec preuve.
 Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       ;;
@@ -2417,11 +2415,13 @@ RUNTIME_CONTEXT="$(build_runtime_context)"
 
 capture_has_contract() {
   local text="$1"
-  printf '%s\n' "$text" | rg -qi 'status\s*[:=]' \
-    && printf '%s\n' "$text" | rg -qi 'delta\s*[:=]' \
-    && printf '%s\n' "$text" | rg -qi 'verdict\s*[:=]' \
-    && printf '%s\n' "$text" | rg -qi 'blocker_id\s*[:=]' \
-    && printf '%s\n' "$text" | rg -qi 'next_action_unique\s*[:=]'
+  # Use here-strings instead of pipes to avoid SIGPIPE/Broken pipe noise
+  # under `set -o pipefail` when rg -q short-circuits early on large payloads.
+  rg -qi 'status\s*[:=]' <<<"$text" \
+    && rg -qi 'delta\s*[:=]' <<<"$text" \
+    && rg -qi 'verdict\s*[:=]' <<<"$text" \
+    && rg -qi 'blocker_id\s*[:=]' <<<"$text" \
+    && rg -qi 'next_action_unique\s*[:=]' <<<"$text"
 }
 
 build_dispatch_prompt() {

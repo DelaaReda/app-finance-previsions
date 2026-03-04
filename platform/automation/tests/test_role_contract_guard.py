@@ -397,6 +397,144 @@ class RoleContractGuardTests(unittest.TestCase):
         self.assertIn("BLOCKER_ID: DELIVERY_PROBE_STREAK_EXCEEDED", cp.stdout)
         self.assertIn("delivery_probe_streak=3/3", cp.stdout)
 
+    def test_planner_handoff_without_target_autofills_dev(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: TASK_PLANNER_HANDOFF_BATCH_08",
+                (
+                    "EVIDENCE: task_update=handoff; lock_check=ok; "
+                    "run_note=handoff planner valide vers lane delivery apres verification architecture complete; "
+                    "exec_report=handoff_prepare_batch08_vers_dev; issues=none; suggestions=none; "
+                    "channels_read=workboard_tasks,workboard_events; impact_assessment=medium; impact_action=sync_cross_role; "
+                    "arch_rule=forecast_contract; review_scope=BATCH-08-ANALYSIS; conformance=PASS; violations=none; "
+                    "vision_rule=forecast-first; planner_artifact=docs/operations/orchestrator/priority-queue.json; "
+                    "stream_id=BATCH-08; task_id=BATCH-08-ANALYSIS"
+                ),
+                "RISKS: none",
+                "NEXT: owner=dev; action=claim BATCH-08-DEV-01",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: PLANNER_HANDOFF_NO_TARGET_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="1",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+        self.assertIn("handoff_to=dev", cp.stdout)
+
+    def test_planner_handoff_missing_blocker_is_converted_to_wait(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: CONTRACT_GUARD_BLOCK",
+                (
+                    "EVIDENCE: task_update=blocked; lock_check=ok; "
+                    "run_note=guard signale handoff sans cible explicite et lane doit rester active; "
+                    "exec_report=guard_block_detected_handoff_target_missing; issues=handoff_to_missing; suggestions=normalize_target; "
+                    "channels_read=workboard_tasks,admin_chat; impact_assessment=medium; impact_action=sync_cross_role; "
+                    "arch_rule=forecast_contract; review_scope=BATCH-08-ANALYSIS; conformance=BLOCKED; violations=handoff_to_missing; "
+                    "vision_rule=forecast-first; planner_artifact=platform/policies/role_contract_guard.py; "
+                    "stream_id=BATCH-08; task_id=BATCH-08-ANALYSIS"
+                ),
+                "RISKS: handoff target missing",
+                "NEXT: owner=planner; action=fix contract",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: HANDOFF_TO_MISSING",
+                "NEXT_ACTION_UNIQUE: PLANNER_HANDOFF_BLOCKED_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="0",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: WAIT", cp.stdout)
+        self.assertIn("DELTA: NO_DELTA", cp.stdout)
+        self.assertIn("VERDICT: PASS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+        self.assertIn("handoff_to_autofill=dev", cp.stdout)
+        self.assertIn("WAIT_HANDOFF_TARGET_NORMALIZED_", cp.stdout)
+
+
+    def test_planner_blocked_batch_id_invalid_is_converted_to_wait(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: CONTRACT_GUARD_BLOCK",
+                (
+                    "EVIDENCE: task_update=blocked; lock_check=ok; "
+                    "run_note=guard detecte batch id invalide mais lane planner doit rester active; "
+                    "planner_artifact=platform/policies/role_contract_guard.py; "
+                    "stream_id=BATCH-08; task_id=BATCH-08-ANALYSIS"
+                ),
+                "RISKS: batch id invalid",
+                "NEXT: owner=planner; action=fix batch id",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: PLANNER_BATCH_ID_INVALID",
+                "NEXT_ACTION_UNIQUE: PLANNER_BATCH_INVALID_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="1",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: WAIT", cp.stdout)
+        self.assertIn("DELTA: NO_DELTA", cp.stdout)
+        self.assertIn("VERDICT: PASS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+        self.assertIn("batch_created_sanitized=1", cp.stdout)
+
+    def test_planner_blocked_mode_analyse_is_converted_to_wait(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: MODE_ANALYSE_BLOQUE_CREATION_BATCH",
+                (
+                    "EVIDENCE: task_update=blocked; lock_check=ok; "
+                    "run_note=mode analyse sans edits force un faux blocage planner; "
+                    "planner_artifact=platform/policies/role_contract_guard.py; "
+                    "stream_id=BATCH-08; task_id=BATCH-08-ANALYSIS"
+                ),
+                "RISKS: mode analyse",
+                "NEXT: owner=planner; action=switch delivery",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: MODE_ANALYSE_NO_EDITS",
+                "NEXT_ACTION_UNIQUE: PLANNER_MODE_ANALYSE_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="0",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: WAIT", cp.stdout)
+        self.assertIn("DELTA: NO_DELTA", cp.stdout)
+        self.assertIn("VERDICT: PASS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+        self.assertIn("analysis_mode_converted_wait=1", cp.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
