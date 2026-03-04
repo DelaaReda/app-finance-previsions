@@ -2516,7 +2516,8 @@ Budget strict:
   - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
   - python3 platform/automation/parallel_workstream.py claim --role planner
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
-Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/operations/orchestrator/priority-queue.json, docs/operations/orchestrator/parallel-workstreams.json.
+Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/operations/orchestrator/parallel-workstreams.json.
+Source unique: parallel-workstreams.json contient l'état des batches (streams[]) ET les tâches — priority-queue.json est obsolète.
 Ne modifie pas apps/** ni les fichiers de sécurité. Tu peux modifier uniquement orchestration/docs/json de pilotage.
 
 Décision tick (ordre strict):
@@ -2537,7 +2538,8 @@ Création batch (si step 4/5):
 - Inclure architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate dans EVIDENCE.
 - Pas de sous-tâches récursives ni stream à 4 segments.
 
-EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, sync_priority_attempted, sync_priority_created_streams, sync_priority_created_tasks, planner_action_required, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+EVIDENCE: task_update, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, vision_alignment, batch_created, acceptance_gate, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+Si batch_created: inclure architecture_plan_ref.
 Si task_update=handoff et handoff_to est vide/placeholder (none, ?, tbd), forcer handoff_to=dev.
 Interdit planner: BLOCKER_ID=HANDOFF_TO_MISSING, BLOCKER_ID=PLANNER_BATCH_ID_INVALID, BLOCKER_ID=MODE_ANALYSE_NO_EDITS. Convertir en WAIT/PASS avec preuve.
 Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.

@@ -115,13 +115,35 @@ def queue_summary(queue_path: Path) -> dict[str, str]:
         "top_level_ready": "0",
         "planner_batch_runway_short": "1",
     }
-    if not queue_path.exists():
+    # Prefer reading from workstreams.json streams (single source of truth).
+    # Falls back to priority-queue.json if workstreams not available.
+    ws_path = queue_path.parent / "parallel-workstreams.json"
+    if ws_path.exists():
+        try:
+            ws_obj = json.loads(ws_path.read_text(encoding="utf-8"))
+            raw_streams = ws_obj.get("streams", [])
+            # Convert streams to queue-like items for unified processing
+            items: list = [
+                {
+                    "id": s.get("id", ""),
+                    "state": s.get("state", ""),
+                    "title": s.get("title", ""),
+                    "blocker_id": s.get("blocker_id", "NONE"),
+                    "next_action": s.get("next_action", ""),
+                }
+                for s in raw_streams
+                if isinstance(s, dict) and re.fullmatch(r"BATCH-\d{2}", str(s.get("id", "")))
+            ]
+        except Exception:
+            items = []
+    elif queue_path.exists():
+        try:
+            payload = json.loads(queue_path.read_text(encoding="utf-8"))
+            items = payload.get("items", [])
+        except Exception:
+            items = []
+    else:
         return result
-    try:
-        payload = json.loads(queue_path.read_text(encoding="utf-8"))
-    except Exception:
-        return result
-    items = payload.get("items", [])
     if not isinstance(items, list):
         return result
 
@@ -143,7 +165,9 @@ def queue_summary(queue_path: Path) -> dict[str, str]:
         title = str(item.get("title", "")).strip()
         blocker_id = str(item.get("blocker_id", "NONE")).strip() or "NONE"
         next_action = str(item.get("next_action", "NONE")).strip() or "NONE"
-        if item_id:
+        # Only show actionable states (READY/IN_PROGRESS) + DONE summary to reduce noise.
+        # WAITING_DEP batches beyond the immediate next are not actionable.
+        if item_id and state_upper in {"READY", "IN_PROGRESS", "BLOCKED"}:
             queue_states.append(f"{item_id}={state}")
         if re.fullmatch(r"BATCH-\d{2}", item_id):
             top_level_total += 1
