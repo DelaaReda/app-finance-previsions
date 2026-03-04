@@ -65,6 +65,10 @@ if [[ "$#" -gt 0 ]]; then
 else
   ROLES=(planner dev admin)
 fi
+RECENT_MINUTES="${FC_DEEP_RECENT_MINUTES:-180}"
+if ! [[ "$RECENT_MINUTES" =~ ^[0-9]+$ ]] || [[ "$RECENT_MINUTES" -lt 15 ]]; then
+  RECENT_MINUTES=180
+fi
 
 print_tick_summary() {
   local role="$1"
@@ -144,45 +148,98 @@ print_runner_health_summary() {
   local events="$LIVE_DIR/${role}.events.log"
   [[ -f "$events" ]] || { echo "  runner_health: no events log"; return 0; }
 
-  python3 - "$events" <<'PY'
-import re, sys
+  python3 - "$events" "$RECENT_MINUTES" <<'PY'
+import re, sys, time
+from datetime import datetime, timezone
 from collections import Counter
 path = sys.argv[1]
-engines = Counter()
-fallback = 0
-timeout_124 = 0
-timeout_missing = 0
-broken_pipe = 0
-rate_limit_probe_error = 0
+recent_minutes = int(sys.argv[2])
+now_epoch = time.time()
+window_s = recent_minutes * 60
+engines_recent = Counter()
+engines_all = Counter()
+fallback_recent = 0
+fallback_all = 0
+timeout_124_recent = 0
+timeout_124_all = 0
+timeout_missing_recent = 0
+timeout_missing_all = 0
+broken_pipe_recent = 0
+broken_pipe_all = 0
+rate_limit_probe_error_recent = 0
+rate_limit_probe_error_all = 0
+
+
+def parse_epoch(line: str):
+    m = re.match(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})Z", line.strip())
+    if not m:
+        return None
+    try:
+        dt = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return None
 
 with open(path, "r", encoding="utf-8", errors="ignore") as fh:
     lines = fh.readlines()[-800:]
 
 for ln in lines:
+    ts = parse_epoch(ln)
+    is_recent = ts is not None and (now_epoch - ts) <= window_s
     m = re.search(r"event=startup detail=.*?\bagent=([a-zA-Z0-9_-]+)", ln)
     if m:
-        engines[m.group(1).strip().lower()] += 1
+        agent = m.group(1).strip().lower()
+        engines_all[agent] += 1
+        if is_recent:
+            engines_recent[agent] += 1
     if "event=checkpoint_fallback" in ln:
-        fallback += 1
+        fallback_all += 1
+        if is_recent:
+            fallback_recent += 1
         if "rc_primary=124" in ln or "rc_retry=124" in ln:
-            timeout_124 += 1
+            timeout_124_all += 1
+            if is_recent:
+                timeout_124_recent += 1
         if "timeout: command not found" in ln:
-            timeout_missing += 1
+            timeout_missing_all += 1
+            if is_recent:
+                timeout_missing_recent += 1
         if "Broken pipe" in ln:
-            broken_pipe += 1
+            broken_pipe_all += 1
+            if is_recent:
+                broken_pipe_recent += 1
     if "event=rate_limit_probe_error" in ln:
-        rate_limit_probe_error += 1
+        rate_limit_probe_error_all += 1
+        if is_recent:
+            rate_limit_probe_error_recent += 1
 
-engine_list = ",".join(f"{k}:{v}" for k, v in sorted(engines.items())) if engines else "none"
-if len(engines) > 1:
-    print(f"  runner_health: MIXED_ENGINES engines={engine_list}")
+recent_engines = ",".join(f"{k}:{v}" for k, v in sorted(engines_recent.items())) if engines_recent else "none"
+all_engines = ",".join(f"{k}:{v}" for k, v in sorted(engines_all.items())) if engines_all else "none"
+if len(engines_recent) > 1:
+    print(f"  runner_health: MIXED_ENGINES_RECENT({recent_minutes}m) engines={recent_engines}")
 else:
-    print(f"  runner_health: engines={engine_list}")
+    print(f"  runner_health: engines_recent({recent_minutes}m)={recent_engines}")
+if len(engines_all) > 1 and engines_all != engines_recent:
+    print(f"  runner_health: engines_all(window)={all_engines}")
 print(
     "  runner_health: "
-    f"fallback={fallback} timeout124={timeout_124} timeout_missing={timeout_missing} "
-    f"broken_pipe={broken_pipe} rate_limit_probe_error={rate_limit_probe_error}"
+    f"fallback_recent={fallback_recent} timeout124_recent={timeout_124_recent} "
+    f"timeout_missing_recent={timeout_missing_recent} broken_pipe_recent={broken_pipe_recent} "
+    f"rate_limit_probe_error_recent={rate_limit_probe_error_recent}"
 )
+if (
+    fallback_all != fallback_recent
+    or timeout_124_all != timeout_124_recent
+    or timeout_missing_all != timeout_missing_recent
+    or broken_pipe_all != broken_pipe_recent
+    or rate_limit_probe_error_all != rate_limit_probe_error_recent
+):
+    print(
+        "  runner_health_hist: "
+        f"fallback_all={fallback_all} timeout124_all={timeout_124_all} "
+        f"timeout_missing_all={timeout_missing_all} broken_pipe_all={broken_pipe_all} "
+        f"rate_limit_probe_error_all={rate_limit_probe_error_all}"
+    )
 PY
 }
 
