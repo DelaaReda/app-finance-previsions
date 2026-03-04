@@ -172,6 +172,9 @@ LOCK_META_FILE="${STATE_DIR}/${ROLE}.run.lock.meta"
 RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
 TRACE_LAST_EVENT_FILE="${STATE_DIR}/${ROLE}.trace_event_last"
 RATE_LIMIT_STATE_NOTE=""
+TRILOCK_ORDER="tick>run>memory"
+RUN_LOCK_ACQUIRED_AT=0
+FORCED_CORE_BIN_NOTE=""
 
 if ! [[ "$RECOVERY_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$RECOVERY_THRESHOLD" -lt 1 ]]; then
   RECOVERY_THRESHOLD=2
@@ -291,8 +294,33 @@ normalize_model() {
   printf '%s\n' "$model"
 }
 
+normalize_reasoning_effort() {
+  local effort="${1:-}"
+  effort="$(printf '%s' "$effort" | tr '[:upper:]' '[:lower:]' | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+  case "$effort" in
+    xhigh)
+      # Codex exec accepts up to "high"; map legacy xhigh safely.
+      printf 'high\n'
+      ;;
+    high|medium|low|minimal)
+      printf '%s\n' "$effort"
+      ;;
+    ""|none|null|auto|default)
+      printf '\n'
+      ;;
+    *)
+      # Defensive fallback for unknown values.
+      printf 'high\n'
+      ;;
+  esac
+}
+
 DEFAULT_CODEX_MODEL="$(normalize_model "${DEFAULT_CODEX_MODEL}")"
 CODEX_EXEC_MODEL="$(normalize_model "${CODEX_EXEC_MODEL}")"
+ROLE_THINKING_VAR="LM_ROLE_${ROLE^^}_THINKING"
+ROLE_THINKING_VAR="${ROLE_THINKING_VAR//-/_}"
+CODEX_REASONING_EFFORT_RAW="${TMUX_ROLE_CODEX_THINKING:-${!ROLE_THINKING_VAR:-${LM_USED_ROLE_THINKING:-}}}"
+CODEX_REASONING_EFFORT="$(normalize_reasoning_effort "${CODEX_REASONING_EFFORT_RAW}")"
 if ! command -v tmux >/dev/null 2>&1; then
   echo "tmux is not available in PATH" >&2
   exit 5
@@ -629,6 +657,7 @@ target_session_name() {
   case "$1" in
     planner) echo "${prefix}_planner_cron" ;;
     dev) echo "${prefix}_dev_cron" ;;
+    admin) echo "${prefix}_admin_cron" ;;
     tester) echo "${prefix}_tester_cron" ;;
     qa) echo "${prefix}_qa_cron" ;;
     architect) echo "${prefix}_architect_cron" ;;
@@ -671,6 +700,9 @@ build_codex_global_args() {
   args+=(--sandbox "$CODEX_SANDBOX_MODE" -a "$CODEX_APPROVAL_POLICY")
   if [[ "$CODEX_SEARCH_ENABLED" == "1" ]]; then
     args+=(--search)
+  fi
+  if [[ -n "${CODEX_REASONING_EFFORT:-}" ]]; then
+    args+=(--config "model_reasoning_effort=\"${CODEX_REASONING_EFFORT}\"")
   fi
   printf '%s\n' "${args[@]}"
 }
@@ -993,6 +1025,34 @@ one_line() {
   printf '%s' "$1" | tr '\n' ' ' | tr -s ' ' | cut -c1-180
 }
 
+read_lock_meta_field() {
+  local key="$1"
+  local file="$2"
+  [[ -f "$file" ]] || return 1
+  sed -n "s/.*${key}=\\([^[:space:]]*\\).*/\\1/p" "$file" | head -n 1
+}
+
+file_age_seconds() {
+  local file="$1"
+  local mtime=0
+  if [[ ! -e "$file" ]]; then
+    echo "0"
+    return 0
+  fi
+  mtime="$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || echo 0)"
+  if ! [[ "$mtime" =~ ^[0-9]+$ ]]; then
+    echo "0"
+    return 0
+  fi
+  local now
+  now="$(date +%s)"
+  if [[ "$now" -lt "$mtime" ]]; then
+    echo "0"
+    return 0
+  fi
+  echo $(( now - mtime ))
+}
+
 ensure_role_memory_file() {
   local path="${ROLE_MEMORY_DIR}/${ROLE}.md"
   mkdir -p "$ROLE_MEMORY_DIR"
@@ -1026,7 +1086,7 @@ append_role_memory() {
 
   tmp="$(mktemp)"
   printf '%s\n' "$payload" > "$tmp"
-  python3 "$ROLE_MEMORY_APPEND_SCRIPT" \
+  ROLE_MEMORY_LOCK_TRACE_FILE="$TRACE_EVENTS_FILE" python3 "$ROLE_MEMORY_APPEND_SCRIPT" \
     "$ROLE" \
     "$source" \
     "$tmp" \
@@ -1217,6 +1277,7 @@ publish_execution_monitoring_if_enabled() {
 
 acquire_role_lock() {
   local holder_meta=""
+  local holder_age_s="unknown"
   if ! command -v flock >/dev/null 2>&1; then
     return 0
   fi
@@ -1224,13 +1285,21 @@ acquire_role_lock() {
   if ! flock -n 9; then
     if [[ -f "$LOCK_META_FILE" ]]; then
       holder_meta="$(one_line "$(cat "$LOCK_META_FILE" 2>/dev/null || true)")"
+      holder_start_epoch="$(read_lock_meta_field "start_epoch" "$LOCK_META_FILE" || true)"
+      if [[ "$holder_start_epoch" =~ ^[0-9]+$ ]]; then
+        holder_age_s=$(( $(date +%s) - holder_start_epoch ))
+      else
+        holder_age_s="$(file_age_seconds "$LOCK_META_FILE")"
+      fi
     else
       holder_meta="unknown_holder"
+      holder_age_s="$(file_age_seconds "$LOCK_FILE")"
     fi
+    trace_event "trilock_busy layer=run role=${ROLE} lock_file=${LOCK_FILE} holder_age_s=${holder_age_s}"
     cat <<EOF
 STATUS: IN_PROGRESS
 DELTA: LOCK_SKIP
-EVIDENCE: overlapping_run_detected=1; lock_file=${LOCK_FILE}; holder=${holder_meta}
+EVIDENCE: overlapping_run_detected=1; lock_file=${LOCK_FILE}; lock_order=${TRILOCK_ORDER}; holder_age_s=${holder_age_s}; holder=${holder_meta}
 RISKS: concurrence role-runner, risque de timeout et de sorties croisées
 NEXT: laisser finir le run en cours puis reprendre au prochain tick
 VERDICT: GO_WITH_CAUTION
@@ -1239,8 +1308,26 @@ NEXT_ACTION_UNIQUE: WAIT_RUN_LOCK_${ROLE}_$(date +%s)
 EOF
     exit 0
   fi
-  printf 'pid=%s host=%s start_utc=%s role=%s\n' "$$" "${HOSTNAME:-unknown}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" > "$LOCK_META_FILE"
-  trap 'rm -f "$LOCK_META_FILE"' EXIT
+  RUN_LOCK_ACQUIRED_AT="$(date +%s)"
+  printf 'pid=%s host=%s start_epoch=%s start_utc=%s role=%s layer=run order=%s lock_file=%s\n' \
+    "$$" "${HOSTNAME:-unknown}" "$RUN_LOCK_ACQUIRED_AT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" "$TRILOCK_ORDER" "$LOCK_FILE" > "$LOCK_META_FILE"
+  trace_event "trilock_acquired layer=run role=${ROLE} lock_file=${LOCK_FILE} order=${TRILOCK_ORDER}"
+  trap 'release_role_lock $?' EXIT
+}
+
+release_role_lock() {
+  local rc="${1:-0}"
+  local now hold_s
+  now="$(date +%s)"
+  hold_s=0
+  if [[ "$RUN_LOCK_ACQUIRED_AT" =~ ^[0-9]+$ ]] && [[ "$RUN_LOCK_ACQUIRED_AT" -gt 0 ]]; then
+    hold_s=$(( now - RUN_LOCK_ACQUIRED_AT ))
+    if [[ "$hold_s" -lt 0 ]]; then
+      hold_s=0
+    fi
+  fi
+  trace_event "trilock_release layer=run role=${ROLE} lock_file=${LOCK_FILE} hold_s=${hold_s} release_reason=exit_rc_${rc}"
+  rm -f "$LOCK_META_FILE"
 }
 
 acquire_role_lock
@@ -1791,6 +1878,13 @@ else
     fi
   fi
 fi
+if [[ -n "${FORCED_CORE_BIN_NOTE:-}" ]]; then
+  if [[ -n "$STARTUP_NOTE" ]]; then
+    STARTUP_NOTE="${STARTUP_NOTE}; ${FORCED_CORE_BIN_NOTE:-}"
+  else
+    STARTUP_NOTE="${FORCED_CORE_BIN_NOTE:-}"
+  fi
+fi
 trace_event "startup session=${TARGET_SESSION} agent=${AGENT_BIN_NAME} primary_channel=${PRIMARY_CHANNEL} startup_note=${STARTUP_NOTE:-none}"
 
 sanitize_tmux_logs() {
@@ -1930,6 +2024,7 @@ Création batch (si step 3/4):
 - Pas de sous-tâches récursives ni stream à 4 segments.
 
 EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+Si task_update=handoff et handoff_to est vide/placeholder (none, ?, tbd), forcer handoff_to=dev.
 Interdit planner: BLOCKER_ID=HANDOFF_TO_MISSING, BLOCKER_ID=PLANNER_BATCH_ID_INVALID, BLOCKER_ID=MODE_ANALYSE_NO_EDITS. Convertir en WAIT/PASS avec preuve.
 Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
@@ -1965,7 +2060,6 @@ Décision tick (ordre strict):
    - tu ajoutes une note d'audit dans `docs/ops/ADMIN_TEAM_CHAT.md` (TYPE:PROMPT_PATCH)
    - tu ajoutes une note d'itération dans `docs/ops/ADMIN_TEAM_ITERATIONS.md`
    - `admin_artifact` référence au moins un fichier prompt + un fichier d'audit.
-
 Commandes shell via platform/policies/exec_safe.sh.
 EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), admin_artifact, root_cause, fix_applied, verify.
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
@@ -2119,7 +2213,6 @@ Mode delivery strict:
 - avant création de fichier/module: preuve reuse-first obligatoire (`rg` + module réutilisé ou justification `NONE(reason)`).
 - architecture-first obligatoire avant patch: confirmer la couche cible (domain/application/api/platform) et éviter imports cross-layer.
 - appliquer le modèle JUDGE endpoint comme référence de qualité d'intégration: réutiliser clients/modules existants avant création.
-
 Spécialisation par task_id:
 - DEV-01 => API/contracts + module-load/layering fixes (apps/api/src/**)
 - DEV-02 => runtime-path/integration coherence (+ UI wiring si demandé)
@@ -2129,9 +2222,11 @@ Blocker permission/read-only: preuve fraîche obligatoire du tick courant sur fi
 Commandes shell via platform/policies/exec_safe.sh.
 EVIDENCE: dev_artifact, task_update, lock_check=ok, run_note (>=5 mots), root_cause, fix_applied, verify, reuse_check, architecture_check, vision_alignment, qa_proof.
 reuse_check format: <module_reused> ou NONE(<raison courte>).
+verify format (si complete/handoff): before=<état_avant>; after=<état_après>; test=<preuve_exécution>.
 architecture_check format: layer=<domain|application|api|platform>; imports_ok=<yes|no>; path_target=<fichier>.
 vision_alignment format: batch=<BATCH-XX>; target=<objectif_livraison>; impact=<courte_phrase>.
 qa_proof format: test=<cmd_ou_suite>; result=<PASS|FAIL|SKIP(reason)>.
+Valeurs interdites dans ces champs: ?, ??, TBD, TODO, FIXME, NONE sans raison.
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
 Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Si task_update=blocked avec un motif permission/read-only, ajouter cmd_err_excerpt=<stderr_reel>.
@@ -2307,7 +2402,7 @@ fi
 
 PLANNER_GUARDIAN_PROMPT_SECTION=""
 if [[ "$ROLE" == "planner" ]]; then
-  PLANNER_GUARDIAN_PROMPT_SECTION="$(cat <<EOF
+PLANNER_GUARDIAN_PROMPT_SECTION="$(cat <<EOF
 PLANNER_GUARDIAN_FEEDBACK:
 ${PLANNER_GUARDIAN_CONTEXT}
 
@@ -2831,17 +2926,15 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
   fi
 fi
 
-RETRY_PROMPT="$(cat <<EOF
-${PROMPT_TEXT}
+RETRY_PROMPT="${PROMPT_TEXT}
+
 Reponse precedente invalide ou incomplete. Reemets uniquement le contrat valide.
 Checklist minimale:
 - 8 lignes strictes dans l'ordre contractuel.
 - EVIDENCE contient ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>, task_update, lock_check=ok, run_note>=5 mots.
 - Si queue/workboard actif: stream_id et task_id.
 - Si task_update=complete: cmd et tests_run.
-- Aucun texte hors contrat.
-EOF
-)"
+- Aucun texte hors contrat."
 
 RAW_RETRY=""
 RC_RETRY=0
