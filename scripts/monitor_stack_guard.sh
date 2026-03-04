@@ -21,6 +21,9 @@ LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-d
 PUBLIC_URL="${FC_MONITOR_PUBLIC_URL:-https://fc-monitor.loca.lt/api/status}"
 PUBLIC_HEADER_KEY="${FC_MONITOR_PUBLIC_HEADER_KEY:-bypass-tunnel-reminder}"
 PUBLIC_HEADER_VALUE="${FC_MONITOR_PUBLIC_HEADER_VALUE:-1}"
+PUBLIC_URL_STATE_FILE="${FC_MONITOR_PUBLIC_URL_STATE_FILE:-${LOG_DIR}/monitor-public-url.txt}"
+PUBLIC_FAILURE_STATE_FILE="${FC_MONITOR_PUBLIC_FAILURE_STATE_FILE:-${LOG_DIR}/monitor-public-fail-streak.txt}"
+PUBLIC_FAILURE_THRESHOLD="${FC_MONITOR_PUBLIC_FAILURE_THRESHOLD:-3}"
 LT_SUBDOMAIN="${FC_MONITOR_LT_SUBDOMAIN:-fc-monitor}"
 LT_HOST="${FC_MONITOR_LT_HOST:-https://loca.lt}"
 LT_PORT="${FC_MONITOR_LT_PORT:-7779}"
@@ -46,6 +49,44 @@ ts() {
 
 log() {
   printf '%s [monitor-guard] %s\n' "$(ts)" "$*" >> "$GUARD_LOG"
+}
+
+current_public_url() {
+  local from_state=""
+  if [[ -f "$PUBLIC_URL_STATE_FILE" ]]; then
+    from_state="$(head -n 1 "$PUBLIC_URL_STATE_FILE" 2>/dev/null | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+  fi
+  if [[ -n "$from_state" ]]; then
+    printf '%s\n' "$from_state"
+    return 0
+  fi
+  printf '%s\n' "$PUBLIC_URL"
+}
+
+write_public_url_state() {
+  local url="${1:-}"
+  [[ -n "$url" ]] || return 0
+  printf '%s\n' "$url" > "$PUBLIC_URL_STATE_FILE"
+}
+
+read_public_fail_streak() {
+  if [[ -f "$PUBLIC_FAILURE_STATE_FILE" ]]; then
+    local n=""
+    n="$(head -n 1 "$PUBLIC_FAILURE_STATE_FILE" 2>/dev/null | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+    if [[ "$n" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$n"
+      return 0
+    fi
+  fi
+  printf '0\n'
+}
+
+write_public_fail_streak() {
+  local n="${1:-0}"
+  if ! [[ "$n" =~ ^[0-9]+$ ]]; then
+    n=0
+  fi
+  printf '%s\n' "$n" > "$PUBLIC_FAILURE_STATE_FILE"
 }
 
 monitor_server_running() {
@@ -93,11 +134,15 @@ is_local_up() {
 }
 
 is_public_up() {
-  curl -fsS -m 8 -H "${PUBLIC_HEADER_KEY}: ${PUBLIC_HEADER_VALUE}" -o /dev/null "$PUBLIC_URL" >/dev/null 2>&1
+  local url=""
+  url="$(current_public_url)"
+  curl -fsS -m 8 -H "${PUBLIC_HEADER_KEY}: ${PUBLIC_HEADER_VALUE}" -o /dev/null "$url" >/dev/null 2>&1
 }
 
 public_queue_source() {
-  curl -fsS -m 8 -H "${PUBLIC_HEADER_KEY}: ${PUBLIC_HEADER_VALUE}" "$PUBLIC_URL" 2>/dev/null \
+  local url=""
+  url="$(current_public_url)"
+  curl -fsS -m 8 -H "${PUBLIC_HEADER_KEY}: ${PUBLIC_HEADER_VALUE}" "$url" 2>/dev/null \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("sources") or {}).get("queue") or "").strip())' 2>/dev/null || true
 }
 
@@ -123,7 +168,10 @@ restart_monitor_server() {
 
 start_tunnel() {
   local mode="${1:-host}"
-  local -a cmd=(npx --yes localtunnel --port "${LT_PORT}" --subdomain "${LT_SUBDOMAIN}" --local-host 127.0.0.1)
+  local -a cmd=(npx --yes localtunnel --port "${LT_PORT}" --local-host 127.0.0.1)
+  if [[ "$mode" == "host" ]]; then
+    cmd+=(--subdomain "${LT_SUBDOMAIN}")
+  fi
   if [[ "$mode" == "host" && -n "$LT_HOST" ]]; then
     cmd+=(--host "$LT_HOST")
   fi
@@ -132,18 +180,25 @@ start_tunnel() {
     nohup "${cmd[@]}" >> "${LOG_DIR}/monitor-tunnel.log" 2>&1 < /dev/null &
   )
   sleep 3
+  local discovered_url=""
+  discovered_url="$(tail -n 30 "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\\.loca\\.lt' | tail -n 1 || true)"
+  if [[ -n "$discovered_url" ]]; then
+    write_public_url_state "${discovered_url}/api/status"
+    log "tunnel url discovered mode=${mode} url=${discovered_url}"
+  elif [[ "$mode" == "host" ]]; then
+    write_public_url_state "$PUBLIC_URL"
+  fi
 }
 
 tunnel_pid_list() {
   local leaf=""
-  leaf="$(ps -eo pid=,args= 2>/dev/null | awk -v domain="$LT_SUBDOMAIN" -v port="$LT_PORT" '
+  leaf="$(ps -eo pid=,args= 2>/dev/null | awk -v port="$LT_PORT" '
     {
       pid=$1
       $1=""
       line=substr($0,2)
       if (line ~ /monitor_stack_guard\.sh/) next
       if (line !~ /\/bin\/lt([[:space:]]|$)/) next
-      if (line !~ ("--subdomain[ =]" domain)) next
       if (line !~ ("--port[ =]" port)) next
       print pid
     }
@@ -152,14 +207,13 @@ tunnel_pid_list() {
     printf '%s\n' "$leaf"
     return 0
   fi
-  ps -eo pid=,args= 2>/dev/null | awk -v domain="$LT_SUBDOMAIN" -v port="$LT_PORT" '
+  ps -eo pid=,args= 2>/dev/null | awk -v port="$LT_PORT" '
     {
       pid=$1
       $1=""
       line=substr($0,2)
       if (line ~ /monitor_stack_guard\.sh/) next
       if (line !~ /(localtunnel|\/lt([[:space:]]|$))/) next
-      if (line !~ ("--subdomain[ =]" domain)) next
       if (line !~ ("--port[ =]" port)) next
       print pid
     }
@@ -200,7 +254,8 @@ restart_tunnel() {
     log "restart tunnel mode=${mode}"
     start_tunnel "$mode"
     if tunnel_process_running && is_public_up; then
-      log "tunnel healthy mode=${mode}"
+      log "tunnel healthy mode=${mode} url=$(current_public_url)"
+      write_public_fail_streak 0
       return 0
     fi
     stop_tunnel
@@ -235,6 +290,9 @@ if ! is_local_up; then
 fi
 
 if [[ "$MANAGE_TUNNEL" == "1" ]]; then
+  if ! [[ "$PUBLIC_FAILURE_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$PUBLIC_FAILURE_THRESHOLD" -lt 1 ]]; then
+    PUBLIC_FAILURE_THRESHOLD=3
+  fi
   tc="$(tunnel_process_count)"
   if [[ "$tc" -gt 1 ]]; then
     log "duplicate tunnel processes detected count=${tc}; restarting"
@@ -246,9 +304,21 @@ if [[ "$MANAGE_TUNNEL" == "1" ]]; then
     start_tunnel host
   fi
 
-  if ! is_public_up; then
-    log "public tunnel unavailable; restarting tunnel"
-    restart_tunnel || true
+  if is_public_up; then
+    write_public_fail_streak 0
+  else
+    fail_streak="$(read_public_fail_streak)"
+    fail_streak="$((fail_streak + 1))"
+    write_public_fail_streak "$fail_streak"
+    if [[ "$fail_streak" -ge "$PUBLIC_FAILURE_THRESHOLD" ]]; then
+      log "public tunnel unavailable streak=${fail_streak}; restarting tunnel"
+      restart_tunnel || true
+      if is_public_up; then
+        write_public_fail_streak 0
+      fi
+    else
+      log "public tunnel unavailable streak=${fail_streak}/${PUBLIC_FAILURE_THRESHOLD}; defer restart"
+    fi
   fi
 
   if [[ "$ENFORCE_PUBLIC_ROOT_MATCH" == "1" ]] && is_public_up && ! public_matches_root; then
@@ -257,10 +327,10 @@ if [[ "$MANAGE_TUNNEL" == "1" ]]; then
   fi
 
   if is_local_up && is_public_up && { [[ "$ENFORCE_PUBLIC_ROOT_MATCH" != "1" ]] || public_matches_root; }; then
-    log "ok local=up public=up"
+    log "ok local=up public=up url=$(current_public_url)"
   else
-    log "error local/public not healthy after restart attempt"
-    exit 1
+    log "warn local/public degraded local=$(is_local_up && echo up || echo down) public=$(is_public_up && echo up || echo down) url=$(current_public_url)"
+    exit 0
   fi
 else
   log "ok local=up public=skip"
