@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-03T20:44:58.684171Z",
+  "updated_at": "2026-03-04T10:50:13.069013+00:00",
   "items": [
     {
       "id": "BATCH-01",
@@ -200,7 +200,7 @@
     {
       "id": "BATCH-08",
       "title": "Decision UX 2-3 clics + Flux portefeuille",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [
@@ -208,8 +208,8 @@
         "BATCH-26"
       ],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T20:44:58.684171Z",
-      "next_action": "BATCH-26 (P0 architecture hotfix) must pass before reopening UX delivery on BATCH-08.",
+      "updated_at": "2026-03-04T00:55:42.778818+00:00",
+      "next_action": "planner completes BATCH-08-PLAN then dispatches canonical chain BATCH-08-DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV_REVIEW.",
       "goals": [
         "Unifier le contrat decision API->UI (verdict/confidence/why/risk).",
         "Reduire le parcours principal a 2-3 clics sur desktop et mobile.",
@@ -231,24 +231,27 @@
         "NEXT_ACTION_UNIQUE"
       ],
       "notes": [
-        "implementation_architecture: apps/api keep contracts in existing domains; apps/web consume same contract via shared connector.",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets/contracts before creating new components.",
-        "reuse_targets: apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/components/widgets/*.html, apps/api/src/domains/judge/application/intelligence_service.py",
-        "validation_path: claim planner -> dispatch dev lane -> targeted UI/API tests -> complete with proof.",
-        "blocked_by_architecture_audit_2026-03-03: F-001..F-012 P0/P1 fixes required before UX lane."
-      ]
+        "implementation_architecture: keep existing domain contracts (apps/api/src/domains/*) and existing forecast UI wiring (apps/web/src/domains/forecasts/*); no parallel stack.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: canonical runtime chain uses planner/dev/admin only; avoid backend/frontend/data/infra lane names for active tasks.",
+        "reuse_targets_api: apps/api/src/domains/judge/api/judge.py + apps/api/src/domains/judge/application/judge_pipeline.py + apps/api/src/domains/judge/application/g4f_client.py",
+        "reuse_targets_ui: apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/domains/forecasts/components/widgets/*.html + apps/web/src/domains/forecasts/pages/app.js",
+        "validation_path: planner PLAN/ARCH complete -> dev chain with targeted tests -> admin runtime validation -> planner GOV_REVIEW close with proof."
+      ],
+      "unblocked_by": "BATCH-26-gov-review-20260304",
+      "closed_at": "2026-03-04T01:10:21.892112+00:00",
+      "closed_by": "auto_batch_close"
     },
     {
       "id": "BATCH-09",
       "title": "Alertes et surveillance orientees decision",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [
         "BATCH-08"
       ],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-04T10:50:13.069013+00:00",
       "next_action": "preparer BATCH-09-PLAN avec matrice severite, dedupe strategy et runbook de verification SLA.",
       "goals": [
         "Introduire alerting priorise actif+macro avec deduplication.",
@@ -275,19 +278,20 @@
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse jobs and monitor endpoints already in apps/api/src/platform/legacy/jobs and apps/monitor/server.py.",
         "reuse_targets: apps/api/src/platform/legacy/jobs/market_brief.py, apps/api/src/platform/legacy/jobs/forecasts_simple.py, scripts/fc_health_check.sh, scripts/monitor_agents.sh",
         "validation_path: signal generation tests + monitor visibility + end-to-end alert acknowledgment."
-      ]
+      ],
+      "closed_at": "2026-03-04T10:49:57Z"
     },
     {
       "id": "BATCH-10",
       "title": "Cost runtime governance et release gate MVP",
-      "state": "WAITING_DEP",
+      "state": "READY",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [
         "BATCH-09"
       ],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-04T10:50:13.069013+00:00",
       "next_action": "ouvrir BATCH-10-PLAN et cadrer gate GO/NO-GO avec checklist et rollback testable.",
       "goals": [
         "Plafonner cout runtime via cache/fallback/quotas/timeouts.",
@@ -919,8 +923,8 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T20:44:58.684171Z",
-      "updated_at": "2026-03-03T20:57:20Z",
-      "next_action": "Claim BATCH-26-PLAN, dispatch BATCH-26-DEV-01/02/03 in strict order, then execute BATCH-26-ADMIN-01 and BATCH-26-GOV-REVIEW with runtime proofs.",
+      "updated_at": "2026-03-04T00:37:01.810720+00:00",
+      "next_action": "Continue BATCH-26-DEV-02 (READY), then chain DEV-03 -> ADMIN-01 -> GOV-REVIEW with proofs.",
       "goals": [
         "Restore forecast/judge runtime determinism by fixing missing imports, wrong roots, and ghost paths.",
         "Eliminate fake/runtime-split data paths and unblock real data flow to APIs.",
@@ -950,8 +954,90 @@
         "Do not start feature work from BATCH-08 until BATCH-26 verdict PASS or explicit risk accept by owner.",
         "Proof commands must include: import checks, targeted pytest, workboard status transitions, and runtime monitor snapshot."
       ],
-      "closed_at": "2026-03-03T21:02:01.504948+00:00",
+      "reopen_reason": "Reopened: auto_batch_close bug (multi-part task IDs ignored). Tasks DEV-02/DEV-03/ADMIN-01/GOV-REVIEW not DONE. Was=CLOSED",
+      "closed_at": "2026-03-04T00:44:37.961711+00:00",
       "closed_by": "auto_batch_close"
+    },
+    {
+      "id": "BATCH-27",
+      "title": "Frontend Dynamic Data Coverage (Facettes + Widgets)",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-09"
+      ],
+      "created_at": "2026-03-04T02:48:16Z",
+      "updated_at": "2026-03-04T02:48:16Z",
+      "next_action": "ouvrir BATCH-27-PLAN des cloture de BATCH-09, puis chaine canonique DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV-REVIEW.",
+      "goals": [
+        "Aligner les contrats backend->frontend (judge/forecasts/news/portfolio/search) pour un payload stable et versionnable.",
+        "Remplacer les contenus facettes statiques par des renderers branches au flux live existant.",
+        "Supprimer les divergences de mapping (duplication connector + champs aleatoires/non deterministes)."
+      ],
+      "success_criteria": [
+        "Contrat API unifie: memes champs critiques entre reponse backend et consommateur UI (verdict/confidence/why/risk/freshness).",
+        "loadFacetteContent n injecte plus de sample synthetique quand les donnees live existent.",
+        "Aucune transformation aleatoire dans le connecteur forecasts/news (zero Math.random sur payload API)."
+      ],
+      "gate_reference": "docs/product/planning/FRONTEND_DYNAMIC_DATA_GAP_MAP_2026-03-03.md#batch-mapping",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "reuse_targets_ui: apps/web/src/domains/forecasts/pages/app.js, apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/pages/index.html.",
+        "dynamic_gap_refs: generateFacetteContent placeholder flow, fallback-heavy widgets, deterministic transform required for news effect.",
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: no duplicate connector logic; canonical connector stays in domains/forecasts/contracts/apiConnector.js.",
+        "validation_path: browser smoke + payload trace + targeted frontend tests/lint + degraded-mode checks.",
+        "reuse_targets_backend: apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/search/api/universal_search.py, apps/api/src/platform/routes/dashboard.py.",
+        "reuse_targets_frontend: apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/domains/forecasts/pages/app.js (no second connector source of truth)."
+      ]
+    },
+    {
+      "id": "BATCH-28",
+      "title": "Frontend Dynamic UX Hardening (Freshness + Error States)",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [
+        "BATCH-27"
+      ],
+      "created_at": "2026-03-04T02:48:16Z",
+      "updated_at": "2026-03-04T02:48:16Z",
+      "next_action": "ouvrir BATCH-28-PLAN apres fermeture BATCH-27 pour finaliser freshness UX, erreurs colorees, et preuves e2e.",
+      "goals": [
+        "Rendre visibles les etats runtime front/back: loading, stale, degraded, error par widget critique.",
+        "Uniformiser freshness et envelopes d erreur cote backend puis propagation UI sans ambiguite.",
+        "Ajouter des checks de non-regression e2e sur scenarios nominal + degrade."
+      ],
+      "success_criteria": [
+        "Backend expose freshness + error metadata coherents pour les endpoints utilises par le dashboard.",
+        "Chaque widget critique affiche son etat freshness/error avec severite visuelle claire.",
+        "Runbook e2e valide desktop/mobile et fallback degrade avec preuves de rendu."
+      ],
+      "gate_reference": "docs/product/planning/FRONTEND_DYNAMIC_DATA_GAP_MAP_2026-03-03.md#success-gates",
+      "evidence_required": [
+        "DELTA",
+        "EVIDENCE",
+        "RISKS",
+        "NEXT",
+        "VERDICT",
+        "BLOCKER_ID",
+        "NEXT_ACTION_UNIQUE"
+      ],
+      "notes": [
+        "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",
+        "reuse-first: exploit existing live event financecopilot:live-dashboard-updated and window.getLiveDashboardData().",
+        "admin signoff requires monitor snapshot + frontend smoke proof in degraded mode.",
+        "backend_scope: harmoniser metadonnees freshness/error dans endpoints dashboard/judge/search utilises par app.js.",
+        "frontend_scope: afficher badges freshness + erreurs colorees par severite et CTA de recovery."
+      ]
     }
   ]
 }
