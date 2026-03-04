@@ -84,6 +84,10 @@ TEAM_CHAT_FILE="${TMUX_ROLE_TEAM_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
 TEAM_ITER_FILE="${TMUX_ROLE_TEAM_ITER_FILE:-$ROOT/docs/ops/ADMIN_TEAM_ITERATIONS.md}"
 DIRECTIVE_BUS_FILE="${TMUX_ROLE_DIRECTIVE_BUS_FILE:-$ROOT/docs/ops/DIRECTIVE_BUS.jsonl}"
 WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$ORCHESTRATOR_DIR_DEFAULT/parallel-workstreams.json}"
+QUEUE_FILE="${TMUX_ROLE_QUEUE_FILE:-$ORCHESTRATOR_DIR_DEFAULT/priority-queue.json}"
+if [[ ! -f "$QUEUE_FILE" ]] && [[ -f "$ROOT/docs/orchestrator-ops/priority-queue.json" ]]; then
+  QUEUE_FILE="$ROOT/docs/orchestrator-ops/priority-queue.json"
+fi
 MEMORY_LOCK_FILE="${TMUX_ROLE_MEMORY_LOCK_FILE:-${STATE_DIR}/${ROLE}.memory.lock}"
 RECOVERY_THRESHOLD="${TMUX_ROLE_RECOVERY_THRESHOLD:-2}"
 SKIP_RETRY_ON_TIMEOUT="${SKIP_RETRY_ON_TIMEOUT:-1}"
@@ -95,6 +99,7 @@ TMUX_READY_WAIT_SECONDS="${TMUX_ROLE_READY_WAIT_SECONDS:-8}"
 TMUX_POLL_INTERVAL_SECONDS="${TMUX_ROLE_POLL_INTERVAL_SECONDS:-1}"
 TMUX_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-75}"
 CODEX_EXEC_FALLBACK="${TMUX_ROLE_CODEX_EXEC_FALLBACK:-1}"
+SESSION_NOT_READY_FALLBACK_CODEX="${TMUX_ROLE_SESSION_NOT_READY_FALLBACK_CODEX:-1}"
 ROLE_MODEL_VAR="LM_ROLE_${ROLE^^}_MODEL"
 ROLE_MODEL_VAR="${ROLE_MODEL_VAR//-/_}"
 ROLE_DEFAULT_CODEX_MODEL="${!ROLE_MODEL_VAR:-${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}}"
@@ -120,8 +125,20 @@ TMUX_ROLE_MEMORY_MAX_LINE_CHARS="${TMUX_ROLE_MEMORY_MAX_LINE_CHARS:-180}"
 PUBLISH_EXEC_MONITORING="${TMUX_ROLE_PUBLISH_MONITORING:-1}"
 EXEC_MONITORING_LATEST_FILE="${TMUX_ROLE_EXEC_MONITORING_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/executors-monitoring-latest.json}"
 EXEC_MONITORING_EVENTS_FILE="${TMUX_ROLE_EXEC_MONITORING_EVENTS_FILE:-$ROOT/logs-codex-runs/executor-monitoring/events.jsonl}"
+PUBLISH_ITERATION_ISSUES="${TMUX_ROLE_PUBLISH_ITERATION_ISSUES:-1}"
+ITERATION_ISSUES_EVENTS_FILE="${TMUX_ROLE_ITERATION_ISSUES_EVENTS_FILE:-$ORCHESTRATOR_DIR_DEFAULT/agent-iteration-issues.jsonl}"
+ITERATION_ISSUES_LATEST_FILE="${TMUX_ROLE_ITERATION_ISSUES_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/agent-iteration-issues-latest.json}"
+PUBLISH_ITERATION_ISSUE_DIGEST="${TMUX_ROLE_PUBLISH_ITERATION_ISSUE_DIGEST:-1}"
+ITERATION_ISSUE_DIGEST_FILE="${TMUX_ROLE_ITERATION_ISSUE_DIGEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/agent-iteration-issues-digest.txt}"
+FALLBACK_CHANNELS_READ="${TMUX_ROLE_FALLBACK_CHANNELS_READ:-runtime_context}"
+FALLBACK_IMPACT_ASSESSMENT="${TMUX_ROLE_FALLBACK_IMPACT_ASSESSMENT:-low}"
+FALLBACK_IMPACT_ACTION="${TMUX_ROLE_FALLBACK_IMPACT_ACTION:-monitor_updates}"
+FALLBACK_CHANNELS_ISSUE_CODE="${TMUX_ROLE_FALLBACK_CHANNELS_ISSUE_CODE:-channels_autofill_fallback}"
 TOOL_REQUESTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_FILE:-$ROOT/docs/ops/AGENT_TOOL_REQUESTS.md}"
 TOOL_REQUESTS_EVENTS_FILE="${TMUX_ROLE_TOOL_REQUESTS_EVENTS_FILE:-$ORCHESTRATOR_DIR_DEFAULT/agent-tool-requests.jsonl}"
+TMUX_ROLE_PLANNER_PREFLIGHT_SYNC="${TMUX_ROLE_PLANNER_PREFLIGHT_SYNC:-1}"
+TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS="${TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS:-15}"
+TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED="${TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED:-1}"
 
 resolve_helper_script() {
   local primary="$1"
@@ -139,6 +156,8 @@ resolve_helper_script() {
 
 ROLE_MEMORY_APPEND_SCRIPT="$(resolve_helper_script "platform/automation/role_memory_append.py" "scripts/role_memory_append.py")"
 ROLE_EXEC_MONITORING_SCRIPT="$(resolve_helper_script "platform/automation/role_execution_monitoring.py" "scripts/role_execution_monitoring.py")"
+ROLE_ISSUE_REPORT_SCRIPT="$(resolve_helper_script "platform/automation/iteration_issue_report.py" "scripts/iteration_issue_report.py")"
+ITERATION_ISSUE_DIGEST_SCRIPT="$(resolve_helper_script "scripts/issue_digest_compact.sh" "scripts/issue_digest_compact.sh")"
 PLANNER_GUARDIAN_SCRIPT="$(resolve_helper_script "platform/automation/planner_guardian.py" "scripts/planner_guardian.py")"
 ROLE_CONTRACT_GUARD_SCRIPT="$(resolve_helper_script "platform/policies/role_contract_guard.py" "scripts/role_contract_guard.py")"
 ROLE_RUNTIME_CONTEXT_SCRIPT="$(resolve_helper_script "platform/automation/role_runtime_context.py" "scripts/role_runtime_context.py")"
@@ -157,12 +176,16 @@ mkdir -p \
   "$(dirname "$PLANNER_TIMELINE_FILE")" \
   "$(dirname "$EXEC_MONITORING_LATEST_FILE")" \
   "$(dirname "$EXEC_MONITORING_EVENTS_FILE")" \
+  "$(dirname "$ITERATION_ISSUES_EVENTS_FILE")" \
+  "$(dirname "$ITERATION_ISSUES_LATEST_FILE")" \
+  "$(dirname "$ITERATION_ISSUE_DIGEST_FILE")" \
   "$(dirname "$PLANNER_GUARDIAN_LATEST_FILE")" \
   "$(dirname "$PLANNER_GUARDIAN_EVENTS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_EVENTS_FILE")"
 FAIL_FILE="${STATE_DIR}/${ROLE}.fail_count"
 NO_DELTA_FILE="${STATE_DIR}/${ROLE}.no_delta_count"
+SESSION_NOT_READY_FALLBACK_COUNT_FILE="${STATE_DIR}/${ROLE}.session_not_ready_fallback_count"
 CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
 LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
 TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
@@ -209,6 +232,15 @@ fi
 if ! [[ "$TRACE_EVENTS_ENABLED" =~ ^[01]$ ]]; then
   TRACE_EVENTS_ENABLED=1
 fi
+if ! [[ "$TMUX_ROLE_PLANNER_PREFLIGHT_SYNC" =~ ^[01]$ ]]; then
+  TMUX_ROLE_PLANNER_PREFLIGHT_SYNC=1
+fi
+if ! [[ "$TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED" =~ ^[01]$ ]]; then
+  TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED=1
+fi
+if ! [[ "$TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS" -lt 5 ]]; then
+  TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS=15
+fi
 if ! [[ "$TRACE_EVENT_DEDUPE_SECONDS" =~ ^[0-9]+$ ]] || [[ "$TRACE_EVENT_DEDUPE_SECONDS" -lt 0 ]]; then
   TRACE_EVENT_DEDUPE_SECONDS=4
 fi
@@ -226,6 +258,9 @@ if ! [[ "$RATE_LIMIT_QWEN_FALLBACK" =~ ^[01]$ ]]; then
 fi
 if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
   CODEX_EXEC_FALLBACK=1
+fi
+if ! [[ "$SESSION_NOT_READY_FALLBACK_CODEX" =~ ^[01]$ ]]; then
+  SESSION_NOT_READY_FALLBACK_CODEX=1
 fi
 if ! [[ "$CODEX_NO_ALT_SCREEN" =~ ^[01]$ ]]; then
   CODEX_NO_ALT_SCREEN=1
@@ -258,6 +293,15 @@ if ! [[ "$PLANNER_GUARDIAN_INCLUDE_IN_PROMPT" =~ ^[01]$ ]]; then
 fi
 if ! [[ "$PLANNER_AUDIT_ENABLED" =~ ^[01]$ ]]; then
   PLANNER_AUDIT_ENABLED=1
+fi
+if ! [[ "$PUBLISH_EXEC_MONITORING" =~ ^[01]$ ]]; then
+  PUBLISH_EXEC_MONITORING=1
+fi
+if ! [[ "$PUBLISH_ITERATION_ISSUES" =~ ^[01]$ ]]; then
+  PUBLISH_ITERATION_ISSUES=1
+fi
+if ! [[ "$PUBLISH_ITERATION_ISSUE_DIGEST" =~ ^[01]$ ]]; then
+  PUBLISH_ITERATION_ISSUE_DIGEST=1
 fi
 TOOL_REQUEST_DEFAULT="$(printf '%s' "$TOOL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
 SKILL_REQUEST_DEFAULT="$(printf '%s' "$SKILL_REQUEST_DEFAULT" | tr '\r\n' ' ' | tr ';' ',' | tr -s ' ' | sed 's/^ *//; s/ *$//' | tr ' ' '_')"
@@ -455,12 +499,12 @@ fi
 ROLE_MEMORY_MAX_LINE_CHARS_EFFECTIVE="$TMUX_ROLE_MEMORY_MAX_LINE_CHARS"
 
 runtime_queue_has_ready() {
-  if [[ ! -f "docs/orchestrator-ops/priority-queue.json" ]]; then
+  if [[ ! -f "$QUEUE_FILE" ]]; then
     echo "0"
     return 0
   fi
   jq -r '[.items[]? | select((.state // "")=="READY")] | if length>0 then "1" else "0" end' \
-    docs/orchestrator-ops/priority-queue.json 2>/dev/null || echo "0"
+    "$QUEUE_FILE" 2>/dev/null || echo "0"
 }
 
 runtime_workboard_role_has_work() {
@@ -632,8 +676,12 @@ RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="$(runtime_workboard_role_has_in_progress
 if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" =~ ^[01]$ ]]; then
   RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="0"
 fi
-RUNTIME_QUEUE_VERSION="$(runtime_source_version "docs/orchestrator-ops/priority-queue.json" "queue")"
+RUNTIME_QUEUE_VERSION="$(runtime_source_version "$QUEUE_FILE" "queue")"
 RUNTIME_WORKBOARD_VERSION="$(runtime_source_version "$WORKBOARD_FILE" "workboard")"
+PLANNER_SYNC_PRIORITY_ATTEMPTED=0
+PLANNER_SYNC_PRIORITY_STREAMS_CREATED=0
+PLANNER_SYNC_PRIORITY_TASKS_CREATED=0
+PLANNER_SYNC_PRIORITY_RC=0
 # Auto-delivery roles only run in write mode when their lane has actionable work.
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
   if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" ]]; then
@@ -715,12 +763,12 @@ detect_rate_limit_signal() {
   clean_text="$(printf '%s\n' "$text" \
     | grep -v -i -E 'openai codex|qwen code|approaching rate limits|switch to .* for lower credit|press enter to confirm or esc|^╭|^╰|^│' || true)"
   # Signatures provider/API strictes seulement (évite faux positifs sur sorties reasoning).
-  if ! printf '%s\n' "$clean_text" | rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit[[:space:]_-]*reached|api-rate-limit-reached|insufficient_quota|quota[[:space:]_-]*(exceeded|exhausted|reached)|rate[[:space:]_-]*limit[[:space:]_-]*(exceeded|exhausted|reached)|((http|status|code|error)[^0-9]{0,8}429([^0-9]|$))|(^|[^0-9])429([^0-9]|$)|too many requests'; then
+  if ! rg -qi 'api[[:space:]_-]*rate[[:space:]_-]*limit[[:space:]_-]*reached|api-rate-limit-reached|insufficient_quota|quota[[:space:]_-]*(exceeded|exhausted|reached)|rate[[:space:]_-]*limit[[:space:]_-]*(exceeded|exhausted|reached)|((http|status|code|error)[^0-9]{0,8}429([^0-9]|$))|(^|[^0-9])429([^0-9]|$)|too many requests' <<<"$clean_text"; then
     return 1
   fi
   # "too many requests" sans 429 ni code explicite est trop ambigu -> ignore.
-  if printf '%s\n' "$clean_text" | rg -qi 'too many requests' \
-    && ! printf '%s\n' "$clean_text" | rg -qi '429|http|status|code|insufficient_quota|api-rate-limit-reached'; then
+  if rg -qi 'too many requests' <<<"$clean_text" \
+    && ! rg -qi '429|http|status|code|insufficient_quota|api-rate-limit-reached' <<<"$clean_text"; then
     return 1
   fi
   return 0
@@ -861,9 +909,113 @@ run_with_timeout() {
   "$@"
 }
 
+DISPATCH_TIMEOUT_EFFECTIVE=0
+DISPATCH_RETRY_TIMEOUT_EFFECTIVE=0
+DISPATCH_PROMPT_BYTES=0
+DISPATCH_TIMEOUT_TIER="default"
+
+resolve_dispatch_timeout_budgets() {
+  local prompt_bytes_raw="${1:-0}"
+  local requested_timeout_raw="${2:-0}"
+  local retry_timeout_raw="${3:-0}"
+  local prompt_bytes=0
+  local timeout_budget=0
+  local retry_timeout_budget=0
+  local tier="default"
+
+  if [[ "$prompt_bytes_raw" =~ ^[0-9]+$ ]]; then
+    prompt_bytes="$prompt_bytes_raw"
+  fi
+  if [[ "$requested_timeout_raw" =~ ^[0-9]+$ ]]; then
+    timeout_budget="$requested_timeout_raw"
+  fi
+  if [[ "$retry_timeout_raw" =~ ^[0-9]+$ ]]; then
+    retry_timeout_budget="$retry_timeout_raw"
+  fi
+
+  # Admin-only adaptive profile (avoids rc=124 spikes on large runtime prompts).
+  if [[ "$ROLE" == "admin" ]]; then
+    if (( prompt_bytes > 14336 )); then
+      (( timeout_budget < 540 )) && timeout_budget=540
+      (( retry_timeout_budget < 240 )) && retry_timeout_budget=240
+      tier="admin_gt_14k"
+    elif (( prompt_bytes > 8192 )); then
+      (( timeout_budget < 420 )) && timeout_budget=420
+      (( retry_timeout_budget < 180 )) && retry_timeout_budget=180
+      tier="admin_8k_14k"
+    else
+      tier="admin_le_8k"
+    fi
+  fi
+
+  printf '%s|%s|%s|%s\n' "$prompt_bytes" "$timeout_budget" "$retry_timeout_budget" "$tier"
+}
+
+planner_preflight_sync_if_needed() {
+  PLANNER_SYNC_PRIORITY_ATTEMPTED=0
+  PLANNER_SYNC_PRIORITY_STREAMS_CREATED=0
+  PLANNER_SYNC_PRIORITY_TASKS_CREATED=0
+  PLANNER_SYNC_PRIORITY_RC=0
+
+  if [[ "$TMUX_ROLE_PLANNER_PREFLIGHT_SYNC" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$ROLE" != "planner" ]]; then
+    return 0
+  fi
+  if [[ "$RUNTIME_QUEUE_HAS_READY" != "1" ]]; then
+    return 0
+  fi
+  if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" != "0" ]]; then
+    return 0
+  fi
+  if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" != "0" ]]; then
+    return 0
+  fi
+
+  local cmd="python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json"
+  local output=""
+  local rc=0
+  local compact=""
+
+  PLANNER_SYNC_PRIORITY_ATTEMPTED=1
+  set +e
+  output="$(run_with_timeout "$TMUX_ROLE_PLANNER_PREFLIGHT_SYNC_TIMEOUT_SECONDS" \
+    "$ROOT/platform/policies/exec_safe.sh" \
+    --workdir "$ROOT" -- "$cmd" 2>&1)"
+  rc=$?
+  set -e
+
+  PLANNER_SYNC_PRIORITY_RC="$rc"
+  compact="$(printf '%s\n' "$output" | tr '\n' ' ' | tr -s ' ')"
+  if [[ "$compact" =~ SYNC_OK[[:space:]]+streams_created=([0-9]+)[[:space:]]+tasks_created=([0-9]+) ]]; then
+    PLANNER_SYNC_PRIORITY_STREAMS_CREATED="${BASH_REMATCH[1]}"
+    PLANNER_SYNC_PRIORITY_TASKS_CREATED="${BASH_REMATCH[2]}"
+  fi
+
+  trace_event "planner_preflight_sync attempted=1 rc=${PLANNER_SYNC_PRIORITY_RC} streams=${PLANNER_SYNC_PRIORITY_STREAMS_CREATED} tasks=${PLANNER_SYNC_PRIORITY_TASKS_CREATED}"
+  if [[ "$rc" -ne 0 ]]; then
+    trace_event "planner_preflight_sync_soft_fail rc=${rc} detail=$(sanitize_evidence_fragment "$compact")"
+    return 0
+  fi
+
+  # Refresh runtime hints after sync-priority may have instantiated planner tasks.
+  RUNTIME_WORKBOARD_ROLE_HAS_WORK="$(runtime_workboard_role_has_work)"
+  if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" =~ ^[01]$ ]]; then
+    RUNTIME_WORKBOARD_ROLE_HAS_WORK="0"
+  fi
+  RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="$(runtime_workboard_role_has_in_progress)"
+  if [[ ! "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" =~ ^[01]$ ]]; then
+    RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS="0"
+  fi
+  RUNTIME_QUEUE_VERSION="$(runtime_source_version "$QUEUE_FILE" "queue")"
+  RUNTIME_WORKBOARD_VERSION="$(runtime_source_version "$WORKBOARD_FILE" "workboard")"
+}
+
 emit_rate_limit_gate_output() {
   local reason="${1:-rate_limit_detected}"
   local source="${2:-precheck}"
+  local gate_tick="RL$(date +%s)_$RANDOM"
   local artifact_key
   local evidence_text
   local output
@@ -878,7 +1030,7 @@ emit_rate_limit_gate_output() {
     artifact_key="ROLE_ARTIFACT="
   fi
 
-  evidence_text="task_update=none_no_signal; lock_check=ok; run_note=mode backoff temporaire suite rate limit; issues=rate_limit_detected; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; ${artifact_key}rate_limit_gate; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
+  evidence_text="task_update=none_no_signal; lock_check=ok; run_note=mode backoff temporaire suite rate limit; issues=rate_limit_detected,${FALLBACK_CHANNELS_ISSUE_CODE}; issue_count=2; issue_severity=medium; stream_id=RATELIMIT_${ROLE}; task_id=RATELIMIT_${ROLE}; channels_read=${FALLBACK_CHANNELS_READ}; impact_assessment=${FALLBACK_IMPACT_ASSESSMENT}; impact_action=${FALLBACK_IMPACT_ACTION}; ${artifact_key}rate_limit_gate; rate_limit_reason=${reason}; rate_limit_source=${source}; rate_limit_cache_ttl=${RATE_LIMIT_CACHE_TTL_SECONDS}"
 
 output="$(cat <<EOF
 STATUS: RATE_LIMIT_SKIP
@@ -906,7 +1058,7 @@ EOF
     persist_last_contract "$output" "rate_limit_gate_${source}"
   fi
   if declare -f publish_execution_monitoring_if_enabled >/dev/null 2>&1; then
-    publish_execution_monitoring_if_enabled "$output" "rate_limit_gate_${source}"
+    publish_execution_monitoring_if_enabled "$output" "rate_limit_gate_${source}" "$gate_tick" "0"
   fi
   if declare -f trace_event >/dev/null 2>&1; then
     trace_event "rate_limit_gate source=${source} model=${AGENT_BIN_NAME} reason=${reason}"
@@ -1126,6 +1278,57 @@ publish_execution_monitoring() {
   rm -f "$tmp_payload"
 }
 
+publish_iteration_issue_report() {
+  local payload="$1"
+  local source="${2:-unknown}"
+  local tick_id="${3:-unknown}"
+  local rc_final="${4:-0}"
+  local tmp_payload=""
+  local tmp_raw_primary=""
+  local tmp_raw_retry=""
+  local tmp_raw_codex=""
+
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$ROLE_ISSUE_REPORT_SCRIPT" ]]; then
+    return 0
+  fi
+
+  tmp_payload="$(mktemp)"
+  tmp_raw_primary="$(mktemp)"
+  tmp_raw_retry="$(mktemp)"
+  tmp_raw_codex="$(mktemp)"
+  printf '%s\n' "$payload" > "$tmp_payload"
+  printf '%s\n' "${RAW_OUTPUT:-}" > "$tmp_raw_primary"
+  printf '%s\n' "${RAW_RETRY:-}" > "$tmp_raw_retry"
+  printf '%s\n' "${RAW_CODEX_FALLBACK:-}" > "$tmp_raw_codex"
+
+  python3 "$ROLE_ISSUE_REPORT_SCRIPT" \
+    "$ROLE" \
+    "$source" \
+    "$tmp_payload" \
+    "$ITERATION_ISSUES_LATEST_FILE" \
+    "$ITERATION_ISSUES_EVENTS_FILE" \
+    "$STATE_DIR" \
+    "$tick_id" \
+    "${AGENT_BIN_NAME:-unknown}" \
+    "${OUTPUT_CHANNEL_LABEL:-${PRIMARY_CHANNEL:-tmux}}" \
+    "${RC_PRIMARY:-0}" \
+    "${RC_RETRY:-0}" \
+    "$rc_final" \
+    "${RC_CODEX_FALLBACK:--1}" \
+    "$tmp_raw_primary" \
+    "$tmp_raw_retry" \
+    "$tmp_raw_codex" \
+    "$TRACE_EVENTS_FILE" \
+    "${RUNTIME_QUEUE_VERSION:-}" \
+    "${RUNTIME_WORKBOARD_VERSION:-}" >/dev/null 2>&1 || true
+
+  if [[ "$PUBLISH_ITERATION_ISSUE_DIGEST" == "1" && -x "$ITERATION_ISSUE_DIGEST_SCRIPT" ]]; then
+    "$ITERATION_ISSUE_DIGEST_SCRIPT" 60 > "$ITERATION_ISSUE_DIGEST_FILE" 2>/dev/null || true
+  fi
+
+  rm -f "$tmp_payload" "$tmp_raw_primary" "$tmp_raw_retry" "$tmp_raw_codex"
+}
+
 publish_planner_guardian_if_enabled() {
   local contract="$1"
   local source="${2:-unknown}"
@@ -1266,10 +1469,17 @@ PY
 publish_execution_monitoring_if_enabled() {
   local contract="$1"
   local source="${2:-unknown}"
+  local tick_id="${3:-unknown}"
+  local rc_final="${4:-0}"
   if [[ "$PUBLISH_EXEC_MONITORING" == "0" ]]; then
     trace_event "monitoring_publish_skipped role=${ROLE} source=${source} reason=disabled"
   else
     publish_execution_monitoring "$contract" "$source"
+  fi
+  if [[ "$PUBLISH_ITERATION_ISSUES" == "0" ]]; then
+    trace_event "iteration_issue_publish_skipped role=${ROLE} source=${source} reason=disabled"
+  else
+    publish_iteration_issue_report "$contract" "$source" "$tick_id" "$rc_final"
   fi
   publish_planner_guardian_if_enabled "$contract" "$source"
   publish_planner_audit_if_enabled "$contract" "$source"
@@ -1299,7 +1509,7 @@ acquire_role_lock() {
     cat <<EOF
 STATUS: IN_PROGRESS
 DELTA: LOCK_SKIP
-EVIDENCE: overlapping_run_detected=1; lock_file=${LOCK_FILE}; lock_order=${TRILOCK_ORDER}; holder_age_s=${holder_age_s}; holder=${holder_meta}
+EVIDENCE: task_update=blocked; lock_check=ok; run_note=lock run occupe sur tick courant, reprise au prochain cycle; issues=run_lock_busy,${FALLBACK_CHANNELS_ISSUE_CODE}; issue_count=2; issue_severity=medium; channels_read=${FALLBACK_CHANNELS_READ}; impact_assessment=${FALLBACK_IMPACT_ASSESSMENT}; impact_action=${FALLBACK_IMPACT_ACTION}; overlapping_run_detected=1; lock_file=${LOCK_FILE}; lock_order=${TRILOCK_ORDER}; holder_age_s=${holder_age_s}; holder=${holder_meta}
 RISKS: concurrence role-runner, risque de timeout et de sorties croisées
 NEXT: laisser finir le run en cours puis reprendre au prochain tick
 VERDICT: GO_WITH_CAUTION
@@ -1374,6 +1584,29 @@ write_no_delta_count() {
   printf '%s\n' "$1" > "$NO_DELTA_FILE"
 }
 
+read_session_not_ready_fallback_count() {
+  if [[ -f "$SESSION_NOT_READY_FALLBACK_COUNT_FILE" ]]; then
+    cat "$SESSION_NOT_READY_FALLBACK_COUNT_FILE"
+  else
+    echo "0"
+  fi
+}
+
+write_session_not_ready_fallback_count() {
+  printf '%s\n' "$1" > "$SESSION_NOT_READY_FALLBACK_COUNT_FILE"
+}
+
+increment_session_not_ready_fallback_count() {
+  local current=0
+  current="$(read_session_not_ready_fallback_count)"
+  if ! [[ "$current" =~ ^[0-9]+$ ]]; then
+    current=0
+  fi
+  current=$(( current + 1 ))
+  write_session_not_ready_fallback_count "$current"
+  printf '%s\n' "$current"
+}
+
 read_codex_session_id() {
   if [[ -f "$CODEX_SESSION_FILE" ]]; then
     tr -d '[:space:]' < "$CODEX_SESSION_FILE"
@@ -1398,7 +1631,7 @@ apply_no_delta_gate() {
   local source="$2"
   local no_delta=0
   local streak=0
-  if printf '%s\n' "$payload" | rg -q '^DELTA:[[:space:]]*NO_DELTA([[:space:]]*)$'; then
+  if rg -q '^DELTA:[[:space:]]*NO_DELTA([[:space:]]*)$' <<<"$payload"; then
     no_delta=1
   fi
   if [[ "$no_delta" -eq 1 ]]; then
@@ -1419,7 +1652,7 @@ apply_no_delta_gate() {
     cat <<EOF
 STATUS: BLOCKED
 DELTA: NO_DELTA
-EVIDENCE: no_delta_streak=${streak}/${NO_DELTA_THRESHOLD}; gate_source=${source}
+EVIDENCE: task_update=blocked; lock_check=ok; run_note=aucun delta detecte malgre queue active, escalation du streak; issues=no_progress_streak,${FALLBACK_CHANNELS_ISSUE_CODE}; issue_count=2; issue_severity=high; channels_read=${FALLBACK_CHANNELS_READ}; impact_assessment=${FALLBACK_IMPACT_ASSESSMENT}; impact_action=${FALLBACK_IMPACT_ACTION}; no_delta_streak=${streak}/${NO_DELTA_THRESHOLD}; gate_source=${source}
 RISKS: aucune progression détectée, boucle improductive
 NEXT: escalader et corriger prompts/cadence avant prochain tick
 VERDICT: BLOCKED
@@ -1446,14 +1679,20 @@ enforce_role_delivery_contract() {
   fi
 
   # Auto-fix trivial formatting issues to avoid roles stalling on minor contract mistakes.
-  python3 - "$tmp" <<'PY' 2>/dev/null || true
+  python3 - "$tmp" "$ROLE" "$source" <<'PY' 2>/dev/null || true
 import re
 import sys
 from pathlib import Path
 
 p=Path(sys.argv[1])
+role=(sys.argv[2] if len(sys.argv) > 2 else "").strip().lower()
+source=(sys.argv[3] if len(sys.argv) > 3 else "").strip().lower()
 text=p.read_text(encoding='utf-8',errors='ignore')
 lines=text.splitlines(True)
+delivery_roles={
+    "backend_engineer","frontend_engineer","data_analyst","dev",
+    "tester","qa","integrator","infra_engineer","admin"
+}
 
 # Find EVIDENCE line
 for i,raw in enumerate(lines):
@@ -1485,8 +1724,81 @@ for i,raw in enumerate(lines):
                 kv['issues'] = issues + ',run_note_auto_fixed'
         else:
             kv['issues'] = 'run_note_auto_fixed'
+    # enforce issue-report contract coherence (strict guard expects these fields).
+    issues_raw=(kv.get('issues') or '').strip()
+    issues_l=issues_raw.lower()
+    valid_codes=[]
+    invalid_codes=[]
+    if not issues_raw:
+        issues_raw='none'
+        issues_l='none'
+    if issues_l == 'none':
+        kv['issues']='none'
+        kv['issue_count']='0'
+        kv['issue_severity']='none'
+    else:
+        for token in issues_raw.split(','):
+            code=token.strip().lower()
+            if not code:
+                continue
+            if re.fullmatch(r'[a-z0-9_]{3,64}', code):
+                valid_codes.append(code)
+            else:
+                invalid_codes.append(code)
+        if invalid_codes and 'issue_report_invalid' not in valid_codes:
+            valid_codes.append('issue_report_invalid')
+        if not valid_codes:
+            valid_codes=['issue_report_invalid']
+        kv['issues']=','.join(valid_codes)
+        kv['issue_count']=str(len(valid_codes))
+        sev=(kv.get('issue_severity') or '').strip().lower()
+        if sev not in {'low','medium','high','critical'}:
+            kv['issue_severity']='medium'
+    blocker=(kv.get('blocker_id') or '').strip().upper()
+    task_update=(kv.get('task_update') or '').strip().lower()
+    if task_update == 'blocked' or (blocker and blocker not in {'NONE','N/A','NULL'}):
+        if kv.get('issues','none').strip().lower() == 'none':
+            kv['issues']='blocked_without_issue_report'
+            kv['issue_count']='1'
+        try:
+            if int(kv.get('issue_count','0')) < 1:
+                kv['issue_count']='1'
+        except Exception:
+            kv['issue_count']='1'
+        sev=(kv.get('issue_severity') or '').strip().lower()
+        if sev not in {'medium','high','critical'}:
+            kv['issue_severity']='medium'
+    # Keep delivery lanes moving: auto-fill observability fields on no-op ticks, but keep traceability via issue codes.
+    if role in delivery_roles and task_update in {'analysis_only', 'none_no_ready', 'none_no_signal'}:
+        issues=(kv.get('issues') or '').strip().lower()
+        codes=[tok.strip() for tok in issues.split(',') if tok.strip() and tok.strip() != 'none']
+        channels_read=(kv.get('channels_read') or '').strip().lower()
+        if not channels_read or channels_read in {'none','n/a','na','?','tbd'}:
+            kv['channels_read']='runtime_context'
+            if 'channels_autofill_missing' not in codes:
+                codes.append('channels_autofill_missing')
+        impact_assessment=(kv.get('impact_assessment') or '').strip().lower()
+        if impact_assessment not in {'none','low','medium','high','critical'}:
+            kv['impact_assessment']='low'
+            impact_assessment='low'
+            if 'impact_autofill_missing' not in codes:
+                codes.append('impact_autofill_missing')
+        impact_action=(kv.get('impact_action') or '').strip()
+        if not impact_action or impact_action.lower() in {'none','noop','n/a','na','?','tbd'}:
+            if impact_assessment in {'medium','high','critical'}:
+                kv['impact_action']='claim_ready_when_available'
+            else:
+                kv['impact_action']='monitor_updates'
+            if 'impact_autofill_missing' not in codes:
+                codes.append('impact_autofill_missing')
+        if codes:
+            kv['issues']=','.join(codes)
+            kv['issue_count']=str(len(codes))
+            sev=(kv.get('issue_severity') or '').strip().lower()
+            if sev not in {'low','medium','high','critical'}:
+                kv['issue_severity']='low'
     # rebuild evidence preserving a stable key order first
-    preferred=['task_update','lock_check','run_note','issues','stream_id','task_id','cmd','tests_run','handoff_to','cmd_err_excerpt']
+    preferred=['task_update','lock_check','run_note','issues','issue_count','issue_severity','channels_read','impact_assessment','impact_action','stream_id','task_id','cmd','tests_run','handoff_to','cmd_err_excerpt']
     seen=set()
     parts=[]
     for k in preferred:
@@ -1524,7 +1836,15 @@ reconcile_runtime_truth() {
   local tmp=""
   tmp="$(mktemp)"
   cat > "$tmp"
-  python3 - "$ROLE" "$tmp" <<'PY'
+  python3 - \
+    "$ROLE" \
+    "$tmp" \
+    "$QUEUE_FILE" \
+    "$TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED" \
+    "$PLANNER_SYNC_PRIORITY_ATTEMPTED" \
+    "$PLANNER_SYNC_PRIORITY_STREAMS_CREATED" \
+    "$PLANNER_SYNC_PRIORITY_TASKS_CREATED" \
+    "$PLANNER_SYNC_PRIORITY_RC" <<'PY'
 import json
 import re
 import sys
@@ -1532,6 +1852,12 @@ from pathlib import Path
 
 role = sys.argv[1]
 payload_path = Path(sys.argv[2])
+queue_path = Path(sys.argv[3])
+planner_soft_action_required = str(sys.argv[4] or "1").strip() == "1"
+sync_attempted = str(sys.argv[5] or "0").strip()
+sync_streams = str(sys.argv[6] or "0").strip()
+sync_tasks = str(sys.argv[7] or "0").strip()
+sync_rc = str(sys.argv[8] or "0").strip()
 text = payload_path.read_text(encoding="utf-8", errors="ignore")
 
 keys = [
@@ -1558,7 +1884,6 @@ for raw in text.splitlines():
 queue_has_ready = False
 ready_actions = []
 queue_states = {}
-queue_path = Path("docs/orchestrator-ops/priority-queue.json")
 if queue_path.exists():
     try:
         queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
@@ -1576,6 +1901,19 @@ if queue_path.exists():
                     ready_actions.append(f"{item_id}:NEXT_ACTION_MISSING")
     except Exception:
         pass
+
+evidence_raw = values.get("EVIDENCE", "").strip()
+evidence_pairs = {}
+for frag in evidence_raw.split(";"):
+    item = frag.strip()
+    if "=" not in item:
+        continue
+    k, v = item.split("=", 1)
+    key = k.strip().lower()
+    if not key:
+        continue
+    evidence_pairs[key] = v.strip()
+task_update = evidence_pairs.get("task_update", "").strip().lower()
 
 batch01_signoff_pass = False
 gate_dir = Path("evidence/gates/openclaw-gates")
@@ -1664,6 +2002,57 @@ if dispatch_signal:
         values["RISKS"] = "action de dispatch cible un batch qui n'est plus READY"
         values["NEXT"] = "reprendre le prochain item READY depuis la queue runtime"
 
+if role == "planner":
+    evidence_pairs["sync_priority_attempted"] = sync_attempted
+    evidence_pairs["sync_priority_created_streams"] = sync_streams
+    evidence_pairs["sync_priority_created_tasks"] = sync_tasks
+    evidence_pairs["sync_priority_rc"] = sync_rc
+
+if (
+    planner_soft_action_required
+    and role == "planner"
+    and queue_has_ready
+    and task_update in {"none_no_ready", "none_no_signal"}
+):
+    values["DELTA"] = "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT"
+    values["NEXT"] = "owner=planner; action=run sync-priority then claim first READY planner task"
+    evidence_pairs["planner_action_required"] = "claim_ready"
+    if values.get("BLOCKER_ID", "").strip().upper() not in {"", "NONE"}:
+        values["BLOCKER_ID"] = "NONE"
+    if values.get("STATUS", "").strip().upper() == "BLOCKED":
+        values["STATUS"] = "IN_PROGRESS"
+    if values.get("VERDICT", "").strip().upper() == "BLOCKED":
+        values["VERDICT"] = "GO_WITH_CAUTION"
+
+if evidence_pairs:
+    preferred = [
+        "task_update",
+        "lock_check",
+        "run_note",
+        "issues",
+        "stream_id",
+        "task_id",
+        "cmd",
+        "tests_run",
+        "handoff_to",
+        "sync_priority_attempted",
+        "sync_priority_created_streams",
+        "sync_priority_created_tasks",
+        "sync_priority_rc",
+        "planner_action_required",
+    ]
+    parts = []
+    seen = set()
+    for key in preferred:
+        if key in evidence_pairs:
+            parts.append(f"{key}={evidence_pairs[key]}")
+            seen.add(key)
+    for key in sorted(evidence_pairs.keys()):
+        if key in seen:
+            continue
+        parts.append(f"{key}={evidence_pairs[key]}")
+    values["EVIDENCE"] = "; ".join(parts)
+
 if not values.get("NEXT_ACTION_UNIQUE", "").strip():
     values["NEXT_ACTION_UNIQUE"] = f"CONTINUE_{role}_RUNTIME_TRUTH"
 
@@ -1728,7 +2117,7 @@ tmux_agent_ready() {
       qwen) child_regex='(qwen|qwen-code|@qwen-code|node.*qwen)' ;;
       *) child_regex="(${AGENT_BIN_NAME}|node.*${AGENT_BIN_NAME})" ;;
     esac
-    if printf '%s\n' "$children" | rg -qi "$child_regex"; then
+    if rg -qi "$child_regex" <<<"$children"; then
       return 0
     fi
   fi
@@ -1994,6 +2383,124 @@ print(msg[:420])
 PY
 }
 
+load_dev_adaptive_coaching_prompt() {
+  if [[ "$ROLE" != "dev" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf 'none\n'
+    return 0
+  fi
+  local tick_log="${ROOT}/logs-codex-runs/fc-ticks/dev.tick.log"
+  python3 - "$EXEC_MONITORING_EVENTS_FILE" "$tick_log" "${RUNTIME_QUEUE_HAS_READY:-0}" "${RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS:-0}" <<'PY'
+import json
+import re
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def parse_ts(raw: str) -> float | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+events_file = Path(sys.argv[1])
+tick_log = Path(sys.argv[2])
+queue_has_ready = str(sys.argv[3]).strip() == "1"
+work_in_progress = str(sys.argv[4]).strip() == "1"
+lane_active = queue_has_ready or work_in_progress
+
+now = time.time()
+cutoff_60 = now - (60 * 60)
+cutoff_24h = now - (24 * 60 * 60)
+
+channels_missing_60m = 0
+none_no_signal_24h = 0
+
+if events_file.exists():
+    for raw in events_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("role", "")).strip().lower() != "dev":
+            continue
+        ts_epoch = parse_ts(str(row.get("ts_utc", "")))
+        if ts_epoch is None:
+            continue
+        blocker = str(row.get("blocker_id", "")).strip().upper()
+        issues = str(row.get("issues", "")).strip().lower()
+        if ts_epoch >= cutoff_60 and (
+            blocker == "CHANNELS_READ_MISSING"
+            or "contract_guard_channels_read_missing" in issues
+            or "channels_read_missing" in issues
+        ):
+            channels_missing_60m += 1
+        if ts_epoch >= cutoff_24h and str(row.get("task_update", "")).strip().lower() == "none_no_signal":
+            none_no_signal_24h += 1
+
+if tick_log.exists():
+    ch_count = 0
+    none_count = 0
+    for raw in tick_log.read_text(encoding="utf-8", errors="ignore").splitlines():
+        m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", raw)
+        if not m:
+            continue
+        try:
+            ts_epoch = datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+        except Exception:
+            continue
+        if ts_epoch >= cutoff_60 and "CHANNELS_READ_MISSING" in raw:
+            ch_count += 1
+        if ts_epoch >= cutoff_24h and "[ACTION]" in raw and "task_update=none_no_signal" in raw:
+            none_count += 1
+    channels_missing_60m = max(channels_missing_60m, ch_count)
+    none_no_signal_24h = max(none_no_signal_24h, none_count)
+
+hints: list[str] = []
+if channels_missing_60m >= 2:
+    hints.append(
+        "DEV_COACHING_CHANNELS_READ: derniers ticks ont bloque sur CHANNELS_READ_MISSING. "
+        "Si task_update=analysis_only|none_no_ready|none_no_signal, EVIDENCE doit inclure "
+        "channels_read=<sources_reelles>; impact_assessment=<low|medium|high|critical>; "
+        "impact_action=<action_concrete>."
+    )
+if lane_active and none_no_signal_24h >= 3:
+    hints.append(
+        "DEV_COACHING_ANTI_STALL: lane active detectee avec repetition none_no_signal. "
+        "Action imperative ce tick: claim -> patch minimal -> test cible -> complete/handoff "
+        "(ou blocked avec cmd_err_excerpt reel)."
+    )
+
+if hints:
+    print(
+        "DEV_ADAPTIVE_SIGNALS: channels_missing_60m="
+        f"{channels_missing_60m}; none_no_signal_24h={none_no_signal_24h}; lane_active={int(lane_active)}"
+    )
+    print("\n".join(hints))
+else:
+    print("none")
+PY
+}
+
 build_prompt() {
   local role="$1"
   case "$role" in
@@ -2003,27 +2510,31 @@ ROLE=planner.
 Mission: agir comme owner autonome du backlog (détection des gaps, alignement architecture, création/dispatch des batches).
 Objectif: débloquer la livraison réelle avec une action concrète unique par tick.
 Budget strict:
-- maximum 1 commande shell par tick, maximum 15s
-- commande autorisée: python3 platform/automation/parallel_workstream.py context --role planner --limit 5
+- maximum 3 commandes shell par tick, maximum 20s chacune
+- commandes autorisées:
+  - python3 platform/automation/parallel_workstream.py context --role planner --limit 5
+  - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
+  - python3 platform/automation/parallel_workstream.py claim --role planner
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
-Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json.
+Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/operations/orchestrator/priority-queue.json, docs/operations/orchestrator/parallel-workstreams.json.
 Ne modifie pas apps/** ni les fichiers de sécurité. Tu peux modifier uniquement orchestration/docs/json de pilotage.
 
 Décision tick (ordre strict):
 1) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
-2) tâche planner READY -> claim puis dispatch vers dev avec task cible + fichiers cibles + test cible.
-3) si queue/workboard indiquent un gap critique non couvert (architecture, dépendance, acceptance gate), créer 1 batch top-level BATCH-XX même si runway_short=0.
-4) planner_batch_runway_short=1 -> créer au plus 1 batch top-level BATCH-XX.
-5) sinon task_update=none_no_ready.
-6) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete (ne pas auto-bloquer la lane planner).
+2) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
+3) si une tâche planner est READY -> claim puis dispatch vers dev avec task cible + fichiers cibles + test cible.
+4) si queue/workboard indiquent un gap critique non couvert (architecture, dépendance, acceptance gate), créer 1 batch top-level BATCH-XX même si runway_short=0.
+5) planner_batch_runway_short=1 -> créer au plus 1 batch top-level BATCH-XX.
+6) sinon task_update=none_no_ready.
+7) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete (ne pas auto-bloquer la lane planner).
 
-Création batch (si step 3/4):
+Création batch (si step 4/5):
 - ID unique BATCH-XX (2 chiffres, top-level uniquement).
 - Lier explicitement au target de vision: feature, endpoint, domaine, critère done.
 - Inclure architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate dans EVIDENCE.
 - Pas de sous-tâches récursives ni stream à 4 segments.
 
-EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, verify, batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate, vision_alignment, architecture_audit, sync_priority_attempted, sync_priority_created_streams, sync_priority_created_tasks, planner_action_required, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
 Si task_update=handoff et handoff_to est vide/placeholder (none, ?, tbd), forcer handoff_to=dev.
 Interdit planner: BLOCKER_ID=HANDOFF_TO_MISSING, BLOCKER_ID=PLANNER_BATCH_ID_INVALID, BLOCKER_ID=MODE_ANALYSE_NO_EDITS. Convertir en WAIT/PASS avec preuve.
 Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -2062,6 +2573,7 @@ Décision tick (ordre strict):
    - `admin_artifact` référence au moins un fichier prompt + un fichier d'audit.
 Commandes shell via platform/policies/exec_safe.sh.
 EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), admin_artifact, root_cause, fix_applied, verify.
+Si task_update=analysis_only|none_no_ready|none_no_signal: ajouter channels_read=<sources_lues>, impact_assessment=<none|low|medium|high|critical>, impact_action=<action_ou_monitor>.
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
 Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Si task_update=blocked avec motif permission/read-only: cmd_err_excerpt requis.
@@ -2221,13 +2733,18 @@ Spécialisation par task_id:
 Blocker permission/read-only: preuve fraîche obligatoire du tick courant sur fichier métier (cmd_err_excerpt). Pas de preuve sur *.lock uniquement.
 Commandes shell via platform/policies/exec_safe.sh.
 EVIDENCE: dev_artifact, task_update, lock_check=ok, run_note (>=5 mots), root_cause, fix_applied, verify, reuse_check, architecture_check, vision_alignment, qa_proof.
+Si task_update=analysis_only|none_no_ready|none_no_signal: ajouter obligatoirement channels_read, impact_assessment, impact_action.
 reuse_check format: <module_reused> ou NONE(<raison courte>).
 verify format (si complete/handoff): before=<état_avant>; after=<état_après>; test=<preuve_exécution>.
 architecture_check format: layer=<domain|application|api|platform>; imports_ok=<yes|no>; path_target=<fichier>.
 vision_alignment format: batch=<BATCH-XX>; target=<objectif_livraison>; impact=<courte_phrase>.
 qa_proof format: test=<cmd_ou_suite>; result=<PASS|FAIL|SKIP(reason)>.
+channels_read format: <source1,source2,...> (ex: runtime_context,workboard_tasks,team_chat_tail).
+impact_assessment format: <low|medium|high|critical>.
+impact_action format: <action concrète, jamais none si impact_assessment>=medium>.
 Valeurs interdites dans ces champs: ?, ??, TBD, TODO, FIXME, NONE sans raison.
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
+Si task_update=claim|handoff: ajouter reflection_passes=<int>=2 et reflection_dimensions=scope,dependency_impact,risk,verification,rollback.
 Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Si task_update=blocked avec un motif permission/read-only, ajouter cmd_err_excerpt=<stderr_reel>.
 Return at most 10 lines with keys:
@@ -2240,7 +2757,8 @@ ROLE=dev.
 Read docs/product/planning/tasks.md, docs/product/planning/stories.md, and docs/orchestrator-ops/priority-queue.json.
 Mode analyse (read-only): Do not modify files.
 Si queue_has_ready=1 mais workboard_role_has_work=0 et workboard_role_has_in_progress=0: utiliser task_update=none_no_ready.
-Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_cible_ou_patch_plan>.
+Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_cible_ou_patch_plan>, channels_read, impact_assessment, impact_action.
+Exemple valide read-only: task_update=none_no_signal; lock_check=ok; run_note=analyse runtime context et prochaine action concrete; dev_artifact=docs/product/planning/tasks.md; channels_read=runtime_context,workboard_tasks; impact_assessment=low; impact_action=monitor_updates; issues=none; issue_count=0; issue_severity=none
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -2395,9 +2913,13 @@ if [[ "$ROLE" == "admin" ]]; then
 fi
 PLANNER_GUARDIAN_CONTEXT="$(load_planner_guardian_context)"
 PROMPT_TEXT="$(build_prompt "$ROLE")"
+DEV_ADAPTIVE_COACHING_CONTEXT="$(load_dev_adaptive_coaching_prompt)"
 trace_event "prompt_memory_context role=${ROLE} mode=${TMUX_ROLE_CONTEXT_MODE} profile=${ROLE_MEMORY_PROFILE_EFFECTIVE} daily_lines=${ROLE_MEMORY_DAILY_LINES_EFFECTIVE} role_history_lines=${ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE} bytes=${#ROLE_MEMORY_CONTEXT}"
 if [[ "$ROLE" == "planner" ]]; then
   trace_event "planner_guardian_context role=${ROLE} enabled=${PLANNER_GUARDIAN_INCLUDE_IN_PROMPT} bytes=${#PLANNER_GUARDIAN_CONTEXT}"
+fi
+if [[ "$ROLE" == "dev" && "$DEV_ADAPTIVE_COACHING_CONTEXT" != "none" ]]; then
+  trace_event "dev_adaptive_coaching active=1 detail=$(sanitize_evidence_fragment "$DEV_ADAPTIVE_COACHING_CONTEXT")"
 fi
 
 PLANNER_GUARDIAN_PROMPT_SECTION=""
@@ -2410,11 +2932,22 @@ EOF
 )"
 fi
 
+DEV_ADAPTIVE_COACHING_PROMPT_SECTION=""
+if [[ "$ROLE" == "dev" && "$DEV_ADAPTIVE_COACHING_CONTEXT" != "none" ]]; then
+DEV_ADAPTIVE_COACHING_PROMPT_SECTION="$(cat <<EOF
+DEV_AUTONOMY_COACHING:
+${DEV_ADAPTIVE_COACHING_CONTEXT}
+
+EOF
+)"
+fi
+
 SYSTEM_PROMPT="$(cat <<EOF
 ARCHITECTURE_CONTINUITY_3DAYS:
 ${ROLE_MEMORY_CONTEXT}
 
 ${PLANNER_GUARDIAN_PROMPT_SECTION}
+${DEV_ADAPTIVE_COACHING_PROMPT_SECTION}
 ANTI_REGRESSION_GUARDS:
 - Interdits: copilot-app/*, backend/src/backend/src/*, imports legacy src.*
 - References: apps/api/src/domains/*, apps/web/src, apps/api/runtime/, docs/ops/AGENTS_READY.md
@@ -2438,9 +2971,18 @@ EVIDENCE (champs requis):
 - task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>
 - lock_check=ok
 - run_note=<5+ mots — action concrète faite ce tick>
+- issues=<none|code1,code2,...>
+- issue_count=<entier >=0>
+- issue_severity=<none|low|medium|high|critical>
+- si task_update in {analysis_only,none_no_ready,none_no_signal}: channels_read + impact_assessment + impact_action obligatoires
 - ${REQUIRED_ARTIFACT_MARKER}<fichier_ou_preuve>
 - stream_id + task_id (si task_update=claim|complete|handoff)
 - cmd=<commande|SKIP(raison)> (si task_update=complete)
+- Règle cohérence issue report:
+  - issues=none <=> issue_count=0 et issue_severity=none
+  - issue_count>0 => issues!=none et nombre de codes = issue_count
+  - codes issues regex ^[a-z0-9_]{3,64}$ (CSV)
+  - si task_update=blocked ou BLOCKER_ID!=NONE: issue_count>=1 et issue_severity∈{medium,high,critical}
 NEXT: owner=<role>; action=<…>. Si BLOCKED: BLOCKER_ID != NONE.
 
 WORKDIR_ATTENDU=${ROOT}.
@@ -2466,7 +3008,8 @@ PROMPT
 
 ORCHESTRATION_RETRY_PROMPT="$(cat <<'PROMPT'
 RETRY: Retourne exactement 8 lignes (STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE).
-EVIDENCE: task_update + lock_check=ok + run_note (>=5 mots) + artifact_rôle + root_cause + fix_applied + verify.
+EVIDENCE: task_update + lock_check=ok + run_note (>=5 mots) + issues + issue_count + issue_severity + artifact_rôle + root_cause + fix_applied + verify.
+Si task_update=analysis_only|none_no_ready|none_no_signal: inclure channels_read + impact_assessment + impact_action.
 Priorité: IN_PROGRESS > READY > none_no_ready. Pas de blockers inventés.
 PROMPT
 )"
@@ -2506,6 +3049,7 @@ build_runtime_context() {
     "$workboard_role_has_work" \
     "$workboard_role_has_in_progress"
 }
+planner_preflight_sync_if_needed
 RUNTIME_CONTEXT="$(build_runtime_context)"
 
 capture_has_contract() {
@@ -2619,6 +3163,10 @@ codex_exec_prompt_once() {
   local tick="$3"
   local dispatch_scope="${4:-primary}"
   local prompt_payload=""
+  local prompt_bytes=0
+  local timeout_budget="$timeout_seconds"
+  local retry_timeout_budget="${RETRY_PROMPT_TIMEOUT_SECONDS:-0}"
+  local timeout_tier="default"
   local session_id=""
   local allow_resume=0
   local output=""
@@ -2630,7 +3178,14 @@ codex_exec_prompt_once() {
   local -a codex_cmd=()
 
   prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick" "$dispatch_scope")"
-  trace_event "dispatch_prompt scope=${dispatch_scope} channel=codex_exec tick=${tick} bytes=${#prompt_payload}"
+  prompt_bytes="${#prompt_payload}"
+  IFS='|' read -r prompt_bytes timeout_budget retry_timeout_budget timeout_tier \
+    <<< "$(resolve_dispatch_timeout_budgets "$prompt_bytes" "$timeout_budget" "$retry_timeout_budget")"
+  DISPATCH_TIMEOUT_EFFECTIVE="$timeout_budget"
+  DISPATCH_RETRY_TIMEOUT_EFFECTIVE="$retry_timeout_budget"
+  DISPATCH_PROMPT_BYTES="$prompt_bytes"
+  DISPATCH_TIMEOUT_TIER="$timeout_tier"
+  trace_event "dispatch_prompt scope=${dispatch_scope} channel=codex_exec tick=${tick} bytes=${prompt_bytes} timeout_budget=${timeout_budget}s retry_timeout_budget=${retry_timeout_budget}s timeout_tier=${timeout_tier}"
   while IFS= read -r token; do
     [[ -z "$token" ]] && continue
     codex_cmd+=("$token")
@@ -2647,10 +3202,10 @@ codex_exec_prompt_once() {
   if [[ "$allow_resume" -eq 1 && -n "$session_id" ]]; then
     used_resume=1
     set +e
-    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_budget}" codex "${codex_cmd[@]}" exec resume "$session_id" --model "$CODEX_EXEC_MODEL" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
-    if [[ $rc -ne 0 ]] && printf '%s\n' "$output" | rg -qi 'session.*not found|unknown session|invalid session|no such session'; then
+    if [[ $rc -ne 0 ]] && rg -qi 'session.*not found|unknown session|invalid session|no such session' <<<"$output"; then
       clear_codex_session_id
       session_id=""
     fi
@@ -2663,7 +3218,7 @@ codex_exec_prompt_once() {
 
   if [[ -z "$session_id" ]]; then
     set +e
-    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_budget}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
   fi
@@ -2688,7 +3243,7 @@ codex_exec_prompt_once() {
     set +e
     rm -f "$msg_file"
     msg_file="$(mktemp)"
-    output="$(run_with_timeout "${timeout_seconds}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
+    output="$(run_with_timeout "${timeout_budget}" codex "${codex_cmd[@]}" exec --model "$CODEX_EXEC_MODEL" --output-last-message "$msg_file" --json "$prompt_payload" 2>&1)"
     rc=$?
     set -e
     sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"
@@ -2726,6 +3281,10 @@ prompt_once() {
   local channel="${4:-${PRIMARY_CHANNEL:-tmux}}"
   local dispatch_scope="${5:-primary}"
   local prompt_payload=""
+  local prompt_bytes=0
+  local timeout_budget="$timeout_seconds"
+  local retry_timeout_budget="${RETRY_PROMPT_TIMEOUT_SECONDS:-0}"
+  local timeout_tier="default"
   local deadline=0
   local now=0
   local capture=""
@@ -2740,6 +3299,13 @@ prompt_once() {
   fi
 
   if ! ensure_role_session_ready "$ROLE"; then
+    if [[ "$SESSION_NOT_READY_FALLBACK_CODEX" == "1" && "$CODEX_EXEC_FALLBACK" == "1" ]]; then
+      local fallback_count=0
+      fallback_count="$(increment_session_not_ready_fallback_count)"
+      trace_event "session_not_ready_fallback_codex role=${ROLE} channel=${channel} tick=${tick} timeout=${timeout_seconds}s count=${fallback_count}"
+      codex_exec_prompt_once "$timeout_seconds" "$prompt_text" "$tick" "$dispatch_scope"
+      return $?
+    fi
     printf 'session_not_ready role=%s session=%s\n' "$ROLE" "$TARGET_SESSION"
     return 43
   fi
@@ -2747,10 +3313,17 @@ prompt_once() {
   tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" C-l >/dev/null 2>&1 || true
   tmux clear-history -t "$(tmux_target "$TARGET_SESSION")" >/dev/null 2>&1 || true
   prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick" "$dispatch_scope")"
-  trace_event "dispatch_prompt scope=${dispatch_scope} channel=${channel} tick=${tick} bytes=${#prompt_payload}"
+  prompt_bytes="${#prompt_payload}"
+  IFS='|' read -r prompt_bytes timeout_budget retry_timeout_budget timeout_tier \
+    <<< "$(resolve_dispatch_timeout_budgets "$prompt_bytes" "$timeout_budget" "$retry_timeout_budget")"
+  DISPATCH_TIMEOUT_EFFECTIVE="$timeout_budget"
+  DISPATCH_RETRY_TIMEOUT_EFFECTIVE="$retry_timeout_budget"
+  DISPATCH_PROMPT_BYTES="$prompt_bytes"
+  DISPATCH_TIMEOUT_TIER="$timeout_tier"
+  trace_event "dispatch_prompt scope=${dispatch_scope} channel=${channel} tick=${tick} bytes=${prompt_bytes} timeout_budget=${timeout_budget}s retry_timeout_budget=${retry_timeout_budget}s timeout_tier=${timeout_tier}"
   tmux_send_multiline "$TARGET_SESSION" "$prompt_payload"
 
-  deadline=$(( $(date +%s) + timeout_seconds ))
+  deadline=$(( $(date +%s) + timeout_budget ))
   last_progress_at="$(date +%s)"
   while true; do
     capture="$(tmux_capture "$TARGET_SESSION" "$TMUX_CAPTURE_LINES")"
@@ -2759,13 +3332,13 @@ prompt_once() {
       return 0
     fi
     # Auto-dismiss interactive menus: rate limit switch, trust project, etc.
-    if printf '%s\n' "$capture" | grep -qE "Approaching rate limits|Switch to .* for lower credit|Press enter to confirm or esc"; then
+    if grep -qE "Approaching rate limits|Switch to .* for lower credit|Press enter to confirm or esc" <<<"$capture"; then
       trace_event "autodismiss_ratelimit_menu session=${TARGET_SESSION} tick=${tick}"
       tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "2" Enter >/dev/null 2>&1 || true
       last_progress_at="$(date +%s)"
       sleep 2
     fi
-    if printf '%s\n' "$capture" | grep -qE "Trust this project|Allow all file|trust_level"; then
+    if grep -qE "Trust this project|Allow all file|trust_level" <<<"$capture"; then
       trace_event "autodismiss_trust_menu session=${TARGET_SESSION} tick=${tick}"
       tmux send-keys -t "$(tmux_target "$TARGET_SESSION")" "1" Enter >/dev/null 2>&1 || true
       last_progress_at="$(date +%s)"
@@ -2892,7 +3465,7 @@ response_has_tick() {
   if [[ "$channel" == "codex_exec" ]]; then
     return 0
   fi
-  printf '%s\n' "$payload" | rg -q "^NEXT_ACTION_UNIQUE:[[:space:]].*_${tick}[[:space:]]*$"
+  rg -q "^NEXT_ACTION_UNIQUE:[[:space:]].*_${tick}[[:space:]]*$" <<<"$payload"
 }
 
 RAW_OUTPUT=""
@@ -2916,7 +3489,7 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
       STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
       sanitize_tmux_logs
       persist_last_contract "$STRUCTURED" "primary_structured"
-      publish_execution_monitoring_if_enabled "$STRUCTURED" "primary_structured"
+      publish_execution_monitoring_if_enabled "$STRUCTURED" "primary_structured" "$PRIMARY_TICK" "0"
       trace_event "final_output source=primary"
       printf "%s\n" "$STRUCTURED"
       exit 0
@@ -2931,7 +3504,7 @@ RETRY_PROMPT="${PROMPT_TEXT}
 Reponse precedente invalide ou incomplete. Reemets uniquement le contrat valide.
 Checklist minimale:
 - 8 lignes strictes dans l'ordre contractuel.
-- EVIDENCE contient ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>, task_update, lock_check=ok, run_note>=5 mots.
+- EVIDENCE contient ${REQUIRED_ARTIFACT_MARKER}<valeur_concrete>, task_update, lock_check=ok, run_note>=5 mots, issues, issue_count, issue_severity.
 - Si queue/workboard actif: stream_id et task_id.
 - Si task_update=complete: cmd et tests_run.
 - Aucun texte hors contrat."
@@ -2970,7 +3543,7 @@ if [[ "$DO_RETRY" -eq 1 ]]; then
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
         sanitize_tmux_logs
         persist_last_contract "$STRUCTURED" "retry_structured"
-        publish_execution_monitoring_if_enabled "$STRUCTURED" "retry_structured"
+        publish_execution_monitoring_if_enabled "$STRUCTURED" "retry_structured" "$RETRY_TICK" "0"
         trace_event "final_output source=retry"
         printf "%s\n" "$STRUCTURED"
         exit 0
@@ -3014,7 +3587,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
         sanitize_tmux_logs
         persist_last_contract "$STRUCTURED" "codex_exec_fallback"
-        publish_execution_monitoring_if_enabled "$STRUCTURED" "codex_exec_fallback"
+        publish_execution_monitoring_if_enabled "$STRUCTURED" "codex_exec_fallback" "$CODEX_TICK" "0"
         trace_event "final_output source=codex_fallback"
         printf "%s\n" "$STRUCTURED"
         exit 0
@@ -3133,14 +3706,28 @@ esac
     FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
     write_fail_count "$FAIL_COUNT"
     RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-    EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_ok=${FALLBACK_SOURCE}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable,${FALLBACK_CHANNELS_ISSUE_CODE}; issue_count=2; issue_severity=medium; channels_read=${FALLBACK_CHANNELS_READ}; impact_assessment=${FALLBACK_IMPACT_ASSESSMENT}; impact_action=${FALLBACK_IMPACT_ACTION}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
 else
   FAIL_COUNT="$(( $(read_fail_count) + 1 ))"
   write_fail_count "$FAIL_COUNT"
   RECOVERY_NOTE="$(sanitize_evidence_fragment "$(recover_role_if_needed "$FAIL_COUNT")")"
-    EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable_source_missing; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
+    EVIDENCE_TEXT="fallback_mode=checkpoint; source_missing=${FALLBACK_SOURCE:-unknown}; signal_unparseable=1; output_channel=${OUTPUT_CHANNEL_LABEL}; rc_primary=${RC_PRIMARY}; rc_retry=${RC_RETRY}; rc_codex=${RC_CODEX_FALLBACK}; retry_mode=${RETRY_MODE}; t_primary=${PROMPT_TIMEOUT_SECONDS}s; t_retry=${RETRY_PROMPT_TIMEOUT_SECONDS}s; t_codex=${CODEX_FALLBACK_TIMEOUT}s; fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD}; task_update=none_no_signal; lock_check=ok; run_note=fallback checkpoint car sortie non exploitable; issues=signal_unparseable_source_missing,${FALLBACK_CHANNELS_ISSUE_CODE}; issue_count=2; issue_severity=high; channels_read=${FALLBACK_CHANNELS_READ}; impact_assessment=${FALLBACK_IMPACT_ASSESSMENT}; impact_action=${FALLBACK_IMPACT_ACTION}; ${FALLBACK_ARTIFACT_MARKER}${FALLBACK_ARTIFACT_VALUE}; ${RECOVERY_NOTE}"
 fi
 trace_event "checkpoint_fallback rc_primary=${RC_PRIMARY} rc_retry=${RC_RETRY} rc_codex=${RC_CODEX_FALLBACK} fail_count=${FAIL_COUNT}/${RECOVERY_THRESHOLD} retry_mode=${RETRY_MODE} raw_primary=[${PRIMARY_PREVIEW:-n/a}] raw_retry=[${RETRY_PREVIEW:-n/a}] raw_codex=[${CODEX_PREVIEW:-n/a}]"
+FALLBACK_TICK="F$(date +%s)_$RANDOM"
+RC_FALLBACK_FINAL="${RC_CODEX_FALLBACK:--1}"
+if ! [[ "$RC_FALLBACK_FINAL" =~ ^-?[0-9]+$ ]]; then
+  RC_FALLBACK_FINAL=-1
+fi
+if [[ "${RC_FALLBACK_FINAL}" -lt 0 ]]; then
+  RC_FALLBACK_FINAL="${RC_RETRY:-0}"
+fi
+if [[ "${RC_FALLBACK_FINAL}" -eq 0 ]]; then
+  RC_FALLBACK_FINAL="${RC_PRIMARY:-0}"
+fi
+if [[ "${RC_FALLBACK_FINAL}" -eq 0 ]]; then
+  RC_FALLBACK_FINAL=1
+fi
 
 FALLBACK_OUTPUT="$(cat <<EOF
 STATUS: IN_PROGRESS
@@ -3159,6 +3746,6 @@ FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
 sanitize_tmux_logs
 persist_last_contract "$FALLBACK_OUTPUT" "fallback_checkpoint"
-publish_execution_monitoring_if_enabled "$FALLBACK_OUTPUT" "fallback_checkpoint"
+publish_execution_monitoring_if_enabled "$FALLBACK_OUTPUT" "fallback_checkpoint" "$FALLBACK_TICK" "$RC_FALLBACK_FINAL"
 trace_event "final_output source=checkpoint"
 printf "%s\n" "$FALLBACK_OUTPUT"

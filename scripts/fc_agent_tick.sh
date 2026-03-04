@@ -10,45 +10,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-ROOT_CANDIDATE="$(cd "$SCRIPT_DIR/.." && pwd -P)"
-
-resolve_root() {
-  local candidate="${1:-}"
-  local shared="/home/venom/shared/analyse-financiere"
-  local vm="/home/venom/analyse-financiere"
-  local mac="/Users/venom/Documents/analyse-financiere"
-  local path=""
-  for path in "$candidate" "$shared" "$vm" "$mac"; do
-    if [[ -z "$path" ]]; then
-      continue
-    fi
-    if [[ -d "$path/scripts" ]] && [[ -d "$path/platform" ]]; then
-      printf '%s\n' "$path"
-      return 0
-    fi
-  done
-  printf '%s\n' "$candidate"
-}
-
-workspace_writable() {
-  local candidate="${1:-}"
-  [[ -n "$candidate" ]] || return 1
-  mkdir -p "$candidate/logs-codex-runs" >/dev/null 2>&1 || return 1
-  [[ -w "$candidate/logs-codex-runs" ]]
-}
-
-ROOT="$(resolve_root "$ROOT_CANDIDATE")"
-if ! workspace_writable "$ROOT"; then
-  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
-    if [[ "$fallback" == "$ROOT" ]]; then
-      continue
-    fi
-    if [[ -d "$fallback/scripts" ]] && [[ -d "$fallback/platform" ]] && workspace_writable "$fallback"; then
-      ROOT="$fallback"
-      break
-    fi
-  done
+WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+if [[ ! -f "$WORKSPACE_HELPER" ]]; then
+  echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
+  exit 2
 fi
+# shellcheck source=/dev/null
+source "$WORKSPACE_HELPER"
+
+ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 ROLE="${1:-}"
 LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
 LOCK_DIR="/tmp/fc-agent-locks"
@@ -56,7 +26,7 @@ LOCK_DIR="/tmp/fc-agent-locks"
 source "$ROOT/platform/config/lm_used_model_config.sh" 2>/dev/null || true
 QWEN_BIN_CANDIDATE="${TMUX_ROLE_QWEN_BIN:-${LM_USED_QWEN_BIN:-${LM_FALLBACK_BIN:-/home/venom/.npm-global/bin/qwen}}}"
 QWEN_BIN="$QWEN_BIN_CANDIDATE"
-CODEX_RL_CACHE_DIR="/home/venom/.openclaw/cron/role-state"
+CODEX_RL_CACHE_DIR="${FC_ROLE_STATE_DIR:-${TMUX_ROLE_STATE_DIR:-${HOME}/.openclaw/cron/role-state}}"
 CODEX_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/codex.rate_limit_gate_cache"
 QWEN_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/qwen.rate_limit_gate_cache"
 # Backoffs réduits: schedules anti-collision évitent la saturation en rafale.
@@ -78,19 +48,41 @@ if [[ -z "$ROLE" ]]; then
 fi
 
 ROLE_INPUT="$ROLE"
+LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-skip}"
 # === CONSOLIDATION 2026-03-02: 10 rôles → 3 ===
 # Tout ce qui était backend_engineer / frontend_engineer / data_analyst → dev
 # Tout ce qui était architect / po / scrum_master / analyst → planner
 # Tout ce qui était clawsentinel / infra_engineer / qa → admin
 case "$ROLE" in
   backend_engineer|frontend_engineer|data_analyst|integrator)
-    echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'dev', please update crontab" >&2
-    ROLE="dev" ;;
+    if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
+      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'dev' (legacy alias mode=map)" >&2
+      ROLE="dev"
+    else
+      echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
+      exit 0
+    fi
+    ;;
   analyst|architect|po|scrum_master|vision-architect-tasks-planner|vision_architect_tasks_planner)
-    ROLE="planner" ;;
+    if [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
+      ROLE="planner"
+    elif [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
+      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'planner' (legacy alias mode=map)" >&2
+      ROLE="planner"
+    else
+      echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
+      exit 0
+    fi
+    ;;
   clawsentinel|infra_engineer|qa|tester)
-    echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'admin', please update crontab" >&2
-    ROLE="admin" ;;
+    if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
+      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'admin' (legacy alias mode=map)" >&2
+      ROLE="admin"
+    else
+      echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
+      exit 0
+    fi
+    ;;
 esac
 
 ROLE_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.rate_limit_gate_cache"
@@ -106,16 +98,76 @@ case "$ROLE" in
 esac
 
 LOCK="$LOCK_DIR/$ROLE.lock"
+LOCK_META="${LOCK}.meta"
 LOG="$LOG_DIR/$ROLE.tick.log"
-
-# Prevent overlap
-exec 9>"$LOCK"
-if ! flock -n 9; then
-  echo "[fc_tick] $ROLE already running, skip" >> "$LOG"
-  exit 0
-fi
+TRILOCK_ORDER="tick>run>memory"
+LOCK_ACQUIRED=0
+LOCK_MODE="none"
+LOCK_ACQUIRED_AT=0
+LOCK_DIR_FALLBACK=""
 
 ts() { date '+%Y-%m-%dT%H:%M:%S'; }
+
+meta_field() {
+  local key="$1"
+  local file="$2"
+  [[ -f "$file" ]] || return 1
+  sed -n "s/.*${key}=\\([^[:space:]]*\\).*/\\1/p" "$file" | head -n 1
+}
+
+release_tick_lock() {
+  local rc="${1:-0}"
+  local now_epoch hold_s
+  now_epoch="$(date +%s)"
+  hold_s=0
+  if [[ "$LOCK_ACQUIRED_AT" =~ ^[0-9]+$ ]] && [[ "$LOCK_ACQUIRED_AT" -gt 0 ]]; then
+    hold_s=$(( now_epoch - LOCK_ACQUIRED_AT ))
+    if [[ "$hold_s" -lt 0 ]]; then
+      hold_s=0
+    fi
+  fi
+  if [[ "$LOCK_ACQUIRED" == "1" ]]; then
+    echo "$(ts) [TRILOCK_RELEASE] layer=tick role=$ROLE mode=$LOCK_MODE hold_s=$hold_s release_reason=exit_rc_${rc}" >> "$LOG"
+  fi
+  if [[ -n "$LOCK_DIR_FALLBACK" ]]; then
+    rmdir "$LOCK_DIR_FALLBACK" >/dev/null 2>&1 || true
+  fi
+  rm -f "$LOCK_META" >/dev/null 2>&1 || true
+}
+
+# Prevent overlap
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK"
+  if ! flock -n 9; then
+    holder_meta="unknown_holder"
+    holder_age_s="unknown"
+    if [[ -f "$LOCK_META" ]]; then
+      holder_meta="$(tr '\n' ' ' < "$LOCK_META" | tr -s ' ' | cut -c1-220)"
+      holder_start_epoch="$(meta_field "start_epoch" "$LOCK_META" || true)"
+      if [[ "$holder_start_epoch" =~ ^[0-9]+$ ]]; then
+        holder_age_s=$(( $(date +%s) - holder_start_epoch ))
+      fi
+    fi
+    echo "$(ts) [TRILOCK_SKIP] layer=tick role=$ROLE reason=busy lock_file=$LOCK holder_age_s=$holder_age_s holder=$holder_meta" >> "$LOG"
+    exit 0
+  fi
+  LOCK_ACQUIRED=1
+  LOCK_MODE="flock"
+else
+  LOCK_DIR_FALLBACK="${LOCK}.dirlock"
+  if ! mkdir "$LOCK_DIR_FALLBACK" 2>/dev/null; then
+    echo "$(ts) [TRILOCK_SKIP] layer=tick role=$ROLE reason=busy_dirlock lock_dir=$LOCK_DIR_FALLBACK" >> "$LOG"
+    exit 0
+  fi
+  LOCK_ACQUIRED=1
+  LOCK_MODE="dirlock"
+fi
+
+LOCK_ACQUIRED_AT="$(date +%s)"
+printf 'pid=%s host=%s start_epoch=%s start_utc=%s role=%s layer=tick order=%s lock_file=%s\n' \
+  "$$" "${HOSTNAME:-unknown}" "$LOCK_ACQUIRED_AT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" "$TRILOCK_ORDER" "$LOCK" > "$LOCK_META"
+echo "$(ts) [TRILOCK_ACQUIRE] layer=tick role=$ROLE mode=$LOCK_MODE lock_file=$LOCK order=$TRILOCK_ORDER" >> "$LOG"
+trap 'release_tick_lock $?' EXIT
 
 normalize_seconds() {
   local raw="${1:-}"
@@ -271,6 +323,11 @@ set_rl_cache() {
 AGENT_MODE="codex"
 AGENT_BIN_EFFECTIVE="codex"
 CODEX_COOLDOWN_ACTIVE=0
+ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-0}"
+
+if ! [[ "$ENABLE_QWEN_FALLBACK" =~ ^[01]$ ]]; then
+  ENABLE_QWEN_FALLBACK=0
+fi
 
 if is_rl_cache_active "$ROLE_RL_CACHE_FILE"; then
   echo "$(ts) [SKIP] role cooldown active (${ROLE_RL_CACHE_FILE}) reason=$(cache_reason "$ROLE_RL_CACHE_FILE")" >> "$LOG"
@@ -283,24 +340,28 @@ fi
 
 if [[ "$CODEX_COOLDOWN_ACTIVE" -eq 1 ]]; then
   RL_REASON="$(cache_reason "$CODEX_RL_CACHE_FILE")"
-  echo "$(ts) [QWEN_FALLBACK] codex rate-limited (${RL_REASON}), switching to qwen" >> "$LOG"
+  if [[ "$ENABLE_QWEN_FALLBACK" != "1" ]]; then
+    echo "$(ts) [CODEX_COOLDOWN] codex rate-limited (${RL_REASON}); qwen fallback disabled, keeping codex rate-limit gate" >> "$LOG"
+  else
+    echo "$(ts) [QWEN_FALLBACK] codex rate-limited (${RL_REASON}), switching to qwen" >> "$LOG"
 
-  if is_rl_cache_active "$QWEN_RL_CACHE_FILE"; then
-    echo "$(ts) [SKIP] qwen also rate-limited, skipping tick for $ROLE" >> "$LOG"
-    exit 0
+    if is_rl_cache_active "$QWEN_RL_CACHE_FILE"; then
+      echo "$(ts) [SKIP] qwen also rate-limited, skipping tick for $ROLE" >> "$LOG"
+      exit 0
+    fi
+
+    RESOLVED_QWEN_BIN="$(resolve_executable "$QWEN_BIN" || true)"
+    if [[ -z "$RESOLVED_QWEN_BIN" ]]; then
+      echo "$(ts) [SKIP] qwen not executable (candidate=$QWEN_BIN), skipping tick" >> "$LOG"
+      exit 0
+    fi
+    QWEN_BIN="$RESOLVED_QWEN_BIN"
+
+    AGENT_MODE="qwen"
+    AGENT_BIN_EFFECTIVE="$QWEN_BIN"
+    SESSION="qwen_${ROLE}_cron"
+    echo "$(ts) [AGENT] using qwen fallback: $QWEN_BIN" >> "$LOG"
   fi
-
-  RESOLVED_QWEN_BIN="$(resolve_executable "$QWEN_BIN" || true)"
-  if [[ -z "$RESOLVED_QWEN_BIN" ]]; then
-    echo "$(ts) [SKIP] qwen not executable (candidate=$QWEN_BIN), skipping tick" >> "$LOG"
-    exit 0
-  fi
-  QWEN_BIN="$RESOLVED_QWEN_BIN"
-
-  AGENT_MODE="qwen"
-  AGENT_BIN_EFFECTIVE="$QWEN_BIN"
-  SESSION="qwen_${ROLE}_cron"
-  echo "$(ts) [AGENT] using qwen fallback: $QWEN_BIN" >> "$LOG"
 fi
 
 # ============================================================
@@ -321,7 +382,7 @@ fi
 # ============================================================
 # Source config et lancer le tick
 # Timeout global du tick: configurable, marge pour precheck+primary+retry+overhead.
-# PROMPT_TIMEOUT_SECONDS=210s pour laisser le temps à xhigh thinking sans dépasser budget.
+# PROMPT_TIMEOUT_SECONDS=210s pour laisser le temps à un reasoning high sans dépasser budget.
 # ============================================================
 cd "$ROOT"
 source platform/config/lm_used_model_config.sh 2>/dev/null || true
@@ -343,7 +404,7 @@ resolve_role_thinking() {
   local role="${1:-${ROLE}}"
   local varname="LM_ROLE_${role^^}_THINKING"
   varname="${varname//-/_}"
-  printf '%s' "${!varname:-${LM_USED_ROLE_THINKING:-xhigh}}"
+  printf '%s' "${!varname:-${LM_USED_ROLE_THINKING:-high}}"
 }
 
 normalize_codex_model() {
@@ -361,14 +422,34 @@ normalize_codex_model() {
   esac
 }
 
+normalize_reasoning_effort() {
+  local raw="${1:-high}"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    ""|default|auto|none)
+      printf 'high\n' ;;
+    xhigh|extra|extra_high|veryhigh|max|maximum)
+      printf 'high\n' ;;
+    minimal|low|medium|high)
+      printf '%s\n' "$normalized" ;;
+    *)
+      printf 'high\n' ;;
+  esac
+}
+
 RESOLVED_ROLE_MODEL="$(resolve_role_model "$ROLE")"
 RESOLVED_ROLE_THINKING="$(resolve_role_thinking "$ROLE")"
 CANDIDATE_ROLE_MODEL="${TMUX_ROLE_CODEX_MODEL:-${RESOLVED_ROLE_MODEL}}"
-CANDIDATE_ROLE_THINKING="${TMUX_ROLE_CODEX_THINKING:-${RESOLVED_ROLE_THINKING}}"
+RAW_ROLE_THINKING="${TMUX_ROLE_CODEX_THINKING:-${RESOLVED_ROLE_THINKING}}"
+CANDIDATE_ROLE_THINKING="$(normalize_reasoning_effort "$RAW_ROLE_THINKING")"
 SANITIZED_ROLE_MODEL="$(normalize_codex_model "$CANDIDATE_ROLE_MODEL")"
 
 if [[ "$CANDIDATE_ROLE_MODEL" != "$SANITIZED_ROLE_MODEL" ]]; then
   echo "$(ts) [MODEL_GUARD] role=$ROLE model=$CANDIDATE_ROLE_MODEL -> $SANITIZED_ROLE_MODEL" >> "$LOG"
+fi
+if [[ "$RAW_ROLE_THINKING" != "$CANDIDATE_ROLE_THINKING" ]]; then
+  echo "$(ts) [THINKING_GUARD] role=$ROLE thinking=$RAW_ROLE_THINKING -> $CANDIDATE_ROLE_THINKING" >> "$LOG"
 fi
 echo "$(ts) [MODEL] role=$ROLE model=$SANITIZED_ROLE_MODEL thinking=${CANDIDATE_ROLE_THINKING:-default}" >> "$LOG"
 export TMUX_ROLE_CODEX_MODEL="$SANITIZED_ROLE_MODEL"
@@ -377,7 +458,7 @@ ROLE_RATE_LIMIT_CACHE_TTL_SECONDS="${TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS:-180
 ROLE_RATE_LIMIT_CACHE_TTL_SECONDS="$(normalize_seconds "$ROLE_RATE_LIMIT_CACHE_TTL_SECONDS" "180" "60" "180")"
 export TMUX_ROLE_RATE_LIMIT_CACHE_TTL_SECONDS="$ROLE_RATE_LIMIT_CACHE_TTL_SECONDS"
 ROLE_MIN_REFLECTION_PASSES="${TMUX_ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REFLECTION_PASSES:-2}}"
-ROLE_MIN_REFLECTION_PASSES="$(normalize_seconds "$ROLE_MIN_REFLECTION_PASSES" "2" "2" "2")"
+ROLE_MIN_REFLECTION_PASSES="$(normalize_seconds "$ROLE_MIN_REFLECTION_PASSES" "2" "1" "2")"
 export TMUX_ROLE_MIN_REFLECTION_PASSES="$ROLE_MIN_REFLECTION_PASSES"
 
 # Rôles avec qwen comme agent PRIMAIRE (pas fallback — zéro quota codex)
@@ -414,6 +495,7 @@ except Exception:
   echo "$(ts) [CONFIG] role=$ROLE allow_file_edits=$TMUX_ROLE_ALLOW_FILE_EDITS" >> "$LOG"
 fi
 export TMUX_ROLE_AGENT_BIN="$AGENT_BIN_EFFECTIVE"
+export TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK="${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-$ENABLE_QWEN_FALLBACK}"
 # SDK primary : codex exec direct, évite le paste 36KB dans la TUI tmux
 export TMUX_ROLE_RETRY_ENGINE_DEFAULT="${TMUX_ROLE_RETRY_ENGINE_DEFAULT:-sdk}"
 # Session reuse: économise ~40% de tokens (pas de re-lecture contexte à chaque tick)
@@ -431,21 +513,30 @@ case "$ROLE" in
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_PLANNER_RETRY_TIMEOUT_SECONDS:-120}"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_PLANNER_STALL_ABORT_SECONDS:-90}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_PLANNER_TICK_TIMEOUT_SECONDS:-420}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
-    # Planner: fresh context each tick to avoid runaway resume sessions.
-    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-0}"
+    # Planner: keep resume enabled by default for faster/stabler ticks.
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-1}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PLANNER_RATE_LIMIT_PRECHECK:-0}"
     export TMUX_ROLE_CODEX_THINKING="${FC_PLANNER_THINKING:-high}"
     export TMUX_ROLE_MIN_REFLECTION_PASSES="${FC_PLANNER_MIN_REFLECTION_PASSES:-1}"
     ;;
+  dev)
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-0}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_DEV_CODEX_EXEC_RESUME:-1}"
+    export PROMPT_TIMEOUT_SECONDS="${FC_DEV_PROMPT_TIMEOUT_SECONDS:-300}"
+    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_DEV_RETRY_TIMEOUT_SECONDS:-120}"
+    TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_DEV_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
+    export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_DEV_STALL_ABORT_SECONDS:-80}"
+    ;;
   admin)
     export TMUX_ROLE_CODEX_MODEL="${FC_ADMIN_MODEL:-gpt-5.3-codex-spark}"
-    export PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_PROMPT_TIMEOUT_SECONDS:-300}"
-    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_RETRY_TIMEOUT_SECONDS:-120}"
+    # Admin defaults slightly raised; final budget remains adaptive in cron_tmux_role_runner.sh
+    export PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_PROMPT_TIMEOUT_SECONDS:-360}"
+    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_RETRY_TIMEOUT_SECONDS:-150}"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_ADMIN_STALL_ABORT_SECONDS:-85}"
-    TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_ADMIN_TICK_TIMEOUT_SECONDS:-480}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
+    TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_ADMIN_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_ADMIN_CODEX_EXEC_RESUME:-1}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_ADMIN_RATE_LIMIT_PRECHECK:-0}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-low}"
+    export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-medium}"
     export TMUX_ROLE_MEMORY_PROFILE="${FC_ADMIN_MEMORY_PROFILE:-analysis}"
     export TMUX_ROLE_MEMORY_DAILY_LINES="${FC_ADMIN_MEMORY_DAILY_LINES:-4}"
     export TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES="${FC_ADMIN_MEMORY_ROLE_HISTORY_LINES:-2}"
@@ -453,8 +544,14 @@ case "$ROLE" in
     ;;
 esac
 
+FINAL_ROLE_THINKING="$(normalize_reasoning_effort "${TMUX_ROLE_CODEX_THINKING:-$CANDIDATE_ROLE_THINKING}")"
+if [[ "${TMUX_ROLE_CODEX_THINKING:-$CANDIDATE_ROLE_THINKING}" != "$FINAL_ROLE_THINKING" ]]; then
+  echo "$(ts) [THINKING_GUARD_FINAL] role=$ROLE thinking=${TMUX_ROLE_CODEX_THINKING:-$CANDIDATE_ROLE_THINKING} -> $FINAL_ROLE_THINKING" >> "$LOG"
+fi
+export TMUX_ROLE_CODEX_THINKING="$FINAL_ROLE_THINKING"
+
 EFFECTIVE_ROLE_MODEL="${TMUX_ROLE_CODEX_MODEL:-$SANITIZED_ROLE_MODEL}"
-EFFECTIVE_ROLE_THINKING="${TMUX_ROLE_CODEX_THINKING:-${CANDIDATE_ROLE_THINKING:-default}}"
+EFFECTIVE_ROLE_THINKING="${TMUX_ROLE_CODEX_THINKING:-default}"
 echo "$(ts) [MODEL_EFFECTIVE] role=$ROLE model=$EFFECTIVE_ROLE_MODEL thinking=$EFFECTIVE_ROLE_THINKING resume=${TMUX_ROLE_CODEX_EXEC_RESUME:-1} precheck=${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}" >> "$LOG"
 
 echo "$(ts) [TICK] role=$ROLE agent=$AGENT_MODE session=$SESSION timeout=${TICK_TIMEOUT_SECONDS}s" >> "$LOG"
@@ -468,7 +565,8 @@ echo "$(ts) [END] role=$ROLE agent=$AGENT_MODE rc=$RC" >> "$LOG"
 
 # Log dernière ligne du résultat pour diagnostic rapide
 if [[ -n "$RESULT" ]]; then
-  LAST_LINE="$(echo "$RESULT" | tail -1 | cut -c1-160)"
+  # Sanitize: strip non-UTF8 bytes and ANSI codes before writing to log
+  LAST_LINE="$(echo "$RESULT" | tail -1 | LC_ALL=C sed 's/[\x80-\xff]/?/g' | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | cut -c1-160)"
   echo "$(ts) [RESULT_TAIL] $LAST_LINE" >> "$LOG"
 
   extract_contract_value_from_text() {
@@ -546,9 +644,12 @@ if [[ -n "$RESULT" ]]; then
     ROOT_CAUSE="$(evidence_get root_cause)"
     FIX_APPLIED="$(evidence_get fix_applied)"
     VERIFY_NOTE="$(evidence_get verify)"
+    ISSUE_COUNT="$(evidence_get issue_count)"
+    ISSUE_SEVERITY="$(evidence_get issue_severity)"
+    ISSUES_LIST="$(evidence_get issues)"
 
-    if [[ -n "$TASK_UPDATE$STREAM_ID$TASK_ID$RUN_NOTE$ROOT_CAUSE$FIX_APPLIED$VERIFY_NOTE" ]]; then
-      echo "$(ts) [ACTION] task_update=$(printf '%s' "${TASK_UPDATE:-?}" | cut -c1-24) stream=$(printf '%s' "${STREAM_ID:-?}" | cut -c1-24) task=$(printf '%s' "${TASK_ID:-?}" | cut -c1-28) run_note=$(printf '%s' "${RUN_NOTE:-?}" | cut -c1-70) root_cause=$(printf '%s' "${ROOT_CAUSE:-?}" | cut -c1-40) fix=$(printf '%s' "${FIX_APPLIED:-?}" | cut -c1-40) verify=$(printf '%s' "${VERIFY_NOTE:-?}" | cut -c1-40)" >> "$LOG"
+    if [[ -n "$TASK_UPDATE$STREAM_ID$TASK_ID$RUN_NOTE$ROOT_CAUSE$FIX_APPLIED$VERIFY_NOTE$ISSUE_COUNT$ISSUE_SEVERITY$ISSUES_LIST" ]]; then
+      echo "$(ts) [ACTION] task_update=$(printf '%s' "${TASK_UPDATE:-?}" | cut -c1-24) stream=$(printf '%s' "${STREAM_ID:-?}" | cut -c1-24) task=$(printf '%s' "${TASK_ID:-?}" | cut -c1-28) issue_count=$(printf '%s' "${ISSUE_COUNT:-?}" | cut -c1-5) issue_severity=$(printf '%s' "${ISSUE_SEVERITY:-?}" | cut -c1-12) issues=$(printf '%s' "${ISSUES_LIST:-?}" | cut -c1-44) run_note=$(printf '%s' "${RUN_NOTE:-?}" | cut -c1-70) root_cause=$(printf '%s' "${ROOT_CAUSE:-?}" | cut -c1-40) fix=$(printf '%s' "${FIX_APPLIED:-?}" | cut -c1-40) verify=$(printf '%s' "${VERIFY_NOTE:-?}" | cut -c1-40)" >> "$LOG"
     fi
   fi
 fi
