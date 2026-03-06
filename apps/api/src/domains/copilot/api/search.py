@@ -3,14 +3,75 @@ Search API Routes
 Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
 Task: API-SEARCH-001 - Global search functionality
 """
+from datetime import datetime, timezone
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
-from core.response import ok, err
+from core.response import ok
 import logging
+    
+try:
+    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from platform.legacy.services.service_standard import (  # type: ignore
+            ensure_decision_contract,
+            utc_now_iso,
+        )
+    except Exception:  # pragma: no cover
+        ensure_decision_contract = None  # type: ignore
+        utc_now_iso = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _now_iso() -> str:
+    if callable(utc_now_iso):
+        return utc_now_iso()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _apply_search_contract(payload: Dict[str, Any], *, source: str) -> Dict[str, Any]:
+    if callable(ensure_decision_contract):
+        ensure_decision_contract(
+            payload,
+            default_source=source,
+            verdict="hold",
+            confidence=0.45,
+            why=["Search payload is informative-only, not an action recommendation."],
+            risk_level="low",
+            freshness=payload.get("freshness"),
+        )
+        return payload
+
+    payload.setdefault("verdict", "hold")
+    payload.setdefault("confidence", 0.45)
+    payload.setdefault("why", ["Search payload is informative-only, not an action recommendation."])
+    payload.setdefault("risk_level", "low")
+    payload.setdefault("risk", {"level": "low", "caveat": ""})
+    payload.setdefault("risk_flag", False)
+    payload.setdefault("generated_at", payload.get("generated_at") or _now_iso())
+    payload.setdefault("freshness", payload.get("freshness") or payload.get("generated_at"))
+    payload.setdefault("source", [source])
+    return payload
+
+
+def _search_error_payload(
+    *, source: str, query: Optional[str] = None, error: str, **extra: Any
+) -> Dict[str, Any]:
+    now_iso = _now_iso()
+    payload: Dict[str, Any] = {
+        "query": query,
+        "total": 0,
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "source": [source, "error_fallback"],
+        "error": error,
+        "message": "Search temporarily unavailable.",
+    }
+    payload.update(extra)
+    return _apply_search_contract(payload, source=source)
 
 
 # Ticker metadata (can be extended with company names, sectors, etc.)
@@ -167,19 +228,33 @@ async def search_tickers(
         
         # Limit results
         matches = matches[:limit]
-        
-        logger.info(f"Search tickers: found {len(matches)} matches")
-        
-        return ok({
+        now_iso = _now_iso()
+        has_more = len(matches) == limit and limit > 0
+        response_data = {
             "query": q,
             "matches": matches,
             "total": len(matches),
-            "has_more": len(matches) == limit
-        })
+            "has_more": has_more,
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "source": ["search_tickers"],
+        }
+        _apply_search_contract(response_data, source="search_tickers")
+        
+        logger.info(f"Search tickers: found {len(matches)} matches")
+        return ok(response_data)
         
     except Exception as e:
         logger.error(f"Error searching tickers: {str(e)}")
-        return err(f"Search failed: {str(e)}", code=500)
+        return ok(
+            _search_error_payload(
+                source="search_tickers",
+                error=str(e),
+                query=q,
+                matches=[],
+                has_more=False,
+            )
+        )
 
 
 @router.get("/global")
@@ -242,20 +317,34 @@ async def search_global(
             results["notes"] = []  # Placeholder
         
         logger.info(f"Global search: found {total} results")
-        
-        return ok({
+        now_iso = _now_iso()
+        response_data = {
             "query": q,
             "results": results,
-            "total": total
-        })
+            "total": total,
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "source": ["search_global"],
+        }
+        _apply_search_contract(response_data, source="search_global")
+        return ok(response_data)
         
     except Exception as e:
         logger.error(f"Error in global search: {str(e)}")
-        return err(f"Global search failed: {str(e)}", code=500)
+        return ok(
+            _search_error_payload(
+                source="search_global",
+                error=str(e),
+                query=q,
+                results={},
+                total=0,
+                execution_time=0,
+            )
+        )
 
 
 import time
-from core.response import ok, err
+from core.response import ok
 from storage.io import load_json
 
 def calculate_similarity(query: str, target: str) -> float:
@@ -300,15 +389,25 @@ async def get_sectors():
     """
     try:
         sectors = sorted(set(meta["sector"] for meta in TICKER_METADATA.values()))
-        
-        return ok({
+
+        response_data = {
             "sectors": sectors,
             "total": len(sectors)
-        })
+        }
+        _apply_search_contract(response_data, source="search_sectors")
+        return ok(response_data)
         
     except Exception as e:
         logger.error(f"Error getting sectors: {str(e)}")
-        return err(f"Failed to get sectors: {str(e)}", code=500)
+        return ok(
+            _search_error_payload(
+                source="search_sectors",
+                error=str(e),
+                query=None,
+                sectors=[],
+                total=0,
+            )
+        )
 
 
 @router.get("/universal")
@@ -559,12 +658,27 @@ async def universal_search_endpoint(
                 'sort_by': sort_by
             }
         }
-        
+        _apply_search_contract(response_data, source="search_universal")
         return ok(response_data)
         
     except Exception as e:
         logger.error(f"Error in universal search: {str(e)}", exc_info=True)
-        return err(f"Universal search failed: {str(e)}", code=500)
+        return ok(
+            _search_error_payload(
+                source="search_universal",
+                query=q,
+                results={},
+                total=0,
+                execution_time=0,
+                search_metadata={
+                    "types_searched": [],
+                    "tickers_filtered": [],
+                    "date_range": None,
+                    "sort_by": sort_by,
+                },
+                error=str(e),
+            )
+        )
 
 # Export router with expected name for main.py registration
 search_router = router

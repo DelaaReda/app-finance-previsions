@@ -7,13 +7,67 @@ from typing import Dict, Any, Optional, List
 import json
 from datetime import datetime, timedelta, timezone
 
-from core.response import ok, err
+from core.response import ok
 from storage.io import load_json
 import logging
 
 logger = logging.getLogger(__name__)
 
+try:
+    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from platform.legacy.services.service_standard import (  # type: ignore
+            ensure_decision_contract,
+            utc_now_iso,
+        )
+    except Exception:  # pragma: no cover
+        ensure_decision_contract = None  # type: ignore
+        utc_now_iso = None  # type: ignore
+
 router = APIRouter()
+
+
+def _now_iso() -> str:
+    if callable(utc_now_iso):
+        return utc_now_iso()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _apply_news_contract(payload: Dict[str, Any], *, source: str) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+
+    now_iso = payload.get("generated_at") or payload.get("freshness") or _now_iso()
+    payload.setdefault("generated_at", now_iso)
+    payload.setdefault("freshness", now_iso)
+    payload.setdefault("last_update", payload.get("last_update") or now_iso)
+    payload.setdefault("source", [source])
+
+    if callable(ensure_decision_contract):
+        ensure_decision_contract(
+            payload,
+            default_source=source,
+            verdict=payload.get("verdict", "hold"),
+            confidence=payload.get("confidence") or 0.45,
+            why=payload.get("why") or [
+                "News payload is informational and supports dashboard context."
+            ],
+            risk_level=payload.get("risk_level")
+            or payload.get("risk", {}).get("level")
+            if isinstance(payload.get("risk"), dict)
+            else None,
+            freshness=payload.get("freshness"),
+        )
+        return payload
+
+    payload.setdefault("verdict", "hold")
+    payload.setdefault("confidence", 0.45)
+    payload.setdefault("why", ["News payload is informational and supports dashboard context."])
+    payload.setdefault("risk_level", "low")
+    payload.setdefault("risk", {"level": "low", "caveat": ""})
+    payload.setdefault("risk_flag", False)
+    return payload
 
 @router.get("/news/feed")
 def get_filtered_news(
@@ -36,7 +90,7 @@ def get_filtered_news(
         
         if not news_data:
             # Return empty structure with metadata but never fail
-            return ok({
+            response_data = {
                 "articles": [],
                 "count": 0,
                 "filtered_params": {
@@ -48,10 +102,10 @@ def get_filtered_news(
                     "sources": sources
                 },
                 "message": "No news data available - system ingesting in background",
-                "freshness": "unknown",
-                "generated_at": datetime.utcnow().isoformat(),
-                "source": ["fallback_empty"]
-            })
+                "source": ["news_feed", "fallback_empty"],
+            }
+            _apply_news_contract(response_data, source="news_feed")
+            return ok(response_data)
         
         # Extract news articles
         data_payload = news_data.get("data", news_data.get("payload", news_data))
@@ -177,7 +231,7 @@ def get_filtered_news(
             },
             "freshness": news_data.get("freshness") or news_data.get("last_update"),
             "last_update": news_data.get("freshness") or news_data.get("last_update"),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": _now_iso(),
             "source": news_data.get("source", ["news_pipeline"])
         }
         
@@ -214,6 +268,7 @@ def get_filtered_news(
         # Update the response with enhanced articles
         response_data["articles"] = enhanced_articles
         
+        _apply_news_contract(response_data, source="news_feed")
         return ok(response_data)
     
     except Exception as e:
@@ -221,7 +276,7 @@ def get_filtered_news(
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error in news feed endpoint: {str(e)}", exc_info=True)
-        return ok({
+        response_data = {
             "articles": [],
             "count": 0,
             "filtered_params": {
@@ -236,9 +291,11 @@ def get_filtered_news(
             },
             "error": str(e),
             "message": "News temporarily unavailable - showing fallback data",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": _now_iso(),
             "source": ["fallback", "error_handling"]
-        })
+        }
+        _apply_news_contract(response_data, source="news_feed")
+        return ok(response_data)
 
 
 @router.get("/news/features/daily")
@@ -251,9 +308,13 @@ def news_features_daily(
     """Compatibility endpoint. Returns empty rows if features gold is not materialized."""
     try:
         rows: List[Dict[str, Any]] = []
-        return ok({"rows": rows, "count": len(rows)})
+        response_data = {"rows": rows, "count": len(rows)}
+        _apply_news_contract(response_data, source="news_features_daily")
+        return ok(response_data)
     except Exception as e:
-        return ok({"rows": [], "count": 0, "error": str(e)})
+        response_data = {"rows": [], "count": 0, "error": str(e), "source": ["news_features_daily", "error_fallback"]}
+        _apply_news_contract(response_data, source="news_features_daily")
+        return ok(response_data)
 
 
 def _get_sentiment_label(sentiment_score: float) -> str:
