@@ -1,5 +1,12 @@
 # Architecture Runtime Refactor — 2026-03-04
 
+Superseded for current target architecture.
+
+This file is a historical implementation snapshot from the pre-planner-orchestrator period.
+Current canonical execution roadmap is:
+- `docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md`
+- `docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md`
+
 ## Scope delivered in this pass
 - Cron integration hardening:
   - runner config validation on cron setup

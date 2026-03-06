@@ -1,5 +1,12 @@
 # Architecture Batches — Runtime Autonomy + Strangler (2026-03-05)
 
+Superseded for current target architecture.
+
+This file is a historical planning document from the parallel-lane period.
+Current canonical execution roadmap is:
+- `docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md`
+- `docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md`
+
 ## Contexte cible
 - Runtime canonique: `/home/venom/analyse-financiere`
 - Démarrage canonique: `./finance-copilot.sh start`

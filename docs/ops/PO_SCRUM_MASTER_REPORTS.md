@@ -1,5 +1,15 @@
 # PO Scrum Master Reports
 
+Legacy compatibility artifact.
+
+This file is retained because some compatibility paths still reference it.
+It is not the target source of truth for current orchestration design.
+
+Current target:
+- planner-only scheduling
+- planner-owned scrum capability
+- no independent `po_scrum_master` target lane
+
 ## Scope
 - Advisory lane only (`po_scrum_master` / technical role `scrum_master`).
 - No delivery ownership (no claim/complete/handoff workboard tasks).

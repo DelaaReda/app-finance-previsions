@@ -2963,6 +2963,7 @@ def status():
             "root":str(ROOT),
             "state_dir":str(STATE),
             "execution_mode": execution_mode,
+            "core_roles": list(CORE_ROLES),
             "roles":list(roles),
             "done": workboard_done,
             "ready": workboard_ready,

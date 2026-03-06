@@ -1,5 +1,12 @@
 # ARCH Batches Runtime Refactor — 2026-03-06
 
+Superseded for current target architecture.
+
+This file is a historical implementation snapshot.
+Current canonical execution roadmap is:
+- `docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md`
+- `docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md`
+
 ## Scope delivered
 - S1: Admin stale runtime blocker override on live probes.
 - S2: Planner evidence incomplete softened to `GO_WITH_CAUTION` with runtime markers.

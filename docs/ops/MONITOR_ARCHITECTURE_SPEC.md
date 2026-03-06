@@ -1,135 +1,81 @@
 # Monitor Architecture Specification
 
-## Changelog
-- **2026-03-04**: New document; formalized monitor layering contract (collection, aggregation, API/UI), core-health rule, and advisory visibility.
+## Purpose
+Define FC Monitor behavior for the current planner-orchestrator runtime.
 
-## 1) Purpose and Scope
-This spec defines FC Monitor architecture and behavior for runtime observability.
+The monitor must reflect current runtime truth, not historical topology.
 
-Scope:
-- Data sources and path resolution.
-- Health computation policy.
-- API contracts.
-- UI behavioral guarantees.
+## Current Runtime Model
+- execution mode is derived from runner config and environment
+- target execution mode is `planner_experimental`
+- in `planner_experimental`, the only scheduled core role is `planner`
+- `dev`, `admin`, and `scrum_master` remain visible as capability outputs or planner-owned subagent activity, not as independent core cron lanes
 
-## 2) Normative Rules (MUST/SHOULD/MUST NOT)
-- Monitor **MUST** compute global health from `planner/dev/admin` only.
-- Advisory lanes **MUST** be observable but non-blocking.
-- Monitor **SHOULD** prefer writable canonical workspace roots.
-- API payloads **MUST NOT** regress required keys to `null` unexpectedly.
+## Normative Rules
+- Monitor **MUST** compute health from `core_roles` derived from execution mode.
+- In `planner_experimental`, `core_roles` **MUST** equal `["planner"]`.
+- Monitor **MUST** expose orchestration truth, delivery truth, and product-value truth.
+- Legacy advisory fields **MUST** be treated as compatibility surfaces, not architectural truth.
+- API payloads **MUST NOT** regress required keys unexpectedly.
 
-## 3) Interfaces and Schemas
-### Required APIs
-- `GET /api/status`
-- `GET /api/runtime-diagnostics`
-- `GET /api/agent-insights`
-- `GET /api/iteration-issues`
-- `GET /api/issues/feed`
-- `GET /api/issues/summary`
-- `GET /api/workboard`
-
-### Status payload key groups
-- `health`
+## Required Status Payload Concepts
+- `execution_mode`
+- `core_roles`
 - `agents`
-- `rate_limits`
-- `kpi`
-- `runtime_freshness`
-- `sources`
-- `dispatcher_tshape`
-- `po_scrum_master`
+- `planner_subagents`
+- `dynamic_workers`
+- `queue_workboard_integrity`
+- `orchestration`
 - `agent_messages`
+- `doctor`
 
-### Agent message view model
-- `open_count`, `delivered_count`, `actioned_count`, `closed_count`
-- `open_by_role`
-- `last_message_id_by_role`
-- `latest_action_status_by_role`
+Compatibility:
+- `po_scrum_master` may still appear for historical or compatibility reasons
+- it is not part of the target architecture contract
 
-## 4) Runtime Behavior and Edge Cases
-- Root resolution scores candidates by orchestrator presence, writable logs, and freshness.
-- Shared mount roots are penalized to avoid stale mirror attachment.
-- Historical permission errors are shown as historical unless recent evidence exists.
-- If monitor data is temporarily unavailable, payload should degrade gracefully with unknown placeholders.
+## Health Policy
 
-## 5) Operator Commands and Expected Outputs
-- Start monitor stack (project flow):
+### Target mode: `planner_experimental`
+Health is based on:
+- planner freshness
+- planner contract validity
+- queue/workboard integrity
+- runtime provider health
+- delivery/product-value signals where available
+
+Planner-owned subagent failures are relevant only insofar as they affect planner progress or delivery truth.
+
+### Compatibility modes
+When running in non-target profiles, monitor may still compute health from legacy core roles.
+
+## Runtime Behavior
+- Monitor resolves execution mode first, then derives `core_roles`.
+- Monitor must prefer canonical orchestrator data under `docs/operations/orchestrator`.
+- Monitor should surface planner-owned delegation via `planner_subagents`.
+- Monitor should emphasize value and blockages over raw agent chatter.
+
+## Product/Delivery Signals
+The monitor should progressively expose:
+- delivery proof sufficiency
+- stale READY / stalled progress
+- product-vs-orchestration work ratio
+- copilot usable vs fallback
+- forecast real vs placeholder
+- data freshness
+
+## Operator Commands
 ```bash
 bash scripts/monitor_stack_guard.sh
+curl -s http://127.0.0.1:7779/api/status | jq '{health,execution_mode,core_roles,planner_subagents}'
+bash scripts/fc_doctor.sh --json | jq '.checks.sessions,.checks.providers'
 ```
-Expected:
-- monitor API reachable and tunnel guard handling as configured.
 
-- Contract smoke:
-```bash
-bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779
-```
-Expected:
-- PASS with non-null critical status fields.
+Expected in target mode:
+- `execution_mode="planner_experimental"`
+- `core_roles=["planner"]`
 
-## 6) Observability and Troubleshooting
-Monitor data dependencies:
-- `docs/operations/orchestrator/*.json*`
-- `logs-codex-runs/fc-ticks/*`
-- `logs-codex-runs/role-runner/*`
-- role state contracts in `/home/venom/.openclaw/cron/role-state`
-- message bus and advisory report files
-
-Troubleshooting rule:
-- If UI appears stale, verify selected `sources` and workspace root scoring outcome.
-
-## 7) Compatibility and Migration Notes
-Target architecture split:
-1. Collectors
-2. Aggregators
-3. API/UI presentation
-
-Current implementation remains monolithic in `apps/monitor/server.py`; split is planned progressively with compatibility preserved.
-
-## 8) Acceptance Criteria
-- API remains backward-compatible for existing consumers.
-- Core health policy remains stable under advisory activity.
-- Message/advisory visibility is present and actionable.
-- Monitor contract smoke remains green.
-
-## 2026-03-05 Layering Progress Update
-
-### Current extraction state
-- Implemented monitor module tree: `apps/monitor/src/{collectors,aggregators,api}`.
-- `doctor` API is mounted from `apps/monitor/src/api/doctor_router.py`.
-
-### Remaining split steps (non-breaking)
-1. move `/api/status` builders to `aggregators/health.py` + `api/status_router.py`,
-2. move `/api/runtime-diagnostics` builders to `aggregators/diagnostics.py` + router,
-3. keep `apps/monitor/server.py` as bootstrap only (app init + include routers).
-
-### Compatibility invariant
-- Existing public payload keys remain additive and stable.
-## Update 2026-03-06 — Admin Dispatch + Dev Passive Signals
-
-### `/api/status` additions
-
-- `admin_dispatch` block:
-  - `status`
-  - `last_action`
-  - `last_reason`
-  - `dispatch_reason_code`
-  - `autonomy_reason_code`
-  - `stream_fairness_slot`
-  - `cooldown_left_s`
-
-### `/api/runtime-diagnostics` additions
-
-- `signals.dispatcher_starvation_s`
-- `signals.passive_with_ready_streak`
-- `signals.admin_dispatch_status`
-- `signals.admin_dispatch_last_action`
-- `signals.admin_dispatch_last_reason`
-
-These fields are additive and non-breaking.
-
-Validation (VM):
-```bash
-cd /home/venom/analyse-financiere
-scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779
-python3 -m pytest -q apps/monitor/tests/test_status_never_null.py apps/monitor/tests/test_runtime_diagnostics.py
-```
+## Acceptance Criteria
+- monitor reflects planner-only scheduling correctly
+- planner-owned subagent visibility is additive and non-confusing
+- legacy advisory fields no longer define the runtime model
+- status/doctor remain coherent with each other

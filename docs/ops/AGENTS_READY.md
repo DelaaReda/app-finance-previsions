@@ -1,94 +1,56 @@
-# Agents Readiness (Operational State)
+# Agents Readiness
 
-## Changelog
-- **2026-03-04**: Full rewrite in English; converted from historical snapshot to operational readiness standard tied to current runtime.
+## Purpose
+Define what "ready" means for the current planner-orchestrator runtime.
 
-## 1) Purpose and Scope
-This document defines what “ready” means for agent operations before and during active orchestration.
+## Ready Means
+- runtime is on the VM workspace `/home/venom/analyse-financiere`
+- `planner` scheduled lane is healthy
+- planner contracts are fresh and parseable
+- queue/workboard are coherent
+- state reconciler and delivery gate are active
+- monitor and doctor agree on execution mode and core roles
 
-Scope:
-- Core lane readiness (`planner/dev/admin`).
-- Advisory lane status (`po_scrum_master`).
-- Required gates (contracts, sessions, queue/workboard, monitor).
+## Target Runtime Readiness
+Target mode is:
+- `execution_mode=planner_experimental`
+- `core_roles=["planner"]`
 
-## 2) Normative Rules (MUST/SHOULD/MUST NOT)
-- Runtime execution **MUST** happen inside VM workspace `/home/venom/analyse-financiere`.
-- Runtime execution **MUST NOT** run on macOS host (servers, crons, role ticks).
-- Runtime runbooks **MUST** be written as VM-local commands (no `ssh dev-vm-utm ...` wrappers in canonical steps).
-- Host context **MUST** be checked with `bash scripts/runtime_host_check.sh` before start/restart/install-cron operations.
-- Core lanes **MUST** be available before declaring runtime ready.
-- Advisory lane **MUST NOT** influence global health readiness.
-- Queue/workboard **MUST** parse and remain state-consistent.
-- Contract guard suites **MUST** pass before major rollout changes.
+Readiness is not defined by the presence of independent `dev/admin/scrum_master` cron lanes.
 
-## 3) Interfaces and Schemas
-Readiness checklist schema:
-- `runtime_services`: backend/frontend/monitor
-- `core_lanes`: planner/dev/admin tick freshness
-- `contracts`: latest valid contract per core lane
-- `orchestration_data`: queue/workboard health
-- `guards`: contract guard + runtime context tests
-- `advisory`: po_scrum_master status (informational)
+## Capability Readiness Under Planner
 
-## 4) Runtime Behavior and Edge Cases
-Current behavior:
-- `full` profile runs planner/dev/admin and utility jobs.
-- `canary` profile runs planner/dev only.
-- `scrum_master` runs as advisory in `full` via cron flags (`FC_PO_SCRUM_MASTER_CRON=1`, `FC_PO_SCRUM_MASTER_RUN_NOW=1`).
+### Dev capability ready when
+- planner can delegate implementation work
+- delivery proof requirements are enforced
+- planner-owned results can be merged cleanly
 
-Approved direction:
-- `po_scrum_master` every 5 minutes in `full` profile only.
+### Admin capability ready when
+- runtime diagnosis and reconciliation can be delegated
+- stale locks/blockers can be repaired
 
-Edge cases:
-- Temporary stale monitor state should not auto-fail readiness if core lanes are healthy and recovering.
-- Historical errors must be labeled historical, not active blockers.
+### Scrum capability ready when
+- starvation/stall signals can be produced
+- unblock/escalation outputs are available to planner
 
-## 5) Operator Commands and Expected Outputs
-- Quick readiness snapshot:
+These capabilities do not need to exist as scheduled cron lanes in target mode.
+
+## Operator Checks
 ```bash
 bash scripts/runtime_host_check.sh
-bash scripts/fc_health_check.sh --strict
-bash scripts/monitor_agents.sh
+bash scripts/fc_doctor.sh --json | jq '.checks.sessions,.checks.providers'
+curl -s http://127.0.0.1:7779/api/status | jq '{health,execution_mode,core_roles,planner_subagents}'
+python3 -m pytest -q \
+  platform/automation/tests/test_state_reconciler.py \
+  platform/automation/tests/test_delivery_value_gate.py \
+  platform/automation/tests/test_planner_subagent_manager.py
 ```
+
 Expected:
-- `runtime_is_vm=1`, services up, and core lane coverage visible.
+- `runtime_is_vm=1`
+- planner healthy
+- execution mode and doctor aligned
 
-- Verify tests:
-```bash
-python3 platform/automation/tests/test_role_contract_guard.py
-python3 platform/automation/tests/test_role_runtime_context.py
-```
-Expected:
-- Passing suites with no critical contract regressions.
-
-## 6) Observability and Troubleshooting
-Primary runtime artifacts:
-- `/home/venom/analyse-financiere/docs/operations/orchestrator/executors-monitoring-latest.json`
-- `/home/venom/analyse-financiere/logs-codex-runs/fc-ticks/*.tick.log`
-- `/home/venom/analyse-financiere/logs-codex-runs/role-runner/*.events.log`
-
-Monitor checks:
-- `/api/status`
-- `/api/runtime-diagnostics`
-
-## 7) Compatibility and Migration Notes
-- Legacy role names can exist in historical logs; readiness is evaluated on canonical core lanes.
-- Config migration to YAML v1 may run with temporary ENV fallback.
-- Advisory `po_scrum_master` remains non-blocking.
-
-## 8) Acceptance Criteria
-- Core lanes emit fresh valid contracts.
-- Queue/workboard are coherent and actionable.
-- Guard test baseline is green.
-- Monitor status and CLI checks agree on core runtime state.
-
-## Runtime Config & Advisory Cron (2026-03-04)
-
-- Canonical runner config path: `platform/config/runner/runner.v1.yaml`.
-- Canonical runner schema path: `platform/config/schema/runner.v1.schema.json`.
-- `scripts/fc_setup_crons.sh` validates config before writing crontab.
-- Full profile includes advisory `po_scrum_master` cron (`3-58/5`) gated by `FC_PO_SCRUM_MASTER_CRON_ENABLED`.
-- Canary profile keeps advisory cron disabled by default.
-- Runtime doctor:
-  - CLI: `bash scripts/fc_doctor.sh --json`
-  - Monitor API: `/api/doctor` and `/api/doctor/latest`
+## Compatibility Notes
+- Legacy `po_scrum_master` and multi-lane readiness language is historical only.
+- Compatibility scripts may still exist, but they are not the readiness target.

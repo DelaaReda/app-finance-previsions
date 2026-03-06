@@ -1,5 +1,9 @@
 # Runner Configuration YAML v1 Specification
 
+Compatibility note:
+- target architecture is planner-only scheduling with planner-owned capabilities
+- legacy role/feature names may remain in config during migration, but they do not redefine the target topology
+
 ## Changelog
 - **2026-03-04**: New document; formalized YAML v1 contract, transition policy (`YAML > ENV fallback`), and strict-mode sunset.
 
@@ -44,7 +48,7 @@ Recommended role keys:
 Recommended flags:
 - `tshape`
 - `admin_dispatcher`
-- `po_scrum_master`
+- planner orchestrator and compatibility flags as implemented in runtime
 
 ## 4) Runtime Behavior and Edge Cases
 - Current config file is JSON-compatible content in `.yaml` path; this is acceptable during transition.

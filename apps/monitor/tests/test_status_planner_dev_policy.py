@@ -101,6 +101,8 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         ), mock.patch.object(self.module, "rate_limits", lambda: []):
             payload = self.module.status()
 
+        self.assertEqual(payload.get("execution_mode"), "parallel_roles")
+        self.assertEqual(payload.get("core_roles"), ["planner", "dev", "admin", "scrum_master"])
         self.assertTrue(payload.get("planner_policy_enforced"))
         self.assertEqual(payload.get("planner_autonomy_last_action"), "create_and_claim")
         self.assertEqual(payload.get("planner_autonomy_last_outcome"), "resolved")

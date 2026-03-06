@@ -1,5 +1,9 @@
 # Agent Message Bus Specification
 
+Compatibility note:
+- target architecture is planner-only scheduling
+- references to `po_scrum_master` below are legacy compatibility notes, not the target topology
+
 ## Changelog
 - **2026-03-04**: Full rewrite in English; formalized event contract, anti-loop semantics, sticky+TTL policy, and operator quickstart.
 
@@ -99,7 +103,7 @@ Runtime files:
 - `deliver` and `action` reject invalid lifecycle states.
 - Monitor reflects open/delivered/actioned/closed message counters accurately.
 
-## Advisory scheduling note (2026-03-04)
+## Legacy advisory scheduling note (2026-03-04)
 
 - With `FC_PO_SCRUM_MASTER_CRON_ENABLED=1`, advisory `po_scrum_master` can post/close targeted messages on schedule.
 - Anti-loop behavior remains unchanged:

@@ -1,107 +1,114 @@
 # Cron Profiles Specification
 
-## Changelog
-- **2026-03-04**: New document; formalized full/canary schedule matrix, profile behavior, and advisory lane policy.
-- **2026-03-06**: Added `planner-experimental` mono-lane profile for planner-owned orchestration.
+## Purpose
+Define the supported cron profiles for the current runtime architecture.
 
-## 1) Purpose and Scope
-This spec defines cron profile behavior for orchestration roles and utility jobs.
+Current target architecture:
+- one scheduled orchestrator lane: `planner`
+- `dev`, `admin`, and `scrum_master` operate as planner-owned capabilities/subagents in planner-only mode
+- utility/runtime guard jobs stay scheduled independently
 
-Profiles:
-- `full`
-- `canary`
-- `planner-experimental`
+## Profiles
 
-## 2) Normative Rules (MUST/SHOULD/MUST NOT)
-- Profiles **MUST** be installed via `scripts/fc_setup_crons.sh`.
-- `full` **MUST** schedule core lanes planner/dev/admin.
-- `canary` **MUST** schedule planner/dev and keep admin paused.
-- `planner-experimental` **MUST** schedule planner only for delivery lanes, while keeping essential infra/cleanup jobs.
-- `po_scrum_master` advisory cron **MUST** be enabled only in `full` profile (approved target).
+### `planner-experimental`
+Target profile for active orchestration.
 
-## 3) Interfaces and Schemas
-### Installer interface
+Behavior:
+- schedules `planner` only for orchestration work
+- keeps essential infra/cleanup jobs
+- does not schedule independent `dev`, `admin`, or `scrum_master` delivery lanes
+
+Notes:
+- planner delegates bounded work through `planner_subagent_manager.py`
+- non-planner role ticks are ignored when `FC_EXPERIMENTAL_PLANNER_ONLY=1`
+
+### `full`
+Supported compatibility and incident profile.
+
+Behavior:
+- keeps legacy multi-lane scheduling available for recovery, diagnosis, or controlled fallback
+- not the target steady-state architecture
+
+### `canary`
+Reduced compatibility profile for limited testing.
+
+Behavior:
+- keeps a smaller legacy schedule surface
+- not the target steady-state architecture
+
+## Normative Rules
+- Cron profiles **MUST** be installed through `scripts/fc_setup_crons.sh`.
+- `planner-experimental` **MUST** be treated as the target runtime profile.
+- `full` and `canary` **MUST NOT** be treated as the architectural target; they are fallback/test profiles.
+- Utility jobs **MUST** remain installed across profiles when required for runtime health.
+- Legacy `po_scrum_master` compatibility scripts **MUST NOT** be interpreted as target scheduling policy.
+
+## Installer Interface
 ```bash
+bash scripts/fc_setup_crons.sh --profile planner-experimental
 bash scripts/fc_setup_crons.sh --profile full
 bash scripts/fc_setup_crons.sh --profile canary
-bash scripts/fc_setup_crons.sh --profile planner-experimental
 ```
 
-### Current schedule matrix (observed)
-- `full`
-  - planner: `0,22,44`
-  - dev: `6,28,50`
-  - admin: `*/5` (configurable via env)
-- `canary`
-  - planner: `0,30`
-  - dev: `10,40`
-  - admin: paused
-- `planner-experimental`
-  - planner: `0,22,44`
-  - dev: paused
-  - admin: paused
-  - scrum_master: paused
+## Expected Schedule Shape
 
-### Utility jobs (both profiles)
-- VM resume guard
-- auto recovery
-- chromium watchdog
-- stale lock cleanup
+### `planner-experimental`
+- planner: scheduled
+- dev: not independently scheduled
+- admin: not independently scheduled
+- scrum_master: not independently scheduled
+- utility jobs: scheduled
+
+### `full`
+- planner/dev/admin legacy lines may be scheduled
+- used only for rollback, diagnostics, or compatibility operation
+
+### `canary`
+- reduced compatibility schedule
+- used only for limited testing
+
+## Utility Jobs
+Typical utility jobs include:
 - monitor guard
-- log cleanup
-- health snapshot
-- auto batch close
-- dependency recompute (`scripts/dependency_recompute.sh`, every 5 minutes)
+- stale lock cleanup
+- health snapshot / reconciliation helpers
+- dependency recompute where enabled
 
-## 4) Runtime Behavior and Edge Cases
-- Installer removes old managed cron lines before writing new ones.
-- Legacy scrum/master cron lines are purged by installer filters.
-- Advisory `scrum_master` execution remains gated in tick launcher unless explicit flags are provided.
-- In `planner-experimental`, non-planner lane ticks are ignored by `fc_agent_tick.sh` when `FC_EXPERIMENTAL_PLANNER_ONLY=1`.
+These are orthogonal to planner-only orchestration and stay valid.
 
-## 5) Operator Commands and Expected Outputs
-- Install profile:
-```bash
-bash scripts/fc_setup_crons.sh --profile full
-crontab -l | grep -E 'fc_agent_tick|monitor_stack_guard|health_snapshot' | grep -v '^#'
-```
-Expected:
-- profile-specific role lines and utility lines are present.
+## Operator Commands
 
-- Verify canary:
-```bash
-bash scripts/fc_setup_crons.sh --profile canary
-crontab -l | grep -E 'fc_agent_tick\.sh (planner|dev|admin)'
-```
-Expected:
-- planner/dev present, admin absent.
-
-- Verify planner-experimental:
+Install target profile:
 ```bash
 bash scripts/fc_setup_crons.sh --profile planner-experimental
-crontab -l | grep -E 'fc_agent_tick\.sh (planner|dev|admin|scrum_master)'
+crontab -l | rg 'fc_agent_tick\.sh (planner|dev|admin|scrum_master)|monitor_stack_guard|cleanup_stale_role_locks'
 ```
+
 Expected:
-- planner present
-- dev/admin/scrum_master absent
+- planner line present
+- dev/admin/scrum_master independent lane lines absent
+- utility jobs present
 
-## 6) Observability and Troubleshooting
-Profile drift indicators:
-- Missing expected role lines.
-- Unexpected legacy role lines.
-- Health mismatches caused by schedule gaps.
+Install compatibility profile:
+```bash
+bash scripts/fc_setup_crons.sh --profile full
+```
 
-Troubleshooting sources:
-- `logs-codex-runs/fc-ticks/*.cron.log`
-- `logs-codex-runs/health-snapshot.log`
-- monitor `/api/status` sources and freshness.
+Expected:
+- legacy multi-lane lines may reappear for incident recovery
 
-## 7) Compatibility and Migration Notes
-- Cron profile behavior is stable; additional advisory lane scheduling should remain additive.
-- Environment controls remain available for timeout/cadence tuning during migration.
-- `planner_architect_orchestrator` remains a compatibility alias; `planner` stays canonical in the installed cron lines.
+## Observability
+Primary verification points:
+- `crontab -l`
+- `logs-codex-runs/fc-ticks/planner.cron.log`
+- `/api/status`
+- `bash scripts/fc_doctor.sh --json`
 
-## 8) Acceptance Criteria
-- Installing profile `full`, `canary`, or `planner-experimental` yields deterministic role schedules.
-- Utility jobs remain present in both profiles.
-- Advisory lane policy remains explicit and non-breaking.
+Expected in target mode:
+- `execution_mode=planner_experimental`
+- `core_roles=["planner"]`
+
+## Acceptance Criteria
+- `planner-experimental` installs deterministically
+- planner-only scheduling remains stable
+- compatibility profiles remain available without changing the target architecture definition
