@@ -84,6 +84,56 @@ def _runtime_rate_limit_snapshot() -> dict[str, Any]:
         "warnings": warnings,
     }
 
+
+INGESTION_SOURCE_OBSERVABILITY = (
+    ("forecasts", "forecasts", "forecasts"),
+    ("news", "news_feed", "news_feed"),
+    ("macro_series", "macro_series", "macro_series"),
+    ("stocks", "stocks/prices", "stocks"),
+    ("backtests", "backtests", "backtests"),
+    ("brief_weekly", "brief_weekly", "brief_weekly"),
+    ("brief_daily", "brief_daily", "brief_daily"),
+)
+
+
+def _ingestion_source_status(
+    *,
+    source_name: str,
+    file_key: str,
+    ttl_key: str,
+    freshness_payload: FreshnessFn,
+    data_freshness_ttl: dict[str, int],
+    now: datetime,
+) -> dict[str, Any]:
+    payload = _load_json_compat(file_key)
+    if payload is None and not file_key.endswith(".json"):
+        payload = _load_json_compat(f"{file_key}.json")
+
+    ttl_seconds = data_freshness_ttl.get(ttl_key, 24 * 3600)
+    freshness = freshness_payload(payload, ttl_seconds, now=now)
+    status = str(freshness.get("status") or "missing")
+    is_fresh = bool(freshness.get("is_fresh"))
+    errors: list[str] = []
+
+    if payload is None:
+        status = "missing"
+        errors.append("payload_missing")
+    elif not isinstance(payload, dict):
+        errors.append("payload_invalid")
+        status = "invalid_payload"
+    elif status != "fresh":
+        errors.append("payload_stale")
+
+    return {
+        "source": source_name,
+        "file": file_key,
+        "status": status,
+        "is_fresh": is_fresh,
+        "freshness": freshness,
+        "errors": errors,
+        "path": f"data/{file_key}.json",
+    }
+
 def create_health_router(
     *,
     ok_response: OkFn,
@@ -187,6 +237,37 @@ def create_health_router(
             ),
             "source": ["api_health", "freshness_metrics"],
             "status": "ok",
+        })
+
+    @router.get("/api/ingestion/health")
+    async def ingestion_health():
+        now = datetime.now(timezone.utc)
+        sources = [
+            _ingestion_source_status(
+                source_name=source_name,
+                file_key=file_key,
+                ttl_key=ttl_key,
+                freshness_payload=freshness_payload,
+                data_freshness_ttl=data_freshness_ttl,
+                now=now,
+            )
+            for source_name, file_key, ttl_key in INGESTION_SOURCE_OBSERVABILITY
+        ]
+
+        errors_by_source = {
+            item["source"]: item["errors"] for item in sources if item["errors"]
+        }
+        degraded_count = sum(1 for item in sources if not item["is_fresh"])
+        all_fresh = degraded_count == 0
+
+        return ok_response({
+            "status": "ok" if all_fresh else "degraded",
+            "generated_at": now.isoformat().replace("+00:00", "Z"),
+            "source": ["api_health", "ingestion"],
+            "sources": sources,
+            "degraded_count": degraded_count,
+            "errors_by_source": errors_by_source,
+            "all_fresh": all_fresh,
         })
 
     @router.get("/api/frontend/config")
