@@ -141,6 +141,28 @@ def planner_subagent_context(root: Path, role: str, max_chars: int = 240) -> str
     return compact_text(cp.stdout, max_chars)
 
 
+def product_priority_context(root: Path, max_chars: int = 240) -> str:
+    script_path = root / "platform" / "automation" / "product_priority_guard.py"
+    if not script_path.exists():
+        return "none"
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--root",
+        str(root),
+        "--api-base-url",
+        os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050"),
+        "prompt-context",
+    ]
+    try:
+        cp = subprocess.run(cmd, text=True, capture_output=True, check=False, cwd=str(root))
+    except Exception:
+        return "none"
+    if cp.returncode != 0:
+        return "none"
+    return compact_text(cp.stdout, max_chars)
+
+
 def queue_summary(queue_path: Path) -> dict[str, str]:
     result = {
         "ready_items": "none",
@@ -520,6 +542,7 @@ def main() -> int:
     publication_channels = run_parallel_workstream(parallel_script, role, "channels", 4, 360, cwd=root)
     worker_summary = dynamic_worker_context(root, role)
     planner_subagent_summary = planner_subagent_context(root, role)
+    product_priority_summary = product_priority_context(root)
 
     agent_memory = compact_file_tail(role_memory_dir / f"{role}.md", 8, 180)
     self_last_contract = compact_text(read_last_contract_hint(last_contract_file, "self"), 200)
@@ -575,6 +598,7 @@ def main() -> int:
             f"workboard_context={workboard_context} | "
             f"worker_summary={worker_summary} | "
             f"planner_subagent_summary={planner_subagent_summary} | "
+            f"product_priority_summary={product_priority_summary} | "
             f"agent_messages_tail={agent_messages_tail_text} | "
             f"agent_message_ids={agent_message_ids} | "
             f"trace_tail={trace_tail} | "
@@ -617,6 +641,7 @@ def main() -> int:
             f"workboard_context={workboard_context} | "
             f"worker_summary={worker_summary} | "
             f"planner_subagent_summary={planner_subagent_summary} | "
+            f"product_priority_summary={product_priority_summary} | "
             f"publication_channels={publication_channels} | "
             f"team_chat_tail={team_chat_tail} | "
             f"team_iteration_tail={team_iteration_tail} | "
