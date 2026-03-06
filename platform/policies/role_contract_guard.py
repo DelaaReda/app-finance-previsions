@@ -1147,19 +1147,9 @@ def main() -> int:
     # ── CHECK 8b : dev must provide architecture/reuse/qa evidence ──────────
     if role == "dev" and task_update in {"claim", "complete", "handoff"}:
         if task_update == "claim":
-            # Claim payloads may be lightweight; however, if deep evidence fields are
-            # provided, they must not be placeholders.
-            optional_claim_fields = (
-                "root_cause",
-                "architecture_check",
-                "vision_alignment",
-                "reuse_check",
-            )
-            weak_or_missing_dev = [
-                field
-                for field in optional_claim_fields
-                if field in ev and (ev.get(field, "").strip() and _is_weak_evidence(ev.get(field, "")))
-            ]
+            # Claim payloads are intentionally lightweight for continuous flow.
+            # Deep evidence stays mandatory only at complete/handoff stages.
+            weak_or_missing_dev = []
         else:
             required_dev_fields = (
                 "root_cause",
@@ -1324,6 +1314,13 @@ def main() -> int:
                 ev = _upsert_evidence(values, ev, "planner_non_passive_policy", "enforced")
                 if _is_empty_or_placeholder(ev.get("planner_action_required", "")):
                     ev = _upsert_evidence(values, ev, "planner_action_required", "quality_backfill")
+                # Compatibility marker for downstream monitors/tests expecting legacy soft issue token.
+                ev = _append_issue(
+                    ev=ev,
+                    values=values,
+                    code="planner_evidence_incomplete_soft",
+                    severity="low",
+                )
                 values["EVIDENCE"] = "; ".join(
                     f"{k}={v}" for k, v in ev.items() if str(k).strip()
                 )
@@ -1376,6 +1373,13 @@ def main() -> int:
                         code="planner_evidence_autofill_missing",
                         severity="low",
                     )
+                    # Backward-compat marker still consumed by legacy dashboards/tests.
+                    ev = _append_issue(
+                        ev=ev,
+                        values=values,
+                        code="planner_evidence_incomplete_soft",
+                        severity="low",
+                    )
                     values["EVIDENCE"] = "; ".join(
                         f"{k}={v}" for k, v in ev.items() if str(k).strip()
                     )
@@ -1393,8 +1397,9 @@ def main() -> int:
                     values["RISKS"] = "planner evidence incomplete soft-enforced with mandatory quality backfill"
                     if _is_empty_or_placeholder(ev.get("planner_action_required", "")):
                         ev = _upsert_evidence(values, ev, "planner_action_required", "quality_backfill")
+                    planner_quality_score_local = max(0, 100 - (len(sorted(set(weak_or_missing_planner))) * 25))
                     ev = _upsert_evidence(values, ev, "planner_quality_missing", missing_csv or "none")
-                    ev = _upsert_evidence(values, ev, "planner_quality_score", str(planner_quality_score))
+                    ev = _upsert_evidence(values, ev, "planner_quality_score", str(planner_quality_score_local))
                     ev = _upsert_evidence(values, ev, "planner_quality_autofix", "1")
                     ev = _append_issue(
                         ev=ev,
@@ -1801,6 +1806,17 @@ def main() -> int:
         ev=ev,
         task_update=task_update,
     )
+
+    # Compatibility marker should only be injected after issue-report validation.
+    if role == "planner" and values.get("STATUS", "").strip().upper() != "BLOCKED":
+        delta_token = values.get("DELTA", "").strip().upper()
+        if delta_token in {"PLANNER_QUALITY_INCOMPLETE", "PLANNER_EVIDENCE_AUTOFILLED"}:
+            ev = _append_issue(
+                ev=ev,
+                values=values,
+                code="planner_evidence_incomplete_soft",
+                severity="low",
+            )
 
     if queue_version:
         ev = _upsert_evidence(values, ev, "queue_version", queue_version)

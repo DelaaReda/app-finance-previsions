@@ -1,0 +1,1005 @@
+{
+  "report_kind": "planner_monolane_migration",
+  "mode": "dry_run",
+  "at": "2026-03-06T18:14:43Z",
+  "board_path": "docs/operations/orchestrator/parallel-workstreams.json",
+  "queue_path": "docs/operations/orchestrator/priority-queue.json",
+  "counts": {
+    "tasks_role_reassigned": 17,
+    "tasks_ready_normalized": 4,
+    "tasks_requeued_from_active": 0,
+    "tasks_assignee_cleared": 0,
+    "tasks_target_preserved": 17,
+    "queue_owner_reassigned": 23,
+    "queue_ready_normalized": 4,
+    "queue_target_preserved": 0,
+    "task_changes": 17,
+    "queue_changes": 26
+  },
+  "before": {
+    "board_state_counts": {
+      "DONE": 143,
+      "READY_DEV": 4,
+      "WAITING_DEP": 19,
+      "READY_PLANNER": 1
+    },
+    "queue_state_counts": {
+      "DONE": 17,
+      "READY_DEV": 4,
+      "WAITING_DEP": 14,
+      "PLANNED": 22,
+      "READY_PLANNER": 1
+    }
+  },
+  "after": {
+    "board_state_counts": {
+      "DONE": 143,
+      "READY_PLANNER": 5,
+      "WAITING_DEP": 19
+    },
+    "queue_state_counts": {
+      "DONE": 17,
+      "READY_PLANNER": 5,
+      "WAITING_DEP": 14,
+      "PLANNED": 22
+    }
+  },
+  "task_changes": [
+    {
+      "id": "BATCH-27-DEV-02",
+      "before": {
+        "id": "BATCH-27-DEV-02",
+        "role": "dev",
+        "assignee": "",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-27-DEV-02",
+        "role": "planner",
+        "assignee": "",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-27-DEV-03",
+      "before": {
+        "id": "BATCH-27-DEV-03",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-27-DEV-03",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-27-ADMIN-01",
+      "before": {
+        "id": "BATCH-27-ADMIN-01",
+        "role": "admin",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-27-ADMIN-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "admin",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "admin",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-28-DEV-01",
+      "before": {
+        "id": "BATCH-28-DEV-01",
+        "role": "dev",
+        "assignee": "",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-28-DEV-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-28-DEV-02",
+      "before": {
+        "id": "BATCH-28-DEV-02",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-28-DEV-02",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-28-DEV-03",
+      "before": {
+        "id": "BATCH-28-DEV-03",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-28-DEV-03",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-28-ADMIN-01",
+      "before": {
+        "id": "BATCH-28-ADMIN-01",
+        "role": "admin",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-28-ADMIN-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "admin",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "admin",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-11-DEV-02",
+      "before": {
+        "id": "BATCH-11-DEV-02",
+        "role": "dev",
+        "assignee": "",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-11-DEV-02",
+        "role": "planner",
+        "assignee": "",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-11-DEV-03",
+      "before": {
+        "id": "BATCH-11-DEV-03",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-11-DEV-03",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-11-ADMIN-01",
+      "before": {
+        "id": "BATCH-11-ADMIN-01",
+        "role": "admin",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-11-ADMIN-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "admin",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "admin",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-51-DEV-02",
+      "before": {
+        "id": "BATCH-51-DEV-02",
+        "role": "dev",
+        "assignee": "",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-51-DEV-02",
+        "role": "planner",
+        "assignee": "",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-51-DEV-03",
+      "before": {
+        "id": "BATCH-51-DEV-03",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-51-DEV-03",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-51-ADMIN-01",
+      "before": {
+        "id": "BATCH-51-ADMIN-01",
+        "role": "admin",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-51-ADMIN-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "admin",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "admin",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-58-DEV-01",
+      "before": {
+        "id": "BATCH-58-DEV-01",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-58-DEV-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-58-DEV-02",
+      "before": {
+        "id": "BATCH-58-DEV-02",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-58-DEV-02",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-58-DEV-03",
+      "before": {
+        "id": "BATCH-58-DEV-03",
+        "role": "dev",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-58-DEV-03",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "dev",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "dev",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-58-ADMIN-01",
+      "before": {
+        "id": "BATCH-58-ADMIN-01",
+        "role": "admin",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-58-ADMIN-01",
+        "role": "planner",
+        "assignee": "",
+        "state": "WAITING_DEP",
+        "meta": {
+          "planner_monolane": {
+            "planner_subagent_target_role": "admin",
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "admin",
+            "migrated_from_state": "WAITING_DEP"
+          }
+        }
+      }
+    }
+  ],
+  "queue_changes": [
+    {
+      "id": "BATCH-11",
+      "before": {
+        "id": "BATCH-11",
+        "owner_role": "planner",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-11",
+        "owner_role": "planner",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "planner",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-27",
+      "before": {
+        "id": "BATCH-27",
+        "owner_role": "planner",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-27",
+        "owner_role": "planner",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "planner",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-28",
+      "before": {
+        "id": "BATCH-28",
+        "owner_role": "planner",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-28",
+        "owner_role": "planner",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "planner",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-29",
+      "before": {
+        "id": "BATCH-29",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-29",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-30",
+      "before": {
+        "id": "BATCH-30",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-30",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-31",
+      "before": {
+        "id": "BATCH-31",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-31",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-32",
+      "before": {
+        "id": "BATCH-32",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-32",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-33",
+      "before": {
+        "id": "BATCH-33",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-33",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-34",
+      "before": {
+        "id": "BATCH-34",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-34",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-35",
+      "before": {
+        "id": "BATCH-35",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-35",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-36",
+      "before": {
+        "id": "BATCH-36",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-36",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-37",
+      "before": {
+        "id": "BATCH-37",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-37",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-38",
+      "before": {
+        "id": "BATCH-38",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-38",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-39",
+      "before": {
+        "id": "BATCH-39",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-39",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-40",
+      "before": {
+        "id": "BATCH-40",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-40",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-41",
+      "before": {
+        "id": "BATCH-41",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-41",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-42",
+      "before": {
+        "id": "BATCH-42",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-42",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-43",
+      "before": {
+        "id": "BATCH-43",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-43",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-44",
+      "before": {
+        "id": "BATCH-44",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-44",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-45",
+      "before": {
+        "id": "BATCH-45",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-45",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-46",
+      "before": {
+        "id": "BATCH-46",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-46",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-47",
+      "before": {
+        "id": "BATCH-47",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-47",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-48",
+      "before": {
+        "id": "BATCH-48",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-48",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-49",
+      "before": {
+        "id": "BATCH-49",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-49",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-50",
+      "before": {
+        "id": "BATCH-50",
+        "owner_role": "",
+        "state": "PLANNED",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-50",
+        "owner_role": "planner",
+        "state": "PLANNED",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "PLANNED"
+          }
+        }
+      }
+    },
+    {
+      "id": "BATCH-51",
+      "before": {
+        "id": "BATCH-51",
+        "owner_role": "",
+        "state": "READY_DEV",
+        "meta": {}
+      },
+      "after": {
+        "id": "BATCH-51",
+        "owner_role": "planner",
+        "state": "READY_PLANNER",
+        "meta": {
+          "planner_monolane": {
+            "migrated_at": "2026-03-06T18:14:43Z",
+            "migrated_from_role": "",
+            "migrated_from_state": "READY_DEV"
+          }
+        }
+      }
+    }
+  ]
+}

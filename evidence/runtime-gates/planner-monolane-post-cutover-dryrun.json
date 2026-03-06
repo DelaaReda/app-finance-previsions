@@ -1,0 +1,51 @@
+{
+  "report_kind": "planner_monolane_migration",
+  "mode": "dry_run",
+  "at": "2026-03-06T19:21:33Z",
+  "board_path": "docs/operations/orchestrator/parallel-workstreams.json",
+  "queue_path": "docs/operations/orchestrator/priority-queue.json",
+  "counts": {
+    "tasks_role_reassigned": 0,
+    "tasks_ready_normalized": 0,
+    "tasks_requeued_from_active": 0,
+    "tasks_assignee_cleared": 0,
+    "tasks_target_preserved": 0,
+    "queue_owner_reassigned": 0,
+    "queue_ready_normalized": 0,
+    "queue_target_preserved": 0,
+    "task_changes": 0,
+    "queue_changes": 0
+  },
+  "before": {
+    "board_state_counts": {
+      "DONE": 143,
+      "READY_PLANNER": 4,
+      "WAITING_DEP": 19,
+      "IN_PROGRESS": 1
+    },
+    "queue_state_counts": {
+      "DONE": 17,
+      "READY_PLANNER": 4,
+      "WAITING_DEP": 14,
+      "PLANNED": 22,
+      "IN_PROGRESS": 1
+    }
+  },
+  "after": {
+    "board_state_counts": {
+      "DONE": 143,
+      "READY_PLANNER": 4,
+      "WAITING_DEP": 19,
+      "IN_PROGRESS": 1
+    },
+    "queue_state_counts": {
+      "DONE": 17,
+      "READY_PLANNER": 4,
+      "WAITING_DEP": 14,
+      "PLANNED": 22,
+      "IN_PROGRESS": 1
+    }
+  },
+  "task_changes": [],
+  "queue_changes": []
+}

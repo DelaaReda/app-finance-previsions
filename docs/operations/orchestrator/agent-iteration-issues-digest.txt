@@ -1,5 +1,5 @@
-window=60m total=42 warn=1 error=0 critical=0
-planner issues_60m=0 last=none sev=INFO age=0m
-dev issues_60m=0 last=none sev=INFO age=9m
-admin issues_60m=1 last=none sev=INFO age=9m
-next=monitor_and_prevent_repeat
+window=60m total=1 warn=0 error=0 critical=0
+planner issues_60m=0 last=none sev=INFO age=576m
+dev issues_60m=0 last=none sev=INFO age=570m
+admin issues_60m=0 last=none sev=INFO age=570m
+next=none

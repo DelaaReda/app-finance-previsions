@@ -5,6 +5,7 @@ Business logic lives in `services/forecasts_service.py`.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +39,19 @@ except Exception:  # pragma: no cover
     edge_forecasts_degraded = lambda data, detail=None, **_: {"ok": True, "data": data}  # type: ignore
 
 from storage.io import load_json
+import logging as _logging
+
+try:
+    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from platform.legacy.services.service_standard import (  # type: ignore
+            ensure_decision_contract,
+            utc_now_iso,
+        )
+    except Exception:  # pragma: no cover
+        ensure_decision_contract = None  # type: ignore
+        utc_now_iso = None  # type: ignore
 
 try:
     from schemas.forecasts import (  # type: ignore
@@ -61,6 +75,43 @@ except Exception:  # pragma: no cover
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/forecasts")
 EDGE_FORECASTS_FLAG = "FC_API_EDGE_FORECASTS"
+
+
+def _now_iso() -> str:
+    if callable(utc_now_iso):
+        return utc_now_iso()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _apply_decision_contract(payload: Dict[str, Any], *, route: str) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+
+    now_iso = payload.get("generated_at") or payload.get("freshness") or _now_iso()
+    payload.setdefault("generated_at", now_iso)
+    payload.setdefault("freshness", now_iso)
+    payload.setdefault("last_update", payload.get("last_update") or now_iso)
+    payload.setdefault("source", [route])
+
+    if callable(ensure_decision_contract):
+        ensure_decision_contract(
+            payload,
+            default_source=route,
+            verdict="hold",
+            confidence=payload.get("avg_confidence") or payload.get("confidence") or 0.45,
+            why=["Forecast payload is informational with decision context."],
+            risk_level=payload.get("risk_level") or payload.get("risk", {}).get("level") if isinstance(payload.get("risk"), dict) else None,
+            freshness=payload.get("freshness"),
+        )
+        return payload
+
+    payload.setdefault("verdict", "hold")
+    payload.setdefault("confidence", 0.45)
+    payload.setdefault("why", ["Forecast payload is informational with decision context."])
+    payload.setdefault("risk_level", "medium")
+    payload.setdefault("risk", {"level": "medium", "caveat": ""})
+    payload.setdefault("risk_flag", payload.get("risk_level") in {"high", "critical"})
+    return payload
 
 # Expose service state for test/backward-compat contract checks.
 _FORECASTS_RESPONSE_CACHE = forecasts_service._FORECASTS_RESPONSE_CACHE
@@ -100,11 +151,13 @@ async def get_forecasts(
             debug=debug,
             load_json_fn=load_json,
         )
+        _apply_decision_contract(payload, route="forecasts_route")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_forecasts_ok(payload)
         return ok(payload)
     except Exception as route_exc:
         logger.error("Error in get_forecasts route orchestration: %s", route_exc, exc_info=True)
+        now_iso = _now_iso()
         # Never-empty route-level fallback.
         fallback_payload = {
             "rows": [],
@@ -112,11 +165,11 @@ async def get_forecasts(
             "total": 0,
             "offset": int(offset),
             "limit": int(limit),
-            "generated_at": "",
-            "freshness": "",
+            "generated_at": now_iso,
+            "freshness": now_iso,
             "freshness_status": "unknown",
             "freshness_age": -1.0,
-            "last_update": "",
+            "last_update": now_iso,
             "source": ["forecasts_route", "critical_route_error_fallback"],
             "provider_chain": ["route_exception_fallback"],
             "fallback_used": True,
@@ -156,6 +209,7 @@ async def get_forecasts(
             "error": str(route_exc),
             "message": "Forecasts route failed critically but returned never-empty fallback.",
         }
+        _apply_decision_contract(fallback_payload, route="forecasts_route")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_forecasts_degraded(fallback_payload, detail=str(route_exc))
         return ok(fallback_payload)
@@ -172,6 +226,7 @@ async def get_forecast(forecast_id: str):
             forecast_id=forecast_id,
             load_json_fn=load_json,
         )
+        _apply_decision_contract(payload, route="forecast_detail")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_ok(
                 payload,
@@ -181,17 +236,19 @@ async def get_forecast(forecast_id: str):
         return ok(payload)
     except Exception as exc:
         logger.error("Error in get_forecast route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
         fallback_payload = {
             "forecast": {},
             "found": False,
-            "generated_at": "",
-            "freshness": "",
-            "last_update": "",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
             "source": ["forecasts_route", "critical_route_error_fallback"],
             "warnings": [],
             "error": str(exc),
             "message": "Forecast temporarily unavailable, returning empty response per never-empty pattern.",
         }
+        _apply_decision_contract(fallback_payload, route="forecast_detail")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_degraded(
                 fallback_payload,

@@ -160,8 +160,9 @@ with_lock_or_exit() {
 }
 
 is_local_up() {
-  curl -fsS -m 5 -o /dev/null "$LOCAL_URL" >/dev/null 2>&1 \
-    && curl -fsS -m 5 -o /dev/null "$LOCAL_DIAG_URL" >/dev/null 2>&1
+  # Keep local liveness check lightweight and stable: `/api/runtime-diagnostics`
+  # can be heavier and should not trigger monitor restarts when `/api/status` is up.
+  curl -fsS -m 5 -o /dev/null "$LOCAL_URL" >/dev/null 2>&1
 }
 
 is_public_up() {

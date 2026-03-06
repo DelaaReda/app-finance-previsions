@@ -64,3 +64,12 @@ cd /home/venom/analyse-financiere
 scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050
 scripts/runtime_e2e_gate.sh
 ```
+
+## 2026-03-06 Monitor API additions (non-edge, additive)
+
+For runtime supervision, monitor now also exposes:
+- `/api/agent-activity`
+- `/api/tasks/active`
+- `/api/dependencies/map`
+
+These routes are observability-only and do not modify edge routing for product APIs.

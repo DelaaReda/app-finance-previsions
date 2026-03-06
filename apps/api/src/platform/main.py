@@ -1812,6 +1812,11 @@ def register_routes(app: FastAPI):
                 else None
             )
             freshness_iso = _to_utc_iso(freshness) or now_iso
+            freshness_meta = _freshness_payload(
+                {"freshness": freshness_iso},
+                STOCKS_PRICES_CACHE_TTL_SECONDS,
+                now=datetime.now(timezone.utc),
+            )
 
             results: Dict[str, Dict[str, Any]] = {}
             source_tags: List[str] = ["stocks_prices_route"]
@@ -1920,8 +1925,15 @@ def register_routes(app: FastAPI):
                 "interval": interval,
                 "timestamp": freshness_iso,
                 "freshness": freshness_iso,
+                "freshness_status": freshness_meta["status"],
+                "freshness_age": freshness_meta["age_seconds"],
                 "last_update": freshness_iso,
                 "generated_at": now_iso,
+                "cache": {
+                    "hit": False,
+                    "age_seconds": None,
+                    "ttl_seconds": STOCKS_PRICES_CACHE_TTL_SECONDS,
+                },
                 "source": source_tags,
                 "filters_applied": filters_applied,
                 "stats": {
@@ -1976,6 +1988,13 @@ def register_routes(app: FastAPI):
                     "freshness": now_iso,
                     "last_update": now_iso,
                     "generated_at": now_iso,
+                    "freshness_status": "missing",
+                    "freshness_age": 0.0,
+                    "cache": {
+                        "hit": False,
+                        "age_seconds": 0.0,
+                        "ttl_seconds": STOCKS_PRICES_CACHE_TTL_SECONDS,
+                    },
                     "source": source_tags,
                     "filters_applied": filters_applied,
                     "stats": {
@@ -1998,6 +2017,13 @@ def register_routes(app: FastAPI):
                 "freshness": now_iso,
                 "last_update": now_iso,
                 "generated_at": now_iso,
+                "freshness_status": "missing",
+                "freshness_age": 0.0,
+                "cache": {
+                    "hit": False,
+                    "age_seconds": 0.0,
+                    "ttl_seconds": STOCKS_PRICES_CACHE_TTL_SECONDS,
+                },
                 "source": source_tags,
                 "filters_applied": filters_applied,
                 "stats": {
@@ -2621,6 +2647,12 @@ def register_routes(app: FastAPI):
                 "news_feed_cache_hit",
             )
             if cached_payload:
+                if "cache" not in cached_payload:
+                    cached_payload["cache"] = {
+                        "hit": True,
+                        "age_seconds": None,
+                        "ttl_seconds": NEWS_FEED_CACHE_TTL_SECONDS,
+                    }
                 return _ok(cached_payload)
 
             source_tags: List[str] = ["news_feed_route"]
@@ -2764,6 +2796,11 @@ def register_routes(app: FastAPI):
 
             freshness_iso = _to_utc_iso(freshness) or _to_utc_iso(latest_published) or now_iso
             last_update_iso = _to_utc_iso(last_update) or freshness_iso
+            freshness_meta = _freshness_payload(
+                {"freshness": freshness_iso},
+                NEWS_FEED_CACHE_TTL_SECONDS,
+                now=datetime.now(timezone.utc),
+            )
             avg_score = (
                 round(sum(scored_values) / len(scored_values), 6)
                 if scored_values
@@ -2782,7 +2819,14 @@ def register_routes(app: FastAPI):
                 "freshness": freshness_iso,
                 "last_update": last_update_iso,
                 "generated_at": now_iso,
+                "freshness_status": freshness_meta["status"],
+                "freshness_age": freshness_meta["age_seconds"],
                 "source": source_tags,
+                "cache": {
+                    "hit": False,
+                    "age_seconds": None,
+                    "ttl_seconds": NEWS_FEED_CACHE_TTL_SECONDS,
+                },
                 "filters_applied": filters_applied,
                 "stats": {
                     "raw_count": len(normalized_items),
@@ -2810,6 +2854,13 @@ def register_routes(app: FastAPI):
                 "freshness": now_iso,
                 "last_update": now_iso,
                 "generated_at": now_iso,
+                "freshness_status": "missing",
+                "freshness_age": 0.0,
+                "cache": {
+                    "hit": False,
+                    "age_seconds": 0.0,
+                    "ttl_seconds": NEWS_FEED_CACHE_TTL_SECONDS,
+                },
                 "source": ["news_feed_route", "critical_error_fallback"],
                 "filters_applied": filters_applied,
                 "stats": {

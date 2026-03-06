@@ -1,6 +1,6 @@
 {
   "version": "workboard_1772498403_d870e2227f2b",
-  "updated_at": "2026-03-06T11:44:23Z",
+  "updated_at": "2026-03-06T21:49:01Z",
   "sprint": {
     "id": "S-BOOTSTRAP",
     "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
@@ -419,7 +419,7 @@
       "source_state": "READY_DEV",
       "state": "READY_DEV",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:44:17Z",
+      "updated_at": "2026-03-06T21:49:01Z",
       "next_action": "claim BATCH-27-DEV-01 (READY pour dev) \u2192 Reliability SRE Pack + Chaos Drills",
       "goals": [
         "Aligner les contrats backend->frontend (judge/forecasts/news/portfolio/search) pour un payload stable et versionnable.",
@@ -438,7 +438,7 @@
       "source_state": "READY_DEV",
       "state": "READY_DEV",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:44:17Z",
+      "updated_at": "2026-03-06T21:49:01Z",
       "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
       "goals": [
         "Rendre visibles les etats runtime front/back: loading, stale, degraded, error par widget critique.",
@@ -480,7 +480,7 @@
         "Garantir un SLO de fraicheur exploitable en UI."
       ],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T11:44:17Z",
+      "updated_at": "2026-03-06T21:49:01Z",
       "source_state": "READY_DEV"
     },
     {
@@ -777,10 +777,10 @@
       "id": "BATCH-51",
       "title": "PRODUCT VISION \u2014 Finance Copilot",
       "priority": "P2",
-      "source_state": "IN_PROGRESS",
-      "state": "IN_PROGRESS",
+      "source_state": "READY_DEV",
+      "state": "READY_DEV",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T11:44:17Z"
+      "updated_at": "2026-03-06T21:49:01Z"
     },
     {
       "id": "BATCH-52",
@@ -840,10 +840,10 @@
       "id": "BATCH-58",
       "title": "**Profil:** Reda (venom) \u2014 professionnel non-expert en finance qui g\u00e8re ses investissements pers",
       "priority": "P2",
-      "source_state": "READY_PLANNER",
+      "source_state": "IN_PROGRESS",
       "state": "IN_PROGRESS",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:44:18Z"
+      "updated_at": "2026-03-06T21:49:01Z"
     }
   ],
   "tasks": [
@@ -1528,12 +1528,10 @@
       "role": "dev",
       "state": "DONE",
       "priority": "P1",
-      "depends_on": [
-        "BATCH-06-ARCH"
-      ],
+      "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-06T11:44:23Z",
+      "updated_at": "2026-03-06T21:49:01Z",
       "started_at": "2026-03-03T14:37:05Z",
       "completed_at": "2026-03-03T15:28:08Z",
       "notes": [
@@ -1606,12 +1604,10 @@
       "role": "dev",
       "state": "DONE",
       "priority": "P1",
-      "depends_on": [
-        "BATCH-07-ARCH"
-      ],
+      "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-03-06T11:44:23Z",
+      "updated_at": "2026-03-06T21:49:01Z",
       "started_at": "2026-03-03T16:50:27Z",
       "completed_at": "2026-03-03T16:51:41Z",
       "notes": [
@@ -2184,33 +2180,38 @@
       "code": "DEV-01",
       "title": "Reliability SRE Pack + Chaos Drills [DEV-01]",
       "role": "dev",
-      "state": "READY_DEV",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-27-ARCH"
       ],
       "blocked_reason": "",
-      "artifacts": [],
+      "artifacts": [
+        "c49ba51f7f9b6d8b9b9"
+      ],
       "notes": [
         "BACKEND-FIRST: harmoniser les payloads API (judge/forecasts/news/portfolio/search) pour contrat unique verdict/confidence/why/risk/freshness.",
         "Limiter les edits aux modules existants (domains/* + routes dashboard/search/judge) sans nouvelle stack ni endpoint fantome.",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
+        "Normalized search/news/portfolio API contract payloads for DEV-01",
+        "cmd=python3 -m py_compile apps/api/src/domains/copilot/api/search.py apps/api/src/domains/market_data/api/news.py apps/api/src/domains/market_data/api/portfolios.py;tests_run=python3 -m py_compile apps/api/src/domains/copilot/api/search.py apps/api/src/domains/market_data/api/news.py apps/api/src/domains/market_data/api/portfolios.py:PASS;prechange_plan_count=6;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-DEV-01/20260306T121634Z-416.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:22:24Z",
-      "completed_at": "",
+      "updated_at": "2026-03-06T12:16:34Z",
+      "completed_at": "2026-03-06T12:16:34Z",
       "prechange_plan_items": [
-        "definir le scope exact du module et du task cible",
-        "evaluer dependency impact amont aval et integration cross role",
-        "identifier les risques de regression et les edge cases critiques",
-        "executer verification via tests smoke pytest puis collecter les preuves",
-        "preparer un rollback fallback de mitigation si la validation echoue."
+        "scope coverage: normalize contract envelopes for search",
+        "news and portfolios endpoints",
+        "dependency impact: keep service call dependencies unchanged and no new external coupling added",
+        "risk controls: preserve existing status-code and validation behavior to avoid regressions",
+        "verification checks: run py_compile on all touched api route modules after patch",
+        "rollback option: revert commit c49ba51f7f9b6d8b9b9 and redeploy fallback payloads if needed"
       ],
       "prechange_architecture_checks": [
-        "reutiliser_les_modules_existants_et_limiter_le_couplage_inter_composants",
-        "maintenir_la_stabilite_des_contrats_api_et_schemas_publics",
-        "conserver_observabilite_et_plan_de_degradation_sans_breaking_change."
+        "api_contract_layer_consistency",
+        "route_payload_metadata_consistency",
+        "no_new_cross_layer_imports_from_lower_layers"
       ],
       "prechange_reflection_dimensions": [
         "scope",
@@ -2219,7 +2220,13 @@
         "verification",
         "rollback"
       ],
-      "prechange_gate_version": 2
+      "prechange_gate_version": 2,
+      "assignee": "dev",
+      "started_at": "2026-03-06T12:00:05Z",
+      "last_idempotency_key": "BATCH-27-DEV-01-P1772799306_12831",
+      "proof_manifests": [
+        "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-DEV-01/20260306T121634Z-416.yaml"
+      ]
     },
     {
       "id": "BATCH-27-DEV-02",
@@ -2227,7 +2234,7 @@
       "code": "DEV-02",
       "title": "Reliability SRE Pack + Chaos Drills [DEV-02]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "READY_DEV",
       "priority": "P1",
       "depends_on": [
         "BATCH-27-DEV-01"
@@ -2242,9 +2249,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:30:50.271133+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-27-DEV-03",
@@ -2267,9 +2282,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:30:50.271133+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-27-ADMIN-01",
@@ -2292,9 +2315,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:30:50.271133+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "admin",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "admin",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-28-PLAN",
@@ -2411,7 +2442,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:22:24Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "completed_at": "",
       "prechange_plan_items": [
         "definir le scope exact du module et du task cible",
@@ -2432,7 +2463,15 @@
         "verification",
         "rollback"
       ],
-      "prechange_gate_version": 2
+      "prechange_gate_version": 2,
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-28-DEV-02",
@@ -2455,9 +2494,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-28-DEV-03",
@@ -2480,9 +2527,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-28-ADMIN-01",
@@ -2505,9 +2560,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "admin",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "admin",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-28-GOV_REVIEW",
@@ -2982,22 +3045,51 @@
       "code": "DEV-01",
       "title": "Data Ingestion Core + Freshness SLO [DEV-01]",
       "role": "dev",
-      "state": "READY_DEV",
+      "state": "DONE",
       "priority": "P1",
       "depends_on": [
         "BATCH-11-ARCH"
       ],
-      "assignee": "",
+      "assignee": "dev",
       "blocked_reason": "",
-      "artifacts": [],
+      "artifacts": [
+        "docs/operations/orchestrator/proofs/BATCH-11/BATCH-11-DEV-01/20260306T120000Z.md"
+      ],
       "notes": [
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
+        "cmd=env PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/platform/tests/test_health_router.py -q;tests_run=apps/api/src/platform/tests/test_health_router.py -q:PASS(2);prechange_plan_count=5;prechange_arch_count=5;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/operations/orchestrator/proofs/BATCH-11/BATCH-11-DEV-01/20260306T115845Z-790.yaml"
       ],
       "handoff_to": "",
       "created_at": "2026-03-05T22:47:19Z",
-      "updated_at": "2026-03-06T11:22:24Z",
-      "started_at": "",
-      "completed_at": ""
+      "updated_at": "2026-03-06T11:58:45Z",
+      "started_at": "2026-03-06T11:46:18Z",
+      "completed_at": "2026-03-06T11:58:45Z",
+      "prechange_plan_items": [
+        "1) scope: confirm task in/out and dependencies",
+        "2) dependency_impact: map affected api health contract only",
+        "3) risk: assess fallback contract and import safety",
+        "4) verification: run targeted pytest health_router only",
+        "5) rollback: revert route helper on regression or route regression."
+      ],
+      "prechange_architecture_checks": [
+        "domain_boundary",
+        "artifact_traceability",
+        "reuse_first",
+        "no_sys_path_bridge",
+        "no_api_contract_regression"
+      ],
+      "prechange_reflection_dimensions": [
+        "scope",
+        "dependency_impact",
+        "risk",
+        "verification",
+        "rollback"
+      ],
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-60b672bf5166",
+      "proof_manifests": [
+        "docs/operations/orchestrator/proofs/BATCH-11/BATCH-11-DEV-01/20260306T115845Z-790.yaml"
+      ]
     },
     {
       "id": "BATCH-11-DEV-02",
@@ -3005,7 +3097,7 @@
       "code": "DEV-02",
       "title": "Data Ingestion Core + Freshness SLO [DEV-02]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "READY_DEV",
       "priority": "P1",
       "depends_on": [
         "BATCH-11-DEV-01"
@@ -3018,9 +3110,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-05T22:47:19Z",
-      "updated_at": "2026-03-05T22:47:19Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-11-DEV-03",
@@ -3041,9 +3141,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-05T22:47:19Z",
-      "updated_at": "2026-03-05T22:47:19Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-11-ADMIN-01",
@@ -3064,9 +3172,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-05T22:47:19Z",
-      "updated_at": "2026-03-05T22:47:19Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "admin",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "admin",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-11-GOV_REVIEW",
@@ -3188,22 +3304,28 @@
       "code": "DEV-01",
       "title": "PRODUCT VISION \u2014 Finance Copilot [DEV-01]",
       "role": "dev",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "priority": "P2",
       "depends_on": [
         "BATCH-51-ARCH"
       ],
       "assignee": "dev",
       "blocked_reason": "",
-      "artifacts": [],
+      "artifacts": [
+        "AGENTS.md",
+        "docs/product/planning/PRODUCT_VISION.md"
+      ],
       "notes": [
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
+        "Close_tick",
+        "cmd=SKIP(no_cmd_recorded);tests_run=PASS;prechange_plan_count=5;prechange_arch_count=3;prechange_reflection_count=5;prechange_gate_version=2;review_ref=none;review_verdict=GO_WITH_CAUTION;proof_manifest=docs/operations/orchestrator/proofs/BATCH-51/BATCH-51-DEV-01/20260306T114550Z-417.yaml",
+        "Completed by architect review 2026-03-06T11:47:43.117458+00:00: code committed, doc updated"
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T11:00:02Z",
+      "updated_at": "2026-03-06T11:47:43.117458+00:00",
       "started_at": "2026-03-06T11:00:02Z",
-      "completed_at": "",
+      "completed_at": "2026-03-06T11:47:43.117458+00:00",
       "prechange_plan_items": [
         "definir le scope exact du module et du task cible",
         "evaluer dependency impact amont aval et integration cross role",
@@ -3223,7 +3345,11 @@
         "verification",
         "rollback"
       ],
-      "prechange_gate_version": 2
+      "prechange_gate_version": 2,
+      "last_idempotency_key": "IK-fa572e4265ba",
+      "proof_manifests": [
+        "docs/operations/orchestrator/proofs/BATCH-51/BATCH-51-DEV-01/20260306T114550Z-417.yaml"
+      ]
     },
     {
       "id": "BATCH-51-DEV-02",
@@ -3231,7 +3357,7 @@
       "code": "DEV-02",
       "title": "PRODUCT VISION \u2014 Finance Copilot [DEV-02]",
       "role": "dev",
-      "state": "WAITING_DEP",
+      "state": "READY_DEV",
       "priority": "P2",
       "depends_on": [
         "BATCH-51-DEV-01"
@@ -3244,9 +3370,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T01:00:02Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-51-DEV-03",
@@ -3267,9 +3401,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T01:00:02Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-51-ADMIN-01",
@@ -3290,9 +3432,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T01:00:02Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "admin",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "admin",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-51-GOV_REVIEW",
@@ -4577,12 +4727,19 @@
       "blocked_reason": "",
       "artifacts": [],
       "notes": [
-        "AUTOBATCH-NOTE: generated by planner-autobatch to keep planner lane non-passive."
+        "AUTOBATCH-NOTE: generated by planner-autobatch to keep planner lane non-passive.",
+        "STALE_SWEEP:at=2026-03-06T12:49:01Z;task=BATCH-58-ANALYSIS;age_s=3883;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T14:04:01Z;task=BATCH-58-ANALYSIS;age_s=3839;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T15:24:01Z;task=BATCH-58-ANALYSIS;age_s=3718;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T16:49:01Z;task=BATCH-58-ANALYSIS;age_s=3899;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T18:04:01Z;task=BATCH-58-ANALYSIS;age_s=3837;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T19:24:01Z;task=BATCH-58-ANALYSIS;age_s=3719;action=reclaim;to_state=READY_PLANNER",
+        "STALE_SWEEP:at=2026-03-06T20:49:01Z;task=BATCH-58-ANALYSIS;age_s=3899;action=reclaim;to_state=READY_PLANNER"
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:44:18Z",
-      "started_at": "2026-03-06T11:44:18Z",
+      "updated_at": "2026-03-06T21:00:03Z",
+      "started_at": "2026-03-06T21:00:03Z",
       "completed_at": ""
     },
     {
@@ -4654,9 +4811,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:00:03Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-58-DEV-02",
@@ -4677,9 +4842,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:00:03Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-58-DEV-03",
@@ -4700,9 +4873,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:00:03Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "dev",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "dev",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-58-ADMIN-01",
@@ -4723,9 +4904,17 @@
       ],
       "handoff_to": "",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:00:03Z",
+      "updated_at": "2026-03-06T19:24:01Z",
       "started_at": "",
-      "completed_at": ""
+      "completed_at": "",
+      "meta": {
+        "planner_monolane": {
+          "planner_subagent_target_role": "admin",
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "admin",
+          "migrated_from_state": "WAITING_DEP"
+        }
+      }
     },
     {
       "id": "BATCH-58-GOV_REVIEW",
@@ -7731,6 +7920,2657 @@
         "decoupled_closed": "0",
         "decoupled_open": "0",
         "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T11:45:02Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T11:45:50Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-51-DEV-01",
+        "artifact": "docs/operations/orchestrator/proofs/BATCH-51/BATCH-51-DEV-01/20260306T114500Z.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-51/BATCH-51-DEV-01/20260306T114550Z-417.yaml",
+        "idempotency_key": "IK-fa572e4265ba",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-06T11:46:18Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-11-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-06T11:48:03Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "2",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T11:48:04Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T11:50:06Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T11:51:55Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T11:53:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T11:55:20Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T11:58:08Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T11:58:45Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-11-DEV-01",
+        "artifact": "docs/operations/orchestrator/proofs/BATCH-11/BATCH-11-DEV-01/20260306T120000Z.md",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-11/BATCH-11-DEV-01/20260306T115845Z-790.yaml",
+        "idempotency_key": "IK-60b672bf5166",
+        "prechange_plan_count": "5",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-06T11:59:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:00:05Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:00:05Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-27-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "5",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-06T12:00:07Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:03:08Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T12:05:02Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:08:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T12:10:08Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:13:09Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T12:16:34Z",
+      "kind": "complete",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-27-DEV-01",
+        "artifact": "c49ba51f7f9b6d8b9b9",
+        "handoff_to": "none",
+        "handoff_id": "none",
+        "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-DEV-01/20260306T121634Z-416.yaml",
+        "idempotency_key": "BATCH-27-DEV-01-P1772799306_12831",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "3",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-03-06T12:16:41Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T12:18:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T12:49:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3883,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T12:50:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T13:00:02Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T13:00:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T13:04:02Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T14:04:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3839,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T14:05:02Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T14:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:20:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:22:02Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T14:22:03Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:23:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:25:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:25:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:30:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:30:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:33:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:35:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:38:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:40:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:40:03Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:45:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:48:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:50:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:53:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:55:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:55:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T14:58:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:00:04Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:03:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:05:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:06:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:08:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:13:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:15:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:15:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:18:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:23:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:24:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3718,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T15:25:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:25:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:30:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:30:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:33:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:35:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:35:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:38:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:40:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:40:04Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:44:01Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T15:44:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:45:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:48:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:50:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:53:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:55:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:55:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T15:58:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:00:03Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:03:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:05:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:06:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:08:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:10:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:10:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:13:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:15:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:15:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:18:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:20:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:20:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:23:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:25:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:25:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:30:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:30:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:33:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:35:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:35:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:38:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:40:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:40:03Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:45:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:48:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:49:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3899,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T16:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:50:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:53:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:55:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:55:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T16:58:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:00:03Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T17:00:04Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:00:04Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:03:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:05:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:06:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:08:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:13:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:15:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:15:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:18:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:20:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:23:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:25:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:25:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:28:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:28:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:30:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:30:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:33:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:35:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:35:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:38:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:40:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:40:03Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:44:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:45:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:48:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:50:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:53:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:55:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:55:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T17:58:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:00:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:00:04Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:03:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:04:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3837,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T18:05:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:06:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:08:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:13:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:15:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:18:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:22:01Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T18:22:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:23:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:25:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:28:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:30:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:33:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:35:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:38:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:40:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:45:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:48:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:50:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:53:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:55:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T18:58:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:03:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:05:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:06:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:08:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:10:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:13:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:15:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:18:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:20:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:21:19Z",
+      "kind": "planner_monolane_migration",
+      "details": {
+        "at": "2026-03-06T19:21:19Z",
+        "tasks_role_reassigned": "17",
+        "tasks_ready_normalized": "4",
+        "tasks_requeued_from_active": "0",
+        "tasks_assignee_cleared": "0",
+        "tasks_target_preserved": "17"
+      }
+    },
+    {
+      "at": "2026-03-06T19:21:25Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:22:02Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:24:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3719,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T19:29:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "5",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T19:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:44:02Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T19:44:02Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T19:49:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T20:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T20:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T20:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T20:49:01Z",
+      "kind": "stale_task_sweep",
+      "details": {
+        "task_id": "BATCH-58-ANALYSIS",
+        "role": "planner",
+        "age_seconds": 3899,
+        "from_state": "IN_PROGRESS",
+        "to_state": "READY_PLANNER",
+        "mode": "reclaim"
+      }
+    },
+    {
+      "at": "2026-03-06T20:54:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T21:00:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T21:00:03Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T21:00:03Z",
+      "kind": "claim",
+      "details": {
+        "role": "planner",
+        "task_id": "BATCH-58-ANALYSIS",
+        "prechange_plan_count": "0",
+        "prechange_arch_count": "0",
+        "prechange_reflection_count": "0",
+        "prechange_gate_version": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T21:04:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-06T21:22:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T21:44:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-03-06T21:46:53Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "docs/operations/orchestrator/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "non_destructive": "1"
       }
     }
   ],

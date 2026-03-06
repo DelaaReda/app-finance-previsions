@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-06T11:00:03Z",
+  "updated_at": "2026-03-06T19:21:19Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -172,7 +172,7 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T11:22:24Z",
+      "updated_at": "2026-03-06T19:29:01Z",
       "next_action": "claim BATCH-11-ARCH (READY pour planner) \u2192 produire artefact architecture \u2192 d\u00e9bloquer DEV-01",
       "notes": [
         "implementation_architecture: keep ingestion in existing legacy jobs + domain services, normalize outputs before UI.",
@@ -184,7 +184,17 @@
         "BATCH-10"
       ],
       "dispatch_authorized": true,
-      "ready_at": "2026-03-05T22:47:19Z"
+      "ready_at": "2026-03-05T22:47:19Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-06T14:20:01Z",
+      "reconciled_at": "2026-03-06T14:20:01Z",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "planner",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-12",
@@ -500,7 +510,7 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:22:24Z",
+      "updated_at": "2026-03-06T19:29:01Z",
       "next_action": "claim BATCH-27-DEV-01 (READY pour dev) \u2192 Reliability SRE Pack + Chaos Drills",
       "notes": [
         "reuse_targets_ui: apps/web/src/domains/forecasts/pages/app.js, apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/pages/index.html.",
@@ -519,7 +529,17 @@
       "parked_at": "2026-03-05T22:47:19Z",
       "origin_state": "IN_PROGRESS",
       "dispatch_authorized": true,
-      "ready_at": "2026-03-06T00:18:03Z"
+      "ready_at": "2026-03-06T00:18:03Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-06T14:20:01Z",
+      "reconciled_at": "2026-03-06T14:20:01Z",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "planner",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-28",
@@ -529,7 +549,7 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T11:22:24Z",
+      "updated_at": "2026-03-06T19:29:01Z",
       "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
       "notes": [
         "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",
@@ -542,284 +562,481 @@
         "BATCH-27"
       ],
       "dispatch_authorized": true,
-      "ready_at": "2026-03-06T00:20:02Z"
+      "ready_at": "2026-03-06T00:20:02Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-06T14:20:01Z",
+      "reconciled_at": "2026-03-06T14:20:01Z",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "planner",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-29",
       "title": "Probabilistic Forecast Calibration Lab",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-28"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-30",
       "title": "Multi-Horizon Forecast Decomposition",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-29"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-31",
       "title": "Cross-Asset Correlation Regime Map",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-30"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-32",
       "title": "Forecast Ensemble Governance",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-31"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-33",
       "title": "Macro Narrative-to-Signal Parser",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-32"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-34",
       "title": "Alternative Data Sentiment Fusion",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-33"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-35",
       "title": "Forecast Drift Sentinel + Auto-Recalibration",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-34"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-36",
       "title": "Uncertainty Visualization UX",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-35"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-37",
       "title": "Hypothesis Workbench",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-36"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-38",
       "title": "Walk-Forward Forecast Scoreboard",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-37"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-39",
       "title": "Forecast Data Quality SLA + Provenance",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-38"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-40",
       "title": "Predictive Research Hub Finalization Gate",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-39"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-41",
       "title": "Free Global Signal Mesh",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-40"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-42",
       "title": "Geopolitical Risk Graph + Conflict Escalation",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-41"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-43",
       "title": "Law and Policy Change Impact Engine",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-42"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-44",
       "title": "Insider Behavior Intelligence Layer",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-43"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-45",
       "title": "Supply Chain + Commodity Shock Propagation",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-44"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-46",
       "title": "Country/Continent/World Macro Regime Forecasts",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-45"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-47",
       "title": "Sector-to-Company Impact Transmission",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-46"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-48",
       "title": "Event Impact Horizon Matrix",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-47"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-49",
       "title": "Multi-Layer Forecast Fusion + Attribution",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-48"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-50",
       "title": "Global Forecast Board Final Gate",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-05T22:54:01Z",
+      "updated_at": "2026-03-06T19:21:19Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
         "BATCH-49"
-      ]
+      ],
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "PLANNED"
+        }
+      }
     },
     {
       "id": "BATCH-51",
       "title": "PRODUCT VISION \u2014 Finance Copilot",
-      "state": "IN_PROGRESS",
+      "state": "READY_DEV",
       "priority": "P2",
       "next_action": "CLAIM_PLANNER_ANALYSIS",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T11:00:02Z",
+      "updated_at": "2026-03-06T19:29:01Z",
       "dispatch_authorized": true,
-      "ready_at": "2026-03-06T01:45:01Z"
+      "ready_at": "2026-03-06T01:45:01Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-06T14:20:01Z",
+      "reconciled_at": "2026-03-06T14:20:01Z",
+      "owner_role": "planner",
+      "meta": {
+        "planner_monolane": {
+          "migrated_at": "2026-03-06T19:21:19Z",
+          "migrated_from_role": "",
+          "migrated_from_state": "READY_DEV"
+        }
+      }
     },
     {
       "id": "BATCH-52",
@@ -930,7 +1147,7 @@
     {
       "id": "BATCH-58",
       "title": "**Profil:** Reda (venom) \u2014 professionnel non-expert en finance qui g\u00e8re ses investissements pers",
-      "state": "READY_PLANNER",
+      "state": "IN_PROGRESS",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
@@ -939,7 +1156,7 @@
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-06T11:30:04Z",
+      "updated_at": "2026-03-06T21:04:01Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T11:30:04Z"
     }

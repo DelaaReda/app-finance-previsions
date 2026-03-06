@@ -1,23 +1,23 @@
 {
-  "updated_at_utc": "2026-03-06T11:44:57Z",
+  "updated_at_utc": "2026-03-06T21:47:22Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-06T11:38:01Z",
+      "ts_utc": "2026-03-06T21:38:01Z",
       "role": "dev",
       "source": "health_snapshot",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CONTINUE_DEV_CONTRACT_AUTOFILL_20260306T113530Z",
-      "next": "owner=dev; action=publier un contrat complet au prochain tick",
-      "task_update": "none_no_signal",
+      "status": "BLOCKED",
+      "delta": "CONTRACT_GUARD_BLOCK",
+      "verdict": "BLOCKED",
+      "blocker_id": "DEV_ARCH_CHECK_FORMAT_INVALID",
+      "next_action_unique": "FIX_DEV_20260306T121640Z",
+      "next": "owner=dev; action=corriger le contrat puis relancer",
+      "task_update": "blocked",
       "exec_report": "none",
-      "issues": "contract_incomplete_autofill",
+      "issues": "contract_guard_dev_arch_check_format_invalid",
       "issue_count": 1,
-      "issue_severity": "low",
+      "issue_severity": "high",
       "issue_codes": [
-        "contract_incomplete_autofill"
+        "contract_guard_dev_arch_check_format_invalid"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
@@ -27,29 +27,31 @@
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
-      "channels_read": "runtime_context,workboard_tasks,workboard_handoffs,workboard_events,role_contracts",
-      "impact_assessment": "low",
-      "impact_action": "monitor_updates",
+      "channels_read": "",
+      "impact_assessment": "",
+      "impact_action": "",
       "queue_version": "",
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-06T11:44:57Z",
+      "ts_utc": "2026-03-06T21:38:01Z",
       "role": "planner",
-      "source": "primary_structured",
+      "source": "health_snapshot",
       "status": "IN_PROGRESS",
       "delta": "PLANNER_QUALITY_INCOMPLETE",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
-      "next_action_unique": "PLANNER_QUALITY_BACKFILL_20260306T114455Z",
+      "next_action_unique": "PLANNER_QUALITY_BACKFILL_20260306T121024Z",
       "next": "owner=planner; action=complete missing quality fields now",
       "task_update": "complete",
       "exec_report": "none",
-      "issues": "planner_quality_autofill_missing",
-      "issue_count": 1,
+      "issues": "dependency_policy_not_enforced,planner_quality_autofill_missing,planner_evidence_incomplete_soft",
+      "issue_count": 3,
       "issue_severity": "low",
       "issue_codes": [
-        "planner_quality_autofill_missing"
+        "dependency_policy_not_enforced",
+        "planner_quality_autofill_missing",
+        "planner_evidence_incomplete_soft"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
@@ -62,59 +64,26 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1772796604_eea285cc44aa",
-      "workboard_version": "workboard_1772797463_fe83607bad11"
+      "queue_version": "queue_1772798407_aa85ef4b5216",
+      "workboard_version": "workboard_1772799008_a0b276dbfe0b"
     },
     "admin": {
-      "ts_utc": "2026-03-06T11:38:01Z",
+      "ts_utc": "2026-03-06T21:38:01Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "IN_PROGRESS",
-      "delta": "RELANCE_PLANNER_SUR_READY_BATCH_11_ARCH",
-      "verdict": "NUDGE_PLANNER_CLAIM_READY",
-      "blocker_id": "NONE",
-      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772796926_29993",
-      "next": "owner=planner; action=claim BATCH-11-ARCH puis publier l'artefact architecture",
+      "delta": "TAKEOVER_DEV_DEBLOQUER_CONTRACT_GUARD_ET_CLAIM_READY",
+      "verdict": "TAKEOVER_DEV_NOW",
+      "blocker_id": "DEV_ARCH_CHECK_FORMAT_INVALID",
+      "next_action_unique": "TAKEOVER_CLAIM_BATCH_27_DEV_01_P1772799402_22370",
+      "next": "owner=admin; action=takeover claim BATCH-27-DEV-01 via parallel_workstream role=dev",
       "task_update": "analysis_only",
       "exec_report": "none",
-      "issues": "none",
-      "issue_count": 0,
-      "issue_severity": "none",
-      "issue_codes": [],
-      "issue_reporting_ok": true,
-      "issue_reporting_errors": [],
-      "suggestions": "none",
-      "stream_id": "none",
-      "task_id": "none",
-      "tool_request": "none",
-      "skill_request": "none",
-      "tools_used": "",
-      "channels_read": "runtime_context,workboard_context,peer_contracts,trace_tail",
-      "impact_assessment": "medium",
-      "impact_action": "demander_claim_batch_11_arch",
-      "queue_version": "queue_1772796604_eea285cc44aa",
-      "workboard_version": "workboard_1772796876_bd46b822776e"
-    },
-    "scrum_master": {
-      "ts_utc": "2026-03-06T11:43:32Z",
-      "role": "scrum_master",
-      "source": "primary_structured",
-      "status": "WAIT",
-      "delta": "QUEUE_READY_MULTIPLE",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "ADVISE_PLANNER_CLAIM_BATCH11_ARCH_AND_CLEAR_BATCH58_READY_PLANNER_P1772797393_10542",
-      "next": "owner=planner; action=claim_batch11_arch_maintenant_puis_clarifier_batch58_ready_planner_et_publier_artefact_arch",
-      "task_update": "analysis_only",
-      "exec_report": "none",
-      "issues": "workstate_stale,queue_ready_multiple,ready_items_no_next_action,contract_guard_role_artifact_missing",
-      "issue_count": 4,
+      "issues": "dev_arch_check_format_invalid",
+      "issue_count": 1,
       "issue_severity": "high",
       "issue_codes": [
-        "workstate_stale",
-        "queue_ready_multiple",
-        "ready_items_no_next_action",
-        "contract_guard_role_artifact_missing"
+        "dev_arch_check_format_invalid"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
@@ -124,11 +93,44 @@
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
-      "channels_read": "workboard_tasks,workboard_events,role_contracts,admin_chat,admin_iterations",
-      "impact_assessment": "ready_items_present_mais_next_action_manquant_sur_batch58_et_workstate_obsolete",
-      "impact_action": "conseil_planner_claim_batch11_arch_et_clarifier_batch58_ready_planner",
-      "queue_version": "queue_1772796604_eea285cc44aa",
-      "workboard_version": "workboard_1772797391_e30f4d1fde9e"
+      "channels_read": "runtime_context,admin_tshape_context,peer_contracts,trace_tail",
+      "impact_assessment": "high",
+      "impact_action": "takeover_claim_batch_27_dev_01",
+      "queue_version": "queue_1772799401_8c541bc7c526",
+      "workboard_version": "workboard_1772799402_c7676ee5b091"
+    },
+    "scrum_master": {
+      "ts_utc": "2026-03-06T21:47:22Z",
+      "role": "scrum_master",
+      "source": "retry_structured",
+      "status": "WAIT",
+      "delta": "BATCH27_READY_DEV_CLAIM",
+      "verdict": "GO_WITH_CAUTION",
+      "blocker_id": "NONE",
+      "next_action_unique": "PLANIFY_DEV_FIX_POSSIBLE_APRES_UNBLOCK_R1772833636_7506",
+      "next": "owner=admin; action=r\u00e9parer DEV_ARCH_CHECK_FORMAT_INVALID puis forcer un tick dev pour permettre claim BATCH-27-DEV-01",
+      "task_update": "analysis_only",
+      "exec_report": "none",
+      "issues": "dev_arch_check_format_invalid,planner_quality_incomplete",
+      "issue_count": 2,
+      "issue_severity": "high",
+      "issue_codes": [
+        "dev_arch_check_format_invalid",
+        "planner_quality_incomplete"
+      ],
+      "issue_reporting_ok": true,
+      "issue_reporting_errors": [],
+      "suggestions": "none",
+      "stream_id": "none",
+      "task_id": "none",
+      "tool_request": "none",
+      "skill_request": "none",
+      "tools_used": "",
+      "channels_read": "planner.events.log,dev.events.log,admin.events.log,fc-ticks(planner,dev,admin)",
+      "impact_assessment": "",
+      "impact_action": "",
+      "queue_version": "queue_1772833441_c2e3d1f60cb8",
+      "workboard_version": "workboard_1772833613_420b27f02a34"
     }
   },
   "summary": {
@@ -145,7 +147,7 @@
     "delivery_gaps_open": 1,
     "delivery_probe_loops_open": 0,
     "flow_gaps_open": 0,
-    "blockers_open": 0,
+    "blockers_open": 1,
     "tool_skill_requests_open": 0,
     "issue_roles": [
       "dev"
@@ -156,7 +158,9 @@
     "delivery_gap_roles": [
       "dev"
     ],
-    "blocker_roles": [],
+    "blocker_roles": [
+      "dev"
+    ],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
       "admin",
@@ -164,11 +168,11 @@
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1772796604_d391f2badc07",
-      "workboard_version": "workboard_1772797463_b2947b9e4fd5"
+      "queue_version": "queue_1772833441_56ae6ed8e064",
+      "workboard_version": "workboard_1772833613_b163fbe593da"
     }
   },
-  "updated_at": "2026-03-06T11:38:01Z",
+  "updated_at": "2026-03-06T21:38:01Z",
   "health_snapshot": {
     "ts_utc": "2026-03-03T11:03:54Z",
     "workboard": {
@@ -207,11 +211,11 @@
     "done_total": 40,
     "health": "OK"
   },
-  "health": "OK",
+  "health": "DEGRADED",
   "velocity": {
-    "done_24h": 69,
-    "done_7d": 112,
-    "proofs": 48
+    "done_24h": 72,
+    "done_7d": 115,
+    "proofs": 49
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
   "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']"
