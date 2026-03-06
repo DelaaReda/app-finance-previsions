@@ -10,6 +10,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import subprocess
@@ -458,6 +459,58 @@ def check_providers(root: Path, api_base: str, monitor_base: str, state_dir: Pat
     )
 
 
+def _load_product_priority_guard(root: Path):
+    module_path = root / "platform" / "automation" / "product_priority_guard.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_product_priority_guard_doctor", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check_product_value(root: Path, api_base: str) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_product_value_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_product_value_metrics(root, api_base_url=api_base, timeout_s=0.6)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    guard = metrics.get("priority_guard", {}) if isinstance(metrics, dict) else {}
+    copilot = metrics.get("copilot", {}) if isinstance(metrics, dict) else {}
+    forecasts = metrics.get("forecasts", {}) if isinstance(metrics, dict) else {}
+    status = "ok"
+    if guard.get("status") == "blocked":
+        status = "degraded"
+    return CheckResult(
+        status=status,
+        detail={
+            "guard_status": guard.get("status", "unknown"),
+            "p0_broken": bool(guard.get("p0_broken", False)),
+            "blocked_reasons": guard.get("blocked_reasons", []),
+            "allow_orchestration_autobatch": bool(guard.get("allow_orchestration_autobatch", True)),
+            "copilot_status": copilot.get("status", "unknown"),
+            "forecasts_status": forecasts.get("status", "unknown"),
+            "metrics": metrics,
+        },
+    )
+
+
+def check_delivery_integrity(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_integrity_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_integrity_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    status = "ok" if str(metrics.get("status", "unknown")) == "ok" else "degraded"
+    return CheckResult(status=status, detail=metrics)
+
+
 def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[str, Any], int]:
     start = time.time()
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
@@ -468,6 +521,8 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "locks": check_locks(root, state_dir),
         "queue_workboard": check_queue_workboard(root),
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
+        "product_value": check_product_value(root, api_base=api_base),
+        "delivery_integrity": check_delivery_integrity(root),
     }
     statuses = [check.status for check in checks.values()]
     if "error" in statuses:

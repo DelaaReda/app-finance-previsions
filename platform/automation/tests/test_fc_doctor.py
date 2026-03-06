@@ -80,7 +80,7 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("status", payload)
         self.assertIn("checks", payload)
         self.assertIn("meta", payload)
-        for key in ("workspace_root", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers"):
+        for key in ("workspace_root", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity"):
             self.assertIn(key, payload["checks"])
         queue_workboard = payload["checks"].get("queue_workboard", {})
         self.assertIsInstance(queue_workboard, dict)

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import subprocess
@@ -234,6 +235,18 @@ def _rate_limit_state(cache_file: Path) -> RateLimitState:
     return RateLimitState(remaining > 0, until_epoch, remaining, str(cache_file))
 
 
+def _load_product_priority_guard(root: Path):
+    module_path = root / "platform" / "automation" / "product_priority_guard.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_product_priority_guard_unified_doctor", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -272,6 +285,26 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         warnings.append("codex_rate_limit_active")
     if qwen_rl.active:
         warnings.append("qwen_rate_limit_active")
+
+    product_value: dict[str, Any] = {}
+    delivery_integrity: dict[str, Any] = {}
+    guard_module = _load_product_priority_guard(root)
+    if guard_module is not None:
+        api_base = os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050")
+        try:
+            product_value = guard_module.build_product_value_metrics(root, api_base_url=api_base, timeout_s=0.6)
+            if (product_value.get("priority_guard") or {}).get("status") == "blocked":
+                warnings.append("product_priority_guard_blocked")
+        except Exception as exc:
+            warnings.append("product_priority_guard_error")
+            product_value = {"error": str(exc)}
+        try:
+            delivery_integrity = guard_module.build_delivery_integrity_metrics(root, window_hours=24)
+            if str(delivery_integrity.get("status", "ok")) != "ok":
+                warnings.append("delivery_integrity_degraded")
+        except Exception as exc:
+            warnings.append("delivery_integrity_error")
+            delivery_integrity = {"error": str(exc)}
 
     if errors:
         verdict = "BLOCKED"
@@ -325,6 +358,8 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
                 },
             },
         },
+        "product_value": product_value,
+        "delivery_integrity": delivery_integrity,
         "verdict": verdict,
         "errors": errors,
         "warnings": warnings,

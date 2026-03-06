@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Finance Copilot — Monitor Web Server — http://localhost:7779"""
 from __future__ import annotations
+import importlib.util
 import json, os, re, subprocess, sys, time
 import urllib.error
 import urllib.request
@@ -8,6 +9,7 @@ import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import Counter, defaultdict
+from functools import lru_cache
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -470,6 +472,81 @@ def _planner_subagents_snapshot() -> dict:
         "active": active[:8],
         "recent": recent[-8:],
     }
+
+
+@lru_cache(maxsize=1)
+def _product_priority_guard_module():
+    module_path = ROOT / "platform" / "automation" / "product_priority_guard.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_product_priority_guard_monitor", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _product_value_metrics_snapshot() -> dict:
+    module = _product_priority_guard_module()
+    if module is None or not hasattr(module, "build_product_value_metrics"):
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "copilot": {"status": "unknown", "usable": None},
+            "forecasts": {"status": "unknown", "valid": None},
+            "data_freshness": {},
+            "delivery_mix": {},
+            "priority_guard": {"status": "unknown", "p0_broken": False, "blocked_reasons": []},
+        }
+    try:
+        return module.build_product_value_metrics(
+            ROOT,
+            api_base_url=os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050"),
+            timeout_s=0.6,
+        )
+    except Exception as exc:
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "copilot": {"status": "unknown", "usable": None},
+            "forecasts": {"status": "unknown", "valid": None},
+            "data_freshness": {},
+            "delivery_mix": {},
+            "priority_guard": {
+                "status": "error",
+                "p0_broken": False,
+                "blocked_reasons": [f"product_priority_guard_error:{exc}"],
+            },
+        }
+
+
+def _delivery_integrity_snapshot() -> dict:
+    module = _product_priority_guard_module()
+    if module is None or not hasattr(module, "build_delivery_integrity_metrics"):
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "window_hours": 24,
+            "recent_completions": 0,
+            "proof_manifest_coverage": 1.0,
+            "tests_evidence_coverage": 1.0,
+            "commit_evidence_coverage": 1.0,
+            "suspicious_completion_count": 0,
+            "suspicious_task_ids": [],
+            "status": "unknown",
+        }
+    try:
+        return module.build_delivery_integrity_metrics(ROOT, window_hours=24)
+    except Exception as exc:
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "window_hours": 24,
+            "recent_completions": 0,
+            "proof_manifest_coverage": 0.0,
+            "tests_evidence_coverage": 0.0,
+            "commit_evidence_coverage": 0.0,
+            "suspicious_completion_count": 0,
+            "suspicious_task_ids": [],
+            "status": f"error:{exc}",
+        }
 
 
 def _active_planner_subagent_roles() -> tuple[str, ...]:
@@ -2956,6 +3033,8 @@ def status():
     activity_summary = _activity_summary_from_bundle(activity_bundle)
     dynamic_workers = _dynamic_workers_snapshot()
     planner_subagents = _planner_subagents_snapshot()
+    delivery_integrity = _delivery_integrity_snapshot()
+    product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
 
     payload = {"ts_utc":now.isoformat(),"health":health,
@@ -3002,6 +3081,8 @@ def status():
             "queue_workboard_integrity": queue_workboard_integrity,
             "dynamic_workers": dynamic_workers,
             "planner_subagents": planner_subagents,
+            "delivery_integrity": delivery_integrity,
+            "product_value_metrics": product_value_metrics,
             "po_scrum_master": po_scrum_master,
             "agent_messages": agent_messages,
             "doctor": doctor,
@@ -4181,7 +4262,7 @@ async function load(){
     D=s.data;
     D.__status_unavailable=false;
   }else if(!D){
-    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
+    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
   }else{
     D.__status_unavailable=true;
   }
