@@ -12,6 +12,7 @@ from pathlib import Path
 READY_STATES = {"READY", "READY_PLANNER", "READY_DEV"}
 ACTIVE_STATES = {"IN_PROGRESS", "REVIEW"}
 MESSAGE_TTL = {"planner": 120, "dev": 90, "admin": 60}
+STALE_CONTRACT_SECONDS = 3600
 
 
 @dataclass
@@ -97,6 +98,15 @@ def _parse_contract(path: Path) -> dict[str, str]:
         if key and key not in values:
             values[key] = value.strip()
     return values
+
+
+def _contract_is_fresh(path: Path, now_epoch: int, max_age_seconds: int = STALE_CONTRACT_SECONDS) -> bool:
+    try:
+        if not path.exists():
+            return False
+        return (now_epoch - int(path.stat().st_mtime)) <= max_age_seconds
+    except Exception:
+        return False
 
 
 def _parse_evidence(raw: str) -> dict[str, str]:
@@ -186,7 +196,10 @@ def evaluate_policy(config: PolicyConfig, now_epoch: int | None = None) -> Polic
     for role in ("planner", "dev"):
         if role in seen_targets:
             continue
-        contract = _parse_contract(config.state_dir / f"{role}.last_contract")
+        contract_path = config.state_dir / f"{role}.last_contract"
+        if not _contract_is_fresh(contract_path, now_epoch):
+            continue
+        contract = _parse_contract(contract_path)
         evidence = _parse_evidence(contract.get("EVIDENCE", ""))
         status = str(contract.get("STATUS", "")).strip().upper()
         delta = str(contract.get("DELTA", "")).strip().upper()

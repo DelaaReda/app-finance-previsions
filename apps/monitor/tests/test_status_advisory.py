@@ -66,7 +66,9 @@ class MonitorStatusAdvisoryTests(unittest.TestCase):
         self.assertIn("po_scrum_master", payload)
         self.assertIsInstance(payload["po_scrum_master"], dict)
         self.assertEqual(payload["po_scrum_master"].get("name"), "po_scrum_master")
-        self.assertEqual(payload["po_scrum_master"].get("mode"), "scheduled_advisory")
+        self.assertIn(payload["po_scrum_master"].get("mode"), {"disabled_compat", "scheduled_advisory"})
+        if payload["po_scrum_master"].get("mode") == "disabled_compat":
+            self.assertFalse(payload["po_scrum_master"].get("active"))
         self.assertIn("lock_skip_streak", payload["po_scrum_master"])
         self.assertIn("tick_tail", payload["po_scrum_master"])
         self.assertIn("runner_tail", payload["po_scrum_master"])
@@ -91,6 +93,36 @@ class MonitorStatusAdvisoryTests(unittest.TestCase):
         catalog = payload.get("catalog", {}).get("scrum_master", {})
         self.assertTrue(catalog.get("tick", {}).get("exists"))
         self.assertTrue(catalog.get("runner", {}).get("exists"))
+
+    def test_stale_non_core_contract_is_hidden_in_planner_mode(self) -> None:
+        dev_contract = self.state / "dev.last_contract"
+        dev_contract.write_text(
+            "\n".join([
+                "STATUS: BLOCKED",
+                "DELTA: CONTRACT_GUARD_BLOCK",
+                "EVIDENCE: task_update=blocked",
+                "RISKS: invalid arch check",
+                "NEXT: owner=dev; action=fix",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: DEV_ARCH_CHECK_FORMAT_INVALID",
+                "NEXT_ACTION_UNIQUE: DEV_FIX",
+            ]),
+            encoding="utf-8",
+        )
+        old_epoch = 1772800000 - 7200
+        os.utime(dev_contract, (old_epoch, old_epoch))
+        with mock.patch.dict(
+            os.environ,
+            {
+                "FC_PLANNER_ORCHESTRATOR_ENABLED": "1",
+                "FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY": "1",
+            },
+            clear=False,
+        ), mock.patch.object(self.module, "_active_planner_subagent_roles", lambda: ()), mock.patch.object(
+            self.module.time, "time", lambda: 1772800000
+        ):
+            self.assertEqual(self.module.contract("dev"), {})
+            self.assertEqual(self.module.contract_raw("dev"), "")
 
 
 if __name__ == "__main__":

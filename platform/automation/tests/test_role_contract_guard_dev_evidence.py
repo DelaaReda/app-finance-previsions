@@ -60,21 +60,22 @@ def payload_with_evidence(evidence: str) -> str:
 
 
 class RoleContractGuardDevEvidenceTests(unittest.TestCase):
-    def test_claim_blocks_placeholder_root_cause(self) -> None:
+    def test_claim_allows_lightweight_payload_with_placeholder_root_cause(self) -> None:
         payload = payload_with_evidence(
             "task_update=claim; lock_check=ok; "
             "run_note=claim dev avec verification architecture appliquee; "
             "dev_artifact=apps/api/src/domains/copilot/application/copilot_service.py; "
             "stream_id=BATCH-26; task_id=BATCH-26-DEV-02; "
             "root_cause=?; "
+            "reflection_passes=2; reflection_dimensions=scope,dependency_impact,risk,verification,rollback; "
             "architecture_check=layer=application,imports_ok=yes,path_target=apps/api/src/domains/copilot/application/copilot_service.py; "
             "vision_alignment=batch=BATCH-26,target=copilot_runtime,impact=delivery_ready; "
             "reuse_check=domains.judge.application.g4f_client"
         )
         cp = run_guard(payload)
         self.assertEqual(cp.returncode, 0, msg=cp.stderr)
-        self.assertIn("STATUS: BLOCKED", cp.stdout)
-        self.assertIn("BLOCKER_ID: DEV_DELIVERY_EVIDENCE_MISSING", cp.stdout)
+        self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
 
     def test_complete_blocks_invalid_verify_format(self) -> None:
         payload = payload_with_evidence(
@@ -146,6 +147,26 @@ class RoleContractGuardDevEvidenceTests(unittest.TestCase):
             "architecture_check=layer=application,imports_ok=yes,path_target=apps/api/src/domains/copilot/application/copilot_service.py; "
             "vision_alignment=batch=BATCH-26,target=delivery_stable,impact=reponse_plus_fiable; "
             "qa_proof=test=pytest platform/tests/test_copilot.py,result=PASS; "
+            "cmd=pytest platform/tests/test_copilot.py -q; tests_run=unit:PASS"
+        )
+        cp = run_guard(payload)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+
+    def test_complete_accepts_split_compound_evidence_fields(self) -> None:
+        payload = payload_with_evidence(
+            "task_update=complete; lock_check=ok; "
+            "run_note=complete dev avec sous champs evidence separes correctement; "
+            "dev_artifact=apps/api/src/domains/copilot/application/copilot_service.py; "
+            "stream_id=BATCH-27; task_id=BATCH-27-DEV-02; "
+            "root_cause=fallback forcait un module legacy non maintenu; "
+            "fix_applied=import direct module juge existant et suppression bridge local; "
+            "verify=before=fallback_only; after=primary_with_context; test=pytest platform/tests/test_copilot.py; "
+            "reuse_check=domains.judge.application.g4f_client; "
+            "architecture_check=layer=application; imports_ok=yes; path_target=apps/api/src/domains/copilot/application/copilot_service.py; "
+            "vision_alignment=batch=BATCH-27; target=delivery_stable; impact=reponse_plus_fiable; "
+            "qa_proof=test=pytest platform/tests/test_copilot.py; result=PASS; "
             "cmd=pytest platform/tests/test_copilot.py -q; tests_run=unit:PASS"
         )
         cp = run_guard(payload)

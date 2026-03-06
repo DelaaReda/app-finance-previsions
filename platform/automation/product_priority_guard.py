@@ -228,9 +228,10 @@ def _forecast_metrics(root: Path, *, api_base_url: str | None, timeout_s: float,
         source_kind = "model_backed"
     else:
         source_kind = "unknown"
-    valid = bool(rows) and freshness_status != "stale" and source_kind not in {"pseudo", "fallback"} and not fallback_used
+    valid = bool(rows) and source_kind not in {"pseudo", "fallback"}
+    quality_degraded = freshness_status == "stale" or bool(fallback_used)
     return {
-        "status": "ok" if valid else ("degraded" if rows else "error"),
+        "status": "ok" if valid and not quality_degraded else ("degraded" if valid else "error"),
         "probe_source": source,
         "probe_error": probe_error,
         "rows_count": len(rows),

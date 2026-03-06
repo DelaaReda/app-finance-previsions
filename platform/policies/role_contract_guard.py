@@ -350,14 +350,26 @@ def _default_channels_read_for_role(role: str) -> str:
     return "runtime_context,workboard_tasks,role_contracts"
 
 
-def _has_required_kv_markers(raw: str, required_keys: tuple[str, ...]) -> bool:
+def _has_required_kv_markers(
+    raw: str,
+    required_keys: tuple[str, ...],
+    evidence: dict[str, str] | None = None,
+) -> bool:
     text = (raw or "").strip().lower()
-    if not text:
+    remaining = {key.strip().lower() for key in required_keys if key.strip()}
+    if text:
+        for key in tuple(remaining):
+            if re.search(rf"(^|[;,\s]){re.escape(key)}=", text):
+                remaining.discard(key)
+    if not remaining:
+        return True
+    if not evidence:
         return False
-    for key in required_keys:
-        if not re.search(rf"(^|[;,\s]){re.escape(key.lower())}=", text):
-            return False
-    return True
+    for key in tuple(remaining):
+        value = str(evidence.get(key, "") or "").strip()
+        if not _is_empty_or_placeholder(value):
+            remaining.discard(key)
+    return not remaining
 
 
 def _planner_batch_created_ids(raw: str) -> tuple[list[str], list[str]]:
@@ -1209,7 +1221,7 @@ def main() -> int:
                     values,
                 )
         if task_update != "claim" and not _has_required_kv_markers(
-            ev.get("architecture_check", ""), ("layer", "imports_ok", "path_target")
+            ev.get("architecture_check", ""), ("layer", "imports_ok", "path_target"), ev
         ):
             _blocked(
                 role,
@@ -1222,7 +1234,7 @@ def main() -> int:
                 values,
             )
         if task_update != "claim" and not _has_required_kv_markers(
-            ev.get("vision_alignment", ""), ("batch", "target", "impact")
+            ev.get("vision_alignment", ""), ("batch", "target", "impact"), ev
         ):
             _blocked(
                 role,
@@ -1235,7 +1247,7 @@ def main() -> int:
                 values,
             )
         if task_update in {"complete", "handoff"}:
-            if not _has_required_kv_markers(ev.get("verify", ""), ("before", "after", "test")):
+            if not _has_required_kv_markers(ev.get("verify", ""), ("before", "after", "test"), ev):
                 _blocked(
                     role,
                     source,
@@ -1243,7 +1255,7 @@ def main() -> int:
                     "verify invalide; attendu before=<...>; after=<...>; test=<...>",
                     values,
                 )
-            if not _has_required_kv_markers(ev.get("qa_proof", ""), ("test", "result")):
+            if not _has_required_kv_markers(ev.get("qa_proof", ""), ("test", "result"), ev):
                 _blocked(
                     role,
                     source,
@@ -1278,12 +1290,12 @@ def main() -> int:
                     weak_or_missing_planner.append(field)
                     continue
             if field == "verify" and not _has_required_kv_markers(
-                raw_val, ("before", "after", "test")
+                raw_val, ("before", "after", "test"), ev
             ):
                 weak_or_missing_planner.append(field)
                 continue
             if field == "vision_alignment" and not _has_required_kv_markers(
-                raw_val, ("batch", "target", "impact")
+                raw_val, ("batch", "target", "impact"), ev
             ):
                 weak_or_missing_planner.append(field)
                 continue

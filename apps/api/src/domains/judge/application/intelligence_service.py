@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 CACHE_FILE_INTEL = DATA_DIR / "intelligence_snapshot.json"
 CACHE_FILE_CONTEXT = DATA_DIR / "market_context_snapshot.json"
+CACHE_MAX_AGE_MINUTES = 30
 
 def _read_cache(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
@@ -35,6 +36,69 @@ def _read_cache(path: Path) -> Optional[Dict[str, Any]]:
 def _write_cache(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _cache_timestamp(payload: Dict[str, Any]) -> Optional[datetime]:
+    for key in ("timestamp", "generated_at", "freshness", "last_update"):
+        dt = _parse_timestamp(payload.get(key))
+        if dt is not None:
+            return dt
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("generated_at", "timestamp"):
+            dt = _parse_timestamp(metadata.get(key))
+            if dt is not None:
+                return dt
+    return None
+
+
+def _cache_is_stale(payload: Dict[str, Any], *, max_age_minutes: int = CACHE_MAX_AGE_MINUTES) -> bool:
+    ts = _cache_timestamp(payload)
+    if ts is None:
+        return True
+    age_s = max(0.0, (_now() - ts).total_seconds())
+    return age_s > max_age_minutes * 60
+
+
+def _normalize_intelligence_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    normalized = dict(payload)
+    timestamp = _cache_timestamp(normalized) or _now()
+    normalized.setdefault("timestamp", timestamp.isoformat())
+    sources = normalized.get("sources")
+    if not isinstance(sources, dict):
+        sources = {}
+    sources.setdefault("forecasts", bool(_load_forecasts()))
+    sources.setdefault("brief", bool(_load_brief()))
+    sources.setdefault("news", bool(_load_news()))
+    normalized["sources"] = sources
+    return normalized
+
+
+def _normalize_market_context(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    normalized = dict(payload)
+    timestamp = _cache_timestamp(normalized) or _now()
+    metadata = normalized.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+    metadata.setdefault("generated_at", timestamp.isoformat())
+    sources = metadata.get("sources")
+    if not isinstance(sources, list) or not any(str(item).strip() for item in sources):
+        metadata["sources"] = ["intelligence", "forecasts", "news"]
+    source_health = metadata.get("source_health")
+    if not isinstance(source_health, dict):
+        source_health = {
+            "forecasts": bool(_load_forecasts()),
+            "news": bool(_load_news()),
+            "brief": bool(_load_brief()),
+        }
+    metadata["source_health"] = source_health
+    normalized["metadata"] = metadata
+    normalized.setdefault("timestamp", timestamp.isoformat())
+    return normalized
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -406,12 +470,20 @@ def get_market_intelligence_snapshot(use_cache: bool = True, persist: bool = Tru
         logger.debug(f"🔍 Checking cache: {CACHE_FILE_INTEL}")
         cached = _read_cache(CACHE_FILE_INTEL)
         if cached:
-            logger.info(f"✅ Using cached intelligence snapshot", extra={
-                "cache_file": str(CACHE_FILE_INTEL),
-                "timestamp": cached.get("timestamp")
-            })
-            return cached
-        logger.debug(f"⚠️ No cache found, generating new snapshot")
+            cached = _normalize_intelligence_snapshot(cached)
+            if not _cache_is_stale(cached):
+                if persist:
+                    _write_cache(CACHE_FILE_INTEL, cached)
+                logger.info(f"✅ Using cached intelligence snapshot", extra={
+                    "cache_file": str(CACHE_FILE_INTEL),
+                    "timestamp": cached.get("timestamp")
+                })
+                return cached
+            logger.info(
+                "⚠️ Intelligence cache stale; regenerating snapshot",
+                extra={"cache_file": str(CACHE_FILE_INTEL), "timestamp": cached.get("timestamp")},
+            )
+        logger.debug(f"⚠️ No fresh cache found, generating new snapshot")
 
     logger.debug(f"📂 Loading data sources...")
     forecasts = _load_forecasts()
@@ -479,7 +551,11 @@ def get_market_context_snapshot(use_cache: bool = True, persist: bool = True) ->
     if use_cache:
         cached = _read_cache(CACHE_FILE_CONTEXT)
         if cached:
-            return cached
+            cached = _normalize_market_context(cached)
+            if not _cache_is_stale(cached):
+                if persist:
+                    _write_cache(CACHE_FILE_CONTEXT, cached)
+                return cached
 
     forecasts = _load_forecasts()
     news = _load_news()
@@ -540,8 +616,23 @@ def get_market_context_snapshot(use_cache: bool = True, persist: bool = True) ->
         "key_drivers": drivers,
         "characteristics": characteristics,
         "recommended_layout": layout,
+        "metadata": {
+            "generated_at": _now().isoformat(),
+            "sources": [
+                "intelligence",
+                "forecasts",
+                "news",
+            ],
+            "source_health": {
+                "forecasts": bool(forecasts),
+                "news": bool(news),
+                "brief": bool(brief),
+            },
+        },
         "timestamp": _now().isoformat(),
     }
+
+    context = _normalize_market_context(context)
 
     if persist:
         _write_cache(CACHE_FILE_CONTEXT, context)

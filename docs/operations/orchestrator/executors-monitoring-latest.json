@@ -1,8 +1,8 @@
 {
-  "updated_at_utc": "2026-03-06T21:47:22Z",
+  "updated_at_utc": "2026-03-06T22:22:16Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-06T21:38:01Z",
+      "ts_utc": "2026-03-06T22:08:01Z",
       "role": "dev",
       "source": "health_snapshot",
       "status": "BLOCKED",
@@ -34,24 +34,23 @@
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-06T21:38:01Z",
+      "ts_utc": "2026-03-06T22:22:16Z",
       "role": "planner",
-      "source": "health_snapshot",
+      "source": "primary_structured",
       "status": "IN_PROGRESS",
-      "delta": "PLANNER_QUALITY_INCOMPLETE",
+      "delta": "COMPLETE_BATCH_58_ANALYSIS",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
-      "next_action_unique": "PLANNER_QUALITY_BACKFILL_20260306T121024Z",
-      "next": "owner=planner; action=complete missing quality fields now",
+      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772835723_14494",
+      "next": "owner=planner; action=claim --role planner sur BATCH-11-ARCH puis publier l artefact ARCH",
       "task_update": "complete",
       "exec_report": "none",
-      "issues": "dependency_policy_not_enforced,planner_quality_autofill_missing,planner_evidence_incomplete_soft",
-      "issue_count": 3,
+      "issues": "dependency_policy_not_enforced,planner_quality_autofill_missing",
+      "issue_count": 2,
       "issue_severity": "low",
       "issue_codes": [
         "dependency_policy_not_enforced",
-        "planner_quality_autofill_missing",
-        "planner_evidence_incomplete_soft"
+        "planner_quality_autofill_missing"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
@@ -64,11 +63,11 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1772798407_aa85ef4b5216",
-      "workboard_version": "workboard_1772799008_a0b276dbfe0b"
+      "queue_version": "queue_1772835721_514fdb133eec",
+      "workboard_version": "workboard_1772835722_5db1f4f872c6"
     },
     "admin": {
-      "ts_utc": "2026-03-06T21:38:01Z",
+      "ts_utc": "2026-03-06T22:08:01Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "IN_PROGRESS",
@@ -100,24 +99,21 @@
       "workboard_version": "workboard_1772799402_c7676ee5b091"
     },
     "scrum_master": {
-      "ts_utc": "2026-03-06T21:47:22Z",
+      "ts_utc": "2026-03-06T22:18:27Z",
       "role": "scrum_master",
-      "source": "retry_structured",
+      "source": "primary_structured",
       "status": "WAIT",
       "delta": "BATCH27_READY_DEV_CLAIM",
       "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
-      "next_action_unique": "PLANIFY_DEV_FIX_POSSIBLE_APRES_UNBLOCK_R1772833636_7506",
-      "next": "owner=admin; action=r\u00e9parer DEV_ARCH_CHECK_FORMAT_INVALID puis forcer un tick dev pour permettre claim BATCH-27-DEV-01",
-      "task_update": "analysis_only",
+      "next_action_unique": "CONFIRMER_CLAIM_BATCH11_ARCH_ET_MONITORER_DERNIERS_TICKS_P1772835503_20998",
+      "next": "owner=planner; action=CONFIRMER_CLAIM_BATCH11_ARCH_ET_MONITORER_DERNIERS_TICKS_P1772835503_20998",
+      "task_update": "none_no_signal",
       "exec_report": "none",
-      "issues": "dev_arch_check_format_invalid,planner_quality_incomplete",
-      "issue_count": 2,
-      "issue_severity": "high",
-      "issue_codes": [
-        "dev_arch_check_format_invalid",
-        "planner_quality_incomplete"
-      ],
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
       "suggestions": "none",
@@ -126,11 +122,11 @@
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
-      "channels_read": "planner.events.log,dev.events.log,admin.events.log,fc-ticks(planner,dev,admin)",
-      "impact_assessment": "",
-      "impact_action": "",
-      "queue_version": "queue_1772833441_c2e3d1f60cb8",
-      "workboard_version": "workboard_1772833613_420b27f02a34"
+      "channels_read": "docs/operations/orchestrator/priority-queue.json,docs/operations/orchestrator/parallel-workstreams.json,logs-codex-runs/role-runner/planner.events.log,logs-codex-runs/role-runner/d",
+      "impact_assessment": "capacit\u00e9 planner active",
+      "impact_action": "aviser planner de confirmer claim BATCH11_ARCH puis de basculer claim BATCH-27-DEV-01",
+      "queue_version": "queue_1772835433_514fdb133eec",
+      "workboard_version": "workboard_1772835503_f8bb2c1be057"
     }
   },
   "summary": {
@@ -168,11 +164,11 @@
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1772833441_56ae6ed8e064",
-      "workboard_version": "workboard_1772833613_b163fbe593da"
+      "queue_version": "queue_1772835721_650ab789cd5a",
+      "workboard_version": "workboard_1772835722_6e8ec61f8b0d"
     }
   },
-  "updated_at": "2026-03-06T21:38:01Z",
+  "updated_at": "2026-03-06T22:08:01Z",
   "health_snapshot": {
     "ts_utc": "2026-03-03T11:03:54Z",
     "workboard": {

@@ -318,6 +318,30 @@ def _message_bus_snapshot(now_iso: str) -> dict:
 
 
 def _po_scrum_master_snapshot(message_bus_snapshot: dict) -> dict:
+    if tuple(CORE_ROLES) == ("planner",):
+        return {
+            "name": "po_scrum_master",
+            "lane_role": "scrum_master",
+            "mode": "disabled_compat",
+            "active": False,
+            "last_run": "",
+            "last_run_age_min": -1,
+            "status": "DISABLED",
+            "verdict": "DISABLED",
+            "blocker": "NONE",
+            "next": "",
+            "last_report_path": str(PO_SCRUM_MASTER_REPORT_FILE),
+            "last_report_ts": "",
+            "last_report_age_min": -1,
+            "lock_skip_streak": 0,
+            "last_messages_posted": 0,
+            "recent_messages": [],
+            "tick_tail": [],
+            "runner_tail": [],
+            "events_tail": [],
+            "source": "planner_only_compat_disabled",
+        }
+
     def _lock_skip_streak(role_name: str) -> int:
         events_path = ROOT / f"logs-codex-runs/role-runner/{role_name}.events.log"
         lines = _tail_lines(events_path, 240)
@@ -1013,6 +1037,21 @@ def dev_parent_snapshot() -> dict:
         return {}
 
 
+def _contract_is_stale_for_planner_mode(role: str, path: Path, now_ts: float | None = None) -> bool:
+    if _execution_mode(ROOT) != "planner_experimental":
+        return False
+    role_token = str(role or "").strip().lower()
+    if role_token in {"", "planner"}:
+        return False
+    if role_token in set(_active_planner_subagent_roles()):
+        return False
+    try:
+        age_s = (now_ts if now_ts is not None else time.time()) - path.stat().st_mtime
+    except Exception:
+        return False
+    return age_s > 3600
+
+
 def _dev_autonomy_from_parent(parent: dict | None) -> dict:
     data = parent if isinstance(parent, dict) else {}
     return {
@@ -1029,6 +1068,8 @@ def _dev_autonomy_from_parent(parent: dict | None) -> dict:
 
 def contract(role):
     f = STATE / f"{role}.last_contract"
+    if _contract_is_stale_for_planner_mode(role, f):
+        return {}
     if not f.exists(): return {}
     d = {}
     for l in f.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -1038,6 +1079,8 @@ def contract(role):
 
 def contract_raw(role):
     f = STATE / f"{role}.last_contract"
+    if _contract_is_stale_for_planner_mode(role, f):
+        return ""
     if not f.exists(): return ""
     return f.read_text(encoding="utf-8", errors="ignore")
 
@@ -1095,14 +1138,26 @@ def _is_weak_evidence(value: str) -> bool:
     return len(text) < 3
 
 
-def _has_required_kv_markers(raw: str, required_keys: tuple[str, ...]) -> bool:
+def _has_required_kv_markers(
+    raw: str,
+    required_keys: tuple[str, ...],
+    evidence: dict[str, str] | None = None,
+) -> bool:
     text = str(raw or "").strip().lower()
-    if not text:
+    remaining = {key.strip().lower() for key in required_keys if key.strip()}
+    if text:
+        for key in tuple(remaining):
+            if re.search(rf"(^|[;,\s]){re.escape(key)}=", text):
+                remaining.discard(key)
+    if not remaining:
+        return True
+    if not evidence:
         return False
-    for key in required_keys:
-        if not re.search(rf"(^|[;,\s]){re.escape(key.lower())}=", text):
-            return False
-    return True
+    for key in tuple(remaining):
+        value = str(evidence.get(key, "") or "").strip()
+        if not _is_weak_evidence(value):
+            remaining.discard(key)
+    return not remaining
 
 
 def _reuse_check_valid(raw: str) -> bool:
@@ -1248,25 +1303,25 @@ def parse_contract_fields(role: str) -> dict:
         issues.append("invalid_reuse_check_format")
 
     if checks["architecture_check"] and not _has_required_kv_markers(
-        values_by_field["architecture_check"], ("layer", "imports_ok", "path_target")
+        values_by_field["architecture_check"], ("layer", "imports_ok", "path_target"), evidence
     ):
         invalid_markers.append("architecture_check")
         issues.append("invalid_architecture_check_format")
 
     if checks["vision_alignment"] and not _has_required_kv_markers(
-        values_by_field["vision_alignment"], ("batch", "target", "impact")
+        values_by_field["vision_alignment"], ("batch", "target", "impact"), evidence
     ):
         invalid_markers.append("vision_alignment")
         issues.append("invalid_vision_alignment_format")
 
     if task_update in {"complete", "handoff"}:
         if checks["verify"] and not _has_required_kv_markers(
-            values_by_field["verify"], ("before", "after", "test")
+            values_by_field["verify"], ("before", "after", "test"), evidence
         ):
             invalid_markers.append("verify")
             issues.append("invalid_verify_format")
         if checks["qa_proof"] and not _has_required_kv_markers(
-            values_by_field["qa_proof"], ("test", "result")
+            values_by_field["qa_proof"], ("test", "result"), evidence
         ):
             invalid_markers.append("qa_proof")
             issues.append("invalid_qa_proof_format")
@@ -4807,6 +4862,7 @@ function render(){
   const tileRoles=roles.length ? roles : ['planner','dev','admin'];
   const pa=(D&&D.planner_autonomy)||{};
   const ts=(D&&D.dispatcher_tshape)||{};
+  const poDisabled=(po.mode||'')==='disabled_compat';
   const poRunAge=(Number.isFinite(po.last_run_age_min) && po.last_run_age_min>=0)?`${po.last_run_age_min}m`:'never';
   const poReportAge=(Number.isFinite(po.last_report_age_min) && po.last_report_age_min>=0)?`${po.last_report_age_min}m`:'na';
   const poActiveTxt=po.active?'1':'0';
@@ -4830,6 +4886,7 @@ function render(){
   const poTickTail=Array.isArray(po.tick_tail)?po.tick_tail:[];
   const poRunnerTail=Array.isArray(po.runner_tail)?po.runner_tail:[];
   const poEventsTail=Array.isArray(po.events_tail)?po.events_tail:[];
+  const poPanel=poDisabled ? '' : `<div class="panel fade"><div class="panel-head"><span class="panel-label">PO Scrum Master (Advisory)</span><span style="font-size:10px;color:var(--ghost)">scheduled/5m · active=${poActiveTxt}</span></div><div class="panel-body"><div class="queue-sync ${po.active?'warn':'ok'}"><strong>run_age</strong> ${poRunAge} · <strong>report_age</strong> ${poReportAge} · <strong>status</strong> ${poStatus} · <strong>verdict</strong> ${poVerdict} · <strong>lock_skip_streak</strong> <span class="${poLockSkip>3?'err':'ok'}">${poLockSkip}</span></div><div class="queue-sync warn" style="margin-top:8px"><strong>message bus</strong> · open=${msgBus.open??0} · delivered_recent=${msgBus.delivered_recent??0} · actioned_recent=${msgBus.actioned_recent??0} · closed_recent=${msgBus.closed_recent??0}</div><div class="queue-sync" style="margin-top:8px"><strong>recent_messages</strong><br>${poRecentMsgs}</div><div class="exec-logs" style="margin-top:8px"><div class="log-box"><div class="log-head">fc-ticks (scrum_master.tick.log)</div><div class="log-scroll">${logLinesHtml(poTickTail)}</div></div><div class="log-box"><div class="log-head">role-runner (scrum_master.live.log)</div><div class="log-scroll">${logLinesHtml(poRunnerTail)}</div></div><div class="log-box"><div class="log-head">runner-events (scrum_master.events.log)</div><div class="log-scroll">${logLinesHtml(poEventsTail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/ticks/scrum_master" target="_blank">⬡ Ticks</a><a class="ext-link" href="/api/logs/scrum_master" target="_blank">⬡ Logs</a><a class="ext-link" href="/api/logs/scrum_master/events" target="_blank">⬡ Events</a><a class="ext-link" href="/api/log-view?role=scrum_master&kind=runner&n=220" target="_blank">⬡ Log JSON</a></div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>report:</strong> ${esc(shortPath(po.last_report_path||''))}</div></div></div>`;
   const plannerReqTop=String((agents.planner&&agents.planner.planner_action_required)||'').toLowerCase();
   const paBadge=(plannerReqTop && plannerReqTop!=='none')
     ? `<span class="planner-action-chip">ACTION REQUIRED · ${esc(plannerReqTop)}</span>`
@@ -4913,7 +4970,7 @@ function render(){
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">PO Scrum Master (Advisory)</span><span style="font-size:10px;color:var(--ghost)">scheduled/5m · active=${poActiveTxt}</span></div><div class="panel-body"><div class="queue-sync ${po.active?'warn':'ok'}"><strong>run_age</strong> ${poRunAge} · <strong>report_age</strong> ${poReportAge} · <strong>status</strong> ${poStatus} · <strong>verdict</strong> ${poVerdict} · <strong>lock_skip_streak</strong> <span class="${poLockSkip>3?'err':'ok'}">${poLockSkip}</span></div><div class="queue-sync warn" style="margin-top:8px"><strong>message bus</strong> · open=${msgBus.open??0} · delivered_recent=${msgBus.delivered_recent??0} · actioned_recent=${msgBus.actioned_recent??0} · closed_recent=${msgBus.closed_recent??0}</div><div class="queue-sync" style="margin-top:8px"><strong>recent_messages</strong><br>${poRecentMsgs}</div><div class="exec-logs" style="margin-top:8px"><div class="log-box"><div class="log-head">fc-ticks (scrum_master.tick.log)</div><div class="log-scroll">${logLinesHtml(poTickTail)}</div></div><div class="log-box"><div class="log-head">role-runner (scrum_master.live.log)</div><div class="log-scroll">${logLinesHtml(poRunnerTail)}</div></div><div class="log-box"><div class="log-head">runner-events (scrum_master.events.log)</div><div class="log-scroll">${logLinesHtml(poEventsTail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/ticks/scrum_master" target="_blank">⬡ Ticks</a><a class="ext-link" href="/api/logs/scrum_master" target="_blank">⬡ Logs</a><a class="ext-link" href="/api/logs/scrum_master/events" target="_blank">⬡ Events</a><a class="ext-link" href="/api/log-view?role=scrum_master&kind=runner&n=220" target="_blank">⬡ Log JSON</a></div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>report:</strong> ${esc(shortPath(po.last_report_path||''))}</div></div></div>
+	      ${poPanel}
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Exécution récente</span><span style="color:var(--emerald);font-size:11px;font-weight:600">${execRole}</span></div><div class="panel-body"><div class="tab-bar" id="exec-tabs">${etabs}</div><div class="exec-meta">${execMetaHtml(execRole)}</div><div class="exec-logs"><div class="log-box"><div class="log-head">fc-ticks (${execRole}.tick.log)</div><div class="log-scroll">${logLinesHtml(ex.tick_tail)}</div></div><div class="log-box"><div class="log-head">role-runner (${execRole}.live.log)</div><div class="log-scroll">${logLinesHtml(ex.runner_tail)}</div></div><div class="log-box"><div class="log-head">runner-events (${execRole}.events.log)</div><div class="log-scroll">${logLinesHtml(ex.events_tail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/execution/${execRole}" target="_blank">⬡ Execution JSON</a><a class="ext-link" href="/api/logs/${execRole}" target="_blank">⬡ Runner logs</a><a class="ext-link" href="/api/logs/${execRole}/events" target="_blank">⬡ Runner events</a><a class="ext-link" href="/api/ticks/${execRole}" target="_blank">⬡ Ticks</a>${plannerExecLinks}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Truth Matrix</span><span style="color:var(--amber);font-size:11px;font-weight:600">activité réelle · qualité · signaux</span></div><div class="panel-body">${insightsHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Issues Feed</span><span style="color:var(--coral);font-size:11px;font-weight:600">open ${((IS&&IS.totals_by_severity)?((IS.totals_by_severity.WARN||0)+(IS.totals_by_severity.ERROR||0)+(IS.totals_by_severity.CRITICAL||0)):0)} · critical ${(IS&&IS.critical_open_count)||0}</span></div><div class="panel-body">${iterationIssuesHtml()}</div></div>

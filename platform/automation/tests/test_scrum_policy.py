@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
@@ -89,6 +90,26 @@ class ScrumPolicyTests(unittest.TestCase):
         evaluate_policy(self._config(), now_epoch=1772800000)
         result = evaluate_policy(self._config(), now_epoch=1772800300)
         self.assertTrue(any(intent.target == "admin" and intent.reason == "contract_guard_escalation" for intent in result.intents))
+
+    def test_stale_contract_guard_block_is_ignored(self) -> None:
+        self.queue_path.write_text(json.dumps({"items": []}), encoding="utf-8")
+        self.report_path.write_text(json.dumps({}), encoding="utf-8")
+        self.board_path.write_text(json.dumps({"tasks": []}), encoding="utf-8")
+        contract_path = self.state_dir / "dev.last_contract"
+        contract_path.write_text("\n".join([
+            "STATUS: BLOCKED",
+            "DELTA: CONTRACT_GUARD_BLOCK",
+            "EVIDENCE: task_update=blocked; lock_check=ok; run_note=blocked by guard; issues=contract_guard_dev_arch_check_format_invalid; issue_count=1; issue_severity=high",
+            "RISKS: invalid arch check",
+            "NEXT: owner=dev; action=fix",
+            "VERDICT: BLOCKED",
+            "BLOCKER_ID: DEV_ARCH_CHECK_FORMAT_INVALID",
+            "NEXT_ACTION_UNIQUE: DEV_FIX",
+        ]), encoding="utf-8")
+        old_epoch = 1772800000 - 7200
+        os.utime(contract_path, (old_epoch, old_epoch))
+        result = evaluate_policy(self._config(), now_epoch=1772800000)
+        self.assertFalse(any(intent.reason == "contract_guard_block" for intent in result.intents))
 
     def test_stalled_in_progress_escalation_changes_reason_code(self) -> None:
         self.queue_path.write_text(json.dumps({"items": []}), encoding="utf-8")

@@ -778,7 +778,8 @@ if [[ "$ROLE" == "admin" ]]; then
 fi
 PRIMARY_CHANNEL="${PRIMARY_CHANNEL:-tmux}"
 
-if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
+if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL:-0}" == "1" ]]; then
+  : "${TRACE_FILE:=/tmp/fc-role-runner.log}"
   ROLE_ALLOW_FILE_EDITS="1"
   echo "$(date '+%Y-%m-%dT%H:%M:%S%z') [ALLOW_FILE_EDITS_OVERRIDE] role=$ROLE mode=global force=1" >> "${TRACE_FILE:-/tmp/fc-role-runner.log}"
 fi
@@ -2100,6 +2101,9 @@ runner_fatal_err_trap() {
   local cmd="${3:-unknown}"
   local cmd_clean=""
   local stack=""
+  if [[ "${RUNNER_EXPECTED_PROMPT_FAILURE:-0}" == "1" ]]; then
+    return 0
+  fi
   if [[ "${RUNNER_FATAL_TRAP_ACTIVE:-0}" == "1" ]]; then
     return 0
   fi
@@ -4688,6 +4692,8 @@ Mission:
 2) lire les preuves récentes (runner/events/ticks des rôles planner/dev/admin),
 3) proposer des actions ciblées via bus message,
 4) produire un rapport compact horodaté.
+En mode planner-only (`execution_mode=planner_experimental`), considérer `planner.last_contract`, `planner_subagent_summary` et le runtime_context comme source de vérité.
+Ne pas traiter un vieux `dev.last_contract` ou de vieux logs `dev/admin` standalone comme un blocker actif si aucune capability planner correspondante n'est active sur ce tick.
 Sources minimales:
 - docs/operations/orchestrator/priority-queue.json
 - docs/operations/orchestrator/parallel-workstreams.json
@@ -5244,6 +5250,12 @@ record_agent_message_receipts() {
         else
           safe_ttl="${AGENT_MESSAGE_DEFAULT_TTL_MIN:-10080}"
         fi
+        if [[ -n "$intent_id" && "$intent_id" != "none" ]]; then
+          if [[ ",${ids_csv}," == *",${intent_id},"* || ( -n "$fallback_ack_id" && "$intent_id" == "$fallback_ack_id" ) ]]; then
+            trace_event "agent_msg_emit_rekey role=${ROLE} target=${intent_role} old_id=${intent_id} reason=inbound_message_id_reserved"
+            intent_id="none"
+          fi
+        fi
         if [[ -z "$intent_id" || "$intent_id" == "none" ]]; then
           msg_hash=""
           if command -v sha256sum >/dev/null 2>&1; then
@@ -5252,13 +5264,15 @@ record_agent_message_receipts() {
             msg_hash="$(printf '%s' "$intent_msg" | shasum -a 256 | awk '{print $1}' | cut -c1-8)"
           fi
           [[ -n "$msg_hash" ]] || msg_hash="$(date +%s | tail -c 8)"
-          local stamp role_token
+          local stamp role_token tick_token
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           role_token="$(printf '%s' "$ROLE" | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9_')"
           if [[ "$ROLE" == "scrum_master" ]]; then
             role_token="SM"
           fi
-          intent_id="MSG_${role_token}_${stamp}_${msg_hash}"
+          tick_token="$(printf '%s' "$tick_id" | tr -cd 'A-Za-z0-9' | tail -c 6)"
+          [[ -n "$tick_token" ]] || tick_token="$(printf '%04d' $((RANDOM % 10000)))"
+          intent_id="MSG_${role_token}_${stamp}_${msg_hash}_${tick_token}"
           intent_auto_generated_id="1"
           trace_event "agent_msg_emit_autoid role=${ROLE} target=${intent_role} id=${intent_id} reason=${intent_reason}"
         fi
@@ -5827,8 +5841,10 @@ RC_PRIMARY=0
 PRIMARY_TICK="P$(date +%s)_$RANDOM"
 trace_event "primary_prompt_begin tick=${PRIMARY_TICK} timeout=${PROMPT_TIMEOUT_SECONDS}s channel=${PRIMARY_CHANNEL}"
 set +e
+RUNNER_EXPECTED_PROMPT_FAILURE=1
 RAW_OUTPUT="$(prompt_once "$PROMPT_TIMEOUT_SECONDS" "$PROMPT_TEXT" "$PRIMARY_TICK" "$PRIMARY_CHANNEL" "primary" 2>&1)"
 RC_PRIMARY=$?
+RUNNER_EXPECTED_PROMPT_FAILURE=0
 set -e
 trace_event "primary_prompt_end tick=${PRIMARY_TICK} rc=${RC_PRIMARY} bytes=${#RAW_OUTPUT}"
 handle_rate_limit_output "primary_${PRIMARY_CHANNEL}" "$RAW_OUTPUT" "$RC_PRIMARY"
@@ -5892,8 +5908,10 @@ if [[ "$DO_RETRY" -eq 1 ]]; then
   RETRY_TICK="R$(date +%s)_$RANDOM"
   trace_event "retry_prompt_begin tick=${RETRY_TICK} timeout=${RETRY_PROMPT_TIMEOUT_SECONDS}s channel=${RETRY_CHANNEL} mode=${RETRY_MODE}"
   set +e
+  RUNNER_EXPECTED_PROMPT_FAILURE=1
   RAW_RETRY="$(prompt_once "$RETRY_PROMPT_TIMEOUT_SECONDS" "$RETRY_PROMPT" "$RETRY_TICK" "$RETRY_CHANNEL" "retry" 2>&1)"
   RC_RETRY=$?
+  RUNNER_EXPECTED_PROMPT_FAILURE=0
   set -e
   trace_event "retry_prompt_end tick=${RETRY_TICK} rc=${RC_RETRY} bytes=${#RAW_RETRY}"
   handle_rate_limit_output "retry_${RETRY_CHANNEL}" "$RAW_RETRY" "$RC_RETRY"
@@ -5939,8 +5957,10 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
   CODEX_TICK="C$(date +%s)_$RANDOM"
   trace_event "codex_fallback_begin tick=${CODEX_TICK} timeout=${CODEX_FALLBACK_TIMEOUT}s"
   set +e
+  RUNNER_EXPECTED_PROMPT_FAILURE=1
   RAW_CODEX_FALLBACK="$(prompt_once "$CODEX_FALLBACK_TIMEOUT" "$RETRY_PROMPT" "$CODEX_TICK" "codex_exec" "retry" 2>&1)"
   RC_CODEX_FALLBACK=$?
+  RUNNER_EXPECTED_PROMPT_FAILURE=0
   set -e
   trace_event "codex_fallback_end tick=${CODEX_TICK} rc=${RC_CODEX_FALLBACK} bytes=${#RAW_CODEX_FALLBACK}"
   handle_rate_limit_output "codex_exec_fallback" "$RAW_CODEX_FALLBACK" "$RC_CODEX_FALLBACK"
