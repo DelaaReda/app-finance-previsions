@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from apps.monitor.src.collectors import collect_activity_events
@@ -11,6 +12,11 @@ from apps.monitor.src.collectors import collect_activity_events
 class ActivityCollectorsTests(unittest.TestCase):
     def test_collect_activity_events_normalizes_actions(self):
         with tempfile.TemporaryDirectory() as td:
+            now = datetime.now(timezone.utc)
+            claim_ts = (now - timedelta(minutes=12)).isoformat().replace("+00:00", "Z")
+            complete_ts = (now - timedelta(minutes=7)).isoformat().replace("+00:00", "Z")
+            runner_ts_1 = (now - timedelta(minutes=6)).isoformat().replace("+00:00", "Z")
+            runner_ts_2 = (now - timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
             root = Path(td)
             orch = root / "docs" / "operations" / "orchestrator"
             state = root / "state"
@@ -24,14 +30,14 @@ class ActivityCollectorsTests(unittest.TestCase):
                     [
                         json.dumps(
                             {
-                                "at": "2026-03-06T11:00:00Z",
+                                "at": claim_ts,
                                 "kind": "claim",
                                 "details": {"role": "dev", "task_id": "BATCH-27-DEV-01"},
                             }
                         ),
                         json.dumps(
                             {
-                                "at": "2026-03-06T11:05:00Z",
+                                "at": complete_ts,
                                 "kind": "complete",
                                 "details": {
                                     "role": "dev",
@@ -47,8 +53,8 @@ class ActivityCollectorsTests(unittest.TestCase):
             (runner / "dev.events.log").write_text(
                 "\n".join(
                     [
-                        "2026-03-06T11:06:00Z role=dev event=primary_prompt_end detail=tick=P1 rc=0",
-                        "2026-03-06T11:07:00Z role=dev event=final_output detail=tick=P1",
+                        f"{runner_ts_1} role=dev event=primary_prompt_end detail=tick=P1 rc=0",
+                        f"{runner_ts_2} role=dev event=final_output detail=tick=P1",
                     ]
                 ),
                 encoding="utf-8",
