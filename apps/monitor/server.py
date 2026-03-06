@@ -2720,7 +2720,7 @@ def status():
                       "last_action_target": (scrum_last_action_target if role == "scrum_master" else ""),
                       "last_action_message_id": (scrum_last_action_message_id if role == "scrum_master" else ""),
                       "source": source}
-    agents, incomplete_roles = monitor_ensure_core_agents(agents)
+    agents, incomplete_roles = monitor_ensure_core_agents(agents, core_roles=CORE_ROLES)
     kpi={}
     try:
         kd=kpi_last(); v=kd.get("velocity",{}); wb2=kd.get("workboard",{})

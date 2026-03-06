@@ -33,11 +33,16 @@ def unknown_agent_payload(role: str, source: str = "unknown") -> dict[str, Any]:
     }
 
 
-def ensure_core_agents(agents: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+def ensure_core_agents(
+    agents: dict[str, Any],
+    *,
+    core_roles: tuple[str, ...] | list[str] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
     out = dict(agents) if isinstance(agents, dict) else {}
     incomplete: list[str] = []
     required = ("status", "verdict", "blocker", "tick_age_min", "source")
-    for role in CORE_ROLES:
+    roles = tuple(core_roles or CORE_ROLES)
+    for role in roles:
         agent = out.get(role)
         if not isinstance(agent, dict):
             out[role] = unknown_agent_payload(role)

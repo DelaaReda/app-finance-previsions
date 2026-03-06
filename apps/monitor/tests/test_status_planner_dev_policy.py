@@ -252,6 +252,8 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("execution_mode"), "planner_experimental")
         self.assertEqual(payload.get("roles"), ["planner"])
         self.assertEqual(payload.get("health_breakdown", {}).get("core_roles"), ["planner"])
+        self.assertEqual(payload.get("agents_incomplete"), [])
+        self.assertNotIn("dev", payload.get("health_breakdown", {}).get("by_role", {}))
 
 
 if __name__ == "__main__":
