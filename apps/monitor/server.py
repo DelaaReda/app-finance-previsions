@@ -22,14 +22,24 @@ if str(MONITOR_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(MONITOR_SRC_DIR))
 
 from collectors import (  # type: ignore
+    collect_activity_events as monitor_collect_activity_events,
     collect_message_bus_snapshot as monitor_collect_message_bus_snapshot,
     detect_data_source as monitor_detect_data_source,
+    detect_runtime_host_kind as monitor_detect_runtime_host_kind,
+    load_workboard_snapshot as monitor_load_workboard_snapshot,
+    safe_tail as monitor_safe_tail,
 )
 from aggregators import (  # type: ignore
+    build_active_tasks as monitor_build_active_tasks,
+    build_activity_summary as monitor_build_activity_summary,
+    build_dependency_map as monitor_build_dependency_map,
+    build_system_summary as monitor_build_system_summary,
+    build_throughput as monitor_build_throughput,
+    collect_role_intentions as monitor_collect_role_intentions,
     compute_health as monitor_compute_health,
     ensure_core_agents as monitor_ensure_core_agents,
 )
-from api import create_doctor_router  # type: ignore
+from api import create_activity_router, create_doctor_router  # type: ignore
 
 def _latest_mtime(paths: list[Path]) -> float:
     latest = 0.0
@@ -62,7 +72,9 @@ def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             status = int(getattr(resp, "status", 0) or 0)
             return 200 <= status < 300
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return False
+    except Exception:
         return False
 
 def _orchestrator_root_for_workspace(p: Path) -> Path | None:
@@ -150,14 +162,19 @@ INSTANCE_ID = os.environ.get(
     "FC_MONITOR_INSTANCE_ID",
     f"{socket.gethostname()}:{ROOT}",
 )
-CORE_ROLES = ("planner", "dev", "admin")
+CORE_ROLES = ("planner", "dev", "admin", "scrum_master")
 ERROR_FEED_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_ERROR_FEED_RECENT_MINUTES", "90")))
 RUNTIME_DIAG_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_RUNTIME_DIAG_RECENT_MINUTES", "90")))
 AGENT_MESSAGES_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_AGENT_MESSAGES_RECENT_MINUTES", "1440")))
+ACTIVITY_FEED_ENABLED = str(os.environ.get("FC_MONITOR_ACTIVITY_FEED_ENABLED", "1")).strip() not in {"0", "false", "False"}
+ACTIVITY_FEED_WINDOW_HOURS = max(1, int(os.environ.get("FC_MONITOR_ACTIVITY_WINDOW_HOURS", "6")))
+ACTIVITY_FEED_MAX_EVENTS = max(50, int(os.environ.get("FC_MONITOR_ACTIVITY_MAX_EVENTS", "300")))
+DEPENDENCY_MAP_ENABLED = str(os.environ.get("FC_MONITOR_DEP_GRAPH_ENABLED", "1")).strip() not in {"0", "false", "False"}
 DEFAULT_SCHEDULE_MAP = {
     "planner": [0, 22, 44],
     "dev": [6, 28, 50],
     "admin": [12, 34, 56],
+    "scrum_master": [3, 18, 33, 48],
 }
 ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or (ROOT / "docs" / "operations" / "orchestrator")
@@ -219,9 +236,10 @@ DOCTOR_SCRIPT_FILE = Path(
         str(ROOT / "scripts" / "fc_doctor.sh"),
     )
 ).expanduser()
-DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "30")))
+DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "120")))
 DOCTOR_RUN_TIMEOUT_SECONDS = max(2, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "4")))
 _DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+_DOCTOR_RUNNING = False
 
 
 def _iteration_issue_event_sources() -> list[Path]:
@@ -337,12 +355,197 @@ def _po_scrum_master_snapshot(message_bus_snapshot: dict) -> dict:
     }
 
 
+def _dynamic_workers_snapshot() -> dict:
+    registry_path = orchestrator_file("dynamic-workers-registry.json")
+    payload = _load_json_file(registry_path) if registry_path.exists() else {}
+    workers = payload.get("workers", []) if isinstance(payload, dict) else []
+    if not isinstance(workers, list):
+        workers = []
+    active = []
+    recent = []
+    for item in workers:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", "")).strip().lower()
+        normalized = {
+            "worker_id": str(item.get("worker_id", "")),
+            "worker_type": str(item.get("worker_type", "")),
+            "parent_role": str(item.get("parent_role", "")),
+            "owner_task_id": str(item.get("owner_task_id", "")),
+            "status": str(item.get("status", "")),
+            "summary": str(item.get("summary", "")),
+            "artifact": str(item.get("artifact", "")),
+            "last_update_at": str(item.get("last_update_at", "")),
+        }
+        if status in {"spawned", "running"}:
+            active.append(normalized)
+        else:
+            recent.append(normalized)
+    return {
+        "enabled": str(os.environ.get("FC_DYNAMIC_WORKERS_ENABLED", "0")).strip() not in {"0", "false", "False"},
+        "registry_path": str(registry_path),
+        "active_count": len(active),
+        "active": active[:8],
+        "recent": recent[-8:],
+    }
+
+
+def _planner_subagents_snapshot() -> dict:
+    registry_path = orchestrator_file("planner-subagents-registry.json")
+    payload = _load_json_file(registry_path) if registry_path.exists() else {}
+    subagents = payload.get("subagents", []) if isinstance(payload, dict) else []
+    if not isinstance(subagents, list):
+        subagents = []
+    active = []
+    recent = []
+    for item in subagents:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", "")).strip().lower()
+        normalized = {
+            "subagent_id": str(item.get("subagent_id", "")),
+            "target_role": str(item.get("target_role", "")),
+            "parent_role": str(item.get("parent_role", "")),
+            "owner_task_id": str(item.get("owner_task_id", "")),
+            "status": str(item.get("status", "")),
+            "summary": str(item.get("summary", "")),
+            "artifact": str(item.get("artifact", "")),
+            "last_update_at": str(item.get("last_update_at", "")),
+        }
+        if status in {"spawned", "running"}:
+            active.append(normalized)
+        else:
+            recent.append(normalized)
+    enabled = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED", "0")).strip() not in {"0", "false", "False"}
+    cron_planner_only = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", "0")).strip() not in {"0", "false", "False"}
+    return {
+        "enabled": enabled,
+        "cron_planner_only": cron_planner_only,
+        "registry_path": str(registry_path),
+        "active_count": len(active),
+        "active": active[:8],
+        "recent": recent[-8:],
+    }
+
+
+def _activity_bundle(window_hours: int, limit: int) -> dict:
+    if not ACTIVITY_FEED_ENABLED:
+        return {
+            "enabled": False,
+            "window_hours": int(window_hours),
+            "limit": int(limit),
+            "timeline": [],
+            "throughput": {
+                "tasks_completed_last_hour": 0,
+                "artifacts_generated_last_hour": 0,
+                "delivery_rate": 0.0,
+            },
+            "intentions": {},
+            "quality": {},
+            "tasks_active": [],
+            "dependencies": {
+                "nodes": [],
+                "edges": [],
+                "bottlenecks": [],
+                "summary": {"nodes": 0, "edges": 0, "waiting_dep_tasks": 0, "bottleneck_count": 0},
+                "explanations": [],
+            },
+            "system_summary": {
+                "what_changed_last_15m": [],
+                "events_by_role_last_15m": {},
+                "current_bottleneck": "none",
+                "recommended_next_action": "monitor",
+                "intentions": {},
+                "decision_trace_quality": {},
+            },
+            "sources": {},
+        }
+
+    safe_window = max(1, min(int(window_hours), 72))
+    safe_limit = max(20, min(int(limit), 1000))
+    workboard_snapshot = monitor_load_workboard_snapshot(ROOT)
+    activity = monitor_collect_activity_events(
+        root=ROOT,
+        state_dir=STATE,
+        window_hours=safe_window,
+        limit=safe_limit,
+    )
+    timeline = activity.get("timeline", []) if isinstance(activity, dict) else []
+    if not isinstance(timeline, list):
+        timeline = []
+    active_tasks = monitor_build_active_tasks(
+        tasks=workboard_snapshot.get("tasks", []) if isinstance(workboard_snapshot, dict) else [],
+        timeline=timeline,
+        limit=min(240, safe_limit),
+    )
+    dependency_map = (
+        monitor_build_dependency_map(workboard_snapshot.get("tasks", []) if isinstance(workboard_snapshot, dict) else [])
+        if DEPENDENCY_MAP_ENABLED
+        else {"nodes": [], "edges": [], "bottlenecks": [], "summary": {}, "explanations": []}
+    )
+    intentions_payload = monitor_collect_role_intentions(STATE)
+    throughput = monitor_build_throughput(timeline)
+    system_summary = monitor_build_system_summary(
+        timeline=timeline,
+        intentions=intentions_payload,
+        dependency_map=dependency_map,
+        active_tasks=active_tasks,
+    )
+    return {
+        "enabled": True,
+        "window_hours": safe_window,
+        "limit": safe_limit,
+        "timeline": timeline,
+        "throughput": throughput,
+        "intentions": intentions_payload.get("intentions", {}) if isinstance(intentions_payload, dict) else {},
+        "quality": intentions_payload.get("decision_trace_quality", {}) if isinstance(intentions_payload, dict) else {},
+        "tasks_active": active_tasks,
+        "dependencies": dependency_map,
+        "system_summary": system_summary,
+        "sources": {
+            **(activity.get("sources", {}) if isinstance(activity, dict) else {}),
+            **(workboard_snapshot.get("paths", {}) if isinstance(workboard_snapshot, dict) else {}),
+        },
+    }
+
+
+def _activity_summary_from_bundle(bundle: dict) -> dict:
+    timeline = bundle.get("timeline", []) if isinstance(bundle, dict) else []
+    if not isinstance(timeline, list):
+        timeline = []
+    summary = monitor_build_activity_summary(timeline)
+    if not isinstance(summary, dict):
+        summary = {}
+    summary.setdefault("events_last_1h", 0)
+    summary.setdefault("events_last_6h", 0)
+    summary.setdefault("tasks_progressed_last_1h", 0)
+    summary.setdefault("last_action_by_role", {})
+    summary.setdefault("current_bottleneck", "none")
+    return summary
+
+
 def doctor_snapshot(force_refresh: bool = False) -> dict:
+    global _DOCTOR_RUNNING
     now = time.time()
     cached_payload = _DOCTOR_CACHE.get("payload")
     cached_ts = float(_DOCTOR_CACHE.get("ts") or 0.0)
     if not force_refresh and isinstance(cached_payload, dict) and (now - cached_ts) <= DOCTOR_CACHE_TTL_SECONDS:
         return cached_payload
+
+    # Prevent recursive refresh loops:
+    # /api/status -> doctor_snapshot -> fc_doctor.sh -> /api/status.
+    if _DOCTOR_RUNNING:
+        if isinstance(cached_payload, dict) and cached_payload:
+            return cached_payload
+        return {
+            "status": "degraded",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checks": {},
+            "meta": {
+                "schema_version": "doctor.v1",
+                "note": "doctor_refresh_in_progress",
+            },
+        }
 
     if not DOCTOR_SCRIPT_FILE.exists():
         payload = {
@@ -360,49 +563,53 @@ def doctor_snapshot(force_refresh: bool = False) -> dict:
         return payload
 
     try:
-        cp = subprocess.run(
-            [str(DOCTOR_SCRIPT_FILE), "--json"],
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=DOCTOR_RUN_TIMEOUT_SECONDS,
-            cwd=str(ROOT),
-        )
-        payload = {}
+        _DOCTOR_RUNNING = True
         try:
-            payload = json.loads(cp.stdout or "{}")
-        except Exception:
+            cp = subprocess.run(
+                [str(DOCTOR_SCRIPT_FILE), "--json"],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=DOCTOR_RUN_TIMEOUT_SECONDS,
+                cwd=str(ROOT),
+            )
             payload = {}
-        if not isinstance(payload, dict):
-            payload = {}
-        if not payload:
+            try:
+                payload = json.loads(cp.stdout or "{}")
+            except Exception:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            if not payload:
+                payload = {
+                    "status": "error",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "checks": {},
+                    "meta": {
+                        "schema_version": "doctor.v1",
+                        "error": "doctor_invalid_json",
+                        "rc": cp.returncode,
+                        "stderr": (cp.stderr or "")[:240],
+                    },
+                }
+            else:
+                meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+                if not isinstance(meta, dict):
+                    meta = {}
+                meta["rc"] = cp.returncode
+                payload["meta"] = meta
+        except Exception as exc:
             payload = {
                 "status": "error",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "checks": {},
                 "meta": {
                     "schema_version": "doctor.v1",
-                    "error": "doctor_invalid_json",
-                    "rc": cp.returncode,
-                    "stderr": (cp.stderr or "")[:240],
+                    "error": f"doctor_exec_failed:{exc}",
                 },
             }
-        else:
-            meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
-            if not isinstance(meta, dict):
-                meta = {}
-            meta["rc"] = cp.returncode
-            payload["meta"] = meta
-    except Exception as exc:
-        payload = {
-            "status": "error",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "checks": {},
-            "meta": {
-                "schema_version": "doctor.v1",
-                "error": f"doctor_exec_failed:{exc}",
-            },
-        }
+    finally:
+        _DOCTOR_RUNNING = False
 
     _DOCTOR_CACHE["payload"] = payload
     _DOCTOR_CACHE["ts"] = now
@@ -609,6 +816,28 @@ LOG_KIND_LABELS = {
 
 app = FastAPI(docs_url=None, redoc_url=None)
 app.include_router(create_doctor_router(doctor_snapshot))
+app.include_router(
+    create_activity_router(
+        lambda window, limit: _activity_bundle(window, limit),
+        lambda window, limit: (
+            lambda safe_window, safe_limit, items: {
+                "window_hours": safe_window,
+                "limit": safe_limit,
+                "items": items,
+                "tasks": items,
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
+        )(
+            max(1, min(int(window), 72)),
+            max(10, min(int(limit), 300)),
+            _activity_bundle(window, max(limit, 120)).get("tasks_active", [])[: max(10, min(int(limit), 300))],
+        ),
+        lambda limit: {
+            **(_activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, max(limit, ACTIVITY_FEED_MAX_EVENTS)).get("dependencies", {})),
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        },
+    )
+)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 def jload(p):
@@ -2368,7 +2597,8 @@ def status():
                 providers_detail = {}
             providers_status = str(providers_check.get("status", "")).strip().lower() if isinstance(providers_check, dict) else ""
             api_now_ok = _probe_http_ok("http://127.0.0.1:8050/api/health") or bool(providers_detail.get("api_health_ok", False)) or providers_status == "ok"
-            mon_now_ok = _probe_http_ok("http://127.0.0.1:7779/api/status") or bool(providers_detail.get("monitor_status_ok", False)) or providers_status == "ok"
+            # Avoid self-probing /api/status while serving /api/status.
+            mon_now_ok = bool(providers_detail.get("monitor_status_ok", False)) or providers_status == "ok"
             blocker_token = str(blocker_value or "").upper()
             blocker_norm = re.sub(r"[^A-Z0-9_]+", "_", blocker_token).strip("_")
             blocker_is_runtime = False
@@ -2659,6 +2889,10 @@ def status():
         "orchestrator_source": orchestrator_source,
         "dev_force_claim_events_60m": dev_force_claim_events_60m,
     }
+    activity_bundle = _activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, min(ACTIVITY_FEED_MAX_EVENTS, 220))
+    activity_summary = _activity_summary_from_bundle(activity_bundle)
+    dynamic_workers = _dynamic_workers_snapshot()
+    planner_subagents = _planner_subagents_snapshot()
 
     payload = {"ts_utc":now.isoformat(),"health":health,
             "instance":INSTANCE_ID,
@@ -2685,6 +2919,7 @@ def status():
                          "ready_tasks":ready_t,"in_progress_tasks":ip_t,
                          "state_counts":workboard_state_counts},
             "orchestration": orchestration_payload,
+            "activity_summary": activity_summary,
             "agents":agents,"rate_limits":rl,"kpi":kpi,"health_breakdown":health_breakdown,
             "planner_autonomy": planner_autonomy,
             "planner_policy_enforced": planner_policy_enforced,
@@ -2699,6 +2934,8 @@ def status():
             "admin_dispatch": admin_dispatch,
             "planner_evidence_quality_score": planner_evidence_quality_score,
             "queue_workboard_integrity": queue_workboard_integrity,
+            "dynamic_workers": dynamic_workers,
+            "planner_subagents": planner_subagents,
             "po_scrum_master": po_scrum_master,
             "agent_messages": agent_messages,
             "doctor": doctor,
@@ -3838,7 +4075,7 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
   </div>
 </div>
 <script>
-let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,R=null,IS=null,G=null,P=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner';
+let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,R=null,IS=null,G=null,P=null,A=null,TA=null,DM=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner';
 async function fetchJson(url, fallback={}, timeoutMs=6000){
   const ctrl=new AbortController();
   const tid=setTimeout(()=>ctrl.abort(), timeoutMs);
@@ -3854,7 +4091,7 @@ async function fetchJson(url, fallback={}, timeoutMs=6000){
   }
 }
 async function load(){
-  const[s,t,e,l,lc,i,x,f,r,is,p,g]=await Promise.all([
+  const[s,t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm]=await Promise.all([
     fetchJson('/api/status',{}),
     fetchJson('/api/ticks/all?n=20',{}),
     fetchJson('/api/execution/all?tick_n=40&runner_n=90',{}),
@@ -3866,9 +4103,12 @@ async function load(){
     fetchJson('/api/issues/feed?n=160&window_min=240',{}),
     fetchJson('/api/issues/summary?window_min=60',{}),
     fetchJson('/api/dev-parent',{}),
-    fetchJson('/api/runtime-diagnostics',{})
+    fetchJson('/api/runtime-diagnostics',{}),
+    fetchJson('/api/agent-activity?window=6&limit=300',{}),
+    fetchJson('/api/tasks/active?window=6&limit=120',{}),
+    fetchJson('/api/dependencies/map?limit=300',{})
   ]);
-  API_ERRORS=[s,t,e,l,lc,i,x,f,r,is,p,g].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
+  API_ERRORS=[s,t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
 
   const statusOk = !!(s.ok && s.data && s.data.queue && s.data.workboard && s.data.agents);
   if(statusOk){
@@ -3890,6 +4130,9 @@ async function load(){
   if(is.ok)IS=is.data;
   P=p.ok ? p.data : {};
   if(g.ok)G=g.data;
+  A=a.ok ? a.data : {};
+  TA=ta.ok ? ta.data : {};
+  DM=dm.ok ? dm.data : {};
 }
 function esc(v){return String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
 function shortPath(v, max=92){
@@ -4186,6 +4429,67 @@ function insightsHtml(){
     }).join('')
   }</div>`;
 }
+function activityFeedHtml(){
+  const timeline=((A&&A.timeline)||[]).slice(0,24);
+  if(!timeline.length){
+    return '<div class="log-empty">Aucune activité récente consolidée</div>';
+  }
+  return `<div class="iter-issues">${
+    timeline.map(ev=>{
+      const role=String(ev.role||'unknown');
+      const action=String(ev.action||'NOOP');
+      const task=String(ev.task_id||ev.batch_id||'');
+      const reason=String(ev.reason_code||'');
+      const ts=String(ev.ts||'');
+      const artifact=(Array.isArray(ev.artifact_refs)&&ev.artifact_refs.length)?String(ev.artifact_refs[0]||''):'';
+      const sev=(action==='BLOCKED')?'error':(action==='NOOP'?'info':'warn');
+      return `<div class="issue-row ${sev}">
+        <div class="issue-head"><span class="issue-role">${esc(role)} → ${esc(action)}</span><span class="issue-sev ${sev}">${esc(ts.slice(11,19)||'--:--:--')}</span></div>
+        <div class="issue-meta">${esc(task||'task: none')} ${reason?`· ${esc(reason)}`:''}</div>
+        ${artifact?`<div class="issue-text">artifact: ${esc(artifact)}</div>`:''}
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function taskInspectorHtml(){
+  const items=((TA&&TA.items)||[]).slice(0,18);
+  if(!items.length){
+    return '<div class="log-empty">Aucune tâche active détaillée</div>';
+  }
+  return `<div class="iter-issues">${
+    items.map(t=>{
+      const state=String(t.state||'UNKNOWN');
+      const sev=state==='IN_PROGRESS'?'warn':(state==='WAITING_DEP'?'error':'info');
+      const stalled=Boolean(t.stalled);
+      const progress=Math.max(0,Math.min(100,Number(t.progress_pct||0)));
+      return `<div class="issue-row ${sev}">
+        <div class="issue-head"><span class="issue-role">${esc(t.task_id||'')}</span><span class="issue-sev ${sev}">${esc(state)}</span></div>
+        <div class="issue-meta">owner=${esc(t.owner||'?')} · progress=${progress}% · step=${esc(t.current_step||'—')}</div>
+        <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${progress}%"></div></div>
+        ${t.artifact_output?`<div class="issue-text">artifact: ${esc(t.artifact_output)}</div>`:''}
+        ${stalled?`<div class="issue-text" style="color:var(--coral)">stalled: ${esc(t.stalled_reason||'unknown')}</div>`:''}
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function dependencyMapHtml(){
+  const summary=(DM&&DM.summary)||{};
+  const bottlenecks=((DM&&DM.bottlenecks)||[]).slice(0,5);
+  const explanations=((DM&&DM.explanations)||[]).slice(0,5);
+  if(!bottlenecks.length){
+    return `<div class="queue-sync ok"><strong>dependency graph</strong> · nodes=${summary.nodes||0} · edges=${summary.edges||0} · bottlenecks=0</div>`;
+  }
+  return `<div>
+    <div class="queue-sync warn" style="margin-bottom:8px"><strong>dependency graph</strong> · nodes=${summary.nodes||0} · edges=${summary.edges||0} · waiting_dep=${summary.waiting_dep_tasks||0}</div>
+    <div class="iter-issues">${
+      bottlenecks.map((b,idx)=>`<div class="issue-row warn">
+        <div class="issue-head"><span class="issue-role">${idx+1}. ${esc(b.task_id||'unknown')}</span><span class="issue-sev warn">${esc(String(b.blocked_count||0))} blocked</span></div>
+        <div class="issue-meta">oldest_wait=${esc(String(b.oldest_blocked_minutes??'-1'))} min</div>
+        <div class="issue-text">${esc(explanations[idx]||'')}</div>
+      </div>`).join('')
+    }</div>
+  </div>`;
+}
 function errorFeedHtml(){
   const items=(F&&F.items)||[];
   if(!items.length)return '<div class="log-empty">Aucune alerte récente.</div>';
@@ -4306,6 +4610,9 @@ function render(){
   const agents=D.agents||{};
   const rl=D.rate_limits||[];
   const kpi=D.kpi||{};
+  const activitySummary=D.activity_summary||{};
+  const activityBundle=A||{};
+  const systemSummary=(activityBundle.system_summary)||{};
   const src=D.sources||{};
   const doctor=(D&&D.doctor)||{};
   const po=(D&&D.po_scrum_master)||{};
@@ -4457,7 +4764,8 @@ function render(){
     </div>
 	    <div class="col-right">
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">PO Scrum Master (Advisory)</span><span style="font-size:10px;color:var(--ghost)">scheduled/5m · active=${poActiveTxt}</span></div><div class="panel-body"><div class="queue-sync ${po.active?'warn':'ok'}"><strong>run_age</strong> ${poRunAge} · <strong>report_age</strong> ${poReportAge} · <strong>status</strong> ${poStatus} · <strong>verdict</strong> ${poVerdict} · <strong>lock_skip_streak</strong> <span class="${poLockSkip>3?'err':'ok'}">${poLockSkip}</span></div><div class="queue-sync warn" style="margin-top:8px"><strong>message bus</strong> · open=${msgBus.open??0} · delivered_recent=${msgBus.delivered_recent??0} · actioned_recent=${msgBus.actioned_recent??0} · closed_recent=${msgBus.closed_recent??0}</div><div class="queue-sync" style="margin-top:8px"><strong>recent_messages</strong><br>${poRecentMsgs}</div><div class="exec-logs" style="margin-top:8px"><div class="log-box"><div class="log-head">fc-ticks (scrum_master.tick.log)</div><div class="log-scroll">${logLinesHtml(poTickTail)}</div></div><div class="log-box"><div class="log-head">role-runner (scrum_master.live.log)</div><div class="log-scroll">${logLinesHtml(poRunnerTail)}</div></div><div class="log-box"><div class="log-head">runner-events (scrum_master.events.log)</div><div class="log-scroll">${logLinesHtml(poEventsTail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/ticks/scrum_master" target="_blank">⬡ Ticks</a><a class="ext-link" href="/api/logs/scrum_master" target="_blank">⬡ Logs</a><a class="ext-link" href="/api/logs/scrum_master/events" target="_blank">⬡ Events</a><a class="ext-link" href="/api/log-view?role=scrum_master&kind=runner&n=220" target="_blank">⬡ Log JSON</a></div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>report:</strong> ${esc(shortPath(po.last_report_path||''))}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Exécution récente</span><span style="color:var(--emerald);font-size:11px;font-weight:600">${execRole}</span></div><div class="panel-body"><div class="tab-bar" id="exec-tabs">${etabs}</div><div class="exec-meta">${execMetaHtml(execRole)}</div><div class="exec-logs"><div class="log-box"><div class="log-head">fc-ticks (${execRole}.tick.log)</div><div class="log-scroll">${logLinesHtml(ex.tick_tail)}</div></div><div class="log-box"><div class="log-head">role-runner (${execRole}.live.log)</div><div class="log-scroll">${logLinesHtml(ex.runner_tail)}</div></div><div class="log-box"><div class="log-head">runner-events (${execRole}.events.log)</div><div class="log-scroll">${logLinesHtml(ex.events_tail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/execution/${execRole}" target="_blank">⬡ Execution JSON</a><a class="ext-link" href="/api/logs/${execRole}" target="_blank">⬡ Runner logs</a><a class="ext-link" href="/api/logs/${execRole}/events" target="_blank">⬡ Runner events</a><a class="ext-link" href="/api/ticks/${execRole}" target="_blank">⬡ Ticks</a>${plannerExecLinks}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Truth Matrix</span><span style="color:var(--amber);font-size:11px;font-weight:600">activité réelle · qualité · signaux</span></div><div class="panel-body">${insightsHtml()}</div></div>

@@ -21,8 +21,9 @@ assert_eq() {
 assert_eq "$(runner_normalize_role planner 0)" "planner" "planner_identity"
 assert_eq "$(runner_normalize_role vision-architect-tasks-planner 0)" "planner" "vision_alias"
 assert_eq "$(runner_normalize_role backend_engineer 0)" "dev" "backend_alias"
-assert_eq "$(runner_normalize_role scrum_master 0)" "planner" "scrum_disabled_alias"
-assert_eq "$(runner_normalize_role scrum_master 1)" "scrum_master" "scrum_enabled"
+assert_eq "$(runner_normalize_role scrum_master 0 advisory)" "scrum_master" "scrum_advisory_kept"
+assert_eq "$(runner_normalize_role scrum_master 1 advisory)" "scrum_master" "scrum_advisory_enabled"
+assert_eq "$(runner_normalize_role scrum_master 0 operational)" "scrum_master" "scrum_operational_enabled"
 
 runner_is_supported_role planner
 runner_is_supported_role dev

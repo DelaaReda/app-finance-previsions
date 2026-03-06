@@ -2,8 +2,6 @@
 
 runner_normalize_role() {
   local role="${1:-}"
-  local po_scrum_enabled="${2:-0}"
-  local scrum_mode="${3:-${FC_SCRUM_MASTER_MODE:-operational}}"
   case "$role" in
     vision-architect-tasks-planner|vision_architect_tasks_planner)
       printf "planner\n"
@@ -12,13 +10,7 @@ runner_normalize_role() {
       printf "planner\n"
       ;;
     scrum_master)
-      if [[ "$scrum_mode" == "operational" ]]; then
-        printf "scrum_master\n"
-      elif [[ "$po_scrum_enabled" == "1" ]]; then
-        printf "scrum_master\n"
-      else
-        printf "planner\n"
-      fi
+      printf "scrum_master\n"
       ;;
     backend_engineer|frontend_engineer|data_analyst|integrator)
       printf "dev\n"

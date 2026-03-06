@@ -113,6 +113,16 @@ def _apply_env_whitelist(cfg: dict[str, Any]) -> tuple[dict[str, Any], list[str]
         "FC_DEFAULT_PROMPT_TIMEOUT_SECONDS": "defaults.prompt_timeout_seconds",
         "FC_DEFAULT_RETRY_TIMEOUT_SECONDS": "defaults.retry_prompt_timeout_seconds",
         "FC_DEFAULT_TICK_TIMEOUT_SECONDS": "defaults.tick_timeout_seconds",
+        "FC_FORCE_ALLOW_FILE_EDITS_ALL": "features.force_allow_file_edits_all",
+        "FC_PLANNER_ORCHESTRATOR_ENABLED": "features.planner_orchestrator.enabled",
+        "FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY": "features.planner_orchestrator.cron_planner_only",
+        "FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE": "features.planner_orchestrator.max_active",
+        "FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN": "features.planner_orchestrator.default_ttl_min",
+        "FC_PLANNER_ORCHESTRATOR_RETRY_MAX": "features.planner_orchestrator.retry_max",
+        "FC_DYNAMIC_WORKERS_ENABLED": "features.dynamic_workers.enabled",
+        "FC_DYNAMIC_WORKERS_MAX_ACTIVE": "features.dynamic_workers.max_active",
+        "FC_DYNAMIC_WORKERS_DEFAULT_TTL_MIN": "features.dynamic_workers.default_ttl_min",
+        "FC_DYNAMIC_WORKERS_RETRY_MAX": "features.dynamic_workers.retry_max",
     }
     for env_key, dotted in env_top_map.items():
         value = os.environ.get(env_key, "").strip()

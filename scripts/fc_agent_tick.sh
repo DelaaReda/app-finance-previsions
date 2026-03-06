@@ -73,18 +73,25 @@ if [[ -z "$ROLE" ]]; then
 fi
 
 ROLE_INPUT="$ROLE"
-FC_ENABLE_PO_SCRUM_MASTER="${FC_ENABLE_PO_SCRUM_MASTER:-0}"
-FC_PO_SCRUM_MASTER_RUN_NOW="${FC_PO_SCRUM_MASTER_RUN_NOW:-0}"
-FC_PO_SCRUM_MASTER_CRON="${FC_PO_SCRUM_MASTER_CRON:-0}"
+FC_SCRUM_MASTER_ENABLED="${FC_SCRUM_MASTER_ENABLED:-1}"
+FC_ENABLE_PO_SCRUM_MASTER="${FC_ENABLE_PO_SCRUM_MASTER:-${FC_SCRUM_MASTER_ENABLED}}"
+FC_PO_SCRUM_MASTER_RUN_NOW="${FC_PO_SCRUM_MASTER_RUN_NOW:-1}"
+FC_PO_SCRUM_MASTER_CRON="${FC_PO_SCRUM_MASTER_CRON:-1}"
 FC_SCRUM_MASTER_MODE="${FC_SCRUM_MASTER_MODE:-operational}"
+FC_STATE_RECONCILER="${FC_STATE_RECONCILER:-1}"
+FC_FORCE_ALLOW_FILE_EDITS_ALL="${FC_FORCE_ALLOW_FILE_EDITS_ALL:-1}"
 FC_ADMIN_RUNTIME_STALE_AUTOHEAL="${FC_ADMIN_RUNTIME_STALE_AUTOHEAL:-1}"
 FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
 FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
 FC_MONITOR_READY_DEV_FROM_WORKBOARD="${FC_MONITOR_READY_DEV_FROM_WORKBOARD:-1}"
 LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-skip}"
-# === CONSOLIDATION 2026-03-02: 10 rôles → 3 ===
+DEFAULT_ROLE_ALLOW_FILE_EDITS="0"
+if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
+  DEFAULT_ROLE_ALLOW_FILE_EDITS="1"
+fi
+# === CONSOLIDATION 2026-03-02: legacy aliases → 4 runtime roles ===
 # Tout ce qui était backend_engineer / frontend_engineer / data_analyst → dev
-# Tout ce qui était architect / po / scrum_master / analyst → planner
+# Tout ce qui était architect / po / analyst → planner
 # Tout ce qui était clawsentinel / infra_engineer / qa → admin
 case "$ROLE" in
   backend_engineer|frontend_engineer|data_analyst|integrator)
@@ -96,13 +103,9 @@ case "$ROLE" in
       exit 0
     fi
     ;;
-  analyst|architect|po|scrum_master|vision-architect-tasks-planner|vision_architect_tasks_planner)
+  analyst|architect|po|vision-architect-tasks-planner|vision_architect_tasks_planner)
     if [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
       ROLE="planner"
-    elif [[ "$ROLE" == "scrum_master" && "$FC_SCRUM_MASTER_MODE" == "operational" ]]; then
-      ROLE="scrum_master"
-    elif [[ "$ROLE" == "scrum_master" && "$FC_ENABLE_PO_SCRUM_MASTER" == "1" && ( "$FC_PO_SCRUM_MASTER_RUN_NOW" == "1" || "$FC_PO_SCRUM_MASTER_CRON" == "1" ) ]]; then
-      ROLE="scrum_master"
     elif [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
       echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'planner' (legacy alias mode=map)" >&2
       ROLE="planner"
@@ -110,6 +113,9 @@ case "$ROLE" in
       echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
       exit 0
     fi
+    ;;
+  scrum_master)
+    ROLE="scrum_master"
     ;;
   clawsentinel|infra_engineer|qa|tester)
     if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
@@ -125,19 +131,11 @@ esac
 ROLE_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.rate_limit_gate_cache"
 ROLE_STATE_CONTRACT_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.last_contract"
 
-# 3 rôles actifs + advisory manuel optionnel
+# 4 rôles actifs
 case "$ROLE" in
-  dev|planner|admin) ;;
-  scrum_master)
-    if [[ "$FC_SCRUM_MASTER_MODE" == "advisory" ]]; then
-      if [[ "$FC_ENABLE_PO_SCRUM_MASTER" != "1" || ( "$FC_PO_SCRUM_MASTER_RUN_NOW" != "1" && "$FC_PO_SCRUM_MASTER_CRON" != "1" ) ]]; then
-        echo "[fc_tick] Role '$ROLE_INPUT' advisory lane gated (set FC_ENABLE_PO_SCRUM_MASTER=1 with FC_PO_SCRUM_MASTER_RUN_NOW=1 or FC_PO_SCRUM_MASTER_CRON=1), skipping" >&2
-        exit 0
-      fi
-    fi
-    ;;
+  dev|planner|admin|scrum_master) ;;
   *)
-    echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) not in active set {dev,planner,admin}, skipping" >&2
+    echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) not in active set {planner,dev,admin,scrum_master}, skipping" >&2
     exit 0
     ;;
 esac
@@ -263,6 +261,18 @@ if declare -F runner_config_emit_env >/dev/null 2>&1; then
   fi
 else
   load_runner_config_env "$ROLE"
+fi
+
+if [[ "$FC_STATE_RECONCILER" == "1" ]] && command -v python3 >/dev/null 2>&1 && [[ -f "$ROOT/platform/automation/state_reconciler.py" ]]; then
+  set +e
+  RECONCILE_OUT="$(python3 "$ROOT/platform/automation/state_reconciler.py" --role "$ROLE" --root "$ROOT" 2>&1)"
+  RECONCILE_RC=$?
+  set -e
+  if [[ "$RECONCILE_RC" -eq 0 ]]; then
+    echo "$(ts) [STATE_RECONCILER] role=$ROLE status=ok detail=$(printf '%s' "$RECONCILE_OUT" | tail -1 | cut -c1-220)" >> "$LOG"
+  else
+    echo "$(ts) [STATE_RECONCILER] role=$ROLE status=soft_fail rc=$RECONCILE_RC detail=$(printf '%s' "$RECONCILE_OUT" | tail -1 | cut -c1-220)" >> "$LOG"
+  fi
 fi
 
 normalize_seconds() {
@@ -511,7 +521,7 @@ normalize_codex_model() {
   local raw="${1:-gpt-5.2}"
   local stripped="${raw#openai-codex/}"
   case "$stripped" in
-    gpt-5.2|gpt-5.3-codex-spark|gpt-5.3-codex)
+    gpt-5.2|gpt-5.3-codex-spark|gpt-5.3-codex|gpt-5.4)
       printf '%s\n' "$stripped" ;;
     gpt-5.3-spark)
       printf 'gpt-5.3-codex-spark\n' ;;
@@ -587,11 +597,17 @@ try:
             print(int(r.get(\"allow_file_edits\",0)))
             break
     else:
-        print(0)
+        print("")
 except Exception:
-    print(0)
-" "$CRON_MAP_FILE" "$ROLE" 2>/dev/null || echo 0)
-  export TMUX_ROLE_ALLOW_FILE_EDITS="${ALLOW_FILE_EDITS_FROM_MAP:-0}"
+    print("")
+" "$CRON_MAP_FILE" "$ROLE" 2>/dev/null || true)
+  if [[ "$ALLOW_FILE_EDITS_FROM_MAP" != "0" && "$ALLOW_FILE_EDITS_FROM_MAP" != "1" ]]; then
+    ALLOW_FILE_EDITS_FROM_MAP="$DEFAULT_ROLE_ALLOW_FILE_EDITS"
+  fi
+  export TMUX_ROLE_ALLOW_FILE_EDITS="${ALLOW_FILE_EDITS_FROM_MAP:-$DEFAULT_ROLE_ALLOW_FILE_EDITS}"
+  if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
+    export TMUX_ROLE_ALLOW_FILE_EDITS="1"
+  fi
   echo "$(ts) [CONFIG] role=$ROLE allow_file_edits=$TMUX_ROLE_ALLOW_FILE_EDITS" >> "$LOG"
 fi
 export TMUX_ROLE_AGENT_BIN="$AGENT_BIN_EFFECTIVE"
@@ -696,19 +712,20 @@ case "$ROLE" in
     export TMUX_ROLE_ADMIN_TSHAPE_COOLDOWN_SECONDS="${FC_ADMIN_TSHAPE_COOLDOWN_SECONDS:-300}"
     ;;
   scrum_master)
-    export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER=1
-    export TMUX_ROLE_CODEX_MODEL="${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}"
-    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}"
-    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-0}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_PO_SCRUM_MASTER_THINKING:-medium}"
-    export PROMPT_TIMEOUT_SECONDS="${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}"
-    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}"
-    export PO_SCRUM_MASTER_ALLOW_BUS_POST="${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}"
+    export TMUX_ROLE_ENABLE_SCRUM_MASTER="${FC_SCRUM_MASTER_ENABLED:-1}"
+    export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-${TMUX_ROLE_ENABLE_SCRUM_MASTER}}"
+    export TMUX_ROLE_CODEX_MODEL="${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_SCRUM_MASTER_CODEX_EXEC_RESUME:-${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-0}}"
+    export TMUX_ROLE_CODEX_THINKING="${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-low}}"
+    export PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}}"
+    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}}"
+    export PO_SCRUM_MASTER_ALLOW_BUS_POST="${FC_SCRUM_MASTER_ALLOW_BUS_POST:-${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}}"
     export FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
     export FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
-    export PO_SCRUM_MASTER_MAX_POSTS_PER_TICK="${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK:-2}"
-    export PO_SCRUM_MASTER_POST_COOLDOWN_S="${PO_SCRUM_MASTER_POST_COOLDOWN_S:-600}"
-    export ROLE_ALLOW_FILE_EDITS="${ROLE_ALLOW_FILE_EDITS:-0}"
+    export PO_SCRUM_MASTER_MAX_POSTS_PER_TICK="${FC_SCRUM_MASTER_MAX_POSTS_PER_TICK:-${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK:-2}}"
+    export PO_SCRUM_MASTER_POST_COOLDOWN_S="${FC_SCRUM_MASTER_POST_COOLDOWN_S:-${PO_SCRUM_MASTER_POST_COOLDOWN_S:-600}}"
+    export ROLE_ALLOW_FILE_EDITS="${ROLE_ALLOW_FILE_EDITS:-$DEFAULT_ROLE_ALLOW_FILE_EDITS}"
     ;;
 esac
 

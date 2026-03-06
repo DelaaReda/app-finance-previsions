@@ -63,7 +63,7 @@ def read_last_contract_hint(path: Path, scope: str) -> str:
 def peer_contracts_hint(state_dir: Path, role: str) -> str:
     # Priorité: lane planner unifié + lanes delivery actives — 3 pairs max
     # Active lean roles only — legacy roles (backend_engineer, etc.) have been consolidated into 'dev'
-    priority_roles = ["planner", "dev", "admin"]
+    priority_roles = ["planner", "dev", "admin", "scrum_master"]
     _now = __import__("time").time()
     _stale_threshold_s = 7200  # 2h — contracts older than this are not reliable peers
     role_files = sorted(
@@ -106,6 +106,34 @@ def run_parallel_workstream(script_path: Path, role: str, subcmd: str, limit: in
     run_cwd = str(cwd) if cwd is not None else None
     try:
         cp = subprocess.run(cmd, text=True, capture_output=True, check=False, cwd=run_cwd)
+    except Exception:
+        return "none"
+    if cp.returncode != 0:
+        return "none"
+    return compact_text(cp.stdout, max_chars)
+
+
+def dynamic_worker_context(root: Path, role: str, max_chars: int = 240) -> str:
+    script_path = root / "platform" / "automation" / "worker_manager.py"
+    if not script_path.exists():
+        return "none"
+    cmd = [sys.executable, str(script_path), "--root", str(root), "prompt-context", "--role", role]
+    try:
+        cp = subprocess.run(cmd, text=True, capture_output=True, check=False, cwd=str(root))
+    except Exception:
+        return "none"
+    if cp.returncode != 0:
+        return "none"
+    return compact_text(cp.stdout, max_chars)
+
+
+def planner_subagent_context(root: Path, role: str, max_chars: int = 240) -> str:
+    script_path = root / "platform" / "automation" / "planner_subagent_manager.py"
+    if not script_path.exists():
+        return "none"
+    cmd = [sys.executable, str(script_path), "--root", str(root), "prompt-context", "--role", role]
+    try:
+        cp = subprocess.run(cmd, text=True, capture_output=True, check=False, cwd=str(root))
     except Exception:
         return "none"
     if cp.returncode != 0:
@@ -207,6 +235,32 @@ def queue_summary(queue_path: Path) -> dict[str, str]:
     # just because non_closed < 20 (most of those are blocked behind sequencing).
     # Threshold: flag only when non_closed < 3 (near-empty pipeline) AND ready == 0.
     result["planner_batch_runway_short"] = "1" if (top_level_non_closed < 3 and top_level_ready == 0) else "0"
+    return result
+
+
+def reconcile_summary(report_path: Path) -> dict[str, str]:
+    result = {
+        "reconcile_at": "none",
+        "reconcile_fixes_applied": "0",
+        "reconcile_ready_starvation_detected": "0",
+        "reconcile_stale_inprogress_marked": "0",
+        "reconcile_runtime_blockers_cleared": "0",
+        "reconcile_stale_locks_removed": "0",
+    }
+    if not report_path.exists():
+        return result
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return result
+    if not isinstance(payload, dict):
+        return result
+    result["reconcile_at"] = compact_text(str(payload.get("at", "none")), 64)
+    result["reconcile_fixes_applied"] = str(int(payload.get("fixes_applied", 0) or 0))
+    result["reconcile_ready_starvation_detected"] = str(int(payload.get("ready_starvation_detected", 0) or 0))
+    result["reconcile_stale_inprogress_marked"] = str(int(payload.get("stale_inprogress_marked", 0) or 0))
+    result["reconcile_runtime_blockers_cleared"] = str(int(payload.get("runtime_blockers_cleared", 0) or 0))
+    result["reconcile_stale_locks_removed"] = str(int(payload.get("stale_locks_removed", 0) or 0))
     return result
 
 
@@ -452,6 +506,7 @@ def main() -> int:
     queue_path, orchestrator_source = resolve_orchestrator_queue_path(root)
     queue_data = queue_summary(queue_path)
     workboard_path = queue_path.parent / "parallel-workstreams.json"
+    reconcile_data = reconcile_summary(queue_path.parent / "state-reconcile-report.json")
     workstate_primary = root / "docs/product/planning/WORKSTATE.md"
     workstate_fallback = root / "docs/planning/WORKSTATE.md"
     workstate_target = workstate_primary if workstate_primary.exists() else workstate_fallback
@@ -463,6 +518,8 @@ def main() -> int:
     parallel_hint = run_parallel_workstream(parallel_script, role, "status", 3, 240, cwd=root)
     workboard_context = run_parallel_workstream(parallel_script, role, "context", 3, 300, cwd=root)
     publication_channels = run_parallel_workstream(parallel_script, role, "channels", 4, 360, cwd=root)
+    worker_summary = dynamic_worker_context(root, role)
+    planner_subagent_summary = planner_subagent_context(root, role)
 
     agent_memory = compact_file_tail(role_memory_dir / f"{role}.md", 8, 180)
     self_last_contract = compact_text(read_last_contract_hint(last_contract_file, "self"), 200)
@@ -498,6 +555,11 @@ def main() -> int:
             f"ready_items={queue_data['ready_items']} | "
             f"ready_next_actions={queue_data['ready_next_actions']} | "
             f"blocked_items={queue_data['blocked_items']} | "
+            f"reconcile_at={reconcile_data['reconcile_at']} | "
+            f"reconcile_fixes_applied={reconcile_data['reconcile_fixes_applied']} | "
+            f"reconcile_ready_starvation_detected={reconcile_data['reconcile_ready_starvation_detected']} | "
+            f"reconcile_runtime_blockers_cleared={reconcile_data['reconcile_runtime_blockers_cleared']} | "
+            f"reconcile_stale_locks_removed={reconcile_data['reconcile_stale_locks_removed']} | "
             f"workstate_hint={workstate_hint} | "
             f"workboard_role_has_work={workboard_role_has_work} | "
             f"workboard_role_has_ready={workboard_role_has_ready} | "
@@ -511,6 +573,8 @@ def main() -> int:
             f"self_last_contract={self_last_contract} | "
             f"peer_contracts={peer_contracts} | "
             f"workboard_context={workboard_context} | "
+            f"worker_summary={worker_summary} | "
+            f"planner_subagent_summary={planner_subagent_summary} | "
             f"agent_messages_tail={agent_messages_tail_text} | "
             f"agent_message_ids={agent_message_ids} | "
             f"trace_tail={trace_tail} | "
@@ -532,6 +596,10 @@ def main() -> int:
             f"ready_items={queue_data['ready_items']} | "
             f"ready_next_actions={queue_data['ready_next_actions']} | "
             f"blocked_items={queue_data['blocked_items']} | "
+            f"reconcile_at={reconcile_data['reconcile_at']} | "
+            f"reconcile_fixes_applied={reconcile_data['reconcile_fixes_applied']} | "
+            f"reconcile_ready_starvation_detected={reconcile_data['reconcile_ready_starvation_detected']} | "
+            f"reconcile_stale_inprogress_marked={reconcile_data['reconcile_stale_inprogress_marked']} | "
             f"workstate_hint={workstate_hint} | "
             f"parallel_hint={parallel_hint} | "
             f"workboard_role_has_work={workboard_role_has_work} | "
@@ -547,6 +615,8 @@ def main() -> int:
             f"self_last_contract={self_last_contract} | "
             f"peer_contracts={peer_contracts} | "
             f"workboard_context={workboard_context} | "
+            f"worker_summary={worker_summary} | "
+            f"planner_subagent_summary={planner_subagent_summary} | "
             f"publication_channels={publication_channels} | "
             f"team_chat_tail={team_chat_tail} | "
             f"team_iteration_tail={team_iteration_tail} | "

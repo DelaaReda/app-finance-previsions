@@ -59,11 +59,13 @@ ADMIN_TSHAPE_ENFORCE_SLA="${FC_ADMIN_TSHAPE_ENFORCE_SLA:-1}"
 ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS="${FC_ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS:-15}"
 ADMIN_TSHAPE_COOLDOWN_SECONDS="${FC_ADMIN_TSHAPE_COOLDOWN_SECONDS:-0}"
 # Scrum master lane (every 5 minutes in full profile, operational by default).
-PO_SCRUM_MASTER_CRON_EXPR="${FC_SCRUM_MASTER_CRON_EXPR:-${FC_PO_SCRUM_MASTER_CRON_EXPR:-3-58/5}}"
-PO_SCRUM_MASTER_CRON_ENABLED="${FC_SCRUM_MASTER_CRON_ENABLED:-${FC_PO_SCRUM_MASTER_CRON_ENABLED:-}}"
+SCRUM_MASTER_CRON_EXPR="${FC_SCRUM_MASTER_CRON_EXPR:-${FC_PO_SCRUM_MASTER_CRON_EXPR:-3-58/5}}"
+SCRUM_MASTER_CRON_ENABLED="${FC_SCRUM_MASTER_CRON_ENABLED:-${FC_PO_SCRUM_MASTER_CRON_ENABLED:-}}"
 FC_SCRUM_MASTER_MODE="${FC_SCRUM_MASTER_MODE:-operational}"
 FC_SCRUM_MASTER_FULL_REMEDIATION="${FC_SCRUM_MASTER_FULL_REMEDIATION:-1}"
 FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES="${FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES:-2}"
+PLANNER_ORCHESTRATOR_ENABLED="${FC_PLANNER_ORCHESTRATOR_ENABLED:-}"
+PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-}"
 ROLE_RECOVERY_LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-${ROOT}/logs-codex-runs}"
 if [[ "$ROOT" == /Users/* ]]; then
   MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
@@ -146,17 +148,17 @@ case "$CRON_PROFILE" in
     ;;
 esac
 
-if [[ -z "${PO_SCRUM_MASTER_CRON_ENABLED}" ]]; then
+if [[ -z "${SCRUM_MASTER_CRON_ENABLED}" ]]; then
   if [[ "$CRON_PROFILE" == "canary" ]]; then
-    PO_SCRUM_MASTER_CRON_ENABLED=0
+    SCRUM_MASTER_CRON_ENABLED=0
   else
-    PO_SCRUM_MASTER_CRON_ENABLED=1
+    SCRUM_MASTER_CRON_ENABLED=1
   fi
 fi
 
 # Advisory cron is full-profile only by policy.
 if [[ "$CRON_PROFILE" != "full" ]]; then
-  PO_SCRUM_MASTER_CRON_ENABLED=0
+  SCRUM_MASTER_CRON_ENABLED=0
 fi
 
 if [[ -f "$RUNNER_CONFIG_FILE" && -f "$RUNNER_CONFIG_LOADER" ]] && command -v python3 >/dev/null 2>&1; then
@@ -169,9 +171,44 @@ if [[ -f "$RUNNER_CONFIG_FILE" && -f "$RUNNER_CONFIG_LOADER" ]] && command -v py
   rm -f /tmp/fc_runner_cfg_validate.out /tmp/fc_runner_cfg_validate.err
 fi
 
+if [[ -f "$RUNNER_CONFIG_FILE" ]] && command -v python3 >/dev/null 2>&1; then
+  if [[ -z "$PLANNER_ORCHESTRATOR_ENABLED" || -z "$PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY" ]]; then
+    planner_flags="$(
+      python3 - "$RUNNER_CONFIG_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    cfg = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+except Exception:
+    cfg = {}
+features = cfg.get("features", {}) if isinstance(cfg, dict) else {}
+planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+enabled = 1 if str(planner.get("enabled", 0)).strip() not in {"0", "false", "False", ""} else 0
+cron_only = 1 if str(planner.get("cron_planner_only", 0)).strip() not in {"0", "false", "False", ""} else 0
+print(f"{enabled} {cron_only}")
+PY
+    )"
+    if [[ -n "$planner_flags" ]]; then
+      read -r cfg_planner_enabled cfg_planner_cron_only <<<"$planner_flags"
+      [[ -n "$PLANNER_ORCHESTRATOR_ENABLED" ]] || PLANNER_ORCHESTRATOR_ENABLED="${cfg_planner_enabled:-0}"
+      [[ -n "$PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY" ]] || PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${cfg_planner_cron_only:-0}"
+    fi
+  fi
+fi
+PLANNER_ORCHESTRATOR_ENABLED="${PLANNER_ORCHESTRATOR_ENABLED:-0}"
+PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}"
+PLANNER_ORCHESTRATOR_ACTIVE=0
+if [[ "$PLANNER_ORCHESTRATOR_ENABLED" == "1" && "$PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY" == "1" ]]; then
+  PLANNER_ORCHESTRATOR_ACTIVE=1
+fi
+
 echo "📋 Configuring Finance Copilot cron jobs..."
 echo "   Root: $ROOT"
 echo "   Profile: $CRON_PROFILE"
+echo "   Planner orchestrator: $PLANNER_ORCHESTRATOR_ACTIVE"
 echo ""
 
 # ── Backup existing crontab ───────────────────────────────
@@ -183,13 +220,26 @@ disable_vm_resume_guard_timer
 # ── Build new crontab ─────────────────────────────────────
 CRON_CONTENT=$(
   crontab -l 2>/dev/null \
-    | grep -v "fc_agent_tick\|auto_recover_tmux\|fc_setup\|cron_tmux_role_runner\|vm_resume_guard\|fc_resume\|watchdog_chromium\|cleanup_monitoring_noise\|cleanup_stale_role_locks\|monitor_stack_guard\|health_snapshot\|auto_batch_close\|dependency_recompute\|cron_admin_tick\.sh\|cron_po_scrum_master_tick\.sh\|Finance Copilot" \
-    | grep -v "fc_agent_tick\.sh[[:space:]]\+scrum_master\|cron_tmux_role_runner\.sh[[:space:]]\+scrum_master\|cron_po_scrum_master_tick\.sh" \
+    | grep -v "fc_agent_tick\|auto_recover_tmux\|fc_setup\|cron_tmux_role_runner\|vm_resume_guard\|fc_resume\|watchdog_chromium\|cleanup_monitoring_noise\|cleanup_stale_role_locks\|monitor_stack_guard\|health_snapshot\|auto_batch_close\|dependency_recompute\|cron_admin_tick\.sh\|cron_po_scrum_master_tick\.sh\|cron_scrum_master_tick\.sh\|Finance Copilot" \
+    | grep -v "fc_agent_tick\.sh[[:space:]]\+scrum_master\|cron_tmux_role_runner\.sh[[:space:]]\+scrum_master\|cron_po_scrum_master_tick\.sh\|cron_scrum_master_tick\.sh" \
     || true
 )
 
 ROLE_CRON_BLOCK=""
-if [[ "$CRON_PROFILE" == "canary" ]]; then
+if [[ "$PLANNER_ORCHESTRATOR_ACTIVE" == "1" ]]; then
+  PLANNER_ORCHESTRATOR_CRON_EXPR="0,22,44"
+  if [[ "$CRON_PROFILE" == "canary" ]]; then
+    PLANNER_ORCHESTRATOR_CRON_EXPR="0,30"
+  fi
+  ROLE_CRON_BLOCK=$(cat <<EOF
+# [finance-copilot] PLANNER — sole scheduled orchestrator (Codex multi-agent experimental)
+${PLANNER_ORCHESTRATOR_CRON_EXPR} * * * * ${BASH_BIN} -lc 'cd ${ROOT} && RUNNER_CONFIG_FILE=${RUNNER_CONFIG_FILE} RUNNER_CONFIG_LOADER=${RUNNER_CONFIG_LOADER} RUNNER_CONFIG_FALLBACK_ENV=${RUNNER_CONFIG_FALLBACK_ENV} FC_PLANNER_ORCHESTRATOR_ENABLED=1 FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY=1 bash scripts/fc_agent_tick.sh planner' >> ${ROOT}/logs-codex-runs/fc-ticks/planner.cron.log 2>&1
+
+# Managed lanes are no longer independently scheduled in planner_orchestrator mode.
+# dev/admin/scrum_master execute as planner-owned Codex subagents via planner_subagent_manager.py
+EOF
+)
+elif [[ "$CRON_PROFILE" == "canary" ]]; then
   ROLE_CRON_BLOCK=$(cat <<EOF
 # [finance-copilot] PLANNER (lean canary) — cadence réduite
 0,30 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && RUNNER_CONFIG_FILE=${RUNNER_CONFIG_FILE} RUNNER_CONFIG_LOADER=${RUNNER_CONFIG_LOADER} RUNNER_CONFIG_FALLBACK_ENV=${RUNNER_CONFIG_FALLBACK_ENV} bash scripts/fc_agent_tick.sh planner' >> ${ROOT}/logs-codex-runs/fc-ticks/planner.cron.log 2>&1
@@ -212,7 +262,7 @@ else
 ${ADMIN_CRON_EXPR} * * * * ${BASH_BIN} -lc 'cd ${ROOT} && RUNNER_CONFIG_FILE=${RUNNER_CONFIG_FILE} RUNNER_CONFIG_LOADER=${RUNNER_CONFIG_LOADER} RUNNER_CONFIG_FALLBACK_ENV=${RUNNER_CONFIG_FALLBACK_ENV} bash scripts/cron_admin_tick.sh' >> ${ROOT}/logs-codex-runs/fc-ticks/admin.cron.log 2>&1
 
 # [finance-copilot] Scrum Master (operational) — scheduled lane (5m, full profile only)
-${PO_SCRUM_MASTER_CRON_EXPR} * * * * ${BASH_BIN} -lc 'if [[ "${PO_SCRUM_MASTER_CRON_ENABLED}" == "1" ]]; then cd ${ROOT} && RUNNER_CONFIG_FILE=${RUNNER_CONFIG_FILE} RUNNER_CONFIG_LOADER=${RUNNER_CONFIG_LOADER} RUNNER_CONFIG_FALLBACK_ENV=${RUNNER_CONFIG_FALLBACK_ENV} FC_SCRUM_MASTER_MODE=${FC_SCRUM_MASTER_MODE} FC_SCRUM_MASTER_FULL_REMEDIATION=${FC_SCRUM_MASTER_FULL_REMEDIATION} FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES=${FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES} bash scripts/cron_po_scrum_master_tick.sh; fi' >> ${ROOT}/logs-codex-runs/fc-ticks/scrum_master.cron.log 2>&1
+${SCRUM_MASTER_CRON_EXPR} * * * * ${BASH_BIN} -lc 'if [[ "${SCRUM_MASTER_CRON_ENABLED}" == "1" ]]; then cd ${ROOT} && RUNNER_CONFIG_FILE=${RUNNER_CONFIG_FILE} RUNNER_CONFIG_LOADER=${RUNNER_CONFIG_LOADER} RUNNER_CONFIG_FALLBACK_ENV=${RUNNER_CONFIG_FALLBACK_ENV} FC_SCRUM_MASTER_MODE=${FC_SCRUM_MASTER_MODE} FC_SCRUM_MASTER_FULL_REMEDIATION=${FC_SCRUM_MASTER_FULL_REMEDIATION} FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES=${FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES} bash scripts/cron_scrum_master_tick.sh; fi' >> ${ROOT}/logs-codex-runs/fc-ticks/scrum_master.cron.log 2>&1
 EOF
 )
 fi
@@ -270,7 +320,14 @@ echo "   - auto_recover        : every 10 min (garde sessions vivantes)"
 echo "   - log_cleanup         : minute 17 every 4h"
 echo "   - monitor_guard       : every 1 min  (api+tunnel health)"
 echo "   - dependency_recompute: every 5 min  (queue/workboard dep refresh)"
-if [[ "$CRON_PROFILE" == "canary" ]]; then
+if [[ "$PLANNER_ORCHESTRATOR_ACTIVE" == "1" ]]; then
+  if [[ "$CRON_PROFILE" == "canary" ]]; then
+    echo "   - planner             : 0,30 (sole orchestrator, canary)"
+  else
+    echo "   - planner             : 0,22,44 (sole orchestrator)"
+  fi
+  echo "   - dev/admin/scrum     : planner-owned Codex subagents"
+elif [[ "$CRON_PROFILE" == "canary" ]]; then
   echo "   - planner             : 0,30  (canary)"
   echo "   - dev                 : 10,40 (canary)"
   echo "   - admin               : paused (canary)"
@@ -278,8 +335,8 @@ else
   echo "   - planner             : 0,22,44"
   echo "   - dev                 : 6,28,50"
   echo "   - admin               : ${ADMIN_CRON_EXPR}"
-  if [[ "${PO_SCRUM_MASTER_CRON_ENABLED}" == "1" ]]; then
-    echo "   - scrum_master       : ${PO_SCRUM_MASTER_CRON_EXPR} (operational)"
+  if [[ "${SCRUM_MASTER_CRON_ENABLED}" == "1" ]]; then
+    echo "   - scrum_master       : ${SCRUM_MASTER_CRON_EXPR} (operational)"
   else
     echo "   - scrum_master       : disabled"
   fi

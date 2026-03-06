@@ -14,7 +14,7 @@
   },
   "roles": {
     "planner": {
-      "model": "gpt-5.2",
+      "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
       "rate_limit_precheck": 0,
@@ -23,7 +23,7 @@
       "tick_timeout_seconds": 420
     },
     "dev": {
-      "model": "gpt-5.3-codex-spark",
+      "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
       "codex_require_fresh_tick": 0,
@@ -34,8 +34,8 @@
       "tick_timeout_seconds": 540
     },
     "admin": {
-      "model": "gpt-5.2",
-      "thinking": "high",
+      "model": "gpt-5.4",
+      "thinking": "medium",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 360,
@@ -43,8 +43,8 @@
       "tick_timeout_seconds": 540
     },
     "scrum_master": {
-      "model": "gpt-5.2",
-      "thinking": "medium",
+      "model": "gpt-5.3-codex-spark",
+      "thinking": "low",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 300,
@@ -78,10 +78,45 @@
       "proof_gate_strict": 1,
       "security_window_min": 10
     },
-    "po_scrum_master": {
+    "scrum_master": {
       "enabled": 1,
       "cron_enabled_profile": "full"
     },
+    "state_reconciler": {
+      "enabled": 1,
+      "stale_lock_seconds": 1800,
+      "stale_in_progress_seconds": 14400,
+      "ready_starvation_seconds": 1800
+    },
+    "delivery_value_gate": {
+      "enabled": 1,
+      "mode": "enforce",
+      "burst_window_seconds": 300,
+      "burst_threshold": 3
+    },
+    "scrum_policy": {
+      "enabled": 1,
+      "ready_starvation_seconds": 1800,
+      "stalled_in_progress_seconds": 14400,
+      "escalate_after_cycles": 2
+    },
+    "planner_orchestrator": {
+      "enabled": 1,
+      "cron_planner_only": 1,
+      "max_active": 3,
+      "default_ttl_min": 45,
+      "retry_max": 2,
+      "backend": "codex_exec",
+      "managed_roles": ["dev", "admin", "scrum_master"]
+    },
+    "dynamic_workers": {
+      "enabled": 0,
+      "max_active": 6,
+      "default_ttl_min": 60,
+      "retry_max": 2,
+      "allowed_roles": ["planner", "dev", "admin"]
+    },
+    "force_allow_file_edits_all": 1,
     "planner_autonomy": {
       "enabled": 1,
       "wait_forbidden": 1,

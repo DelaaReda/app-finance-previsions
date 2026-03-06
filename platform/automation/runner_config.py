@@ -107,7 +107,7 @@ def _role_prefix(role: str) -> str:
         "planner": "FC_PLANNER",
         "dev": "FC_DEV",
         "admin": "FC_ADMIN",
-        "scrum_master": "FC_PO_SCRUM_MASTER",
+        "scrum_master": "FC_SCRUM_MASTER",
     }
     return mapping.get(role, f"FC_{role.upper()}")
 
@@ -237,13 +237,120 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
         _as_int01(stability.get("monitor_ready_dev_from_workboard", 1), 1)
     )
 
-    po_feature = features.get("po_scrum_master", {}) if isinstance(features.get("po_scrum_master"), dict) else {}
-    out["TMUX_ROLE_ENABLE_PO_SCRUM_MASTER"] = str(_as_int01(po_feature.get("enabled", 1), 1))
-    out["FC_ENABLE_PO_SCRUM_MASTER"] = out["TMUX_ROLE_ENABLE_PO_SCRUM_MASTER"]
+    scrum_feature = features.get("scrum_master", {}) if isinstance(features.get("scrum_master"), dict) else {}
+    if not scrum_feature:
+        scrum_feature = features.get("po_scrum_master", {}) if isinstance(features.get("po_scrum_master"), dict) else {}
+    out["FC_SCRUM_MASTER_ENABLED"] = str(_as_int01(scrum_feature.get("enabled", 1), 1))
+    out["TMUX_ROLE_ENABLE_SCRUM_MASTER"] = out["FC_SCRUM_MASTER_ENABLED"]
+    out["TMUX_ROLE_ENABLE_PO_SCRUM_MASTER"] = out["FC_SCRUM_MASTER_ENABLED"]
+    out["FC_ENABLE_PO_SCRUM_MASTER"] = out["FC_SCRUM_MASTER_ENABLED"]
+    out["FC_FORCE_ALLOW_FILE_EDITS_ALL"] = str(_as_int01(features.get("force_allow_file_edits_all", 1), 1))
     if role == "scrum_master":
-        out["PO_SCRUM_MASTER_ALLOW_BUS_POST"] = str(_as_int01(role_cfg.get("allow_bus_post", 1), 1))
-        out["PO_SCRUM_MASTER_MAX_POSTS_PER_TICK"] = str(_as_int(role_cfg.get("max_posts_per_tick", 2), 2))
-        out["PO_SCRUM_MASTER_POST_COOLDOWN_S"] = str(_as_int(role_cfg.get("post_cooldown_s", 600), 600))
+        allow_bus_post = str(_as_int01(role_cfg.get("allow_bus_post", 1), 1))
+        max_posts_per_tick = str(_as_int(role_cfg.get("max_posts_per_tick", 2), 2))
+        post_cooldown_s = str(_as_int(role_cfg.get("post_cooldown_s", 600), 600))
+        out["FC_SCRUM_MASTER_ALLOW_BUS_POST"] = allow_bus_post
+        out["FC_SCRUM_MASTER_MAX_POSTS_PER_TICK"] = max_posts_per_tick
+        out["FC_SCRUM_MASTER_POST_COOLDOWN_S"] = post_cooldown_s
+        out["PO_SCRUM_MASTER_ALLOW_BUS_POST"] = allow_bus_post
+        out["PO_SCRUM_MASTER_MAX_POSTS_PER_TICK"] = max_posts_per_tick
+        out["PO_SCRUM_MASTER_POST_COOLDOWN_S"] = post_cooldown_s
+
+    state_reconciler = (
+        features.get("state_reconciler", {})
+        if isinstance(features.get("state_reconciler"), dict)
+        else {}
+    )
+    out["FC_STATE_RECONCILER"] = str(_as_int01(state_reconciler.get("enabled", 1), 1))
+    out["FC_RECONCILE_STALE_LOCK_SECONDS"] = str(
+        _as_int(state_reconciler.get("stale_lock_seconds", 1800), 1800)
+    )
+    out["FC_RECONCILE_STALE_IN_PROGRESS_SECONDS"] = str(
+        _as_int(state_reconciler.get("stale_in_progress_seconds", 14400), 14400)
+    )
+    out["FC_RECONCILE_READY_STARVATION_SECONDS"] = str(
+        _as_int(state_reconciler.get("ready_starvation_seconds", 1800), 1800)
+    )
+
+    delivery_gate = (
+        features.get("delivery_value_gate", {})
+        if isinstance(features.get("delivery_value_gate"), dict)
+        else {}
+    )
+    out["FC_DELIVERY_VALUE_GATE"] = str(_as_int01(delivery_gate.get("enabled", 1), 1))
+    out["FC_DELIVERY_VALUE_GATE_MODE"] = _as_text(delivery_gate.get("mode"), "enforce")
+    out["FC_DELIVERY_VALUE_GATE_BURST_WINDOW_SECONDS"] = str(
+        _as_int(delivery_gate.get("burst_window_seconds", 300), 300)
+    )
+    out["FC_DELIVERY_VALUE_GATE_BURST_THRESHOLD"] = str(
+        _as_int(delivery_gate.get("burst_threshold", 3), 3)
+    )
+
+    scrum_policy = (
+        features.get("scrum_policy", {})
+        if isinstance(features.get("scrum_policy"), dict)
+        else {}
+    )
+    out["FC_SCRUM_POLICY_ENABLED"] = str(_as_int01(scrum_policy.get("enabled", 1), 1))
+    out["FC_SCRUM_READY_STARVATION_SECONDS"] = str(
+        _as_int(scrum_policy.get("ready_starvation_seconds", 1800), 1800)
+    )
+    out["FC_SCRUM_STALLED_IN_PROGRESS_SECONDS"] = str(
+        _as_int(scrum_policy.get("stalled_in_progress_seconds", 14400), 14400)
+    )
+    out["FC_SCRUM_ESCALATE_AFTER_CYCLES"] = str(
+        _as_int(scrum_policy.get("escalate_after_cycles", 2), 2)
+    )
+
+    planner_orchestrator = (
+        features.get("planner_orchestrator", {})
+        if isinstance(features.get("planner_orchestrator"), dict)
+        else {}
+    )
+    raw_managed_roles = planner_orchestrator.get("managed_roles", ["dev", "admin", "scrum_master"])
+    if not isinstance(raw_managed_roles, list):
+        raw_managed_roles = ["dev", "admin", "scrum_master"]
+    out["FC_PLANNER_ORCHESTRATOR_ENABLED"] = str(
+        _as_int01(planner_orchestrator.get("enabled", 0), 0)
+    )
+    out["FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"] = str(
+        _as_int01(planner_orchestrator.get("cron_planner_only", 0), 0)
+    )
+    out["FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE"] = str(
+        _as_int(planner_orchestrator.get("max_active", 3), 3)
+    )
+    out["FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN"] = str(
+        _as_int(planner_orchestrator.get("default_ttl_min", 45), 45)
+    )
+    out["FC_PLANNER_ORCHESTRATOR_RETRY_MAX"] = str(
+        _as_int(planner_orchestrator.get("retry_max", 2), 2)
+    )
+    out["FC_PLANNER_ORCHESTRATOR_BACKEND"] = _as_text(
+        planner_orchestrator.get("backend"), "codex_exec"
+    )
+    out["FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES"] = ",".join(
+        str(tok).strip() for tok in raw_managed_roles if str(tok).strip()
+    )
+
+    dynamic_workers = (
+        features.get("dynamic_workers", {})
+        if isinstance(features.get("dynamic_workers"), dict)
+        else {}
+    )
+    raw_allowed_roles = dynamic_workers.get("allowed_roles", ["planner", "dev", "admin"])
+    if not isinstance(raw_allowed_roles, list):
+        raw_allowed_roles = ["planner", "dev", "admin"]
+    out["FC_DYNAMIC_WORKERS_ENABLED"] = str(_as_int01(dynamic_workers.get("enabled", 0), 0))
+    out["FC_DYNAMIC_WORKERS_MAX_ACTIVE"] = str(
+        _as_int(dynamic_workers.get("max_active", 6), 6)
+    )
+    out["FC_DYNAMIC_WORKERS_DEFAULT_TTL_MIN"] = str(
+        _as_int(dynamic_workers.get("default_ttl_min", 60), 60)
+    )
+    out["FC_DYNAMIC_WORKERS_RETRY_MAX"] = str(
+        _as_int(dynamic_workers.get("retry_max", 2), 2)
+    )
+    out["FC_DYNAMIC_WORKERS_ALLOWED_ROLES"] = ",".join(str(tok).strip() for tok in raw_allowed_roles if str(tok).strip())
 
     tshape = features.get("tshape", {}) if isinstance(features.get("tshape"), dict) else {}
     out["FC_ADMIN_TSHAPE_ENABLED"] = str(_as_int01(tshape.get("enabled", 1), 1))

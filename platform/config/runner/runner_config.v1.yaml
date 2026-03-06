@@ -65,10 +65,27 @@
     "admin_dispatcher": {
       "enabled": 1
     },
-    "po_scrum_master": {
+    "scrum_master": {
       "enabled": 1,
       "cron_enabled_profile": "full"
-    }
+    },
+    "planner_orchestrator": {
+      "enabled": 1,
+      "cron_planner_only": 1,
+      "max_active": 3,
+      "default_ttl_min": 45,
+      "retry_max": 2,
+      "backend": "codex_exec",
+      "managed_roles": ["dev", "admin", "scrum_master"]
+    },
+    "dynamic_workers": {
+      "enabled": 0,
+      "max_active": 6,
+      "default_ttl_min": 60,
+      "retry_max": 2,
+      "allowed_roles": ["planner", "dev", "admin"]
+    },
+    "force_allow_file_edits_all": 1
   },
   "paths": {
     "state_dir": "/home/venom/.openclaw/cron/role-state",

@@ -5,19 +5,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 FILE="${ROOT}/scripts/fc_setup_crons.sh"
 
-# Policy: advisory cron must be full-profile only.
-grep -q 'if \[\[ "\$CRON_PROFILE" != "full" \]\]; then' "$FILE"
-grep -q 'PO_SCRUM_MASTER_CRON_ENABLED=0' "$FILE"
+# Planner orchestrator is now the scheduled entrypoint by default.
+grep -q 'PLANNER_ORCHESTRATOR_ACTIVE=1' "$FILE"
+grep -q 'PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY' "$FILE"
 
-# Full profile cron line exists and runs the dedicated wrapper.
-grep -q 'PO Scrum Master (advisory)' "$FILE"
-grep -q 'cron_po_scrum_master_tick\.sh' "$FILE"
+# Planner-only block exists and disables independent dev/admin/scrum scheduling.
+grep -q 'sole scheduled orchestrator' "$FILE"
+grep -q 'planner-owned Codex subagents via planner_subagent_manager.py' "$FILE"
 
-# Canary block should not carry explicit scrum cron entry.
-awk '/if \[\[ "\$CRON_PROFILE" == "canary" \]\]; then/,/else/' "$FILE" | \
-  grep -q 'ADMIN — volontairement désactivé en canary'
+# Legacy scrum wrapper still exists for manual fallback compatibility.
+grep -q 'cron_scrum_master_tick\.sh' "$FILE"
 
-# default cadence requested by architecture plan.
-grep -q 'PO_SCRUM_MASTER_CRON_EXPR="\${FC_PO_SCRUM_MASTER_CRON_EXPR:-3-58/5}"' "$FILE"
+# Planner cadence remains explicit.
+grep -q '0,22,44 \* \* \* \* .*fc_agent_tick.sh planner' "$FILE"
 
 echo "PASS test_fc_setup_crons_po_scrum_master"

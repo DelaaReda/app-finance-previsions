@@ -64,22 +64,24 @@ fi
 
 CORE_ORCHESTRATION_ROLE=0
 case "$ROLE" in
-  planner|dev|admin)
+  planner|dev|admin|scrum_master)
     CORE_ORCHESTRATION_ROLE=1
     ;;
 esac
 
 FC_SCRUM_MASTER_MODE="${FC_SCRUM_MASTER_MODE:-operational}"
+FC_FORCE_ALLOW_FILE_EDITS_ALL="${FC_FORCE_ALLOW_FILE_EDITS_ALL:-1}"
 FC_ADMIN_RUNTIME_STALE_AUTOHEAL="${FC_ADMIN_RUNTIME_STALE_AUTOHEAL:-1}"
 FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
 FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
-TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-$([[ "$FC_SCRUM_MASTER_MODE" == "operational" ]] && echo 1 || echo 0)}"
+TMUX_ROLE_ENABLE_SCRUM_MASTER="${TMUX_ROLE_ENABLE_SCRUM_MASTER:-${FC_SCRUM_MASTER_ENABLED:-$([[ "$FC_SCRUM_MASTER_MODE" == "operational" ]] && echo 1 || echo 0)}}"
+TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-$TMUX_ROLE_ENABLE_SCRUM_MASTER}"
 ROLE_INPUT="$ROLE"
 if declare -F runner_normalize_role >/dev/null 2>&1; then
-  ROLE="$(runner_normalize_role "$ROLE" "$TMUX_ROLE_ENABLE_PO_SCRUM_MASTER" "$FC_SCRUM_MASTER_MODE")"
+  ROLE="$(runner_normalize_role "$ROLE" "$TMUX_ROLE_ENABLE_SCRUM_MASTER" "$FC_SCRUM_MASTER_MODE")"
 elif [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
   ROLE="planner"
-elif [[ "$ROLE" == "analyst" || "$ROLE" == "architect" || "$ROLE" == "po" || ( "$ROLE" == "scrum_master" && "$FC_SCRUM_MASTER_MODE" == "advisory" && "$TMUX_ROLE_ENABLE_PO_SCRUM_MASTER" != "1" ) ]]; then
+elif [[ "$ROLE" == "analyst" || "$ROLE" == "architect" || "$ROLE" == "po" ]]; then
   ROLE="planner"
 fi
 
@@ -296,6 +298,13 @@ TMUX_ROLE_DEV_FORCE_CLAIM_ON_DEV_READY="${TMUX_ROLE_DEV_FORCE_CLAIM_ON_DEV_READY
 FC_DEV_CLAIM_LOOP_BREAKER="${FC_DEV_CLAIM_LOOP_BREAKER:-1}"
 FC_DEV_CLAIM_LOOP_THRESHOLD="${FC_DEV_CLAIM_LOOP_THRESHOLD:-3}"
 FC_ADMIN_RUNTIME_OVERRIDE_ON_LIVE_PROBE="${FC_ADMIN_RUNTIME_OVERRIDE_ON_LIVE_PROBE:-1}"
+FC_PLANNER_ORCHESTRATOR_ENABLED="${FC_PLANNER_ORCHESTRATOR_ENABLED:-0}"
+FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}"
+FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE="${FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE:-3}"
+FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN="${FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN:-45}"
+FC_PLANNER_ORCHESTRATOR_RETRY_MAX="${FC_PLANNER_ORCHESTRATOR_RETRY_MAX:-2}"
+FC_PLANNER_ORCHESTRATOR_BACKEND="${FC_PLANNER_ORCHESTRATOR_BACKEND:-codex_exec}"
+FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES="${FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES:-dev,admin,scrum_master}"
 TMUX_ROLE_ADMIN_TSHAPE_ENABLED="${TMUX_ROLE_ADMIN_TSHAPE_ENABLED:-1}"
 TMUX_ROLE_ADMIN_TSHAPE_TRIGGER="${TMUX_ROLE_ADMIN_TSHAPE_TRIGGER:-blocked}"
 TMUX_ROLE_ADMIN_TSHAPE_BLOCKED_THRESHOLD="${TMUX_ROLE_ADMIN_TSHAPE_BLOCKED_THRESHOLD:-1}"
@@ -313,9 +322,9 @@ AGENT_MESSAGE_MAX_ACTIVE_PER_ROLE="${AGENT_MESSAGE_MAX_ACTIVE_PER_ROLE:-10}"
 RUNNER_CONFIG_VERSION="${RUNNER_CONFIG_VERSION:-env}"
 RUNNER_CONFIG_SOURCE="${RUNNER_CONFIG_SOURCE:-env}"
 RUNNER_CONFIG_HASH="${RUNNER_CONFIG_HASH:-none}"
-PO_SCRUM_MASTER_ALLOW_BUS_POST="${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}"
-PO_SCRUM_MASTER_MAX_POSTS_PER_TICK="${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK:-2}"
-PO_SCRUM_MASTER_POST_COOLDOWN_S="${PO_SCRUM_MASTER_POST_COOLDOWN_S:-600}"
+PO_SCRUM_MASTER_ALLOW_BUS_POST="${PO_SCRUM_MASTER_ALLOW_BUS_POST:-${FC_SCRUM_MASTER_ALLOW_BUS_POST:-1}}"
+PO_SCRUM_MASTER_MAX_POSTS_PER_TICK="${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK:-${FC_SCRUM_MASTER_MAX_POSTS_PER_TICK:-2}}"
+PO_SCRUM_MASTER_POST_COOLDOWN_S="${PO_SCRUM_MASTER_POST_COOLDOWN_S:-${FC_SCRUM_MASTER_POST_COOLDOWN_S:-600}}"
 AGENT_MESSAGE_PROMPT_LIMIT="${AGENT_MESSAGE_PROMPT_LIMIT:-3}"
 
 resolve_helper_script() {
@@ -344,6 +353,9 @@ PLANNER_GUARDIAN_SCRIPT="$(resolve_helper_script "platform/automation/planner_gu
 ROLE_CONTRACT_GUARD_SCRIPT="$(resolve_helper_script "platform/policies/role_contract_guard.py" "scripts/role_contract_guard.py")"
 ROLE_RUNTIME_CONTEXT_SCRIPT="$(resolve_helper_script "platform/automation/role_runtime_context.py" "scripts/role_runtime_context.py")"
 AGENT_MESSAGE_BUS_SCRIPT="$(resolve_helper_script "platform/automation/agent_message_bus.sh" "scripts/agent_message_bus.sh")"
+DELIVERY_VALUE_GATE_SCRIPT="$(resolve_helper_script "platform/automation/delivery_value_gate.py" "scripts/delivery_value_gate.py")"
+SCRUM_POLICY_SCRIPT="$(resolve_helper_script "platform/automation/scrum_policy.py" "scripts/scrum_policy.py")"
+PLANNER_SUBAGENT_MANAGER_SCRIPT="$(resolve_helper_script "platform/automation/planner_subagent_manager.py" "scripts/planner_subagent_manager.py")"
 PLANNER_GUARDIAN_ENABLED="${TMUX_ROLE_PLANNER_GUARDIAN_ENABLED:-1}"
 PLANNER_GUARDIAN_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_GUARDIAN_INCLUDE_IN_PROMPT:-1}"
 PLANNER_GUARDIAN_LATEST_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-latest.json}"
@@ -766,6 +778,11 @@ if [[ "$ROLE" == "admin" ]]; then
 fi
 PRIMARY_CHANNEL="${PRIMARY_CHANNEL:-tmux}"
 
+if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
+  ROLE_ALLOW_FILE_EDITS="1"
+  echo "$(ts) [ALLOW_FILE_EDITS_OVERRIDE] role=$ROLE mode=global force=1" >> "$LOG"
+fi
+
 ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
 if [[ "$ROLE_ALLOW_FILE_EDITS" == "1" ]]; then
   ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
@@ -1099,25 +1116,30 @@ PLANNER_DEP_SANITIZE_RC=0
 PLANNER_AUTOBATCH_ATTEMPTED=0
 PLANNER_AUTOBATCH_RC=0
 PLANNER_AUTOBATCH_BATCH_ID="none"
-# Auto-delivery roles only run in write mode when their lane has actionable work.
-if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
-  if [[ "$ROLE" == "dev" && "$TMUX_ROLE_DEV_WAIT_ROLE_SCOPED" == "1" ]]; then
-    if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" || "$RUNTIME_WORKBOARD_ROLE_HAS_READY" == "1" ]]; then
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+# Auto-delivery roles only run in write mode when their lane has actionable work,
+# unless global override forces writable mode for all roles.
+if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
+  ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+else
+  if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
+    if [[ "$ROLE" == "dev" && "$TMUX_ROLE_DEV_WAIT_ROLE_SCOPED" == "1" ]]; then
+      if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" || "$RUNTIME_WORKBOARD_ROLE_HAS_READY" == "1" ]]; then
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+      else
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+      fi
     else
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
-    fi
-  else
-    if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" ]]; then
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
-    elif [[ "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" != "1" ]]; then
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
-    elif [[ "$RUNTIME_QUEUE_HAS_READY" == "1" ]]; then
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
-    elif [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" == "1" ]]; then
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
-    else
-      ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+      if [[ "$RUNTIME_WORKBOARD_ROLE_HAS_IN_PROGRESS" == "1" ]]; then
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+      elif [[ "$RUNTIME_WORKBOARD_ROLE_HAS_WORK" != "1" ]]; then
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+      elif [[ "$RUNTIME_QUEUE_HAS_READY" == "1" ]]; then
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+      elif [[ "$ALLOW_WORKBOARD_ONLY_DELIVERY" == "1" ]]; then
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=1
+      else
+        ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0
+      fi
     fi
   fi
 fi
@@ -3000,6 +3022,43 @@ PY
   fi
   rm -f "$tmp"
 }
+
+apply_delivery_value_gate_safe() {
+  local source="${1:-unknown}"
+  local tmp=""
+  local gate_rc=0
+  local mode="${FC_DELIVERY_VALUE_GATE_MODE:-enforce}"
+  tmp="$(mktemp)"
+  cat > "$tmp"
+
+  if [[ "${FC_DELIVERY_VALUE_GATE:-1}" != "1" ]]; then
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$DELIVERY_VALUE_GATE_SCRIPT" ]]; then
+    trace_event "delivery_value_gate_unavailable source=${source}; fallback=raw_payload"
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  set +e
+  python3 "$DELIVERY_VALUE_GATE_SCRIPT" \
+    --role "$ROLE" \
+    --source "$source" \
+    --contract-file "$tmp" \
+    --burst-window-seconds "${FC_DELIVERY_VALUE_GATE_BURST_WINDOW_SECONDS:-300}" \
+    --burst-threshold "${FC_DELIVERY_VALUE_GATE_BURST_THRESHOLD:-3}"
+  gate_rc=$?
+  set -e
+  if [[ "$gate_rc" -ne 0 ]]; then
+    trace_event "delivery_value_gate_failed source=${source} rc=${gate_rc}; mode=${mode}"
+    cat "$tmp"
+  fi
+  rm -f "$tmp"
+}
+
 reconcile_runtime_truth() {
   local tmp=""
   tmp="$(mktemp)"
@@ -4236,7 +4295,7 @@ build_prompt() {
     planner)
       cat <<'PROMPT'
 ROLE=planner.
-Mission: agir comme owner autonome du backlog (détection des gaps, alignement architecture, création/dispatch des batches).
+Mission: agir comme owner autonome du backlog et orchestrateur central des autres lanes via Codex multi-agent expérimental.
 Objectif: débloquer la livraison réelle avec une action concrète unique par tick.
 Budget strict:
 - maximum 3 commandes shell par tick, maximum 20s chacune
@@ -4244,21 +4303,34 @@ Budget strict:
   - python3 platform/automation/parallel_workstream.py context --role planner --limit 5
   - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
   - python3 platform/automation/parallel_workstream.py claim --role planner
+  - python3 platform/automation/planner_subagent_manager.py plan --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <delivery|implementation|verification|targeted_fix|runtime|reconcile|takeover|repair|flow|coordination|unblock|starvation>
+  - python3 platform/automation/planner_subagent_manager.py run --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <...> --message "<brief>"
+  - python3 platform/automation/planner_subagent_manager.py collect --role planner --subagent-id <subagent_id> --mark-merged
+  - python3 platform/automation/planner_subagent_manager.py cleanup
+  - python3 platform/automation/worker_manager.py plan --role planner --worker-type <repo_scan_worker|patch_proposal_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy>
+  - python3 platform/automation/worker_manager.py run --role planner --worker-type <repo_scan_worker|patch_proposal_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy> --message "<brief>"
+  - python3 platform/automation/worker_manager.py collect --role planner --worker-id <worker_id> --mark-merged
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
 Lis uniquement: docs/product/planning/WORKSTATE.md, docs/product/planning/PRODUCT_VISION.md, docs/architecture/ARCHITECTURE_MAP.md, docs/operations/orchestrator/parallel-workstreams.json.
 Source unique: parallel-workstreams.json contient l'état des batches (streams[]) ET les tâches — priority-queue.json est obsolète.
 Ne modifie pas apps/** ni les fichiers de sécurité. Tu peux modifier uniquement orchestration/docs/json de pilotage.
+Quand planner_orchestrator_enabled=1, tu es la seule lane schedulée: dev/admin/scrum_master n'attendent plus leur propre cron, ils doivent être lancés comme subagents planner-owned.
 
 Décision tick (ordre strict):
-1) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
+1) planner_subagent_active != none -> collecter et merger le résultat planner_subagent prêt avant de lancer un nouveau sous-agent.
+2) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
    EXCEPTION CRITIQUE: si la tâche IN_PROGRESS est de type GOV_REVIEW, PLAN, ANALYSIS, ou ARCH (task_id contient ces codes),
    elle t'appartient — tu dois la compléter toi-même (task_update=complete) après avoir vérifié que tous les depends_on sont DONE.
    NE PAS utiliser task_update=handoff sur ces tâches. Handoff = passer à un autre rôle. GOV_REVIEW = vérification finale planner.
-2) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
-3) si une tâche planner est READY -> claim puis dispatch vers dev avec task cible + fichiers cibles + test cible.
-4) si aucune tâche planner READY/IN_PROGRESS après sync-priority -> créer immédiatement 1 batch top-level BATCH-XX, puis relancer sync-priority, puis claim --role planner.
-5) si claim échoue après création: conserver VERDICT=GO_WITH_CAUTION + issue=planner_claim_after_create_failed + NEXT=create_or_claim_now (interdit WAIT/MUTED).
-6) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete, mais NEXT doit rester create_or_claim_now (pas de passivité planner).
+3) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
+4) si une tâche planner est READY et qu'elle nécessite une exécution de delivery/runtime/flow -> claim puis lancer le subagent cible approprié:
+   - dev pour patch/test/verify
+   - admin pour runtime/reconcile/takeover
+   - scrum_master pour starvation/unblock/escalation
+5) si une tâche planner est READY mais purement stratégique -> la traiter toi-même puis complete/handoff.
+6) si aucune tâche planner READY/IN_PROGRESS après sync-priority -> créer immédiatement 1 batch top-level BATCH-XX, puis relancer sync-priority, puis claim --role planner.
+7) si claim échoue après création: conserver VERDICT=GO_WITH_CAUTION + issue=planner_claim_after_create_failed + NEXT=create_or_claim_now (interdit WAIT/MUTED).
+8) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete, mais NEXT doit rester create_or_claim_now (pas de passivité planner).
 
 Création batch (si step 4/5):
 - ID unique BATCH-XX (2 chiffres, top-level uniquement).
@@ -4494,7 +4566,7 @@ qa_proof format: test=<cmd_ou_suite>; result=<PASS|FAIL|SKIP(reason)>.
 channels_read format: <source1,source2,...> (ex: runtime_context,workboard_tasks,team_chat_tail).
 impact_assessment format: <low|medium|high|critical>.
 impact_action format: <action concrète, jamais none si impact_assessment>=medium>.
-Valeurs interdites dans ces champs: ?, ??, TBD, TODO, FIXME, NONE sans raison.
+Valeurs interdites dans ces champs: ?, ??, tbd, placeholder, vide, NONE sans raison.
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
 Si task_update=claim|handoff: ajouter reflection_passes=<int>=2 et reflection_dimensions=scope,dependency_impact,risk,verification,rollback.
 Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
@@ -4818,9 +4890,15 @@ else
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=analyse: n'edite pas de fichiers et ne declenche pas d'actions externes. Regle planner: si aucun slot planner READY/IN_PROGRESS, NEXT=create_or_claim_now (jamais WAIT/MUTED). Regle dev: task_update=none_no_ready uniquement si workboard_role_has_ready=0 et workboard_role_has_in_progress=0."
 fi
 if [[ "$ROLE" == "scrum_master" ]]; then
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PO_SCRUM_MASTER_GUARDS: allow_bus_post=${PO_SCRUM_MASTER_ALLOW_BUS_POST}; max_posts_per_tick=${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK}; post_cooldown_s=${PO_SCRUM_MASTER_POST_COOLDOWN_S}."
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"SCRUM_MASTER_GUARDS: allow_bus_post=${PO_SCRUM_MASTER_ALLOW_BUS_POST}; max_posts_per_tick=${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK}; post_cooldown_s=${PO_SCRUM_MASTER_POST_COOLDOWN_S}."
   if [[ "$PO_SCRUM_MASTER_ALLOW_BUS_POST" != "1" ]]; then
     SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"BUS_POST_DISABLED=1: ne pas envoyer de message, produire uniquement le rapport advisory."
+  fi
+fi
+if [[ "$FC_PLANNER_ORCHESTRATOR_ENABLED" == "1" ]]; then
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_ORCHESTRATOR_STATE: enabled=1; cron_planner_only=${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY}; managed_roles=${FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES}; subagent_backend=${FC_PLANNER_ORCHESTRATOR_BACKEND}; max_active=${FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE}."
+  if [[ "$ROLE" == "planner" ]]; then
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_IS_SOLE_SCHEDULER=1: ne pas attendre une future lane dev/admin/scrum_master. Si une action delivery/runtime/flow est necessaire, lancer un planner subagent tout de suite."
   fi
 fi
 if [[ "$ROLE" == "admin" && "$ADMIN_TSHAPE_ACTIVE" == "1" ]]; then
@@ -4837,13 +4915,20 @@ fi
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
 - Source taches: docs/product/planning/tasks.md (fallback docs/planning/tasks.md) — IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
-- WIP max 60 taches actives (guard dans parallel_workstream.py).
+- Limite: 60 taches actives max (guard dans parallel_workstream.py).
 - Blocker permission valide UNIQUEMENT avec cmd_err_excerpt du tick courant (pas d'historique).
-- MODE DELIVERY: claim via python3 platform/automation/parallel_workstream.py claim, root_cause concret, patch minimal, tests ciblés, complete/handoff.
+- MODE DELIVERY: claim via python3 platform/automation/parallel_workstream.py claim, root_cause concret, patch minimal, tests ciblés, git add -A && git commit -m "<message>", complete/handoff.
+- COMMIT OBLIGATOIRE: tout fichier modifié doit être commité AVANT d'appeler complete. Sans commit, la tâche n'est pas considérée livrée. Format: git add -A && git commit -m "feat(<scope>): <description> (BATCH-NN-ROLE)"
+- DELIVERY_VALUE_GATE: aucun complete sans root_cause, fix_applied, verify(before=/after=/test= ou proof=), artifact, tests_run, files_touched, architecture_check, vision_alignment, et commit_sha valide pour code/config/runtime.
+- PLANNER_ORCHESTRATOR: si planner_orchestrator_enabled=1, planner est la seule lane schedulée et doit lancer dev/admin/scrum_master via python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}. Les subagents rendent des preuves; seul planner met a jour l'orchestration.
+- PLANNER_SUBAGENT_RULE: un subagent dev/admin/scrum_master ne claim/complete jamais le workboard directement. Resultat attendu = summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.
+- DYNAMIC_WORKERS: seuls planner/dev/admin peuvent utiliser python3 platform/automation/worker_manager.py {plan,run,collect,cleanup}. Types autorises: repo_scan_worker, test_worker, runtime_diag_worker, patch_proposal_worker.
+- WORKER_RULE: un worker ne claim/complete jamais une tache metier. Son resultat = evidence/test result/patch proposal/runtime diagnostic, puis le parent decide merge, handoff ou complete.
 - Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
 - Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.
 - Planner: si aucun slot planner READY/IN_PROGRESS, créer un batch top-level puis claim immédiatement (jamais WAIT/MUTED hors incident runtime dur).
 - Dev: task_update=none_no_ready uniquement si workboard_role_has_ready=0 ET workboard_role_has_in_progress=0.
+- Scrum master: ordre strict = READY non claimes -> guard blocks -> stalled IN_PROGRESS -> escalade admin/planner. Priorite aux actions de deblocage, pas aux resumes passifs.
 PROMPT
 )"
 
@@ -4887,7 +4972,7 @@ build_runtime_context() {
     fi
   fi
 
-  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | top_level_total=0 | top_level_non_closed=0 | top_level_ready=0 | planner_batch_runway_short=1 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_ready=%s | workboard_role_has_in_progress=%s | dev_has_ready_task=0 | dev_ready_count=0 | dev_ready_dev_count=0 | dev_ready_task_ids=none | dev_ready_reason=none | dev_wait_allowed=1 | orchestrator_source=canonical | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | agent_messages_tail=none | agent_message_ids=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
+  printf 'RUNTIME_CONTEXT: now_iso=%s | queue_states=none | queue_has_ready=0 | top_level_total=0 | top_level_non_closed=0 | top_level_ready=0 | planner_batch_runway_short=1 | queue_version=%s | workboard_version=%s | ready_items=none | ready_next_actions=none | blocked_items=none | reconcile_at=none | reconcile_fixes_applied=0 | reconcile_ready_starvation_detected=0 | reconcile_stale_inprogress_marked=0 | workstate_hint=none | parallel_hint=none | workboard_role_has_work=%s | workboard_role_has_ready=%s | workboard_role_has_in_progress=%s | dev_has_ready_task=0 | dev_ready_count=0 | dev_ready_dev_count=0 | dev_ready_task_ids=none | dev_ready_reason=none | dev_wait_allowed=1 | orchestrator_source=canonical | agent_memory=none | self_last_contract=none | peer_contracts=none | workboard_context=none | worker_summary=none | planner_subagent_summary=none | publication_channels=none | team_chat_tail=none | team_iteration_tail=none | directives_tail=none | agent_messages_tail=none | agent_message_ids=none | trace_tail=none | execution_rules=respect_run_lock,update_tasks,ack_handoffs,read_publication_channels,assess_impact' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$queue_version" \
     "$workboard_version" \
@@ -4993,209 +5078,18 @@ build_scrum_master_auto_post_intents() {
   if [[ "$ROLE" != "scrum_master" ]]; then
     return 0
   fi
-  if ! command -v python3 >/dev/null 2>&1; then
+  if [[ "${FC_SCRUM_POLICY_ENABLED:-1}" != "1" ]]; then
     return 0
   fi
-  local hardened="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
-  local safe_root="${ROOT:-$PWD}"
-  local safe_state_dir="${STATE_DIR:-${HOME}/.openclaw/cron/role-state}"
-  local safe_api_base="${API_BASE_URL:-http://127.0.0.1:8050}"
-  local safe_monitor_base="${MONITOR_BASE_URL:-http://127.0.0.1:7779}"
-  if [[ -z "$safe_root" || -z "$safe_state_dir" ]]; then
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$SCRUM_POLICY_SCRIPT" ]]; then
     return 0
   fi
-  if [[ "$hardened" != "1" ]]; then
-    safe_root="${ROOT:-$safe_root}"
-    safe_state_dir="${STATE_DIR:-$safe_state_dir}"
-  fi
-  python3 - "$safe_root" "$safe_state_dir" "$safe_api_base" "$safe_monitor_base" <<'PY' || true
-import json
-import re
-import sys
-from pathlib import Path
-from urllib.request import Request, urlopen
-
-root = Path(sys.argv[1]).resolve()
-state_dir = Path(sys.argv[2]).resolve()
-api_base = str(sys.argv[3] or "http://127.0.0.1:8050").rstrip("/")
-monitor_base = str(sys.argv[4] or "http://127.0.0.1:7779").rstrip("/")
-orch = root / "docs" / "operations" / "orchestrator"
-if not orch.exists():
-    orch = root / "docs" / "orchestrator-ops"
-queue_path = orch / "priority-queue.json"
-workboard_path = orch / "parallel-workstreams.json"
-
-def jload(path: Path):
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8", errors="ignore"))
-    except Exception:
-        return {}
-
-def probe_ok(url: str) -> bool:
-    try:
-        req = Request(url, headers={"Accept": "application/json"})
-        with urlopen(req, timeout=1.8) as resp:
-            return int(getattr(resp, "status", 0) or 0) == 200
-    except Exception:
-        return False
-
-def parse_contract(path):
-    out = {}
-    if not path.exists():
-        return out
-    try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    except Exception:
-        return out
-    for line in lines:
-        if ":" not in line:
-            continue
-        k, v = line.split(":", 1)
-        key = k.strip().upper()
-        if key and key not in out:
-            out[key] = v.strip()
-    return out
-
-def parse_evidence(evidence):
-    kv = {}
-    for frag in str(evidence or "").split(";"):
-        item = frag.strip()
-        if "=" not in item:
-            continue
-        k, v = item.split("=", 1)
-        key = k.strip().lower()
-        if key and key not in kv:
-            kv[key] = v.strip()
-    return kv
-
-def _normalize_batch_state(state):
-    s = str(state or "").strip().upper()
-    aliases = {
-        "READY_PLANNER": "READY",
-        "READY_DEV": "READY",
-        "PASS": "CLOSED",
-        "DONE": "CLOSED",
-        "BLOCK": "BLOCKED",
-        "BLOCKED_RUNTIME": "BLOCKED",
-    }
-    return aliases.get(s, s or "UNKNOWN")
-
-def _derive_stream_state(states):
-    for state in ("BLOCKED", "IN_PROGRESS", "READY", "WAITING_DEP", "PLANNED", "CLOSED", "UNKNOWN"):
-        if state in states:
-            return state
-    return "UNKNOWN"
-
-def _states_equivalent(queue_state, workboard_state):
-    q = _normalize_batch_state(queue_state)
-    w = _normalize_batch_state(workboard_state)
-    if q == w:
-        return True
-    if q == "PLANNED" and w in {"WAITING_DEP", "BACKLOG"}:
-        return True
-    if q == "IN_PROGRESS" and w == "READY":
-        return True
-    return False
-
-queue_obj = jload(queue_path)
-wb_obj = jload(workboard_path)
-queue_items = queue_obj.get("items", []) if isinstance(queue_obj, dict) else []
-tasks = wb_obj.get("tasks", []) if isinstance(wb_obj, dict) else []
-
-queue_batches = {
-    str(item.get("id", "")).strip(): _normalize_batch_state(item.get("state", ""))
-    for item in queue_items
-    if isinstance(item, dict)
-}
-task_states_by_stream = {}
-for task in tasks:
-    if not isinstance(task, dict):
-        continue
-    stream = str(task.get("stream_id", "")).strip()
-    if not stream:
-        m = re.match(r"^(BATCH-\d{2})\b", str(task.get("id", "")).strip())
-        stream = m.group(1) if m else ""
-    if not stream:
-        continue
-    task_states_by_stream.setdefault(stream, set()).add(_normalize_batch_state(task.get("state", "")))
-stream_states = {sid: _derive_stream_state(states) for sid, states in task_states_by_stream.items()}
-
-queue_only = []
-state_mismatch = []
-for batch_id, q_state in queue_batches.items():
-    w_state = stream_states.get(batch_id)
-    if w_state is None:
-        if q_state not in {"WAITING_DEP", "PLANNED", "READY_FOR_PARALLEL_DISPATCH"}:
-            queue_only.append(batch_id)
-        continue
-    if not _states_equivalent(q_state, w_state):
-        state_mismatch.append(batch_id)
-workboard_only = [sid for sid in stream_states.keys() if sid not in queue_batches]
-mismatch_count = len(queue_only) + len(workboard_only) + len(state_mismatch)
-
-dev_ready_count = 0
-for task in tasks:
-    if not isinstance(task, dict):
-        continue
-    t_state = str(task.get("state", "")).strip().upper()
-    if t_state not in {"READY", "READY_DEV"}:
-        continue
-    role_token = str(task.get("assignee") or task.get("role") or "").strip().lower()
-    if role_token == "dev":
-        dev_ready_count += 1
-
-dev_contract = parse_contract(state_dir / "dev.last_contract")
-dev_ev = parse_evidence(dev_contract.get("EVIDENCE", ""))
-dev_task_update = str(dev_ev.get("task_update", "")).strip().lower()
-dev_passive = dev_task_update in {"none_no_signal", "none_no_ready", "analysis_only"}
-
-admin_contract = parse_contract(state_dir / "admin.last_contract")
-admin_blocker = str(admin_contract.get("BLOCKER_ID", "")).strip().upper()
-admin_runtime_blockers = {
-    "BACKEND_API_UNREACHABLE",
-    "BACKEND_API_HEALTHCHECK_FAIL",
-    "MONITOR_API_UNREACHABLE",
-    "BACKEND_AND_MONITOR_UNREACHABLE",
-    "RUNTIME_DOWN",
-    "RUNTIME_DOWN_BLOCKS_READY_QUEUE",
-}
-runtime_false_blocker = (
-    admin_blocker in admin_runtime_blockers
-    and probe_ok(f"{api_base}/api/health")
-    and probe_ok(f"{monitor_base}/api/status")
-)
-
-intents = []
-if mismatch_count > 0:
-    intents.append((
-        "planner",
-        120,
-        f"Queue/workboard mismatch detected ({mismatch_count}). Run sync-priority then reconcile-only dependency recompute and confirm mismatch_count=0.",
-        "queue_workboard_desync",
-    ))
-if dev_ready_count > 0 and dev_passive:
-    intents.append((
-        "dev",
-        90,
-        f"READY_DEV tasks={dev_ready_count} while latest dev task_update={dev_task_update or 'unknown'}. Claim one READY item now and publish verify proof.",
-        "ready_dev_passive",
-    ))
-if runtime_false_blocker:
-    intents.append((
-        "admin",
-        60,
-        "False runtime blocker suspected: probes are healthy while blocker stayed unreachable. Normalize blocker and publish runtime_verified_ok.",
-        "runtime_false_blocker",
-    ))
-
-for target, ttl, msg, reason in intents:
-    safe_msg = msg.replace("|", "/").strip()
-    if not safe_msg:
-        continue
-    print(f"emit|{target}|none|{ttl}|{safe_msg}|{reason}")
-PY
+  python3 "$SCRUM_POLICY_SCRIPT" \
+    --root "${ROOT:-$PWD}" \
+    --state-dir "${STATE_DIR:-${HOME}/.openclaw/cron/role-state}" \
+    --ready-starvation-seconds "${FC_SCRUM_READY_STARVATION_SECONDS:-1800}" \
+    --stalled-in-progress-seconds "${FC_SCRUM_STALLED_IN_PROGRESS_SECONDS:-14400}" \
+    --escalate-after-cycles "${FC_SCRUM_ESCALATE_AFTER_CYCLES:-2}"
 }
 
 po_scrum_message_emit_allowed() {
@@ -5428,6 +5322,14 @@ record_agent_message_receipts() {
           fi
         else
           trace_event "agent_msg_action_skip id=${intent_id} role=${ROLE} reason=unknown_message"
+        fi
+        ;;
+      metric)
+        IFS='|' read -r _ metric_name metric_value <<<"$line"
+        metric_name="$(printf '%s' "$metric_name" | sed 's/^ *//; s/ *$//')"
+        metric_value="$(printf '%s' "$metric_value" | sed 's/^ *//; s/ *$//')"
+        if [[ -n "$metric_name" && "$ROLE" == "scrum_master" ]]; then
+          trace_event "scrum_policy_metric name=${metric_name} value=${metric_value:-0}"
         fi
         ;;
       *)
@@ -5938,6 +5840,7 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
         STRUCTURED="$(apply_reconcile_runtime_truth_safe "$STRUCTURED")"
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "primary_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "primary_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$PRIMARY_TICK"
         sanitize_tmux_logs
@@ -6002,6 +5905,7 @@ if [[ "$DO_RETRY" -eq 1 ]]; then
         STRUCTURED="$(apply_reconcile_runtime_truth_safe "$STRUCTURED")"
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "retry_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$RETRY_TICK"
         sanitize_tmux_logs
@@ -6049,6 +5953,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
         STRUCTURED="$(apply_reconcile_runtime_truth_safe "$STRUCTURED")"
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "codex_exec_fallback")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "codex_exec_fallback")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$CODEX_TICK"
         sanitize_tmux_logs
@@ -6161,7 +6066,7 @@ case "$ROLE" in
     ;;
   scrum_master)
     FALLBACK_SOURCE="docs/operations/orchestrator/parallel-workstreams.json"
-    FALLBACK_NEXT="maintenir cadence et réduction des blockers/WIP"
+    FALLBACK_NEXT="maintenir cadence et reduction des blockers/en_cours"
     FALLBACK_ACTION="CONTINUE_SCRUM_MASTER_FROM_SPRINT_STATE"
     FALLBACK_ARCH_RULE="observability"
     ;;
@@ -6219,6 +6124,7 @@ EOF
 FALLBACK_OUTPUT="$(apply_reconcile_runtime_truth_safe "$FALLBACK_OUTPUT")"
 FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
+FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_delivery_value_gate_safe "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(normalize_advisory_contract_if_needed "$FALLBACK_OUTPUT")"
 record_agent_message_receipts "$FALLBACK_OUTPUT" "$FALLBACK_TICK"
 sanitize_tmux_logs
