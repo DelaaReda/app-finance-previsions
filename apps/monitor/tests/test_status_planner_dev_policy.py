@@ -232,6 +232,10 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
             json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
             encoding="utf-8",
         )
+        (self.root / "logs-codex-runs" / "fc-ticks" / "scrum_master.tick.log").write_text(
+            "2026-03-06T19:00:00 [END] role=scrum_master rc=0\n",
+            encoding="utf-8",
+        )
         module = _load_server_module(self.root, self.state)
         contracts = {
             "planner": {
@@ -254,6 +258,7 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("health_breakdown", {}).get("core_roles"), ["planner"])
         self.assertEqual(payload.get("agents_incomplete"), [])
         self.assertNotIn("dev", payload.get("health_breakdown", {}).get("by_role", {}))
+        self.assertNotIn("scrum_master", payload.get("roles", []))
 
 
 if __name__ == "__main__":

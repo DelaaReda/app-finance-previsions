@@ -472,6 +472,19 @@ def _planner_subagents_snapshot() -> dict:
     }
 
 
+def _active_planner_subagent_roles() -> tuple[str, ...]:
+    snapshot = _planner_subagents_snapshot()
+    roles: list[str] = []
+    for item in snapshot.get("active", []):
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("target_role", "")).strip()
+        if role:
+            roles.append(role)
+    ordered = _ordered_roles(roles)
+    return ordered if ordered else ()
+
+
 def _activity_bundle(window_hours: int, limit: int) -> dict:
     if not ACTIVITY_FEED_ENABLED:
         return {
@@ -778,6 +791,12 @@ def _role_has_monitor_artifacts(role: str) -> bool:
 
 def monitor_roles() -> tuple[str, ...]:
     roles = list(active_roles())
+    if _execution_mode(ROOT) == "planner_experimental":
+        for role in _active_planner_subagent_roles():
+            if role not in roles:
+                roles.append(role)
+        ordered = _ordered_roles(roles)
+        return ordered if ordered else CORE_ROLES
     for core_role in CORE_ROLES:
         if core_role not in roles:
             roles.append(core_role)
