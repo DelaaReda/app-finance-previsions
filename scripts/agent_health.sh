@@ -51,12 +51,15 @@ show_health() {
 
   # === BATCH STATE ===
   echo -e "${BOLD}BATCH STATE${NC}"
-  python3 - <<'PY' 2>/dev/null || echo "  (error reading queue)"
-import json, sys
+python3 - <<'PY' 2>/dev/null || echo "  (error reading queue)"
+import json, re, sys
 with open("docs/orchestrator-ops/priority-queue.json") as f:
     q = json.load(f)
 symbols = {"CLOSED":"✅","DONE":"✅","IN_PROGRESS":"🔄","READY":"📋","BLOCKED":"🚫","PLANNED":"💤"}
-for item in q.get("items",[]):
+items = q.get("items", [])
+top_level = [i for i in items if re.fullmatch(r"BATCH-\d{2}", str(i.get("id", "")).strip())]
+rows = top_level if top_level else items
+for item in rows:
     s = item.get("state","?")
     icon = symbols.get(s,"❓")
     print(f"  {icon} {item['id']:10} {s:12} {item['title'][:40]}")

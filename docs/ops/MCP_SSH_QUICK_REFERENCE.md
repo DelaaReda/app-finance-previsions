@@ -91,7 +91,7 @@ ssh -i ~/.ssh/id_utm_linux venom@dev-vm-utm "echo test"
 If that works but Claude fails → restart Claude
 
 ## More Info
-See: `/Users/venom/Documents/analyse-financiere/docs/ops/MCP_SSH_CONFIGURATION_GUIDE.md`
+See: `/home/venom/analyse-financiere/docs/ops/MCP_SSH_CONFIGURATION_GUIDE.md`
 
 ---
 

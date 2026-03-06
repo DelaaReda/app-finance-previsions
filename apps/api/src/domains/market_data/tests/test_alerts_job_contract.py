@@ -1,0 +1,81 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import importlib.util
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
+
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+ALERTS_JOB_PATH = SRC_ROOT / "platform" / "legacy" / "jobs" / "alerts.py"
+SPEC = importlib.util.spec_from_file_location("alerts_job_contract_test", ALERTS_JOB_PATH)
+assert SPEC is not None and SPEC.loader is not None
+ALERTS_JOB = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(ALERTS_JOB)
+
+
+def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
+    def fake_load_json(name: str) -> Dict[str, Any]:
+        if name == "forecasts":
+            return {
+                "payload": {
+                    "rows": [
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.74},
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.88},
+                        {"ticker": "MSFT", "direction": "up", "confidence": 0.61},
+                        {"ticker": "MSFT", "direction": "up", "confidence": 79},
+                    ]
+                }
+            }
+        if name == "news_feed":
+            return {
+                "payload": {
+                    "articles": [
+                        {
+                            "tickers": ["AAPL"],
+                            "sentiment_score": -0.65,
+                            "title": "AAPL update",
+                            "pubDate": "2026-03-04T06:10:00Z",
+                        },
+                        {
+                            "tickers": ["MSFT"],
+                            "sentiment_score": 0.92,
+                            "title": "MSFT update",
+                            "pubDate": "2026-03-04T06:12:00Z",
+                        },
+                    ]
+                }
+            }
+        return {}
+
+    def fake_seeded_float(seed: str) -> float:
+        if seed.startswith("alerts:rsi:AAPL:2026030406"):
+            return 0.05  # force oversold
+        if seed.startswith("alerts:rsi:MSFT:2026030406"):
+            return 0.95  # force overbought
+        if seed.startswith("alerts:vol:"):
+            return 0.55  # deterministic high volatility
+        return 0.5
+
+    monkeypatch.setattr(ALERTS_JOB, "load_json", fake_load_json)
+    monkeypatch.setattr(ALERTS_JOB, "_seeded_float", fake_seeded_float)
+
+    run_at = datetime(2026, 3, 4, 6, 20, 0, tzinfo=timezone.utc)
+    first = ALERTS_JOB.compute_alerts(now=run_at)
+    second = ALERTS_JOB.compute_alerts(now=run_at)
+
+    assert first["generated_at"] == second["generated_at"]
+    assert isinstance(first.get("alerts"), list)
+    assert first.get("count") == len(first["alerts"]) == first["stats"]["generated"]
+    assert first["stats"]["scanned_tickers"] == 10
+
+    signatures = {(item.get("ticker"), item.get("type"), item.get("summary", "")) for item in first["alerts"]}
+    assert len(signatures) == len(first["alerts"])  # no duplicates by signature
+
+    for alert in first["alerts"]:
+        assert 0.0 <= alert["confidence"] <= 1.0
+        assert alert["severity"] in {"critical", "high", "warning", "medium", "low", "info"}

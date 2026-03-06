@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-10-BATCH-10-DEV-03-20260304T225930Z-742"
+stream_id: "BATCH-10"
+task_id: "BATCH-10-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-04T22:59:30Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope: expose active rate-limit cooldowns in /api/health"
+    - "dependency_impact: parse state_dir cache entries for planner/dev/admin cooldowns"
+    - "risk: avoid stale cooldown cache and silent health-only states"
+    - "verification: add targeted unit test for parse fallback and active cooldown detection"
+    - "rollback: no dependency changes"
+    - "remove cache entry parsing if false positives"
+    - "log actionable reason + remaining seconds"
+  architecture_checks:
+    - "platform_layer_scope_check"
+    - "reuse_first_modules"
+    - "rollback_safety_net"
+    - "dependency_impact_map"
+    - "scope_boundary_validation"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "PYTHONPATH=apps/api/src python3 -m pytest -q apps/api/src/platform/tests/test_health_router.py"
+      rc: "0"
+      started_at_utc: "2026-03-04T22:59:30Z"
+      ended_at_utc: "2026-03-04T22:59:30Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest=PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/platform/routers/health.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-B10-DEV-03-RATE-GOV-01"
+  review_ref: "none"
+  note: "DEV-03 harden health runtime governance"

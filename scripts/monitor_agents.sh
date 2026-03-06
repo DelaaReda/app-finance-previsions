@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # monitor_agents.sh — Dashboard orchestration lean
 set -uo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+if [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+fi
 cd "$ROOT"
 
 WATCH=0; COMPACT=0
@@ -60,28 +68,89 @@ show_status() {
   done
   [[ $_rl_any -eq 0 ]] && printf '  ✅ Codex + Qwen libres\n'
 
+  # Scheduler ownership conflicts (legacy qwen timers/services + tmux sessions)
+  _legacy_units=0
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+    _legacy_units=$(systemctl --user list-units --all --type=service --type=timer 2>/dev/null \
+      | grep -E "fc-(planner|dev|admin)-qwen\.(service|timer)" \
+      | grep -E " active | activating | waiting " \
+      | wc -l)
+    _legacy_units="$(printf '%s' "${_legacy_units:-0}" | tr -d '[:space:]')"
+  fi
+  [[ -n "${_legacy_units:-}" ]] || _legacy_units=0
+  if [[ "$_legacy_units" -gt 0 ]]; then
+    printf '  ⚠  legacy qwen systemd schedulers actifs: %s\n' "$_legacy_units"
+  else
+    printf '  ✅ Ownership scheduler: cron canonique seul\n'
+  fi
+
+  _legacy_tmux=0
+  if command -v tmux >/dev/null 2>&1; then
+    _legacy_tmux=$(tmux ls 2>/dev/null | grep -E "^qwen_(planner|dev|admin)_cron:" | wc -l)
+    _legacy_tmux="$(printf '%s' "${_legacy_tmux:-0}" | tr -d '[:space:]')"
+  fi
+  [[ -n "${_legacy_tmux:-}" ]] || _legacy_tmux=0
+  if [[ "$_legacy_tmux" -gt 0 ]]; then
+    printf '  ⚠  sessions legacy qwen_* encore présentes: %s\n' "$_legacy_tmux"
+  fi
+
   # Queue + Workboard
   printf '\n'
-  python3 - << 'PY'
+python3 - << 'PY'
 import json
+import re
 from pathlib import Path
+import time
+
+ROOT = Path('.').resolve()
+CANONICAL_ORCH = ROOT / 'docs' / 'operations' / 'orchestrator'
+LEGACY_ORCH = ROOT / 'docs' / 'orchestrator-ops'
+
+def resolve_orch_root() -> Path:
+    candidates = []
+    for d in (CANONICAL_ORCH, LEGACY_ORCH):
+        if not d.exists():
+            continue
+        score = 0.0
+        queue = d / 'priority-queue.json'
+        board = d / 'parallel-workstreams.json'
+        if queue.exists():
+            score += 20.0
+        if board.exists():
+            score += 20.0
+        latest = max(
+            queue.stat().st_mtime if queue.exists() else 0.0,
+            board.stat().st_mtime if board.exists() else 0.0,
+        )
+        if latest > 0:
+            age_m = max(0.0, (time.time() - latest) / 60.0)
+            score += max(0.0, 20.0 - min(20.0, age_m))
+        candidates.append((score, d))
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+    return CANONICAL_ORCH
+
+ORCH_ROOT = resolve_orch_root()
 
 def sym(s):
     return {'READY':'▶','IN_PROGRESS':'⟳','WAITING_DEP':'◌','DONE':'✓','CLOSED':'✓'}.get(s,'?')
 
 try:
-    pq = json.loads(Path('docs/orchestrator-ops/priority-queue.json').read_text())
+    pq = json.loads((ORCH_ROOT / 'priority-queue.json').read_text(encoding='utf-8', errors='ignore'))
     items = pq.get('items', [])
-    closed = sum(1 for i in items if i.get('state') in ('CLOSED','DONE','PASS'))
-    active = [i for i in items if i.get('state') not in ('CLOSED','DONE','PASS')]
-    print(f"  QUEUE  {closed}/{len(items)} clos  |  {len(active)} actif(s)")
+    top_level = [i for i in items if re.fullmatch(r'BATCH-\d{2}', str(i.get('id', '')).strip())]
+    rows = top_level if top_level else items
+    closed = sum(1 for i in rows if i.get('state') in ('CLOSED','DONE','PASS'))
+    active = [i for i in rows if i.get('state') not in ('CLOSED','DONE','PASS')]
+    print(f"  QUEUE  {closed}/{len(rows)} clos  |  {len(active)} actif(s)")
     for i in active[:3]:
         print(f"    {sym(i.get('state','?'))}  {i.get('id','?'):20s}  [{i.get('state','?')}]")
 except Exception as e:
     print(f"  QUEUE: {e}")
 
 try:
-    wb = json.loads(Path('docs/orchestrator-ops/parallel-workstreams.json').read_text())
+    wb = json.loads((ORCH_ROOT / 'parallel-workstreams.json').read_text(encoding='utf-8', errors='ignore'))
     tasks = wb.get('tasks', [])
     ready  = [t for t in tasks if t.get('state')=='READY']
     ip     = [t for t in tasks if t.get('state')=='IN_PROGRESS']
@@ -128,6 +197,10 @@ PY
       _delta=$(grep   -m1 "^DELTA:"      "$_cf" | cut -d: -f2- | tr -d ' \r' | cut -c1-40)
       _blocker=$(grep -m1 "^BLOCKER_ID:" "$_cf" | cut -d: -f2- | tr -d ' \r')
       _next=$(grep    -m1 "^NEXT:"       "$_cf" | cut -d: -f2- | tr -d '\r' | sed 's/^ *//' | cut -c1-60)
+      _evidence=$(grep -m1 "^EVIDENCE:"  "$_cf" | cut -d: -f2- | tr -d '\r')
+      _issues=$(printf '%s\n' "$_evidence" | tr ';' '\n' | sed -n 's/^[[:space:]]*issues=//p' | head -1 | sed 's/[[:space:]]*$//')
+      _issue_count=$(printf '%s\n' "$_evidence" | tr ';' '\n' | sed -n 's/^[[:space:]]*issue_count=//p' | head -1 | sed 's/[[:space:]]*$//')
+      _issue_sev=$(printf '%s\n' "$_evidence" | tr ';' '\n' | sed -n 's/^[[:space:]]*issue_severity=//p' | head -1 | sed 's/[[:space:]]*$//')
       _is_rate_limit=0
       if [[ "$_blocker" =~ ^AGENT_RATE_LIMIT_ ]] || [[ "$_status" == "RATE_LIMIT_SKIP" ]] || [[ "$_status" == "RATE_LIMIT_BACKOFF" ]] || [[ "$_delta" == "RATE_LIMIT_BACKOFF" ]]; then
         _is_rate_limit=1
@@ -144,6 +217,12 @@ PY
       printf '    %s  %-8s  %-14s  %s\n' "$_icon" "$_verdict" "$_status" "$_delta"
       [[ "${_blocker:-NONE}" != "NONE" && -n "${_blocker:-}" && "$_is_rate_limit" -ne 1 ]] && \
         printf '    ↳ blocker: %s\n' "$_blocker"
+      if [[ -n "${_issue_count}${_issue_sev}${_issues}" ]]; then
+        printf '    ↳ issues: count=%s sev=%s codes=%s\n' \
+          "${_issue_count:-?}" \
+          "${_issue_sev:-?}" \
+          "$(printf '%s' "${_issues:-none}" | cut -c1-54)"
+      fi
       printf '    ↳ %s\n' "$_next"
     else
       printf '    ⚪  (pas de contrat)\n'

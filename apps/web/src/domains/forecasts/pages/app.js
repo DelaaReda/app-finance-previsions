@@ -988,6 +988,7 @@ let v11Data = window.v11Data || FALLBACK_V11_DATA;
 let tradeIdeas = sanitizeTradeIdeas(window.tradeIdeas || FALLBACK_TRADE_IDEAS);
 let marketCalendar = sanitizeMarketCalendar(window.marketCalendar || FALLBACK_MARKET_CALENDAR);
 let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
+let liveAlerts = [];
 let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
 let liveForecastRows = [];
@@ -1088,13 +1089,23 @@ function buildCopilotJudgePayload(raw) {
   const data = isObject(payload.data) ? payload.data : payload;
   const verdict = normalizeVerdict(data.verdict || data.action || data.recommendation, 'hold');
   const confidence = formatConfidence(data.confidence, 0.35);
+  const rawRisk = isObject(data.risk) ? data.risk : {};
+  const riskLevel = toString(
+    data.risk_level
+      || data.riskLevel
+      || rawRisk.level
+      || rawRisk.risk_level
+      || (typeof data.risk === 'string' ? data.risk : ''),
+    'medium'
+  ).toLowerCase();
+  const riskCaveat = toString(data.risk_caveat || rawRisk.caveat || rawRisk.reason || '', '');
   const models = toArray(data.models, []).filter(isObject);
   const fallbackModel = {
     name: toString(data.model, 'Copilot'),
     verdict: verdict.toUpperCase(),
     confidence,
     icon: '🤖',
-    evidence: toString(data.risk_caveat, '')
+    evidence: riskCaveat
   };
   const modelRows = models.length
     ? models.map((item) => ({
@@ -1102,10 +1113,10 @@ function buildCopilotJudgePayload(raw) {
       verdict: normalizeVerdict(item.verdict || item.action, verdict).toUpperCase(),
       confidence: formatConfidence(item.confidence, confidence),
       icon: toString(item.icon || '🤖', '🤖'),
-      evidence: toString(item.evidence || item.reasoning || '', '')
+      evidence: toString(item.evidence || item.reasoning || item.why || riskCaveat, '')
     }))
     : [fallbackModel];
-  const reasoning = normalizeReasoning(data.reasoning || data.answer || '');
+  const reasoning = normalizeReasoning(data.why || data.reasoning || data.answer || '');
   const sources = normalizeCopilotSources(data.sources || data.citations);
   const requirementsMet = isObject(data.requirements_met || data.requirementsMet)
     ? (data.requirements_met || data.requirementsMet)
@@ -1115,7 +1126,7 @@ function buildCopilotJudgePayload(raw) {
   return {
     question: toString(data.question, 'Que faire avec votre portefeuille ?'),
     consensus: verdict.toUpperCase(),
-    answer: toString(data.answer || data.reasoning, ''),
+    answer: toString(data.answer || data.reasoning || data.why, ''),
     confidence,
     verdictClass: verdict,
     model: toString(data.model, 'Copilot'),
@@ -1124,7 +1135,13 @@ function buildCopilotJudgePayload(raw) {
       min_sources_2: !!requirementsMet.min_sources_2,
       quality_threshold: !!requirementsMet.quality_threshold
     },
+    riskLevel,
+    risk: {
+      level: riskLevel,
+      caveat: riskCaveat
+    },
     models: modelRows,
+    why: reasoning,
     reasoning: reasoning.length
       ? reasoning.join(' ')
       : toString(data.answer, 'Analyse indisponible pour le moment, réessayez plus tard.'),
@@ -1271,6 +1288,138 @@ function sanitizeNewsItems(items) {
     tickers: toArray(item.tickers, []),
     sentiment: toString(item.sentiment, '')
   }));
+}
+
+const ALERT_SEVERITY_ORDER = {
+  critical: 0,
+  high: 1,
+  warning: 2,
+  medium: 3,
+  info: 4,
+  low: 5
+};
+
+function normalizeAlertSeverity(value, fallback = 'medium') {
+  const severity = toString(value, fallback).toLowerCase();
+  if (severity === 'critical') return 'critical';
+  if (severity === 'high') return 'high';
+  if (severity === 'warning') return 'warning';
+  if (severity === 'medium') return 'medium';
+  if (severity === 'low') return 'low';
+  if (severity === 'info') return 'info';
+  return fallback;
+}
+
+function mapAlertPriority(severity, fallback = 'low') {
+  const normalized = normalizeAlertSeverity(severity, fallback);
+  if (normalized === 'critical' || normalized === 'high') return 'high';
+  if (normalized === 'warning' || normalized === 'medium') return 'medium';
+  return 'low';
+}
+
+function mapAlertType(rawType = '', rawCategory = '') {
+  const type = toString(rawType, '').toLowerCase();
+  const category = toString(rawCategory, '').toLowerCase();
+  if (category === 'news') return 'news';
+  if (category === 'risk') return 'risks';
+  if (type.includes('risk') || type.includes('bear') || type.includes('negative') || type.includes('volatility')) return 'risks';
+  if (type.includes('bull') || type.includes('support') || type.includes('oversold-bullish') || type.includes('positive') || type.includes('breakout') || category === 'forecast') return 'opportunities';
+  return 'signal';
+}
+
+function resolveAlertIcon(type = '', severity = 'low') {
+  const normalizedType = type.toLowerCase();
+  if (normalizedType.includes('risk') || normalizedType.includes('bear') || normalizedType.includes('volatility')) return '⚠️';
+  if (normalizedType.includes('news')) return '📰';
+  if (normalizedType.includes('positive') || normalizedType.includes('bull') || normalizedType.includes('breakout')) return '📈';
+  if (normalizeAlertSeverity(severity, 'low') === 'low' || normalizeAlertSeverity(severity, 'low') === 'info') return '🛈';
+  return '⚡';
+}
+
+function sanitizeAlertTimeline(items) {
+  const rows = toArray(items, []);
+  const bySignature = new Map();
+  const parsed = rows.map((item) => {
+    const source = isObject(item) ? item : {};
+    const severity = normalizeAlertSeverity(source.severity, 'medium');
+    const priority = mapAlertPriority(severity, 'low');
+    const type = mapAlertType(source.type, source.category);
+    const confidence = toFiniteNumber(source.confidence, 0);
+    const confidenceLabel = Math.max(0, Math.min(100, Math.round(confidence > 1 ? confidence : confidence * 100)));
+    const summary = toString(source.summary || source.description || source.detail || source.message, 'Alerte marché détectée');
+    const timestamp = toString(source.timestamp || source.generated_at || source.generatedAt, new Date().toISOString());
+    const signature = [toString(source.ticker, 'MARKET'), source.type || 'signal', summary].join('|');
+
+    return {
+      id: toString(source.id, 'alert-' + signature.replace(/[^a-z0-9-]/gi, '-')),
+      title: `${toString(source.ticker, 'MARKET').toUpperCase()} ${type === 'risks' ? 'Risk' : type === 'news' ? 'News' : 'Signal'}`,
+      summary,
+      severity,
+      severityLabel: toString(severity, 'medium').toUpperCase(),
+      priority,
+      priorityRank: ALERT_SEVERITY_ORDER[severity],
+      type,
+      confidence: confidenceLabel,
+      confidenceLabel: confidenceLabel ? `${confidenceLabel}%` : '—',
+      ticker: toString(source.ticker, 'MARKET').toUpperCase(),
+      icon: resolveAlertIcon(source.type, severity),
+      timestamp,
+      timeLabel: formatRelativeTime(timestamp),
+      signalSource: source.category || source.type || 'market',
+      actionHint: type === 'news' ? 'Voir news' : 'Act now',
+      signature
+    };
+  });
+
+  parsed.forEach((item) => {
+    if (!item.signature || bySignature.has(item.signature)) {
+      return;
+    }
+    bySignature.set(item.signature, item);
+  });
+
+  return Array.from(bySignature.values())
+    .sort((a, b) => {
+      if (a.priorityRank !== b.priorityRank) return a.priorityRank - b.priorityRank;
+      if (a.confidence !== b.confidence) return b.confidence - a.confidence;
+      return Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0);
+    })
+    .slice(0, 12);
+}
+
+function renderAlertTimeline(alerts = liveAlerts) {
+  const container = document.getElementById('timelineContainer');
+  if (!container) return;
+
+  const rows = sanitizeAlertTimeline(alerts);
+  if (!rows.length) {
+    container.innerHTML = `
+      <div class="alert-item medium expandable" data-priority="low" data-type="news" onclick="toggleAlertDetails(this)">
+        <span class="alert-icon">🔎</span>
+        <div class="alert-content">
+          <h3>Aucune alerte nouvelle</h3>
+          <p>Le flux reste propre pour l'instant</p>
+        </div>
+        <div class="alert-actions" style="display: none;"></div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = rows.map((item) => `
+    <div class="alert-item ${item.priority} expandable" data-priority="${item.priority}" data-type="${item.type}" onclick="toggleAlertDetails(this)">
+      <span class="alert-icon">${item.icon}</span>
+      <div class="alert-content">
+        <h3>${item.title}</h3>
+        <p>${item.confidenceLabel} confidence • ${item.timeLabel}</p>
+      </div>
+      <div class="alert-actions" style="display: none;">
+        <button class="alert-action-btn primary" onclick="showToast('Applying ${item.actionHint} for ${item.ticker}')">${item.actionHint}</button>
+        <button class="alert-action-btn secondary" onclick="showToast('Reminder set for ${item.ticker}')">Remind Me</button>
+        <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
+      </div>
+    </div>
+  `).join('');
 }
 
 function sanitizeMarketCalendar(calendar) {
@@ -1472,6 +1621,7 @@ function renderLiveDashboardWidgets() {
   renderMarketCalendar();
   renderNewsFeed();
   renderMarketDrivers();
+  renderAlertTimeline();
   syncDashboardCards();
   updateLiveProvenance(liveDataMeta);
   renderForecastScenarioWidget();
@@ -1617,6 +1767,7 @@ function applyLiveDashboardData(payload = {}) {
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
   liveForecastRows = sanitizeForecastRows(data.forecasts || window.liveForecasts);
   liveTopMovers = sanitizeTopMovers(data.topMovers || data.stocks || window.topMovers);
+  liveAlerts = sanitizeAlertTimeline(data.alerts || window.alertTimeline || []);
   liveKpis = data.kpis || window.liveKpis;
   livePortfolioSummary = data.portfolioSummary || window.livePortfolioSummary;
 
@@ -2687,17 +2838,26 @@ function filterAlerts(type) {
 
   const alerts = document.querySelectorAll('.alert-timeline .alert-item');
   alerts.forEach(alert => {
+    if (!alert) return;
+    const normalizedType = toString(alert.dataset.type, 'news').toLowerCase() === 'risk' ? 'risks' : toString(alert.dataset.type, 'news').toLowerCase() === 'opportunity' ? 'opportunities' : toString(alert.dataset.type, 'news').toLowerCase();
+    const priority = toString(alert.dataset.priority, 'low').toLowerCase();
     if (type === 'all') {
       alert.style.display = 'flex';
-    } else if (type === 'opportunities') {
-      alert.style.display = alert.dataset.type === 'opportunity' ? 'flex' : 'none';
-    } else if (type === 'risks') {
-      alert.style.display = alert.dataset.type === 'risk' ? 'flex' : 'none';
-    } else if (type === 'news') {
-      alert.style.display = alert.dataset.type === 'news' ? 'flex' : 'none';
-    } else {
-      alert.style.display = alert.dataset.priority === type ? 'flex' : 'none';
+      return;
     }
+    if (type === 'opportunities') {
+      alert.style.display = normalizedType === 'opportunities' ? 'flex' : 'none';
+      return;
+    }
+    if (type === 'risks') {
+      alert.style.display = normalizedType === 'risks' ? 'flex' : 'none';
+      return;
+    }
+    if (type === 'news') {
+      alert.style.display = normalizedType === 'news' ? 'flex' : 'none';
+      return;
+    }
+    alert.style.display = priority === type ? 'flex' : 'none';
   });
 }
 
@@ -4106,6 +4266,7 @@ window.toggleAlertDetails = toggleAlertDetails;
 window.selectReturnRange = selectReturnRange;
 window.filterHistory = filterHistory;
 window.refreshData = refreshData;
+window.renderAlertTimeline = renderAlertTimeline;
 window.openExportModal = openExportModal;
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;

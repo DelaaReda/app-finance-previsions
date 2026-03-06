@@ -1,58 +1,86 @@
-# Index de l’espace de travail (référence rapide agent)
+# Agent Workspace Index (Canonical Reference)
 
-## Racine
+## Changelog
+- **2026-03-04**: Full rewrite in English; normalized canonical vs compatibility paths and added runtime ownership map.
 
-- Orchestrateur / règles d’agent : [AGENTS.md](/home/venom/analyse-financiere/AGENTS.md)
-- État prêt agents : [AGENTS_READY.md](../ops/AGENTS_READY.md)
-- Symlinks (canoniques) : [SYMLINKS_CATALOG.md](../ops/SYMLINKS_CATALOG.md)
-- Orchestration (consignes, blocages) : [ORCHESTRATION_AGENTS_READY.md](../ops/ORCHESTRATION_AGENTS_READY.md)
-- Mémoire : [memory/](/home/venom/analyse-financiere/memory)
-- Hub mémoire agent : [docs/memory-hub](/home/venom/analyse-financiere/docs/memory-hub)
-- Scripts d’opérations : [scripts/](/home/venom/analyse-financiere/scripts)
-- Runtime mutable : [apps/api/runtime/](/home/venom/analyse-financiere/apps/api/runtime)
+## 1) Purpose and Scope
+This index provides canonical paths and ownership boundaries for agents and operators.
 
-## Produit
+It is the primary path map used by orchestration docs, monitor diagnostics, and troubleshooting workflows.
 
-- Backend (source) : [apps/api/src/](/home/venom/analyse-financiere/apps/api/src)
-- Frontend (source) : [apps/web/src/](/home/venom/analyse-financiere/apps/web/src)
-- Domaines backend :
-  - [forecasts](/home/venom/analyse-financiere/apps/api/src/domains/forecasts)
-  - [judge](/home/venom/analyse-financiere/apps/api/src/domains/judge)
-  - [market_data](/home/venom/analyse-financiere/apps/api/src/domains/market_data)
-  - [copilot](/home/venom/analyse-financiere/apps/api/src/domains/copilot)
-- Domaines frontend :
-  - [forecasts](/home/venom/analyse-financiere/apps/web/src/domains/forecasts)
-  - [judge](/home/venom/analyse-financiere/apps/web/src/domains/judge)
-  - [portfolio](/home/venom/analyse-financiere/apps/web/src/domains/portfolio)
+## 2) Normative Rules (MUST/SHOULD/MUST NOT)
+- Agents **MUST** prefer canonical paths over compatibility aliases.
+- Mutable runtime data **MUST NOT** be stored under source code roots.
+- Ops scripts **SHOULD** resolve root via workspace helpers (writable canonical workspace first).
+- Compatibility paths **MUST** be read-only compatibility unless explicitly documented.
+- Runtime commands **MUST** execute in VM workspace `/home/venom/analyse-financiere`.
+- Runtime commands **MUST NOT** execute on macOS host.
+- Canonical runtime docs **MUST NOT** require SSH wrapper syntax (`ssh dev-vm-utm ...`) for standard operations.
+- If host context is uncertain, operators **MUST** run `bash scripts/runtime_host_check.sh` and proceed only when `runtime_is_vm=1`.
 
-## Partage / contrats
+## 3) Interfaces and Schemas
+### Canonical workspace root
+- `/home/venom/analyse-financiere`
 
-- Contrats partagés : [packages/contracts/](/home/venom/analyse-financiere/packages/contracts)
-- Kit UI / observabilité : [packages/ui-kit](/home/venom/analyse-financiere/packages/ui-kit), [packages/observability](/home/venom/analyse-financiere/packages/observability), [packages/sdk](/home/venom/analyse-financiere/packages/sdk)
+### Core orchestration files
+- Queue: `/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json`
+- Workboard: `/home/venom/analyse-financiere/docs/operations/orchestrator/parallel-workstreams.json`
+- Monitoring latest: `/home/venom/analyse-financiere/docs/operations/orchestrator/executors-monitoring-latest.json`
 
-## Gouvernance / ops
+### Runtime logs
+- Tick logs: `/home/venom/analyse-financiere/logs-codex-runs/fc-ticks/`
+- Runner logs: `/home/venom/analyse-financiere/logs-codex-runs/role-runner/`
+- Monitor guard logs: `/home/venom/analyse-financiere/logs-codex-runs/monitor-guard.cron.log`
 
-- Docs ops principales : [docs/ops/](/home/venom/analyse-financiere/docs/ops)
-- Orchestrations et crons : [docs/orchestrator-ops/](/home/venom/analyse-financiere/docs/orchestrator-ops)
-- Documentation opérationnelle ciblée (hub) : [docs/operations/](/home/venom/analyse-financiere/docs/operations)
-- Vérification QA navigateur : [OPENCLAW_BROWSER_QA.md](/home/venom/analyse-financiere/docs/ops/OPENCLAW_BROWSER_QA.md)
-- Plan produit / epics : [docs/product/](/home/venom/analyse-financiere/docs/product), [docs/product/planning/tasks.md](/home/venom/analyse-financiere/docs/product/planning/tasks.md)
-- Tâches en vue d’exécution : [docs/tasks-hub/](/home/venom/analyse-financiere/docs/tasks-hub)
+### Contracts and policies
+- Runner: `/home/venom/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- Tick launcher: `/home/venom/analyse-financiere/scripts/fc_agent_tick.sh`
+- Contract guard: `/home/venom/analyse-financiere/platform/policies/role_contract_guard.py`
+- Runner config (v1): `/home/venom/analyse-financiere/platform/config/runner/runner.v1.yaml`
+- Runner schema (v1): `/home/venom/analyse-financiere/platform/config/schema/runner.v1.schema.json`
+- Doctor CLI: `/home/venom/analyse-financiere/scripts/fc_doctor.sh`
 
-## Traces / preuve
+## 4) Runtime Behavior and Edge Cases
+- Compatibility alias `/home/venom/analyse-financiere/docs/orchestrator-ops` may exist and be readable.
+- Canonical orchestrator directory is `docs/operations/orchestrator`.
+- If monitor/root detection sees stale shared roots, writable canonical root must win.
 
-- Preuves live : [evidence/](/home/venom/analyse-financiere/evidence)
-- Archive (historique) : [archive/](/home/venom/analyse-financiere/archive)
-- Logs : [logs/](/home/venom/analyse-financiere/logs)
+## 5) Operator Commands and Expected Outputs
+- Verify runtime host context:
+```bash
+bash scripts/runtime_host_check.sh
+```
+Expected:
+- `runtime_host_kind=vm_runtime`
+- `runtime_is_vm=1`
 
-## Onboarding agents
+- Verify canonical paths:
+```bash
+ls -ld docs/operations/orchestrator docs/orchestrator-ops
+```
+Expected:
+- canonical directory present; compatibility alias may be symlink.
 
-- Vision architecture + règles de contribution : [docs/ops/AGENT_ONBOARDING.md](/home/venom/analyse-financiere/docs/ops/AGENT_ONBOARDING.md)
-- Architecture cible et styles : [docs/architecture/ARCHITECTURE_MAP.md](/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_MAP.md), [docs/architecture/ARCHITECTURE_STYLE_GUIDE.md](/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_STYLE_GUIDE.md), [docs/architecture/TARGET_ARCHITECTURE_LAYOUT.md](/home/venom/analyse-financiere/docs/architecture/TARGET_ARCHITECTURE_LAYOUT.md)
-- Unification src cible : [docs/ops/APP_SRC_UNIFICATION.md](/home/venom/analyse-financiere/docs/ops/APP_SRC_UNIFICATION.md)
-- Carte rapide documentaire globale : [docs/ops/WORKSPACE_MAP.md](/home/venom/analyse-financiere/docs/ops/WORKSPACE_MAP.md)
+- Verify critical files:
+```bash
+test -f docs/operations/orchestrator/priority-queue.json && echo OK_QUEUE
+test -f docs/operations/orchestrator/parallel-workstreams.json && echo OK_WORKBOARD
+```
+Expected:
+- both checks print `OK_*`.
 
-## Quick map de la période migration
+## 6) Observability and Troubleshooting
+When path drift is suspected:
+- Check monitor-reported `sources` in `/api/status`.
+- Compare mtime and content between canonical and alias paths.
+- Prefer writing state updates only to canonical paths.
 
-- Documentation post-migration : [docs/operations/MIGRATION_SUMMARY.md](/home/venom/analyse-financiere/docs/operations/MIGRATION_SUMMARY.md), [docs/operations/STABILISATION_POST_MIGRATION.md](/home/venom/analyse-financiere/docs/operations/STABILISATION_POST_MIGRATION.md), [docs/operations/POST_MIGRATION_RECOVERY.md](/home/venom/analyse-financiere/docs/operations/POST_MIGRATION_RECOVERY.md)
-- Portail mémoire agent : [docs/memory-hub/](/home/venom/analyse-financiere/docs/memory-hub)
+## 7) Compatibility and Migration Notes
+- `docs/ops/*` may symlink into `docs/operations/*`; this is expected.
+- Historical `docs/orchestrator-ops/*` remains compatibility-only.
+- Migration summary tracks deprecation and cutover windows.
+
+## 8) Acceptance Criteria
+- All operational runbooks point to canonical paths.
+- Queue/workboard references are consistent across monitor, runner, and docs.
+- Alias paths are documented as compatibility-only where applicable.

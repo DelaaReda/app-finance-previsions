@@ -17,6 +17,12 @@ BASELINE_UTILITY_JOBS=(
   "stale-sweep-autoheal-7m"
   "dg-alert-15m"
 )
+BASELINE_ADVISORY_JOBS=(
+  "po-scrum-master-advisory-5m"
+  "po_scrum_master-advisory-5m"
+  "scrum-master-operational-5m"
+  "scrum_master-operational-5m"
+)
 
 # role|id|name|session
 ROLE_MAP=()
@@ -93,6 +99,7 @@ load_dynamic_role_map() {
   done
   EXPECTED_NAMES+=("${BASELINE_ADMIN_JOBS[@]}")
   EXPECTED_NAMES+=("${BASELINE_UTILITY_JOBS[@]}")
+  EXPECTED_NAMES+=("${BASELINE_ADVISORY_JOBS[@]}")
 }
 
 cron_id_exists() {
@@ -228,7 +235,7 @@ disable_roles() {
 enable_governance_jobs() {
   local job_name=""
   local job_id=""
-  for job_name in "${BASELINE_ADMIN_JOBS[@]}" "${BASELINE_UTILITY_JOBS[@]}"; do
+  for job_name in "${BASELINE_ADMIN_JOBS[@]}" "${BASELINE_UTILITY_JOBS[@]}" "${BASELINE_ADVISORY_JOBS[@]}"; do
     job_id="$(job_id_for_name "$job_name" || true)"
     set_job_state "$job_id" enable "job=$job_name"
   done
@@ -237,7 +244,7 @@ enable_governance_jobs() {
 disable_governance_jobs() {
   local job_name=""
   local job_id=""
-  for job_name in "${BASELINE_ADMIN_JOBS[@]}" "${BASELINE_UTILITY_JOBS[@]}"; do
+  for job_name in "${BASELINE_ADMIN_JOBS[@]}" "${BASELINE_UTILITY_JOBS[@]}" "${BASELINE_ADVISORY_JOBS[@]}"; do
     job_id="$(job_id_for_name "$job_name" || true)"
     set_job_state "$job_id" disable "job=$job_name"
   done

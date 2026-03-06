@@ -14,10 +14,8 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-# Reuse the shared V16 dashboard UI service helpers living under src/.
-# We use a relative import so this module works regardless of how the
-# backend package is mounted (avoids depending on ``backend.src``).
-from ..services.dashboard_ui_service import (  # type: ignore
+# Reuse the shared V16 dashboard UI service helpers (pure Python, no FastAPI).
+from ..application.dashboard_ui_service import (  # type: ignore
   build_portfolio_summary,
   build_portfolio_health,
   build_market_drivers_snapshot,

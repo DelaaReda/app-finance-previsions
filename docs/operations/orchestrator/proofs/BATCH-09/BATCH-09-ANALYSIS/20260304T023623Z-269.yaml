@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-09-BATCH-09-ANALYSIS-20260304T023623Z-269"
+stream_id: "BATCH-09"
+task_id: "BATCH-09-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-04T02:36:23Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(analysis_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-04T02:36:23Z"
+      ended_at_utc: "2026-03-04T02:36:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(analysis_artifact_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-09/BATCH-09-ANALYSIS/20260304T023613Z-analysis.md"
+handoff:
+  to_role: "planner"
+  handoff_id: "HO-20260304023623-170"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-02fd751edf49"
+  review_ref: "none"
+  note: "Analyse causale BATCH-09 produite avec protocole deep-diagnostic; top causes + correctifs minimaux + réutilisation imposée."

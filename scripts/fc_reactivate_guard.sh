@@ -78,11 +78,28 @@ cleanup_stale_locks() {
 
 cleanup_stale_chromium() {
   local stale_pids=""
-  stale_pids="$(ps -eo pid=,etimes=,comm=,args= | awk '
+  stale_pids="$(ps -Ao pid=,etime=,comm=,args= | awk '
+    function etime_to_seconds(raw, n, a, day, h, m, s) {
+      day = 0; h = 0; m = 0; s = 0
+      n = split(raw, a, "-")
+      if (n == 2) {
+        day = a[1] + 0
+        raw = a[2]
+      }
+      n = split(raw, a, ":")
+      if (n == 3) {
+        h = a[1] + 0; m = a[2] + 0; s = a[3] + 0
+      } else if (n == 2) {
+        m = a[1] + 0; s = a[2] + 0
+      } else if (n == 1) {
+        s = a[1] + 0
+      }
+      return day*86400 + h*3600 + m*60 + s
+    }
     {
-      pid=$1; et=$2; cmd=$3; $1=""; $2=""; $3="";
+      pid=$1; et=etime_to_seconds($2); cmd=$3; $1=""; $2=""; $3="";
       args=$0;
-      if (et+0 < 3600) next;
+      if (et < 3600) next;
       if (cmd !~ /(chromium|chrome)/) next;
       if (args ~ /(renderer|zygote|gpu-process|utility|headless)/) print pid;
     }' | tr '\n' ' ')"
@@ -214,7 +231,22 @@ fi
 
 if [[ "$KICK_PLANNER" -eq 1 ]]; then
   ok "kick planner tick (bounded timeout)"
-  timeout 120 bash scripts/fc_agent_tick.sh planner >/tmp/fc_reactivate_kick.out 2>/tmp/fc_reactivate_kick.err || true
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 120 bash scripts/fc_agent_tick.sh planner >/tmp/fc_reactivate_kick.out 2>/tmp/fc_reactivate_kick.err || true
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout 120 bash scripts/fc_agent_tick.sh planner >/tmp/fc_reactivate_kick.out 2>/tmp/fc_reactivate_kick.err || true
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY' >/tmp/fc_reactivate_kick.out 2>/tmp/fc_reactivate_kick.err || true
+import subprocess, sys
+try:
+    res = subprocess.run(["bash", "scripts/fc_agent_tick.sh", "planner"], timeout=120)
+    sys.exit(res.returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
+  else
+    bash scripts/fc_agent_tick.sh planner >/tmp/fc_reactivate_kick.out 2>/tmp/fc_reactivate_kick.err || true
+  fi
   tail -n 5 /tmp/fc_reactivate_kick.err 2>/dev/null || true
 fi
 

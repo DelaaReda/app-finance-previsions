@@ -15,9 +15,19 @@ except Exception:  # pragma: no cover
     build_judge_quality_report = None  # type: ignore
 
 try:
-    from services.service_standard import safe_int, service_response, utc_now_iso
+    from services.service_standard import (
+        ensure_decision_contract,
+        safe_int,
+        service_response,
+        utc_now_iso,
+    )
 except Exception:  # pragma: no cover
-    from src.services.service_standard import safe_int, service_response, utc_now_iso  # type: ignore
+    from src.services.service_standard import (  # type: ignore
+        ensure_decision_contract,
+        safe_int,
+        service_response,
+        utc_now_iso,
+    )
 
 
 JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
@@ -41,7 +51,7 @@ async def get_judge_verdicts_payload(
     compute_verdicts_fn: JudgeVerdictsComputeFn,
 ) -> Dict[str, Any]:
     """Delegate heavy verdict generation to the provided reusable compute function."""
-    return await compute_verdicts_fn(
+    response = await compute_verdicts_fn(
         limit=limit,
         min_confidence=min_confidence,
         ticker=ticker,
@@ -52,6 +62,27 @@ async def get_judge_verdicts_payload(
         debug_full=debug_full,
         x_debug_token=x_debug_token,
     )
+    if not isinstance(response, dict):
+        return response
+
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return response
+
+    verdicts = data.get("verdicts")
+    head = verdicts[0] if isinstance(verdicts, list) and verdicts and isinstance(verdicts[0], dict) else {}
+    ensure_decision_contract(
+        data,
+        default_source="judge_endpoint_service",
+        verdict=head.get("verdict") or head.get("action"),
+        confidence=head.get("confidence"),
+        why=head.get("why") or head.get("reasoning"),
+        risk_level=head.get("risk_level") or head.get("risk"),
+        risk_caveat=head.get("risk_caveat") or head.get("risk_reason"),
+        freshness=response.get("freshness") or data.get("generated_at"),
+    )
+    response.setdefault("freshness", data.get("freshness") or data.get("generated_at"))
+    return response
 
 
 async def get_judge_quality_payload(

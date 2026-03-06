@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://analyse-financiere.local/schemas/runner.v1.schema.json",
+  "title": "Runner Config v1",
+  "type": "object",
+  "required": [
+    "version",
+    "defaults",
+    "roles",
+    "features",
+    "paths",
+    "timeouts",
+    "retries",
+    "telemetry"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "defaults": {
+      "type": "object",
+      "required": [
+        "prompt_timeout_seconds",
+        "retry_prompt_timeout_seconds",
+        "tick_timeout_seconds"
+      ],
+      "properties": {
+        "prompt_timeout_seconds": { "type": "integer", "minimum": 30, "maximum": 3600 },
+        "retry_prompt_timeout_seconds": { "type": "integer", "minimum": 10, "maximum": 1800 },
+        "tick_timeout_seconds": { "type": "integer", "minimum": 60, "maximum": 7200 }
+      },
+      "additionalProperties": true
+    },
+    "roles": {
+      "type": "object",
+      "required": ["planner", "dev", "admin", "scrum_master"],
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "features": { "type": "object" },
+    "paths": { "type": "object" },
+    "timeouts": { "type": "object" },
+    "retries": { "type": "object" },
+    "telemetry": { "type": "object" }
+  },
+  "additionalProperties": true
+}

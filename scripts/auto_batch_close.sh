@@ -20,6 +20,21 @@ wb = json.loads(wb_path.read_text())
 pq = json.loads(pq_path.read_text())
 ts = datetime.now(timezone.utc).isoformat()
 
+# SYNC-PASS: propagate stream state → queue for desync items
+# (stream advances to IN_PROGRESS but queue stays WAITING_DEP)
+stream_states = {s.get('id',''): s.get('state','') for s in wb.get('streams', [])}
+q_synced = 0
+for item in pq.get('items', []):
+    bid = item.get('id', '')
+    q_state = item.get('state', '')
+    ws_state = stream_states.get(bid, '')
+    if q_state == 'WAITING_DEP' and ws_state in ('IN_PROGRESS', 'READY', 'DONE'):
+        item['state'] = 'CLOSED' if ws_state == 'DONE' else ws_state
+        item['updated_at'] = ts
+        q_synced += 1
+if q_synced:
+    print(f'🔄 Queue sync: {q_synced} items propagated from workstream state')
+
 tasks = wb.get('tasks', [])
 closed = []
 unlocked = []

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-08-BATCH-08-GOV_REVIEW-20260304T011011Z-468"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-04T01:10:11Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/parallel_workstream.py status --role planner --compact && python3 platform/automation/parallel_workstream.py status --role dev --compact && python3 platform/automation/parallel_workstream.py status --role admin --compact"
+      rc: "0"
+      started_at_utc: "2026-03-04T01:10:11Z"
+      ended_at_utc: "2026-03-04T01:10:11Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "evidence_chain_review:PASS; queue_workboard_chain_completion:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-GOV-REVIEW/20260304T010948Z-gov-review.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-52f663eef11a"
+  review_ref: "none"
+  note: "Gouvernance BATCH-08 clôturée PASS: chaîne canonique complète, contrat décision API/UI stabilisé, smoke live validé et runtime monitor cohérent."

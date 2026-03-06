@@ -80,6 +80,9 @@ def test_ask_payload_injects_market_context_and_structured_response():
     )
     assert response.get("action") == "buy"
     assert response.get("verdict") == "buy"
+    assert response.get("why") == response.get("reasoning")
+    assert response.get("risk", {}).get("level") in {"low", "medium", "high", "critical"}
+    assert isinstance(response.get("risk", {}).get("caveat"), str)
     assert response.get("risk_caveat") == "Contexte marché et sources disponibles."
     assert response.get("sources_count") == 2
     assert response["requirements_met"]["min_sources_2"] is True
@@ -111,6 +114,9 @@ def test_ask_payload_uses_market_context_when_rag_empty():
     )
 
     assert response.get("action") == "hold"
+    assert response.get("verdict") == "hold"
+    assert response.get("why")
+    assert response.get("risk", {}).get("level") in {"low", "medium", "high", "critical"}
     assert response.get("sources_count") == 1
     assert response["quality_status"] == "insufficient_sources"
     assert response["requirements_met"]["min_sources_2"] is False
@@ -144,6 +150,9 @@ def test_ask_payload_fallback_when_market_context_service_fails():
     )
 
     assert response.get("action") == "hold"
+    assert response.get("verdict") == "hold"
+    assert response.get("why")
+    assert response.get("risk", {}).get("level") in {"low", "medium", "high", "critical"}
     assert response.get("sources_count") == 1
     assert response["quality_status"] == "insufficient_sources"
     assert response["requirements_met"]["min_sources_2"] is False

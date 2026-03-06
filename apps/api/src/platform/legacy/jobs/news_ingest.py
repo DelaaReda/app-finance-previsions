@@ -466,6 +466,19 @@ def run_news_ingest():
         all_articles: List[Dict[str, Any]] = []
         sources_processed: List[str] = []
         seen_uids: set[str] = set()
+        yahoo_empty_by_ticker: Dict[str, int] = {}
+        yahoo_empty_events = 0
+
+        def _track_yahoo_empty(source_payload: Dict[str, Any]) -> None:
+            nonlocal yahoo_empty_events
+            source_name = str(source_payload.get("name", ""))
+            if "Yahoo Finance" not in source_name:
+                return
+            source_ticker = normalize_ticker(str(source_payload.get("source_ticker") or ""))
+            if not source_ticker:
+                return
+            yahoo_empty_events += 1
+            yahoo_empty_by_ticker[source_ticker] = yahoo_empty_by_ticker.get(source_ticker, 0) + 1
 
         # Known tickers from forecasts + profiles (pour enrichir l'extraction)
         known_tickers = set(DEFAULT_TICKERS)
@@ -524,6 +537,7 @@ def run_news_ingest():
                 
                 if not xml_content:
                     logger.warning(f"No content from {source['name']}, skipping")
+                    _track_yahoo_empty(source)
                     continue
                 
                 # Parse articles
@@ -531,6 +545,7 @@ def run_news_ingest():
                 
                 if not articles:
                     logger.warning(f"No articles parsed from {source['name']}")
+                    _track_yahoo_empty(source)
                     continue
                 
                 # Process each article
@@ -582,6 +597,7 @@ def run_news_ingest():
                 
             except Exception as e:
                 logger.error(f"Error processing source {source['name']}: {e}", exc_info=True)
+                _track_yahoo_empty(source)
                 continue
 
         # Sort globally: recency first, then relevance.
@@ -659,11 +675,31 @@ def run_news_ingest():
                 t: (ticker_coverage.get(t, 0) >= MIN_ARTICLES_PER_TICKER)
                 for t in target_tickers
             },
+            "provider_fallback_stats": {
+                "news": {
+                    "yahoo_empty_events_total": yahoo_empty_events,
+                    "yahoo_empty_by_ticker": dict(sorted(yahoo_empty_by_ticker.items())),
+                }
+            },
         }
         
         # Save to persistent storage
         logger.info("Saving news feed to storage...")
         save_json(result, "news_feed.json", source=["job:news_ingest", "rss_feeds"] + sources_processed)
+        try:
+            save_json(
+                {
+                    "generated_at": datetime.utcnow().isoformat() + "Z",
+                    "yahoo_empty_events_total": yahoo_empty_events,
+                    "yahoo_empty_by_ticker": dict(sorted(yahoo_empty_by_ticker.items())),
+                    "source_count": len(sources_processed),
+                    "lookback_days": LOOKBACK_DAYS,
+                },
+                "provider_fallback_news.json",
+                source=["job:news_ingest", "provider_fallback_stats"],
+            )
+        except Exception as stats_exc:
+            logger.warning(f"Failed to persist provider fallback news stats: {stats_exc}")
         
         # Return summary
         summary = {
@@ -671,6 +707,12 @@ def run_news_ingest():
             "sources": sources_processed,
             "ticker_coverage": ticker_coverage,
             "target_tickers": target_tickers,
+            "provider_fallback_stats": {
+                "news": {
+                    "yahoo_empty_events_total": yahoo_empty_events,
+                    "yahoo_empty_by_ticker": dict(sorted(yahoo_empty_by_ticker.items())),
+                }
+            },
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "status": "completed"
         }

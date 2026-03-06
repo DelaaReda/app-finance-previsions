@@ -218,9 +218,32 @@ def generate_brief() -> bool:
 def generate_judge_quality() -> bool:
     """Generate judge quality report snapshot"""
     try:
+        # Preferred path: legacy adapter job (keeps launcher compatibility).
         from jobs.judge_quality_report import run_judge_quality_report
+
         report = run_judge_quality_report(horizon_days=5, min_samples=20)
-        return bool(report)
+        if report:
+            logger.info("✅ Generated judge quality report via legacy adapter")
+            return True
+    except Exception as e:
+        logger.warning(f"⚠️ Legacy judge quality adapter unavailable: {e}")
+
+    # Explicit fallback to domain implementation if adapter import fails.
+    try:
+        from services.judge_quality import build_judge_quality_report
+        from storage.io import save_json
+
+        report = build_judge_quality_report(horizon_days=5, min_samples=20)
+        if not isinstance(report, dict) or not report:
+            logger.warning("⚠️ Empty judge quality report from domain service")
+            return False
+        save_json(
+            "judge_quality",
+            report,
+            source=["job:validate_and_generate_data", "judge_quality_domain_fallback"],
+        )
+        logger.info("✅ Generated judge quality report via domain fallback")
+        return True
     except Exception as e:
         logger.error(f"❌ Failed to generate judge quality report: {e}")
         return False

@@ -6,6 +6,7 @@ The API layer can then serve the cached file instantly.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 from typing import Dict, Any, List
@@ -211,6 +212,12 @@ def main(argv: List[str] | None = None) -> int:
     
     successful_series = 0
     failed_series = []
+    macro_fallback_stats = {
+        "fred_empty_fallback_attempted_total": 0,
+        "fred_empty_fallback_recovered_total": 0,
+        "fred_empty_fallback_failed_total": 0,
+        "fred_empty_fallback_by_series": {},
+    }
 
     for series_id in ids:
         try:
@@ -234,10 +241,24 @@ def main(argv: List[str] | None = None) -> int:
             # Gold fallback via yfinance if FRED returns empty
             if (df is None or df.empty) and series_id == "GOLDAMGBD228NLBM":
                 print("   ⚠️  GOLDAMGBD228NLBM: empty from FRED, trying yfinance GC=F fallback...")
+                macro_fallback_stats["fred_empty_fallback_attempted_total"] += 1
                 df = _gold_fallback_from_yf(MAX_POINTS)
                 if df is not None and not df.empty:
                     df.columns = [series_id]
                     print("   ✅ GOLD fallback GC=F (yfinance) recovered data")
+                    macro_fallback_stats["fred_empty_fallback_recovered_total"] += 1
+                    macro_fallback_stats["fred_empty_fallback_by_series"][series_id] = {
+                        "attempted": 1,
+                        "recovered": 1,
+                        "failed": 0,
+                    }
+                else:
+                    macro_fallback_stats["fred_empty_fallback_failed_total"] += 1
+                    macro_fallback_stats["fred_empty_fallback_by_series"][series_id] = {
+                        "attempted": 1,
+                        "recovered": 0,
+                        "failed": 1,
+                    }
             if df is None or df.empty:
                 print(f"   ⚠️  {series_id}: DataFrame vide ou None")
                 failed_series.append(series_id)
@@ -271,10 +292,28 @@ def main(argv: List[str] | None = None) -> int:
     if not result["series"]:
         print(f"⚠️  Aucun série macro n'a pu être récupérée. Séries échouées: {', '.join(failed_series)}")
         # Save empty structure to prevent repeated failures
+        result["provider_fallback_stats"] = {"macro": macro_fallback_stats}
         save_json("macro_series", result, source=["fred", "error_fallback"])
+        save_json(
+            "provider_fallback_macro",
+            {
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "macro": macro_fallback_stats,
+            },
+            source=["job:macro_series_snapshot", "provider_fallback_stats", "error_fallback"],
+        )
         return 1
 
+    result["provider_fallback_stats"] = {"macro": macro_fallback_stats}
     save_json("macro_series", result, source=["fred"])
+    save_json(
+        "provider_fallback_macro",
+        {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "macro": macro_fallback_stats,
+        },
+        source=["job:macro_series_snapshot", "provider_fallback_stats"],
+    )
     
     if failed_series:
         print(f"⚠️  {len(failed_series)} série(s) n'ont pas pu être récupérée(s): {', '.join(failed_series)}")

@@ -193,6 +193,19 @@ done
 
 move_old_ui_noise
 
+# Trim orchestrator tracking files that grow unbounded
+ORCH_DIR="${ROOT}/docs/operations/orchestrator"
+for f in \
+  "${ORCH_DIR}/planner-audit-events.jsonl" \
+  "${ORCH_DIR}/planner-guardian-events.jsonl" \
+  "${ORCH_DIR}/executor-monitoring-events.jsonl"
+do
+  [[ -f "$f" ]] && trim_file_to_lines "$f" 120
+done
+for f in "${ORCH_DIR}/planner-timeline.log"; do
+  [[ -f "$f" ]] && trim_file_to_lines "$f" 1000
+done
+
 if [[ -z "$(find "$ARCHIVE_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
   rmdir "$ARCHIVE_DIR" 2>/dev/null || true
   echo "cleanup_monitoring_noise: no archive content created"

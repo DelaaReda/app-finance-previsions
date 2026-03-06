@@ -11,17 +11,42 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+RUNTIME_HOST_GUARD="${SCRIPT_DIR}/../platform/automation/lib/runtime_host_guard.sh"
 if [[ ! -f "$WORKSPACE_HELPER" ]]; then
   echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
   exit 2
 fi
+if [[ ! -f "$RUNTIME_HOST_GUARD" ]]; then
+  echo "Missing runtime host guard: $RUNTIME_HOST_GUARD" >&2
+  exit 2
+fi
 # shellcheck source=/dev/null
 source "$WORKSPACE_HELPER"
+# shellcheck source=/dev/null
+source "$RUNTIME_HOST_GUARD"
+fc_runtime_assert_vm_or_exit "fc_tick"
 
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+RUNNER_MODULE_MAIN="${ROOT}/platform/automation/runner/main.sh"
+if [[ -f "$RUNNER_MODULE_MAIN" ]]; then
+  # shellcheck source=/dev/null
+  source "$RUNNER_MODULE_MAIN"
+  runner_modules_init || true
+fi
 ROLE="${1:-}"
 LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
 LOCK_DIR="/tmp/fc-agent-locks"
+if declare -F runner_config_default_file >/dev/null 2>&1; then
+  RUNNER_CONFIG_FILE="${RUNNER_CONFIG_FILE:-$(runner_config_default_file "$ROOT")}"
+else
+  RUNNER_CONFIG_FILE="${RUNNER_CONFIG_FILE:-$ROOT/platform/config/runner/runner.v1.yaml}"
+fi
+RUNNER_CONFIG_FALLBACK_ENV="${RUNNER_CONFIG_FALLBACK_ENV:-1}"
+if declare -F runner_config_default_loader >/dev/null 2>&1; then
+  RUNNER_CONFIG_LOADER="${RUNNER_CONFIG_LOADER:-$(runner_config_default_loader "$ROOT")}"
+else
+  RUNNER_CONFIG_LOADER="${RUNNER_CONFIG_LOADER:-$ROOT/platform/automation/runner_config.py}"
+fi
 # Source config early so qwen fallback path can be overridden in one place.
 source "$ROOT/platform/config/lm_used_model_config.sh" 2>/dev/null || true
 QWEN_BIN_CANDIDATE="${TMUX_ROLE_QWEN_BIN:-${LM_USED_QWEN_BIN:-${LM_FALLBACK_BIN:-/home/venom/.npm-global/bin/qwen}}}"
@@ -48,6 +73,14 @@ if [[ -z "$ROLE" ]]; then
 fi
 
 ROLE_INPUT="$ROLE"
+FC_ENABLE_PO_SCRUM_MASTER="${FC_ENABLE_PO_SCRUM_MASTER:-0}"
+FC_PO_SCRUM_MASTER_RUN_NOW="${FC_PO_SCRUM_MASTER_RUN_NOW:-0}"
+FC_PO_SCRUM_MASTER_CRON="${FC_PO_SCRUM_MASTER_CRON:-0}"
+FC_SCRUM_MASTER_MODE="${FC_SCRUM_MASTER_MODE:-operational}"
+FC_ADMIN_RUNTIME_STALE_AUTOHEAL="${FC_ADMIN_RUNTIME_STALE_AUTOHEAL:-1}"
+FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
+FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
+FC_MONITOR_READY_DEV_FROM_WORKBOARD="${FC_MONITOR_READY_DEV_FROM_WORKBOARD:-1}"
 LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-skip}"
 # === CONSOLIDATION 2026-03-02: 10 rôles → 3 ===
 # Tout ce qui était backend_engineer / frontend_engineer / data_analyst → dev
@@ -66,6 +99,10 @@ case "$ROLE" in
   analyst|architect|po|scrum_master|vision-architect-tasks-planner|vision_architect_tasks_planner)
     if [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
       ROLE="planner"
+    elif [[ "$ROLE" == "scrum_master" && "$FC_SCRUM_MASTER_MODE" == "operational" ]]; then
+      ROLE="scrum_master"
+    elif [[ "$ROLE" == "scrum_master" && "$FC_ENABLE_PO_SCRUM_MASTER" == "1" && ( "$FC_PO_SCRUM_MASTER_RUN_NOW" == "1" || "$FC_PO_SCRUM_MASTER_CRON" == "1" ) ]]; then
+      ROLE="scrum_master"
     elif [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
       echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'planner' (legacy alias mode=map)" >&2
       ROLE="planner"
@@ -88,9 +125,17 @@ esac
 ROLE_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.rate_limit_gate_cache"
 ROLE_STATE_CONTRACT_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.last_contract"
 
-# 3 rôles actifs seulement
+# 3 rôles actifs + advisory manuel optionnel
 case "$ROLE" in
   dev|planner|admin) ;;
+  scrum_master)
+    if [[ "$FC_SCRUM_MASTER_MODE" == "advisory" ]]; then
+      if [[ "$FC_ENABLE_PO_SCRUM_MASTER" != "1" || ( "$FC_PO_SCRUM_MASTER_RUN_NOW" != "1" && "$FC_PO_SCRUM_MASTER_CRON" != "1" ) ]]; then
+        echo "[fc_tick] Role '$ROLE_INPUT' advisory lane gated (set FC_ENABLE_PO_SCRUM_MASTER=1 with FC_PO_SCRUM_MASTER_RUN_NOW=1 or FC_PO_SCRUM_MASTER_CRON=1), skipping" >&2
+        exit 0
+      fi
+    fi
+    ;;
   *)
     echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) not in active set {dev,planner,admin}, skipping" >&2
     exit 0
@@ -107,6 +152,48 @@ LOCK_ACQUIRED_AT=0
 LOCK_DIR_FALLBACK=""
 
 ts() { date '+%Y-%m-%dT%H:%M:%S'; }
+
+load_runner_config_env() {
+  local cfg_role="$1"
+  if declare -F runner_load_config_env >/dev/null 2>&1; then
+    if ! runner_load_config_env "$cfg_role" "$RUNNER_CONFIG_FILE" "$RUNNER_CONFIG_LOADER" "$RUNNER_CONFIG_FALLBACK_ENV" "$LOG" "RUNNER_CONFIG"; then
+      exit 2
+    fi
+    return 0
+  fi
+  [[ -f "$RUNNER_CONFIG_FILE" ]] || return 0
+  [[ -f "$RUNNER_CONFIG_LOADER" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  local out_file err_file
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  if ! python3 "$RUNNER_CONFIG_LOADER" \
+      --config "$RUNNER_CONFIG_FILE" \
+      emit-env \
+      --role "$cfg_role" \
+      --fallback-env "$RUNNER_CONFIG_FALLBACK_ENV" >"$out_file" 2>"$err_file"; then
+    local err_preview
+    err_preview="$(tr '\n' ' ' <"$err_file" | sed 's/  */ /g' | cut -c1-220)"
+    echo "$(ts) [RUNNER_CONFIG] role=$cfg_role status=invalid file=$RUNNER_CONFIG_FILE detail=$err_preview" >> "$LOG"
+    rm -f "$out_file" "$err_file"
+    exit 2
+  fi
+  while IFS= read -r kv; do
+    [[ -n "$kv" ]] || continue
+    [[ "$kv" == \#* ]] && continue
+    # kv format is KEY='value' emitted by runner_config.py
+    eval "export $kv"
+  done <"$out_file"
+  if [[ -s "$err_file" ]]; then
+    local warn_preview
+    warn_preview="$(tr '\n' ' ' <"$err_file" | sed 's/  */ /g' | cut -c1-220)"
+    echo "$(ts) [RUNNER_CONFIG] role=$cfg_role status=fallback_env file=$RUNNER_CONFIG_FILE detail=$warn_preview" >> "$LOG"
+  else
+    echo "$(ts) [RUNNER_CONFIG] role=$cfg_role status=loaded file=$RUNNER_CONFIG_FILE fallback_env=$RUNNER_CONFIG_FALLBACK_ENV" >> "$LOG"
+  fi
+  rm -f "$out_file" "$err_file"
+}
 
 meta_field() {
   local key="$1"
@@ -168,6 +255,15 @@ printf 'pid=%s host=%s start_epoch=%s start_utc=%s role=%s layer=tick order=%s l
   "$$" "${HOSTNAME:-unknown}" "$LOCK_ACQUIRED_AT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ROLE" "$TRILOCK_ORDER" "$LOCK" > "$LOCK_META"
 echo "$(ts) [TRILOCK_ACQUIRE] layer=tick role=$ROLE mode=$LOCK_MODE lock_file=$LOCK order=$TRILOCK_ORDER" >> "$LOG"
 trap 'release_tick_lock $?' EXIT
+
+if declare -F runner_config_emit_env >/dev/null 2>&1; then
+  if ! runner_config_emit_env "$ROLE" "$RUNNER_CONFIG_FILE" "$RUNNER_CONFIG_LOADER" "$RUNNER_CONFIG_FALLBACK_ENV"; then
+    echo "$(ts) [RUNNER_CONFIG] role=$ROLE status=invalid file=$RUNNER_CONFIG_FILE" >> "$LOG"
+    exit 2
+  fi
+else
+  load_runner_config_env "$ROLE"
+fi
 
 normalize_seconds() {
   local raw="${1:-}"
@@ -323,6 +419,10 @@ set_rl_cache() {
 AGENT_MODE="codex"
 AGENT_BIN_EFFECTIVE="codex"
 CODEX_COOLDOWN_ACTIVE=0
+# Default conservative: keep qwen fallback opt-in until qwen tmux transport is hardened.
+if [[ "$ROLE" == "planner" || "$ROLE" == "dev" || "$ROLE" == "admin" ]]; then
+  FC_ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-0}"
+fi
 ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-0}"
 
 if ! [[ "$ENABLE_QWEN_FALLBACK" =~ ^[01]$ ]]; then
@@ -508,16 +608,24 @@ export TMUX_ROLE_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-80}"
 # Role-specific overrides to reduce planner/admin timeout churn on heavy context ticks.
 case "$ROLE" in
   planner)
-    export TMUX_ROLE_CODEX_MODEL="${FC_PLANNER_MODEL:-gpt-5.3-codex-spark}"
+    export TMUX_ROLE_CODEX_MODEL="${FC_PLANNER_MODEL:-$SANITIZED_ROLE_MODEL}"
     export PROMPT_TIMEOUT_SECONDS="${FC_PLANNER_PROMPT_TIMEOUT_SECONDS:-300}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_PLANNER_RETRY_TIMEOUT_SECONDS:-120}"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_PLANNER_STALL_ABORT_SECONDS:-90}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_PLANNER_TICK_TIMEOUT_SECONDS:-420}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     # Planner: keep resume enabled by default for faster/stabler ticks.
-    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-1}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-0}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PLANNER_RATE_LIMIT_PRECHECK:-0}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_PLANNER_THINKING:-high}"
+    export TMUX_ROLE_CODEX_THINKING="${FC_PLANNER_THINKING:-${RESOLVED_ROLE_THINKING}}"
     export TMUX_ROLE_MIN_REFLECTION_PASSES="${FC_PLANNER_MIN_REFLECTION_PASSES:-1}"
+    export FC_PLANNER_AUTONOMY_ENABLED="${FC_PLANNER_AUTONOMY_ENABLED:-1}"
+    export FC_PLANNER_WAIT_FORBIDDEN="${FC_PLANNER_WAIT_FORBIDDEN:-${FC_PLANNER_NEVER_WAIT:-1}}"
+    export FC_PLANNER_AUTO_CREATE_ON_EMPTY="${FC_PLANNER_AUTO_CREATE_ON_EMPTY:-${FC_PLANNER_IDLE_AUTOBATCH:-1}}"
+    export FC_PLANNER_CREATE_SOURCE="${FC_PLANNER_CREATE_SOURCE:-vision}"
+    export TMUX_ROLE_PLANNER_NEVER_WAIT="${FC_PLANNER_WAIT_FORBIDDEN:-1}"
+    export TMUX_ROLE_PLANNER_IDLE_AUTOBATCH="${FC_PLANNER_AUTO_CREATE_ON_EMPTY:-1}"
+    export TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S="${FC_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S:-0}"
+    export TMUX_ROLE_PLANNER_PREFLIGHT_SYNC="${FC_PLANNER_PREFLIGHT_SYNC:-1}"
     ;;
   dev)
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-0}"
@@ -526,21 +634,81 @@ case "$ROLE" in
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_DEV_RETRY_TIMEOUT_SECONDS:-120}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_DEV_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_DEV_STALL_ABORT_SECONDS:-80}"
+    export TMUX_ROLE_DEV_AUTONOMY_STALL_THRESHOLD_TICKS="${FC_DEV_AUTONOMY_STALL_THRESHOLD_TICKS:-2}"
+    export TMUX_ROLE_DEV_AUTONOMY_ENFORCE_COOLDOWN_SECONDS="${FC_DEV_AUTONOMY_ENFORCE_COOLDOWN_SECONDS:-1200}"
+    export TMUX_ROLE_DEV_AUTONOMY_MAX_ENFORCED_PER_HOUR="${FC_DEV_AUTONOMY_MAX_ENFORCED_PER_HOUR:-4}"
+    export TMUX_ROLE_DEV_AUTONOMY_MIN_DELIVERY_ACTIONS_24H="${FC_DEV_AUTONOMY_MIN_DELIVERY_ACTIONS_24H:-4}"
+    export TMUX_ROLE_DEV_AUTONOMY_STRICT_ENFORCE="${FC_DEV_AUTONOMY_STRICT_ENFORCE:-1}"
+    export FC_DEV_WAIT_READY_TASK_ONLY="${FC_DEV_WAIT_READY_TASK_ONLY:-1}"
+    export TMUX_ROLE_DEV_WAIT_ROLE_SCOPED="${FC_DEV_WAIT_ROLE_SCOPED:-1}"
+    export TMUX_ROLE_DEV_WAIT_READY_TASK_ONLY="${FC_DEV_WAIT_READY_TASK_ONLY:-1}"
     ;;
   admin)
-    export TMUX_ROLE_CODEX_MODEL="${FC_ADMIN_MODEL:-gpt-5.3-codex-spark}"
+    export TMUX_ROLE_CODEX_MODEL="${FC_ADMIN_MODEL:-$SANITIZED_ROLE_MODEL}"
     # Admin defaults slightly raised; final budget remains adaptive in cron_tmux_role_runner.sh
     export PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_PROMPT_TIMEOUT_SECONDS:-360}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_RETRY_TIMEOUT_SECONDS:-150}"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_ADMIN_STALL_ABORT_SECONDS:-85}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_ADMIN_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
-    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_ADMIN_CODEX_EXEC_RESUME:-1}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_ADMIN_CODEX_EXEC_RESUME:-0}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_ADMIN_RATE_LIMIT_PRECHECK:-0}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-medium}"
+    export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-${RESOLVED_ROLE_THINKING}}"
     export TMUX_ROLE_MEMORY_PROFILE="${FC_ADMIN_MEMORY_PROFILE:-analysis}"
     export TMUX_ROLE_MEMORY_DAILY_LINES="${FC_ADMIN_MEMORY_DAILY_LINES:-4}"
     export TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES="${FC_ADMIN_MEMORY_ROLE_HISTORY_LINES:-2}"
     export TMUX_ROLE_MEMORY_MAX_LINE_CHARS="${FC_ADMIN_MEMORY_MAX_LINE_CHARS:-120}"
+    export FC_ADMIN_DISPATCH_ENABLED="${FC_ADMIN_DISPATCH_ENABLED:-1}"
+    export FC_ADMIN_DISPATCH_COOLDOWN_SECONDS="${FC_ADMIN_DISPATCH_COOLDOWN_SECONDS:-180}"
+    export FC_ADMIN_DISPATCH_MAX_ACTIONS="${FC_ADMIN_DISPATCH_MAX_ACTIONS:-2}"
+    export FC_ADMIN_DISPATCH_SYNC_PRIORITY="${FC_ADMIN_DISPATCH_SYNC_PRIORITY:-1}"
+    export FC_ADMIN_DISPATCH_BYPASS_COOLDOWN_ON_HANDOFF="${FC_ADMIN_DISPATCH_BYPASS_COOLDOWN_ON_HANDOFF:-1}"
+    export FC_ADMIN_DISPATCH_FORCE_ROLE_TICK="${FC_ADMIN_DISPATCH_FORCE_ROLE_TICK:-0}"
+    export FC_ADMIN_DISPATCH_SOFT_FAIL="${FC_ADMIN_DISPATCH_SOFT_FAIL:-1}"
+    export FC_ADMIN_AUTONOMY_ENABLED="${FC_ADMIN_AUTONOMY_ENABLED:-1}"
+    export FC_ADMIN_RUNTIME_STALE_AUTOHEAL="${FC_ADMIN_RUNTIME_STALE_AUTOHEAL:-1}"
+    export FC_ADMIN_STALL_TICKS_THRESHOLD="${FC_ADMIN_STALL_TICKS_THRESHOLD:-2}"
+    export FC_ADMIN_AUTONOMY_SCOPE="${FC_ADMIN_AUTONOMY_SCOPE:-full_with_proofs}"
+    export FC_ADMIN_AUTONOMY_MAX_ACTIONS="${FC_ADMIN_AUTONOMY_MAX_ACTIONS:-2}"
+    export FC_ADMIN_AUTONOMY_ROLE_COOLDOWN_S="${FC_ADMIN_AUTONOMY_ROLE_COOLDOWN_S:-300}"
+    export FC_ADMIN_AUTONOMY_RETRY_BACKOFF_S="${FC_ADMIN_AUTONOMY_RETRY_BACKOFF_S:-120}"
+    export FC_ADMIN_AUTONOMY_FAILSAFE_MAX_RETRIES="${FC_ADMIN_AUTONOMY_FAILSAFE_MAX_RETRIES:-3}"
+    export FC_ADMIN_PROOF_GATE_STRICT="${FC_ADMIN_PROOF_GATE_STRICT:-1}"
+    export FC_ADMIN_AUTONOMY_SECURITY_WINDOW_MIN="${FC_ADMIN_AUTONOMY_SECURITY_WINDOW_MIN:-10}"
+    export FC_ADMIN_TSHAPE_ENABLED="${FC_ADMIN_TSHAPE_ENABLED:-1}"
+    export FC_ADMIN_TSHAPE_TRIGGER="${FC_ADMIN_TSHAPE_TRIGGER:-blocked}"
+    export FC_ADMIN_TSHAPE_BLOCKED_THRESHOLD="${FC_ADMIN_TSHAPE_BLOCKED_THRESHOLD:-1}"
+    export FC_ADMIN_TSHAPE_SCOPE="${FC_ADMIN_TSHAPE_SCOPE:-full_takeover}"
+    export FC_ADMIN_TSHAPE_EXIT_POLICY="${FC_ADMIN_TSHAPE_EXIT_POLICY:-resolved_only}"
+    export FC_ADMIN_TSHAPE_ALLOWED_TARGETS="${FC_ADMIN_TSHAPE_ALLOWED_TARGETS:-planner,dev}"
+    export FC_ADMIN_TSHAPE_SYNC_TIMEOUT_SECONDS="${FC_ADMIN_TSHAPE_SYNC_TIMEOUT_SECONDS:-20}"
+    export FC_ADMIN_TSHAPE_ENFORCE_SLA="${FC_ADMIN_TSHAPE_ENFORCE_SLA:-1}"
+    export FC_ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS="${FC_ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS:-15}"
+    export FC_ADMIN_TSHAPE_COOLDOWN_SECONDS="${FC_ADMIN_TSHAPE_COOLDOWN_SECONDS:-300}"
+    export TMUX_ROLE_ADMIN_TSHAPE_ENABLED="${FC_ADMIN_TSHAPE_ENABLED:-1}"
+    export TMUX_ROLE_ADMIN_TSHAPE_TRIGGER="${FC_ADMIN_TSHAPE_TRIGGER:-blocked}"
+    export TMUX_ROLE_ADMIN_TSHAPE_BLOCKED_THRESHOLD="${FC_ADMIN_TSHAPE_BLOCKED_THRESHOLD:-1}"
+    export TMUX_ROLE_ADMIN_TSHAPE_SCOPE="${FC_ADMIN_TSHAPE_SCOPE:-full_takeover}"
+    export TMUX_ROLE_ADMIN_TSHAPE_EXIT_POLICY="${FC_ADMIN_TSHAPE_EXIT_POLICY:-resolved_only}"
+    export TMUX_ROLE_ADMIN_TSHAPE_ALLOWED_TARGETS="${FC_ADMIN_TSHAPE_ALLOWED_TARGETS:-planner,dev}"
+    export TMUX_ROLE_ADMIN_TSHAPE_SYNC_TIMEOUT_SECONDS="${FC_ADMIN_TSHAPE_SYNC_TIMEOUT_SECONDS:-20}"
+    export TMUX_ROLE_ADMIN_TSHAPE_ENFORCE_SLA="${FC_ADMIN_TSHAPE_ENFORCE_SLA:-1}"
+    export TMUX_ROLE_ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS="${FC_ADMIN_TSHAPE_SLA_TIMEOUT_SECONDS:-15}"
+    export TMUX_ROLE_ADMIN_TSHAPE_COOLDOWN_SECONDS="${FC_ADMIN_TSHAPE_COOLDOWN_SECONDS:-300}"
+    ;;
+  scrum_master)
+    export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER=1
+    export TMUX_ROLE_CODEX_MODEL="${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-0}"
+    export TMUX_ROLE_CODEX_THINKING="${FC_PO_SCRUM_MASTER_THINKING:-medium}"
+    export PROMPT_TIMEOUT_SECONDS="${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}"
+    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}"
+    export PO_SCRUM_MASTER_ALLOW_BUS_POST="${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}"
+    export FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
+    export FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
+    export PO_SCRUM_MASTER_MAX_POSTS_PER_TICK="${PO_SCRUM_MASTER_MAX_POSTS_PER_TICK:-2}"
+    export PO_SCRUM_MASTER_POST_COOLDOWN_S="${PO_SCRUM_MASTER_POST_COOLDOWN_S:-600}"
+    export ROLE_ALLOW_FILE_EDITS="${ROLE_ALLOW_FILE_EDITS:-0}"
     ;;
 esac
 
@@ -552,7 +720,45 @@ export TMUX_ROLE_CODEX_THINKING="$FINAL_ROLE_THINKING"
 
 EFFECTIVE_ROLE_MODEL="${TMUX_ROLE_CODEX_MODEL:-$SANITIZED_ROLE_MODEL}"
 EFFECTIVE_ROLE_THINKING="${TMUX_ROLE_CODEX_THINKING:-default}"
-echo "$(ts) [MODEL_EFFECTIVE] role=$ROLE model=$EFFECTIVE_ROLE_MODEL thinking=$EFFECTIVE_ROLE_THINKING resume=${TMUX_ROLE_CODEX_EXEC_RESUME:-1} precheck=${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}" >> "$LOG"
+# Isolate rate-limit caches by effective model to avoid cross-model poisoning
+# (e.g. gpt-5.3-codex-spark quota should not block gpt-5.2 lane).
+MODEL_CACHE_KEY="$(printf '%s' "$EFFECTIVE_ROLE_MODEL" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g')"
+if [[ "$AGENT_MODE" == "codex" ]]; then
+  export TMUX_ROLE_RATE_LIMIT_CACHE_FILE="${CODEX_RL_CACHE_DIR}/codex.${MODEL_CACHE_KEY}.rate_limit_gate_cache"
+elif [[ "$AGENT_MODE" == "qwen" ]]; then
+  export TMUX_ROLE_RATE_LIMIT_CACHE_FILE="${CODEX_RL_CACHE_DIR}/qwen.rate_limit_gate_cache"
+fi
+echo "$(ts) [MODEL_EFFECTIVE] role=$ROLE model=$EFFECTIVE_ROLE_MODEL thinking=$EFFECTIVE_ROLE_THINKING resume=${TMUX_ROLE_CODEX_EXEC_RESUME:-1} precheck=${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1} rl_cache=$(basename "${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-none}")" >> "$LOG"
+
+if [[ "$ROLE" == "planner" && "${FC_PLANNER_AUTONOMY_ENABLED:-1}" == "1" ]]; then
+  PLANNER_AUTONOMY_OUT="$(bash platform/automation/planner_autonomy_tick.sh 2>&1 || true)"
+  if [[ -n "$PLANNER_AUTONOMY_OUT" ]]; then
+    printf '%s\n' "$PLANNER_AUTONOMY_OUT" >> "$LOG"
+    PLANNER_AUTONOMY_RESULT_LINE="$(printf '%s\n' "$PLANNER_AUTONOMY_OUT" | rg -n 'PLANNER_AUTONOMY' | tail -n 1 | cut -c1-200)"
+    if [[ -n "$PLANNER_AUTONOMY_RESULT_LINE" ]]; then
+      echo "$(ts) [PLANNER_AUTONOMY] role=planner status=ok result=${PLANNER_AUTONOMY_RESULT_LINE}" >> "$LOG"
+    else
+      echo "$(ts) [PLANNER_AUTONOMY] role=planner status=soft_fail reason=no_result_line" >> "$LOG"
+    fi
+  else
+    echo "$(ts) [PLANNER_AUTONOMY] role=planner status=soft_fail reason=autonomy_no_output" >> "$LOG"
+  fi
+fi
+
+if [[ "$ROLE" == "admin" && "${FC_ADMIN_DISPATCH_ENABLED:-1}" == "1" ]]; then
+  DISPATCH_OUT="$(bash platform/automation/admin_dispatcher_tick.sh 2>&1 || true)"
+  if [[ -n "$DISPATCH_OUT" ]]; then
+    printf '%s\n' "$DISPATCH_OUT" >> "$LOG"
+    DISPATCH_RESULT_LINE="$(printf '%s\n' "$DISPATCH_OUT" | rg -n 'dispatch_result' | tail -n 1 | cut -c1-180)"
+    if [[ -n "$DISPATCH_RESULT_LINE" ]]; then
+      echo "$(ts) [DISPATCHER] role=admin status=ok result=${DISPATCH_RESULT_LINE}" >> "$LOG"
+    else
+      echo "$(ts) [DISPATCHER] role=admin status=ok result=none" >> "$LOG"
+    fi
+  else
+    echo "$(ts) [DISPATCHER] role=admin status=soft_fail reason=dispatcher_no_output" >> "$LOG"
+  fi
+fi
 
 echo "$(ts) [TICK] role=$ROLE agent=$AGENT_MODE session=$SESSION timeout=${TICK_TIMEOUT_SECONDS}s" >> "$LOG"
 

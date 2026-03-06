@@ -171,7 +171,42 @@ run_once_cmd() {
   local run_ok=0
   local run_err=""
   while [[ "$attempt" -le "$FORCE_RUN_RETRIES" ]]; do
-    if timeout $((RUN_TIMEOUT_MS / 1000))s openclaw cron run "$JOB_ID" --expect-final --timeout "$RUN_TIMEOUT_MS" >/tmp/architect_cron_watch_run.out 2>/tmp/architect_cron_watch_run.err; then
+    local run_rc=0
+    if command -v timeout >/dev/null 2>&1; then
+      set +e
+      timeout $((RUN_TIMEOUT_MS / 1000))s openclaw cron run "$JOB_ID" --expect-final --timeout "$RUN_TIMEOUT_MS" >/tmp/architect_cron_watch_run.out 2>/tmp/architect_cron_watch_run.err
+      run_rc=$?
+      set -e
+    elif command -v gtimeout >/dev/null 2>&1; then
+      set +e
+      gtimeout $((RUN_TIMEOUT_MS / 1000))s openclaw cron run "$JOB_ID" --expect-final --timeout "$RUN_TIMEOUT_MS" >/tmp/architect_cron_watch_run.out 2>/tmp/architect_cron_watch_run.err
+      run_rc=$?
+      set -e
+    elif command -v python3 >/dev/null 2>&1; then
+      set +e
+      python3 - "$RUN_TIMEOUT_MS" "$JOB_ID" >/tmp/architect_cron_watch_run.out 2>/tmp/architect_cron_watch_run.err <<'PY'
+import subprocess
+import sys
+
+timeout_ms = int(sys.argv[1])
+job_id = sys.argv[2]
+cmd = ["openclaw", "cron", "run", job_id, "--expect-final", "--timeout", str(timeout_ms)]
+try:
+    res = subprocess.run(cmd, timeout=max(1, timeout_ms // 1000))
+    sys.exit(res.returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
+      run_rc=$?
+      set -e
+    else
+      set +e
+      openclaw cron run "$JOB_ID" --expect-final --timeout "$RUN_TIMEOUT_MS" >/tmp/architect_cron_watch_run.out 2>/tmp/architect_cron_watch_run.err
+      run_rc=$?
+      set -e
+    fi
+
+    if [[ "$run_rc" -eq 0 ]]; then
       cat /tmp/architect_cron_watch_run.out
       run_ok=1
       break

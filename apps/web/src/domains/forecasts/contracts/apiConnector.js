@@ -83,6 +83,11 @@ async function getTopMovers() {
   return payload;
 }
 
+async function getAlerts() {
+  const payload = getResponseData(await fetchWithCache('/alerts', 'alerts'));
+  return extractArray(payload, ['alerts', 'data', 'rows']);
+}
+
 async function getDashboardPerformance() {
   const payload = getResponseData(await fetchWithCache('/dashboard/performance', 'dashboard_performance'));
   return payload || {};
@@ -319,6 +324,34 @@ function transformTopStocks(payload) {
     .filter((stock) => !!stock.symbol);
 }
 
+function transformAlert(payload) {
+  const raw = isObject(payload) ? payload : {};
+  const confidenceRaw = normalizeNumber(raw.confidence ?? raw.score ?? raw.probability, 0);
+  const confidence = confidenceRaw > 1 ? confidenceRaw : confidenceRaw * 100;
+  const timestamp = raw.timestamp || raw.generated_at || raw.generatedAt || raw.generated_at_iso || new Date().toISOString();
+  const type = String(raw.type || raw.alertType || 'market-alert').trim().toLowerCase();
+  const ticker = String(raw.ticker || raw.symbol || 'MARKET').trim().toUpperCase() || 'MARKET';
+  const description = String(
+    raw.description ||
+    raw.message ||
+    raw.detail ||
+    `${ticker} ${type.replace(/-/g, ' ')} detected`
+  ).trim();
+
+  return {
+    id: raw.id || `alert-${type}-${ticker}-${Date.now()}`,
+    type,
+    ticker,
+    severity: String(raw.severity || 'info').toLowerCase(),
+    confidence: Math.max(0, Math.min(100, Math.round(confidence))),
+    timestamp,
+    category: String(raw.category || '').toLowerCase(),
+    description,
+    detail: description,
+    signals: isObject(raw.signals) ? raw.signals : {}
+  };
+}
+
 function transformOpportunities(payload) {
   const opportunities = extractArray(payload, ['opportunities']) || [];
   return opportunities.map((row) => {
@@ -408,6 +441,13 @@ async function populateWindowGlobals() {
     if (rawNews.length > 0) {
       window.newsItems = rawNews.map(transformNewsItem);
       console.log("[API] ✅ " + window.newsItems.length + " news chargées depuis l'API");
+    }
+
+    // Alerts
+    const rawAlerts = await getAlerts();
+    window.alertTimeline = toArray(rawAlerts, []).map(transformAlert);
+    if (window.alertTimeline.length > 0) {
+      console.log('[API] ✅ ' + window.alertTimeline.length + ' alerts chargées depuis l\'API');
     }
 
     // Forecasts
@@ -518,6 +558,7 @@ async function populateWindowGlobals() {
         data: {
           newsItems: window.newsItems || [],
           forecasts: window.liveForecasts || [],
+          alerts: window.alertTimeline || [],
           topMovers: window.topMovers || [],
           stocks: window.liveStocks || {},
           topStocks: window.topStocks || [],
@@ -552,6 +593,7 @@ function startAutoRefresh(intervalMs) {
     delete cache.data.forecasts;
     delete cache.data.stocks;
     delete cache.data.dashboard_performance;
+    delete cache.data.alerts;
     delete cache.data.brief_daily;
     delete cache.data.dashboard_allocation;
     delete cache.data.movers;
@@ -566,6 +608,7 @@ window.FinanceAPI = {
   getForecasts,
   getStockPrices,
   getTopMovers,
+  getAlerts,
   getHealth,
   getJudgeAnalysis,
   askCopilot,
@@ -578,6 +621,7 @@ window.getLiveDashboardData = () => ({
   data: {
     newsItems: window.newsItems || [],
     forecasts: window.liveForecasts || [],
+    alerts: window.alertTimeline || [],
     topMovers: window.topMovers || [],
     stocks: window.liveStocks || {},
     topStocks: window.topStocks || [],

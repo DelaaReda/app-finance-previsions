@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+try:
+    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+except Exception:  # pragma: no cover
+    ensure_decision_contract = None  # type: ignore
+    utc_now_iso = lambda: datetime.utcnow().isoformat() + "Z"  # type: ignore
+
 def calculate_similarity(query: str, target: str) -> float:
     """
     Calculate similarity between query and target string using a simple algorithm
@@ -57,6 +63,7 @@ async def universal_search_endpoint(
     Universal search endpoint for stocks, news, briefs, and forecasts
     """
     start_time = time.time()
+    now_iso = utc_now_iso()
     
     # Normalize search types
     search_types = ['stocks', 'news', 'briefs', 'forecasts']
@@ -258,6 +265,9 @@ async def universal_search_endpoint(
             'results': results,
             'total': total_results,
             'execution_time': exec_time_ms,
+            'generated_at': now_iso,
+            'freshness': now_iso,
+            'source': ['universal_search'],
             'search_metadata': {
                 'types_searched': search_types,
                 'tickers_filtered': ticker_list if ticker_list else None,
@@ -268,6 +278,17 @@ async def universal_search_endpoint(
                 'sort_by': sort_by
             }
         }
+
+        if callable(ensure_decision_contract):
+            ensure_decision_contract(
+                response_data,
+                default_source="universal_search",
+                verdict="hold",
+                confidence=0.0,
+                why=["Universal search payload (no trading action)."],
+                risk_level="low",
+                freshness=now_iso,
+            )
         
         return ok(response_data)
         

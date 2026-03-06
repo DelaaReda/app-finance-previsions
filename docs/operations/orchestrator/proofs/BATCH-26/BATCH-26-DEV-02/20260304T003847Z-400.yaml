@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-26-BATCH-26-DEV-02-20260304T003847Z-400"
+stream_id: "BATCH-26"
+task_id: "BATCH-26-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-04T00:38:47Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope: unify runtime data path and remove forecast dead cache logic"
+    - "dependency impact: keep storage compatibility for legacy callers and monitor runtime"
+    - "risk: avoid data drift while preserving existing payload contracts"
+    - "verification: run compile checks plus grep/find and runtime smoke checks"
+    - "rollback: isolate edits to two files for reversible patch"
+  architecture_checks:
+    - "apps/api/runtime/data_is_canonical_storage_root"
+    - "apps/api/src/runtime_duplicate_tree_must_remain_absent"
+    - "no_service_should_depend_on_platform/legacy/data_as_primary_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 -m py_compile path_resolver.py forecast_service.py; python proofs for resolver/io path equality; find/grep duplicate runtime and fake rag; vm monitor status smoke"
+      rc: "0"
+      started_at_utc: "2026-03-04T00:38:47Z"
+      ended_at_utc: "2026-03-04T00:38:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "py_compile PASS; resolver/io canonical path PASS; duplicate runtime NO; fake rag refs NONE; monitor status PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/domains/forecasts/application/forecast_service.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-7089c4db3c2b"
+  review_ref: "none"
+  note: "F-006/F-008 traites: resolver et forecast service alignes sur runtime data canonique + suppression logique parquet morte + preuves grep/find/smoke"

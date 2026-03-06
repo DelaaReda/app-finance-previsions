@@ -93,6 +93,8 @@ def parse_runtime_flag(text: str, key: str, default: int = 0) -> int:
 def parse_runtime_context(text: str) -> Dict[str, int]:
     return {
         "queue_has_ready": parse_runtime_flag(text, "queue_has_ready", 0),
+        "workboard_role_has_work": parse_runtime_flag(text, "workboard_role_has_work", 0),
+        "workboard_role_has_ready": parse_runtime_flag(text, "workboard_role_has_ready", 0),
         "workboard_role_has_in_progress": parse_runtime_flag(
             text, "workboard_role_has_in_progress", 0
         ),
@@ -126,10 +128,23 @@ def compute_score(
     has_arch_ref = bool(evidence.get("architecture_plan_ref"))
     has_vision_alignment = bool(evidence.get("vision_alignment"))
     has_arch_audit = bool(evidence.get("architecture_audit"))
+    planner_runtime_exception = truthy(evidence.get("planner_runtime_exception", "0"))
+    planner_autobatch_attempted = truthy(evidence.get("planner_autobatch_attempted", "0"))
     batch_created = truthy(evidence.get("batch_created", ""))
+    batch_dependency_policy = str(evidence.get("batch_dependency_policy", "")).strip().lower()
+    inter_batch_dep_raw = str(evidence.get("inter_batch_dep", "")).strip().lower()
+    batch_depends_on = str(evidence.get("batch_depends_on", "")).strip().lower()
+    depends_on_batch = str(evidence.get("depends_on_batch", "")).strip().lower()
     arch_ref_value = str(evidence.get("architecture_plan_ref", "")).lower()
     vision_alignment_value = str(evidence.get("vision_alignment", "")).lower()
     arch_audit_value = str(evidence.get("architecture_audit", "")).lower()
+    inter_batch_dependency_detected = False
+    if inter_batch_dep_raw in {"1", "true", "yes", "on"}:
+        inter_batch_dependency_detected = True
+    for token in (batch_depends_on, depends_on_batch):
+        if token and token not in {"none", "n/a", "null", "-"}:
+            inter_batch_dependency_detected = True
+            break
 
     if not task_update:
         score -= 25
@@ -146,6 +161,20 @@ def compute_score(
             score -= 35
             issues.append("ready_but_none_task_update")
 
+    if task_update in {"none_no_ready", "none_no_signal"} and not planner_runtime_exception:
+        score -= 40
+        issues.append("planner_passive_forbidden_violation")
+
+    if (
+        runtime.get("queue_has_ready", 0) == 0
+        and runtime.get("workboard_role_has_work", 0) == 0
+        and runtime.get("workboard_role_has_in_progress", 0) == 0
+        and task_update in {"none_no_ready", "none_no_signal"}
+        and not planner_autobatch_attempted
+    ):
+        score -= 20
+        issues.append("planner_autobatch_missing_when_idle")
+
     if status.upper() == "BLOCKED" and blocker.strip().upper() in {"", "NONE"}:
         score -= 20
         issues.append("blocked_without_blocker_id")
@@ -157,6 +186,14 @@ def compute_score(
     if runtime.get("planner_batch_runway_short", 0) == 1 and not batch_created:
         score -= 15
         issues.append("runway_short_without_batch_creation")
+
+    if inter_batch_dependency_detected:
+        score -= 25
+        issues.append("inter_batch_dependency_detected")
+
+    if not batch_dependency_policy or batch_dependency_policy != "single_batch":
+        score -= 15
+        issues.append("dependency_policy_not_enforced")
 
     # If planner did active work, demand stronger architecture/vision traceability.
     if task_update not in {"none_no_ready", "none_no_signal", "analysis_only", ""}:
@@ -254,6 +291,10 @@ def update_streaks(
 
 def recommendations(issues: List[str]) -> List[str]:
     out: List[str] = []
+    if "planner_passive_forbidden_violation" in issues:
+        out.append("Planner non-passive policy violee: claim une tache planner READY ou creer un autobatch immediatement.")
+    if "planner_autobatch_missing_when_idle" in issues:
+        out.append("Lane planner idle sans READY: executer planner-autobatch puis claim la tache ANALYSIS.")
     if "ready_but_no_delta" in issues or "ready_but_none_task_update" in issues:
         out.append("Claim une tache READY et fournir un dispatch concret vers role delivery.")
     if "missing_architecture_plan_ref" in issues or "missing_architecture_audit" in issues:
@@ -270,6 +311,8 @@ def recommendations(issues: List[str]) -> List[str]:
         out.append("Creer un batch top-level BATCH-XX pour maintenir la runway planner.")
     if "missing_stream_task_on_delivery_update" in issues:
         out.append("Completer stream_id et task_id pour tout task_update claim|complete|handoff.")
+    if "inter_batch_dependency_detected" in issues or "dependency_policy_not_enforced" in issues:
+        out.append("Regrouper dependances dans le meme batch (taches intra-stream), puis relancer sanitize-dependencies + sync-priority.")
     if not out:
         out.append("Maintenir cadence actuelle et poursuivre fermeture IN_PROGRESS avant nouveaux claims.")
     return out[:3]
@@ -284,8 +327,12 @@ def maybe_emit_directive(
     bus_file: Path,
     state_dir: Path,
 ) -> None:
+    immediate_issues = {"planner_passive_forbidden_violation", "planner_autobatch_missing_when_idle"}
+    immediate_escalation = any(issue in immediate_issues for issue in issues)
     handoff_loop = streaks.get("handoff_same_task_streak", 0) >= 3
     need_directive = (
+        immediate_escalation
+        or
         streaks.get("ready_idle_streak", 0) >= 3
         or streaks.get("low_score_streak", 0) >= 3
         or streaks.get("runway_no_batch_streak", 0) >= 3

@@ -1,0 +1,7 @@
+{
+  "ts_utc": "20260306T113622Z",
+  "result": "OK",
+  "endpoint_failures": 0,
+  "doctor_status": "ok",
+  "proof_log": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260306T113622Z.log"
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://analyse-financiere.local/schemas/runner_config.v1.json",
+  "title": "Runner Config v1",
+  "type": "object",
+  "required": [
+    "version",
+    "defaults",
+    "roles",
+    "features",
+    "paths"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "defaults": {
+      "type": "object"
+    },
+    "roles": {
+      "type": "object",
+      "required": [
+        "planner",
+        "dev",
+        "admin",
+        "scrum_master"
+      ]
+    },
+    "features": {
+      "type": "object"
+    },
+    "paths": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

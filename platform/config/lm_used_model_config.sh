@@ -6,14 +6,14 @@
 # Les scripts ne lisent QUE ce fichier — aucun modèle hardcodé ailleurs.
 #
 # TIERS:
-#   ORCHESTRATION  planner, admin          gpt-5.2 + xhigh   (fiabilité dispatch)
-#   BUILD          dev                     gpt-5.3-codex-spark + xhigh  (~40% moins cher)
+#   ORCHESTRATION  planner, admin          gpt-5.2 + high   (fiabilité dispatch)
+#   BUILD          dev                     gpt-5.3-codex-spark + high  (~40% moins cher)
 #   ANALYSIS       data_analyst, integrator gpt-5.3-codex-spark + medium (read-only)
 #   VALIDATION     tester, qa              qwen (agent primaire, zéro quota codex)
-#   DEEP_DEBUG     override ponctuel       gpt-5.3-codex + xhigh
+#   DEEP_DEBUG     override ponctuel       gpt-5.3-codex + high
 #
 # MODÈLES valides : gpt-5.2 | gpt-5.3-codex-spark | gpt-5.3-codex | qwen
-# THINKING valides: xhigh | high | medium | low | "" (= défaut config codex)
+# THINKING valides: minimal | low | medium | high | "" (= défaut config codex)
 # FALLBACK chain  : codex rate-limited → qwen → skip
 # =============================================================================
 
@@ -25,15 +25,15 @@ set -euo pipefail
 
 # ORCHESTRATION — dispatch, vision, sécurité — fiabilité > coût
 LM_TIER_ORCHESTRATION_MODEL="${LM_TIER_ORCHESTRATION_MODEL:-gpt-5.2}"
-LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-xhigh}"
+LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-high}"
 
 # BUILD — génération code, patches, livraison — spark ~40% moins cher
 LM_TIER_BUILD_MODEL="${LM_TIER_BUILD_MODEL:-gpt-5.3-codex-spark}"
-LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-xhigh}"
+LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-high}"
 
 # ANALYSIS — lecture seule, métriques — medium suffit
 LM_TIER_ANALYSIS_MODEL="${LM_TIER_ANALYSIS_MODEL:-gpt-5.3-codex-spark}"
-LM_TIER_ANALYSIS_THINKING="${LM_TIER_ANALYSIS_THINKING:-xhigh}"
+LM_TIER_ANALYSIS_THINKING="${LM_TIER_ANALYSIS_THINKING:-high}"
 
 # VALIDATION — tests, docs, QA — qwen natif, zéro quota codex
 LM_TIER_VALIDATION_MODEL="${LM_TIER_VALIDATION_MODEL:-qwen}"
@@ -42,7 +42,7 @@ LM_TIER_VALIDATION_THINKING="${LM_TIER_VALIDATION_THINKING:-}"
 # DEEP_DEBUG — debug profond incidents (override ponctuel)
 # Usage: export LM_ROLE_DEV_MODEL="$LM_TIER_DEEP_DEBUG_MODEL"
 LM_TIER_DEEP_DEBUG_MODEL="${LM_TIER_DEEP_DEBUG_MODEL:-gpt-5.3-codex}"
-LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-xhigh}"
+LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-high}"
 
 # =============================================================================
 # SECTION 2 — PER-ROLE  (3 rôles lean actifs + legacy aliasés)
@@ -53,7 +53,7 @@ LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-xhigh}"
 LM_ROLE_PLANNER_MODEL="${LM_ROLE_PLANNER_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
 LM_ROLE_PLANNER_THINKING="${LM_ROLE_PLANNER_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
 
-# dev: code + tests + QA consolidé → spark xhigh
+# dev: code + tests + QA consolidé → spark high
 LM_ROLE_DEV_MODEL="${LM_ROLE_DEV_MODEL:-${LM_TIER_BUILD_MODEL}}"
 LM_ROLE_DEV_THINKING="${LM_ROLE_DEV_THINKING:-${LM_TIER_BUILD_THINKING}}"
 

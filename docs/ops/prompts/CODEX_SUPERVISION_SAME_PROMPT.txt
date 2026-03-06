@@ -1,4 +1,4 @@
-Projet cible: /Users/venom/Documents/analyse-financiere
+Projet cible: /home/venom/analyse-financiere
 Mode: SAME CHAT (continuité)
 
 Contexte runtime:
@@ -42,6 +42,25 @@ Actions à faire:
 - Forcer sorties concrètes et actionnables
 - run_note obligatoire en mini paragraphe (>= 5 mots)
 - Forcer boucle par tick: root_cause concret -> fix_applied concret -> verify concret
+- Forcer une matrice d'hypothèses avant patch sur incident complexe:
+  - au moins 3 causes candidates
+  - 1 test d'invalidation par cause
+  - patch autorisé seulement après preuve causale
+- Forcer tri sévérité et ordre de traitement:
+  - P0 (blocage runtime/livraison) -> P1 -> P2
+- Méthode deep obligatoire sur incident complexe:
+  - isoler cause racine vs bruit (rc/stack/proc exact)
+  - prouver le lien causal (PID/PPID/locks/sessions)
+  - appliquer fix chirurgical (scope minimal)
+  - valider avec métriques avant/après
+  - vérifier absence de régression runtime (cron/session/health)
+- Triangulation minimale obligatoire:
+  - queue/workboard + role-runner/events + monitor/health
+  - ne jamais conclure sur une seule source
+- Format de clôture obligatoire sur bug complexe:
+  - `N problèmes -> N fixes`
+  - pour chaque fix: preuve commande + résultat
+  - ligne finale: `health=<...> blocked_roles=<...> ready_tasks=<...>`
 - Spécialisation dev stricte:
   - DEV-01 = API/back service/contracts
   - DEV-02 = UI/composants/intégration front

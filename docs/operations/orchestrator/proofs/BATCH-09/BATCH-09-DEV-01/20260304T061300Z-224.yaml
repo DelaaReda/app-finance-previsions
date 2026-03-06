@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-09-BATCH-09-DEV-01-20260304T061300Z-224"
+stream_id: "BATCH-09"
+task_id: "BATCH-09-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-04T06:13:00Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope: contract hardening on issue records"
+    - "dependency impact: monitor api parser compatibility"
+    - "risk: parser incompatibility fallback path"
+    - "verification: compile + issue e2e test"
+    - "rollback: revert fields if regression observed"
+  architecture_checks:
+    - "platform/automation/no_cross_layer_imports"
+    - "api_layer_contract_compatibility"
+    - "no_new_imports_from_apps_api"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 -m py_compile scripts/iteration_issue_report.py && bash scripts/tests/test_issue_publication_end_to_end.sh"
+      rc: "0"
+      started_at_utc: "2026-03-04T06:13:00Z"
+      ended_at_utc: "2026-03-04T06:13:00Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "py_compile_issue_report:PASS;test_issue_publication_end_to_end:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "scripts/iteration_issue_report.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "BATCH-09-DEV-01-P1772604362-26713"
+  review_ref: "none"
+  note: "Standardize issue payload fields with backward-compatible contract expansion and richer severity metadata."

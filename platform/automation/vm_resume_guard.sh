@@ -22,6 +22,7 @@ KICK_ENABLED="${VM_RESUME_GUARD_KICK_ENABLED:-1}"
 KICK_COOLDOWN_SECONDS="${VM_RESUME_GUARD_KICK_COOLDOWN_SECONDS:-600}"  # 10 minutes
 KICK_LAST_FILE="$STATE_DIR/last_kick_epoch.txt"
 ADMIN_CHAT_FILE="${VM_RESUME_GUARD_ADMIN_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
+IMMUTABLE_LOCK_ENABLED="${VM_RESUME_GUARD_IMMUTABLE_LOCK_ENABLED:-0}"
 
 now_epoch="$(date -u +%s)"
 last_epoch="0"
@@ -88,15 +89,17 @@ done
 triage_top="$(bash scripts/triage_now.sh 2>/dev/null | sed -n 's/^TOP //p' | head -n 1 | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-240 || true)"
 [[ -n "$triage_top" ]] || triage_top="TOP issue=unknown"
 
-# 4b) Ensure OpenClaw config is immutable-locked (protect director model defaults)
+# 4b) Optional immutable lock for OpenClaw config (disabled by default to avoid blocking runtime updates)
 config_file="$HOME/.openclaw/openclaw.json"
 config_lock="unknown"
 if [[ -f "$config_file" ]] && command -v lsattr >/dev/null 2>&1; then
   if lsattr "$config_file" | rg -q '^-+i'; then
     config_lock="locked"
-  else
+  elif [[ "$IMMUTABLE_LOCK_ENABLED" == "1" ]]; then
     sudo chattr +i "$config_file" >/dev/null 2>&1 || true
     config_lock="locked_after_resume"
+  else
+    config_lock="unlocked_by_policy"
   fi
 fi
 
@@ -124,7 +127,7 @@ maybe_kick() {
     "admin-agents-supervisor-15m"
   )
   local cron_json
-  cron_json="$(openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  cron_json="$(openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}')"
   local ok=0
   for name in "${names[@]}"; do
     jid="$(printf '%s' "$cron_json" | jq -r --arg n "$name" '.jobs[]? | select(.name==$n) | (.id // empty)' | head -n 1)"

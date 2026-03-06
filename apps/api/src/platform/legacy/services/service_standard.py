@@ -114,10 +114,136 @@ def never_empty_payload(
     return payload
 
 
+_VALID_VERDICTS = {"buy", "sell", "hold"}
+_VALID_RISK_LEVELS = {"low", "medium", "high", "critical"}
+
+
+def coerce_confidence(value: Any, *, default: float = 0.5) -> float:
+    """Normalize confidence to a float in [0, 1]. Accepts percent values (0-100)."""
+    try:
+        if value is None:
+            return float(default)
+        if isinstance(value, bool):
+            return float(default)
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+    if confidence > 1.0:
+        confidence = confidence / 100.0 if confidence <= 100.0 else 1.0
+    if confidence < 0.0:
+        confidence = 0.0
+    if confidence > 1.0:
+        confidence = 1.0
+    return float(confidence)
+
+
+def coerce_verdict(value: Any, *, default: str = "hold") -> str:
+    """Normalize verdict/action into buy|sell|hold (accepts up/down/flat, long/short)."""
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return default
+    if raw in _VALID_VERDICTS:
+        return raw
+    if raw in {"up", "bullish", "long"}:
+        return "buy"
+    if raw in {"down", "bearish", "short"}:
+        return "sell"
+    if raw in {"flat", "neutral", "wait", "none"}:
+        return "hold"
+    return default
+
+
+def normalize_risk_level(value: Any, *, default: str = "medium") -> str:
+    raw = str(value or "").strip().lower()
+    if raw in _VALID_RISK_LEVELS:
+        return raw
+    return default if default in _VALID_RISK_LEVELS else "medium"
+
+
+def ensure_decision_contract(
+    payload: Dict[str, Any],
+    *,
+    default_source: str,
+    verdict: Any = None,
+    confidence: Any = None,
+    why: Any = None,
+    risk_level: Any = None,
+    risk_caveat: Any = None,
+    freshness: Any = None,
+) -> Dict[str, Any]:
+    """Ensure a minimal decision contract for dynamic widgets/facettes.
+
+    Adds/normalizes: verdict, confidence, why, risk (level/caveat), risk_level,
+    risk_flag, freshness.
+    """
+    if not isinstance(payload, dict):
+        return payload
+
+    # freshness is duplicated in many payloads; keep whatever exists.
+    resolved_freshness = (
+        str(freshness or "").strip()
+        or str(payload.get("freshness") or "").strip()
+        or str(payload.get("generated_at") or "").strip()
+    )
+    if resolved_freshness:
+        payload.setdefault("freshness", resolved_freshness)
+
+    resolved_verdict = coerce_verdict(
+        verdict if verdict is not None else payload.get("verdict") or payload.get("action"),
+        default="hold",
+    )
+    payload.setdefault("verdict", resolved_verdict)
+
+    resolved_confidence = coerce_confidence(
+        confidence if confidence is not None else payload.get("confidence"),
+        default=0.5,
+    )
+    if "confidence" not in payload:
+        payload["confidence"] = resolved_confidence
+
+    resolved_risk_level = normalize_risk_level(
+        risk_level
+        if risk_level is not None
+        else payload.get("risk_level")
+        or (payload.get("risk") or {}).get("level")
+        if isinstance(payload.get("risk"), dict)
+        else payload.get("risk"),
+        default="medium",
+    )
+    payload.setdefault("risk_level", resolved_risk_level)
+
+    risk_flag_val = payload.get("risk_flag")
+    if risk_flag_val is None:
+        payload["risk_flag"] = resolved_risk_level in {"high", "critical"}
+
+    risk_obj = payload.get("risk")
+    if not isinstance(risk_obj, dict):
+        risk_obj = {"level": resolved_risk_level, "caveat": ""}
+    risk_obj.setdefault("level", resolved_risk_level)
+    if risk_caveat is not None and str(risk_caveat).strip():
+        risk_obj["caveat"] = str(risk_caveat).strip()
+    payload["risk"] = risk_obj
+
+    if "why" not in payload and why is not None:
+        if isinstance(why, list):
+            payload["why"] = [str(item).strip() for item in why if str(item).strip()]
+        else:
+            text = str(why).strip()
+            payload["why"] = text if text else []
+
+    append_source_tag(payload, "decision_contract_v1", default_source=default_source)
+    return payload
+
+
 __all__ = [
     "append_source_tag",
+    "coerce_confidence",
+    "coerce_verdict",
     "ensure_source_list",
+    "ensure_decision_contract",
     "never_empty_payload",
+    "normalize_risk_level",
     "safe_float",
     "safe_int",
     "service_response",

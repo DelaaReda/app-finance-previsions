@@ -20,6 +20,18 @@ BACKUP_DIR="/home/venom/.openclaw/cron/backups"
 MODEL="${CRON_MODEL:-${LM_USED_DIRECT_CRON_MODEL:-${MODEL_CONFIG_DIRECT_CRON_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${LM_USED_ROLE_MODEL}}}}}"
 THINKING="${CRON_THINKING:-${LM_USED_DIRECT_CRON_THINKING:-${MODEL_CONFIG_DIRECT_CRON_THINKING:-${MODEL_CONFIG_ROLE_THINKING:-${LM_USED_ROLE_THINKING}}}}}"
 
+normalize_reasoning_level() {
+  local raw="${1:-high}"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    minimal|low|medium|high) printf '%s\n' "$normalized" ;;
+    xhigh|extra|extra_high|veryhigh|max|maximum|"") printf 'high\n' ;;
+    *) printf 'high\n' ;;
+  esac
+}
+THINKING="$(normalize_reasoning_level "$THINKING")"
+
 mkdir -p "${BACKUP_DIR}"
 cp /home/venom/.openclaw/cron/jobs.json "${BACKUP_DIR}/jobs.${TS}.json"
 openclaw cron list --json > "${BACKUP_DIR}/list.${TS}.json"
@@ -29,7 +41,7 @@ cat <<EOF
 Contexte: ${WORKDIR}. ROLE=planner-direct.
 Methodologie obligatoire: docs/operations/ops/AGENT_WORKFLOW.md + docs/operations/ops/ENGINEERING_PLAYBOOK.md + docs/operations/ops/DIRECT_CRON_METHODOLOGY.md.
 Sans dependance qwen_orchestrator.py ni tmux. Commandes shell uniquement via scripts/exec_safe.sh.
-Lecture autorisee: docs/orchestrator-ops/priority-queue.json, docs/planning/WORKSTATE.md, evidence/gates/openclaw-gates/.
+Lecture autorisee: docs/orchestrator-ops/priority-queue.json, docs/product/planning/WORKSTATE.md, evidence/gates/openclaw-gates/.
 Interdictions: write/edit/git/commit/modification fichiers.
 Sortie <=10 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 Si aucun changement concret: DELTA: NO_DELTA.
@@ -67,7 +79,7 @@ cat <<EOF
 Contexte: ${WORKDIR}. ROLE=qa-direct.
 Methodologie obligatoire: docs/operations/ops/AGENT_WORKFLOW.md + docs/operations/ops/ENGINEERING_PLAYBOOK.md + docs/operations/ops/API_ENDPOINT_BEST_PRACTICES.md + docs/operations/ops/DIRECT_CRON_METHODOLOGY.md.
 Sans dependance qwen_orchestrator.py ni tmux. Commandes shell via scripts/exec_safe.sh.
-Lecture autorisee: evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/scrum/sprint-current.md.
+Lecture autorisee: evidence/gates/openclaw-gates, docs/orchestrator-ops/priority-queue.json, docs/orchestrator-ops/parallel-workstreams.json.
 Verifier coherence de preuve: VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE, artefacts recents.
 Interdictions: write/edit/git/commit/modification fichiers.
 Sortie <=10 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.

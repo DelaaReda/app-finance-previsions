@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import inspect
+import importlib.util
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 import pandas as pd
 from starlette.concurrency import run_in_threadpool
+from .bootstrap import bootstrap_runtime
 try:
     import sentry_sdk
 except Exception:  # pragma: no cover
@@ -322,6 +324,132 @@ except ImportError:
             return data
 
 from core.llm_settings import get_llm_settings
+
+
+def _load_edge_contracts_from_path():
+    edge_dir = Path(__file__).resolve().parent / "edge"
+    contracts_path = edge_dir / "contracts.py"
+    if not contracts_path.exists():
+        raise ImportError(f"edge contracts module not found under {edge_dir}")
+
+    contracts_spec = importlib.util.spec_from_file_location(
+        "fc_platform_edge_contracts", contracts_path
+    )
+    if contracts_spec is None or contracts_spec.loader is None:
+        raise ImportError("unable to build edge contracts module spec")
+
+    contracts_module = importlib.util.module_from_spec(contracts_spec)
+    contracts_spec.loader.exec_module(contracts_module)
+    return contracts_module
+
+
+try:
+    from .edge.contracts import edge_degraded, edge_enabled, edge_ok
+    from .edge.critical_endpoints import (
+        forecasts_degraded as edge_forecasts_degraded,
+        forecasts_ok as edge_forecasts_ok,
+        recommendations_degraded as edge_recommendations_degraded,
+        recommendations_ok as edge_recommendations_ok,
+        stocks_sheet_degraded as edge_stocks_sheet_degraded,
+        stocks_sheet_ok as edge_stocks_sheet_ok,
+    )
+except Exception:  # pragma: no cover
+    try:
+        from platform.edge.contracts import edge_degraded, edge_enabled, edge_ok
+        from platform.edge.critical_endpoints import (
+            forecasts_degraded as edge_forecasts_degraded,
+            forecasts_ok as edge_forecasts_ok,
+            recommendations_degraded as edge_recommendations_degraded,
+            recommendations_ok as edge_recommendations_ok,
+            stocks_sheet_degraded as edge_stocks_sheet_degraded,
+            stocks_sheet_ok as edge_stocks_sheet_ok,
+        )
+    except Exception:
+        try:
+            _edge_contracts_module = _load_edge_contracts_from_path()
+            edge_degraded = getattr(_edge_contracts_module, "edge_degraded")
+            edge_enabled = getattr(_edge_contracts_module, "edge_enabled")
+            edge_ok = getattr(_edge_contracts_module, "edge_ok")
+
+            def edge_forecasts_ok(payload: Dict[str, Any], **_: Any) -> Dict[str, Any]:
+                freshness = payload.get("freshness_age") if isinstance(payload, dict) else None
+                freshness_s = int(freshness) if isinstance(freshness, (int, float)) else None
+                return edge_ok(
+                    payload,
+                    source=["forecasts_route", "forecasts_service"],
+                    freshness_s=freshness_s,
+                    fallback=bool(payload.get("fallback_used")) if isinstance(payload, dict) else False,
+                )
+
+            def edge_forecasts_degraded(payload: Dict[str, Any], detail: Any = None, **_: Any) -> Dict[str, Any]:
+                return edge_degraded(
+                    payload,
+                    code="forecasts_route_exception",
+                    message="Forecasts unavailable, degraded fallback payload returned.",
+                    detail=detail,
+                    source=["forecasts_route", "critical_route_error_fallback"],
+                    fallback=True,
+                )
+
+            def edge_recommendations_ok(payload: Dict[str, Any], **_: Any) -> Dict[str, Any]:
+                return edge_ok(
+                    payload,
+                    source=["recommendations_daily", "weekly_brief_snapshot"],
+                    fallback=False,
+                )
+
+            def edge_recommendations_degraded(payload: Dict[str, Any], detail: Any = None, **_: Any) -> Dict[str, Any]:
+                return edge_degraded(
+                    payload,
+                    code="recommendations_unavailable",
+                    message="Recommendations temporarily unavailable, fallback payload returned.",
+                    detail=detail,
+                    source=["recommendations_daily", "critical_error_fallback"],
+                    fallback=True,
+                )
+
+            def edge_stocks_sheet_ok(payload: Dict[str, Any], **_: Any) -> Dict[str, Any]:
+                return edge_ok(
+                    payload,
+                    source=["stocks_sheet_route", "market_data"],
+                    fallback=False,
+                )
+
+            def edge_stocks_sheet_degraded(
+                payload: Dict[str, Any],
+                code: str,
+                message: str,
+                detail: Any = None,
+                source: Any = None,
+                **_: Any,
+            ) -> Dict[str, Any]:
+                return edge_degraded(
+                    payload,
+                    code=code,
+                    message=message,
+                    detail=detail,
+                    source=source or ["stocks_sheet_route", "critical_error_fallback"],
+                    fallback=True,
+                )
+        except Exception:
+            # Safe fallback keeps legacy shape if edge helpers are unavailable.
+            edge_ok = lambda data, **_: {"ok": True, "data": data}  # type: ignore
+            edge_degraded = (  # type: ignore
+                lambda data, code, message, detail=None, **_: {
+                    "ok": True,
+                    "status": "degraded",
+                    "data": data,
+                    "error": {"code": code, "message": message, "detail": detail},
+                    "meta": {"source": ["legacy_fallback"], "fallback": True},
+                }
+            )
+            edge_enabled = lambda *_args, **_kwargs: False  # type: ignore
+            edge_forecasts_ok = lambda data, **_: {"ok": True, "data": data}  # type: ignore
+            edge_forecasts_degraded = lambda data, detail=None, **_: {"ok": True, "data": data}  # type: ignore
+            edge_recommendations_ok = lambda data, **_: {"ok": True, "data": data}  # type: ignore
+            edge_recommendations_degraded = lambda data, **_: {"ok": True, "data": data}  # type: ignore
+            edge_stocks_sheet_ok = lambda data, **_: {"ok": True, "data": data}  # type: ignore
+            edge_stocks_sheet_degraded = lambda data, **_: {"ok": True, "data": data}  # type: ignore
 
 
 def _parse_csv_list(value: Optional[str]) -> List[str]:
@@ -823,6 +951,7 @@ def _compute_stock_metrics(ticker: str) -> Dict[str, Any]:
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI app."""
+    bootstrap_runtime()
     sentry_enabled = _init_sentry_once()
     debug_enabled = DEBUG_MODE
     app = FastAPI(
@@ -874,6 +1003,25 @@ def create_app() -> FastAPI:
 
     # Routes
     register_routes(app)
+
+    try:
+        from .routers import create_health_router
+        app.include_router(
+            create_health_router(
+                ok_response=_ok,
+                freshness_payload=_freshness_payload,
+                frontend_runtime_config=_frontend_runtime_config,
+                data_freshness_ttl=_DATA_FRESHNESS_TTL_SECONDS,
+            )
+        )
+    except ImportError as e:
+        print(f"⚠️  Failed to include health router: {e}")
+
+    try:
+        from .routers import create_critical_router
+        app.include_router(create_critical_router())
+    except ImportError as e:
+        print(f"⚠️  Failed to include critical router: {e}")
 
     # Include modular route packages once (single active API path).
     try:
@@ -1324,10 +1472,59 @@ def _ok(data: Any) -> Dict:
 def _err(msg: str) -> Dict:
     return {"ok": False, "error": msg}
 
+EDGE_FORECASTS_FLAG = "FC_API_EDGE_FORECASTS"
+EDGE_RECOMMENDATIONS_FLAG = "FC_API_EDGE_RECOMMENDATIONS"
+EDGE_STOCKS_FLAG = "FC_API_EDGE_STOCKS"
+
+
+def _edge_feature_enabled(flag_name: str, default: bool = True) -> bool:
+    try:
+        return bool(edge_enabled(flag_name, default=default))
+    except Exception:
+        return default
+
+
 def _latest_partition(base: str) -> Optional[str]:
     """Get latest dt=YYYYMMDD partition."""
     parts = sorted(Path(base).glob("dt=*"))
     return parts[-1].name.split("=")[-1] if parts else None
+
+
+def _stocks_sheet_fallback_payload(ticker: str, message: str) -> Dict[str, Any]:
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    symbol = str(ticker or "").upper()
+    return {
+        "ticker": symbol,
+        "company_name": symbol,
+        "current_price": None,
+        "price_change": None,
+        "date": now_iso,
+        "fundamentals": {},
+        "technical_indicators": {},
+        "news_count": 0,
+        "news_sentiment": 0.5,
+        "trading_levels": {},
+        "momentum": {"rsi_level": "neutral", "trend": "neutral"},
+        "risk_metrics": {},
+        "composite_score": None,
+        "score_breakdown": None,
+        "alerts": [],
+        "analysis": {
+            "sentiment": "neutral",
+            "outlook": "neutral",
+            "recommendation": "hold",
+            "target_price": None,
+            "stop_loss": None,
+        },
+        "timeframe_analysis": {
+            "short_term": "neutral",
+            "medium_term": "neutral",
+            "long_term": "neutral",
+        },
+        "generated_at": now_iso,
+        "message": message,
+        "source": ["stocks_sheet_route", "fallback"],
+    }
 
 DEFAULT_JUDGE_TICKERS = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "TSLA"]
 # ================================= ROUTES ====================================
@@ -1335,144 +1532,8 @@ DEFAULT_JUDGE_TICKERS = ["SPY", "QQQ", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", 
 def register_routes(app: FastAPI):
     """Register all API routes."""
 
-    @app.get("/api/health")
-    async def health_check():
-        """Health check endpoint with enriched status information."""
-        # Use relative import based on the project structure
-        # Since this is in src/api, and storage is in backend/storage (outside src), 
-        # we need to use a different approach
-        try:
-            # First try the direct import (relative to project root)
-            backend_root = Path(__file__).resolve().parents[1]  # Go from api/main.py to backend/
-            if str(backend_root) not in sys.path:
-                sys.path.insert(0, str(backend_root))
-            
-            from storage.base import load_json
-        except ImportError:
-            try:
-                from storage.io import load_json  # Alternative storage module
-            except ImportError:
-                # Ultimate fallback - create a mock load_json function
-                def load_json(key):
-                    return None
-        
-        # Get last updates by domain from stored files
-        last_updates = {}
-        
-        # Check forecasts last update
-        forecasts_data = load_json("forecasts.json")
-        if forecasts_data:
-            last_updates["forecasts"] = forecasts_data.get("last_update")
-        
-        # Check news feed last update
-        news_data = load_json("news_feed.json")
-        if news_data:
-            last_updates["news"] = news_data.get("last_update")
-        
-        # Check weekly brief last update
-        brief_data = load_json("brief_weekly.json")
-        if brief_data:
-            last_updates["brief_weekly"] = brief_data.get("last_update")
-        
-        # Check backtests last update
-        try:
-            from backend.storage.base import load_json
-            backtests_data = load_json("backtests.json")
-            if backtests_data:
-                last_updates["backtests"] = backtests_data.get("last_update")
-        except ImportError:
-            # If storage module isn't available, skip backtests update
-            pass
-        
-        health_payload = {
-            "status": "up",
-            "backend_up": True,
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": "0.1.0",
-            "last_updates": last_updates,
-            "data_paths": {
-                "forecasts": "data/forecasts.json",
-                "news": "data/news_feed.json", 
-                "brief_weekly": "data/brief_weekly.json",
-                "backtests": "data/backtests.json"
-            }
-        }
-
-        # Backward-compatible shape for existing tests/clients + enriched payload.
-        return {
-            **health_payload,
-            "ok": True,
-            "status": "ok",
-            "version": "1.0.0",
-            "service_status": health_payload["status"],
-            "data": health_payload,
-        }
-
-    @app.get("/api/freshness")
-    async def data_freshness():
-        """Check freshness of all data sources."""
-        now = datetime.now(timezone.utc)
-        try:
-            from storage.io import load_json
-        except Exception:
-            load_json = lambda key: None  # type: ignore
-
-        forecasts_data = load_json("forecasts") or load_json("forecasts.json")
-        news_data = load_json("news_feed") or load_json("news_feed.json")
-        macro_data = load_json("macro_series") or load_json("macro_series.json")
-        stocks_data = load_json("stocks/prices") or load_json("stocks/prices.json")
-        backtests_data = load_json("backtests") or load_json("backtests.json")
-        weekly_brief_data = load_json("brief_weekly") or load_json("brief_weekly.json")
-
-        forecasts_meta = _freshness_payload(forecasts_data, _DATA_FRESHNESS_TTL_SECONDS["forecasts"], now=now)
-        news_meta = _freshness_payload(news_data, _DATA_FRESHNESS_TTL_SECONDS["news_feed"], now=now)
-        macro_meta = _freshness_payload(macro_data, _DATA_FRESHNESS_TTL_SECONDS["macro_series"], now=now)
-        stocks_meta = _freshness_payload(stocks_data, _DATA_FRESHNESS_TTL_SECONDS["stocks"], now=now)
-        backtests_meta = _freshness_payload(
-            backtests_data,
-            _DATA_FRESHNESS_TTL_SECONDS["backtests"],
-            now=now,
-        )
-        weekly_brief_meta = _freshness_payload(
-            weekly_brief_data,
-            _DATA_FRESHNESS_TTL_SECONDS["brief_weekly"],
-            now=now,
-        )
-
-        return _ok({
-            "macro_freshness_minutes": macro_meta["age_minutes"],
-            "news_freshness_minutes": news_meta["age_minutes"],
-            "stocks_freshness_minutes": stocks_meta["age_minutes"],
-            "backtests_freshness_minutes": backtests_meta["age_minutes"],
-            "last_update": now.isoformat().replace("+00:00", "Z"),
-            "targets": {
-                "forecasts_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["forecasts"] / 60),
-                "news_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["news_feed"] / 60),
-                "stocks_minutes": round(_DATA_FRESHNESS_TTL_SECONDS["stocks"] / 60),
-                "backtests_hours": round(_DATA_FRESHNESS_TTL_SECONDS["backtests"] / 3600),
-            },
-            "freshness": {
-                "forecasts": forecasts_meta,
-                "news": news_meta,
-                "macro": macro_meta,
-                "stocks": stocks_meta,
-                "backtests": backtests_meta,
-                "weekly_brief": weekly_brief_meta,
-            },
-            "all_fresh": (
-                forecasts_meta["is_fresh"]
-                and news_meta["is_fresh"]
-                and stocks_meta["is_fresh"]
-                and backtests_meta["is_fresh"]
-            ),
-            "source": ["api_health", "freshness_metrics"],
-            "status": "ok",
-        })
-
-    @app.get("/api/frontend/config")
-    async def frontend_config():
-        """Public runtime config for static frontend clients."""
-        return _ok(_frontend_runtime_config())
+    # /api/health, /api/freshness and /api/frontend/config are mounted via
+    # platform.routers.health to keep register_routes focused on domain endpoints.
 
     # ========================= PILLAR 1: MACRO ===========================
 
@@ -2363,6 +2424,18 @@ def register_routes(app: FastAPI):
                 # Try fallback approach with get_price_history
                 df_prices = get_price_history(ticker, start=None, interval="1d")
                 if df_prices is None or df_prices.empty:
+                    if _edge_feature_enabled(EDGE_STOCKS_FLAG, default=True):
+                        fallback_payload = _stocks_sheet_fallback_payload(
+                            ticker=ticker,
+                            message=f"No price data for {ticker}",
+                        )
+                        return edge_stocks_sheet_degraded(
+                            fallback_payload,
+                            code="stocks_sheet_no_price_data",
+                            message=f"No price data for {ticker}",
+                            detail={"ticker": str(ticker).upper()},
+                            source=["stocks_sheet_route", "data_unavailable"],
+                        )
                     raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
             else:
                 # Convert series to DataFrame format for indicators
@@ -2507,186 +2580,7 @@ def register_routes(app: FastAPI):
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"Error retrieving data for {ticker}: {str(e)}")
 
-    @app.get("/api/stocks/{ticker}/sheet")
-    async def ticker_sheet(ticker: str):
-        """Get detailed ticker sheet (Fiches Ticker) with comprehensive analysis."""
-        try:
-            from core.market_data import get_price_history, get_fundamentals
-            from analytics.phase2_technical import compute_indicators
-            from research.scoring import calculate_composite_score
-            from research.alerts import alerts_for_ticker
-            
-            # Get price history
-            series = get_close_series(ticker)
-            if series is None or series.empty:
-                # Try fallback approach with get_price_history
-                df_prices = get_price_history(ticker, start=None, interval="1d")
-                if df_prices is None or df_prices.empty:
-                    raise HTTPException(status_code=404, detail=f"No price data for {ticker}")
-            else:
-                # Convert series to DataFrame format for indicators
-                df_prices = pd.DataFrame({'Close': series})
-                df_prices.index.name = 'Date'  # Make sure index has a name
-            
-            # Get fundamentals if available
-            fundamentals = {}
-            try:
-                fundamentals = get_fundamentals(ticker)
-            except Exception:
-                # If fundamentals not available, use placeholder
-                fundamentals = {
-                    "sector": "N/A",
-                    "industry": "N/A",
-                    "market_cap": "N/A",
-                    "pe_ratio": "N/A",
-                    "pb_ratio": "N/A",
-                    "dividend_yield": "N/A",
-                    "beta": "N/A",
-                    "eps": "N/A",
-                    "revenue": "N/A",
-                    "roe": "N/A"
-                }
-            
-            # Calculate technical indicators
-            try:
-                df_with_indicators = compute_indicators(df_prices)
-                last_row = df_with_indicators.iloc[-1] if len(df_with_indicators) > 0 else {}
-                
-                technical_indicators = {
-                    "rsi": float(last_row.get("RSI", 0)) if pd.notna(last_row.get("RSI")) else None,
-                    "sma20": float(last_row.get("SMA_20", 0)) if pd.notna(last_row.get("SMA_20")) else None,
-                    "sma50": float(last_row.get("SMA_50", 0)) if pd.notna(last_row.get("SMA_50")) else None,
-                    "sma200": float(last_row.get("SMA_200", 0)) if pd.notna(last_row.get("SMA_200")) else None,
-                    "macd": float(last_row.get("MACD", 0)) if pd.notna(last_row.get("MACD")) else None,
-                    "macd_signal": float(last_row.get("MACD_Signal", 0)) if pd.notna(last_row.get("MACD_Signal")) else None,
-                    "bollinger_upper": float(last_row.get("BB_upper", 0)) if pd.notna(last_row.get("BB_upper")) else None,
-                    "bollinger_lower": float(last_row.get("BB_lower", 0)) if pd.notna(last_row.get("BB_lower")) else None,
-                    "volume_sma": float(last_row.get("Volume_SMA", 0)) if pd.notna(last_row.get("Volume_SMA")) else None,
-                }
-            except Exception:
-                # If indicators computation fails, return basic values
-                last_price = float(df_prices['Close'].iloc[-1]) if 'Close' in df_prices.columns else None
-                technical_indicators = {
-                    "rsi": None,
-                    "sma20": None,
-                    "sma50": None,
-                    "sma200": None,
-                    "macd": None,
-                    "macd_signal": None,
-                    "bollinger_upper": None,
-                    "bollinger_lower": None,
-                    "volume_sma": None,
-                }
-            
-            # Get recent news count and sentiment for this ticker
-            news_count = 0
-            news_sentiment = 0.5  # Default neutral
-            try:
-                from .services.news_service import get_news_feed
-                news_data = get_news_feed(tickers=[ticker], since="7d", score_min=0.0, region="all", limit=50)
-                if isinstance(news_data, dict):
-                    data_block = news_data.get("data") if isinstance(news_data.get("data"), dict) else news_data
-                    if isinstance(data_block, dict):
-                        news_count = int(
-                            data_block.get("count")
-                            or len(data_block.get("articles") or data_block.get("items") or [])
-                        )
-                    else:
-                        news_count = 0
-                else:
-                    news_count = int(getattr(news_data, "count", 0) or 0)
-                # Calculate sentiment from news data if available
-            except Exception:
-                # If news service is not available, use a fallback
-                news_count = 0
-                
-            # Calculate additional metrics
-            last_price = float(df_prices['Close'].iloc[-1]) if 'Close' in df_prices.columns else None
-            price_change_pct = None
-            if len(df_prices) > 1 and 'Close' in df_prices.columns:
-                prev_close = float(df_prices['Close'].iloc[-2])
-                if prev_close != 0:
-                    price_change_pct = ((last_price - prev_close) / prev_close) * 100
-            
-            # Calculate volatility (simple 20-day standard deviation of returns)
-            volatility = None
-            if len(df_prices) > 20 and 'Close' in df_prices.columns:
-                returns = df_prices['Close'].pct_change().dropna().tail(20)
-                if len(returns) > 1:
-                    volatility = float(returns.std() * (252 ** 0.5)) * 100  # Annualized volatility
-            
-            # Calculate composite score
-            composite_score = None
-            score_breakdown = None
-            try:
-                comp_score = calculate_composite_score(ticker.upper())
-                composite_score = comp_score.get("composite_score")
-                score_breakdown = {
-                    "macro": comp_score.get("macro_score"),
-                    "technical": comp_score.get("technical_score"), 
-                    "news": comp_score.get("news_score")
-                }
-            except Exception:
-                pass  # Use None values if scoring fails
-            
-            # Get alerts for this ticker
-            alerts = []
-            try:
-                alerts = alerts_for_ticker(df_prices, pd.DataFrame(technical_indicators, index=[0]), news_sentiment, ticker.upper())
-            except Exception:
-                alerts = []
-            
-            # Create comprehensive ticker sheet (Fiches Ticker)
-            ticker_sheet = {
-                "ticker": ticker.upper(),
-                "company_name": ticker.upper(),  # Would come from fundamentals
-                "current_price": last_price,
-                "price_change": price_change_pct,
-                "date": df_prices.index[-1].isoformat() if not df_prices.empty else None,
-                "fundamentals": fundamentals,
-                "technical_indicators": technical_indicators,
-                "news_count": news_count,
-                "news_sentiment": news_sentiment,
-                "trading_levels": {
-                    "resistance_s1": technical_indicators.get("sma50"),
-                    "resistance_s2": technical_indicators.get("sma200"),
-                    "support_r1": technical_indicators.get("sma20"),
-                    "support_r2": None  # Could calculate more levels
-                },
-                "momentum": {
-                    "rsi_level": "neutral" if technical_indicators.get("rsi") and 30 <= technical_indicators["rsi"] <= 70 else 
-                                "overbought" if technical_indicators.get("rsi") and technical_indicators["rsi"] > 70 else 
-                                "oversold" if technical_indicators.get("rsi") and technical_indicators["rsi"] < 30 else "neutral",
-                    "trend": "bullish" if technical_indicators.get("sma20") and last_price and last_price > technical_indicators["sma20"] else "bearish"
-                },
-                "risk_metrics": {
-                    "volatility": volatility,
-                    "beta": fundamentals.get("beta"),
-                    "max_drawdown": None  # Would need to calculate from historical data
-                },
-                "composite_score": composite_score,
-                "score_breakdown": score_breakdown,
-                "alerts": alerts,
-                "analysis": {
-                    "sentiment": "neutral",
-                    "outlook": "neutral", 
-                    "recommendation": "hold",  # Would be calculated based on all factors
-                    "target_price": None,  # Would come from analysis
-                    "stop_loss": None  # Would come from analysis
-                },
-                "timeframe_analysis": {
-                    "short_term": "neutral",  # Based on technicals
-                    "medium_term": "neutral",  # Based on fundamentals + technicals
-                    "long_term": "neutral"   # Based on fundamentals + macro
-                }
-            }
-            
-            return _ok(ticker_sheet)
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=f"Error retrieving ticker sheet for {ticker}: {str(e)}")
+    # /api/stocks/{ticker}/sheet moved to platform.routers.critical
 
     # ========================= PILLAR 3: NEWS ============================
 
@@ -2934,84 +2828,7 @@ def register_routes(app: FastAPI):
                 "message": "news/feed failed, returning fallback payload (never-empty contract).",
             })
 
-    # ====================== RECOMMENDATIONS =======================
-    @app.get("/api/recommendations/daily")
-    async def recommendations_daily(
-        universe: Optional[List[str]] = Query(None, description="Optional list of tickers to consider"),
-        limit: int = Query(3, ge=1, le=50)
-    ):
-        """Daily recommendations derived from the latest weekly brief (real cached data).
-
-        - Uses /data/brief_weekly.json top_signals as BUY candidates
-        - Applies optional universe filter and limit
-        - Returns stable schema consumed by SmartRecommendationsWidget
-        """
-        try:
-            from storage.io import load_json
-            brief = load_json("brief_weekly") or load_json("brief_weekly.json") or {}
-            core = brief.get("data") or brief
-            top_signals = core.get("top_signals") or []
-            items = []
-            for s in top_signals:
-                tkr = (s.get("ticker") or "").upper()
-                typ = (s.get("type") or "").upper() or "BULLISH"
-                if not tkr:
-                    continue
-                if universe and len(universe) > 0 and tkr not in {u.upper() for u in universe}:
-                    continue
-                if typ != "BULLISH":
-                    continue
-                conf = s.get("confidence")
-                er = s.get("expected_return")
-                score = int(round((conf or 0) * 100)) if isinstance(conf, (int, float)) else 0
-                # Simple risk heuristic from confidence
-                risk_level = "LOW" if (conf or 0) >= 0.7 else "MEDIUM" if (conf or 0) >= 0.4 else "HIGH"
-                items.append({
-                    "ticker": tkr,
-                    "action": "BUY",
-                    "score": score,
-                    "reasoning": s.get("reasoning") or "Forecasts and market brief indicate positive setup.",
-                    "catalysts": [],
-                    "risk_level": risk_level,
-                    "confidence": float(conf) if conf is not None else 0.0,
-                    "supporting_data": {
-                        "forecast_confidence": float(conf) if conf is not None else None,
-                        "news_sentiment": None,
-                        "momentum_score": None,
-                        "macro_alignment": None,
-                    }
-                })
-
-            items = items[:limit]
-
-            # Market context snapshot for header
-            try:
-                context = await run_in_threadpool(get_market_context_snapshot)
-                market_ctx = {
-                    "regime": context.get("insights", {}).get("market_regime", {}).get("current", "NORMAL"),
-                    "summary": context.get("insights", {}).get("summary") or "",
-                    "key_drivers": []
-                }
-            except Exception:
-                mc = _fallback_market_context("Recommendations context")
-                market_ctx = {"regime": mc.get("regime", "NORMAL"), "summary": mc.get("summary", ""), "key_drivers": []}
-
-            now_iso = datetime.utcnow().isoformat() + "Z"
-            return _ok({
-                "recommendations": items,
-                "market_context": market_ctx,
-                "generated_at": now_iso,
-                "valid_until": now_iso
-            })
-        except Exception as e:
-            # Never-empty: return empty recommendations with context
-            now_iso = datetime.utcnow().isoformat() + "Z"
-            return _ok({
-                "recommendations": [],
-                "market_context": {"regime": "NORMAL", "summary": str(e), "key_drivers": []},
-                "generated_at": now_iso,
-                "valid_until": now_iso
-            })
+    # /api/recommendations/daily moved to platform.routers.critical
 
     @app.get("/api/news/sentiment")
     async def news_sentiment(limit: int = Query(100, ge=1, le=500)):
@@ -3351,6 +3168,37 @@ def register_routes(app: FastAPI):
 
             # Strict mode: crash instead of UI fallback when LLM not available
             STRICT_JUDGE = (os.getenv("LLM_JUDGE_STRICT", "1") == "1")
+            run_id = f"judge_{int(time.time() * 1000)}"
+            started_at = time.perf_counter()
+            requested_model = (request.model or "").strip()
+            requested_provider = None
+            if "|" in requested_model:
+                parts = [p.strip() for p in requested_model.split("|")]
+                if len(parts) >= 2:
+                    requested_provider = parts[0] or None
+                    requested_model = parts[1] or requested_model
+            logger.info(
+                "llm_judge.start id=%s strict=%s model=%s provider=%s tickers=%s rows=%s",
+                run_id,
+                STRICT_JUDGE,
+                requested_model or "<auto>",
+                requested_provider or "<auto>",
+                ",".join(ticker_list),
+                len(forecast_results),
+            )
+            print(
+                f"[llm_judge] start id={run_id} strict={int(STRICT_JUDGE)} model={requested_model or '<auto>'} "
+                f"provider={requested_provider or '<auto>'} tickers={','.join(ticker_list)} rows={len(forecast_results)}",
+                flush=True,
+            )
+
+            judge_model_limit = max(1, int(os.getenv("LLM_JUDGE_MODEL_LIMIT", "8") or "8"))
+            judge_model_timeout_s = max(5, int(os.getenv("LLM_JUDGE_MODEL_TIMEOUT_SECONDS", "8") or "8"))
+            judge_model_attempts = max(1, int(os.getenv("LLM_JUDGE_MODEL_ATTEMPTS", "1") or "1"))
+            judge_ensemble_top_n = max(1, int(os.getenv("LLM_JUDGE_ENSEMBLE_TOP_N", "1") or "1"))
+            judge_fastpath_timeout_s = max(5.0, float(os.getenv("LLM_JUDGE_FASTPATH_TIMEOUT_SECONDS", "8") or "8"))
+            judge_ensemble_timeout_s = max(5.0, float(os.getenv("LLM_JUDGE_ENSEMBLE_TIMEOUT_SECONDS", "12") or "12"))
+            judge_single_timeout_s = max(5.0, float(os.getenv("LLM_JUDGE_SINGLE_TIMEOUT_SECONDS", "8") or "8"))
 
             # Small helper: derive deterministic picks/risks for fallback + quality flags
             def _derive(forecasts: List[Dict[str, Any]], max_er: float, min_conf: float) -> Dict[str, Any]:
@@ -3397,53 +3245,24 @@ def register_routes(app: FastAPI):
 
             derived = _derive(forecast_results, request.max_er, request.min_conf)
 
-            # Prepare LLM analysis using unified client
-            try:
-                from platform.legacy.research.llm_client import ask_llm  # type: ignore
-            except Exception:
-                ask_llm = None  # type: ignore
-            
-            # Use LLM to analyze the forecasts and provide judgment
-            context_for_llm = {
-                "tickers_analyzed": ticker_list,
-                "forecast_count": len(forecast_results),
-                "forecasts": forecast_results[:5],  # Limit to first 5 for context
-                "model_params": {
-                    "model": request.model,
-                    "max_expected_return": request.max_er,
-                    "min_confidence": request.min_conf
-                }
-            }
-
-            # Create prompt for LLM judge and immediately use it
-            prompt = f"""
-            You are a financial market judge and risk assessor. Evaluate the following forecasts:
-
-            Model Parameters:
-            - Model: {request.model}
-            - Max Expected Return Threshold: {request.max_er}
-            - Min Confidence Threshold: {request.min_conf}
-
-            Forecasts ({len(forecast_results)} total):
-            {json.dumps(forecast_results[:5], indent=2, default=str)}
-
-            Please provide:
-            1. Context analysis of the market conditions
-            2. Judgment on forecast quality and alignment with current trends
-            3. Risk factors identified in the predictions
-            4. Recommendations for portfolio or trading adjustments
-
-            Respond in JSON format with fields: context, judgment, risks, recommendations
-            """
-            
-            # Use the prompt in the LLM call to avoid "unused variable" warning
-            if ask_llm:
-                llm_response = ask_llm(
-                    question="Analyze these forecast signals",
-                    context_chunks=[{"text": prompt, "meta": {"type": "forecast_analysis"}}],
-                    max_tokens=1000
+            def _is_invalid_llm_answer(text: str) -> bool:
+                candidate = (text or "").strip()
+                if not candidate:
+                    return True
+                lowered = candidate.lower()
+                if candidate.startswith("⚠️") or candidate.startswith("ℹ️"):
+                    return True
+                invalid_markers = (
+                    "model does not exist",
+                    "error processing",
+                    "provider unavailable",
+                    "provider timeout",
+                    "service unavailable",
+                    "llm indisponible",
+                    "no answer",
+                    "g4f_all_candidates_failed",
                 )
-                # Process the response as needed
+                return any(marker in lowered for marker in invalid_markers)
 
             try:
                 # Build context chunks from forecasts for LLM client
@@ -3478,23 +3297,83 @@ def register_routes(app: FastAPI):
                     logger.error("llm_judge.import_failed", extra={"ctx": {"error": str(import_err)}})
                     raise HTTPException(status_code=500, detail="LLM judge unavailable (econ agent missing)") from import_err
 
+                def _model_family(model_name: str) -> str:
+                    name = (model_name or "").lower()
+                    if "deepseek" in name:
+                        return "deepseek"
+                    if "qwen" in name:
+                        return "qwen"
+                    if "glm" in name:
+                        return "glm"
+                    if "llama" in name or "meta-llama" in name:
+                        return "llama"
+                    if "gpt-oss" in name or "openai/gpt-oss" in name:
+                        return "gpt-oss"
+                    return "other"
+
                 ranked_models: List[str] = []
+                working_top3: List[str] = []
+                working_total = 0
+                working_ok = 0
+                try:
+                    from agents.g4f_model_watcher import _load_working as _load_working_models  # type: ignore
+
+                    payload = _load_working_models() or {}
+                    rows = payload.get("models") or []
+                    working_total = len(rows)
+                    prepared_rows = []
+                    for row in rows:
+                        model_name = str(row.get("model") or "").strip()
+                        if not model_name:
+                            continue
+                        prepared_rows.append(
+                            {
+                                "model": model_name,
+                                "ok": bool(row.get("ok")),
+                                "pass_rate": (row.get("pass_rate") or 0.0),
+                                "latency_s": (row.get("latency_s") if row.get("latency_s") is not None else 1e9),
+                                "family": _model_family(model_name),
+                            }
+                        )
+                    prepared_rows.sort(key=lambda x: (not x["ok"], -float(x["pass_rate"]), float(x["latency_s"]), x["model"].lower()))
+                    working_ok = sum(1 for r in prepared_rows if r["ok"])
+                    source_rows = [r for r in prepared_rows if r["ok"]] or prepared_rows
+                    seen_families = set()
+                    for row in source_rows:
+                        family = row["family"]
+                        if family in seen_families:
+                            continue
+                        seen_families.add(family)
+                        working_top3.append(row["model"])
+                        if len(working_top3) == 3:
+                            break
+                except Exception as working_err:
+                    logger.warning("llm_judge.working_models_unavailable id=%s error=%s", run_id, str(working_err))
+
                 try:
                     from domains.judge.application.g4f_client import get_ranked_tested_models as _ranked_models  # type: ignore
                     ranked_models = [
                         m
                         for _, m in _ranked_models(
                             category_preference="forecast",
-                            limit=max(6, int(os.getenv("LLM_JUDGE_MODEL_LIMIT", "18") or "18")),
+                            limit=max(6, judge_model_limit),
                         )
                         if m
                     ]
                 except Exception:
                     ranked_models = []
 
-                econ_models = ranked_models or POWER_NOAUTH_MODELS[:]
-                if request.model:
-                    econ_models = [request.model] + [m for m in econ_models if m != request.model]
+                default_seed_models = [
+                    m.strip()
+                    for m in os.getenv(
+                        "LLM_JUDGE_SEED_MODELS",
+                        "gpt-5-chat,deepseek-v3,qwen-3-235b-a22b,llama-4-maverick",
+                    ).split(",")
+                    if m.strip()
+                ]
+                econ_models = working_top3 + ranked_models + POWER_NOAUTH_MODELS[:] + default_seed_models
+                if requested_model:
+                    econ_models = [requested_model] + [m for m in econ_models if m != requested_model]
                 dedup_models: List[str] = []
                 seen_models = set()
                 for model_name in econ_models:
@@ -3503,8 +3382,28 @@ def register_routes(app: FastAPI):
                         continue
                     seen_models.add(norm)
                     dedup_models.append(str(model_name).strip())
-                econ_models = dedup_models
-                agent = EconomicAnalyst(model_candidates=econ_models or None)
+                econ_models = dedup_models[:judge_model_limit]
+
+                logger.info(
+                    "llm_judge.models id=%s requested=%s working_total=%s working_ok=%s top3=%s selected=%s",
+                    run_id,
+                    requested_model or "<auto>",
+                    working_total,
+                    working_ok,
+                    working_top3,
+                    econ_models,
+                )
+                print(
+                    f"[llm_judge] models id={run_id} requested={requested_model or '<auto>'} "
+                    f"working_total={working_total} working_ok={working_ok} top3={working_top3} selected={econ_models}",
+                    flush=True,
+                )
+                agent = EconomicAnalyst(
+                    model_candidates=econ_models or None,
+                    timeout=judge_model_timeout_s,
+                    retries_per_model=judge_model_attempts,
+                    max_tokens=900,
+                )
 
                 q = (
                     "Juge financier: donne un verdict concis (2–3 phrases) sur ces prévisions, "
@@ -3518,6 +3417,90 @@ def register_routes(app: FastAPI):
                     "stats": derived.get("stats"),
                     "deterministic_summary": derived.get("summary_text"),
                 }
+
+                # Fast-path: direct G4F call with strict timeout before heavier ensemble.
+                try:
+                    import asyncio
+                    from domains.judge.application.g4f_client import call_llm as _judge_call_llm  # type: ignore
+
+                    fast_messages = [
+                        {"role": "system", "content": "Tu es un analyste financier. Réponse concise et actionnable."},
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Tickers: {','.join(ticker_list)}\n"
+                                f"Stats: {json.dumps(derived.get('stats', {}), ensure_ascii=False)}\n"
+                                "Donne un verdict BUY/SELL/HOLD avec justification en 4 points maximum."
+                            ),
+                        },
+                    ]
+                    fast_started = datetime.now()
+                    fast_result = await asyncio.wait_for(
+                        run_in_threadpool(
+                            _judge_call_llm,
+                            fast_messages,
+                            mode="fastest",
+                            category_preference="forecast",
+                            timeout=judge_model_timeout_s,
+                            max_attempts=max(2, judge_model_attempts + 1),
+                            model=requested_model or None,
+                            provider=requested_provider,
+                        ),
+                        timeout=judge_fastpath_timeout_s,
+                    )
+                    fast_latency_ms = int((datetime.now() - fast_started).total_seconds() * 1000.0)
+                    fast_answer = (fast_result.get("answer") or "").strip()
+                    if fast_result.get("ok") and not _is_invalid_llm_answer(fast_answer):
+                        llm_response = {
+                            "answer": fast_answer,
+                            "model": fast_result.get("model") or requested_model,
+                            "provider": fast_result.get("provider") or "g4f_fastest",
+                            "latency_ms": fast_latency_ms,
+                        }
+                        selected_model = llm_response.get("model")
+                        model_runs_summary.append(
+                            {
+                                "model": llm_response.get("model"),
+                                "provider": llm_response.get("provider"),
+                                "ok": True,
+                                "latency_ms": fast_latency_ms,
+                                "attempt": 1,
+                                "answer": fast_answer[:1500],
+                                "parsed": None,
+                            }
+                        )
+                        logger.info("llm_judge.fastpath_ok id=%s model=%s latency_ms=%s", run_id, selected_model, fast_latency_ms)
+                    else:
+                        model_runs_summary.append(
+                            {
+                                "model": fast_result.get("model") or requested_model or "<none>",
+                                "provider": fast_result.get("provider") or "g4f_fastest",
+                                "ok": False,
+                                "latency_ms": fast_latency_ms,
+                                "attempt": 1,
+                                "answer": fast_answer[:1500],
+                                "error": fast_result.get("error") or "invalid_or_empty_answer",
+                            }
+                        )
+                        logger.warning(
+                            "llm_judge.fastpath_invalid id=%s model=%s error=%s",
+                            run_id,
+                            fast_result.get("model") or requested_model or "<none>",
+                            fast_result.get("error") or "invalid_or_empty_answer",
+                        )
+                except Exception as fastpath_err:  # noqa: BLE001
+                    model_runs_summary.append(
+                        {
+                            "model": requested_model or "<none>",
+                            "provider": requested_provider or "g4f_fastest",
+                            "ok": False,
+                            "latency_ms": 0,
+                            "attempt": 1,
+                            "error": str(fastpath_err),
+                        }
+                    )
+                    logger.warning("llm_judge.fastpath_failed id=%s error=%s", run_id, str(fastpath_err))
+
                 econ_input = EconomicInput(
                     question=q,
                     features=econ_features,
@@ -3533,69 +3516,71 @@ def register_routes(app: FastAPI):
                 )
 
                 ensemble_result: Optional[Dict[str, Any]] = None
-                try:
-                    import asyncio
-                    t0 = datetime.now()
-                    # Timeout global de 45 secondes pour l'ensemble
-                    ensemble_result = await asyncio.wait_for(
-                        run_in_threadpool(
-                            agent.analyze_ensemble,
-                            econ_input,
-                            2,  # Réduire de 3 à 2 modèles pour plus de rapidité
-                            True,
-                            True,
-                        ),
-                        timeout=45.0  # Timeout global de 45 secondes
-                    )
-                    latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
-                    ensemble_runs = ensemble_result.get("results", []) if isinstance(ensemble_result, dict) else []
-                    model_runs_summary = [
-                        {
-                            "model": r.get("model"),
-                            "provider": r.get("provider", "EconomicAnalyst"),
-                            "ok": r.get("ok"),
-                            "latency_ms": r.get("latency_ms"),
-                            "attempt": r.get("attempt"),
-                            "answer": (r.get("answer") or "")[:1500],
-                            "parsed": r.get("parsed"),
-                            "error": r.get("error"),
-                        }
-                        for r in ensemble_runs
-                    ]
-                    adjudication_info = ensemble_result.get("adjudication")
-                    avg_agreement = ensemble_result.get("avg_agreement")
-                    pairwise_agreement = ensemble_result.get("pairwise_agreement")
+                if llm_response is None:
+                    try:
+                        import asyncio
+                        t0 = datetime.now()
+                        # Timeout global contrôlé pour éviter les hangs côté client/UI.
+                        ensemble_result = await asyncio.wait_for(
+                            run_in_threadpool(
+                                agent.analyze_ensemble,
+                                econ_input,
+                                judge_ensemble_top_n,
+                                True,
+                                True,
+                            ),
+                            timeout=judge_ensemble_timeout_s,
+                        )
+                        latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
+                        ensemble_runs = ensemble_result.get("results", []) if isinstance(ensemble_result, dict) else []
+                        model_runs_summary.extend(
+                            [
+                                {
+                                    "model": r.get("model"),
+                                    "provider": r.get("provider", "EconomicAnalyst"),
+                                    "ok": r.get("ok"),
+                                    "latency_ms": r.get("latency_ms"),
+                                    "attempt": r.get("attempt"),
+                                    "answer": (r.get("answer") or "")[:1500],
+                                    "parsed": r.get("parsed"),
+                                    "error": r.get("error"),
+                                }
+                                for r in ensemble_runs
+                            ]
+                        )
+                        adjudication_info = ensemble_result.get("adjudication")
+                        avg_agreement = ensemble_result.get("avg_agreement")
+                        pairwise_agreement = ensemble_result.get("pairwise_agreement")
 
-                    ok_runs = [r for r in ensemble_runs if r.get("ok") and (r.get("answer") or "").strip()]
-                    chosen_run = ok_runs[0] if ok_runs else (ensemble_runs[0] if ensemble_runs else None)
-                    if chosen_run:
-                        llm_response = {
-                            "answer": chosen_run.get("answer", ""),
-                            "model": chosen_run.get("model"),
-                            "provider": chosen_run.get("provider", "EconomicAnalyst"),
-                            "latency_ms": chosen_run.get("latency_ms", latency_ms),
-                            "parsed": chosen_run.get("parsed"),
-                        }
-                        selected_model = chosen_run.get("model")
-                except Exception as ensemble_err:  # noqa: BLE001
-                    logger.warning("llm_judge.ensemble_failed", extra={"ctx": {"error": str(ensemble_err)}})
+                        ok_runs = [r for r in ensemble_runs if r.get("ok") and not _is_invalid_llm_answer(r.get("answer", ""))]
+                        chosen_run = ok_runs[0] if ok_runs else None
+                        if chosen_run:
+                            llm_response = {
+                                "answer": chosen_run.get("answer", ""),
+                                "model": chosen_run.get("model"),
+                                "provider": chosen_run.get("provider", "EconomicAnalyst"),
+                                "latency_ms": chosen_run.get("latency_ms", latency_ms),
+                                "parsed": chosen_run.get("parsed"),
+                            }
+                            selected_model = chosen_run.get("model")
+                    except Exception as ensemble_err:  # noqa: BLE001
+                        logger.warning("llm_judge.ensemble_failed", extra={"ctx": {"error": str(ensemble_err)}})
 
                 if llm_response is None:
                     # Fallback to single-shot mode avec timeout
                     try:
                         import asyncio
                         t0 = datetime.now()
-                        # Timeout de 20 secondes pour le mode single-shot
                         try:
                             econ_result = await asyncio.wait_for(
                                 run_in_threadpool(agent.analyze, econ_input),
-                                timeout=20.0
+                                timeout=judge_single_timeout_s,
                             )
                         except asyncio.TimeoutError:
-                            logger.warning("LLM Judge single-shot timeout after 20s")
+                            logger.warning("llm_judge.single_timeout id=%s timeout=%ss", run_id, judge_single_timeout_s)
                             econ_result = None
                         latency_ms = int((datetime.now() - t0).total_seconds() * 1000.0)
-                        if econ_result and econ_result.get("ok") and (econ_result.get("answer") or "").strip():
+                        if econ_result and econ_result.get("ok") and not _is_invalid_llm_answer(econ_result.get("answer", "")):
                             llm_response = dict(econ_result)
                             llm_response.setdefault("provider", "EconomicAnalyst")
                             llm_response["latency_ms"] = latency_ms
@@ -3627,7 +3612,7 @@ def register_routes(app: FastAPI):
                 llm_answer_text = (llm_response.get("answer", "") or "").strip()
                 
                 # Check if response is actually valid (not an error marker)
-                if not llm_answer_text or llm_answer_text.startswith("⚠️") or llm_answer_text.startswith("ℹ️"):
+                if _is_invalid_llm_answer(llm_answer_text):
                     err_detail = llm_response.get("error") or f"Provider {llm_model_name} returned invalid/empty response. No fallback allowed."
                     raise HTTPException(
                         status_code=503,
@@ -3690,40 +3675,35 @@ def register_routes(app: FastAPI):
                 }
 
             except Exception as llm_error:
-                logger.error(f"LLM judgment failed: {llm_error}")
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000.0)
+                logger.error("llm_judge.failed id=%s elapsed_ms=%s error=%s", run_id, elapsed_ms, str(llm_error))
+                print(f"[llm_judge] failed id={run_id} elapsed_ms={elapsed_ms} error={str(llm_error)}", flush=True)
                 # NO FALLBACK ALLOWED - Real LLM or fail
                 raise HTTPException(
                     status_code=503,
-                    detail=f"LLM Judge failed: {str(llm_error)}. Tried multiple models (DeepSeek-R1, DeepSeek-V3, Qwen, Llama). Configure LLM properly or check G4F connectivity."
+                    detail=f"LLM Judge strict: {str(llm_error)}"
                 )
-            
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000.0)
+            logger.info(
+                "llm_judge.success id=%s elapsed_ms=%s model=%s rows=%s",
+                run_id,
+                elapsed_ms,
+                selected_model or requested_model or "<auto>",
+                len(forecast_results),
+            )
+            print(
+                f"[llm_judge] success id={run_id} elapsed_ms={elapsed_ms} "
+                f"model={selected_model or requested_model or '<auto>'} rows={len(forecast_results)}",
+                flush=True,
+            )
             return _ok(response_data)
 
         except HTTPException:
             # In strict mode or explicit errors, propagate HTTP error
             raise
         except Exception as e:
-            try:
-                logger.error(f"Error in LLM judge endpoint: {e}")
-            except Exception:
-                pass
-            # Always return a valid response structure to maintain never-empty guarantee
-            return _ok({
-                "stdout": {
-                    "context": "LLM Judge temporarily unavailable",
-                    "forecast": f"Error processing LLM judgment: {str(e)}"
-                },
-                "rows": [],
-                "count": 0,
-                "model_used": getattr(request, 'model', 'unknown'),
-                "parameters": {
-                    "max_er": getattr(request, 'max_er', None),
-                    "min_conf": getattr(request, 'min_conf', None),
-                    "tickers": []
-                },
-                "generated_at": datetime.now().isoformat() + "Z",
-                "error": str(e)
-            })
+            logger.exception("llm_judge.unexpected_error error=%s", str(e))
+            raise HTTPException(status_code=503, detail=f"LLM Judge strict: {str(e)}") from e
 
     # ------------------------------ LLM Providers (Debug) ------------------ #
 
@@ -3765,14 +3745,20 @@ def register_routes(app: FastAPI):
             ranked_all.append(m)
         ranked_all = sorted(
             ranked_all,
-            key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)),
+            key=lambda m: (
+                not bool(m.get("ok")),
+                -(m.get("pass_rate") or 0),
+                (m.get("latency_s") if m.get("latency_s") is not None else 1e9),
+                str(m.get("model") or "").lower(),
+            ),
         )
         ranked = ranked_all[:limit]
 
         # Compute top-3 distinct families
         seen_fam = set()
         top3: list[str] = []
-        for m in ranked_all:
+        source_rows = [m for m in ranked_all if m.get("ok")] or ranked_all
+        for m in source_rows:
             fam = m.get("family", "other")
             if fam in seen_fam:
                 continue
@@ -3851,11 +3837,17 @@ def register_routes(app: FastAPI):
             ranked_all.append(m)
         ranked_all = sorted(
             ranked_all,
-            key=lambda m: (-(m.get("pass_rate") or 0), (m.get("latency_s") or 1e9)),
+            key=lambda m: (
+                not bool(m.get("ok")),
+                -(m.get("pass_rate") or 0),
+                (m.get("latency_s") if m.get("latency_s") is not None else 1e9),
+                str(m.get("model") or "").lower(),
+            ),
         )
         ranked = ranked_all[: min(limit, len(ranked_all))]
         seen_fam = set(); top3: list[str] = []
-        for m in ranked_all:
+        source_rows = [m for m in ranked_all if m.get("ok")] or ranked_all
+        for m in source_rows:
             fam = m.get("family", "other")
             if fam in seen_fam:
                 continue
@@ -4074,20 +4066,7 @@ def register_routes(app: FastAPI):
         except Exception as e:
             return _ok({"scores": [], "count": 0, "error": str(e)})
 
-    # ========================= FORECASTS (DISABLED - Using router instead) ======================
-    # NOTE: The /api/forecasts endpoint is now handled by api/routes/forecasts.py router
-    # This endpoint is commented out to avoid conflicts with the router
-    # The router provides better filtering, caching, and error handling
-    
-    # @app.get("/api/forecasts")
-    # async def forecasts(
-    #     asset_type: str = Query("all", description="Asset type: equity, commodity, all"),
-    #     horizon: str = Query("all", description="Horizon: 1w, 1m, 3m, all"),
-    #     search: Optional[str] = Query(None, description="Search term"),
-    #     sort_by: str = Query("score", description="Sort by: score, confidence, return")
-    # ):
-    #     """Get forecasts list - serves real data from forecasts.json"""
-    #     # ... (implementation moved to api/routes/forecasts.py)
+    # /api/forecasts handled by domains.forecasts.api via platform.routes namespace
 
     @app.get("/api/backtests")
     async def backtests(

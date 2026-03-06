@@ -27,17 +27,24 @@ fc_resolve_workspace_root() {
     candidates+=("${FC_WORKSPACE_ROOT}")
   fi
 
+  if [[ -n "${HOME:-}" ]]; then
+    candidates+=(
+      "${HOME}/Documents/analyse-financiere"
+      "${HOME}/analyse-financiere"
+    )
+  fi
+
+  candidates+=(
+    "/home/venom/analyse-financiere"
+    "/home/venom/shared/analyse-financiere"
+  )
+
   if [[ -n "$script_dir" ]]; then
     parent="$(cd "${script_dir}/.." && pwd -P 2>/dev/null || true)"
     grandparent="$(cd "${script_dir}/../.." && pwd -P 2>/dev/null || true)"
     [[ -n "$parent" ]] && candidates+=("$parent")
     [[ -n "$grandparent" ]] && candidates+=("$grandparent")
   fi
-
-  candidates+=(
-    "/home/venom/shared/analyse-financiere"
-    "/home/venom/analyse-financiere"
-  )
 
   for candidate in "${candidates[@]}"; do
     if fc_workspace_has_layout "$candidate"; then
@@ -61,7 +68,28 @@ fc_prefer_writable_workspace() {
     return 0
   fi
 
-  for fallback in "/home/venom/shared/analyse-financiere" "/home/venom/analyse-financiere"; do
+  # Prefer current working directory when it already is a valid writable workspace.
+  if [[ -n "${PWD:-}" ]] \
+    && fc_workspace_has_layout "$PWD" \
+    && fc_workspace_writable "$PWD"; then
+    printf '%s\n' "$PWD"
+    return 0
+  fi
+
+  if [[ -n "${HOME:-}" ]]; then
+    for fallback in "${HOME}/Documents/analyse-financiere" "${HOME}/analyse-financiere"; do
+      if [[ "$fallback" == "$root" ]]; then
+        continue
+      fi
+      if fc_workspace_has_layout "$fallback" && fc_workspace_writable "$fallback"; then
+        printf '%s\n' "$fallback"
+        return 0
+      fi
+    done
+  fi
+
+  # VM canonical first, shared mount second (shared can be read-only in incidents).
+  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
     if [[ "$fallback" == "$root" ]]; then
       continue
     fi

@@ -1,122 +1,94 @@
-# État prêt pour agents – 2026-02-28
+# Agents Readiness (Operational State)
 
-**Validé par:** admin principal  
-**Date:** 2026-02-28  
-**Derniere mise a jour operationnelle:** 2026-03-03
+## Changelog
+- **2026-03-04**: Full rewrite in English; converted from historical snapshot to operational readiness standard tied to current runtime.
 
----
+## 1) Purpose and Scope
+This document defines what “ready” means for agent operations before and during active orchestration.
 
-## 🔄 Mise a Jour Operationnelle 2026-03-03
+Scope:
+- Core lane readiness (`planner/dev/admin`).
+- Advisory lane status (`po_scrum_master`).
+- Required gates (contracts, sessions, queue/workboard, monitor).
 
-- Resync effectue entre queue/workboard:
-  - `BATCH-05=IN_PROGRESS`
-  - `BATCH-06=WAITING_DEP` (`depends_on=BATCH-05`)
-  - `BATCH-07=WAITING_DEP` (`depends_on=BATCH-06`)
-- Correction backend appliquee sur les forecasts:
-  - fallback directionnel base sur `price` vs `previous_close` si historique indisponible.
-  - tests forecasts simples maintenant passants.
-- Hygiene workspace:
-  - artefacts racine malformes deplaces vers `.trash/root-garbage-20260303/`.
-- Clarification cron critique:
-  - la normalisation par lanes (`planner/dev/admin`) ne doit pas masquer l'absence des rôles delivery spécialisés.
-  - en phase delivery, le crontab doit inclure explicitement: `planner`, `backend_engineer`, `frontend_engineer`, `data_analyst` (stagger recommandé dans `docs/ops/ORCHESTRATION_AGENTS_READY.md`).
+## 2) Normative Rules (MUST/SHOULD/MUST NOT)
+- Runtime execution **MUST** happen inside VM workspace `/home/venom/analyse-financiere`.
+- Runtime execution **MUST NOT** run on macOS host (servers, crons, role ticks).
+- Runtime runbooks **MUST** be written as VM-local commands (no `ssh dev-vm-utm ...` wrappers in canonical steps).
+- Host context **MUST** be checked with `bash scripts/runtime_host_check.sh` before start/restart/install-cron operations.
+- Core lanes **MUST** be available before declaring runtime ready.
+- Advisory lane **MUST NOT** influence global health readiness.
+- Queue/workboard **MUST** parse and remain state-consistent.
+- Contract guard suites **MUST** pass before major rollout changes.
 
----
+## 3) Interfaces and Schemas
+Readiness checklist schema:
+- `runtime_services`: backend/frontend/monitor
+- `core_lanes`: planner/dev/admin tick freshness
+- `contracts`: latest valid contract per core lane
+- `orchestration_data`: queue/workboard health
+- `guards`: contract guard + runtime context tests
+- `advisory`: po_scrum_master status (informational)
 
-## ✅ Validations passées
+## 4) Runtime Behavior and Edge Cases
+Current behavior:
+- `full` profile runs planner/dev/admin and utility jobs.
+- `canary` profile runs planner/dev only.
+- `scrum_master` runs as advisory in `full` via cron flags (`FC_PO_SCRUM_MASTER_CRON=1`, `FC_PO_SCRUM_MASTER_RUN_NOW=1`).
 
-| Gate | Résultat | Notes |
-|------|----------|-------|
-| `validate_agent_workspace_layout.sh` | 21/21 pass | Structure racine, memory, docs |
-| `validate_parallel_plumbing.sh` | 18/18 ok | Board, cron, rôle policy |
-| `backend_regression_gate.sh` | 39 tests + live endpoints | health, stocks_prices, news_feed OK |
-| `dev_qa_tooling_check.sh` | 23/23 ok | OpenClaw, skills, scripts |
+Approved direction:
+- `po_scrum_master` every 5 minutes in `full` profile only.
 
----
+Edge cases:
+- Temporary stale monitor state should not auto-fail readiness if core lanes are healthy and recovering.
+- Historical errors must be labeled historical, not active blockers.
 
-## Structure active (post-migration)
-
-- **Backend:** `apps/api/src/` (domains: forecasts, judge, market_data, copilot)
-- **Frontend:** `apps/web/src/domains/`
-- **Runtime:** `apps/api/runtime/` (data, cache, api.log)
-- **Jobs:** `apps/api/src/platform/legacy/jobs/`
-- **Archive:** `archive/structure-migrations/` (copilot-app résiduel archivé)
-- **Gates:** `evidence/gates/openclaw-gates/` (alias: `finance-app/openclaw-gates` → symlink)
-
-**Symlinks:** Catalogue complet et chemins canoniques → `docs/ops/SYMLINKS_CATALOG.md`  
-**Orchestration:** Validation et blocages connus → `docs/ops/ORCHESTRATION_AGENTS_READY.md`
-
----
-
-## Mémoire & Contexte (3-Day Continuity)
-
-**Strategy:** Agents chargent une fenêtre 3 jours, profilée par rôle, pour limiter les tokens sans perdre la continuité utile.
-
-- **Default mode:** `TMUX_ROLE_CONTEXT_MODE=lean`
-- **Role profiles:** `coordination`, `analysis`, `delivery` (auto par rôle dans le runner)
-- **Memory budgets (lean):**
-  - coordination: daily=24, role_history=18
-  - analysis: daily=14, role_history=12
-  - delivery: daily=8, role_history=8
-- **Retry compaction:** dispatch `retry` utilise un protocole orchestration compact (moins de token burn/timeouts)
-- **Daily logs:** `memory/YYYY-MM-DD.md` (ou `memory/summaries/YYYY-MM-DD.summary.md` si présent)
-- **Role history source:** `memory/agents/summaries/${ROLE}.summary.md` (sinon fallback `memory/agents/${ROLE}.md`)
-- **Auto role summary:** `scripts/role_memory_append.py` génère `memory/agents/summaries/${ROLE}.summary.md` (fenêtre 14 entrées)
-- **Injection point:** `scripts/cron_tmux_role_runner.sh` fonction `load_3day_memory_context()`
-- **Anti-regression guards:** Inclus dans SYSTEM_PROMPT (références copilot-app/ → archive/, backend/src/backend/src → apps/api/src/)
-- **Monitoring traces:** `dispatch_prompt scope=primary|retry ... bytes=<n>` + `prompt_memory_context ... bytes=<n>`
-
-**Archit benefit:** Continuity conservée avec coût token fortement réduit, surtout pour rôles delivery.
-
-**Reference:** `docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md`
-
----
-
-## Références obligatoires avant de travailler
-
-1. **AGENTS.md** – règles, mémoire, sécurité, heartbeats
-2. **docs/ops/AGENT_WORKSPACE_INDEX.md** – index rapide
-3. **docs/ops/AGENT_ONBOARDING.md** – onboarding architecture
-4. **docs/product/planning/tasks.md** – tâches en cours
-5. **docs/ops/API_ENDPOINTS.md** – endpoints backend frontend
-6. **docs/ops/OPENCLAW_BROWSER_QA.md** – validation frontend avec navigateur OpenClaw
-7. **docs/ops/DEV_AGENT_AUTONOMY_PROTOCOL.md** – protocole autonomie dev (architecture-first, reuse-first, QA proofs)
-
----
-
-## Règles pour les agents
-
-- **Judge template:** `apps/api/src/domains/judge/api/judge.py` est **immutable** (template de référence)
-- **Chemins:** utiliser `apps/api/`, `apps/web/`, pas `copilot-app/`
-- **Symlinks:** privilégier les chemins canoniques (voir `docs/ops/SYMLINKS_CATALOG.md`) ; ne pas en créer sans les documenter
-- **Gate avant commit:** `bash scripts/backend_regression_gate.sh`
-- **Command safety:** `platform/policies/exec_safe.sh` pour commandes shell
-
----
-
-## Services
-
-- Backend: http://localhost:8050 (docs: /docs)
-- Frontend: http://localhost:5173
-
----
-
-## Pre-flight rapide (avant de commencer)
-
+## 5) Operator Commands and Expected Outputs
+- Quick readiness snapshot:
 ```bash
-# Vérifier structure
-bash scripts/validate_agent_workspace_layout.sh
-
-# Vérifier backend + tests (backend doit tourner)
-bash scripts/backend_regression_gate.sh --no-live   # ou sans --no-live pour live endpoints
+bash scripts/runtime_host_check.sh
+bash scripts/fc_health_check.sh --strict
+bash scripts/monitor_agents.sh
 ```
+Expected:
+- `runtime_is_vm=1`, services up, and core lane coverage visible.
 
----
+- Verify tests:
+```bash
+python3 platform/automation/tests/test_role_contract_guard.py
+python3 platform/automation/tests/test_role_runtime_context.py
+```
+Expected:
+- Passing suites with no critical contract regressions.
 
-## Fichiers modifiés récemment (2026-02-28)
+## 6) Observability and Troubleshooting
+Primary runtime artifacts:
+- `/home/venom/analyse-financiere/docs/operations/orchestrator/executors-monitoring-latest.json`
+- `/home/venom/analyse-financiere/logs-codex-runs/fc-ticks/*.tick.log`
+- `/home/venom/analyse-financiere/logs-codex-runs/role-runner/*.events.log`
 
-Voir `memory/2026-02-28.md` et `docs/ops/REMPISE_ORDRE_POST_MIGRATION.md` pour l'historique des corrections post-migration.
+Monitor checks:
+- `/api/status`
+- `/api/runtime-diagnostics`
 
----
+## 7) Compatibility and Migration Notes
+- Legacy role names can exist in historical logs; readiness is evaluated on canonical core lanes.
+- Config migration to YAML v1 may run with temporary ENV fallback.
+- Advisory `po_scrum_master` remains non-blocking.
 
-*Ce document peut être lu en premier par tout agent qui reprend le travail.*
+## 8) Acceptance Criteria
+- Core lanes emit fresh valid contracts.
+- Queue/workboard are coherent and actionable.
+- Guard test baseline is green.
+- Monitor status and CLI checks agree on core runtime state.
+
+## Runtime Config & Advisory Cron (2026-03-04)
+
+- Canonical runner config path: `platform/config/runner/runner.v1.yaml`.
+- Canonical runner schema path: `platform/config/schema/runner.v1.schema.json`.
+- `scripts/fc_setup_crons.sh` validates config before writing crontab.
+- Full profile includes advisory `po_scrum_master` cron (`3-58/5`) gated by `FC_PO_SCRUM_MASTER_CRON_ENABLED`.
+- Canary profile keeps advisory cron disabled by default.
+- Runtime doctor:
+  - CLI: `bash scripts/fc_doctor.sh --json`
+  - Monitor API: `/api/doctor` and `/api/doctor/latest`

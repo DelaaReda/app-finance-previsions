@@ -3,51 +3,24 @@ set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
-ROOT_FROM_PARENT="$(cd "${SCRIPT_DIR}/.." && pwd -P 2>/dev/null || true)"
-ROOT_FROM_GRANDPARENT="$(cd "${SCRIPT_DIR}/../.." && pwd -P 2>/dev/null || true)"
-
-resolve_root() {
-  local candidate_a="${1:-}"
-  local candidate_b="${2:-}"
-  local a="/home/venom/shared/analyse-financiere"
-  local b="/home/venom/analyse-financiere"
-  local candidate=""
-  for candidate in "$candidate_a" "$candidate_b" "$a" "$b"; do
-    if [[ -z "$candidate" ]]; then
-      continue
-    fi
-    if [[ -d "$candidate/scripts" ]] && [[ -d "$candidate/platform" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  printf '%s\n' "$candidate_a"
-}
-
-workspace_writable() {
-  local candidate="${1:-}"
-  [[ -n "$candidate" ]] || return 1
-  mkdir -p "$candidate/logs-codex-runs" >/dev/null 2>&1 || return 1
-  [[ -w "$candidate/logs-codex-runs" ]]
-}
-
-ROOT="$(resolve_root "$ROOT_FROM_PARENT" "$ROOT_FROM_GRANDPARENT")"
-if ! workspace_writable "$ROOT"; then
-  for fallback in "/home/venom/analyse-financiere" "/home/venom/shared/analyse-financiere"; do
-    if [[ "$fallback" == "$ROOT" ]]; then
-      continue
-    fi
-    if [[ -d "$fallback/scripts" ]] && [[ -d "$fallback/platform" ]] && workspace_writable "$fallback"; then
-      ROOT="$fallback"
-      break
-    fi
-  done
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ ! -f "$WORKSPACE_HELPER" ]]; then
+  echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
+  exit 2
 fi
+# shellcheck source=/dev/null
+source "$WORKSPACE_HELPER"
+
+ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 LOCK_FILE="${FC_ROLE_RECOVERY_LOCK_FILE:-/tmp/fc-codex-role-recovery.lock}"
+LOCK_META_FILE="${FC_ROLE_RECOVERY_LOCK_META_FILE:-${LOCK_FILE}.meta}"
+LOCK_STALE_SECONDS="${FC_ROLE_RECOVERY_LOCK_STALE_SECONDS:-1800}"
+MAX_RUNTIME_SECONDS="${FC_ROLE_RECOVERY_MAX_SECONDS:-480}"
 LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-$ROOT/logs-codex-runs}"
 LOG_FILE="${FC_ROLE_RECOVERY_LOG_FILE:-$LOG_DIR/role-recovery.log}"
 TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/operations/orchestrator/parallel-role-topology-active.json}"
 ROLES=()
+RUN_STARTED_EPOCH="$(date +%s)"
 
 if [[ ! -f "$TOPOLOGY_FILE" ]]; then
   TOPOLOGY_FILE="$ROOT/docs/orchestrator-ops/parallel-role-topology-active.json"
@@ -82,9 +55,20 @@ normalize_role_list() {
 cleanup_stale_runtime_locks() {
   local role_state_dir="${HOME}/.openclaw/cron/role-state"
   local shared_lock_dir="${ROOT}/.tmp/openclaw-shared-locks"
-  find /tmp/fc-agent-locks -name '*.lock' -mmin +20 -delete 2>/dev/null || true
-  if [[ -d "$role_state_dir" ]]; then
-    find "$role_state_dir" -name '*.run.lock' -mmin +20 -delete 2>/dev/null || true
+  local cleanup_script="${ROOT}/scripts/cleanup_stale_role_locks.sh"
+  local stale_min="${FC_STALE_LOCK_MINUTES:-20}"
+  if [[ -f "$cleanup_script" ]]; then
+    FC_STALE_LOCK_MINUTES="$stale_min" \
+    FC_STALE_LOCK_LOG="$LOG_FILE" \
+    FC_ROLE_STATE_DIR="$role_state_dir" \
+    FC_RUNTIME_LOCK_DIR="/tmp/fc-agent-locks" \
+    bash "$cleanup_script" >/dev/null 2>&1 || true
+  else
+    find /tmp/fc-agent-locks -name '*.lock' -mmin +20 -delete 2>/dev/null || true
+    if [[ -d "$role_state_dir" ]]; then
+      find "$role_state_dir" -name '*.run.lock' -mmin +20 -delete 2>/dev/null || true
+      find "$role_state_dir" -name '*.memory.lock' -mmin +20 -delete 2>/dev/null || true
+    fi
   fi
   if [[ -d "$shared_lock_dir" ]]; then
     find "$shared_lock_dir" -name '*.lock' -mmin +30 -delete 2>/dev/null || true
@@ -108,6 +92,53 @@ fi
 
 ts() {
   date '+%Y-%m-%dT%H:%M:%S%z'
+}
+
+role_recovery_runtime_guard() {
+  local now elapsed
+  now="$(date +%s)"
+  elapsed=$((now - RUN_STARTED_EPOCH))
+  if [[ "$elapsed" -gt "$MAX_RUNTIME_SECONDS" ]]; then
+    printf '%s [ERROR] runtime_guard_exceeded elapsed=%ss limit=%ss\n' "$(ts)" "$elapsed" "$MAX_RUNTIME_SECONDS" >> "$LOG_FILE"
+    exit 124
+  fi
+}
+
+lock_holder_pid() {
+  local pid=""
+  if command -v lsof >/dev/null 2>&1; then
+    pid="$(lsof -t "$LOCK_FILE" 2>/dev/null | head -n 1 || true)"
+  elif command -v fuser >/dev/null 2>&1; then
+    pid="$(fuser "$LOCK_FILE" 2>/dev/null | awk '{print $1}' | head -n 1 || true)"
+  fi
+  printf '%s' "$pid"
+}
+
+lock_meta_started_epoch() {
+  local started="0"
+  if [[ -f "$LOCK_META_FILE" ]]; then
+    started="$(awk -F= '/^started_epoch=/{print $2}' "$LOCK_META_FILE" 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ ! "$started" =~ ^[0-9]+$ ]]; then
+    started="0"
+  fi
+  printf '%s' "$started"
+}
+
+write_lock_meta() {
+  local now now_iso
+  now="$(date +%s)"
+  now_iso="$(ts)"
+  cat >"$LOCK_META_FILE" <<EOF
+pid=$$
+started_epoch=$now
+started_iso=$now_iso
+root=$ROOT
+EOF
+}
+
+cleanup_lock_meta() {
+  rm -f "$LOCK_META_FILE" >/dev/null 2>&1 || true
 }
 
 role_session_name() {
@@ -206,9 +237,36 @@ start_or_restart_session() {
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
-    printf '%s [SKIP] auto-recovery already running\n' "$(ts)" >> "$LOG_FILE"
-    exit 0
+    holder_pid="$(lock_holder_pid)"
+    started_epoch="$(lock_meta_started_epoch)"
+    now_epoch="$(date +%s)"
+    age_s=0
+    if [[ "$started_epoch" -gt 0 ]]; then
+      age_s=$((now_epoch - started_epoch))
+      if [[ "$age_s" -lt 0 ]]; then
+        age_s=0
+      fi
+    fi
+    if [[ "$holder_pid" =~ ^[0-9]+$ ]] && [[ "$age_s" -ge "$LOCK_STALE_SECONDS" ]] && [[ "${FC_ROLE_RECOVERY_KILL_STALE_LOCK_PID:-1}" == "1" ]]; then
+      printf '%s [WARN] stale lock holder detected pid=%s age_s=%s threshold_s=%s; attempting terminate\n' "$(ts)" "$holder_pid" "$age_s" "$LOCK_STALE_SECONDS" >> "$LOG_FILE"
+      kill -TERM "$holder_pid" >/dev/null 2>&1 || true
+      sleep 2
+      if kill -0 "$holder_pid" >/dev/null 2>&1; then
+        kill -KILL "$holder_pid" >/dev/null 2>&1 || true
+      fi
+      sleep 1
+      if ! flock -n 9; then
+        printf '%s [SKIP] auto-recovery already running lock_pid=%s age_s=%s\n' "$(ts)" "${holder_pid:-unknown}" "$age_s" >> "$LOG_FILE"
+        exit 0
+      fi
+      printf '%s [INFO] stale lock released; continuing recovery\n' "$(ts)" >> "$LOG_FILE"
+    else
+      printf '%s [SKIP] auto-recovery already running lock_pid=%s age_s=%s\n' "$(ts)" "${holder_pid:-unknown}" "$age_s" >> "$LOG_FILE"
+      exit 0
+    fi
   fi
+  write_lock_meta
+  trap cleanup_lock_meta EXIT
 else
   LOCK_DIR_FALLBACK="${LOCK_FILE}.dirlock"
   if ! mkdir "$LOCK_DIR_FALLBACK" 2>/dev/null; then
@@ -219,6 +277,7 @@ else
 fi
 
 cd "$ROOT"
+role_recovery_runtime_guard
 cleanup_stale_runtime_locks
 
 if ! command -v tmux >/dev/null 2>&1; then
@@ -238,6 +297,7 @@ normalize_role_list
 
 down_roles=()
 for role in "${ROLES[@]}"; do
+  role_recovery_runtime_guard
   session="$(role_session_name "$role")"
   if [[ -z "$session" ]]; then
     printf '%s [WARN] no session mapping for role=%s; skip\n' "$(ts)" "$role" >> "$LOG_FILE"
@@ -250,11 +310,13 @@ done
 
 if [[ ${#down_roles[@]} -eq 0 ]]; then
   printf '%s [OK] no recovery needed; all mapped roles already UP\n' "$(ts)" >> "$LOG_FILE"
+  exec 9>&- 2>/dev/null || true
   exit 0
 fi
 
 printf '%s [WARN] detected DOWN role(s): %s\n' "$(ts)" "$(IFS=,; echo "${down_roles[*]}")" >> "$LOG_FILE"
 for role in "${down_roles[@]}"; do
+  role_recovery_runtime_guard
   session="$(role_session_name "$role")"
   if [[ -z "$session" ]]; then
     printf '%s [WARN] no session mapping for role=%s; skip restart\n' "$(ts)" "$role" >> "$LOG_FILE"
@@ -266,6 +328,7 @@ done
 
 verify_down=()
 for role in "${ROLES[@]}"; do
+  role_recovery_runtime_guard
   session="$(role_session_name "$role")"
   if [[ -z "$session" ]]; then
     continue
@@ -277,8 +340,13 @@ done
 
 if [[ ${#verify_down[@]} -gt 0 ]]; then
   printf '%s [ERROR] recovery failed; roles still DOWN: %s\n' "$(ts)" "$(IFS=,; echo "${verify_down[*]}")" >> "$LOG_FILE"
+  exec 9>&- 2>/dev/null || true
   exit 1
 fi
 
 printf '%s [OK] recovery successful; all mapped roles are UP\n' "$(ts)" >> "$LOG_FILE"
+# Explicitly close FD 9 before exit to prevent tmux from inheriting the flock FD.
+# Without this, tmux keeps FD 9 open after the script exits, permanently holding
+# the flock and causing every subsequent invocation to see 'already running'.
+exec 9>&- 2>/dev/null || true
 exit 0

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-08-BATCH-08-PLAN-20260304T005351Z-518"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-04T00:53:51Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/parallel_workstream.py status --role planner --compact && python3 platform/automation/parallel_workstream.py handoff-close --handoff HO-20260303150825-745 --role planner && python3 platform/automation/parallel_workstream.py handoff-close --handoff HO-20260303210031-323 --role planner"
+      rc: "0"
+      started_at_utc: "2026-03-04T00:53:51Z"
+      ended_at_utc: "2026-03-04T00:53:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner planification documentaire et cohérence workboard)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-PLAN/20260304T005306Z-plan.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-7ffbb3ec2437"
+  review_ref: "none"
+  note: "Plan exécutable publié: chaîne canonique planner/dev/admin, reuse-first API/UI explicite, et suppression des lanes legacy dans BATCH-08."

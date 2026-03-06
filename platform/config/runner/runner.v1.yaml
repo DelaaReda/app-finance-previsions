@@ -1,0 +1,124 @@
+{
+  "version": "v1",
+  "defaults": {
+    "prompt_timeout_seconds": 210,
+    "retry_prompt_timeout_seconds": 90,
+    "tick_timeout_seconds": 540,
+    "stall_abort_seconds": 80,
+    "message_bus": {
+      "enabled": 1,
+      "sticky_default": 1,
+      "default_ttl_min": 10080,
+      "max_active_per_role": 10
+    }
+  },
+  "roles": {
+    "planner": {
+      "model": "gpt-5.2",
+      "thinking": "high",
+      "resume": 1,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 300,
+      "retry_timeout_seconds": 120,
+      "tick_timeout_seconds": 420
+    },
+    "dev": {
+      "model": "gpt-5.3-codex-spark",
+      "thinking": "high",
+      "resume": 1,
+      "codex_require_fresh_tick": 0,
+      "codex_tick_autofix": 1,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
+      "tick_timeout_seconds": 540
+    },
+    "admin": {
+      "model": "gpt-5.2",
+      "thinking": "high",
+      "resume": 1,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 360,
+      "retry_timeout_seconds": 150,
+      "tick_timeout_seconds": 540
+    },
+    "scrum_master": {
+      "model": "gpt-5.2",
+      "thinking": "medium",
+      "resume": 1,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 300,
+      "retry_timeout_seconds": 120,
+      "tick_timeout_seconds": 420,
+      "allow_bus_post": 1,
+      "max_posts_per_tick": 2,
+      "post_cooldown_s": 600
+    }
+  },
+  "features": {
+    "tshape": {
+      "enabled": 1,
+      "trigger": "blocked",
+      "blocked_threshold": 1,
+      "scope": "full_takeover",
+      "exit_policy": "resolved_only",
+      "allowed_targets": "planner,dev"
+    },
+    "admin_dispatcher": {
+      "enabled": 1
+    },
+    "admin_autonomy": {
+      "enabled": 1,
+      "stall_ticks_threshold": 2,
+      "scope": "full_with_proofs",
+      "max_actions": 2,
+      "role_cooldown_s": 300,
+      "retry_backoff_s": 120,
+      "failsafe_max_retries": 3,
+      "proof_gate_strict": 1,
+      "security_window_min": 10
+    },
+    "po_scrum_master": {
+      "enabled": 1,
+      "cron_enabled_profile": "full"
+    },
+    "planner_autonomy": {
+      "enabled": 1,
+      "wait_forbidden": 1,
+      "auto_create_on_empty": 1,
+      "create_source": "vision"
+    },
+    "dev_wait_policy": {
+      "ready_task_only": 1
+    },
+    "stability": {
+      "admin_runtime_stale_autoheal": 1,
+      "scrum_artifact_autofill": 1,
+      "scrum_auto_intents_hardened": 1,
+      "monitor_ready_dev_from_workboard": 1
+    }
+  },
+  "paths": {
+    "state_dir": "/home/venom/.openclaw/cron/role-state",
+    "trace_dir": "logs-codex-runs/role-runner",
+    "orchestrator_dir": "docs/operations/orchestrator"
+  },
+  "timeouts": {
+    "primary_seconds": 210,
+    "retry_seconds": 90,
+    "tick_seconds": 540,
+    "stall_abort_seconds": 80
+  },
+  "retries": {
+    "recovery_threshold": 2,
+    "no_delta_threshold": 12,
+    "skip_retry_on_timeout": 1,
+    "engine_default": "sdk"
+  },
+  "telemetry": {
+    "trace_events_enabled": 1,
+    "event_dedupe_seconds": 4,
+    "publish_monitoring": 1,
+    "publish_iteration_issues": 1
+  }
+}

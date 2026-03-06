@@ -54,7 +54,7 @@ fi
 [[ -n "$roles_issue" ]] || roles_issue="none"
 
 # Cron thinking drift check (flag any enabled job still on thinking=low)
-thinking_low="$(openclaw cron list --json 2>/dev/null | jq -r '[.jobs[]? | select(.enabled==true) | select((.payload.thinking//"")=="low") | .name] | join(",")' 2>/dev/null || true)"
+thinking_low="$( (openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}') | jq -r '[.jobs[]? | select(.enabled==true) | select((.payload.thinking//"")=="low") | .name] | join(",")' 2>/dev/null || true)"
 [[ -n "$thinking_low" ]] || thinking_low="none"
 
 # Fingerprint to avoid spamming identical directives
@@ -73,7 +73,7 @@ msg_common="id=${id} ts=${now_local} issue=${issue:-unknown} ready=${queue_ready
 
 msg_adminagents="MAIN ROUTE ${msg_common} | ACTION: (1) si ready!=none => claim tasks READY et DISPATCH (board: parallel_workstreams). (2) si roles_blocked!=none => clear blockers en rerun role-specifique avec preuves. next=${next_action:-none}"
 
-msg_adminapp="MAIN ROUTE ${msg_common} | ACTION: (1) if stale/error/timeout -> run stale sweep apply + recheck cron_run_manager status. (2) if thinking_low!=none -> patch thinking to xhigh. next=${next_action:-none}"
+msg_adminapp="MAIN ROUTE ${msg_common} | ACTION: (1) if stale/error/timeout -> run stale sweep apply + recheck cron_run_manager status. (2) if thinking_low!=none -> patch thinking to high. next=${next_action:-none}"
 
 msg_sentinel="MAIN ROUTE ${msg_common} | ACTION: surveiller répétition blockers >2 ticks, et dérives thinking/model; escalade TYPE: BLOCKER avec exec_issue code + evidence. next=${next_action:-none}"
 
@@ -101,7 +101,7 @@ maybe_force_run_admin_agents() {
   fi
   # find id by name
   local cron_id=""
-  cron_id="$(openclaw cron list --json 2>/dev/null | jq -r --arg name "$ADMIN_AGENTS_CRON_NAME" '.jobs[]? | select(.name==$name) | (.id // empty)' | head -n 1 || true)"
+  cron_id="$( (openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}') | jq -r --arg name "$ADMIN_AGENTS_CRON_NAME" '.jobs[]? | select(.name==$name) | (.id // empty)' | head -n 1 || true)"
   if [[ -z "$cron_id" ]]; then
     echo "missing_id"
     return 0
@@ -111,6 +111,29 @@ maybe_force_run_admin_agents() {
   if command -v timeout >/dev/null 2>&1; then
     set +e
     timeout "${FORCE_RUN_CMD_TIMEOUT_SECONDS}s" openclaw cron run --timeout "$FORCE_RUN_CRON_TIMEOUT_MS" "$cron_id" >/dev/null 2>&1
+    rc=$?
+    set -e
+  elif command -v gtimeout >/dev/null 2>&1; then
+    set +e
+    gtimeout "${FORCE_RUN_CMD_TIMEOUT_SECONDS}s" openclaw cron run --timeout "$FORCE_RUN_CRON_TIMEOUT_MS" "$cron_id" >/dev/null 2>&1
+    rc=$?
+    set -e
+  elif command -v python3 >/dev/null 2>&1; then
+    set +e
+    python3 - "$FORCE_RUN_CMD_TIMEOUT_SECONDS" "$FORCE_RUN_CRON_TIMEOUT_MS" "$cron_id" >/dev/null 2>&1 <<'PY'
+import subprocess
+import sys
+
+timeout_s = int(sys.argv[1])
+cron_timeout_ms = int(sys.argv[2])
+cron_id = sys.argv[3]
+cmd = ["openclaw", "cron", "run", "--timeout", str(cron_timeout_ms), cron_id]
+try:
+    res = subprocess.run(cmd, timeout=timeout_s)
+    sys.exit(res.returncode)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+PY
     rc=$?
     set -e
   else

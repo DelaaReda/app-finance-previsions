@@ -53,7 +53,7 @@ if ! command -v openclaw >/dev/null 2>&1; then
   exit 3
 fi
 
-cron_json="$(openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+cron_json="$(openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}')"
 total_jobs="$(printf '%s' "$cron_json" | jq '[.jobs[]?] | length' 2>/dev/null || echo 0)"
 error_jobs="$(printf '%s' "$cron_json" | jq '[.jobs[]? | select((.state.lastStatus // "")=="error")] | length' 2>/dev/null || echo 0)"
 running_jobs="$(printf '%s' "$cron_json" | jq '[.jobs[]? | select(.state.runningAtMs!=null)] | length' 2>/dev/null || echo 0)"

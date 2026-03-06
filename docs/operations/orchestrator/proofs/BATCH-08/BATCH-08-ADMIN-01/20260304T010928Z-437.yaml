@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-08-BATCH-08-ADMIN-01-20260304T010928Z-437"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-04T01:09:28Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope validate runtime health and monitor truth after dev chain completion"
+    - "dependency impact ensure queue workboard and monitor api remain aligned for batch-08"
+    - "risk detect stale contracts or false green before governance closure"
+    - "verification run monitor_agents health_check and monitor api status commands on vm"
+    - "rollback keep admin action read-only with no config mutation"
+  architecture_checks:
+    - "monitor_api_and_workboard_must_report_batch-08_dev_chain_progression_consistently"
+    - "canonical_roles_planner_dev_admin_remain_active_in_cron_and_monitor_output"
+    - "contract_smoke_artifact_from_dev-03_is_present_before_admin_signoff"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "ssh venom@dev-vm-utm 'cd ~/analyse-financiere && bash scripts/monitor_agents.sh --compact && bash scripts/fc_health_check.sh | sed -n \"1,28p\" && curl -sS http://127.0.0.1:7779/api/status > /tmp/monitor-status.json'"
+      rc: "0"
+      started_at_utc: "2026-03-04T01:09:28Z"
+      ended_at_utc: "2026-03-04T01:09:28Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "monitor_agents_compact:PASS; fc_health_check_backend_frontend_monitor:PASS; monitor_api_status:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-ADMIN-01/20260304T010907Z-admin01.md"
+handoff:
+  to_role: "planner"
+  handoff_id: "HO-20260304010928-722"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-624648ab14b9"
+  review_ref: "none"
+  note: "Validation runtime post-dev effectuée: monitor API OK, lanes canoniques alignées; frontend 5173 relancé après drift post-restart; health check revalidé."

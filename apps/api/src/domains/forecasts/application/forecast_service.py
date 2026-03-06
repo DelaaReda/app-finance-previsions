@@ -5,22 +5,12 @@ Updated to use hybrid ML + G4F system (FC-P1-013).
 """
 from __future__ import annotations
 from typing import Dict, List, Optional, Any
-from pathlib import Path
 import logging
-import sys
-import pandas as pd
 from datetime import datetime
 
-backend_root = Path(__file__).resolve().parent.parent.parent.parent
-legacy_root = backend_root / "platform" / "legacy"
-if str(backend_root) not in sys.path:
-    sys.path.insert(0, str(backend_root))
-if str(legacy_root) not in sys.path:
-    sys.path.insert(0, str(legacy_root))
-
 from domains.market_data.application.cache_layer import CacheLayerService
-from models.forecast_hybrid_v1 import ForecastHybridV1
-from storage.io import load_json, save_json
+from platform.legacy.models.forecast_hybrid_v1 import ForecastHybridV1
+from platform.legacy.storage.io import BASE_PATH, load_json, save_json
 
 
 def _load_or_compute(
@@ -55,7 +45,8 @@ class ForecastService:
         self._cache_layer = CacheLayerService()
         self.logger = logging.getLogger(__name__)
         self.cache_ttl = 300  # 5 minutes
-        self.data_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "forecast"
+        # Canonical runtime storage root marker (apps/api/runtime/data/**).
+        self.data_root = BASE_PATH
     
     async def get_all_forecasts(self, 
                                asset_type: str = "all", 
@@ -164,34 +155,6 @@ class ForecastService:
         except Exception as e:
             self.logger.error(f"Error generating hybrid forecasts: {e}")
             return {"rows": [], "count": 0, "last_update": datetime.utcnow().isoformat(), "source": ["hybrid_ml_g4f", "error_fallback"], "error": str(e)}
-    
-    def _load_cached_forecasts(self) -> List[Dict[str, Any]]:
-        """Load forecasts from parquet cache."""
-        try:
-            parts = sorted(self.data_path.glob('dt=*'))
-            if parts:
-                latest = parts[-1]
-                final_path = latest / 'final.parquet'
-                if final_path.exists():
-                    df = pd.read_parquet(final_path)
-                    if not df.empty:
-                        # Convert DataFrame to list of dicts
-                        return df.to_dict('records')
-        except Exception:
-            pass
-        return []
-    
-    def _has_cached_data(self) -> bool:
-        """Check if we have any cached forecast data."""
-        try:
-            parts = sorted(self.data_path.glob('dt=*'))
-            if parts:
-                latest = parts[-1]
-                final_path = latest / 'final.parquet'
-                return final_path.exists()
-        except Exception:
-            pass
-        return False
     
     def _generate_fallback_forecasts(self) -> List[Dict[str, Any]]:
         """

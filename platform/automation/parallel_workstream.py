@@ -22,9 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
-DEFAULT_BOARD = Path("docs/orchestrator-ops/parallel-workstreams.json")
-DEFAULT_PRIORITY_QUEUE = Path("docs/orchestrator-ops/priority-queue.json")
-DEFAULT_PROOF_ROOT = Path("docs/orchestrator-ops/proofs")
+DEFAULT_BOARD = Path("docs/operations/orchestrator/parallel-workstreams.json")
+DEFAULT_PRIORITY_QUEUE = Path("docs/operations/orchestrator/priority-queue.json")
+DEFAULT_PROOF_ROOT = Path("docs/operations/orchestrator/proofs")
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SHARED_LOCK_DIR = Path(
     os.environ.get("OPENCLAW_LOCK_DIR", str(ROOT / ".tmp" / "openclaw-shared-locks"))
@@ -33,7 +33,7 @@ DEFAULT_SHARED_LOCK_DIR = Path(
 INTEGRATION_REUSE_TAG = "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS"
 INTEGRATION_REUSE_TAG_ALIAS = "INTEGRATION-APP-ENGINEER-RECOMMENDATIONS"
 PUBLIC_PLANNER_ROLE = "vision-architect-tasks-planner"
-DEPRECATED_ROLES = {"analyst", "architect", "po", "scrum_master"}
+DEPRECATED_ROLES = {"analyst", "architect", "po"}
 DEPRECATED_TASK_CODES = {"PO_REVIEW", "SCRUM_REVIEW"}
 MIN_CHANGE_PLAN_STEPS = 5
 MIN_ARCHITECTURE_CHECKS = 3
@@ -125,14 +125,18 @@ def board_lock(board_path: Path, write: bool = True):
 
 STATE_BACKLOG = "BACKLOG"
 STATE_WAITING_DEP = "WAITING_DEP"
-STATE_READY = "READY"
+STATE_READY_PLANNER = "READY_PLANNER"
+STATE_READY_DEV = "READY_DEV"
+STATE_READY_LEGACY = "READY"
+# Backward-compat alias for previous READY semantics.
+STATE_READY = STATE_READY_PLANNER
 STATE_IN_PROGRESS = "IN_PROGRESS"
 STATE_REVIEW = "REVIEW"
 STATE_DONE = "DONE"
 STATE_BLOCKED = "BLOCKED"
 
 ACTIVE_STATES = {STATE_IN_PROGRESS, STATE_REVIEW}
-READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY}
+READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY, STATE_READY_DEV, STATE_READY_LEGACY}
 PLANNER_GROUP_ROLES = {
     "planner",
     "vision_architect_tasks_planner",
@@ -140,7 +144,6 @@ PLANNER_GROUP_ROLES = {
     "analyst",
     "architect",
     "po",
-    "scrum_master",
     "product_owner",
     "owner",
     "po_engineer",
@@ -165,7 +168,8 @@ ADMIN_GROUP_ROLES = {
 }
 
 ROLE_CATALOG: Dict[str, Dict[str, object]] = {
-    "planner": {"wip_limit": 4, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
+    # Keep planner strictly serial to avoid multi-stream dependency deadlocks.
+    "planner": {"wip_limit": 1, "can_edit": False, "focus": "vision conformance, dispatch hygiene, scope/value decisions, and WIP/flow checks"},
     "backend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "api and backend impl"},
     "frontend_engineer": {"wip_limit": 3, "can_edit": True, "focus": "ui and frontend impl"},
     "data_analyst": {"wip_limit": 2, "can_edit": True, "focus": "data quality and metrics"},
@@ -173,6 +177,7 @@ ROLE_CATALOG: Dict[str, Dict[str, object]] = {
     "integrator": {"wip_limit": 2, "can_edit": True, "focus": "cross-team integration"},
     "dev": {"wip_limit": 6, "can_edit": True, "focus": "build delivery — covers backend_engineer, frontend_engineer, data_analyst, infra_engineer, integrator, tester, qa"},
     "admin": {"wip_limit": 3, "can_edit": True, "focus": "runtime governance, cron/monitor stability, unblock and safety operations"},
+    "scrum_master": {"wip_limit": 2, "can_edit": True, "focus": "active unblock coordination, queue/workboard remediation, escalation"},
     "tester": {"wip_limit": 3, "can_edit": True, "focus": "test automation and checks"},
     "qa": {"wip_limit": 3, "can_edit": True, "focus": "quality gate and validation"},
     "clawsentinel": {"wip_limit": 2, "can_edit": False, "focus": "anti-drift and safety"},
@@ -187,21 +192,15 @@ class TemplateStep:
 
 
 STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
+    # Canonical runtime chain: planner -> dev -> admin -> planner.
     TemplateStep("PLAN", "planner", tuple()),
     TemplateStep("ANALYSIS", "planner", ("PLAN",)),
     TemplateStep("ARCH", "planner", ("ANALYSIS",)),
-    TemplateStep("QA_PREP", "qa", ("PLAN",)),
-    TemplateStep("TEST_PLAN", "tester", ("PLAN",)),
-    TemplateStep("DATA", "data_analyst", ("ANALYSIS",)),
-    TemplateStep("INFRA", "infra_engineer", ("ARCH",)),
-    TemplateStep("BACKEND", "backend_engineer", ("ARCH",)),
-    TemplateStep("FRONTEND", "frontend_engineer", ("ARCH",)),
-    TemplateStep("DEV", "dev", ("ARCH",)),
-    TemplateStep("INTEGRATION", "integrator", ("BACKEND", "FRONTEND", "INFRA", "DATA", "DEV")),
-    TemplateStep("QA_EXEC", "qa", ("INTEGRATION", "QA_PREP", "TEST_PLAN")),
-    TemplateStep("SENTINEL_CHECK", "clawsentinel", ("QA_EXEC",)),
-    # Governance review happens in planner lane (absorbs legacy PO/Scrum steps).
-    TemplateStep("GOV_REVIEW", "planner", ("QA_EXEC", "SENTINEL_CHECK")),
+    TemplateStep("DEV-01", "dev", ("ARCH",)),
+    TemplateStep("DEV-02", "dev", ("DEV-01",)),
+    TemplateStep("DEV-03", "dev", ("DEV-02",)),
+    TemplateStep("ADMIN-01", "admin", ("DEV-03",)),
+    TemplateStep("GOV_REVIEW", "planner", ("ADMIN-01",)),
 )
 
 STREAM_TEMPLATE_DEPS: Dict[str, Tuple[str, ...]] = {step.code: step.deps for step in STREAM_TEMPLATE}
@@ -210,23 +209,17 @@ DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
     "PLAN": [
         "GOVERNANCE-NOTE: keep queue/workboard in sync; run scripts/parallel_workstream.py sync-priority when drift is detected.",
     ],
-    "BACKEND": [
+    "DEV-01": [
         f"{INTEGRATION_REUSE_TAG}: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md.",
     ],
-    "FRONTEND": [
+    "DEV-02": [
         f"{INTEGRATION_REUSE_TAG}: reuse existing widgets (apps/web/src/domains/forecasts/components/*) + shared UI wiring (apps/web/src/platform) before creating new components.",
     ],
-    "INTEGRATION": [
-        f"{INTEGRATION_REUSE_TAG}: prefer wiring existing modules/services over new glue; keep contracts stable; validate E2E with scripts/backend_regression_gate.sh.",
+    "DEV-03": [
+        f"{INTEGRATION_REUSE_TAG}: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests and scripts/backend_regression_gate.sh.",
     ],
-    "DEV": [
-        f"{INTEGRATION_REUSE_TAG}: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests.",
-    ],
-    "TEST_PLAN": [
-        f"{INTEGRATION_REUSE_TAG}: align tests with existing backend pytest suite + scripts/backend_regression_gate.sh; do not invent new harnesses.",
-    ],
-    "QA_EXEC": [
-        f"{INTEGRATION_REUSE_TAG}: validate gate artifacts (evidence/gates/openclaw-gates) vs priority queue + workboard; update docs if drift is found.",
+    "ADMIN-01": [
+        f"{INTEGRATION_REUSE_TAG}: validate monitor/cron/runtime health after dev chain and capture explicit unblock or blocker evidence.",
     ],
     "GOV_REVIEW": [
         "GOVERNANCE-NOTE: final scope/value + flow/WIP review (planner absorbs legacy PO/Scrum steps).",
@@ -592,6 +585,19 @@ def stream_index(board: dict) -> Dict[str, dict]:
     return {str(stream.get("id")): stream for stream in board.get("streams", [])}
 
 
+def _normalize_dep_token(value: str) -> str:
+    """Normalize dependency IDs to absorb underscore/hyphen drift.
+
+    Some manual edits introduce variants like `BATCH-27-GOV-REVIEW` while the
+    canonical task ID is `BATCH-27-GOV_REVIEW`. Normalize separators so runtime
+    dependency evaluation remains stable and does not keep lanes stuck.
+    """
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return ""
+    return re.sub(r"[-_]+", "_", raw)
+
+
 def ensure_stream(
     board: dict,
     stream_id: str,
@@ -637,7 +643,6 @@ def ensure_stream(
         stream["priority"] = priority
         stream["source_state"] = source_state
         stream["updated_at"] = now_iso()
-    legacy_depends = [str(dep).strip().upper() for dep in (legacy_stream_depends_on or []) if str(dep).strip()]
 
     if legacy_tasks:
         kept: List[dict] = []
@@ -660,7 +665,7 @@ def ensure_stream(
         if legacy_tasks and step.code not in legacy_tasks:
             continue
         tid = task_id(stream_id, step.code)
-        deps = legacy_depends if legacy_tasks else [task_id(stream_id, dep) for dep in step.deps]
+        deps = [task_id(stream_id, dep) for dep in step.deps]
         default_notes = DEFAULT_STEP_NOTES.get(step.code, [])
         if tid in tasks:
             existing = tasks[tid]
@@ -739,7 +744,7 @@ def ensure_stream(
 def _legacy_task_state_to_board_state(raw_state: str) -> str:
     value = (raw_state or "").strip().lower()
     if value in {"ready", "rdy", "queued", "queue", "open", "unblocked", "start", "todo"}:
-        return STATE_READY
+        return STATE_READY_PLANNER
     if value in {"in_progress", "inprogress", "working", "started", "wip", "active"}:
         return STATE_IN_PROGRESS
     if value in {"blocked", "blocked_dep", "blocked-dep", "dependency_blocked"}:
@@ -812,7 +817,36 @@ def _all_tasks_for_stream_done(board: dict, stream_id: str) -> bool:
 
 
 def _queue_item_state(item: dict) -> str:
-    return str(item.get("state", "")).strip().upper()
+    return _normalize_state_token(item.get("state", ""))
+
+
+def _normalize_state_token(raw_state: str) -> str:
+    token = str(raw_state or "").strip().upper()
+    if token == "CLOSED":
+        return STATE_DONE
+    if token in {"READY", "READY_PLANNER"}:
+        return STATE_READY
+    if token == "READY_DEV":
+        return STATE_READY_DEV
+    return token or STATE_BACKLOG
+
+
+def _derive_stream_state_from_task_states(states: set[str]) -> str:
+    if STATE_IN_PROGRESS in states or STATE_REVIEW in states:
+        return STATE_IN_PROGRESS
+    if STATE_READY_DEV in states:
+        return STATE_READY_DEV
+    if STATE_READY in states or STATE_READY_LEGACY in states:
+        return STATE_READY
+    if STATE_WAITING_DEP in states:
+        return STATE_WAITING_DEP
+    if STATE_BLOCKED in states:
+        return STATE_BLOCKED
+    if STATE_DONE in states:
+        return STATE_DONE
+    if states:
+        return sorted(states)[0]
+    return STATE_BACKLOG
 
 
 def _dependency_batches_closed(queue_states: Dict[str, str], depends_on: List[str]) -> bool:
@@ -823,6 +857,148 @@ def _dependency_batches_closed(queue_states: Dict[str, str], depends_on: List[st
         if state not in {"CLOSED", "PASS"}:
             return False
     return True
+
+
+def _decouple_inter_batch_dependencies(queue_obj: dict, all_batches: bool = True) -> Dict[str, int]:
+    """Drop inter-batch queue dependencies according to single-batch policy."""
+    items = queue_obj.get("items")
+    if not isinstance(items, list):
+        return {
+            "decoupled_total": 0,
+            "decoupled_closed": 0,
+            "decoupled_open": 0,
+            "waiting_dep_reclassified": 0,
+        }
+
+    counts = {
+        "decoupled_total": 0,
+        "decoupled_closed": 0,
+        "decoupled_open": 0,
+        "waiting_dep_reclassified": 0,
+    }
+    closed_states = {"CLOSED", "DONE", "PASS"}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        state = _queue_item_state(item)
+        should_enforce = all_batches or state not in closed_states
+        deps = [str(dep).strip().upper() for dep in item.get("depends_on", []) if str(dep).strip()]
+        removed_dependencies = False
+        if should_enforce and deps:
+            if not item.get("legacy_depends_on"):
+                item["legacy_depends_on"] = deps
+            item["depends_on"] = []
+            item["dependency_policy"] = "single_batch"
+            item["inter_batch_decoupled_at"] = now_iso()
+            item["updated_at"] = now_iso()
+            counts["decoupled_total"] += 1
+            if state in closed_states:
+                counts["decoupled_closed"] += 1
+            else:
+                counts["decoupled_open"] += 1
+            removed_dependencies = True
+        if removed_dependencies and state == "WAITING_DEP":
+            item["state"] = "PLANNED"
+            item["updated_at"] = now_iso()
+            counts["waiting_dep_reclassified"] += 1
+    return counts
+
+
+def _count_queue_inter_batch_dependencies(queue_obj: dict) -> int:
+    items = queue_obj.get("items")
+    if not isinstance(items, list):
+        return 0
+    total = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        deps = item.get("depends_on", [])
+        if isinstance(deps, list):
+            total += sum(1 for dep in deps if str(dep).strip())
+        elif str(deps).strip():
+            total += 1
+    return total
+
+
+def _queue_inter_batch_dep_count(queue_path: Path) -> int:
+    if not queue_path.exists():
+        return 0
+    try:
+        payload = json.loads(queue_path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    if not isinstance(payload, dict):
+        return 0
+    return _count_queue_inter_batch_dependencies(payload)
+
+
+def _count_cross_stream_task_dependencies(board: dict) -> int:
+    tasks = board.get("tasks", [])
+    if not isinstance(tasks, list) or not tasks:
+        return 0
+    by_id = task_index(board)
+    by_norm: Dict[str, dict] = {}
+    for dep_id, dep_task in by_id.items():
+        token = _normalize_dep_token(dep_id)
+        if token and token not in by_norm:
+            by_norm[token] = dep_task
+
+    total = 0
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        stream_id = str(task.get("stream_id", "")).strip()
+        if not stream_id:
+            continue
+        deps_raw = [str(dep).strip() for dep in (task.get("depends_on") or []) if str(dep).strip()]
+        if not deps_raw:
+            continue
+        for dep in deps_raw:
+            dep_task = by_id.get(dep) or by_id.get(dep.upper()) or by_norm.get(_normalize_dep_token(dep))
+            if not isinstance(dep_task, dict):
+                continue
+            dep_stream = str(dep_task.get("stream_id", "")).strip()
+            if dep_stream and dep_stream != stream_id:
+                total += 1
+    return total
+
+
+def _sanitize_task_dependencies(board: dict) -> int:
+    """Keep only same-stream task dependencies; remove cross-batch links."""
+    tasks = board.get("tasks", [])
+    if not isinstance(tasks, list) or not tasks:
+        return 0
+    by_id = task_index(board)
+    by_norm: Dict[str, dict] = {}
+    for dep_id, dep_task in by_id.items():
+        token = _normalize_dep_token(dep_id)
+        if token and token not in by_norm:
+            by_norm[token] = dep_task
+    cleaned = 0
+    for task in tasks:
+        stream_id = str(task.get("stream_id", "")).strip()
+        deps_raw = [str(dep).strip() for dep in (task.get("depends_on") or []) if str(dep).strip()]
+        if not deps_raw:
+            continue
+        keep: List[str] = []
+        seen: set[str] = set()
+        for dep in deps_raw:
+            dep_task = by_id.get(dep) or by_id.get(dep.upper()) or by_norm.get(_normalize_dep_token(dep))
+            if not isinstance(dep_task, dict):
+                cleaned += 1
+                continue
+            dep_id = str(dep_task.get("id", "")).strip()
+            dep_stream = str(dep_task.get("stream_id", "")).strip()
+            if stream_id and dep_stream and dep_stream != stream_id:
+                cleaned += 1
+                continue
+            if dep_id and dep_id not in seen:
+                keep.append(dep_id)
+                seen.add(dep_id)
+        if keep != deps_raw:
+            task["depends_on"] = keep
+            task["updated_at"] = now_iso()
+    return cleaned
 
 
 def migrate_legacy_stream_tasks(board: dict) -> int:
@@ -869,11 +1045,8 @@ def migrate_legacy_stream_tasks(board: dict) -> int:
             assigned_to = _canonical_role(raw_task.get("assigned_to", ""))
             if not assigned_to:
                 assigned_to = _template_default_role(task_code)
-            depends_on = (
-                list(stream_depends_on)
-                if task_code in legacy_task_codes
-                else [f"{stream_id}-{dep}" for dep in STREAM_TEMPLATE_DEPS.get(task_code, ())]
-            )
+            # No cross-batch dependency propagation: keep only in-stream template deps.
+            depends_on = [f"{stream_id}-{dep}" for dep in STREAM_TEMPLATE_DEPS.get(task_code, ())]
             notes = []
             description = str(raw_task.get("description", "")).strip()
             if description:
@@ -967,11 +1140,21 @@ def migrate_legacy_stream_tasks(board: dict) -> int:
     return migrated
 
 
-def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
+def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None, int, Dict[str, int]]:
     items = queue_obj.get("items")
     if not isinstance(items, list):
         queue_obj["items"] = []
-        return 0, None
+        return (
+            0,
+            None,
+            0,
+            {
+                "decoupled_total": 0,
+                "decoupled_closed": 0,
+                "decoupled_open": 0,
+                "waiting_dep_reclassified": 0,
+            },
+        )
 
     queue_states: Dict[str, str] = {}
     for item in items:
@@ -982,13 +1165,65 @@ def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
 
     closed_count = 0
     opened_batch = None
+    synced_queue_items = 0
+    decoupled_counts = _decouple_inter_batch_dependencies(queue_obj, all_batches=True)
+
+    # Build stream state index from workboard for bidirectional sync.
+    # Task-derived state is preferred (runtime truth), stream-level state is fallback metadata.
+    stream_states_from_wb: Dict[str, str] = {}
+    task_stream_states: Dict[str, set[str]] = {}
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        sid = str(task.get("stream_id", "")).strip().upper()
+        if not sid:
+            continue
+        task_stream_states.setdefault(sid, set()).add(_normalize_state_token(task.get("state", "")))
+    for sid, states in task_stream_states.items():
+        stream_states_from_wb[sid] = _derive_stream_state_from_task_states(states)
+
+    for stream in board.get("streams", []):
+        sid = str(stream.get("id", "")).strip().upper()
+        if sid and sid not in stream_states_from_wb:
+            stream_states_from_wb[sid] = _normalize_state_token(stream.get("state", ""))
+
+    # Keep queue stream-state aligned with workboard stream-state for active lanes.
+    # Previous behavior only propagated WAITING_DEP/READY -> IN_PROGRESS.
+    # That left stale queue entries when a stream returned to READY after plan/arch
+    # completion, causing "queue READY=0" while the workboard had READY tasks.
+    for item in items:
+        item_id = str(item.get("id", "")).strip().upper()
+        if not item_id:
+            continue
+        q_state = queue_states.get(item_id, "")
+        wb_stream_state = stream_states_from_wb.get(item_id, "")
+        desired_state = None
+        if wb_stream_state in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS"}:
+            desired_state = _normalize_state_token(wb_stream_state)
+        elif wb_stream_state in {"WAITING_DEP", "PLANNED"}:
+            desired_state = _normalize_state_token(wb_stream_state)
+        elif wb_stream_state in {"DONE", "CLOSED"}:
+            desired_state = "CLOSED"
+
+        # Also reconcile PLANNED -> READY/IN_PROGRESS when the stream is already active on workboard.
+        if desired_state and q_state in {"PLANNED", "WAITING_DEP", "READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS"} and q_state != desired_state:
+            item["state"] = desired_state
+            item["updated_at"] = now_iso()
+            if desired_state in {"READY", "READY_PLANNER", "READY_DEV"}:
+                item["dispatch_authorized"] = True
+                item.setdefault("ready_at", now_iso())
+            if desired_state == "CLOSED":
+                item.setdefault("closed_at", now_iso())
+                closed_count += 1
+            queue_states[item_id] = desired_state
+            synced_queue_items += 1
 
     for item in items:
         item_id = str(item.get("id", "")).strip().upper()
         if not item_id:
             continue
         state = queue_states.get(item_id, "")
-        if state not in {"READY", "IN_PROGRESS"}:
+        if state not in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS"}:
             continue
         if _all_tasks_for_stream_done(board, item_id):
             item["state"] = "CLOSED"
@@ -996,17 +1231,14 @@ def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
             queue_states[item_id] = "CLOSED"
             closed_count += 1
 
-    active_count = sum(1 for item in items if _queue_item_state(item) in {"READY", "IN_PROGRESS"})
+    active_count = sum(1 for item in items if _queue_item_state(item) in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS"})
     if active_count:
-        return closed_count, None
+        return closed_count, None, synced_queue_items, decoupled_counts
 
     for item in items:
-        if _queue_item_state(item) != "PLANNED":
+        if _queue_item_state(item) not in {"PLANNED", "WAITING_DEP"}:
             continue
-        depends_on = [str(dep).strip() for dep in item.get("depends_on", []) if str(dep).strip()]
-        if not _dependency_batches_closed(queue_states, depends_on):
-            continue
-        item["state"] = "READY"
+        item["state"] = "READY_PLANNER"
         item["dispatch_authorized"] = True
         item.setdefault("ready_at", now_iso())
         if "opened_at" not in item:
@@ -1014,11 +1246,83 @@ def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None]:
         opened_batch = str(item.get("id", "")).strip()
         break
 
-    return closed_count, opened_batch
+    return closed_count, opened_batch, synced_queue_items, decoupled_counts
+
+
+
+def _update_stream_next_action(board: dict) -> None:
+    """Update stream.next_action to reflect the real next READY task.
+    
+    This prevents agents from reading stale next_action like 'ouvrir BATCH-XX-PLAN'
+    when PLAN is already DONE. Called after recompute_states so states are fresh.
+    """
+    tasks_by_stream: dict = {}
+    for task in board.get("tasks", []):
+        sid = str(task.get("stream_id", ""))
+        tasks_by_stream.setdefault(sid, []).append(task)
+
+    for stream in board.get("streams", []):
+        sid = str(stream.get("id", ""))
+        if not sid:
+            continue
+        stream_tasks = tasks_by_stream.get(sid, [])
+        if not stream_tasks:
+            continue
+
+        # Find the first READY or IN_PROGRESS task (canonical next step)
+        ordered_codes = [step.code for step in STREAM_TEMPLATE]
+        def task_order(t: dict) -> int:
+            code = str(t.get("code", "")).upper()
+            try:
+                return ordered_codes.index(code)
+            except ValueError:
+                return 999
+
+        ready_tasks = sorted(
+            [t for t in stream_tasks if t.get("state") in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)],
+            key=task_order
+        )
+        done_tasks = [t for t in stream_tasks if t.get("state") == STATE_DONE]
+
+        if not ready_tasks:
+            # All done or all waiting
+            if len(done_tasks) == len(stream_tasks) and stream_tasks:
+                new_action = "batch complete — awaiting GOV_REVIEW closure"
+            else:
+                # Find next waiting_dep task (what will be ready next)
+                waiting = sorted(
+                    [t for t in stream_tasks if t.get("state") == STATE_WAITING_DEP],
+                    key=task_order
+                )
+                if waiting:
+                    next_t = waiting[0]
+                    new_action = f"attendre completion de {next_t.get('depends_on',['?'])[0] if next_t.get('depends_on') else '?'} puis claim {next_t['id']} (role={next_t.get('role','?')})"
+                else:
+                    continue
+        else:
+            next_t = ready_tasks[0]
+            code = str(next_t.get("code", "")).upper()
+            role = str(next_t.get("role", "?"))
+            tid = str(next_t.get("id", ""))
+            state = str(next_t.get("state", ""))
+            verb = "compléter" if state == STATE_IN_PROGRESS else "claim"
+            ready_label = "READY_DEV" if state == STATE_READY_DEV else "READY_PLANNER"
+            new_action = f"{verb} {tid} ({ready_label} pour {role})"
+
+        old_action = stream.get("next_action", "")
+        if old_action != new_action:
+            stream["next_action"] = new_action
+            stream["updated_at"] = now_iso()
 
 
 def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) -> None:
+    _sanitize_task_dependencies(board)
     tasks_by_id = task_index(board)
+    tasks_by_norm: Dict[str, dict] = {}
+    for _task_id, _task in tasks_by_id.items():
+        _norm = _normalize_dep_token(_task_id)
+        if _norm and _norm not in tasks_by_norm:
+            tasks_by_norm[_norm] = _task
     # Charger la priority-queue pour résoudre les dépendances de haut niveau (BATCH-NN)
     if queue_states is None:
         queue_states = {}
@@ -1033,14 +1337,22 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
             pass
     _queue_closed = {"CLOSED", "DONE", "PASS"}
     for task in board.get("tasks", []):
-        state = str(task.get("state", ""))
+        raw_state = str(task.get("state", ""))
+        state = _normalize_state_token(raw_state)
+        if state != raw_state:
+            task["state"] = state
+            task["updated_at"] = now_iso()
         if state in {STATE_DONE, STATE_BLOCKED, STATE_IN_PROGRESS, STATE_REVIEW}:
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
         def _dep_satisfied(dep: str) -> bool:
             dep_u = dep.strip().upper()
             # Priorité 1: dans le workboard
-            wb_task = tasks_by_id.get(dep_u) or tasks_by_id.get(dep)
+            wb_task = (
+                tasks_by_id.get(dep_u)
+                or tasks_by_id.get(dep)
+                or tasks_by_norm.get(_normalize_dep_token(dep_u))
+            )
             if wb_task:
                 return wb_task.get("state") == STATE_DONE
             # Priorité 2: dans la priority-queue (BATCH-NN)
@@ -1050,7 +1362,8 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
         new_state = task.get("state", STATE_BACKLOG)
         if deps_done:
             if state in READY_LIKE_STATES:
-                new_state = STATE_READY
+                role_token = _canonical_role(str(task.get("role", "")) or str(task.get("assignee", "")))
+                new_state = STATE_READY_DEV if role_token == "dev" else STATE_READY
         else:
             if state in READY_LIKE_STATES:
                 new_state = STATE_WAITING_DEP
@@ -1066,14 +1379,16 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
     for stream in board.get("streams", []):
         stream_id = str(stream.get("id", ""))
         stream_tasks = tasks_by_stream.get(stream_id, [])
-        states = {str(task.get("state", "")) for task in stream_tasks}
+        states = {_normalize_state_token(task.get("state", "")) for task in stream_tasks}
         if stream_tasks and states == {STATE_DONE}:
             stream_state = STATE_DONE
         elif STATE_BLOCKED in states:
             stream_state = STATE_BLOCKED
         elif STATE_IN_PROGRESS in states or STATE_REVIEW in states:
             stream_state = STATE_IN_PROGRESS
-        elif STATE_READY in states:
+        elif STATE_READY_DEV in states:
+            stream_state = STATE_READY_DEV
+        elif STATE_READY in states or STATE_READY_LEGACY in states:
             stream_state = STATE_READY
         else:
             stream_state = STATE_WAITING_DEP
@@ -1090,13 +1405,17 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
     except Exception as exc:
         raise SystemExit(f"QUEUE_READ_ERROR: {queue_path}: {exc}") from exc
 
-    eligible = {"READY", "IN_PROGRESS"}
+    eligible = {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS"}
     if include_pass:
         eligible.add("PASS")
 
     created_streams = 0
     created_tasks = 0
-    closed_streams, opened_batch = _auto_advance_queue(board, queue_obj)
+    # Canonicalize stream states from task truth before queue sync.
+    # Without this pre-pass, stale stream.state (e.g. IN_PROGRESS) can overwrite
+    # queue items even when all tasks have already moved the stream back to READY.
+    recompute_states(board)
+    closed_streams, opened_batch, synced_queue_items, decoupled_counts = _auto_advance_queue(board, queue_obj)
 
     existing_streams = stream_index(board)
     streams_by_id = existing_streams
@@ -1138,7 +1457,20 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
         existing_streams = stream_index(board)
         streams_by_id = existing_streams
 
-    if closed_streams or opened_batch:
+    remaining_inter_batch_deps = _count_queue_inter_batch_dependencies(queue_obj)
+    if remaining_inter_batch_deps > 0:
+        raise SystemExit(
+            "QUEUE_DEP_POLICY_VIOLATION: "
+            f"inter_batch_dependencies_remaining={remaining_inter_batch_deps} queue={queue_path}"
+        )
+
+    if (
+        closed_streams
+        or opened_batch
+        or synced_queue_items
+        or decoupled_counts["decoupled_total"]
+        or decoupled_counts["waiting_dep_reclassified"]
+    ):
         queue_obj.setdefault("updated_at", now_iso())
         queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
         append_event(
@@ -1148,6 +1480,12 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
                 "queue": str(queue_path),
                 "closed_streams": str(closed_streams),
                 "opened_batch": str(opened_batch or "none"),
+                "synced_queue_items": str(synced_queue_items),
+                "decoupled_batches": str(decoupled_counts["decoupled_total"]),
+                "decoupled_total": str(decoupled_counts["decoupled_total"]),
+                "decoupled_closed": str(decoupled_counts["decoupled_closed"]),
+                "decoupled_open": str(decoupled_counts["decoupled_open"]),
+                "waiting_dep_reclassified": str(decoupled_counts["waiting_dep_reclassified"]),
             },
         )
 
@@ -1165,6 +1503,383 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
     return created_streams, created_tasks
 
 
+def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
+    """Non-destructive queue/workboard state reconciliation.
+
+    - use workboard runtime truth (tasks/streams) to refresh queue state
+    - update only non-closed queue entries
+    - do not modify dependency wiring
+    """
+    if not queue_path.exists():
+        raise SystemExit(f"QUEUE_MISSING: {queue_path}")
+    try:
+        queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"QUEUE_READ_ERROR: {queue_path}: {exc}") from exc
+    if not isinstance(queue_obj, dict):
+        raise SystemExit(f"QUEUE_SCHEMA_ERROR: {queue_path} root must be object")
+
+    items = queue_obj.get("items", [])
+    if not isinstance(items, list):
+        queue_obj["items"] = []
+        items = []
+
+    recompute_states(board)
+
+    stream_states_from_wb: Dict[str, str] = {}
+    task_stream_states: Dict[str, set[str]] = {}
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        stream_id = str(task.get("stream_id", "")).strip().upper()
+        if not stream_id:
+            continue
+        task_stream_states.setdefault(stream_id, set()).add(_normalize_state_token(task.get("state", "")))
+    for stream_id, states in task_stream_states.items():
+        stream_states_from_wb[stream_id] = _derive_stream_state_from_task_states(states)
+
+    for stream in board.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+        stream_id = str(stream.get("id", "")).strip().upper()
+        if not stream_id or stream_id in stream_states_from_wb:
+            continue
+        stream_states_from_wb[stream_id] = _normalize_state_token(stream.get("state", ""))
+
+    queue_synced = 0
+    waiting_dep_reclassified = 0
+    queue_changed = False
+    now = now_iso()
+    closed_states = {"CLOSED", "DONE", "PASS"}
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id", "")).strip().upper()
+        if not item_id:
+            continue
+        q_state = _queue_item_state(item)
+        if q_state in closed_states:
+            continue
+        wb_state = stream_states_from_wb.get(item_id, "")
+        if not wb_state:
+            continue
+
+        desired_state = None
+        if wb_state in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "WAITING_DEP", "PLANNED", "REVIEW"}:
+            desired_state = _normalize_state_token(wb_state)
+        elif wb_state in {"DONE", "CLOSED"}:
+            desired_state = "CLOSED"
+
+        if not desired_state or desired_state == q_state:
+            continue
+
+        if q_state == "WAITING_DEP" and desired_state in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "PLANNED"}:
+            waiting_dep_reclassified += 1
+
+        item["state"] = desired_state
+        item["updated_at"] = now
+        if desired_state in {"READY", "READY_PLANNER", "READY_DEV"}:
+            item["dispatch_authorized"] = True
+            item.setdefault("ready_at", now)
+        if desired_state == "CLOSED":
+            item.setdefault("closed_at", now)
+        queue_synced += 1
+        queue_changed = True
+
+    if queue_changed:
+        queue_obj["updated_at"] = now
+        queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+    append_event(
+        board,
+        "reconcile_state",
+        {
+            "queue": str(queue_path),
+            "queue_synced": str(queue_synced),
+            "waiting_dep_reclassified": str(waiting_dep_reclassified),
+            "non_destructive": "1",
+        },
+    )
+    return {
+        "queue_synced": queue_synced,
+        "waiting_dep_reclassified": waiting_dep_reclassified,
+    }
+
+
+def sanitize_queue_dependencies(queue_path: Path, all_batches: bool = True) -> Dict[str, int]:
+    if not queue_path.exists():
+        raise SystemExit(f"QUEUE_MISSING: {queue_path}")
+    try:
+        queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"QUEUE_READ_ERROR: {queue_path}: {exc}") from exc
+    if not isinstance(queue_obj, dict):
+        raise SystemExit(f"QUEUE_SCHEMA_ERROR: {queue_path} root must be object")
+
+    counters = _decouple_inter_batch_dependencies(queue_obj, all_batches=all_batches)
+    remaining = _count_queue_inter_batch_dependencies(queue_obj)
+    if remaining > 0:
+        raise SystemExit(
+            "QUEUE_DEP_POLICY_VIOLATION: "
+            f"inter_batch_dependencies_remaining={remaining} queue={queue_path}"
+        )
+
+    if counters["decoupled_total"] or counters["waiting_dep_reclassified"]:
+        queue_obj.setdefault("updated_at", now_iso())
+        queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    return counters
+
+
+def _parse_iso_epoch(raw: str) -> float | None:
+    token = str(raw or "").strip()
+    if not token:
+        return None
+    try:
+        return datetime.fromisoformat(token.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def _next_batch_id(queue_obj: dict, board: dict) -> str:
+    max_seen = 0
+    pattern = re.compile(r"^BATCH-(\d+)$")
+    for item in queue_obj.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        match = pattern.match(str(item.get("id", "")).strip().upper())
+        if not match:
+            continue
+        max_seen = max(max_seen, int(match.group(1)))
+    for stream in board.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+        match = pattern.match(str(stream.get("id", "")).strip().upper())
+        if not match:
+            continue
+        max_seen = max(max_seen, int(match.group(1)))
+    return f"BATCH-{max_seen + 1:02d}"
+
+
+def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
+    candidates = [
+        workspace_root / "docs/product/planning/PRODUCT_VISION.md",
+        workspace_root / "docs/product/planning/WORKSTATE.md",
+        workspace_root / "docs/planning/WORKSTATE.md",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except Exception:
+            continue
+
+        heading = ""
+        for idx, raw in enumerate(lines, start=1):
+            line = str(raw or "").strip()
+            if not line:
+                continue
+            if line.startswith("#"):
+                heading = line.lstrip("#").strip()[:96]
+                continue
+            # Skip markdown emphasis/italic lines (e.g. _Document de référence...)
+            # and separator lines — these are metadata, not batch titles
+            if line.startswith("_") or line.startswith(">") or line.startswith("-") or line.startswith("|"):
+                continue
+            if line.startswith("---") or line.startswith("==="):
+                continue
+            if len(line) < 12:
+                continue
+            title = line[:96]
+            rel = path.relative_to(workspace_root).as_posix()
+            if heading:
+                return title, f"{rel}#{heading}"
+            return title, f"{rel}:L{idx}"
+
+        if heading:
+            rel = path.relative_to(workspace_root).as_posix()
+            return heading, f"{rel}#{heading}"
+
+    return "Planner Autonomy Batch", "none"
+
+
+def planner_autobatch(
+    board: dict,
+    queue_path: Path,
+    *,
+    reason: str,
+    cooldown_s: int,
+    source: str,
+    workspace_root: Path,
+) -> Dict[str, str]:
+    now = now_iso()
+    now_epoch = datetime.now(timezone.utc).timestamp()
+
+    planner_tasks = [
+        task
+        for task in board.get("tasks", [])
+        if _canonical_role(str(task.get("role", ""))) == "planner"
+    ]
+    planner_actionable = [
+        task
+        for task in planner_tasks
+        if str(task.get("state", "")).upper() in {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW}
+    ]
+    if planner_actionable:
+        return {
+            "status": "skip",
+            "reason": "planner_work_exists",
+            "batch_id": "none",
+            "stream_created": "0",
+            "task_created": "0",
+            "cooldown_applied": "0",
+        }
+
+    last_created_epoch = None
+    for event in reversed(board.get("events", [])):
+        if not isinstance(event, dict):
+            continue
+        if str(event.get("kind", "")).strip() != "planner_autobatch_created":
+            continue
+        last_created_epoch = _parse_iso_epoch(str(event.get("at", "")))
+        if last_created_epoch is not None:
+            break
+    if cooldown_s > 0 and last_created_epoch is not None and (now_epoch - last_created_epoch) < cooldown_s:
+        return {
+            "status": "skip",
+            "reason": "cooldown",
+            "batch_id": "none",
+            "stream_created": "0",
+            "task_created": "0",
+            "cooldown_applied": "1",
+        }
+
+    queue_obj: dict
+    if queue_path.exists():
+        try:
+            queue_obj = json.loads(queue_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise SystemExit(f"QUEUE_READ_ERROR: {queue_path}: {exc}") from exc
+        if not isinstance(queue_obj, dict):
+            raise SystemExit(f"QUEUE_SCHEMA_ERROR: {queue_path} root must be object")
+    else:
+        queue_obj = {"version": 1, "updated_at": now_iso(), "items": [], "meta": {}}
+
+    batch_id = _next_batch_id(queue_obj, board)
+    title, vision_ref = _autobatch_seed(workspace_root)
+
+    # DUPLICATE_TITLE_GUARD: prevent creating the same-titled batch repeatedly.
+    # If an identical title already exists in any non-CLOSED batch, skip creation.
+    existing_titles = {
+        str(i.get("title", "")).strip().lower()
+        for i in queue_obj.get("items", [])
+        if str(i.get("state", "")).upper() not in {"CLOSED", "DONE", "PASS"}
+    }
+    if title.strip().lower() in existing_titles:
+        return {
+            "status": "skip",
+            "reason": "duplicate_title",
+            "batch_id": "none",
+            "stream_created": "0",
+            "task_created": "0",
+            "cooldown_applied": "0",
+        }
+
+    queue_obj.setdefault("items", [])
+    queue_obj["items"].append(
+        {
+            "id": batch_id,
+            "title": title,
+            "state": "READY",
+            "priority": "P2",
+            "owner_role": "planner",
+            "created_by": "planner_autonomy",
+            "vision_ref": vision_ref,
+            "next_action": f"ouvrir {batch_id}-PLAN",
+            "depends_on": [],
+            "dependency_policy": "single_batch",
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+    queue_obj["updated_at"] = now
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+    stream_created = 0
+    if batch_id not in stream_index(board):
+        board.setdefault("streams", []).append(
+            {
+                "id": batch_id,
+                "title": title,
+                "priority": "P2",
+                "source_state": STATE_READY,
+                "state": STATE_READY,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        stream_created = 1
+
+    task_created = 0
+    task_id_value = f"{batch_id}-ANALYSIS"
+    existing_task = task_index(board).get(task_id_value)
+    if existing_task is None:
+        board.setdefault("tasks", []).append(
+            {
+                "id": task_id_value,
+                "stream_id": batch_id,
+                "code": "ANALYSIS",
+                "title": f"{title} [ANALYSIS]",
+                "role": "planner",
+                "state": STATE_READY,
+                "priority": "P2",
+                "depends_on": [],
+                "assignee": "",
+                "blocked_reason": "",
+                "artifacts": [],
+                "notes": [
+                    "AUTOBATCH-NOTE: generated by planner-autobatch to keep planner lane non-passive."
+                ],
+                "handoff_to": "",
+                "created_at": now,
+                "updated_at": now,
+                "started_at": "",
+                "completed_at": "",
+            }
+        )
+        task_created = 1
+    else:
+        existing_task["state"] = STATE_READY
+        existing_task["depends_on"] = []
+        existing_task["updated_at"] = now
+
+    append_event(
+        board,
+        "planner_autobatch_created",
+        {
+            "batch_id": batch_id,
+            "reason": reason or "idle_no_ready",
+            "cooldown_s": str(max(0, cooldown_s)),
+            "source": source or "planner_autobatch_cli",
+            "vision_ref": vision_ref,
+            "stream_created": str(stream_created),
+            "task_created": str(task_created),
+        },
+    )
+    recompute_states(board)
+    return {
+        "status": "ok",
+        "reason": "created",
+        "batch_id": batch_id,
+        "stream_created": str(stream_created),
+        "task_created": str(task_created),
+        "vision_ref": vision_ref,
+        "cooldown_applied": "1" if cooldown_s > 0 else "0",
+    }
+
+
 def iter_tasks_for_role(board: dict, role: str) -> Iterable[dict]:
     role_canonical = _canonical_role(role)
     if not role_canonical:
@@ -1174,6 +1889,21 @@ def iter_tasks_for_role(board: dict, role: str) -> Iterable[dict]:
         for task in board.get("tasks", [])
         if _canonical_role(str(task.get("role", ""))) == role_canonical
     )
+
+
+def dev_ready_tasks(board: dict) -> List[dict]:
+    ready_states = {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW}
+    out: List[dict] = []
+    for task in iter_tasks_for_role(board, "dev"):
+        if str(task.get("state", "")).strip().upper() not in ready_states:
+            continue
+        task_id_value = str(task.get("id", "")).strip()
+        stream_id_value = str(task.get("stream_id", "")).strip()
+        if not task_id_value or not stream_id_value:
+            continue
+        out.append(task)
+    out.sort(key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("id", ""))))
+    return out
 
 
 def role_wip_count(board: dict, role: str) -> int:
@@ -1192,7 +1922,7 @@ def claim_task(
     _wip_limit = 60
     _active_count = sum(
         1 for t in board.get("tasks", [])
-        if str(t.get("state", "")) in (STATE_READY, STATE_IN_PROGRESS)
+        if str(t.get("state", "")) in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)
     )
     if _active_count > _wip_limit:
         raise RuntimeError(
@@ -1203,7 +1933,11 @@ def claim_task(
     # Keep claim behavior consistent with status/context outputs.
     recompute_states(board)
     tasks = list(iter_tasks_for_role(board, role))
-    candidates = [task for task in tasks if str(task.get("state", "")) == STATE_READY]
+    candidates = [
+        task
+        for task in tasks
+        if str(task.get("state", "")).strip().upper() in {STATE_READY, STATE_READY_DEV, "READY"}
+    ]
     candidates.sort(key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("stream_id", "")), str(t.get("code", ""))))
 
     if task_id_override:
@@ -1220,6 +1954,21 @@ def claim_task(
     wip_limit = int(role_conf.get("wip_limit", 2))
     if role_wip_count(board, role) >= wip_limit:
         raise SystemExit(f"WIP_LIMIT_REACHED: role={role} limit={wip_limit}")
+
+    # PLAN_SERIAL_GUARD: planner can only have 1 PLAN-type task IN_PROGRESS at a time
+    # (PLAN tasks bootstrap a batch chain; running 2 simultaneously causes context scatter)
+    if role == "planner":
+        active_plans = [
+            t for t in iter_tasks_for_role(board, role)
+            if str(t.get("state", "")) == STATE_IN_PROGRESS
+            and str(t.get("code", "")).upper().startswith("PLAN")
+        ]
+        chosen_is_plan = str(chosen.get("code", "")).upper().startswith("PLAN")
+        if chosen_is_plan and active_plans:
+            raise SystemExit(
+                f"PLAN_SERIAL_VIOLATION: planner already has IN_PROGRESS PLAN task "
+                f"{active_plans[0].get('id')}. Complete it before claiming {chosen.get('id')}."
+            )
 
     if _requires_prechange_gate(role):
         if not change_plan or not architecture_checks:
@@ -1283,7 +2032,7 @@ def complete_task(
     if task_role != role:
         raise SystemExit(f"COMPLETE_ERROR: role_mismatch task_role={task_role} caller_role={role}")
 
-    if str(task.get("state", "")) not in {STATE_IN_PROGRESS, STATE_READY, STATE_REVIEW}:
+    if str(task.get("state", "")) not in {STATE_IN_PROGRESS, STATE_READY, STATE_READY_DEV, STATE_REVIEW}:
         raise SystemExit(f"COMPLETE_ERROR: invalid_state={task.get('state')} task={task_id_value}")
 
     deps = [dep for dep in task.get("depends_on", []) if dep]
@@ -1494,7 +2243,7 @@ def enforce_handoff_sla(board: dict, ack_sla_seconds: int, close_sla_seconds: in
                     )
                     summary["escalated"] += 1
                     task = tasks.get(task_ref)
-                    if task is not None and str(task.get("state", "")) in {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW}:
+                    if task is not None and str(task.get("state", "")) in {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW}:
                         task["state"] = STATE_BLOCKED
                         task["blocked_reason"] = f"handoff_close_sla_exceeded:{hid}"
                         task["updated_at"] = now_iso()
@@ -1542,7 +2291,7 @@ def _queue_ready_count(queue_path: Path) -> int:
         payload = json.loads(queue_path.read_text(encoding="utf-8"))
     except Exception:
         return 0
-    return sum(1 for item in payload.get("items", []) if str(item.get("state", "")).upper() == STATE_READY)
+    return sum(1 for item in payload.get("items", []) if str(item.get("state", "")).upper() in {STATE_READY, STATE_READY_DEV, "READY"})
 
 
 def _queue_state_map(queue_path: Path) -> Dict[str, str]:
@@ -1651,7 +2400,7 @@ def validate_board(
             if dep not in idx:
                 errors.append(f"MISSING_DEP:{tid}:{dep}")
         state = str(task.get("state", ""))
-        if state == STATE_READY:
+        if state in {STATE_READY, STATE_READY_DEV}:
             deps = task.get("depends_on", [])
             not_done = [dep for dep in deps if idx.get(dep, {}).get("state") != STATE_DONE]
             if not_done:
@@ -1693,11 +2442,23 @@ def validate_board(
                         else:
                             warnings.append(f"INV-DONE-PROOF-WARN:{tid}:{issue}")
 
+    # INV-CROSS-DEP (ERROR): single-batch autonomy policy.
+    cross_task_dep_count = _count_cross_stream_task_dependencies(board)
+    if cross_task_dep_count > 0:
+        errors.append(
+            f"INV-CROSS-DEP-TASK:count={cross_task_dep_count}:owner=planner:remediation=sanitize-dependencies_and_sync-priority"
+        )
+    queue_inter_batch_dep_count = _queue_inter_batch_dep_count(queue_path)
+    if queue_inter_batch_dep_count > 0:
+        errors.append(
+            f"INV-CROSS-DEP-QUEUE:count={queue_inter_batch_dep_count}:owner=planner:remediation=sanitize-dependencies"
+        )
+
     # INV-READY-SYNC (WARN): queue/workboard drift signal.
     queue_states = _queue_state_map(queue_path)
     ready_tasks = []
     for task in tasks:
-        if str(task.get("state", "")) != STATE_READY:
+        if str(task.get("state", "")) not in {STATE_READY, STATE_READY_DEV}:
             continue
         stream_id = str(task.get("stream_id", "")).strip().upper()
         # Ignore READY tasks belonging to streams already marked PASS in the queue.
@@ -1712,7 +2473,7 @@ def validate_board(
         )
 
     # INV-QUEUE-CLOSED-WITH-OPEN-TASKS (WARN): stream marked PASS/CLOSED in queue while actionable tasks remain.
-    actionable_states = {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
+    actionable_states = {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
     stream_open_tasks: Dict[str, List[str]] = {}
     for task in tasks:
         state = str(task.get("state", ""))
@@ -1782,11 +2543,20 @@ def validate_board(
     return errors, warnings
 
 
-def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
+def print_status(board: dict, role: str, compact: bool, limit: int, dev_ready_mode: bool = False) -> None:
     tasks = board.get("tasks", [])
+    if dev_ready_mode:
+        ready = dev_ready_tasks(board)
+        ids = ",".join(str(t.get("id", "")).strip() for t in ready[: max(1, limit)]) or "none"
+        reason = "role_task_present" if ready else "minimal_contract"
+        print(f"DEV_READY count={len(ready)} task_ids={ids} reason={reason}")
+        return
+
     summary = {
         "total": len(tasks),
-        "ready": sum(1 for t in tasks if t.get("state") == STATE_READY),
+        "ready": sum(1 for t in tasks if t.get("state") in {STATE_READY, STATE_READY_DEV}),
+        "ready_planner": sum(1 for t in tasks if t.get("state") == STATE_READY),
+        "ready_dev": sum(1 for t in tasks if t.get("state") == STATE_READY_DEV),
         "in_progress": sum(1 for t in tasks if t.get("state") == STATE_IN_PROGRESS),
         "blocked": sum(1 for t in tasks if t.get("state") == STATE_BLOCKED),
         "done": sum(1 for t in tasks if t.get("state") == STATE_DONE),
@@ -1799,7 +2569,7 @@ def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
             if not role_canonical:
                 raise SystemExit(f"UNKNOWN_ROLE: {role}")
             r_tasks = list(iter_tasks_for_role(board, role_canonical))
-            r_ready = [t for t in r_tasks if t.get("state") == STATE_READY]
+            r_ready = [t for t in r_tasks if t.get("state") in {STATE_READY, STATE_READY_DEV}]
             r_active = [t for t in r_tasks if t.get("state") in ACTIVE_STATES]
             r_blocked = [t for t in r_tasks if t.get("state") == STATE_BLOCKED]
             head = (
@@ -1830,7 +2600,7 @@ def print_status(board: dict, role: str, compact: bool, limit: int) -> None:
         role_tasks = list(iter_tasks_for_role(board, role_name))
         out["by_role"][role_name] = {
             "total": len(role_tasks),
-            "ready": [t for t in role_tasks if t.get("state") == STATE_READY][:limit],
+            "ready": [t for t in role_tasks if t.get("state") in {STATE_READY, STATE_READY_DEV}][:limit],
             "in_progress": [t for t in role_tasks if t.get("state") in ACTIVE_STATES][:limit],
             "blocked": [t for t in role_tasks if t.get("state") == STATE_BLOCKED][:limit],
         }
@@ -1858,7 +2628,7 @@ def print_role_context(board: dict, role: str, limit: int) -> None:
     recompute_states(board)
     role_tasks = list(iter_tasks_for_role(board, role_canonical))
     ready_tasks = sorted(
-        [t for t in role_tasks if str(t.get("state", "")) == STATE_READY],
+        [t for t in role_tasks if str(t.get("state", "")) in {STATE_READY, STATE_READY_DEV}],
         key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("id", ""))),
     )
     active_tasks = [t for t in role_tasks if str(t.get("state", "")) in ACTIVE_STATES]
@@ -1923,7 +2693,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
     recompute_states(board)
     idx = task_index(board)
 
-    actionable_states = {STATE_READY, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
+    actionable_states = {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW, STATE_BLOCKED}
     peer_active_states = {STATE_IN_PROGRESS, STATE_REVIEW}
 
     role_tasks = list(iter_tasks_for_role(board, role_canonical))
@@ -2004,6 +2774,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
 
     own_status_counts = {
         STATE_READY: 0,
+        STATE_READY_DEV: 0,
         STATE_IN_PROGRESS: 0,
         STATE_REVIEW: 0,
         STATE_DONE: 0,
@@ -2028,7 +2799,7 @@ def print_publication_channels_context(board: dict, role: str, limit: int) -> No
         f"peer_events={csv(recent_peer_events)} "
         f"impact_level={impact_level} "
         f"impact_action={impact_action} "
-        f"status_ready={own_status_counts[STATE_READY]} "
+        f"status_ready={own_status_counts[STATE_READY]} status_ready_dev={own_status_counts.get(STATE_READY_DEV,0)} "
         f"status_in_progress={own_status_counts[STATE_IN_PROGRESS]} "
         f"status_review={own_status_counts[STATE_REVIEW]} "
         f"status_done={own_status_counts[STATE_DONE]} "
@@ -2076,10 +2847,24 @@ def build_parser() -> argparse.ArgumentParser:
     sync_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path")
     sync_p.add_argument("--include-pass", action="store_true", help="Also sync PASS streams")
 
+    reconcile_p = sub.add_parser("reconcile-state", help="Non-destructive queue/workboard reconciliation")
+    reconcile_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path")
+
+    sanitize_p = sub.add_parser("sanitize-dependencies", help="Enforce single-batch dependency policy in queue")
+    sanitize_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path")
+    sanitize_p.add_argument("--all-batches", action="store_true", default=True, help="Sanitize dependencies for all batches")
+    sanitize_p.add_argument("--open-only", action="store_true", help="Sanitize only non-closed batches")
+
+    autobatch_p = sub.add_parser("planner-autobatch", help="Create one planner READY batch when planner lane is idle")
+    autobatch_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path")
+    autobatch_p.add_argument("--reason", default="idle_no_ready", help="Reason tag for audit event")
+    autobatch_p.add_argument("--cooldown-s", type=int, default=1800, help="Minimum seconds between autobatch creations")
+
     status_p = sub.add_parser("status", help="Print board status")
     status_p.add_argument("--role", default="", help="Filter by role")
     status_p.add_argument("--compact", action="store_true", help="Compact text output")
     status_p.add_argument("--limit", type=int, default=5, help="Per-list output limit")
+    status_p.add_argument("--dev-ready", action="store_true", help="Print dev executable-ready summary")
 
     claim_p = sub.add_parser("claim", help="Claim one READY task for a role")
     claim_p.add_argument("--role", required=True)
@@ -2178,7 +2963,35 @@ def main() -> int:
             print(f"INIT_OK board={board_path}")
             return 0
 
-    write_commands = {"sync-priority", "claim", "complete", "block", "unblock", "handoff-ack", "handoff-close"}
+    if args.cmd == "sanitize-dependencies":
+        all_batches = bool(args.all_batches) and not bool(args.open_only)
+        with board_lock(board_path):
+            board = load_board(board_path)
+            counters = sanitize_queue_dependencies(Path(args.queue), all_batches=all_batches)
+            append_event(
+                board,
+                "dependency_policy_migration_v1" if all_batches else "dependency_policy_sanitize",
+                {
+                    "queue": str(args.queue),
+                    "dependency_policy": "single_batch",
+                    "all_batches": "1" if all_batches else "0",
+                    "decoupled_total": str(counters["decoupled_total"]),
+                    "decoupled_closed": str(counters["decoupled_closed"]),
+                    "decoupled_open": str(counters["decoupled_open"]),
+                    "waiting_dep_reclassified": str(counters["waiting_dep_reclassified"]),
+                },
+            )
+            save_board(board_path, board)
+        print(
+            "SANITIZE_OK "
+            f"decoupled_total={counters['decoupled_total']} "
+            f"decoupled_closed={counters['decoupled_closed']} "
+            f"decoupled_open={counters['decoupled_open']} "
+            f"waiting_dep_reclassified={counters['waiting_dep_reclassified']}"
+        )
+        return 0
+
+    write_commands = {"sync-priority", "reconcile-state", "planner-autobatch", "claim", "complete", "block", "unblock", "handoff-ack", "handoff-close"}
     lock_write = args.cmd in write_commands or (args.cmd == "enforce-sla" and bool(args.apply))
 
     with board_lock(board_path, write=lock_write):
@@ -2194,11 +3007,54 @@ def main() -> int:
             print(f"SYNC_OK streams_created={created_streams} tasks_created={created_tasks} board={board_path}")
             return 0
 
+        if args.cmd == "reconcile-state":
+            result = reconcile_state(board, Path(args.queue))
+            save_board(board_path, board)
+            print(
+                "RECONCILE_OK "
+                f"queue_synced={result.get('queue_synced', 0)} "
+                f"waiting_dep_reclassified={result.get('waiting_dep_reclassified', 0)} "
+                f"board={board_path}"
+            )
+            return 0
+
+        if args.cmd == "planner-autobatch":
+            result = planner_autobatch(
+                board,
+                Path(str(args.queue)),
+                reason=str(args.reason or "idle_no_ready").strip() or "idle_no_ready",
+                cooldown_s=max(0, int(args.cooldown_s)),
+                source="planner_autobatch_cli",
+                workspace_root=Path.cwd().resolve(),
+            )
+            if result.get("status") == "ok":
+                save_board(board_path, board)
+                print(
+                    "AUTOBATCH_OK "
+                    f"batch_id={result.get('batch_id', 'none')} "
+                    f"stream_created={result.get('stream_created', '0')} "
+                    f"task_created={result.get('task_created', '0')} "
+                    f"cooldown_applied={result.get('cooldown_applied', '0')}"
+                )
+            else:
+                print(
+                    "AUTOBATCH_SKIP "
+                    f"reason={result.get('reason', 'unknown')} "
+                    f"batch_id={result.get('batch_id', 'none')}"
+                )
+            return 0
+
         if args.cmd == "status":
             recompute_states(board)
             role_filter = str(args.role or "").strip()
             role_filter = _canonical_role(role_filter) if role_filter else ""
-            print_status(board, role=role_filter, compact=bool(args.compact), limit=max(1, int(args.limit)))
+            print_status(
+                board,
+                role=role_filter,
+                compact=bool(args.compact),
+                limit=max(1, int(args.limit)),
+                dev_ready_mode=bool(getattr(args, "dev_ready", False)),
+            )
             return 0
 
         if args.cmd == "context":
@@ -2349,10 +3205,15 @@ def main() -> int:
                     print(f"! {warn}")
             else:
                 print("VALIDATE_PASS")
+            cross_task_dep_count = _count_cross_stream_task_dependencies(board)
+            queue_inter_batch_dep_count = _queue_inter_batch_dep_count(Path(str(args.queue)))
             print(
                 f"EVIDENCE tasks={len(board.get('tasks', []))} streams={len(board.get('streams', []))} "
                 f"handoffs_open={sum(1 for h in board.get('handoffs', []) if h.get('status') == 'OPEN')} "
-                f"warnings={len(warnings)} errors={len(errors)}"
+                f"warnings={len(warnings)} errors={len(errors)} "
+                f"cross_dep_count={cross_task_dep_count + queue_inter_batch_dep_count} "
+                f"cross_task_dep_count={cross_task_dep_count} "
+                f"queue_inter_batch_dep_count={queue_inter_batch_dep_count}"
             )
             return 0
 

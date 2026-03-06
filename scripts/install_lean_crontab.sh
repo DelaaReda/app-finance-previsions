@@ -13,7 +13,16 @@
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+if [[ ! -f "$WORKSPACE_HELPER" ]]; then
+  echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
+  exit 2
+fi
+# shellcheck source=/dev/null
+source "$WORKSPACE_HELPER"
+
+ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 cd "$ROOT"
 
 MARKER="# [finance-copilot]"
@@ -44,6 +53,9 @@ ${MARKER} auto_recover_tmux_roles — maintient sessions tmux en vie
 ${MARKER} watchdog_chromium — élimine zombies Chromium
 */15 * * * * ${bash_bin} -lc 'cd ${ROOT} && bash scripts/watchdog_chromium.sh' >> ${LOG_DIR}/watchdog_chromium.log 2>&1
 
+${MARKER} monitor_stack_guard — garde monitor API+tunnel UP
+*/1 * * * * ${bash_bin} -lc 'cd ${ROOT} && bash scripts/monitor_stack_guard.sh' >> ${LOG_DIR}/monitor-guard.cron.log 2>&1
+
 ${MARKER} log_cleanup — réduction bruit historique (archives)
 17 */4 * * * ${bash_bin} -lc 'cd ${ROOT} && bash scripts/cleanup_monitoring_noise.sh' >> ${LOG_DIR}/log-cleanup.log 2>&1
 
@@ -65,13 +77,13 @@ strip_crons() {
     skip { skip=0; next }
     { print }
   ' \
-  | grep -Ev 'scripts/(vm_resume_guard|auto_recover_tmux_roles|watchdog_chromium|cleanup_monitoring_noise|fc_agent_tick)\.sh' \
+  | grep -Ev 'scripts/(vm_resume_guard|auto_recover_tmux_roles|watchdog_chromium|monitor_stack_guard|cleanup_monitoring_noise|fc_agent_tick)\.sh' \
   | cat -s  # cat -s collapse les lignes vides multiples
 }
 
 CURRENT="$(crontab -l 2>/dev/null || true)"
 STRIPPED="$(strip_crons "$CURRENT")"
-EXISTING_COUNT="$(printf '%s\n' "$CURRENT" | grep -Ec '(\[finance-copilot\]|scripts/(vm_resume_guard|auto_recover_tmux_roles|watchdog_chromium|cleanup_monitoring_noise|fc_agent_tick)\.sh)' 2>/dev/null || true)"
+EXISTING_COUNT="$(printf '%s\n' "$CURRENT" | grep -Ec '(\[finance-copilot\]|scripts/(vm_resume_guard|auto_recover_tmux_roles|watchdog_chromium|monitor_stack_guard|cleanup_monitoring_noise|fc_agent_tick)\.sh)' 2>/dev/null || true)"
 [[ -n "$EXISTING_COUNT" ]] || EXISTING_COUNT=0
 log "Entrées projet existantes: $EXISTING_COUNT"
 

@@ -24,11 +24,18 @@ log_error() { echo -e "${RED}[$(date +'%H:%M:%S')]${NC} $1"; }
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 BACKEND_DIR="$PROJECT_DIR/src"
 LEGACY_DIR="$BACKEND_DIR/platform/legacy"
 # Frontend statique (pas de build npm)
 FRONTEND_DIR="$PROJECT_DIR/../web/src/domains/forecasts/pages"
 FRONTEND_DIST="$FRONTEND_DIR"
+MONITOR_GUARD_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_stack_guard.sh"
+MONITOR_WRAPPER_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_server.py"
+MONITOR_URL="${FC_MONITOR_LOCAL_URL:-http://localhost:7779}"
+MONITOR_START_TIMEOUT_SECONDS="${FC_MONITOR_START_TIMEOUT_SECONDS:-25}"
+MONITOR_REQUIRED="${FC_MONITOR_REQUIRED:-1}"
+SYSTEMD_BACKEND_UNIT="finance-backend.service"
 PYTHON_BIN=""
 
 # Résoudre l'interpréteur Python canonique pour ce runtime
@@ -88,7 +95,66 @@ PY
 
 # Vérifier si un port est utilisé
 is_port_in_use() {
-    lsof -i ":$1" >/dev/null 2>&1
+    local port="$1"
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -i ":$port" >/dev/null 2>&1
+        return $?
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[\\.:]${port}\$"
+        return $?
+    fi
+    return 1
+}
+
+is_pid_alive() {
+    local pid_file="$1"
+    local pid=""
+    if [ ! -f "$pid_file" ]; then
+        return 1
+    fi
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    kill -0 "$pid" >/dev/null 2>&1
+}
+
+backend_ready() {
+    curl -fsS "http://localhost:8050/api/health" >/dev/null 2>&1
+}
+
+frontend_ready() {
+    curl -fsS "http://localhost:5173/" >/dev/null 2>&1
+}
+
+monitor_ready() {
+    curl -fsS "http://localhost:7779/api/status" >/dev/null 2>&1 \
+        && curl -fsS "http://localhost:7779/api/runtime-diagnostics" >/dev/null 2>&1
+}
+
+service_running() {
+    local kind="$1"
+    local pid_file="$2"
+    local port="$3"
+    case "$kind" in
+        backend)
+            backend_ready && return 0
+            ;;
+        frontend)
+            frontend_ready && return 0
+            ;;
+        monitor)
+            monitor_ready && return 0
+            ;;
+    esac
+    is_port_in_use "$port" && return 0
+    is_pid_alive "$pid_file" && return 0
+    return 1
+}
+
+has_systemd_backend_unit() {
+    systemctl --user list-unit-files "$SYSTEMD_BACKEND_UNIT" --no-legend >/dev/null 2>&1
 }
 
 # Arrêter proprement les services
@@ -96,12 +162,18 @@ stop_services() {
     log "Arrêt des services existants..."
     
     # Arrêter backend
+    if has_systemd_backend_unit; then
+        systemctl --user stop "$SYSTEMD_BACKEND_UNIT" >/dev/null 2>&1 || true
+    fi
     pkill -f "python.*run_api.py" 2>/dev/null || true
     pkill -f "uvicorn" 2>/dev/null || true
     
     # Arrêter frontend
     pkill -f "http.server 5173" 2>/dev/null || true
     pkill -f "vite.*5173" 2>/dev/null || true
+
+    # Arrêter monitor (serveur API/dashboard)
+    pkill -f "scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
     
     # Nettoyer les PIDs
     rm -f /tmp/finance_copilot_*.pid
@@ -162,13 +234,17 @@ refresh_live_data() {
     # Keep launcher lean: no separate legacy script dependency here.
     run_job "$LEGACY_DIR/jobs/stocks_prices_refresh.py"
 
-    local quality_gate_ok=true
+    local quality_gate_allows_judge_enrich=true
+    local quality_gate_mode="unknown"
+    local quality_gate_domains="none"
     log " → jobs/data_quality_gate.py"
     if ! "$PY" "$LEGACY_DIR/jobs/data_quality_gate.py"; then
-        quality_gate_ok=false
+        quality_gate_allows_judge_enrich=false
         log_warning "Job échoué: jobs/data_quality_gate.py (judge_enrich ignoré)"
     else
-        if ! "$PY" - <<'PY'
+        local quality_gate_eval=""
+        set +e
+        quality_gate_eval="$("$PY" - <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -197,17 +273,53 @@ if degraded is None and isinstance(payload, dict):
 if degraded is None:
     degraded = int(summary.get("files_failed") or 0) > 0
 
-sys.exit(1 if degraded else 0)
+degraded_domains = summary.get("degraded_domains") or []
+if not isinstance(degraded_domains, list):
+    degraded_domains = []
+degraded_domains = [str(x).strip().lower() for x in degraded_domains if str(x).strip()]
+domains_csv = ",".join(degraded_domains) if degraded_domains else "none"
+
+if degraded and set(degraded_domains) == {"judge"}:
+    print(f"QUALITY_GATE_MODE=soft_degraded_judge_only")
+    print(f"QUALITY_GATE_DEGRADED_DOMAINS={domains_csv}")
+    sys.exit(0)
+
+if degraded:
+    print("QUALITY_GATE_MODE=hard_degraded")
+    print(f"QUALITY_GATE_DEGRADED_DOMAINS={domains_csv}")
+    sys.exit(1)
+
+print("QUALITY_GATE_MODE=ok")
+print(f"QUALITY_GATE_DEGRADED_DOMAINS={domains_csv}")
+sys.exit(0)
 PY
-        then
-            quality_gate_ok=false
-            log_warning "Quality gate en mode degradé: judge_enrich ignoré pour éviter garbage in."
+)"
+        local quality_gate_rc=$?
+        set -e
+        quality_gate_mode="$(printf '%s\n' "$quality_gate_eval" | sed -n 's/^QUALITY_GATE_MODE=//p' | tail -n1)"
+        quality_gate_domains="$(printf '%s\n' "$quality_gate_eval" | sed -n 's/^QUALITY_GATE_DEGRADED_DOMAINS=//p' | tail -n1)"
+        quality_gate_mode="${quality_gate_mode:-unknown}"
+        quality_gate_domains="${quality_gate_domains:-none}"
+
+        if [ "$quality_gate_rc" -ne 0 ]; then
+            quality_gate_allows_judge_enrich=false
+        fi
+
+        if [ "$quality_gate_mode" = "soft_degraded_judge_only" ]; then
+            log_warning "Quality gate soft-degraded (judge-only): judge_enrich autorisé (domains=${quality_gate_domains})"
+        elif [ "$quality_gate_mode" = "hard_degraded" ]; then
+            log_warning "Quality gate en mode degradé: judge_enrich ignoré pour éviter garbage in. (domains=${quality_gate_domains})"
+        else
+            log "Quality gate status: ${quality_gate_mode} (domains=${quality_gate_domains})"
         fi
     fi
 
-    if [ "$quality_gate_ok" = true ]; then
+    if [ "$quality_gate_allows_judge_enrich" = true ]; then
         run_job "$LEGACY_DIR/jobs/judge_enrich.py"
+    else
+        log_warning "judge_enrich skip (quality_gate_mode=${quality_gate_mode}, degraded_domains=${quality_gate_domains})"
     fi
+    log " → jobs/judge_quality_report.py"
     run_job "$LEGACY_DIR/jobs/judge_quality_report.py"
 
     log_success "Rafraîchissement des données terminé."
@@ -278,11 +390,24 @@ start_backend() {
     export PYTHONPATH="$BACKEND_DIR"
     ensure_python_bin
     local PY="$PYTHON_BIN"
-    
-    # Démarrer en arrière-plan (logs dans runtime/)
-    nohup "$PY" run_api.py > "$SCRIPT_DIR/api.log" 2>&1 &
-    BACKEND_PID=$!
-    echo $BACKEND_PID > /tmp/finance_copilot_backend.pid
+
+    if has_systemd_backend_unit; then
+        log "Backend systemd détecté: $SYSTEMD_BACKEND_UNIT (restart de l'unité)"
+        if ! systemctl --user restart "$SYSTEMD_BACKEND_UNIT"; then
+            log_error "Échec restart $SYSTEMD_BACKEND_UNIT"
+            systemctl --user status "$SYSTEMD_BACKEND_UNIT" --no-pager --lines=40 || true
+            exit 1
+        fi
+        BACKEND_PID="$(systemctl --user show -p MainPID --value "$SYSTEMD_BACKEND_UNIT" 2>/dev/null || echo "")"
+        if [ -n "$BACKEND_PID" ]; then
+            echo "$BACKEND_PID" > /tmp/finance_copilot_backend.pid
+        fi
+    else
+        # Démarrer en arrière-plan (logs dans runtime/)
+        nohup "$PY" run_api.py > "$SCRIPT_DIR/api.log" 2>&1 &
+        BACKEND_PID=$!
+        echo "$BACKEND_PID" > /tmp/finance_copilot_backend.pid
+    fi
     
     # Attendre que le backend réponde
     log "Attente du démarrage du backend..."
@@ -297,7 +422,11 @@ start_backend() {
     done
     
     log_error "Le backend n'a pas démarré"
-    tail -20 "$SCRIPT_DIR/api.log"
+    if has_systemd_backend_unit; then
+        journalctl --user -u "$SYSTEMD_BACKEND_UNIT" -n 40 --no-pager || true
+    else
+        tail -20 "$SCRIPT_DIR/api.log"
+    fi
     exit 1
 }
 
@@ -332,22 +461,86 @@ start_frontend() {
     exit 1
 }
 
+# Démarrer le monitor runtime (dashboard orchestration)
+wait_monitor_ready() {
+    local timeout="${1:-25}"
+    local waited=0
+    while [ "$waited" -lt "$timeout" ]; do
+        if monitor_ready; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 1
+}
+
+start_monitor() {
+    log "Démarrage du monitor..."
+    local monitor_timeout="$MONITOR_START_TIMEOUT_SECONDS"
+    if ! [[ "$monitor_timeout" =~ ^[0-9]+$ ]] || [ "$monitor_timeout" -lt 5 ]; then
+        monitor_timeout=25
+    fi
+
+    if [ -x "$MONITOR_GUARD_SCRIPT" ]; then
+        if bash "$MONITOR_GUARD_SCRIPT"; then
+            if wait_monitor_ready "$monitor_timeout"; then
+                log_success "✅ Monitor opérationnel"
+                log_success "   URL: $MONITOR_URL"
+                return 0
+            fi
+            log_warning "Monitor guard exécuté mais endpoints monitor indisponibles"
+        else
+            log_warning "monitor_stack_guard.sh a échoué, tentative wrapper direct"
+        fi
+    fi
+
+    if [ -f "$MONITOR_WRAPPER_SCRIPT" ]; then
+        if is_port_in_use 7779 && ! monitor_ready; then
+            log_warning "Port 7779 occupé sans endpoints monitor valides, nettoyage du process stale..."
+            pkill -f "scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
+            sleep 1
+        fi
+        nohup python3 "$MONITOR_WRAPPER_SCRIPT" > /tmp/monitor.log 2>&1 &
+        MONITOR_PID=$!
+        echo "$MONITOR_PID" > /tmp/finance_copilot_monitor.pid
+        if wait_monitor_ready "$monitor_timeout"; then
+            log_success "✅ Monitor opérationnel (wrapper)"
+            log_success "   URL: $MONITOR_URL"
+            return 0
+        fi
+    fi
+
+    if [[ "$MONITOR_REQUIRED" == "1" ]]; then
+        log_error "Monitor non démarré (URL attendue: $MONITOR_URL)"
+        return 1
+    fi
+    log_warning "Monitor non démarré (URL attendue: $MONITOR_URL)"
+    return 0
+}
+
 # Afficher le statut
 status() {
     echo ""
     echo "📊 État des services Finance Copilot"
     echo "======================================"
     
-    if is_port_in_use 8050; then
+    if service_running backend /tmp/finance_copilot_backend.pid 8050; then
         echo -e "${GREEN}✅ Backend${NC}  : EN COURS (http://localhost:8050)"
     else
         echo -e "${RED}❌ Backend${NC}  : ARRÊTÉ"
     fi
     
-    if is_port_in_use 5173; then
+    if service_running frontend /tmp/finance_copilot_frontend.pid 5173; then
         echo -e "${GREEN}✅ Frontend${NC} : EN COURS (http://localhost:5173)"
     else
         echo -e "${RED}❌ Frontend${NC} : ARRÊTÉ"
+    fi
+
+    if service_running monitor /tmp/finance_copilot_monitor.pid 7779; then
+        echo -e "${GREEN}✅ Monitor${NC}  : EN COURS (${MONITOR_URL})"
+    else
+        echo -e "${RED}❌ Monitor${NC}  : ARRÊTÉ"
     fi
     
     echo ""
@@ -380,6 +573,7 @@ start() {
     # Démarrer les services
     start_backend
     start_frontend
+    start_monitor
     
     echo ""
     log_success "🎉 Finance Copilot est opérationnel!"
@@ -388,10 +582,12 @@ start() {
     echo "   Frontend : http://localhost:5173"
     echo "   Backend  : http://localhost:8050"
     echo "   Docs API : http://localhost:8050/docs"
+    echo "   Monitor  : $MONITOR_URL"
     echo ""
     echo "📝 Logs:"
     echo "   Backend  : $SCRIPT_DIR/api.log"
     echo "   Frontend : /tmp/frontend.log"
+    echo "   Monitor  : /tmp/monitor.log (fallback wrapper)"
     echo ""
 }
 
@@ -413,6 +609,7 @@ URLs:
   Frontend : http://localhost:5173
   Backend  : http://localhost:8050
   Docs API : http://localhost:8050/docs
+  Monitor  : $MONITOR_URL
 
 Note: Ce script optimisé utilise le build frontend existant
 et désactive le reload du backend pour éviter les problèmes

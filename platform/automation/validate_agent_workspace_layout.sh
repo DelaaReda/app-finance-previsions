@@ -88,6 +88,17 @@ else
   pass "no ghost RAG file under apps/api/src/runtime/data/rag"
 fi
 
+canonical_rag="apps/api/runtime/data/rag/news.jsonl"
+if [[ -f "$canonical_rag" ]]; then
+  if rg -q "http://test.com|http://fed.com" "$canonical_rag"; then
+    fail "fake RAG markers detected in canonical runtime file: $canonical_rag"
+  else
+    pass "canonical RAG file has no known fake markers"
+  fi
+else
+  pass "canonical RAG file absent (acceptable)"
+fi
+
 src_bak_count="$(find apps/api/src -type f \( -name '*.bak' -o -name '*.bak-*' -o -name '*.bak*' \) 2>/dev/null | wc -l | tr -d ' ')"
 scripts_bak_count="$(find scripts -type f \( -name '*.bak' -o -name '*.bak-*' -o -name '*.bak*' \) 2>/dev/null | wc -l | tr -d ' ')"
 if [[ "$src_bak_count" -eq 0 && "$scripts_bak_count" -eq 0 ]]; then
@@ -118,6 +129,31 @@ do
     warn "bridge module still present (sys.path debt candidate): $bridge"
   fi
 done
+
+legacy_stub_dirs=(
+  "apps/api/src/backend"
+  "apps/api/src/core"
+  "apps/api/src/agents"
+  "apps/api/src/analytics"
+  "apps/api/src/ingestion"
+  "apps/api/src/jobs"
+  "apps/api/src/models"
+  "apps/api/src/runners"
+  "apps/api/src/storage"
+  "apps/api/src/taxonomy"
+  "apps/api/src/schemas"
+)
+stub_present=0
+for d in "${legacy_stub_dirs[@]}"; do
+  if [[ -d "$d" ]]; then
+    stub_present=$((stub_present + 1))
+  fi
+done
+if [[ "$stub_present" -gt 0 ]]; then
+  warn "legacy alias stub dirs present: $stub_present (track for migration cleanup)"
+else
+  pass "no legacy alias stub directories"
+fi
 
 today_utc="$(date_utc_with_offset_days 0)"
 yesterday_utc="$(date_utc_with_offset_days -1)"

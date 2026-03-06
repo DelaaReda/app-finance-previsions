@@ -5,7 +5,19 @@ import os
 import json
 from pathlib import Path
 
-os.chdir("/Users/venom/Documents/analyse-financiere")
+
+def resolve_workspace_root() -> Path:
+    env_root = os.environ.get("FC_WORKSPACE_ROOT", "").strip()
+    if env_root:
+        cand = Path(env_root).expanduser()
+        if cand.exists():
+            return cand
+    # platform/scripts/audit_check.py -> workspace root is two levels up
+    return Path(__file__).resolve().parents[2]
+
+
+ROOT = resolve_workspace_root()
+os.chdir(ROOT)
 
 # Check 1: Broken symlinks
 print("=== SYMLINK VALIDATION ===\n")
@@ -27,20 +39,16 @@ json_files = [
     "docs/orchestrator-ops/priority-queue.json",
     "docs/orchestrator-ops/parallel-workstreams-plumbing.json",
     "platform/config/llm-models.json",
-    "docs/ops/3DAY_MEMORY_DEPLOYMENT_STATUS.md"
 ]
 
 for jf in json_files:
     if Path(jf).exists():
-        if jf.endswith(".json"):
-            try:
-                with open(jf) as f:
-                    json.load(f)
-                print(f"✓ {jf}")
-            except Exception as e:
-                print(f"✗ {jf}: {str(e)[:50]}")
-        else:
-            print(f"✓ {jf} (exists, not JSON)")
+        try:
+            with open(jf) as f:
+                json.load(f)
+            print(f"✓ {jf}")
+        except Exception as e:
+            print(f"✗ {jf}: {str(e)[:50]}")
     else:
         print(f"⚠ {jf} (missing)")
 
@@ -56,9 +64,8 @@ print("\n=== KEY FILES STATUS ===\n")
 key_files = [
     ("SOUL.md", "Identity"),
     ("MEMORY.md", "Long-term memory"),
-    ("memory/today.md", "Today's log"),
     ("scripts/cron_tmux_role_runner.sh", "Agent runner"),
-    ("docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md", "3-day strategy")
+    ("docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md", "3-day strategy"),
 ]
 
 for fname, desc in key_files:

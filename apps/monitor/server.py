@@ -1,15 +1,35 @@
 #!/usr/bin/env python3
 """Finance Copilot — Monitor Web Server — http://localhost:7779"""
 from __future__ import annotations
-import json, os, re, subprocess, time
+import json, os, re, subprocess, sys, time
+import urllib.error
+import urllib.request
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
-from collections import defaultdict
+from collections import Counter, defaultdict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover - Python without zoneinfo
+    ZoneInfo = None
+
+MONITOR_SRC_DIR = Path(__file__).resolve().parent / "src"
+if str(MONITOR_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(MONITOR_SRC_DIR))
+
+from collectors import (  # type: ignore
+    collect_message_bus_snapshot as monitor_collect_message_bus_snapshot,
+    detect_data_source as monitor_detect_data_source,
+)
+from aggregators import (  # type: ignore
+    compute_health as monitor_compute_health,
+    ensure_core_agents as monitor_ensure_core_agents,
+)
+from api import create_doctor_router  # type: ignore
 
 def _latest_mtime(paths: list[Path]) -> float:
     latest = 0.0
@@ -35,6 +55,15 @@ def _load_json_file(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            status = int(getattr(resp, "status", 0) or 0)
+            return 200 <= status < 300
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return False
 
 def _orchestrator_root_for_workspace(p: Path) -> Path | None:
     canonical = p / "docs" / "operations" / "orchestrator"
@@ -87,9 +116,9 @@ def _score_root_candidate(p: Path) -> float:
         # More recent is better: invert by subtracting age bucket.
         age_minutes = max(0.0, (time.time() - latest) / 60.0)
         score += max(0.0, 80.0 - min(80.0, age_minutes))
-    # Very light preference for shared VM mapping only when writable.
-    if "/shared/" in str(p) and _workspace_writable(p):
-        score += 3.0
+    # Shared mounts can drift/lag; prefer canonical workspace unless explicitly forced.
+    if "/shared/" in str(p):
+        score -= 25.0
     return score
 
 def resolve_root() -> Path:
@@ -99,9 +128,9 @@ def resolve_root() -> Path:
         if p.exists():
             return p
     candidates = [
-        Path("/home/venom/shared/analyse-financiere"),
         Path("/home/venom/analyse-financiere"),
-        Path("/Users/venom/Documents/analyse-financiere"),
+        Path("/home/venom/shared/analyse-financiere"),
+        Path.home() / "Documents" / "analyse-financiere",
         Path(__file__).resolve().parents[2],
     ]
     scored: list[tuple[float, Path]] = []
@@ -124,12 +153,260 @@ INSTANCE_ID = os.environ.get(
 CORE_ROLES = ("planner", "dev", "admin")
 ERROR_FEED_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_ERROR_FEED_RECENT_MINUTES", "90")))
 RUNTIME_DIAG_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_RUNTIME_DIAG_RECENT_MINUTES", "90")))
+AGENT_MESSAGES_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_AGENT_MESSAGES_RECENT_MINUTES", "1440")))
 DEFAULT_SCHEDULE_MAP = {
     "planner": [0, 22, 44],
     "dev": [6, 28, 50],
-    "admin": [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
+    "admin": [12, 34, 56],
 }
 ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
+ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or (ROOT / "docs" / "operations" / "orchestrator")
+CANONICAL_ORCH_ROOT = ROOT / "docs" / "operations" / "orchestrator"
+LEGACY_ORCH_ROOT = ROOT / "docs" / "orchestrator-ops"
+ITERATION_ISSUES_EVENTS_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_ITERATION_ISSUES_EVENTS_FILE",
+        str(CANONICAL_ORCH_ROOT / "agent-iteration-issues.jsonl"),
+    )
+).expanduser()
+ITERATION_ISSUES_LATEST_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_ITERATION_ISSUES_LATEST_FILE",
+        str(CANONICAL_ORCH_ROOT / "agent-iteration-issues-latest.json"),
+    )
+).expanduser()
+# Backward-compat alias.
+ITERATION_EVENTS_FILE = ITERATION_ISSUES_EVENTS_FILE
+PLANNER_AUTONOMY_STATE_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_PLANNER_AUTONOMY_STATE_FILE",
+        str(STATE / "planner_autonomy_state.json"),
+    )
+).expanduser()
+ADMIN_TSHAPE_STATE_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_ADMIN_TSHAPE_STATE_FILE",
+        str(STATE / "admin.tshape.state.json"),
+    )
+).expanduser()
+ADMIN_AUTONOMY_STATE_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_ADMIN_AUTONOMY_STATE_FILE",
+        str(STATE / "admin_autonomy_state.json"),
+    )
+).expanduser()
+ADMIN_DISPATCH_LOG_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_ADMIN_DISPATCH_LOG_FILE",
+        str(ROOT / "logs-codex-runs" / "fc-ticks" / "admin.dispatch.log"),
+    )
+).expanduser()
+AGENT_MESSAGE_BUS_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_AGENT_MESSAGE_BUS_FILE",
+        str(ROOT / "docs" / "ops" / "AGENT_MESSAGE_BUS.jsonl"),
+    )
+).expanduser()
+PO_SCRUM_MASTER_REPORT_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_PO_SCRUM_MASTER_REPORT_FILE",
+        str(ROOT / "docs" / "ops" / "PO_SCRUM_MASTER_REPORTS.md"),
+    )
+).expanduser()
+DOCTOR_SCRIPT_FILE = Path(
+    os.environ.get(
+        "FC_MONITOR_DOCTOR_SCRIPT",
+        str(ROOT / "scripts" / "fc_doctor.sh"),
+    )
+).expanduser()
+DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "30")))
+DOCTOR_RUN_TIMEOUT_SECONDS = max(2, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "4")))
+_DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+
+
+def _iteration_issue_event_sources() -> list[Path]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    raw_candidates = [
+        ITERATION_EVENTS_FILE,
+        ITERATION_ISSUES_EVENTS_FILE,
+        CANONICAL_ORCH_ROOT / "agent-iteration-issues.jsonl",
+        LEGACY_ORCH_ROOT / "agent-iteration-issues.jsonl",
+        ROOT / "logs-codex-runs" / "executor-monitoring" / "events.jsonl",
+    ]
+    for path in raw_candidates:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(path)
+    return candidates
+
+
+def _message_bus_snapshot(now_iso: str) -> dict:
+    return monitor_collect_message_bus_snapshot(
+        bus_file=AGENT_MESSAGE_BUS_FILE,
+        now_iso=now_iso,
+        recent_minutes=AGENT_MESSAGES_RECENT_MINUTES,
+        core_roles=CORE_ROLES,
+    )
+
+
+def _po_scrum_master_snapshot(message_bus_snapshot: dict) -> dict:
+    def _lock_skip_streak(role_name: str) -> int:
+        events_path = ROOT / f"logs-codex-runs/role-runner/{role_name}.events.log"
+        lines = _tail_lines(events_path, 240)
+        if not lines:
+            return 0
+        streak = 0
+        seen_lock_event = False
+        for raw in reversed(lines):
+            line = str(raw or "").strip().lower()
+            if "trilock_busy" in line or "trilock_skip" in line:
+                streak += 1
+                seen_lock_event = True
+                continue
+            if "trilock_acquired" in line:
+                return streak if seen_lock_event else 0
+            if seen_lock_event and "event=" in line:
+                break
+        return streak if seen_lock_event else 0
+
+    role = "scrum_master"
+    role_contract = contract(role)
+    role_tick_age = tick_age(role)
+    now_epoch = time.time()
+    run_ts = ""
+    report_ts = ""
+    report_age_min = -1
+    role_contract_file = STATE / f"{role}.last_contract"
+    if role_contract_file.exists():
+        try:
+            run_mtime = float(role_contract_file.stat().st_mtime)
+            run_ts = (
+                datetime.fromtimestamp(run_mtime, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+        except Exception:
+            run_ts = ""
+    if PO_SCRUM_MASTER_REPORT_FILE.exists():
+        try:
+            mtime = float(PO_SCRUM_MASTER_REPORT_FILE.stat().st_mtime)
+            report_ts = (
+                datetime.fromtimestamp(mtime, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+            report_age_min = max(0, int((now_epoch - mtime) // 60))
+        except Exception:
+            report_ts = ""
+            report_age_min = -1
+
+    advisory_active = role_tick_age is not None and role_tick_age >= 0 and role_tick_age <= 180
+    recent_posts = []
+    for item in message_bus_snapshot.get("recent_posts", []) if isinstance(message_bus_snapshot, dict) else []:
+        source = str(item.get("from", "")).strip().lower()
+        if source in {"scrum_master", "po_scrum_master"}:
+            recent_posts.append(item)
+    tick_tail = _tail_lines(ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log", 24)
+    runner_tail = _tail_lines(ROOT / f"logs-codex-runs/role-runner/{role}.live.log", 24)
+    events_tail = _tail_lines(ROOT / f"logs-codex-runs/role-runner/{role}.events.log", 24)
+    lock_skip_streak = _lock_skip_streak(role)
+    return {
+        "name": "po_scrum_master",
+        "lane_role": "scrum_master",
+        "mode": "scheduled_advisory",
+        "active": advisory_active,
+        "last_run": run_ts,
+        "last_run_age_min": role_tick_age if role_tick_age is not None else -1,
+        "status": role_contract.get("STATUS", "UNKNOWN") if role_contract else "UNKNOWN",
+        "verdict": role_contract.get("VERDICT", "UNKNOWN") if role_contract else "UNKNOWN",
+        "blocker": role_contract.get("BLOCKER_ID", "NONE") if role_contract else "NONE",
+        "next": role_contract.get("NEXT", "") if role_contract else "",
+        "last_report_path": str(PO_SCRUM_MASTER_REPORT_FILE),
+        "last_report_ts": report_ts,
+        "last_report_age_min": report_age_min,
+        "lock_skip_streak": lock_skip_streak,
+        "last_messages_posted": len(recent_posts),
+        "recent_messages": recent_posts[:5],
+        "tick_tail": tick_tail,
+        "runner_tail": runner_tail,
+        "events_tail": events_tail,
+        "source": "runtime_contract" if role_contract else "monitor_snapshot",
+    }
+
+
+def doctor_snapshot(force_refresh: bool = False) -> dict:
+    now = time.time()
+    cached_payload = _DOCTOR_CACHE.get("payload")
+    cached_ts = float(_DOCTOR_CACHE.get("ts") or 0.0)
+    if not force_refresh and isinstance(cached_payload, dict) and (now - cached_ts) <= DOCTOR_CACHE_TTL_SECONDS:
+        return cached_payload
+
+    if not DOCTOR_SCRIPT_FILE.exists():
+        payload = {
+            "status": "error",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checks": {},
+            "meta": {
+                "schema_version": "doctor.v1",
+                "error": f"doctor script missing: {DOCTOR_SCRIPT_FILE}",
+                "duration_ms": 0,
+            },
+        }
+        _DOCTOR_CACHE["payload"] = payload
+        _DOCTOR_CACHE["ts"] = now
+        return payload
+
+    try:
+        cp = subprocess.run(
+            [str(DOCTOR_SCRIPT_FILE), "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=DOCTOR_RUN_TIMEOUT_SECONDS,
+            cwd=str(ROOT),
+        )
+        payload = {}
+        try:
+            payload = json.loads(cp.stdout or "{}")
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        if not payload:
+            payload = {
+                "status": "error",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "checks": {},
+                "meta": {
+                    "schema_version": "doctor.v1",
+                    "error": "doctor_invalid_json",
+                    "rc": cp.returncode,
+                    "stderr": (cp.stderr or "")[:240],
+                },
+            }
+        else:
+            meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+            if not isinstance(meta, dict):
+                meta = {}
+            meta["rc"] = cp.returncode
+            payload["meta"] = meta
+    except Exception as exc:
+        payload = {
+            "status": "error",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checks": {},
+            "meta": {
+                "schema_version": "doctor.v1",
+                "error": f"doctor_exec_failed:{exc}",
+            },
+        }
+
+    _DOCTOR_CACHE["payload"] = payload
+    _DOCTOR_CACHE["ts"] = now
+    return payload
 
 
 def _ordered_roles(roles: list[str] | set[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -226,11 +503,45 @@ def active_roles() -> tuple[str, ...]:
     return roles if roles else CORE_ROLES
 
 
+def _role_has_monitor_artifacts(role: str) -> bool:
+    candidate = str(role or "").strip()
+    if not candidate or not ROLE_NAME_RE.fullmatch(candidate):
+        return False
+    probes = (
+        ROOT / f"logs-codex-runs/fc-ticks/{candidate}.tick.log",
+        ROOT / f"logs-codex-runs/fc-ticks/{candidate}.cron.log",
+        ROOT / f"logs-codex-runs/role-runner/{candidate}.live.log",
+        ROOT / f"logs-codex-runs/role-runner/{candidate}.events.log",
+        STATE / f"{candidate}.last_contract",
+    )
+    for path in probes:
+        if not path.exists():
+            continue
+        try:
+            if path.stat().st_size > 0:
+                return True
+        except Exception:
+            return True
+    return False
+
+
+def monitor_roles() -> tuple[str, ...]:
+    roles = list(active_roles())
+    for core_role in CORE_ROLES:
+        if core_role not in roles:
+            roles.append(core_role)
+    if "scrum_master" not in roles:
+        if _role_has_monitor_artifacts("scrum_master") or PO_SCRUM_MASTER_REPORT_FILE.exists():
+            roles.append("scrum_master")
+    ordered = _ordered_roles(roles)
+    return ordered if ordered else CORE_ROLES
+
+
 ROLE_CANONICAL_MAP = {
     "analyst": "planner",
     "architect": "planner",
     "po": "planner",
-    "scrum_master": "planner",
+    "po_scrum_master": "scrum_master",
     "backend_engineer": "dev",
     "frontend_engineer": "dev",
     "data_analyst": "dev",
@@ -297,6 +608,7 @@ LOG_KIND_LABELS = {
 }
 
 app = FastAPI(docs_url=None, redoc_url=None)
+app.include_router(create_doctor_router(doctor_snapshot))
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 def jload(p):
@@ -320,6 +632,31 @@ def orchestrator_file(rel: str) -> Path:
 def monitor_latest_snapshot() -> dict:
     data = jload(orchestrator_file("executors-monitoring-latest.json"))
     return data if isinstance(data, dict) else {}
+
+def dev_parent_snapshot() -> dict:
+    path = ROOT / "logs-codex-runs" / "dev-parent" / "latest.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _dev_autonomy_from_parent(parent: dict | None) -> dict:
+    data = parent if isinstance(parent, dict) else {}
+    return {
+        "coaching_state": str(data.get("coaching_state", "RECOVERING") or "RECOVERING"),
+        "none_no_signal_streak_24h": _int_or_default(data.get("none_signal_streak_24h"), 0),
+        "channels_missing_streak_24h": _int_or_default(data.get("channels_missing_streak_24h"), 0),
+        "contract_guard_block_count_24h": _int_or_default(data.get("contract_guard_block_count_24h"), 0),
+        "issue_reporting_ok_rate_24h": _int_or_default(data.get("issue_reporting_ok_rate_24h"), 100),
+        "delivery_actions_24h": _int_or_default(data.get("delivery_actions_24h"), 0),
+        "enforced_delivery_count_24h": _int_or_default(data.get("enforced_delivery_count_24h"), 0),
+        "stall_recovery_rate_24h": _int_or_default(data.get("stall_recovery_rate_24h"), 100),
+        "ready_seen_without_claim_24h": _int_or_default(data.get("ready_seen_without_claim_24h"), 0),
+    }
 
 def contract(role):
     f = STATE / f"{role}.last_contract"
@@ -351,24 +688,176 @@ def parse_evidence_kv(evidence_line: str) -> dict[str, str]:
         out[key] = v.strip()
     return out
 
+WEAK_EVIDENCE_MARKERS = {
+    "?",
+    "??",
+    "???",
+    "tbd",
+    "todo",
+    "to_do",
+    "fixme",
+    "a_faire",
+    "coming_soon",
+    "unknown",
+    "pending",
+    "later",
+}
+ISSUE_CODE_RE = re.compile(r"^[a-z0-9_]{3,64}$")
+ISSUE_SEVERITIES = {"none", "low", "medium", "high", "critical"}
+ISSUE_BLOCKED_MIN_SEVERITIES = {"medium", "high", "critical"}
+
+
+def _is_empty_marker(value: str) -> bool:
+    token = re.sub(r"\s+", "", str(value or "").strip().lower())
+    return token in {"", "none", "na", "n/a", "null", "-", "non", "aucun", "aucune"}
+
+
+def _is_placeholder_marker(value: str) -> bool:
+    token = re.sub(r"\s+", "", str(value or "").strip().lower())
+    if token in WEAK_EVIDENCE_MARKERS:
+        return True
+    return bool(re.fullmatch(r"[?.!_~\-]+", token))
+
+
+def _is_weak_evidence(value: str) -> bool:
+    text = str(value or "").strip()
+    if _is_empty_marker(text) or _is_placeholder_marker(text):
+        return True
+    return len(text) < 3
+
+
+def _has_required_kv_markers(raw: str, required_keys: tuple[str, ...]) -> bool:
+    text = str(raw or "").strip().lower()
+    if not text:
+        return False
+    for key in required_keys:
+        if not re.search(rf"(^|[;,\s]){re.escape(key.lower())}=", text):
+            return False
+    return True
+
+
+def _reuse_check_valid(raw: str) -> bool:
+    value = str(raw or "").strip()
+    if _is_weak_evidence(value):
+        return False
+    low = value.lower()
+    if low == "none":
+        return False
+    if low.startswith("none"):
+        return bool(re.match(r"^none\(.{3,}\)$", value, flags=re.IGNORECASE))
+    return True
+
+
+def _parse_issue_reporting(evidence: dict[str, str], blocker_id: str, task_update: str) -> dict:
+    missing: list[str] = []
+    errors: list[str] = []
+    for key in ("issues", "issue_count", "issue_severity"):
+        if key not in evidence:
+            missing.append(key)
+
+    issues_raw = str(evidence.get("issues", "none") or "none").strip()
+    issue_count_raw = str(evidence.get("issue_count", "0") or "0").strip()
+    issue_severity = str(evidence.get("issue_severity", "none") or "none").strip().lower()
+
+    issue_codes: list[str] = []
+    invalid_codes: list[str] = []
+    issues_is_none = issues_raw.lower() == "none"
+    if not issues_is_none:
+        for token in issues_raw.split(","):
+            code = token.strip().lower()
+            if not code:
+                continue
+            if ISSUE_CODE_RE.fullmatch(code):
+                issue_codes.append(code)
+            else:
+                invalid_codes.append(code)
+        if invalid_codes:
+            errors.append("invalid_codes")
+        if not issue_codes:
+            errors.append("no_valid_issue_code")
+
+    issue_count = 0
+    if re.fullmatch(r"\d+", issue_count_raw):
+        issue_count = int(issue_count_raw)
+    else:
+        errors.append("issue_count_invalid")
+
+    if issue_severity not in ISSUE_SEVERITIES:
+        errors.append("issue_severity_invalid")
+
+    if issues_is_none:
+        if issue_count != 0 or issue_severity != "none":
+            errors.append("none_inconsistent")
+    else:
+        if issue_count <= 0:
+            errors.append("count_non_positive")
+        if issue_count != len(issue_codes):
+            errors.append("count_mismatch")
+        if issue_severity == "none":
+            errors.append("severity_none_with_issues")
+
+    blocker_present = str(blocker_id or "").strip().upper() not in {"", "NONE", "N/A", "NULL"}
+    if str(task_update or "").strip().lower() == "blocked" or blocker_present:
+        if issues_is_none or issue_count < 1 or issue_severity not in ISSUE_BLOCKED_MIN_SEVERITIES:
+            errors.append("blocked_without_issue_report")
+
+    if issues_is_none:
+        issues = "none"
+        issue_codes = []
+        issue_count = 0
+        issue_severity = "none"
+    else:
+        issues = ",".join(issue_codes)
+        if issue_count <= 0:
+            issue_count = len(issue_codes)
+        if issue_severity not in ISSUE_SEVERITIES:
+            issue_severity = "medium"
+
+    return {
+        "issues": issues or "none",
+        "issue_count": issue_count,
+        "issue_severity": issue_severity,
+        "issue_codes": issue_codes,
+        "issue_reporting_ok": (not missing) and (not errors),
+        "issue_reporting_errors": sorted(set(missing + errors)),
+    }
+
+
 def parse_contract_fields(role: str) -> dict:
     c = contract(role)
     evidence = parse_evidence_kv(c.get("EVIDENCE", ""))
     run_note = evidence.get("run_note", "")
     run_note_words = len([w for w in run_note.split() if w.strip()])
     task_update = evidence.get("task_update", "").strip().lower()
+    issue_report = _parse_issue_reporting(evidence, c.get("BLOCKER_ID", ""), task_update)
     issues: list[str] = []
+    weak_markers: list[str] = []
+    invalid_markers: list[str] = []
+    values_by_field = {
+        "root_cause": evidence.get("root_cause", ""),
+        "fix_applied": evidence.get("fix_applied", ""),
+        "verify": evidence.get("verify", ""),
+        "reuse_check": evidence.get("reuse_check", ""),
+        "architecture_check": evidence.get("architecture_check", ""),
+        "vision_alignment": evidence.get("vision_alignment", ""),
+        "qa_proof": evidence.get("qa_proof", ""),
+    }
     checks = {
         "task_update": bool(task_update),
         "run_note_5w": run_note_words >= 5,
-        "root_cause": bool(evidence.get("root_cause", "").strip()),
-        "fix_applied": bool(evidence.get("fix_applied", "").strip()),
-        "verify": bool(evidence.get("verify", "").strip()),
-        "reuse_check": bool(evidence.get("reuse_check", "").strip()),
-        "architecture_check": bool(evidence.get("architecture_check", "").strip()),
-        "vision_alignment": bool(evidence.get("vision_alignment", "").strip()),
-        "qa_proof": bool(evidence.get("qa_proof", "").strip()),
+        "root_cause": not _is_weak_evidence(values_by_field["root_cause"]),
+        "fix_applied": not _is_weak_evidence(values_by_field["fix_applied"]),
+        "verify": not _is_weak_evidence(values_by_field["verify"]),
+        "reuse_check": not _is_weak_evidence(values_by_field["reuse_check"]),
+        "architecture_check": not _is_weak_evidence(values_by_field["architecture_check"]),
+        "vision_alignment": not _is_weak_evidence(values_by_field["vision_alignment"]),
+        "qa_proof": not _is_weak_evidence(values_by_field["qa_proof"]),
     }
+
+    for field_name, field_value in values_by_field.items():
+        if _is_weak_evidence(field_value):
+            weak_markers.append(field_name)
+
     # Contextual requirements based on task_update.
     if task_update in {"claim", "complete", "handoff"}:
         for key in ("root_cause", "reuse_check"):
@@ -384,10 +873,48 @@ def parse_contract_fields(role: str) -> dict:
                 issues.append(f"missing_{key}")
         if task_update in {"complete", "handoff"} and not checks["qa_proof"]:
             issues.append("missing_qa_proof")
+
+    if checks["reuse_check"] and not _reuse_check_valid(values_by_field["reuse_check"]):
+        invalid_markers.append("reuse_check")
+        issues.append("invalid_reuse_check_format")
+
+    if checks["architecture_check"] and not _has_required_kv_markers(
+        values_by_field["architecture_check"], ("layer", "imports_ok", "path_target")
+    ):
+        invalid_markers.append("architecture_check")
+        issues.append("invalid_architecture_check_format")
+
+    if checks["vision_alignment"] and not _has_required_kv_markers(
+        values_by_field["vision_alignment"], ("batch", "target", "impact")
+    ):
+        invalid_markers.append("vision_alignment")
+        issues.append("invalid_vision_alignment_format")
+
+    if task_update in {"complete", "handoff"}:
+        if checks["verify"] and not _has_required_kv_markers(
+            values_by_field["verify"], ("before", "after", "test")
+        ):
+            invalid_markers.append("verify")
+            issues.append("invalid_verify_format")
+        if checks["qa_proof"] and not _has_required_kv_markers(
+            values_by_field["qa_proof"], ("test", "result")
+        ):
+            invalid_markers.append("qa_proof")
+            issues.append("invalid_qa_proof_format")
+
     if not checks["run_note_5w"]:
         issues.append("run_note_too_short")
+
     score = 100
-    score -= 12 * len(issues)
+    for issue in issues:
+        if issue.startswith("missing_"):
+            score -= 14
+        elif issue.startswith("invalid_"):
+            score -= 11
+        elif issue == "run_note_too_short":
+            score -= 8
+        else:
+            score -= 10
     score = max(0, min(100, score))
     if score >= 80:
         quality = "STRONG"
@@ -400,29 +927,55 @@ def parse_contract_fields(role: str) -> dict:
         "contract": c,
         "evidence": evidence,
         "task_update": task_update or "unknown",
+        "reported_issues": issue_report.get("issues", "none"),
+        "issue_count": int(issue_report.get("issue_count", 0)),
+        "issue_severity": issue_report.get("issue_severity", "none"),
+        "issue_codes": issue_report.get("issue_codes", []),
+        "issue_reporting_ok": bool(issue_report.get("issue_reporting_ok", False)),
+        "issue_reporting_errors": issue_report.get("issue_reporting_errors", []),
         "run_note_words": run_note_words,
         "quality_score": score,
         "quality": quality,
         "issues": issues,
+        "weak_fields": weak_markers,
+        "invalid_fields": invalid_markers,
+        "checks": checks,
     }
 
 def tick_age(role):
     log = ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log"
-    if not log.exists(): return None
-    for l in reversed(log.read_text(encoding="utf-8",errors="ignore").splitlines()):
-        m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", l)
-        if m and any(x in l for x in ("[END]","[SKIP]","[BACKOFF]")):
+    if not log.exists():
+        return None
+    lines = _tail_lines(log, 480)
+    for l in reversed(lines):
+        if not any(x in l for x in ("[END]", "[SKIP]", "[BACKOFF]")):
+            continue
+        ep = _extract_ts_epoch(l)
+        if ep is None:
+            continue
+        age = int((time.time() - ep) / 60)
+        if age < 0:
+            age = 0
+        # Heuristic: if parsed timestamp looks stale but log file just changed,
+        # prefer mtime to avoid timezone skew from naive tick timestamps.
+        if age > 180:
             try:
-                ep = datetime.strptime(m.group(1),"%Y-%m-%dT%H:%M:%S").astimezone(timezone.utc).timestamp()
-                return int((time.time()-ep)/60)
-            except: pass
+                mtime_age = int((time.time() - log.stat().st_mtime) / 60)
+                if 0 <= mtime_age <= 30:
+                    return mtime_age
+            except Exception:
+                pass
+        return age
     return None
 
 def tick_hist(role, n=25):
     log = ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log"
     if not log.exists(): return []
+    n = max(1, int(n))
+    scan = max(160, n * 8)
+    lines = _tail_lines(log, scan)
     out = []
-    for l in reversed(log.read_text(encoding="utf-8",errors="ignore").splitlines()):
+    for l in reversed(lines):
         if len(out)>=n: break
         if not any(x in l for x in ("[END]","[SKIP]","[BACKOFF]")): continue
         ts=re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",l)
@@ -432,11 +985,36 @@ def tick_hist(role, n=25):
                     "type":"SKIP" if "[SKIP]" in l else "BACKOFF" if "[BACKOFF]" in l else "END"})
     return out
 
+
+def _role_state_counter(role: str, suffix: str) -> int:
+    try:
+        path = STATE / f"{role}.{suffix}"
+        if not path.exists():
+            return 0
+        raw = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return int(raw) if raw.isdigit() else 0
+    except Exception:
+        return 0
+
 def _tail_lines(path: Path, n: int) -> list[str]:
     if n <= 0:
         return []
     if not path.exists():
         return []
+    try:
+        proc = subprocess.run(
+            ["tail", "-n", str(int(n)), str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=2.0,
+            check=False,
+        )
+        if proc.returncode == 0:
+            return proc.stdout.splitlines()
+    except Exception:
+        pass
     try:
         return path.read_text(encoding="utf-8", errors="ignore").splitlines()[-n:]
     except Exception:
@@ -464,6 +1042,497 @@ def _tail_jsonl(path: Path, n: int) -> list[dict]:
         return []
     return out
 
+
+def _int_or_default(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _parse_ts_epoch(raw: str) -> float | None:
+    token = str(raw or "").strip()
+    if not token:
+        return None
+    try:
+        if token.endswith("Z"):
+            token = token[:-1] + "+00:00"
+        dt = datetime.fromisoformat(token)
+        if dt.tzinfo is None:
+            local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+            dt = dt.replace(tzinfo=local_tz)
+        return float(dt.timestamp())
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+            dt = datetime.strptime(token, fmt).replace(tzinfo=local_tz)
+            return float(dt.timestamp())
+        except Exception:
+            continue
+    return None
+
+
+def _severity_token(value: str) -> str:
+    token = str(value or "").strip().upper()
+    return token if token in {"INFO", "WARN", "ERROR", "CRITICAL"} else "INFO"
+
+
+def _role_interval_minutes(role: str) -> float:
+    mins = DEFAULT_SCHEDULE_MAP.get(str(role or "").strip(), [])
+    if not mins:
+        return 15.0
+    ordered = sorted({int(x) for x in mins if isinstance(x, int)})
+    if len(ordered) <= 1:
+        return 60.0
+    deltas: list[int] = []
+    for idx, minute in enumerate(ordered):
+        nxt = ordered[(idx + 1) % len(ordered)]
+        delta = (nxt - minute) % 60
+        if delta <= 0:
+            delta = 60
+        deltas.append(delta)
+    return float(min(deltas)) if deltas else 15.0
+
+
+def _load_iteration_issue_rows(
+    *,
+    role: str = "",
+    severity: str = "",
+    recent_minutes: int = 180,
+    n: int = 120,
+) -> list[dict]:
+    lines: list[str] = []
+    scan = max(int(n) * 24, 3000)
+    for candidate in _iteration_issue_event_sources():
+        if not candidate.exists():
+            continue
+        candidate_lines = _tail_lines(candidate, scan)
+        if candidate_lines:
+            lines = candidate_lines
+            break
+    if not lines:
+        return []
+    role_filter = (role or "").strip().lower()
+    severity_raw = str(severity or "").strip().upper()
+    severity_filter = "" if severity_raw in {"", "ALL"} else _severity_token(severity_raw)
+    out: list[dict] = []
+    now_epoch = time.time()
+
+    for raw in reversed(lines):
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(item, dict):
+            continue
+        row_role = str(item.get("role", "")).strip().lower()
+        if role_filter and row_role != role_filter:
+            continue
+
+        ts_raw = str(item.get("ts_utc", "") or "")
+        ts_epoch = _parse_ts_epoch(ts_raw)
+        if recent_minutes > 0 and ts_epoch is not None and (now_epoch - ts_epoch) > (recent_minutes * 60):
+            continue
+
+        issue_status = str(item.get("issue_status", "") or "").strip().lower()
+        issue_count = _int_or_default(item.get("issue_count"), 0)
+        if issue_status not in {"none", "has_issues"}:
+            issue_status = ""
+        if not issue_status:
+            issue_status = "has_issues" if issue_count > 0 else "none"
+        sev_raw = str(item.get("max_severity", "") or "").strip()
+        if not sev_raw:
+            sev_norm = str(item.get("issue_severity", "") or "").strip().lower()
+            if sev_norm in {"critical"}:
+                sev_raw = "CRITICAL"
+            elif sev_norm in {"high"}:
+                sev_raw = "ERROR"
+            elif sev_norm in {"medium", "low"}:
+                sev_raw = "WARN"
+            else:
+                sev_raw = "INFO"
+        max_sev = _severity_token(sev_raw)
+        issue_severity = str(item.get("issue_severity", "") or "").strip().lower()
+        if issue_severity not in {"none", "low", "medium", "high", "critical"}:
+            issue_severity = {
+                "CRITICAL": "critical",
+                "ERROR": "high",
+                "WARN": "medium",
+                "INFO": "none",
+            }.get(max_sev, "none")
+        if severity_filter and severity_filter != "INFO" and max_sev != severity_filter:
+            continue
+        if severity_filter == "INFO" and issue_status != "none":
+            continue
+
+        issues_raw = item.get("issues", [])
+        issues = issues_raw if isinstance(issues_raw, list) else []
+        issue_codes: list[str] = []
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            code = str(issue.get("code", "")).strip()
+            if code:
+                issue_codes.append(code)
+
+        out.append(
+            {
+                "ts_utc": ts_raw,
+                "tick_id": str(item.get("tick_id", "") or ""),
+                "role": str(item.get("role", "") or ""),
+                "agent_bin": str(item.get("agent_bin", "") or ""),
+                "channel": str(item.get("channel", "") or ""),
+                "source": str(item.get("source", "") or ""),
+                "status": str(item.get("status", "") or ""),
+                "verdict": str(item.get("verdict", "") or ""),
+                "rc_primary": _int_or_default(item.get("rc_primary"), 0),
+                "rc_retry": _int_or_default(item.get("rc_retry"), 0),
+                "rc_final": _int_or_default(item.get("rc_final"), 0),
+                "issue_status": issue_status,
+                "issue_count": issue_count,
+                "max_severity": max_sev,
+                "issue_severity": issue_severity,
+                "issue_codes": issue_codes,
+                "issues": issues,
+                "next_action": str(item.get("next_action", "") or ""),
+                "queue_version": str(item.get("queue_version", "") or ""),
+                "workboard_version": str(item.get("workboard_version", "") or ""),
+                "issue_reporting_ok": bool(item.get("issue_reporting_ok", True)),
+                "issue_reporting_errors": item.get("issue_reporting_errors", []),
+                "evidence_paths": item.get("evidence_paths", []),
+            }
+        )
+        if len(out) >= n:
+            break
+    return out
+
+
+def _latest_issue_by_role(rows: list[dict]) -> dict[str, dict]:
+    latest: dict[str, dict] = {}
+    for row in rows:
+        role = str(row.get("role", "")).strip()
+        if not role:
+            continue
+        old = latest.get(role)
+        if old is None:
+            latest[role] = row
+            continue
+        old_ts = _parse_ts_epoch(str(old.get("ts_utc", "")))
+        new_ts = _parse_ts_epoch(str(row.get("ts_utc", "")))
+        if new_ts is None:
+            continue
+        if old_ts is None or new_ts > old_ts:
+            latest[role] = row
+    return latest
+
+
+def _issue_summary_window(window_min: int = 60) -> dict:
+    rows = _load_iteration_issue_rows(recent_minutes=window_min, n=6000)
+    totals = {"INFO": 0, "WARN": 0, "ERROR": 0, "CRITICAL": 0}
+    top_codes: Counter[str] = Counter()
+    roles_touched: set[str] = set()
+    issue_counts_by_role: Counter[str] = Counter()
+    role_latest = _latest_issue_by_role(rows)
+    mttr_samples: defaultdict[str, list[float]] = defaultdict(list)
+    open_since: dict[str, float] = {}
+
+    rows_sorted = sorted(rows, key=lambda r: _parse_ts_epoch(str(r.get("ts_utc", ""))) or 0.0)
+    for row in rows_sorted:
+        role = str(row.get("role", "")).strip()
+        if not role:
+            continue
+        ts_epoch = _parse_ts_epoch(str(row.get("ts_utc", "")))
+        if ts_epoch is None:
+            continue
+        issue_state = str(row.get("issue_status", "none")).lower()
+        if issue_state == "has_issues":
+            sev = _severity_token(row.get("max_severity", "INFO"))
+            totals[sev] += 1
+            roles_touched.add(role)
+            issue_counts_by_role[role] += int(row.get("issue_count") or 0)
+            for code in row.get("issue_codes", []):
+                top_codes[str(code)] += 1
+            open_since.setdefault(role, ts_epoch)
+        else:
+            started = open_since.pop(role, None)
+            if started is not None and ts_epoch >= started:
+                mttr_samples[role].append((ts_epoch - started) / 60.0)
+
+    mttr: dict[str, float | None] = {}
+    for role in sorted(set(list(mttr_samples.keys()) + list(role_latest.keys()))):
+        samples = mttr_samples.get(role, [])
+        if not samples:
+            mttr[role] = None
+            continue
+        mttr[role] = round(sum(samples) / float(len(samples)), 2)
+
+    now_epoch = time.time()
+    issue_publication_gap_roles: list[str] = []
+    roles_scope = active_roles()
+    for role in roles_scope:
+        latest = role_latest.get(role)
+        if isinstance(latest, dict):
+            report_ok = bool(latest.get("issue_reporting_ok", True))
+            if not report_ok:
+                issue_publication_gap_roles.append(role)
+                continue
+            ts_epoch = _parse_ts_epoch(str(latest.get("ts_utc", "")))
+        else:
+            ts_epoch = None
+        allowed = _role_interval_minutes(role) * 1.5
+        if ts_epoch is None:
+            issue_publication_gap_roles.append(role)
+            continue
+        age_min = (now_epoch - ts_epoch) / 60.0
+        if age_min > allowed:
+            issue_publication_gap_roles.append(role)
+
+    return {
+        "window_min": window_min,
+        "total_records": len(rows),
+        "totals_by_severity": totals,
+        "top_codes": [{"code": code, "count": count} for code, count in top_codes.most_common(8)],
+        "roles_touched": sorted(roles_touched),
+        "mttr_estimated_by_role": mttr,
+        "issues_recent_by_role": {role: int(issue_counts_by_role.get(role, 0)) for role in roles_scope},
+        "critical_open_count": int(totals.get("CRITICAL", 0)),
+        "issue_publication_gap_roles": sorted(issue_publication_gap_roles),
+        "role_latest": role_latest,
+    }
+
+
+def planner_autonomy_snapshot(now_ts: float | None = None) -> dict:
+    now_epoch = float(now_ts if now_ts is not None else time.time())
+    cutoff = now_epoch - 86400.0
+    latest_path = orchestrator_file("planner-guardian-latest.json")
+    events_path = orchestrator_file("planner-guardian-events.jsonl")
+
+    latest = _load_json_file(latest_path) if latest_path.exists() else {}
+    if not isinstance(latest, dict):
+        latest = {}
+
+    state = _load_planner_autonomy_state()
+    if not isinstance(state, dict):
+        state = {}
+
+    ready_idle_streak = _int_or_default(latest.get("ready_idle_streak"), 0)
+    low_score_streak = _int_or_default(latest.get("low_score_streak"), 0)
+    runway_no_batch_streak = _int_or_default(latest.get("runway_no_batch_streak"), 0)
+
+    autofix_count_24h = 0
+    last_autofix_reason = ""
+    if events_path.exists():
+        lines = _tail_lines(events_path, 2400)
+        for raw in reversed(lines):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(item, dict):
+                continue
+            ts = _parse_ts_epoch(
+                str(item.get("ts_utc") or item.get("ts") or item.get("timestamp") or "")
+            )
+            if ts is not None and ts < cutoff:
+                continue
+            reason = str(
+                item.get("reason")
+                or item.get("autofix_reason")
+                or item.get("detail")
+                or item.get("message")
+                or ""
+            ).strip()
+            ev_name = str(item.get("event") or item.get("kind") or "").strip().lower()
+            action = str(item.get("action") or "").strip().lower()
+            is_autofix = bool(item.get("autofix_applied"))
+            if not is_autofix and ("autofix" in ev_name or "auto_fix" in ev_name or "auto-fix" in ev_name):
+                is_autofix = True
+            if not is_autofix and ("autofix" in action or "auto_fix" in action or "auto-fix" in action):
+                is_autofix = True
+            if not is_autofix and "autofix" in reason.lower():
+                is_autofix = True
+            if not is_autofix:
+                continue
+            autofix_count_24h += 1
+            if not last_autofix_reason:
+                last_autofix_reason = reason or ev_name or action
+
+    if not last_autofix_reason:
+        last_autofix_reason = str(latest.get("last_autofix_reason") or "").strip()
+
+    since_ts = str(state.get("since_ts") or "").strip()
+    age_min = -1
+    if since_ts:
+        ts_epoch = _parse_ts_epoch(since_ts)
+        if ts_epoch is not None:
+            age_min = max(0, int((now_epoch - ts_epoch) // 60))
+
+    return {
+        "active": bool(state.get("active", False)),
+        "since_ts": since_ts,
+        "age_min": age_min,
+        "last_action": str(state.get("last_action", "idle") or "idle").strip() or "idle",
+        "last_outcome": str(state.get("last_outcome", "none") or "none").strip() or "none",
+        "reason": str(state.get("reason", "none") or "none").strip() or "none",
+        "target_task": str(state.get("target_task", "none") or "none").strip() or "none",
+        "issue_code": str(state.get("issue_code", "none") or "none").strip() or "none",
+        "policy_enforced": bool(state.get("policy_enforced", True)),
+        "wait_forbidden": bool(state.get("wait_forbidden", True)),
+        "ready_idle_streak": ready_idle_streak,
+        "low_score_streak": low_score_streak,
+        "runway_no_batch_streak": runway_no_batch_streak,
+        "autofix_count_24h": autofix_count_24h,
+        "last_autofix_reason": last_autofix_reason,
+        "source": str(state.get("source") or PLANNER_AUTONOMY_STATE_FILE),
+    }
+
+
+def admin_tshape_snapshot(now_ts: float | None = None) -> dict:
+    now_epoch = float(now_ts if now_ts is not None else time.time())
+    state_file = ADMIN_TSHAPE_STATE_FILE
+    payload = {
+        "active": False,
+        "target_role": "",
+        "since_ts": "",
+        "reason_blocker": "NONE",
+        "last_action": "idle",
+        "resolved": True,
+        "blocked_streak": 0,
+        "blocked_roles": [],
+        "age_min": -1,
+        "source": str(state_file),
+    }
+    base = _load_admin_tshape_state()
+    if not isinstance(base, dict):
+        return payload
+
+    since_ts = str(base.get("since_ts") or "").strip()
+    age_min = -1
+    if since_ts:
+        ts_epoch = _parse_ts_epoch(since_ts)
+        if ts_epoch is not None:
+            age_min = max(0, int((now_epoch - ts_epoch) // 60))
+
+    payload.update(
+        {
+            "active": bool(base.get("active", False)),
+            "target_role": str(base.get("target_role") or "").strip(),
+            "since_ts": since_ts,
+            "reason_blocker": str(base.get("reason_blocker") or "NONE").strip() or "NONE",
+            "last_action": str(base.get("last_action") or "idle").strip() or "idle",
+            "resolved": bool(base.get("resolved", False)),
+            "blocked_streak": _int_or_default(base.get("blocked_streak"), 0),
+            "blocked_roles": base.get("blocked_roles", []) if isinstance(base.get("blocked_roles"), list) else [],
+            "age_min": age_min,
+            "source": str(base.get("source") or state_file),
+        }
+    )
+    return payload
+
+
+def admin_autonomy_snapshot(now_ts: float | None = None) -> dict:
+    now_epoch = float(now_ts if now_ts is not None else time.time())
+    state = _load_admin_autonomy_state()
+    if not isinstance(state, dict):
+        state = {}
+    since_ts = str(state.get("since_ts") or "").strip()
+    age_min = -1
+    if since_ts:
+        ts_epoch = _parse_ts_epoch(since_ts)
+        if ts_epoch is not None:
+            age_min = max(0, int((now_epoch - ts_epoch) // 60))
+    streak = state.get("streak_by_role", {})
+    if not isinstance(streak, dict):
+        streak = {}
+    needs_review = state.get("needs_human_review_by_role", {})
+    if not isinstance(needs_review, dict):
+        needs_review = {}
+    return {
+        "active": bool(state.get("active", False)),
+        "trigger": str(state.get("trigger", "none") or "none").strip() or "none",
+        "target_role": str(state.get("target_role", "") or "").strip(),
+        "target_task": str(state.get("target_task", "none") or "none").strip() or "none",
+        "reason_blocker": str(state.get("reason_blocker", "NONE") or "NONE").strip() or "NONE",
+        "last_action": str(state.get("last_action", "idle") or "idle").strip() or "idle",
+        "last_outcome": str(state.get("last_outcome", "none") or "none").strip() or "none",
+        "last_action_seq": str(state.get("last_action_seq", "") or "").strip(),
+        "since_ts": since_ts,
+        "age_min": age_min,
+        "streak_by_role": {
+            "planner": _int_or_default(streak.get("planner"), 0),
+            "dev": _int_or_default(streak.get("dev"), 0),
+        },
+        "needs_human_review_by_role": {
+            "planner": bool(needs_review.get("planner", False)),
+            "dev": bool(needs_review.get("dev", False)),
+        },
+        "source": str(state.get("source", ADMIN_AUTONOMY_STATE_FILE)),
+    }
+
+
+def admin_dispatch_snapshot(now_ts: float | None = None) -> dict:
+    now_epoch = float(now_ts if now_ts is not None else time.time())
+    payload = {
+        "status": "unknown",
+        "last_action": "none",
+        "last_reason": "none",
+        "dispatch_reason_code": "none",
+        "autonomy_reason_code": "none",
+        "stream_fairness_slot": 0,
+        "cooldown_left_s": 0,
+        "last_result_ts": "",
+        "last_result_age_s": -1,
+        "source": str(ADMIN_DISPATCH_LOG_FILE),
+    }
+    lines = _tail_lines(ADMIN_DISPATCH_LOG_FILE, 1200)
+    if not lines:
+        return payload
+    last_result = ""
+    for raw in reversed(lines):
+        if "dispatch_result" in raw:
+            last_result = raw.strip()
+            break
+    if not last_result:
+        return payload
+    ts_match = re.search(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", last_result)
+    if ts_match:
+        last_ts = ts_match.group(1)
+        payload["last_result_ts"] = last_ts
+        ts_epoch = _parse_ts_epoch(last_ts)
+        if ts_epoch is not None:
+            payload["last_result_age_s"] = max(0, int(now_epoch - ts_epoch))
+    result_kv = dict(re.findall(r"([a-zA-Z0-9_]+)=([^\s]+)", last_result))
+    status = str(result_kv.get("status", "unknown")).strip().lower()
+    reason = str(result_kv.get("reason", "none")).strip()
+    dispatch_reason_code = str(result_kv.get("dispatch_reason_code", "none")).strip() or "none"
+    autonomy_reason_code = str(result_kv.get("autonomy_reason_code", "none")).strip() or "none"
+    slot = _int_or_default(result_kv.get("stream_fairness_slot"), 0)
+    cooldown_left_s = 0
+    m_cooldown = re.search(r"cooldown_active_(\d+)s", reason)
+    if m_cooldown:
+        cooldown_left_s = _int_or_default(m_cooldown.group(1), 0)
+    payload.update(
+        {
+            "status": status,
+            "last_action": "dispatch" if status == "ok" else "noop",
+            "last_reason": reason or "none",
+            "dispatch_reason_code": dispatch_reason_code,
+            "autonomy_reason_code": autonomy_reason_code,
+            "stream_fairness_slot": slot,
+            "cooldown_left_s": cooldown_left_s,
+        }
+    )
+    return payload
+
+
 def _state_counts(items: list[dict], key: str = "state") -> dict[str, int]:
     counts: defaultdict[str, int] = defaultdict(int)
     for item in items:
@@ -490,7 +1559,9 @@ def _queue_workboard_mismatches(queue_items: list[dict], tasks: list[dict]) -> l
         done = sum(1 for t in related if str(t.get("state", "")).upper() in {"DONE", "CLOSED", "PASS"})
         if q_state == "READY" and (ready + in_prog) == 0:
             out.append({"batch": batch_id, "issue": "queue_ready_but_no_ready_task", "queue_state": q_state, "tasks_done": done})
-        if q_state == "IN_PROGRESS" and in_prog == 0:
+        # Transitional state is acceptable when stream remains active but the next
+        # task is READY and has not been claimed yet.
+        if q_state == "IN_PROGRESS" and in_prog == 0 and ready == 0:
             out.append({"batch": batch_id, "issue": "queue_in_progress_but_no_task_in_progress", "queue_state": q_state, "tasks_ready": ready})
     return out
 
@@ -748,15 +1819,37 @@ def _extract_ts_epoch(line: str) -> float | None:
             return datetime.strptime(m_off.group(1), "%Y-%m-%dT%H:%M:%S%z").timestamp()
         except Exception:
             pass
-    # 2026-03-03T19:02:37 (naive, assume local tz)
+    # 2026-03-03T19:02:37 (naive timestamp)
     m_local = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", txt)
     if m_local:
         try:
             dt = datetime.strptime(m_local.group(1), "%Y-%m-%dT%H:%M:%S")
+            now_epoch = time.time()
+            candidates = []
             local_tz = datetime.now().astimezone().tzinfo
-            if local_tz is None:
-                local_tz = timezone.utc
-            return dt.replace(tzinfo=local_tz).timestamp()
+            if local_tz is not None:
+                candidates.append(local_tz)
+            log_tz_name = os.environ.get("FC_MONITOR_LOG_TZ", "America/Toronto").strip()
+            if ZoneInfo is not None and log_tz_name:
+                try:
+                    candidates.append(ZoneInfo(log_tz_name))
+                except Exception:
+                    pass
+            candidates.append(timezone.utc)
+            best_epoch = None
+            best_delta = None
+            seen = set()
+            for tz in candidates:
+                key = str(tz)
+                if key in seen:
+                    continue
+                seen.add(key)
+                epoch = dt.replace(tzinfo=tz).timestamp()
+                delta = abs(now_epoch - epoch)
+                if best_delta is None or delta < best_delta:
+                    best_delta = delta
+                    best_epoch = epoch
+            return best_epoch
         except Exception:
             return None
     return None
@@ -801,6 +1894,150 @@ def rate_limits():
         except: pass
     return out
 
+def _parse_bool_token(value) -> bool:
+    token = str(value or "").strip().lower()
+    return token in {"1", "true", "yes", "on"}
+
+def _load_planner_autonomy_state() -> dict:
+    defaults = {
+        "active": False,
+        "since_ts": "",
+        "last_action": "idle",
+        "last_outcome": "none",
+        "reason": "none",
+        "target_task": "none",
+        "issue_code": "none",
+        "policy_enforced": True,
+        "wait_forbidden": True,
+        "source": "",
+    }
+    candidates = [
+        PLANNER_AUTONOMY_STATE_FILE,
+        STATE / "planner_autonomy_state.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        return {
+            "active": bool(payload.get("active", False) or _parse_bool_token(payload.get("active"))),
+            "since_ts": str(payload.get("since_ts", "") or "").strip(),
+            "last_action": str(payload.get("last_action", "idle") or "idle").strip() or "idle",
+            "last_outcome": str(payload.get("last_outcome", "none") or "none").strip() or "none",
+            "reason": str(payload.get("reason", "none") or "none").strip() or "none",
+            "target_task": str(payload.get("target_task", "none") or "none").strip() or "none",
+            "issue_code": str(payload.get("issue_code", "none") or "none").strip() or "none",
+            "policy_enforced": bool(payload.get("policy_enforced", True) or _parse_bool_token(payload.get("policy_enforced", True))),
+            "wait_forbidden": bool(payload.get("wait_forbidden", True) or _parse_bool_token(payload.get("wait_forbidden", True))),
+            "source": str(path),
+        }
+    return defaults
+
+def _load_admin_tshape_state() -> dict:
+    defaults = {
+        "active": False,
+        "target_role": "",
+        "since_ts": "",
+        "reason_blocker": "NONE",
+        "last_action": "idle",
+        "resolved": True,
+        "blocked_roles": [],
+        "source": "",
+    }
+    candidates = [
+        ADMIN_TSHAPE_STATE_FILE,
+        STATE / "admin.tshape.state.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        blocked_roles = payload.get("blocked_roles", [])
+        if not isinstance(blocked_roles, list):
+            blocked_roles = []
+        blocked_roles = [str(r).strip() for r in blocked_roles if str(r).strip()]
+        state = {
+            "active": bool(payload.get("active", False) or _parse_bool_token(payload.get("active"))),
+            "target_role": str(payload.get("target_role", "") or "").strip(),
+            "since_ts": str(payload.get("since_ts", "") or "").strip(),
+            "reason_blocker": str(payload.get("reason_blocker", "NONE") or "NONE").strip().upper(),
+            "last_action": str(payload.get("last_action", "idle") or "idle").strip(),
+            "resolved": bool(payload.get("resolved", True) or _parse_bool_token(payload.get("resolved"))),
+            "blocked_roles": blocked_roles,
+            "source": str(path),
+        }
+        if not state["reason_blocker"]:
+            state["reason_blocker"] = "NONE"
+        return state
+    return defaults
+
+
+def _load_admin_autonomy_state() -> dict:
+    defaults = {
+        "active": False,
+        "trigger": "none",
+        "target_role": "",
+        "target_task": "none",
+        "reason_blocker": "NONE",
+        "last_action": "idle",
+        "last_outcome": "none",
+        "last_action_seq": "",
+        "since_ts": "",
+        "streak_by_role": {"planner": 0, "dev": 0},
+        "needs_human_review_by_role": {"planner": False, "dev": False},
+        "source": "",
+    }
+    candidates = [
+        ADMIN_AUTONOMY_STATE_FILE,
+        STATE / "admin_autonomy_state.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        streak = payload.get("streak_by_role", {})
+        if not isinstance(streak, dict):
+            streak = {}
+        needs = payload.get("needs_human_review_by_role", {})
+        if not isinstance(needs, dict):
+            needs = {}
+        return {
+            "active": bool(payload.get("active", False) or _parse_bool_token(payload.get("active"))),
+            "trigger": str(payload.get("trigger", "none") or "none").strip() or "none",
+            "target_role": str(payload.get("target_role", "") or "").strip(),
+            "target_task": str(payload.get("target_task", "none") or "none").strip() or "none",
+            "reason_blocker": str(payload.get("reason_blocker", "NONE") or "NONE").strip() or "NONE",
+            "last_action": str(payload.get("last_action", "idle") or "idle").strip() or "idle",
+            "last_outcome": str(payload.get("last_outcome", "none") or "none").strip() or "none",
+            "last_action_seq": str(payload.get("last_action_seq", "") or "").strip(),
+            "since_ts": str(payload.get("since_ts", "") or "").strip(),
+            "streak_by_role": {
+                "planner": _int_or_default(streak.get("planner"), 0),
+                "dev": _int_or_default(streak.get("dev"), 0),
+            },
+            "needs_human_review_by_role": {
+                "planner": bool(needs.get("planner", False) or _parse_bool_token(needs.get("planner"))),
+                "dev": bool(needs.get("dev", False) or _parse_bool_token(needs.get("dev"))),
+            },
+            "source": str(path),
+        }
+    return defaults
+
 def kpi_last():
     path = orchestrator_file("kpi-history.jsonl")
     if not path.exists(): return {}
@@ -817,15 +2054,43 @@ def is_rate_limit_marker(verdict: str, status: str, delta: str, blocker: str) ->
     d = (delta or "").upper()
     return b.startswith("AGENT_RATE_LIMIT_") or s in ("RATE_LIMIT_SKIP", "RATE_LIMIT_BACKOFF") or d == "RATE_LIMIT_BACKOFF"
 
+
+def _unknown_agent_payload(role: str, source: str = "unknown") -> dict:
+    return {
+        "verdict": "UNKNOWN",
+        "status": "UNKNOWN",
+        "delta": "NO_DATA",
+        "blocker": "NONE",
+        "next": f"owner=admin; action=restore_runtime_sources_for_{role}",
+        "schedule": "manual",
+        "tick_age_min": -1,
+        "next_tick_min": -1,
+        "next_tick_at": "--",
+        "planner_action_required": "",
+        "soft_blocker": False,
+        "tshape_active": False,
+        "tshape_target_role": "",
+        "session_not_ready_fallback_count": 0,
+        "pending_messages_count": 0,
+        "last_message_id": "",
+        "last_message_action_status": "none",
+        "quality_missing_fields": [],
+        "quality_autofix_active": False,
+        "actions_sent_60m": 0,
+        "last_action_target": "",
+        "last_action_message_id": "",
+        "source": source,
+    }
+
 @app.get("/api/status")
 def status():
     now=datetime.now(timezone.utc); m=now.minute
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
     latest_roles = latest_roles_raw if isinstance(latest_roles_raw, dict) else {}
-    # Canonical UI scope: only currently active topology roles.
-    # Do not auto-reintroduce legacy roles from monitoring snapshots.
-    roles = active_roles()
+    # Canonical UI scope: active topology roles + advisory lanes with monitor evidence.
+    roles = monitor_roles()
     pq=jload(orchestrator_file("priority-queue.json"))
     qi=pq.get("items",[])
     wb=jload(orchestrator_file("parallel-workstreams.json"))
@@ -840,7 +2105,7 @@ def status():
     bs=defaultdict(int)
     for t in tasks: bs[t.get("state","?")] += 1
     done=bs["DONE"]+bs["CLOSED"]+bs["PASS"]
-    ready_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="READY"]
+    ready_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if str(t.get("state","")).upper() in {"READY","READY_PLANNER","READY_DEV"}]
     ip_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="IN_PROGRESS"]
     queue_state_counts = _state_counts(queue_items, key="state")
     workboard_state_counts = _state_counts(tasks, key="state")
@@ -848,6 +2113,15 @@ def status():
     hs = latest_snapshot.get("health_snapshot", {}) if isinstance(latest_snapshot, dict) else {}
     hs_queue = hs.get("queue", {}) if isinstance(hs, dict) else {}
     hs_workboard = hs.get("workboard", {}) if isinstance(hs, dict) else {}
+    planner_autonomy = planner_autonomy_snapshot()
+    dispatcher_tshape = admin_tshape_snapshot()
+    admin_autonomy = admin_autonomy_snapshot()
+    admin_dispatch = admin_dispatch_snapshot()
+    agent_messages = _message_bus_snapshot(now_iso)
+    po_scrum_master = _po_scrum_master_snapshot(agent_messages)
+    doctor = doctor_snapshot(force_refresh=False)
+    planner_contract_health = parse_contract_fields("planner")
+    planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
 
     queue_total = len(queue_items)
     queue_closed = len(queue_items) - len(qa)
@@ -873,9 +2147,121 @@ def status():
         workboard_ready = int(hs_workboard.get("ready") or 0)
         workboard_in_progress = int(hs_workboard.get("in_progress") or 0)
 
+    doctor_checks = doctor.get("checks", {}) if isinstance(doctor, dict) else {}
+    queue_workboard_check = doctor_checks.get("queue_workboard", {}) if isinstance(doctor_checks, dict) else {}
+    queue_workboard_detail = (
+        queue_workboard_check.get("detail", {})
+        if isinstance(queue_workboard_check, dict) and isinstance(queue_workboard_check.get("detail"), dict)
+        else {}
+    )
+    queue_workboard_integrity = {
+        "status": str(queue_workboard_check.get("status", "unknown")) if isinstance(queue_workboard_check, dict) else "unknown",
+        "mismatch_count": _int_or_default(queue_workboard_detail.get("mismatch_count"), len(mismatches)),
+        "oldest_mismatch_age_s": _int_or_default(queue_workboard_detail.get("oldest_mismatch_age_s"), -1),
+        "queue_only": queue_workboard_detail.get("queue_only", []),
+        "workboard_only": queue_workboard_detail.get("workboard_only", []),
+        "state_mismatch": queue_workboard_detail.get("state_mismatch", []),
+    }
+
+    monitor_ready_dev_from_workboard = str(os.environ.get("FC_MONITOR_READY_DEV_FROM_WORKBOARD", "1")).strip() == "1"
+
+    dev_ready_task_ids_runtime: list[str] = []
+    dev_claimable_ready_task_ids_runtime: list[str] = []
+    for t in tasks:
+        if not isinstance(t, dict):
+            continue
+        role_token = canonical_role(t.get("assignee") or t.get("role", ""))
+        if role_token != "dev":
+            continue
+        state_up = str(t.get("state", "")).upper()
+        if state_up not in {"READY", "READY_DEV", "IN_PROGRESS", "REVIEW"}:
+            continue
+        task_id = str(t.get("id", "")).strip()
+        stream_id = str(t.get("stream_id") or _batch_prefix(task_id)).strip()
+        if not task_id or not stream_id:
+            continue
+        if state_up in {"READY", "READY_DEV"}:
+            dev_ready_task_ids_runtime.append(task_id)
+            dev_claimable_ready_task_ids_runtime.append(task_id)
+
+    dev_ready_count_runtime = len(dev_ready_task_ids_runtime)
+    dev_claimable_ready_count_runtime = len(dev_claimable_ready_task_ids_runtime)
+    dev_ready_runtime = dev_ready_count_runtime > 0
+    dev_in_progress_runtime = any(
+        str(t.get("state", "")).upper() == "IN_PROGRESS"
+        and canonical_role(t.get("assignee") or t.get("role", "")) == "dev"
+        for t in tasks
+        if isinstance(t, dict)
+    )
+    dev_wait_allowed_runtime = not dev_ready_runtime and not dev_in_progress_runtime
+    dev_wait_reason_runtime = "no_dev_ready_task" if dev_wait_allowed_runtime else "none"
+    orchestrator_source = "canonical"
+    for source_role in ("planner", "dev", "admin"):
+        c_src = contract(source_role)
+        ev_src = parse_evidence_kv(c_src.get("EVIDENCE", "")) if isinstance(c_src, dict) else {}
+        src_val = str(ev_src.get("orchestrator_source", "")).strip().lower()
+        if src_val in {"canonical", "legacy_fallback"}:
+            orchestrator_source = src_val
+            break
+    dev_force_claim_events_60m = 0
+    dev_events_log = resolve_role_log_path("dev", "events")
+    now_epoch_status = time.time()
+    if dev_events_log and dev_events_log.exists():
+        for ln in _tail_lines(dev_events_log, 420):
+            if "DEV_READY_FORCE_CLAIM" not in ln:
+                continue
+            if _is_recent_line(ln, 60, now_epoch_status):
+                dev_force_claim_events_60m += 1
+
+    planner_contract = contract("planner")
+    planner_evidence = (
+        parse_evidence_kv(planner_contract.get("EVIDENCE", ""))
+        if isinstance(planner_contract, dict)
+        else {}
+    )
+    if not isinstance(planner_evidence, dict):
+        planner_evidence = {}
+    planner_quality_missing_raw = str(planner_evidence.get("planner_quality_missing", "")).strip()
+    planner_quality_missing_fields = [
+        token.strip()
+        for token in planner_quality_missing_raw.split(",")
+        if token.strip() and token.strip().lower() not in {"none", "n/a", "na"}
+    ]
+    planner_quality_missing_count = len(planner_quality_missing_fields)
+    planner_quality_score = _int_or_default(planner_evidence.get("planner_quality_score"), 100)
+    if planner_quality_missing_count > 0 and planner_quality_score == 100:
+        planner_quality_score = max(0, 100 - planner_quality_missing_count * 25)
+    planner_quality_autofix_active = _parse_bool_token(planner_evidence.get("planner_quality_autofix"))
+
+    scrum_actions_sent_60m = 0
+    scrum_message_emit_skip_60m = 0
+    scrum_last_action_target = ""
+    scrum_last_action_message_id = ""
+    scrum_events_log = resolve_role_log_path("scrum_master", "events")
+    if scrum_events_log and scrum_events_log.exists():
+        for ln in _tail_lines(scrum_events_log, 900):
+            if not _is_recent_line(ln, 60, now_epoch_status):
+                continue
+            if "event=scrum_action_posted" in ln:
+                scrum_actions_sent_60m += 1
+                if not scrum_last_action_target:
+                    m_target = re.search(r"\btarget=([a-z0-9_\-]+)", ln, re.IGNORECASE)
+                    if m_target:
+                        scrum_last_action_target = str(m_target.group(1)).strip().lower()
+                if not scrum_last_action_message_id:
+                    m_msg = re.search(r"\bmessage_id=([A-Za-z0-9_\-]+)", ln)
+                    if m_msg:
+                        scrum_last_action_message_id = str(m_msg.group(1)).strip()
+            elif "event=scrum_action_skipped_cooldown" in ln or "event=scrum_action_skipped_dedup" in ln:
+                scrum_message_emit_skip_60m += 1
+    planner_policy_enforced = bool(planner_autonomy.get("wait_forbidden", True))
+    planner_autonomy_last_action = str(planner_autonomy.get("last_action", "idle") or "idle").strip() or "idle"
+    planner_autonomy_last_outcome = str(planner_autonomy.get("last_outcome", "none") or "none").strip() or "none"
+
     agents={}
     for role in roles:
         c=contract(role)
+        ev = parse_evidence_kv(c.get("EVIDENCE", ""))
         snap = latest_roles.get(role, {}) if isinstance(latest_roles, dict) else {}
         if not isinstance(snap, dict):
             snap = {}
@@ -886,10 +2272,131 @@ def status():
             nm=next((x for x in sorted(mins) if x>m),sorted(mins)[0])
             wait=(nm-m) if nm>m else (60-m+nm)
         age=tick_age(role)
-        verdict = c.get("VERDICT") or snap.get("verdict") or "?"
-        status_value = c.get("STATUS") or snap.get("status") or "?"
-        delta_value = c.get("DELTA") or snap.get("delta") or "?"
+        source = "runtime_contract" if c else ("monitor_snapshot" if snap else "unknown")
+        verdict = c.get("VERDICT") or snap.get("verdict") or "UNKNOWN"
+        status_value = c.get("STATUS") or snap.get("status") or "UNKNOWN"
+        delta_value = c.get("DELTA") or snap.get("delta") or "NO_DATA"
         blocker_value = c.get("BLOCKER_ID") or snap.get("blocker_id") or "NONE"
+        if str(verdict).strip() in {"", "?"}:
+            verdict = "UNKNOWN"
+        if str(status_value).strip() in {"", "?"}:
+            status_value = "UNKNOWN"
+        if str(delta_value).strip() in {"", "?"}:
+            delta_value = "NO_DATA"
+        if str(blocker_value).strip().upper() in {"", "?", "N/A", "NULL"}:
+            blocker_value = "NONE"
+        planner_action_required = ""
+        dev_wait_reason = "none"
+        soft_blocker = False
+        tshape_active = False
+        tshape_target_role = ""
+        if role == "planner":
+            planner_action_required = str(ev.get("planner_action_required", "")).strip().lower()
+            soft_blocker = planner_action_required in {"claim_ready", "create_or_claim", "create_or_claim_now", "dependency_regroup"}
+            if not soft_blocker and str(blocker_value).upper() in {
+                "HANDOFF_TO_MISSING",
+                "PLANNER_BATCH_ID_INVALID",
+                "MODE_ANALYSE_NO_EDITS",
+                "CONTRACT_GUARD_BLOCK",
+                "PLANNER_EVIDENCE_INCOMPLETE",
+            }:
+                soft_blocker = True
+
+            planner_hard_blockers = {
+                "RUN_LOCK_BUSY",
+                "LOCK_BUSY",
+                "RUN_LOCK_HELD",
+                "SESSION_NOT_READY",
+                "SESSION_NOT_READY_43",
+                "BACKEND_API_UNREACHABLE",
+                "MONITOR_API_UNREACHABLE",
+                "BACKEND_AND_MONITOR_UNREACHABLE",
+                "API_DOWN",
+                "CONTRACT_PARSE_FAILED",
+                "CONTRACT_GUARD_BLOCK",
+            }
+            planner_status_up = str(status_value or "").strip().upper()
+            planner_blocker_up = str(blocker_value or "").strip().upper()
+            planner_hard_incident = planner_blocker_up in planner_hard_blockers
+            if planner_policy_enforced and planner_status_up in {"WAIT", "MUTED"} and not planner_hard_incident:
+                status_value = "IN_PROGRESS"
+                verdict = "GO_WITH_CAUTION"
+                if str(delta_value or "").strip().upper() in {"NO_DELTA", "NO_DATA", "NONE"}:
+                    delta_value = "PLANNER_AUTONOMY_ENFORCED"
+                blocker_value = "NONE"
+                soft_blocker = True
+
+        if role == "dev":
+            dev_wait_reason = dev_wait_reason_runtime
+            if dev_wait_reason == "no_dev_ready_task":
+                soft_blocker = True
+            dev_status_up = str(status_value or "").strip().upper()
+            if dev_wait_reason == "none" and dev_status_up in {"WAIT", "MUTED"}:
+                status_value = "IN_PROGRESS"
+                verdict = "GO_WITH_CAUTION"
+                if str(delta_value or "").strip().upper() in {"NO_DELTA", "NO_DATA", "DEV_WAIT_NO_READY_TASK"}:
+                    delta_value = "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT"
+                blocker_value = "NONE"
+
+        if role == "admin":
+            tshape_active = bool(dispatcher_tshape.get("active", False))
+            tshape_target_role = str(dispatcher_tshape.get("target_role", "")).strip()
+            admin_autonomy_active = bool(admin_autonomy.get("active", False))
+            admin_autonomy_target_role = str(admin_autonomy.get("target_role", "")).strip()
+            if tshape_active:
+                soft_blocker = True
+            if admin_autonomy_active:
+                soft_blocker = True
+            # Admin can emit stale false alarms from advisory checks; if doctor probes
+            # confirm both APIs are reachable now, do not hard-block global health.
+            admin_runtime_blockers = {
+                "BACKEND_API_UNREACHABLE",
+                "BACKEND_API_HEALTHCHECK_FAIL",
+                "MONITOR_API_UNREACHABLE",
+                "BACKEND_AND_MONITOR_UNREACHABLE",
+                "RUNTIME_DOWN",
+                "RUNTIME_DOWN_BLOCKS_READY_QUEUE",
+                "RUNTIME_DEGRADED",
+                "RUNTIME_DEGRADED_PORTS_8050_7779_DOWN",
+                "RUNTIME_DEGRADED_PORTS_8050_7779_DOWN_CRONS_MISSING",
+            }
+            doctor_checks = doctor.get("checks", {}) if isinstance(doctor, dict) else {}
+            providers_check = doctor_checks.get("providers", {}) if isinstance(doctor_checks, dict) else {}
+            if isinstance(providers_check, dict):
+                providers_detail = providers_check.get("detail") if isinstance(providers_check.get("detail"), dict) else providers_check
+            else:
+                providers_detail = {}
+            providers_status = str(providers_check.get("status", "")).strip().lower() if isinstance(providers_check, dict) else ""
+            api_now_ok = _probe_http_ok("http://127.0.0.1:8050/api/health") or bool(providers_detail.get("api_health_ok", False)) or providers_status == "ok"
+            mon_now_ok = _probe_http_ok("http://127.0.0.1:7779/api/status") or bool(providers_detail.get("monitor_status_ok", False)) or providers_status == "ok"
+            blocker_token = str(blocker_value or "").upper()
+            blocker_norm = re.sub(r"[^A-Z0-9_]+", "_", blocker_token).strip("_")
+            blocker_is_runtime = False
+            for marker in admin_runtime_blockers:
+                if blocker_norm == marker or blocker_norm.startswith(f"{marker}_") or marker in blocker_norm:
+                    blocker_is_runtime = True
+                    break
+            admin_runtime_recovered = blocker_is_runtime and api_now_ok and mon_now_ok
+            if admin_runtime_recovered:
+                soft_blocker = True
+                # Stale runtime blocker from previous tick: prefer current probe truth.
+                ev["admin_runtime_recovered_from"] = blocker_norm or blocker_token
+                ev["admin_runtime_override_applied"] = "1"
+                blocker_value = "NONE"
+                status_value = "PASS"
+                verdict = "PASS"
+                if str(delta_value or "").strip().upper() in {
+                    "RUNTIME_DEGRADED",
+                    "BACKEND_API_UNREACHABLE",
+                    "MONITOR_API_UNREACHABLE",
+                    "RUNTIME_DOWN",
+                    "RUNTIME_DOWN_BLOCKS_READY_QUEUE",
+                    "ADMIN_BLOCKED_RUNTIME_DOWN",
+                    "RUNTIME_DEGRADED_PORTS_8050_7779_DOWN",
+                    "RUNTIME_DEGRADED_PORTS_8050_7779_DOWN_CRONS_MISSING",
+                    "RUNTIME_RECOVERED_SOFT",
+                }:
+                    delta_value = "RUNTIME_VERIFIED_OK"
         if is_rate_limit_marker(verdict, status_value, delta_value, blocker_value):
             if (verdict or "").upper() == "BLOCKED":
                 verdict = "WAIT"
@@ -897,11 +2404,49 @@ def status():
                 status_value = "RATE_LIMIT_SKIP"
             if (blocker_value or "").upper().startswith("AGENT_RATE_LIMIT_"):
                 blocker_value = "NONE"
+        session_not_ready_fallback_count = _role_state_counter(role, "session_not_ready_fallback_count")
+        pending_by_role = agent_messages.get("pending_by_role", {}) if isinstance(agent_messages, dict) else {}
+        last_id_by_role = agent_messages.get("last_message_id_by_role", {}) if isinstance(agent_messages, dict) else {}
+        last_action_status_by_role = (
+            agent_messages.get("latest_action_status_by_role", {})
+            if isinstance(agent_messages, dict)
+            else {}
+        )
+        pending_count = _int_or_default(pending_by_role.get(role), 0) if isinstance(pending_by_role, dict) else 0
+        last_message_id = str(last_id_by_role.get(role, "")).strip() if isinstance(last_id_by_role, dict) else ""
+        last_message_action_status = (
+            str(last_action_status_by_role.get(role, "none")).strip().lower()
+            if isinstance(last_action_status_by_role, dict)
+            else "none"
+        )
+        if last_message_action_status not in {"none", "done", "deferred", "blocked"}:
+            last_message_action_status = "none"
         agents[role]={"verdict":verdict,"status":status_value,"delta":delta_value,
                       "blocker":blocker_value,"next":c.get("NEXT") or snap.get("next", ""),
                       "schedule":(f":{','.join(str(x) for x in mins)}" if mins else "manual"),
                       "tick_age_min":age,"next_tick_min":wait,
-                      "next_tick_at":(f":{nm:02d}" if nm is not None else "--")}
+                      "next_tick_at":(f":{nm:02d}" if nm is not None else "--"),
+                      "planner_action_required": planner_action_required,
+                      "planner_policy_enforced": planner_policy_enforced if role == "planner" else False,
+                      "dev_wait_reason": dev_wait_reason if role == "dev" else "none",
+                      "dev_ready_count": (dev_ready_count_runtime if role == "dev" else 0),
+                      "dev_wait_allowed": (1 if (role == "dev" and dev_wait_allowed_runtime) else 0),
+                      "soft_blocker": soft_blocker,
+                      "tshape_active": tshape_active,
+                      "tshape_target_role": tshape_target_role,
+                      "admin_autonomy_active": (admin_autonomy_active if role == "admin" else False),
+                      "admin_autonomy_target_role": (admin_autonomy_target_role if role == "admin" else ""),
+                      "session_not_ready_fallback_count": session_not_ready_fallback_count,
+                      "pending_messages_count": pending_count,
+                      "last_message_id": last_message_id,
+                      "last_message_action_status": last_message_action_status,
+                      "quality_missing_fields": (planner_quality_missing_fields if role == "planner" else []),
+                      "quality_autofix_active": (planner_quality_autofix_active if role == "planner" else False),
+                      "actions_sent_60m": (scrum_actions_sent_60m if role == "scrum_master" else 0),
+                      "last_action_target": (scrum_last_action_target if role == "scrum_master" else ""),
+                      "last_action_message_id": (scrum_last_action_message_id if role == "scrum_master" else ""),
+                      "source": source}
+    agents, incomplete_roles = monitor_ensure_core_agents(agents)
     kpi={}
     try:
         kd=kpi_last(); v=kd.get("velocity",{}); wb2=kd.get("workboard",{})
@@ -915,38 +2460,221 @@ def status():
              "ts":(kd.get("ts_utc","") or latest_snapshot.get("updated_at",""))[:16]}
     except: pass
     rl=rate_limits()
+    core_agents = [agents.get(role, {}) for role in CORE_ROLES if isinstance(agents.get(role, {}), dict)]
     hard_blocked = any(
         (a.get("blocker", "NONE") not in ("NONE", ""))
+        and not bool(a.get("soft_blocker"))
         and not is_rate_limit_marker(a.get("verdict", ""), a.get("status", ""), a.get("delta", ""), a.get("blocker", ""))
-        for a in agents.values()
+        for a in core_agents
     )
     rate_limited_agents = any(
         is_rate_limit_marker(a.get("verdict", ""), a.get("status", ""), a.get("delta", ""), a.get("blocker", ""))
-        for a in agents.values()
+        for a in core_agents
     )
-    health = "DEGRADED" if hard_blocked else ("STALE" if (rl or rate_limited_agents) else "OK")
+    issues_summary_60 = _issue_summary_window(window_min=60)
+    issues_recent_by_role = issues_summary_60.get("issues_recent_by_role", {})
+    if not isinstance(issues_recent_by_role, dict):
+        issues_recent_by_role = {}
+    critical_count = _int_or_default(issues_summary_60.get("critical_open_count"), 0)
+    issue_publication_gap_roles = issues_summary_60.get("issue_publication_gap_roles", [])
+    if not isinstance(issue_publication_gap_roles, list):
+        issue_publication_gap_roles = []
+    role_latest_issue = issues_summary_60.get("role_latest", {})
+    if not isinstance(role_latest_issue, dict):
+        role_latest_issue = {}
+
+    now_epoch = time.time()
+    last_issue_by_role: dict[str, dict] = {}
+    reports_with_issues = 0
+    for role in roles:
+        latest_issue = role_latest_issue.get(role, {})
+        if not isinstance(latest_issue, dict):
+            latest_issue = {}
+        issue_codes = latest_issue.get("issue_codes", [])
+        if not isinstance(issue_codes, list):
+            issue_codes = []
+        first_code = str(issue_codes[0]) if issue_codes else "none"
+        ts_epoch = _parse_ts_epoch(str(latest_issue.get("ts_utc", "")))
+        age_min = int((now_epoch - ts_epoch) / 60) if ts_epoch is not None else -1
+        issue_count = _int_or_default(issues_recent_by_role.get(role), 0)
+        if issue_count > 0:
+            reports_with_issues += 1
+        last_issue_by_role[role] = {
+            "code": first_code,
+            "age_min": age_min,
+            "max_severity": _severity_token(latest_issue.get("max_severity", "INFO")),
+        }
+
+    issue_reporting = {
+        "roles_total": len(roles),
+        "roles_missing_report": sorted(issue_publication_gap_roles),
+        "reports_with_issues": reports_with_issues,
+        "critical_count": critical_count,
+    }
+
     queue_path = orchestrator_file("priority-queue.json")
     workboard_path = orchestrator_file("parallel-workstreams.json")
-    latest_runtime_ts = _latest_mtime([
+    kpi_path = orchestrator_file("kpi-history.jsonl")
+    runtime_paths = [
         queue_path,
         workboard_path,
         *[ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log" for role in roles],
-    ])
-    freshness_s = int(max(0, time.time() - latest_runtime_ts)) if latest_runtime_ts > 0 else -1
-    freshness_state = "fresh" if 0 <= freshness_s <= 240 else ("warm" if 0 <= freshness_s <= 900 else "stale")
-    if health == "DEGRADED":
-        summary = latest_snapshot.get("summary", {}) if isinstance(latest_snapshot, dict) else {}
-        blocker_roles = summary.get("blocker_roles", []) if isinstance(summary, dict) else []
-        blocker_roles = blocker_roles if isinstance(blocker_roles, list) else []
-        if not hard_blocked and not blocker_roles:
-            health = "OK"
+    ]
+    data_source, data_freshness_s = monitor_detect_data_source(runtime_paths, kpi_path)
 
-    return {"ts_utc":now.isoformat(),"health":health,
+    freshness_state = "fresh" if 0 <= data_freshness_s <= 240 else ("warm" if 0 <= data_freshness_s <= 900 else "stale")
+    unknown_core_agents = all(str(a.get("source", "unknown")) == "unknown" for a in core_agents)
+    force_degraded = bool(incomplete_roles) or data_source == "unknown" or unknown_core_agents
+    summary = latest_snapshot.get("summary", {}) if isinstance(latest_snapshot, dict) else {}
+    blocker_roles = summary.get("blocker_roles", []) if isinstance(summary, dict) else []
+    blocker_roles = blocker_roles if isinstance(blocker_roles, list) else []
+    health = monitor_compute_health(
+        force_degraded=force_degraded,
+        hard_blocked=hard_blocked,
+        has_rate_limits=bool(rl),
+        has_rate_limited_agents=rate_limited_agents,
+        summary_blocker_roles=blocker_roles,
+    )
+    health_breakdown = {
+        "core_roles": list(CORE_ROLES),
+        "by_role": {
+            role: {
+                "status": str(agents.get(role, {}).get("status", "UNKNOWN")),
+                "verdict": str(agents.get(role, {}).get("verdict", "UNKNOWN")),
+                "blocker": str(agents.get(role, {}).get("blocker", "NONE")),
+            }
+            for role in CORE_ROLES
+        },
+    }
+
+    queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
+    queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
+    queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
+    ready_dev_display_count = dev_ready_count_runtime if monitor_ready_dev_from_workboard else queue_ready_dev
+    ready_dev_source = "workboard_runtime" if monitor_ready_dev_from_workboard else "queue_state"
+    queue_ready = queue_ready_planner + queue_ready_legacy + ready_dev_display_count
+    queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
+    queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
+    if queue_total == 0 and isinstance(hs_queue, dict) and hs_queue:
+        queue_ready = _int_or_default(hs_queue.get("ready"), queue_ready)
+        queue_waiting_dep = _int_or_default(hs_queue.get("waiting_dep"), queue_waiting_dep)
+        queue_in_progress = _int_or_default(hs_queue.get("in_progress"), queue_in_progress)
+
+    inter_batch_dependency_count = 0
+    for item in queue_items:
+        if not isinstance(item, dict):
+            continue
+        deps = item.get("depends_on", [])
+        if isinstance(deps, list):
+            inter_batch_dependency_count += sum(1 for dep in deps if str(dep).strip())
+        elif str(deps).strip():
+            inter_batch_dependency_count += 1
+
+    sanitized_dependencies_24h = 0
+    planner_autobatch_24h = 0
+    events = wb.get("events", []) if isinstance(wb, dict) else []
+    if isinstance(events, list):
+        cutoff_epoch = now.timestamp() - 86400
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            kind = str(event.get("kind", "")).strip().lower()
+            if kind not in {
+                "auto_advance_queue",
+                "dependency_policy_migration_v1",
+                "dependency_policy_sanitize",
+                "planner_autobatch_created",
+            }:
+                continue
+            event_epoch = _parse_ts_epoch(event.get("at", ""))
+            if event_epoch is None or event_epoch < cutoff_epoch:
+                continue
+            if kind == "planner_autobatch_created":
+                planner_autobatch_24h += 1
+                continue
+            details = event.get("details", {})
+            if not isinstance(details, dict):
+                details = {}
+            decoupled = _int_or_default(
+                details.get("decoupled_total", details.get("decoupled_batches", 0)), 0
+            )
+            waiting_reclassified = _int_or_default(details.get("waiting_dep_reclassified"), 0)
+            sanitized_dependencies_24h += max(0, decoupled) + max(0, waiting_reclassified)
+
+    planner_passive_events_60m = 0
+    guardian_events_path = orchestrator_file("planner-guardian-events.jsonl")
+    if guardian_events_path.exists():
+        cutoff_epoch_60 = now.timestamp() - 3600
+        guardian_lines = _tail_lines(guardian_events_path, 2400)
+        for raw in guardian_lines:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(item, dict):
+                continue
+            event_epoch = _parse_ts_epoch(
+                str(item.get("ts_utc") or item.get("ts") or item.get("timestamp") or "")
+            )
+            if event_epoch is None or event_epoch < cutoff_epoch_60:
+                continue
+            issues = item.get("issues", [])
+            if isinstance(issues, list):
+                issue_tokens = {str(v).strip().lower() for v in issues if str(v).strip()}
+            else:
+                issue_tokens = {
+                    tok.strip().lower()
+                    for tok in str(issues or "").split(",")
+                    if tok.strip()
+                }
+            if "planner_passive_forbidden_violation" in issue_tokens:
+                planner_passive_events_60m += 1
+
+    # Backward-compatible top-level summary used by legacy monitor consumers.
+    batches_payload = {
+        "total": queue_total,
+        "closed": queue_closed,
+        "ready": queue_ready,
+        "waiting_dep": queue_waiting_dep,
+        "in_progress": queue_in_progress,
+        "display_total": queue_display_total,
+        "display_closed": queue_display_closed,
+    }
+    orchestration_payload = {
+        "dependency_policy": "single_batch",
+        "inter_batch_dependency_count": inter_batch_dependency_count,
+        "sanitized_dependencies_24h": sanitized_dependencies_24h,
+        "planner_non_passive_policy": "enforced",
+        "planner_passive_events_60m": planner_passive_events_60m,
+        "planner_autobatch_24h": planner_autobatch_24h,
+        "planner_quality_score": planner_quality_score,
+        "planner_quality_missing_count": planner_quality_missing_count,
+        "scrum_actions_sent_60m": scrum_actions_sent_60m,
+        "scrum_message_emit_skip_60m": scrum_message_emit_skip_60m,
+        "dev_ready_count": dev_ready_count_runtime,
+        "dev_ready_tasks": dev_ready_task_ids_runtime[:8],
+        "orchestrator_source": orchestrator_source,
+        "dev_force_claim_events_60m": dev_force_claim_events_60m,
+    }
+
+    payload = {"ts_utc":now.isoformat(),"health":health,
             "instance":INSTANCE_ID,
             "root":str(ROOT),
             "state_dir":str(STATE),
             "roles":list(roles),
-            "queue":{"total":queue_total,"closed":queue_closed,"active":queue_active_rows,
+            "done": workboard_done,
+            "ready": workboard_ready,
+            "batches": batches_payload,
+            "dev_parent": dev_parent_snapshot(),
+            "issue_reporting": issue_reporting,
+            "queue":{"total":queue_total,"closed":queue_closed,
+                     "ready":queue_ready,"ready_planner_count":queue_ready_planner + queue_ready_legacy,"ready_dev_count":ready_dev_display_count,
+                     "dev_ready_task_count":dev_ready_count_runtime,"dev_claimable_ready_count":dev_claimable_ready_count_runtime,
+                     "ready_dev_source":ready_dev_source,"waiting_dep":queue_waiting_dep,"in_progress":queue_in_progress,
+                     "active":queue_active_rows,
                      "display_total":queue_display_total,
                      "display_closed":queue_display_closed,
                      "display_batches":queue_display_rows,
@@ -956,17 +2684,52 @@ def status():
             "workboard":{"total":workboard_total,"done":workboard_done,"ready":workboard_ready,"in_progress":workboard_in_progress,
                          "ready_tasks":ready_t,"in_progress_tasks":ip_t,
                          "state_counts":workboard_state_counts},
-            "agents":agents,"rate_limits":rl,"kpi":kpi,
-            "runtime_freshness":{"seconds":freshness_s,"state":freshness_state},
+            "orchestration": orchestration_payload,
+            "agents":agents,"rate_limits":rl,"kpi":kpi,"health_breakdown":health_breakdown,
+            "planner_autonomy": planner_autonomy,
+            "planner_policy_enforced": planner_policy_enforced,
+            "planner_autonomy_last_action": planner_autonomy_last_action,
+            "planner_autonomy_last_outcome": planner_autonomy_last_outcome,
+            "dev_wait_reason": dev_wait_reason_runtime,
+            "dev_ready_task_count": dev_ready_count_runtime,
+            "dev_claimable_ready_count": dev_claimable_ready_count_runtime,
+            "ready_dev_source": ready_dev_source,
+            "dispatcher_tshape": dispatcher_tshape,
+            "admin_autonomy": admin_autonomy,
+            "admin_dispatch": admin_dispatch,
+            "planner_evidence_quality_score": planner_evidence_quality_score,
+            "queue_workboard_integrity": queue_workboard_integrity,
+            "po_scrum_master": po_scrum_master,
+            "agent_messages": agent_messages,
+            "doctor": doctor,
+            "issues_recent_by_role": issues_recent_by_role,
+            "critical_open_count": critical_count,
+            "issue_publication_gap_roles": issue_publication_gap_roles,
+            "last_issue_by_role": last_issue_by_role,
+            "runtime_freshness":{"seconds":data_freshness_s,"state":freshness_state},
+            "data_freshness_s":data_freshness_s,
+            "data_source":data_source,
+            "agents_incomplete":incomplete_roles,
             "sources":{
                 "queue":str(queue_path),
                 "workboard":str(workboard_path),
-                "kpi":str(orchestrator_file("kpi-history.jsonl")),
-            }}
+                "kpi":str(kpi_path),
+                "iteration_issues_events": str(ITERATION_ISSUES_EVENTS_FILE),
+                "iteration_issues_latest": str(ITERATION_ISSUES_LATEST_FILE),
+                "planner_guardian_latest": str(orchestrator_file("planner-guardian-latest.json")),
+                "planner_guardian_events": str(orchestrator_file("planner-guardian-events.jsonl")),
+                }}
+    try:
+        from apps.monitor.services.status_service import build_status_snapshot
+
+        payload = build_status_snapshot(ROOT, lambda: payload)
+    except Exception:
+        pass
+    return payload
 
 @app.get("/api/ticks/{role}")
 def ticks(role:str, n:int=25):
-    roles = active_roles()
+    roles = monitor_roles()
     if role=="all":
         return {r: tick_hist(r, n) for r in roles}
     return {"role":role,"ticks":tick_hist(role,n)}
@@ -981,7 +2744,7 @@ def get_contract(role:str):
 def logs(role:str, n:int=80):
     log=ROOT/f"logs-codex-runs/role-runner/{role}.live.log"
     if not log.exists(): return JSONResponse({"error":"not found"},status_code=404)
-    return {"role":role,"lines":log.read_text(encoding="utf-8",errors="ignore").splitlines()[-n:]}
+    return {"role":role,"lines":_tail_lines(log, n)}
 
 @app.get("/api/logs/{role}/events")
 def log_events(role:str, n:int=120):
@@ -1032,7 +2795,7 @@ def planner_log_bundle(n:int=120):
 
 @app.get("/api/execution/{role}")
 def execution(role: str, tick_n: int = 35, runner_n: int = 55):
-    roles = active_roles()
+    roles = monitor_roles()
     if role == "all":
         return {r: latest_execution(r, tick_n=tick_n, runner_n=runner_n) for r in roles}
     if role not in roles:
@@ -1041,7 +2804,7 @@ def execution(role: str, tick_n: int = 35, runner_n: int = 55):
 
 @app.get("/api/execution-insights/{role}")
 def execution_insights(role: str):
-    roles = active_roles()
+    roles = monitor_roles()
     if role == "all":
         return {r: execution_insight(r) for r in roles}
     if role not in roles:
@@ -1050,7 +2813,10 @@ def execution_insights(role: str):
 
 @app.get("/api/agent-insights")
 def agent_insights():
-    roles = active_roles()
+    roles = monitor_roles()
+    parent = dev_parent_snapshot()
+    if not isinstance(parent, dict):
+        parent = {}
     agents: dict[str, dict] = {}
     for role in roles:
         parsed = parse_contract_fields(role)
@@ -1070,7 +2836,7 @@ def agent_insights():
         # and quality is not weak.
         t = parsed.get("task_update", "unknown")
         interesting = t in {"claim", "complete", "handoff"} and parsed.get("quality") in {"STRONG", "MEDIUM"}
-        agents[role] = {
+        payload = {
             **parsed,
             "last_execution": {
                 "last_ts": ex.get("last_ts", ""),
@@ -1085,11 +2851,32 @@ def agent_insights():
             "tick_tail": tick_tail[-24:],
             "interesting_execution": interesting,
         }
+        if role == "dev":
+            dev_autonomy = _dev_autonomy_from_parent(parent)
+            payload["dev_parent"] = parent
+            payload["dev_autonomy"] = dev_autonomy
+            payload["channels_missing_streak_24h"] = dev_autonomy["channels_missing_streak_24h"]
+            payload["none_signal_streak_24h"] = dev_autonomy["none_no_signal_streak_24h"]
+            payload["contract_guard_block_count_24h"] = dev_autonomy["contract_guard_block_count_24h"]
+            payload["issue_reporting_ok_rate_24h"] = dev_autonomy["issue_reporting_ok_rate_24h"]
+            payload["coaching_state"] = dev_autonomy["coaching_state"]
+            payload["delivery_actions_24h"] = dev_autonomy["delivery_actions_24h"]
+            payload["enforced_delivery_count_24h"] = dev_autonomy["enforced_delivery_count_24h"]
+            payload["stall_recovery_rate_24h"] = dev_autonomy["stall_recovery_rate_24h"]
+            payload["ready_seen_without_claim_24h"] = dev_autonomy["ready_seen_without_claim_24h"]
+        agents[role] = payload
     return {"roles": list(roles), "agents": agents}
+
+@app.get("/api/dev-parent")
+def dev_parent():
+    snap = dev_parent_snapshot()
+    if not snap:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return snap
 
 @app.get("/api/log-catalog")
 def log_catalog():
-    roles = active_roles()
+    roles = monitor_roles()
     data: dict[str, dict[str, dict]] = {}
     for role in roles:
         role_entry: dict[str, dict] = {}
@@ -1113,7 +2900,7 @@ def log_catalog():
 
 @app.get("/api/log-view")
 def log_view(role: str = "planner", kind: str = "tick", n: int = 180):
-    roles = active_roles()
+    roles = monitor_roles()
     role = (role or "").strip()
     kind = (kind or "").strip().lower()
     if role not in roles:
@@ -1151,7 +2938,7 @@ def error_feed(n: int = 120, recent_minutes: int = ERROR_FEED_RECENT_MINUTES):
     rows: list[dict] = []
     dropped_stale = 0
     now_epoch = time.time()
-    for role in active_roles():
+    for role in monitor_roles():
         for kind in ("tick", "cron", "runner", "events", "contract"):
             p = resolve_role_log_path(role, kind)
             if p is None or not p.exists():
@@ -1179,8 +2966,164 @@ def error_feed(n: int = 120, recent_minutes: int = ERROR_FEED_RECENT_MINUTES):
         "dropped_stale": dropped_stale,
     }
 
+
+@app.get("/api/issues/feed")
+def issues_feed(n: int = 200, role: str = "", severity: str = "", window_min: int = 180):
+    n = max(10, min(int(n), 600))
+    window_min = max(1, min(int(window_min), 24 * 60))
+    rows = _load_iteration_issue_rows(
+        role=role,
+        severity=severity,
+        recent_minutes=window_min,
+        n=n,
+    )
+    rows.sort(key=lambda r: str(r.get("ts_utc", "")), reverse=True)
+    return {
+        "count": len(rows),
+        "items": rows[:n],
+        "filters": {
+            "role": role or "all",
+            "severity": severity or "all",
+            "window_min": window_min,
+            "n": n,
+        },
+        "source": str(ITERATION_ISSUES_EVENTS_FILE),
+        "source_aliases": [str(p) for p in _iteration_issue_event_sources() if str(p) != str(ITERATION_ISSUES_EVENTS_FILE)],
+    }
+
+
+@app.get("/api/issues/summary")
+def issues_summary(window_min: int = 60):
+    window_min = max(1, min(int(window_min), 24 * 60))
+    summary = _issue_summary_window(window_min=window_min)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window_min": window_min,
+        "total_records": summary.get("total_records", 0),
+        "totals_by_severity": summary.get("totals_by_severity", {}),
+        "top_codes": summary.get("top_codes", []),
+        "roles_touched": summary.get("roles_touched", []),
+        "mttr_estimated_by_role": summary.get("mttr_estimated_by_role", {}),
+        "issues_recent_by_role": summary.get("issues_recent_by_role", {}),
+        "critical_open_count": summary.get("critical_open_count", 0),
+        "issue_publication_gap_roles": summary.get("issue_publication_gap_roles", []),
+        "source": str(ITERATION_ISSUES_EVENTS_FILE),
+        "source_aliases": [str(p) for p in _iteration_issue_event_sources() if str(p) != str(ITERATION_ISSUES_EVENTS_FILE)],
+    }
+
+
+@app.get("/api/iteration-issues")
+def iteration_issues(role: str = "", severity: str = "", recent_minutes: int = 180, n: int = 120):
+    return issues_feed(n=n, role=role, severity=severity, window_min=recent_minutes)
+
+
+# Doctor routes are mounted via layered router in apps/monitor/src/api/doctor_router.py
+
 @app.get("/api/runtime-diagnostics")
 def runtime_diagnostics():
+    try:
+        status_snapshot = status()
+    except Exception:
+        status_snapshot = {
+            "health": "DEGRADED",
+            "data_freshness_s": -1,
+            "data_source": "unknown",
+            "agents": {role: _unknown_agent_payload(role) for role in CORE_ROLES},
+            "issue_publication_gap_roles": [],
+            "dev_parent": {},
+            "po_scrum_master": {
+                "name": "po_scrum_master",
+                "mode": "scheduled_advisory",
+                "active": False,
+                "last_run": "",
+                "last_run_age_min": -1,
+                "lock_skip_streak": 0,
+                "last_messages_posted": 0,
+                "source": "unknown",
+            },
+            "planner_evidence_quality_score": 0,
+            "queue_workboard_integrity": {
+                "status": "unknown",
+                "mismatch_count": 0,
+                "oldest_mismatch_age_s": -1,
+                "queue_only": [],
+                "workboard_only": [],
+                "state_mismatch": [],
+            },
+            "admin_autonomy": {
+                "active": False,
+                "trigger": "none",
+                "target_role": "",
+                "target_task": "none",
+                "reason_blocker": "NONE",
+                "last_action": "idle",
+                "last_outcome": "none",
+                "age_min": -1,
+                "streak_by_role": {"planner": 0, "dev": 0},
+                "needs_human_review_by_role": {"planner": False, "dev": False},
+            },
+            "admin_dispatch": {
+                "status": "unknown",
+                "last_action": "none",
+                "last_reason": "none",
+                "dispatch_reason_code": "none",
+                "autonomy_reason_code": "none",
+                "stream_fairness_slot": 0,
+                "cooldown_left_s": 0,
+                "last_result_ts": "",
+                "last_result_age_s": -1,
+                "source": str(ADMIN_DISPATCH_LOG_FILE),
+            },
+            "agent_messages": {
+                "open": 0,
+                "open_count": 0,
+                "delivered": 0,
+                "delivered_count": 0,
+                "actioned": 0,
+                "actioned_count": 0,
+                "closed": 0,
+                "closed_count": 0,
+                "delivered_recent": 0,
+                "actioned_recent": 0,
+                "closed_recent": 0,
+                "expired": 0,
+                "expired_count": 0,
+                "posted": 0,
+                "posted_count": 0,
+                "pending_by_role": {"planner": 0, "dev": 0, "admin": 0},
+                "open_by_role": {"planner": 0, "dev": 0, "admin": 0},
+                "last_message_id_by_role": {"planner": "", "dev": "", "admin": ""},
+                "latest_action_status_by_role": {"planner": "none", "dev": "none", "admin": "none"},
+                "source": str(AGENT_MESSAGE_BUS_FILE),
+            },
+            "orchestration": {
+                "dependency_policy": "single_batch",
+                "inter_batch_dependency_count": 0,
+                "sanitized_dependencies_24h": 0,
+                "planner_non_passive_policy": "enforced",
+                "planner_passive_events_60m": 0,
+                "planner_autobatch_24h": 0,
+                "planner_quality_score": 100,
+                "planner_quality_missing_count": 0,
+                "scrum_actions_sent_60m": 0,
+                "scrum_message_emit_skip_60m": 0,
+                "dev_ready_count": 0,
+                "dev_ready_tasks": [],
+                "orchestrator_source": "canonical",
+                "dev_force_claim_events_60m": 0,
+            },
+        }
+    status_agents = status_snapshot.get("agents", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(status_agents, dict):
+        status_agents = {role: _unknown_agent_payload(role) for role in CORE_ROLES}
+    for core_role in CORE_ROLES:
+        if core_role not in status_agents:
+            status_agents[core_role] = _unknown_agent_payload(core_role)
+    dev_parent_data = status_snapshot.get("dev_parent", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(dev_parent_data, dict) or not dev_parent_data:
+        dev_parent_data = dev_parent_snapshot()
+    dev_autonomy_data = _dev_autonomy_from_parent(dev_parent_data)
+
     logs_root = ROOT / "logs-codex-runs"
     role_recovery_lines = _tail_lines(logs_root / "role-recovery.log", 5000)
     health_lines = _tail_lines(logs_root / "health-snapshot.log", 320)
@@ -1191,22 +3134,35 @@ def runtime_diagnostics():
     ts_re = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4})")
     recent_perm_hits: list[str] = []
     historical_perm_hits: list[str] = []
-    last_ts_epoch: float | None = None
+    last_perm_ts_epoch: float | None = None
     now_epoch = time.time()
     recent_window_seconds = RUNTIME_DIAG_RECENT_MINUTES * 60
     for ln in role_recovery_lines:
+        line_epoch: float | None = None
         m_ts = ts_re.match((ln or "").strip())
         if m_ts:
             try:
-                last_ts_epoch = datetime.strptime(m_ts.group(1), "%Y-%m-%dT%H:%M:%S%z").timestamp()
+                line_epoch = datetime.strptime(m_ts.group(1), "%Y-%m-%dT%H:%M:%S%z").timestamp()
             except Exception:
-                last_ts_epoch = None
+                line_epoch = None
         if not perm_re.search(ln):
             continue
-        if last_ts_epoch is not None and (now_epoch - last_ts_epoch) <= recent_window_seconds:
+        if line_epoch is not None and (now_epoch - line_epoch) <= recent_window_seconds:
             recent_perm_hits.append(ln)
         else:
             historical_perm_hits.append(ln)
+        if line_epoch is not None and (last_perm_ts_epoch is None or line_epoch > last_perm_ts_epoch):
+            last_perm_ts_epoch = line_epoch
+
+    permission_last_error_ts = ""
+    permission_last_error_age_min = -1
+    if last_perm_ts_epoch is not None:
+        permission_last_error_ts = (
+            datetime.fromtimestamp(last_perm_ts_epoch, tz=timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        permission_last_error_age_min = max(0, int((now_epoch - last_perm_ts_epoch) // 60))
 
     blocked_re = re.compile(r"blocked=\[(.*?)\]")
     last_health = health_lines[-1] if health_lines else ""
@@ -1241,26 +3197,100 @@ def runtime_diagnostics():
     admin_timeout_recent = len(admin_timeout_recent_lines)
 
     planner_c = contract("planner")
+    admin_contract = contract("admin")
+    admin_evidence = parse_evidence_kv(admin_contract.get("EVIDENCE", ""))
     planner_blocker = (planner_c.get("BLOCKER_ID", "") or "").strip()
     planner_guard_block = planner_blocker == "PLANNER_BATCH_ID_INVALID"
+    dispatcher_tshape = status_snapshot.get("dispatcher_tshape", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(dispatcher_tshape, dict):
+        dispatcher_tshape = {}
+    admin_autonomy = status_snapshot.get("admin_autonomy", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(admin_autonomy, dict):
+        admin_autonomy = {}
+    admin_dispatch = status_snapshot.get("admin_dispatch", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(admin_dispatch, dict) or not admin_dispatch:
+        admin_dispatch = admin_dispatch_snapshot(now_epoch)
+    tshape_active = bool(dispatcher_tshape.get("active", False))
+    tshape_age_min = _int_or_default(dispatcher_tshape.get("age_min"), -1)
+    tshape_target_role = str(dispatcher_tshape.get("target_role", "")).strip()
+    tshape_reason_blocker = str(dispatcher_tshape.get("reason_blocker", "NONE")).strip() or "NONE"
+    admin_autonomy_active = bool(admin_autonomy.get("active", False))
+    admin_autonomy_trigger = str(admin_autonomy.get("trigger", "none")).strip() or "none"
+    admin_autonomy_target_role = str(admin_autonomy.get("target_role", "")).strip()
+    admin_autonomy_target_task = str(admin_autonomy.get("target_task", "none")).strip() or "none"
+    admin_autonomy_last_outcome = str(admin_autonomy.get("last_outcome", "none")).strip() or "none"
+    admin_autonomy_age_min = _int_or_default(admin_autonomy.get("age_min"), -1)
+    admin_autonomy_needs_review = admin_autonomy.get("needs_human_review_by_role", {})
+    if not isinstance(admin_autonomy_needs_review, dict):
+        admin_autonomy_needs_review = {}
+    admin_dispatch_status = str(admin_dispatch.get("status", "unknown")).strip().lower() or "unknown"
+    admin_dispatch_last_reason = str(admin_dispatch.get("last_reason", "none")).strip() or "none"
+    admin_dispatch_last_action = str(admin_dispatch.get("last_action", "none")).strip() or "none"
+    admin_dispatch_age_s = _int_or_default(admin_dispatch.get("last_result_age_s"), -1)
+    dispatcher_starvation_s = 0
+    if admin_dispatch_status in {"noop", "unknown"} and admin_dispatch_age_s >= 0:
+        if admin_dispatch_last_reason.startswith("no_dispatch_needed") or admin_dispatch_last_reason == "none":
+            dispatcher_starvation_s = admin_dispatch_age_s
+    session_not_ready_fallback_count_by_role = {
+        role: _role_state_counter(role, "session_not_ready_fallback_count")
+        for role in CORE_ROLES
+    }
+    issue_gap_roles = status_snapshot.get("issue_publication_gap_roles", []) if isinstance(status_snapshot, dict) else []
+    if not isinstance(issue_gap_roles, list):
+        issue_gap_roles = []
+    queue_snapshot = status_snapshot.get("queue", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(queue_snapshot, dict):
+        queue_snapshot = {}
+    queue_state_counts = queue_snapshot.get("state_counts", {})
+    if not isinstance(queue_state_counts, dict):
+        queue_state_counts = {}
+    queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
+    queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
+    queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
+    queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
+    queue_ready = queue_ready_planner + queue_ready_dev + queue_ready_legacy
+    queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
+    planner_blocker_upper = str(status_agents.get("planner", {}).get("blocker", "")).strip().upper()
+    planner_delta_upper = str(status_agents.get("planner", {}).get("delta", "")).strip().upper()
+    planner_evidence_text = str(planner_c.get("EVIDENCE", "") or "")
+    planner_policy_enforced_status = bool(status_snapshot.get("planner_policy_enforced", True))
+    planner_autonomy_last_action = str(status_snapshot.get("planner_autonomy_last_action", "idle") or "idle").strip() or "idle"
+    planner_autonomy_last_outcome = str(status_snapshot.get("planner_autonomy_last_outcome", "none") or "none").strip() or "none"
+    orchestration_snapshot = status_snapshot.get("orchestration", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(orchestration_snapshot, dict):
+        orchestration_snapshot = {}
+    planner_quality_score = _int_or_default(orchestration_snapshot.get("planner_quality_score"), 100)
+    planner_quality_missing_count = _int_or_default(orchestration_snapshot.get("planner_quality_missing_count"), 0)
+    scrum_actions_sent_60m = _int_or_default(orchestration_snapshot.get("scrum_actions_sent_60m"), 0)
+    scrum_message_emit_skip_60m = _int_or_default(orchestration_snapshot.get("scrum_message_emit_skip_60m"), 0)
+    dev_wait_reason = str(status_snapshot.get("dev_wait_reason", "none") or "none").strip() or "none"
+    dev_contract = contract("dev")
+    dev_evidence = parse_evidence_kv(dev_contract.get("EVIDENCE", ""))
+    passive_with_ready_streak = _int_or_default(dev_evidence.get("passive_with_ready_streak"), 0)
+    dev_claim_loop_count = _int_or_default(dev_evidence.get("dev_claim_loop_count"), 0)
+    admin_runtime_override_applied = _int_or_default(admin_evidence.get("admin_runtime_override_applied"), 0)
 
     findings: list[dict] = []
+    historical_perm_finding: dict | None = None
     if recent_perm_hits:
         findings.append({
+            "id": "PERMISSION_ERRORS_RECENT",
             "severity": "critical",
             "title": "Permission denied in role-recovery",
             "detail": f"{len(recent_perm_hits)} recent hit(s) in role-recovery.log",
             "sample": recent_perm_hits[-1],
         })
     elif historical_perm_hits:
-        findings.append({
-            "severity": "high",
+        historical_perm_finding = {
+            "id": "PERMISSION_ERRORS_HISTORICAL",
+            "severity": "info",
             "title": "Permission denied (historical) in role-recovery",
             "detail": f"{len(historical_perm_hits)} old hit(s), not recent",
             "sample": historical_perm_hits[-1],
-        })
+        }
     if planner_guard_block:
         findings.append({
+            "id": "PLANNER_CONTRACT_GUARD_BLOCK",
             "severity": "critical",
             "title": "Planner contract guard blocked",
             "detail": "BLOCKER_ID=PLANNER_BATCH_ID_INVALID",
@@ -1268,6 +3298,7 @@ def runtime_diagnostics():
         })
     if admin_timeout_recent > 0:
         findings.append({
+            "id": "ADMIN_TIMEOUT_BURSTS",
             "severity": "high",
             "title": "Admin prompt timeout bursts",
             "detail": f"{admin_timeout_recent} timeout event(s) rc=124 (recent window)",
@@ -1275,29 +3306,177 @@ def runtime_diagnostics():
         })
     if max_gap_s >= 1800:
         findings.append({
+            "id": "VM_RESUME_LONG_GAP",
             "severity": "high",
             "title": "VM resume long gap detected",
             "detail": f"max gap_s={max_gap_s}",
             "sample": resume_events[-1]["line"] if resume_events else "",
         })
-    if last_blocked_roles:
+    if last_blocked_roles and _is_recent_line(last_health, RUNTIME_DIAG_RECENT_MINUTES, now_epoch):
         findings.append({
+            "id": "BLOCKED_ROLES_RECENT",
             "severity": "high",
             "title": "Blocked roles seen in health snapshot",
             "detail": ",".join(last_blocked_roles),
             "sample": last_health,
         })
+    if issue_gap_roles:
+        findings.append({
+            "id": "ISSUE_PUBLICATION_GAP",
+            "severity": "high",
+            "title": "ISSUE_PUBLICATION_GAP",
+            "detail": ",".join(sorted(str(x) for x in issue_gap_roles)),
+            "sample": "missing agent iteration issue publication within expected cadence",
+        })
+    dev_coaching_state = str(dev_autonomy_data.get("coaching_state", "RECOVERING") or "RECOVERING").upper()
+    dev_none_streak_24h = _int_or_default(dev_autonomy_data.get("none_no_signal_streak_24h"), 0)
+    dev_delivery_actions_24h = _int_or_default(dev_autonomy_data.get("delivery_actions_24h"), 0)
+    dev_issue_ok_rate_24h = _int_or_default(dev_autonomy_data.get("issue_reporting_ok_rate_24h"), 100)
+    if dev_coaching_state == "STALLED" or dev_none_streak_24h >= 3:
+        stall_severity = "high" if (dev_coaching_state == "STALLED" or dev_none_streak_24h >= 6) else "warn"
+        findings.append({
+            "id": "DEV_STALL_LOOP",
+            "severity": stall_severity,
+            "title": "DEV_STALL_LOOP",
+            "detail": (
+                f"state={dev_coaching_state}; "
+                f"none_no_signal_streak_24h={dev_none_streak_24h}; "
+                f"delivery_actions_24h={dev_delivery_actions_24h}; "
+                f"issue_ok_rate_24h={dev_issue_ok_rate_24h}"
+            ),
+            "sample": "dev lane is repeatedly passive while runtime stays active",
+        })
+
+    planner_passivity_corrected = (
+        "planner_passivity_corrected" in planner_evidence_text.lower()
+        or planner_delta_upper == "PLANNER_AUTONOMY_ENFORCED"
+    )
+    if planner_policy_enforced_status and planner_passivity_corrected:
+        findings.append({
+            "id": "PLANNER_PASSIVITY_VIOLATION_CORRECTED",
+            "severity": "warn",
+            "title": "PLANNER_PASSIVITY_VIOLATION_CORRECTED",
+            "detail": (
+                f"delta={planner_delta_upper or 'UNKNOWN'}; "
+                f"last_action={planner_autonomy_last_action}; "
+                f"last_outcome={planner_autonomy_last_outcome}"
+            ),
+            "sample": "planner passive output was normalized to create_or_claim_now",
+        })
+
+    if planner_quality_missing_count > 0:
+        findings.append({
+            "id": "PLANNER_QUALITY_INCOMPLETE",
+            "severity": "warn",
+            "title": "PLANNER_QUALITY_INCOMPLETE",
+            "detail": (
+                f"planner_quality_missing_count={planner_quality_missing_count}; "
+                f"planner_quality_score={planner_quality_score}"
+            ),
+            "sample": "planner quality fields missing (soft autofix active, lane not hard-blocked)",
+        })
+
+    if dev_wait_reason == "no_dev_ready_task":
+        findings.append({
+            "id": "DEV_WAIT_NO_READY_TASK",
+            "severity": "info",
+            "title": "DEV_WAIT_NO_READY_TASK",
+            "detail": "dev wait allowed because no dev READY/IN_PROGRESS task exists",
+            "sample": "policy dev_wait_ready_task_only active",
+        })
+
+    if planner_policy_enforced_status and planner_autonomy_last_action in {
+        "create_and_claim",
+        "claim_ready",
+        "create_top_level",
+        "create_or_claim_now",
+    }:
+        findings.append({
+            "id": "PLANNER_AUTONOMY_CREATE_CLAIM",
+            "severity": "info",
+            "title": "PLANNER_AUTONOMY_CREATE_CLAIM",
+            "detail": (
+                f"last_action={planner_autonomy_last_action}; "
+                f"last_outcome={planner_autonomy_last_outcome}"
+            ),
+            "sample": "planner autonomy executed create/claim path",
+        })
+    if queue_waiting_dep >= 10 and queue_ready <= 1 and (planner_blocker_upper == "DEPENDENCY_WAIT" or queue_in_progress <= 2):
+        findings.append({
+            "id": "DEPENDENCY_FUNNEL_PLATEAU",
+            "severity": "high",
+            "title": "DEPENDENCY_FUNNEL_PLATEAU",
+            "detail": (
+                f"queue_waiting_dep={queue_waiting_dep}; "
+                f"queue_ready={queue_ready}; "
+                f"queue_in_progress={queue_in_progress}; "
+                f"planner_blocker={planner_blocker_upper or 'NONE'}"
+            ),
+            "sample": "high WAITING_DEP with low READY indicates a dependency fan-in bottleneck",
+        })
+    if tshape_active and tshape_age_min >= RUNTIME_DIAG_RECENT_MINUTES:
+        findings.append({
+            "id": "T_SHAPE_TAKEOVER_ACTIVE",
+            "severity": "high",
+            "title": "T_SHAPE_TAKEOVER_ACTIVE",
+            "detail": f"age_min={tshape_age_min}; target={tshape_target_role or 'unknown'}; blocker={tshape_reason_blocker}",
+            "sample": "admin takeover still active beyond recent diagnostics window",
+        })
+    if admin_autonomy_active:
+        findings.append({
+            "id": "ADMIN_STALL_TAKEOVER_ACTIVE",
+            "severity": "high",
+            "title": "ADMIN_STALL_TAKEOVER_ACTIVE",
+            "detail": (
+                f"trigger={admin_autonomy_trigger}; target={admin_autonomy_target_role or 'none'}; "
+                f"task={admin_autonomy_target_task}; outcome={admin_autonomy_last_outcome}"
+            ),
+            "sample": "admin autonomy takeover is active",
+        })
+    if any(bool(v) for v in admin_autonomy_needs_review.values()):
+        review_roles = ",".join(sorted(k for k, v in admin_autonomy_needs_review.items() if bool(v)))
+        findings.append({
+            "id": "ADMIN_AUTONOMY_NEEDS_HUMAN_REVIEW",
+            "severity": "error",
+            "title": "ADMIN_AUTONOMY_NEEDS_HUMAN_REVIEW",
+            "detail": f"roles={review_roles or 'unknown'}",
+            "sample": "autonomy reached retry failsafe on target lane",
+        })
+    if admin_autonomy_last_outcome in {"deferred", "partial"} and admin_autonomy_age_min >= 0:
+        findings.append({
+            "id": "ADMIN_AUTONOMY_LOOP_GUARD",
+            "severity": "warn",
+            "title": "ADMIN_AUTONOMY_LOOP_GUARD",
+            "detail": (
+                f"outcome={admin_autonomy_last_outcome}; trigger={admin_autonomy_trigger}; "
+                f"age_min={admin_autonomy_age_min}"
+            ),
+            "sample": "autonomy backoff/cooldown guard is active",
+        })
+
+    # Historical-only permission debt remains visible but should not overshadow live incidents.
+    if historical_perm_finding:
+        findings.append(historical_perm_finding)
 
     if not findings:
         findings.append({
+            "id": "NO_RUNTIME_ANOMALY",
             "severity": "ok",
             "title": "No critical runtime anomaly in scanned window",
             "detail": "logs look stable in recent tails",
             "sample": "",
         })
 
-    return {
+    payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "data_freshness_s": status_snapshot.get("data_freshness_s", -1),
+        "data_source": status_snapshot.get("data_source", "unknown"),
+        "agents": status_agents,
+        "po_scrum_master": status_snapshot.get("po_scrum_master", {}),
+        "admin_autonomy": admin_autonomy,
+        "admin_dispatch": admin_dispatch,
+        "dev_autonomy": dev_autonomy_data,
+        "agent_messages": status_snapshot.get("agent_messages", {}),
         "window": {
             "role_recovery_lines": len(role_recovery_lines),
             "health_snapshot_lines": len(health_lines),
@@ -1308,6 +3487,8 @@ def runtime_diagnostics():
             "recent_window_minutes": RUNTIME_DIAG_RECENT_MINUTES,
             "permission_errors_recent": len(recent_perm_hits),
             "permission_errors_historical": len(historical_perm_hits),
+            "permission_last_error_ts": permission_last_error_ts,
+            "permission_last_error_age_min": permission_last_error_age_min,
             "health_degraded_recent": degraded_recent,
             "health_stale_recent": stale_recent,
             "health_last_blocked_roles": last_blocked_roles,
@@ -1317,15 +3498,82 @@ def runtime_diagnostics():
             "admin_timeout_events_historical": max(0, len(admin_timeout_events) - admin_timeout_recent),
             "planner_guard_blocked": planner_guard_block,
             "planner_blocker_id": planner_blocker or "NONE",
+            "tshape_takeover_active": tshape_active,
+            "tshape_takeover_age_min": tshape_age_min,
+            "tshape_takeover_target_role": tshape_target_role,
+            "tshape_takeover_reason_blocker": tshape_reason_blocker,
+            "admin_autonomy_active": admin_autonomy_active,
+            "admin_autonomy_trigger": admin_autonomy_trigger,
+            "admin_autonomy_target_role": admin_autonomy_target_role,
+            "admin_autonomy_target_task": admin_autonomy_target_task,
+            "admin_autonomy_last_outcome": admin_autonomy_last_outcome,
+            "admin_autonomy_age_min": admin_autonomy_age_min,
+            "admin_autonomy_needs_human_review": admin_autonomy_needs_review,
+            "admin_dispatch_status": admin_dispatch_status,
+            "admin_dispatch_last_action": admin_dispatch_last_action,
+            "admin_dispatch_last_reason": admin_dispatch_last_reason,
+            "dispatcher_starvation_s": dispatcher_starvation_s,
+            "planner_policy_enforced": planner_policy_enforced_status,
+            "planner_autonomy_last_action": planner_autonomy_last_action,
+            "planner_autonomy_last_outcome": planner_autonomy_last_outcome,
+            "planner_quality_score": planner_quality_score,
+            "planner_quality_missing_count": planner_quality_missing_count,
+            "scrum_actions_sent_60m": scrum_actions_sent_60m,
+            "scrum_message_emit_skip_60m": scrum_message_emit_skip_60m,
+            "dev_wait_reason": dev_wait_reason,
+            "passive_with_ready_streak": passive_with_ready_streak,
+            "dev_claim_loop_count": dev_claim_loop_count,
+            "admin_runtime_override_applied": admin_runtime_override_applied,
+            "session_not_ready_fallback_count_by_role": session_not_ready_fallback_count_by_role,
+            "issue_publication_gap_roles": issue_gap_roles,
+            "issue_publication_gap_count": len(issue_gap_roles),
+            "dev_coaching_state": dev_coaching_state,
+            "dev_none_no_signal_streak_24h": dev_none_streak_24h,
+            "dev_delivery_actions_24h": dev_delivery_actions_24h,
+            "dev_issue_reporting_ok_rate_24h": dev_issue_ok_rate_24h,
+            "queue_waiting_dep": queue_waiting_dep,
+            "queue_ready": queue_ready,
+            "queue_in_progress": queue_in_progress,
+            "dependency_funnel_plateau": bool(
+                queue_waiting_dep >= 10
+                and queue_ready <= 1
+                and (planner_blocker_upper == "DEPENDENCY_WAIT" or queue_in_progress <= 2)
+            ),
         },
         "top_findings": findings[:6],
     }
+    try:
+        from apps.monitor.services.runtime_diagnostics_service import build_runtime_diagnostics
+
+        payload = build_runtime_diagnostics(ROOT, lambda: payload)
+    except Exception:
+        pass
+    return payload
 
 @app.get("/api/workboard")
 def workboard():
-    wb=jload(orchestrator_file("parallel-workstreams.json"))
-    return {"tasks":[{"id":t["id"],"state":t.get("state"),"role":canonical_role(t.get("assignee") or t.get("role")),
-                      "title":t.get("title","")[:60],"updated_at":t.get("updated_at","")} for t in wb.get("tasks",[])]}
+    wb = jload(orchestrator_file("parallel-workstreams.json"))
+    tasks = []
+    for t in wb.get("tasks", []):
+        deps = t.get("deps") or t.get("depends_on") or t.get("dependencies") or []
+        if not isinstance(deps, list):
+            deps = [str(deps)] if deps else []
+        task_id = str(t.get("id", ""))
+        tasks.append(
+            {
+                "id": task_id,
+                "state": t.get("state"),
+                "role": canonical_role(t.get("assignee") or t.get("role")),
+                "owner": canonical_role(t.get("assignee") or t.get("role")),
+                "title": t.get("title", "")[:60],
+                "updated_at": t.get("updated_at", ""),
+                "deps": deps,
+                "depends_on": deps,
+                "stream_id": t.get("stream_id") or _batch_prefix(task_id),
+                "batch_id": _batch_prefix(task_id),
+            }
+        )
+    return {"tasks": tasks, "items": tasks}
 
 
 
@@ -1412,10 +3660,10 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .queue-sync.err{color:var(--coral);border-color:rgba(255,77,106,.35);background:rgba(255,77,106,.08)}
 .queue-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--lift);border:1px solid var(--edge);border-left:3px solid;border-radius:var(--r);transition:background .15s}
 .queue-row:hover{background:var(--raised)}
-.queue-row.READY{border-left-color:var(--emerald)}.queue-row.WAITING_DEP{border-left-color:var(--dim)}.queue-row.CLOSED{border-left-color:var(--dim);opacity:.45}
+.queue-row.READY{border-left-color:var(--emerald)}.queue-row.READY_PLANNER{border-left-color:var(--emerald)}.queue-row.READY_DEV{border-left-color:var(--sky)}.queue-row.WAITING_DEP{border-left-color:var(--dim)}.queue-row.CLOSED{border-left-color:var(--dim);opacity:.45}
 .queue-id{font-weight:700;font-size:12px;color:var(--ink-text)}
 .queue-badge{font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:3px}
-.queue-badge.READY{color:var(--emerald);background:rgba(0,232,122,.1)}.queue-badge.WAITING_DEP{color:var(--ghost);background:rgba(255,255,255,.04)}.queue-badge.CLOSED{color:var(--dim);background:transparent}
+.queue-badge.READY{color:var(--emerald);background:rgba(0,232,122,.1)}.queue-badge.READY_PLANNER{color:var(--emerald);background:rgba(0,232,122,.1)}.queue-badge.READY_DEV{color:var(--sky);background:rgba(64,169,255,.12)}.queue-badge.WAITING_DEP{color:var(--ghost);background:rgba(255,255,255,.04)}.queue-badge.CLOSED{color:var(--dim);background:transparent}
 .alert-banner{background:rgba(255,77,106,.07);border:1px solid rgba(255,77,106,.35);border-left:4px solid var(--coral);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px;color:var(--coral);font-size:11px;animation:slideDown .2s ease}
 @keyframes slideDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .agents-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -1439,7 +3687,12 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .vc.BLOCKED{color:var(--coral);border-color:rgba(255,77,106,.4);background:rgba(255,77,106,.10)}
 .vc.MUTED{color:var(--ghost);border-color:var(--edge);background:transparent}
 .agent-delta{font-size:11px;color:var(--ghost);background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:7px 10px;margin-bottom:8px;line-height:1.5;min-height:34px;word-break:break-word}
+.agent-action-required{background:rgba(255,179,64,.12);border:1px solid rgba(255,179,64,.35);border-radius:var(--r);padding:5px 10px;color:var(--amber);font-size:10px;margin-bottom:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.agent-action-required.msg-done{background:rgba(0,232,122,.10);border-color:rgba(0,232,122,.35);color:var(--emerald)}
+.agent-action-required.msg-deferred{background:rgba(0,212,255,.10);border-color:rgba(0,212,255,.35);color:var(--aqua)}
+.agent-action-required.msg-blocked{background:rgba(255,77,106,.10);border-color:rgba(255,77,106,.35);color:var(--coral)}
 .agent-blocker{background:rgba(255,77,106,.07);border:1px solid rgba(255,77,106,.3);border-radius:var(--r);padding:5px 10px;color:var(--coral);font-size:10px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.agent-blocker.soft{background:rgba(255,179,64,.10);border-color:rgba(255,179,64,.35);color:var(--amber)}
 .agent-next{font-size:10px;color:var(--ink-text);opacity:.7;line-height:1.55;margin-bottom:10px;min-height:28px}
 .spark{display:flex;align-items:flex-end;gap:2px;height:22px;margin-bottom:8px}
 .spark-bar{flex:1;border-radius:2px 2px 0 0;transition:height .3s ease}
@@ -1450,7 +3703,7 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .task-grid{display:flex;flex-wrap:wrap;gap:6px}
 .task-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:var(--r);font-size:11px;border:1px solid;transition:all .14s}
 .task-chip:hover{transform:translateY(-1px)}
-.task-chip.READY{border-color:rgba(0,232,122,.35);background:rgba(0,232,122,.07);color:var(--emerald)}
+.task-chip.READY{border-color:rgba(0,232,122,.35);background:rgba(0,232,122,.07);color:var(--emerald)}.task-chip.READY_DEV{border-color:rgba(64,169,255,.35);background:rgba(64,169,255,.08);color:var(--sky)}
 .task-chip.IN_PROGRESS{border-color:rgba(0,212,255,.4);background:rgba(0,212,255,.07);color:var(--aqua)}
 .task-chip-role{opacity:.55;font-size:10px}
 .tab-bar{display:flex;gap:5px;margin-bottom:10px}
@@ -1469,10 +3722,11 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .t-rc.ok{color:var(--emerald)}.t-rc.err{color:var(--coral)}.t-rc.skip{color:var(--amber)}
 .contract-block{background:var(--ink);border:1px solid var(--edge);border-radius:var(--r);padding:14px;font-size:11px;line-height:1.9;max-height:220px;overflow-y:auto}
 .contract-block::-webkit-scrollbar{width:3px}.contract-block::-webkit-scrollbar-thumb{background:var(--dim)}
-.c-key{color:var(--aqua);font-weight:600}.c-ok{color:var(--emerald)}.c-err{color:var(--coral);font-weight:700}.c-muted{color:var(--ghost)}
+.c-key{color:var(--aqua);font-weight:600}.c-ok{color:var(--emerald)}.c-err{color:var(--coral);font-weight:700}.c-muted{color:var(--ghost)}.c-warn{color:var(--amber);font-weight:700}
 .link-row{display:flex;gap:14px;padding-top:10px;flex-wrap:wrap}
 .ext-link{font-size:10px;color:var(--ghost);text-decoration:none;display:flex;align-items:center;gap:4px;transition:color .12s}
 .ext-link:hover{color:var(--aqua)}
+.planner-action-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,179,64,.35);background:rgba(255,179,64,.12);color:var(--amber);font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .exec-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;margin-bottom:10px}
 .exec-pill{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:7px 9px;min-height:42px}
 .exec-pill-label{font-size:9px;color:var(--ghost);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
@@ -1513,6 +3767,10 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .insight-score.WEAK{color:var(--coral);border-color:rgba(255,77,106,.35);background:rgba(255,77,106,.08)}
 .insight-meta{font-size:10px;color:var(--ghost);margin-bottom:6px}
 .insight-line{font-size:10px;color:var(--ink-text);line-height:1.5;margin-bottom:4px}
+.dev-state-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;border:1px solid;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.dev-state-badge.STALLED{color:var(--coral);border-color:rgba(255,77,106,.38);background:rgba(255,77,106,.10)}
+.dev-state-badge.RECOVERING{color:var(--amber);border-color:rgba(255,179,64,.38);background:rgba(255,179,64,.10)}
+.dev-state-badge.DELIVERING{color:var(--emerald);border-color:rgba(0,232,122,.35);background:rgba(0,232,122,.10)}
 .insight-issues{font-size:10px;color:var(--coral);line-height:1.45}
 .insight-events{font-size:10px;color:var(--ghost);line-height:1.45;margin-top:6px;max-height:80px;overflow:auto}
 .diag-list{display:flex;flex-direction:column;gap:7px}
@@ -1523,6 +3781,29 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .diag-title{font-family:var(--sans);font-size:12px;font-weight:700;color:#fff}
 .diag-meta{font-size:10px;color:var(--ghost);margin-top:2px}
 .diag-sample{font-size:10px;color:var(--ink-text);line-height:1.45;margin-top:4px;max-height:38px;overflow:auto}
+.iter-issues{display:flex;flex-direction:column;gap:7px;max-height:260px;overflow:auto;padding-right:2px}
+.issue-row{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:8px 10px}
+.issue-row.critical{border-left:3px solid var(--coral);background:rgba(255,77,106,.10)}
+.issue-row.error{border-left:3px solid var(--coral);background:rgba(255,77,106,.08)}
+.issue-row.warn{border-left:3px solid var(--amber);background:rgba(255,179,64,.08)}
+.issue-row.info{border-left:3px solid var(--ghost);background:rgba(125,150,170,.06)}
+.issue-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.issue-role{font-family:var(--sans);font-size:12px;font-weight:700;color:#fff}
+.issue-sev{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--edge2);text-transform:uppercase}
+.issue-sev.critical,.issue-sev.error{color:var(--coral);border-color:rgba(255,77,106,.4)}
+.issue-sev.warn{color:var(--amber);border-color:rgba(255,179,64,.4)}
+.issue-sev.info{color:var(--ghost)}
+.issue-meta{font-size:10px;color:var(--ghost);margin-top:3px}
+.issue-text{font-size:10px;color:var(--ink-text);line-height:1.45;margin-top:4px;word-break:break-word}
+.issue-role-group{border:1px solid var(--edge);border-radius:var(--r);padding:8px;background:rgba(8,21,35,.55)}
+.issue-role-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:11px;color:#fff;font-family:var(--sans);font-weight:700}
+.agent-issue-chip{margin-top:6px;font-size:10px;line-height:1.35;padding:4px 7px;border-radius:8px;border:1px solid var(--edge2);background:rgba(125,150,170,.08);color:var(--ghost)}
+.agent-issue-chip.warn{border-color:rgba(255,179,64,.45);background:rgba(255,179,64,.12);color:var(--amber)}
+.agent-issue-chip.error,.agent-issue-chip.critical{border-color:rgba(255,77,106,.45);background:rgba(255,77,106,.12);color:var(--coral)}
+.agent-issue-chip.info{border-color:var(--edge2);background:rgba(125,150,170,.08);color:var(--ghost)}
+.insight-issue-report{font-size:10px;line-height:1.45;margin-top:4px}
+.insight-issue-report.bad{color:var(--coral)}
+.insight-issue-report.good{color:var(--emerald)}
 @media(max-width:1000px){.insight-grid{grid-template-columns:1fr}}
 @media(max-width:1280px){.exec-logs{grid-template-columns:1fr 1fr}}
 @media(max-width:980px){.exec-logs{grid-template-columns:1fr}}
@@ -1557,7 +3838,7 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
   </div>
 </div>
 <script>
-let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,G=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner';
+let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,R=null,IS=null,G=null,P=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner';
 async function fetchJson(url, fallback={}, timeoutMs=6000){
   const ctrl=new AbortController();
   const tid=setTimeout(()=>ctrl.abort(), timeoutMs);
@@ -1573,7 +3854,7 @@ async function fetchJson(url, fallback={}, timeoutMs=6000){
   }
 }
 async function load(){
-  const[s,t,e,l,lc,i,x,f,g]=await Promise.all([
+  const[s,t,e,l,lc,i,x,f,r,is,p,g]=await Promise.all([
     fetchJson('/api/status',{}),
     fetchJson('/api/ticks/all?n=20',{}),
     fetchJson('/api/execution/all?tick_n=40&runner_n=90',{}),
@@ -1582,16 +3863,19 @@ async function load(){
     fetchJson('/api/agent-insights',{}),
     fetchJson('/api/execution-insights/all',{}),
     fetchJson('/api/error-feed?n=140',{}),
+    fetchJson('/api/issues/feed?n=160&window_min=240',{}),
+    fetchJson('/api/issues/summary?window_min=60',{}),
+    fetchJson('/api/dev-parent',{}),
     fetchJson('/api/runtime-diagnostics',{})
   ]);
-  API_ERRORS=[s,t,e,l,lc,i,x,f,g].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
+  API_ERRORS=[s,t,e,l,lc,i,x,f,r,is,p,g].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
 
   const statusOk = !!(s.ok && s.data && s.data.queue && s.data.workboard && s.data.agents);
   if(statusOk){
     D=s.data;
     D.__status_unavailable=false;
   }else if(!D){
-    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},__status_unavailable:true};
+    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
   }else{
     D.__status_unavailable=true;
   }
@@ -1602,6 +3886,9 @@ async function load(){
   if(i.ok)I=i.data;
   if(x.ok)X=x.data;
   if(f.ok)F=f.data;
+  if(r.ok)R=r.data;
+  if(is.ok)IS=is.data;
+  P=p.ok ? p.data : {};
   if(g.ok)G=g.data;
 }
 function esc(v){return String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
@@ -1634,8 +3921,34 @@ function isRateLimited(v,s,b,d){
   const V=(v||'').toUpperCase(),S=(s||'').toUpperCase(),B=(b||'NONE').toUpperCase(),D=(d||'').toUpperCase();
   return B.startsWith('AGENT_RATE_LIMIT_')||S==='RATE_LIMIT_SKIP'||S==='RATE_LIMIT_BACKOFF'||D==='RATE_LIMIT_BACKOFF'||(V==='WAIT'&&S==='RATE_LIMIT_SKIP');
 }
+function isSoftPlannerSignal(role,agent,blocker,delta){
+  if(role!=='planner')return false;
+  if(agent&&agent.soft_blocker)return true;
+  const req=String((agent&&agent.planner_action_required)||'').toLowerCase();
+  if(['claim_ready','create_or_claim','dependency_regroup','runtime_recovery'].includes(req))return true;
+  const b=String(blocker||'').toUpperCase();
+  const d=String(delta||'').toUpperCase();
+  if(['HANDOFF_TO_MISSING','PLANNER_BATCH_ID_INVALID','MODE_ANALYSE_NO_EDITS','CONTRACT_GUARD_BLOCK'].includes(b))return true;
+  if(['READY_ITEM_AVAILABLE_RUNTIME_CONTEXT','PLANNER_PROGRESS_REQUIRED','DEPENDENCY_POLICY_ENFORCEMENT_REQUIRED'].includes(d))return true;
+  return false;
+}
+function _canonicalMonitorRole(role){
+  return role==='po_scrum_master' ? 'scrum_master' : role;
+}
+function _agentForRole(role){
+  const agents=(D&&D.agents)||{};
+  if(role==='scrum_master') return agents.scrum_master||agents.po_scrum_master||{};
+  return agents[role]||{};
+}
 function monitorRoles(){
-  const entries=Object.entries((D&&D.agents)||{}).filter(([r])=>!!r);
+  const po=(D&&D.po_scrum_master)||{};
+  const poHasSignal = !!(po.active || (Number.isFinite(po.last_run_age_min) && po.last_run_age_min >= 0) || po.last_run);
+  const advisoryRoles = [];
+  const scrumCatalog = LC&&LC.catalog&&LC.catalog.scrum_master;
+  const scrumHasLogs = !!(scrumCatalog && Object.values(scrumCatalog).some(v=>v&&v.exists));
+  if(poHasSignal || scrumHasLogs) advisoryRoles.push('scrum_master');
+  const entriesRaw=Object.entries((D&&D.agents)||{}).filter(([r])=>!!r);
+  const entries=entriesRaw.map(([r,a])=>[_canonicalMonitorRole(r),a]);
   const fromStatus=entries
     .filter(([,a])=>{
       const delta=String((a&&a.delta)||'').toUpperCase();
@@ -1654,20 +3967,23 @@ function monitorRoles(){
       ...forceCore.filter(r=>fromStatus.includes(r)),
       ...forceCore.filter(r=>!fromStatus.includes(r)),
       ...fromStatus.filter(r=>!preferred.includes(r)),
+      ...advisoryRoles.filter(r=>!fromStatus.includes(r)),
     ];
     return [...new Set(ordered)];
   }
-  return ['planner','dev','admin'];
+  const fallback=['planner','dev','admin'];
+  if(advisoryRoles.length) fallback.push(...advisoryRoles.filter(r=>!fallback.includes(r)));
+  return [...new Set(fallback)];
 }
 function ensureRole(selected, roles){
   if(roles.includes(selected))return selected;
   if(roles.includes('planner'))return 'planner';
   return roles[0]||'planner';
 }
-function vc(v,s,b,d){
+function vc(v,s,b,d,role,agent){
   const V=(v||'').toUpperCase(),B=(b||'NONE').toUpperCase();
   if(isRateLimited(v,s,b,d))return'WAIT';
-  if(B!=='NONE'&&B)return'BLOCKED';
+  if(B!=='NONE'&&B)return isSoftPlannerSignal(role,agent,b,d)?'WAIT':'BLOCKED';
   if(V==='GO'||V==='PASS')return V;
   if(V==='WAIT'||(s||'').toUpperCase()==='WAIT')return'WAIT';
   if(V==='BLOCKED')return'BLOCKED';
@@ -1697,7 +4013,7 @@ function tickRowsHtml(role){
   }).join('');
 }
 function contractBodyHtml(role){
-  const a=(D&&D.agents&&D.agents[role])||{};
+  const a=_agentForRole(role);
   const xi=(X&&X[role])||{};
   const cs=xi.contract_status||{};
   const verdict=a.verdict||cs.verdict||'MUTED';
@@ -1706,11 +4022,13 @@ function contractBodyHtml(role){
   const delta=a.delta||cs.delta||'';
   const nextVal=a.next||cs.next||'';
   const rl=isRateLimited(verdict,statusVal,blocker,delta);
-  const v=vc(verdict,statusVal,blocker,delta);
+  const softPlannerAction = isSoftPlannerSignal(role,a,blocker,delta);
+  const v=vc(verdict,statusVal,blocker,delta,role,a);
   return[
     ['VERDICT',verdict,v==='GO'||v==='PASS'?'c-ok':v==='BLOCKED'?'c-err':'c-muted'],
     ['STATUS',statusVal,v==='BLOCKED'?'c-err':'c-muted'],
-    ['BLOCKER',rl?'NONE':blocker,(!rl&&blocker&&blocker!=='NONE')?'c-err':'c-muted'],
+    ['BLOCKER',rl?'NONE':blocker,(!rl&&blocker&&blocker!=='NONE')?(softPlannerAction?'c-warn':'c-err'):'c-muted'],
+    ['ACTION_REQUIRED',(role==='planner'&&String(a.planner_action_required||'').toLowerCase()&&String(a.planner_action_required||'').toLowerCase()!=='none')?String(a.planner_action_required||'').toLowerCase():'none',(role==='planner'&&String(a.planner_action_required||'').toLowerCase()&&String(a.planner_action_required||'').toLowerCase()!=='none')?'c-warn':'c-muted'],
     ['DELTA',delta,'c-muted'],
     ['NEXT',(nextVal||'').slice(0,160),'c-muted'],
   ].map(([k,val,cls])=>`<div><span class="c-key">${k}:</span>&nbsp;<span class="${cls}">${val||'?'}</span></div>`).join('');
@@ -1820,6 +4138,7 @@ function logViewerHtml(){
 function insightsHtml(){
   const agents=(I&&I.agents)||{};
   const exi=(X||{});
+  const parent=P||{};
   const roles=monitorRoles();
   return `<div class="insight-grid">${
     roles.map(r=>{
@@ -1829,11 +4148,25 @@ function insightsHtml(){
       const q=(x.quality||a.quality||'WEAK');
       const e=a.evidence||{};
       const issues=(x.issues&&x.issues.length?x.issues:(a.issues||[]));
+      const issueCount=Number(a.issue_count||0);
+      const issueSeverity=String(a.issue_severity||'none').toLowerCase();
+      const issueCodes=String(a.reported_issues||'none');
+      const issueReportOk=!!a.issue_reporting_ok;
+      const issueReportErrors=(a.issue_reporting_errors||[]);
       const interesting=(x.interesting_events||[]).slice(-3).map(ev=>`[${ev.ts||''}] ${ev.event||''} ${ev.detail||''}`).join('\n');
       const evc=x.event_counts||{};
       const svc=x.severity_counts||{};
       const activity=x.activity||'CHECK';
       const taskUpdate=x.task_update||a.task_update||'?';
+      const isDev=r==='dev';
+      const devAuto=(a.dev_autonomy||{});
+      const parentState=String((devAuto.coaching_state||a.coaching_state||parent.coaching_state||'RECOVERING')).toUpperCase();
+      const parentLine=isDev&&((parent&&Object.keys(parent).length)||Object.keys(devAuto).length)
+        ? `<div class="insight-line"><strong>dev_parent:</strong> <span class="dev-state-badge ${esc(parentState)}">${esc(parentState)}</span> · quality=${esc(parent.quality||'?')} ${esc(parent.quality_score||'?')} · channels_missing_24h=${esc(devAuto.channels_missing_streak_24h??a.channels_missing_streak_24h??parent.channels_missing_streak_24h??0)} · none_signal_24h=${esc(devAuto.none_no_signal_streak_24h??a.none_signal_streak_24h??parent.none_signal_streak_24h??0)} · guard_blocks_24h=${esc(devAuto.contract_guard_block_count_24h??a.contract_guard_block_count_24h??parent.contract_guard_block_count_24h??0)} · delivery_actions_24h=${esc(devAuto.delivery_actions_24h??a.delivery_actions_24h??parent.delivery_actions_24h??0)} · enforced_24h=${esc(devAuto.enforced_delivery_count_24h??a.enforced_delivery_count_24h??parent.enforced_delivery_count_24h??0)} · issue_ok_rate_24h=${esc(devAuto.issue_reporting_ok_rate_24h??a.issue_reporting_ok_rate_24h??parent.issue_reporting_ok_rate_24h??100)}%</div>`
+        : '';
+      const issueReportLine=issueReportOk
+        ? `<div class="insight-issue-report good"><strong>issue_report:</strong> ${esc(issueCodes)} · count=${esc(issueCount)} · sev=${esc(issueSeverity)}</div>`
+        : `<div class="insight-issue-report bad"><strong>issue_report:</strong> missing/invalid · count=${esc(issueCount)} · sev=${esc(issueSeverity)} · errors=${esc((issueReportErrors||[]).join(',')||'unknown')}</div>`;
       return `<div class="insight-tile">
         <div class="insight-head">
           <span class="insight-role">${r}</span>
@@ -1844,7 +4177,9 @@ function insightsHtml(){
         <div class="insight-line"><strong>action:</strong> ${esc(a.last_action_line||'—').slice(0,170)}</div>
         <div class="insight-line"><strong>root_cause:</strong> ${esc(e.root_cause||'—').slice(0,120)}</div>
         <div class="insight-line"><strong>verify:</strong> ${esc(e.verify||'—').slice(0,120)}</div>
+        ${parentLine}
         <div class="insight-line"><strong>signals:</strong> E:${svc.error||0} W:${svc.warn||0} A:${svc.action||0} · events A:${evc.action||0} W:${evc.warn||0} E:${evc.error||0}</div>
+        ${issueReportLine}
         <div class="insight-issues">${issues.length?`issues: ${esc(issues.join(', '))}`:'issues: none'}</div>
         <div class="insight-events">${interesting?esc(interesting):'Aucun événement marquant récent'}</div>
       </div>`;
@@ -1865,7 +4200,13 @@ function runtimeDiagnosticsHtml(){
   const s=(Dg.signals)||{};
   const permRecent=s.permission_errors_recent||0;
   const permHist=s.permission_errors_historical||0;
-  const hdr=`perm_recent=${permRecent} · perm_hist=${permHist} · blocked=${(s.health_last_blocked_roles||[]).join(',')||'none'} · resume_max_gap=${s.resume_max_gap_s||0}s · admin_rc124=${s.admin_timeout_events_recent||0} · planner_guard=${s.planner_guard_blocked?'yes':'no'}`;
+  const tshapeActive = s.tshape_takeover_active ? 'yes' : 'no';
+  const tshapeTarget = s.tshape_takeover_target_role || 'none';
+  const tshapeAge = (s.tshape_takeover_age_min==null || s.tshape_takeover_age_min<0) ? 'na' : `${s.tshape_takeover_age_min}m`;
+  const devState = s.dev_coaching_state || 'unknown';
+  const devStreak = Number(s.dev_none_no_signal_streak_24h||0);
+  const devActions = Number(s.dev_delivery_actions_24h||0);
+  const hdr=`perm_recent=${permRecent} · perm_hist=${permHist} · blocked=${(s.health_last_blocked_roles||[]).join(',')||'none'} · resume_max_gap=${s.resume_max_gap_s||0}s · admin_rc124=${s.admin_timeout_events_recent||0} · planner_guard=${s.planner_guard_blocked?'yes':'no'} · tshape=${tshapeActive}:${tshapeTarget}:${tshapeAge} · dev=${devState}:streak${devStreak}:act${devActions}`;
   const rows=findings.length?findings.map(f=>`
     <div class="diag-item ${esc(f.severity||'high')}">
       <div class="diag-title">${esc(f.title||'Finding')}</div>
@@ -1873,6 +4214,88 @@ function runtimeDiagnosticsHtml(){
       <div class="diag-sample">${esc((f.sample||'').slice(0,220))}</div>
     </div>`).join(''):'<div class="diag-item ok"><div class="diag-title">No findings</div></div>';
   return `<div class="diag-meta" style="margin-bottom:8px">${esc(hdr)}</div><div class="diag-list">${rows}</div>`;
+}
+function issueSevClass(sev){
+  const s=String(sev||'INFO').toUpperCase();
+  if(s==='CRITICAL')return 'critical';
+  if(s==='ERROR')return 'error';
+  if(s==='WARN')return 'warn';
+  if(s==='HIGH')return 'error';
+  if(s==='MEDIUM')return 'warn';
+  if(s==='LOW')return 'info';
+  return 'info';
+}
+function truncIssues(v,max=90){
+  const s=String(v||'none');
+  if(s.length<=max)return s;
+  return `${s.slice(0,max-1)}…`;
+}
+function issueRoleStats(role){
+  const byRole=(D&&D.issues_recent_by_role)||{};
+  const count=Number(byRole[role]||0);
+  const fromStatus=(D&&D.last_issue_by_role&&D.last_issue_by_role[role])||{};
+  let code=String(fromStatus.code||'none');
+  let age=(fromStatus&&Number.isFinite(fromStatus.age_min))?fromStatus.age_min:-1;
+  let sev=String(fromStatus.max_severity||'INFO').toUpperCase();
+  const items=(R&&R.items)||[];
+  if((!code||code==='none') && items.length){
+    const hit=items.find(x=>String(x.role||'')===role && String(x.issue_status||'none')==='has_issues');
+    if(hit){
+      const codes=(hit.issue_codes||[]);
+      if(Array.isArray(codes)&&codes.length)code=String(codes[0]);
+      sev=String(hit.max_severity||sev||'INFO').toUpperCase();
+      if(age<0){
+        const ts=Date.parse(String(hit.ts_utc||''));
+        if(Number.isFinite(ts))age=Math.max(0,Math.floor((Date.now()-ts)/60000));
+      }
+    }
+  }
+  return {count,code:code||'none',age,sev};
+}
+function msgStatusClass(status){
+  const s=String(status||'none').toLowerCase();
+  if(s==='done')return'msg-done';
+  if(s==='blocked')return'msg-blocked';
+  if(s==='deferred')return'msg-deferred';
+  return'';
+}
+function iterationIssuesHtml(){
+  const issueSummary=IS||{};
+  const rows=(R&&R.items)||[];
+  const sevTotals=(issueSummary.totals_by_severity)||{};
+  const open=Number((sevTotals.WARN||0)+(sevTotals.ERROR||0)+(sevTotals.CRITICAL||0));
+  const critical=Number(issueSummary.critical_open_count||0);
+  const missing=(issueSummary.issue_publication_gap_roles||[]);
+  const missingTxt=Array.isArray(missing)&&missing.length?missing.join(', '):'none';
+  const head=`<div class="diag-meta" style="margin-bottom:8px">open=${open} · warn=${sevTotals.WARN||0} · error=${sevTotals.ERROR||0} · critical=${critical} · gap=${esc(missingTxt)}</div>`;
+  if(!rows.length){
+    return `${head}<div class="log-empty">Aucun report d'issue récent (ou source indisponible).</div>`;
+  }
+  const roles=monitorRoles();
+  const groupHtml=roles.map(role=>{
+    const roleRows=rows.filter(row=>String(row.role||'')===role && String(row.issue_status||'none')==='has_issues').slice(0,3);
+    const roleHead=`<div class="issue-role-head"><span>${esc(role)}</span><a class="ext-link" href="/api/issues/feed?role=${encodeURIComponent(role)}&window_min=240&n=200" target="_blank">⬡ drilldown</a></div>`;
+    if(!roleRows.length){
+      return `<div class="issue-role-group">${roleHead}<div class="log-empty">none</div></div>`;
+    }
+    const rowsHtml=roleRows.map(row=>{
+      const sev=issueSevClass(row.max_severity||'INFO');
+      const rowCls=sev;
+      const sevLabel=String(row.max_severity||'INFO').toUpperCase();
+      const issues=Array.isArray(row.issue_codes)&&row.issue_codes.length?row.issue_codes.join(','):'none';
+      return `<div class="issue-row ${rowCls}">
+      <div class="issue-head">
+        <span class="issue-role">${esc(row.role||'?')}</span>
+        <span class="issue-sev ${rowCls}">${esc(sevLabel)}</span>
+      </div>
+      <div class="issue-meta">${esc(row.ts_utc||'?')} · tick=${esc(row.tick_id||'unknown')} · count=${esc(row.issue_count||0)} · rc=${esc(row.rc_final)}</div>
+      <div class="issue-text">codes=${esc(truncIssues(issues))} · source=${esc(row.source||'')}</div>
+      <div class="issue-text">next=${esc(truncIssues(row.next_action||'none',110))}</div>
+    </div>`;
+    }).join('');
+    return `<div class="issue-role-group">${roleHead}${rowsHtml}</div>`;
+  }).join('');
+  return `${head}<div class="iter-issues">${groupHtml}</div>`;
 }
 function render(){
   if(!D)return;
@@ -1884,6 +4307,9 @@ function render(){
   const rl=D.rate_limits||[];
   const kpi=D.kpi||{};
   const src=D.sources||{};
+  const doctor=(D&&D.doctor)||{};
+  const po=(D&&D.po_scrum_master)||{};
+  const msgBus=(D&&D.agent_messages)||{};
   document.getElementById('hd-ts').textContent=new Date().toLocaleTimeString('fr-FR');
   const hc=document.getElementById('health-capsule');
   hc.className='status-capsule '+(statusUnavailable?'warn':(health==='OK'?'ok':health==='STALE'?'warn':'err'));
@@ -1897,8 +4323,13 @@ function render(){
     ? `<div class="alert-banner span2 fade"><span style="font-size:16px">⚠</span><div><strong>Data source indisponible</strong> — affichage partiel (errors: ${esc((API_ERRORS||[]).slice(0,4).join(' | ')||'status fetch failed')})</div></div>`
     : '';
   const qsc=(queue.state_counts)||{};
+  const readyPlannerDisplay = Number.isFinite(Number(queue.ready_planner_count)) ? Number(queue.ready_planner_count) : ((qsc.READY||0)+(qsc.READY_PLANNER||0));
+  const readyDevDisplay = Number.isFinite(Number(queue.ready_dev_count)) ? Number(queue.ready_dev_count) : (qsc.READY_DEV||0);
+  const readyTotalDisplay = Number.isFinite(Number(queue.ready)) ? Number(queue.ready) : (readyPlannerDisplay + readyDevDisplay);
+  const readyDevSource = queue.ready_dev_source || 'queue_state';
   const queueStatesHtml = [
-    `<span class="state-chip ready">READY ${qsc.READY||0}</span>`,
+    `<span class="state-chip ready">READY ${readyTotalDisplay}</span>`,
+    `<span class="state-chip ready">READY_DEV ${readyDevDisplay} (${readyDevSource==='workboard_runtime'?'workboard':'queue'})</span>`,
     `<span class="state-chip progress">IN_PROGRESS ${qsc.IN_PROGRESS||0}</span>`,
     `<span class="state-chip wait">WAITING_DEP ${qsc.WAITING_DEP||0}</span>`,
     `<span class="state-chip done">DONE/CLOSED ${qDisplayClosed ?? '—'}</span>`
@@ -1910,7 +4341,7 @@ function render(){
     ? `<div class="queue-sync err"><strong>Mismatch ${queue.mismatch_count||mismatchItems.length}</strong><br>${mismatchItems.map(m=>`${esc(m.batch)} · ${esc(m.issue)}`).join('<br>')}</div>`
     : `<div class="queue-sync ok">Queue/workboard sync OK</div>`;
   const batchRows=((queue.display_batches&&queue.display_batches.length)?queue.display_batches:(queue.active||[]));
-  const qRows=batchRows.map(i=>`<div class="queue-row ${i.state}"><span class="queue-id">${i.id}</span><span class="queue-badge ${i.state}">${i.state==='READY'?'▶ READY':i.state==='IN_PROGRESS'?'⟳ IN PROG':i.state==='CLOSED'?'■ CLOSED':'◌ WAITING'}</span></div>`).join('')+`<div class="queue-row CLOSED"><span class="queue-id" style="color:var(--dim)">■ ${qDisplayClosed ?? '—'} clos / ${qDisplayTotal ?? '—'}</span></div>`;
+  const qRows=batchRows.map(i=>`<div class="queue-row ${i.state}"><span class="queue-id">${i.id}</span><span class="queue-badge ${i.state}">${(i.state==='READY' || i.state==='READY_PLANNER')?'▶ READY_PLANNER':i.state==='READY_DEV'?'▶ READY_DEV':i.state==='IN_PROGRESS'?'⟳ IN PROG':i.state==='CLOSED'?'■ CLOSED':'◌ WAITING'}</span></div>`).join('')+`<div class="queue-row CLOSED"><span class="queue-id" style="color:var(--dim)">■ ${qDisplayClosed ?? '—'} clos / ${qDisplayTotal ?? '—'}</span></div>`;
   const rf=(D&&D.runtime_freshness)||{};
   const freshnessClass = rf.state==='fresh'?'ok':(rf.state==='warm'?'warn':'err');
   const freshnessText = (rf.seconds>=0 && !statusUnavailable)?`${rf.state||'unknown'} · ${rf.seconds}s`:'unknown';
@@ -1920,8 +4351,40 @@ function render(){
   execRole=ensureRole(execRole,roles);
   logRole=ensureRole(logRole,roles);
   const tileRoles=roles.length ? roles : ['planner','dev','admin'];
+  const pa=(D&&D.planner_autonomy)||{};
+  const ts=(D&&D.dispatcher_tshape)||{};
+  const poRunAge=(Number.isFinite(po.last_run_age_min) && po.last_run_age_min>=0)?`${po.last_run_age_min}m`:'never';
+  const poReportAge=(Number.isFinite(po.last_report_age_min) && po.last_report_age_min>=0)?`${po.last_report_age_min}m`:'na';
+  const poActiveTxt=po.active?'1':'0';
+  const poStatus=esc(po.status||'UNKNOWN');
+  const poVerdict=esc(po.verdict||'UNKNOWN');
+  const poLockSkip=Number.isFinite(Number(po.lock_skip_streak))?Number(po.lock_skip_streak):0;
+  const doctorStatus=esc(String(doctor.status||'unknown').toUpperCase());
+  const doctorDuration=(doctor&&doctor.meta&&Number.isFinite(doctor.meta.duration_ms))?`${doctor.meta.duration_ms}ms`:'na';
+  const doctorChecks=(doctor&&doctor.checks&&typeof doctor.checks==='object')?doctor.checks:{};
+  const doctorFailures=Object.entries(doctorChecks)
+    .filter(([_,v])=>String((v&&v.status)||'unknown').toLowerCase()!=='ok')
+    .map(([k,v])=>`${k}:${String((v&&v.status)||'unknown').toUpperCase()}`)
+    .slice(0,3)
+    .join(', ') || 'none';
+  const poRecentMsgs=(Array.isArray(po.recent_messages)?po.recent_messages:[]).slice(0,3).map(m=>{
+    const id=esc(m.id||'?');
+    const pr=esc((m.priority||'normal').toUpperCase());
+    const tg=Array.isArray(m.targets)?m.targets.join(','):'';
+    return `${id} · ${pr} · ${esc(tg)}`;
+  }).join('<br>') || 'none';
+  const poTickTail=Array.isArray(po.tick_tail)?po.tick_tail:[];
+  const poRunnerTail=Array.isArray(po.runner_tail)?po.runner_tail:[];
+  const poEventsTail=Array.isArray(po.events_tail)?po.events_tail:[];
+  const plannerReqTop=String((agents.planner&&agents.planner.planner_action_required)||'').toLowerCase();
+  const paBadge=(plannerReqTop && plannerReqTop!=='none')
+    ? `<span class="planner-action-chip">ACTION REQUIRED · ${esc(plannerReqTop)}</span>`
+    : '';
+  const tsBadge=(ts&&ts.active)
+    ? `<span class="planner-action-chip">TAKEOVER ACTIVE · ${esc(ts.target_role||'unknown')}</span>`
+    : '';
   const agentTiles=tileRoles.map(role=>{
-    const a=agents[role]||{};
+    const a=_agentForRole(role);
     const xi=(X&&X[role])||{};
     const contractStatus=xi.contract_status||{};
     const verdict=a.verdict||contractStatus.verdict||'MUTED';
@@ -1930,15 +4393,48 @@ function render(){
     const delta=a.delta||contractStatus.delta||'';
     const nextVal=a.next||contractStatus.next||'';
     const rl=isRateLimited(verdict,statusVal,blocker,delta);
-    const v=vc(verdict,statusVal,blocker,delta);
-    const bl=(!rl&&blocker&&blocker!=='NONE')?`<div class="agent-blocker"><span>▲</span>${esc(blocker)}</div>`:'';
+    const softPlannerAction = isSoftPlannerSignal(role,a,blocker,delta);
+    const v=vc(verdict,statusVal,blocker,delta,role,a);
+    const bl=(!rl&&blocker&&blocker!=='NONE')?`<div class="agent-blocker${softPlannerAction?' soft':''}"><span>${softPlannerAction?'◎':'▲'}</span>${esc(blocker)}</div>`:'';
+    const plannerReqLabel = String(a.planner_action_required||'').toLowerCase();
+    const plannerReq = (role==='planner' && plannerReqLabel && plannerReqLabel!=='none')
+      ? `<div class="agent-action-required">ACTION REQUIRED · ${esc(plannerReqLabel)}</div>`
+      : '';
+    const plannerQualityMissing = (role==='planner' && Array.isArray(a.quality_missing_fields))
+      ? a.quality_missing_fields.filter(x=>String(x||'').trim()).length
+      : 0;
+    const plannerQualityBadge = (role==='planner' && plannerQualityMissing>0)
+      ? `<div class="agent-action-required">QUALITY INCOMPLETE · ${plannerQualityMissing}</div>`
+      : '';
+    const adminTakeoverReq = (role==='admin' && Boolean(a.tshape_active))
+      ? `<div class="agent-action-required">TAKEOVER ACTIVE · ${esc(a.tshape_target_role||'unknown')}</div>`
+      : '';
+    const scrumActionsSent = (role==='scrum_master') ? Number(a.actions_sent_60m||0) : 0;
+    const scrumActionBadge = (role==='scrum_master' && scrumActionsSent>0)
+      ? `<div class="agent-action-required msg-deferred">SCRUM ACTION ${scrumActionsSent}${a.last_action_target?` · ${esc(a.last_action_target)}`:''}${a.last_action_message_id?` · ${esc(a.last_action_message_id)}`:''}</div>`
+      : '';
+    const actionReq = plannerReq || adminTakeoverReq;
     const age=a.tick_age_min!=null?`${a.tick_age_min}m ago`:(xi.last_ts?esc(xi.last_ts):'?');
     const schedule=a.schedule||'—';
     const nextTick=(a.next_tick_at&&a.next_tick_min!=null)?`${a.next_tick_at} · ~${a.next_tick_min}min`:'—';
-    return`<div class="agent-tile fade" onclick="setContract('${role}')"><div class="agent-stripe ${v}"></div><div class="agent-inner"><div class="agent-header"><div class="agent-name-wrap"><span style="font-size:18px">${vcIcon(v)}</span><div><div class="agent-name">${role}</div><div class="agent-sched">${schedule}</div></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="vc ${v}">${v}</span><span class="age-chip">${age}</span></div></div><div class="agent-delta">${esc(delta)||'—'}</div>${bl}<div class="agent-next">${esc(nextVal).slice(0,120)}</div><div class="spark">${sparkHtml(role)}</div><div class="agent-footer"><span class="next-lbl">Prochain tick</span><span class="next-time">${nextTick}</span></div></div></div>`;
+    const issueStat=issueRoleStats(role);
+    const issueCls=issueSevClass(issueStat.sev);
+    const issueAge=(Number.isFinite(issueStat.age) && issueStat.age>=0)?`${issueStat.age}m`:'na';
+    const issueMeta=`issues_60m=${issueStat.count} · last=${issueStat.code||'none'} · age=${issueAge}`;
+    const issueChip=issueStat.count>0
+      ? `<div class="agent-issue-chip ${issueCls}">${esc(issueMeta)}</div>`
+      : `<div class="agent-issue-chip info">${esc(issueMeta)}</div>`;
+    const pendingMsgCount=Number(a.pending_messages_count||0);
+    const lastMsgActionStatus=String(a.last_message_action_status||'none').toLowerCase();
+    const msgStatusCls=msgStatusClass(lastMsgActionStatus);
+    const msgStatusTxt=(lastMsgActionStatus && lastMsgActionStatus!=='none')?` · ${lastMsgActionStatus}`:'';
+    const msgBadge=pendingMsgCount>0
+      ? `<div class="agent-action-required ${msgStatusCls}">MSG ${pendingMsgCount}${a.last_message_id?` · ${esc(a.last_message_id)}`:''}${msgStatusTxt}</div>`
+      : '';
+    return`<div class="agent-tile fade" onclick="setContract('${role}')"><div class="agent-stripe ${v}"></div><div class="agent-inner"><div class="agent-header"><div class="agent-name-wrap"><span style="font-size:18px">${vcIcon(v)}</span><div><div class="agent-name">${role}</div><div class="agent-sched">${schedule}</div></div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="vc ${v}">${v}</span><span class="age-chip">${age}</span></div></div><div class="agent-delta">${esc(delta)||'—'}</div>${issueChip}${msgBadge}${scrumActionBadge}${plannerQualityBadge}${actionReq}${bl}<div class="agent-next">${esc(nextVal).slice(0,120)}</div><div class="spark">${sparkHtml(role)}</div><div class="agent-footer"><span class="next-lbl">Prochain tick</span><span class="next-time">${nextTick}</span></div></div></div>`;
   }).join('');
   const wbHtml=[...(workboard.in_progress_tasks||[]).map(t=>`<div class="task-chip IN_PROGRESS" title="${t.title}"><span>⟳</span><strong>${t.id}</strong><span class="task-chip-role">${t.role}</span></div>`),
-    ...(workboard.ready_tasks||[]).map(t=>`<div class="task-chip READY" title="${t.title}"><span>▶</span><strong>${t.id}</strong><span class="task-chip-role">${t.role}</span></div>`)].join('')||'<span style="color:var(--ghost);font-size:11px">Aucune tâche active</span>';
+    ...(workboard.ready_tasks||[]).map(t=>`<div class="task-chip ${String((t&&t.state)||'READY').toUpperCase()==='READY_DEV'?'READY_DEV':'READY'}" title="${t.title}"><span>▶</span><strong>${t.id}</strong><span class="task-chip-role">${t.role}</span></div>`)].join('')||'<span style="color:var(--ghost);font-size:11px">Aucune tâche active</span>';
   const tickTabs=roles.map(r=>`<button class="t-tab${r===tickRole?' on':''}" onclick="setTick('${r}')">${r}</button>`).join('');
   const ctabs=roles.map(r=>`<button class="t-tab${r===contractRole?' on-v':''}" onclick="setContract('${r}')">${r}</button>`).join('');
   const etabs=roles.map(r=>`<button class="t-tab${r===execRole?' on-g':''}" onclick="setExec('${r}')">${r}</button>`).join('');
@@ -1960,10 +4456,12 @@ function render(){
       <div class="panel fade"><div class="panel-head"><span class="panel-label">Vélocité</span><span style="font-size:10px;color:var(--ghost)">${kpi.ts??''}</span></div><div class="stat4"><div class="stat-tile g"><div class="stat-n g">${kpi.done_total??'—'}</div><div class="stat-lbl">Total</div></div><div class="stat-tile y"><div class="stat-n y">${kpi.done_24h??'—'}</div><div class="stat-lbl">24h</div></div><div class="stat-tile"><div class="stat-n">${kpi.done_7d??'—'}</div><div class="stat-lbl">7 jours</div></div><div class="stat-tile b"><div class="stat-n b">${kpi.proofs??'—'}</div><div class="stat-lbl">Proofs</div></div></div></div>
     </div>
 	    <div class="col-right">
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
+    <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">PO Scrum Master (Advisory)</span><span style="font-size:10px;color:var(--ghost)">scheduled/5m · active=${poActiveTxt}</span></div><div class="panel-body"><div class="queue-sync ${po.active?'warn':'ok'}"><strong>run_age</strong> ${poRunAge} · <strong>report_age</strong> ${poReportAge} · <strong>status</strong> ${poStatus} · <strong>verdict</strong> ${poVerdict} · <strong>lock_skip_streak</strong> <span class="${poLockSkip>3?'err':'ok'}">${poLockSkip}</span></div><div class="queue-sync warn" style="margin-top:8px"><strong>message bus</strong> · open=${msgBus.open??0} · delivered_recent=${msgBus.delivered_recent??0} · actioned_recent=${msgBus.actioned_recent??0} · closed_recent=${msgBus.closed_recent??0}</div><div class="queue-sync" style="margin-top:8px"><strong>recent_messages</strong><br>${poRecentMsgs}</div><div class="exec-logs" style="margin-top:8px"><div class="log-box"><div class="log-head">fc-ticks (scrum_master.tick.log)</div><div class="log-scroll">${logLinesHtml(poTickTail)}</div></div><div class="log-box"><div class="log-head">role-runner (scrum_master.live.log)</div><div class="log-scroll">${logLinesHtml(poRunnerTail)}</div></div><div class="log-box"><div class="log-head">runner-events (scrum_master.events.log)</div><div class="log-scroll">${logLinesHtml(poEventsTail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/ticks/scrum_master" target="_blank">⬡ Ticks</a><a class="ext-link" href="/api/logs/scrum_master" target="_blank">⬡ Logs</a><a class="ext-link" href="/api/logs/scrum_master/events" target="_blank">⬡ Events</a><a class="ext-link" href="/api/log-view?role=scrum_master&kind=runner&n=220" target="_blank">⬡ Log JSON</a></div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>report:</strong> ${esc(shortPath(po.last_report_path||''))}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Exécution récente</span><span style="color:var(--emerald);font-size:11px;font-weight:600">${execRole}</span></div><div class="panel-body"><div class="tab-bar" id="exec-tabs">${etabs}</div><div class="exec-meta">${execMetaHtml(execRole)}</div><div class="exec-logs"><div class="log-box"><div class="log-head">fc-ticks (${execRole}.tick.log)</div><div class="log-scroll">${logLinesHtml(ex.tick_tail)}</div></div><div class="log-box"><div class="log-head">role-runner (${execRole}.live.log)</div><div class="log-scroll">${logLinesHtml(ex.runner_tail)}</div></div><div class="log-box"><div class="log-head">runner-events (${execRole}.events.log)</div><div class="log-scroll">${logLinesHtml(ex.events_tail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/execution/${execRole}" target="_blank">⬡ Execution JSON</a><a class="ext-link" href="/api/logs/${execRole}" target="_blank">⬡ Runner logs</a><a class="ext-link" href="/api/logs/${execRole}/events" target="_blank">⬡ Runner events</a><a class="ext-link" href="/api/ticks/${execRole}" target="_blank">⬡ Ticks</a>${plannerExecLinks}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Truth Matrix</span><span style="color:var(--amber);font-size:11px;font-weight:600">activité réelle · qualité · signaux</span></div><div class="panel-body">${insightsHtml()}</div></div>
+		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Issues Feed</span><span style="color:var(--coral);font-size:11px;font-weight:600">open ${((IS&&IS.totals_by_severity)?((IS.totals_by_severity.WARN||0)+(IS.totals_by_severity.ERROR||0)+(IS.totals_by_severity.CRITICAL||0)):0)} · critical ${(IS&&IS.critical_open_count)||0}</span></div><div class="panel-body">${iterationIssuesHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Logs agents</span><span style="color:var(--aqua);font-size:11px;font-weight:600">${logRole} · ${logKind}</span></div><div class="panel-body">${logViewerHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Diagnostic Rapide Runtime</span><span style="color:var(--amber);font-size:11px;font-weight:600">root causes auto</span></div><div class="panel-body">${runtimeDiagnosticsHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Error Feed Global</span><span style="color:var(--coral);font-size:11px;font-weight:600">${(F&&F.count)||0} événements</span></div><div class="panel-body"><div class="log-box"><div class="log-head">Dernières erreurs/warnings (tous agents)</div><div class="log-scroll">${errorFeedHtml()}</div></div></div></div>

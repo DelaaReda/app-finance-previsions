@@ -89,6 +89,17 @@ Options:
 EOF
 }
 
+normalize_reasoning_level() {
+  local raw="${1:-high}"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    minimal|low|medium|high) printf '%s\n' "$normalized" ;;
+    xhigh|extra|extra_high|veryhigh|max|maximum|"") printf 'high\n' ;;
+    *) printf 'high\n' ;;
+  esac
+}
+
 load_role_profiles_from_topology() {
   local loaded=()
   if [[ ! -f "$TOPOLOGY_FILE" ]]; then
@@ -214,6 +225,9 @@ fi
 if ! [[ "$ROLE_MIN_REFLECTION_PASSES" =~ ^[0-9]+$ ]] || [[ "$ROLE_MIN_REFLECTION_PASSES" -lt 2 ]]; then
   ROLE_MIN_REFLECTION_PASSES=2
 fi
+THINKING_LEVEL="$(normalize_reasoning_level "$THINKING_LEVEL")"
+STALE_SWEEP_THINKING="$(normalize_reasoning_level "$STALE_SWEEP_THINKING")"
+DG_ALERT_THINKING="$(normalize_reasoning_level "$DG_ALERT_THINKING")"
 if [[ "${ROLE_AGENT_BIN,,}" != "codex" ]]; then
   if [[ "$ROLE_RETRY_ENGINE_DEFAULT" == "sdk" ]]; then
     ROLE_RETRY_ENGINE_DEFAULT="tmux"
@@ -295,14 +309,16 @@ timeout_seconds_for_role() {
 
 thinking_level_for_role() {
   local role="$1"
+  local level=""
   case "$role" in
     architect)
-      printf '%s\n' "${PARALLEL_CRON_THINKING_ARCHITECT:-${LM_USED_ROLE_THINKING:-${MODEL_CONFIG_ROLE_THINKING:-xhigh}}}"
+      level="${PARALLEL_CRON_THINKING_ARCHITECT:-${LM_USED_ROLE_THINKING:-${MODEL_CONFIG_ROLE_THINKING:-high}}}"
       ;;
     *)
-      printf '%s\n' "$THINKING_LEVEL"
+      level="$THINKING_LEVEL"
       ;;
   esac
+  normalize_reasoning_level "$level"
 }
 
 model_for_role() {

@@ -18,7 +18,7 @@ now_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || dat
 now_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Cron summary
-cron_json="$(openclaw cron list --json 2>/dev/null || echo '{}')"
+cron_json="$(openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{}')"
 
 total_jobs="$(printf '%s' "$cron_json" | jq -r '.jobs | length' 2>/dev/null || echo 0)"
 ok_jobs="$(printf '%s' "$cron_json" | jq -r '[.jobs[]? | select(.state.lastStatus=="ok")] | length' 2>/dev/null || echo 0)"

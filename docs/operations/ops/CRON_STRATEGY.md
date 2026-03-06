@@ -1,5 +1,25 @@
 # CRON STRATEGY v1
 
+## Current Canonical Policy (2026-03-04)
+
+- Runtime execution policy: VM-only (`/home/venom/analyse-financiere`).
+- macOS host is control plane only (edit/review), not runtime execution.
+- Use `bash scripts/runtime_host_check.sh` before cron/runtime operations.
+- Core runtime topology: `planner`, `dev`, `admin`.
+- Advisory runtime lane: `po_scrum_master` (`scrum_master` technical role).
+- Health scope: global monitor health is computed from core roles only.
+- Profile policy:
+  - `full`: enables `po_scrum_master` advisory cron every 5 min.
+  - `canary`: advisory cron is disabled.
+- Canonical cron installer: `scripts/fc_setup_crons.sh`.
+- Canonical runner config: `platform/config/runner/runner.v1.yaml`.
+- Canonical runner schema: `platform/config/schema/runner.v1.schema.json`.
+
+## Note About Historical Sections
+
+Some sections below describe older topologies and legacy jobs kept for incident forensics.
+When content conflicts with this header, this header is the source of truth.
+
 ## Active baseline (parallel, 20 jobs)
 - Profile: tmux-by-role (specialized lanes) + tri-admin + stale auto-heal.
 - Source of truth (avoid doc drift):
@@ -7,13 +27,15 @@
   - `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
 - Jobs actifs:
   - 12 role loops: `planner`, `analyst`, `architect`, `backend_engineer`, `frontend_engineer`, `data_analyst`, `infra_engineer`, `integrator`, `dev`, `tester`, `qa`, `clawsentinel`.
-  - `po` et `scrum_master` restent désactivés en l'état (voir `disabled_jobs`).
+  - `po` reste désactivé.
+  - `scrum_master` est advisory seulement, activé par `scripts/fc_setup_crons.sh` en profil `full` (cadence 5 min).
   - 2 admin loops: `adminapp-codex-sync-10m`, `admin-agents-supervisor-15m`
   - utility jobs:
     - `stale-sweep-autoheal-7m` (auto-heal stale running)
     - `dg-alert-15m` (continuous digest + auto-remontee monitoring)
-- Jobs désactivés pour raisons de cohérence (historique/reprise):
-  - `scrum-master-tmux-loop`, `po-tmux-loop`, `dg-admin-router-5m`, `vm-resume-guard-2m`
+- Jobs legacy désactivés pour raisons de cohérence (historique/reprise):
+  - `scrum-master-tmux-loop` (remplacé par cron advisory `fc_agent_tick.sh scrum_master` en profil full),
+  - `po-tmux-loop`, `dg-admin-router-5m`, `vm-resume-guard-2m`
 - Runtime hardening baseline (tmux role runner):
   - `PROMPT_TIMEOUT_SECONDS=180`
   - `RETRY_PROMPT_TIMEOUT_SECONDS=90`

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-28-BATCH-28-ANALYSIS-20260306T000059Z-515"
+stream_id: "BATCH-28"
+task_id: "BATCH-28-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-06T00:00:59Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_cmd_recorded)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-06T00:00:59Z"
+      ended_at_utc: "2026-03-06T00:00:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_tests_recorded)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-28-ANALYSIS-20260306T0000Z.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-8a8b310312a3"
+  review_ref: "none"
+  note: "Analyse BATCH-28: scope, audit paths, gates"

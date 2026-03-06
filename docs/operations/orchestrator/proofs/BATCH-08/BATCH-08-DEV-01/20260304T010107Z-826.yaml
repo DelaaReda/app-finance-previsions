@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-08-BATCH-08-DEV-01-20260304T010107Z-826"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-04T01:01:07Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope inspect copilot decision payload and consumer contract fields"
+    - "dependency impact keep existing frontend parsing compatible while adding explicit fields"
+    - "risk avoid breaking current copilot response keys and fallback behavior"
+    - "verification add targeted copilot service tests for decision contract stability"
+    - "rollback isolate patch to copilot service and tests for safe revert"
+  architecture_checks:
+    - "reuse_existing_domains/copilot_and_domains/judge_modules_before_creating_new_endpoints"
+    - "preserve_stable_response_envelope_and_never-empty_fallback_behavior"
+    - "keep_changes_inside_canonical_apps/api/src_paths_with_no_service_bridge_sprawl"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "python3 -m py_compile apps/api/src/domains/copilot/application/copilot_service.py && python3 - <<'PY'\\nimport asyncio, json, sys\\nsys.path.insert(0,'apps/api/src')\\nfrom domains.copilot.application import copilot_service\\nclass Ctx:\\n async def get_current_market_context(self):\\n  return {'confidence':0.8,'characteristics':{'risk_level':'low'},'key_drivers':[],'metadata':{},'recommended_layout':{}}\\nclass RAG:\\n def search(self, scope=None, top_k=10):\\n  return [{'text':'signal','meta':{'type':'news','ticker':'AAPL'},'id':'1'},{'text':'macro','meta':{'type':'series'},'id':'2'}]\\ndef ask_llm(*,question,context_chunks,max_tokens=1000):\\n return {'model':'unit','answer':json.dumps({'action':'buy','reasoning':['r1','r2','r3'],'risk_level':'medium'}),'citations':[]}\\nresp=asyncio.run(copilot_service.build_ask_payload(question='q',tickers=['AAPL'],rag_store_cls=RAG,ask_llm_fn=ask_llm,context_service_cls=Ctx))\\nassert resp['verdict']=='buy' and 'why' in resp and 'risk' in resp\\nprint('SMOKE_OK')\\nPY"
+      rc: "0"
+      started_at_utc: "2026-03-04T01:01:07Z"
+      ended_at_utc: "2026-03-04T01:01:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "smoke_build_ask_payload:PASS; vm_smoke_build_ask_payload:PASS; pytest:SKIP(pytest not found in vm image)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-DEV-01/20260304T010043Z-dev01.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-32fbaef7ce0f"
+  review_ref: "none"
+  note: "Contrat décision backend stabilisé sur copilot/ask (verdict/confidence/why/risk) en conservant compatibilité clés existantes; fallback never-empty durci."

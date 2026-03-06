@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import fcntl
+import os
 import re
+import socket
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 CONTRACT_KEYS = {
@@ -16,6 +20,7 @@ CONTRACT_KEYS = {
     "BLOCKER_ID",
     "NEXT_ACTION_UNIQUE",
 }
+TRILOCK_ORDER = "tick>run>memory"
 
 
 def parse_contract(text: str) -> dict[str, str]:
@@ -66,11 +71,14 @@ def build_line(role: str, source: str, ts_local: str, values: dict[str, str], ev
     suggestions = pick(evidence_kv, "suggestions", "none")
     directive_id = pick(evidence_kv, "directive_id", "none")
     directive_ack = pick(evidence_kv, "directive_ack", "none")
+    message_id = pick(evidence_kv, "message_id", "none")
+    message_ack = pick(evidence_kv, "message_ack", "none")
 
     line = (
         f"- [{ts_local}] role={role} source={source} status={status} verdict={verdict} "
         f"delta={delta} blocker={blocker} stream_id={stream_id} task_id={task_id} "
         f"next_action_unique={next_action_unique} directive={directive_id}/{directive_ack} "
+        f"message={message_id}/{message_ack} "
         f"exec_report={exec_report} issues={issues} suggestions={suggestions}"
     )
     return re.sub(r"\s+", " ", line).strip()
@@ -126,6 +134,21 @@ def refresh_role_summary(mem_file: Path, role: str) -> None:
     summary_file.write_text("\n".join(lines), encoding="utf-8")
 
 
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def append_trace(trace_file: Path | None, role: str, event: str, detail: str) -> None:
+    if trace_file is None:
+        return
+    try:
+        trace_file.parent.mkdir(parents=True, exist_ok=True)
+        with trace_file.open("a", encoding="utf-8") as fh:
+            fh.write(f"{utc_now()} role={role} event={event} detail={detail}\n")
+    except Exception:
+        return
+
+
 def main() -> int:
     if len(sys.argv) != 7:
         print(
@@ -140,6 +163,9 @@ def main() -> int:
     memory_file = Path(sys.argv[4])
     memory_lock_file = Path(sys.argv[5])
     ts_local = sys.argv[6]
+    lock_meta_file = Path(f"{memory_lock_file}.meta")
+    trace_raw = os.getenv("ROLE_MEMORY_LOCK_TRACE_FILE", "").strip()
+    trace_file = Path(trace_raw) if trace_raw else None
 
     try:
         text = payload_file.read_text(encoding="utf-8", errors="ignore")
@@ -155,12 +181,42 @@ def main() -> int:
     memory_lock_file.parent.mkdir(parents=True, exist_ok=True)
     with memory_lock_file.open("a+", encoding="utf-8") as lock_fh:
         fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
-        ensure_header(memory_file, role)
-        with memory_file.open("a", encoding="utf-8") as mem_fh:
-            mem_fh.write(line + "\n")
-        trim_if_needed(memory_file)
-        refresh_role_summary(memory_file, role)
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        lock_start = int(time.time())
+        lock_meta = (
+            f"pid={os.getpid()} host={socket.gethostname() or 'unknown'} "
+            f"start_epoch={lock_start} start_utc={utc_now()} role={role} "
+            f"layer=memory order={TRILOCK_ORDER} lock_file={memory_lock_file}"
+        )
+        lock_meta_file.write_text(lock_meta, encoding="utf-8")
+        append_trace(
+            trace_file,
+            role,
+            "trilock_acquired",
+            f"layer=memory lock_file={memory_lock_file} order={TRILOCK_ORDER}",
+        )
+        release_reason = "append_done"
+        try:
+            ensure_header(memory_file, role)
+            with memory_file.open("a", encoding="utf-8") as mem_fh:
+                mem_fh.write(line + "\n")
+            trim_if_needed(memory_file)
+            refresh_role_summary(memory_file, role)
+        except Exception as exc:
+            release_reason = f"append_error_{type(exc).__name__}"
+            raise
+        finally:
+            hold_s = max(0, int(time.time()) - lock_start)
+            append_trace(
+                trace_file,
+                role,
+                "trilock_release",
+                f"layer=memory lock_file={memory_lock_file} hold_s={hold_s} release_reason={release_reason}",
+            )
+            try:
+                lock_meta_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
     return 0
 
 

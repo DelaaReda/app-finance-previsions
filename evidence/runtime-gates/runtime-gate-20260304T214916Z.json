@@ -1,0 +1,229 @@
+{
+  "generated_at": "2026-03-04T21:50:26.653171Z",
+  "verdict": "DEGRADED",
+  "services": {
+    "launcher_start_rc": 0,
+    "api_base_url": "http://127.0.0.1:8050",
+    "monitor_base_url": "http://127.0.0.1:7779"
+  },
+  "checks": {
+    "monitor_contract": {
+      "rc": 0,
+      "summary": "PASS health=OK roles=4 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=19"
+    },
+    "critical_endpoints": {
+      "rc": 0,
+      "summary": "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0\nPASS /api/forecasts?horizon=short&limit=24\nPASS /api/recommendations/daily?limit=3\nPASS /api/stocks/AAPL/sheet"
+    },
+    "doctor": {
+      "rc": 1,
+      "summary": {
+        "status": "degraded",
+        "generated_at": "2026-03-04T21:50:26.596138Z",
+        "checks": {
+          "workspace_root": {
+            "status": "ok",
+            "canonical": "/home/venom/shared/analyse-financiere",
+            "exists": true,
+            "writable": true
+          },
+          "sessions": {
+            "status": "ok",
+            "rc": 0,
+            "sessions": [
+              "admin-agents-sync-cron",
+              "adminapp_codex_sync",
+              "clawsentinel",
+              "codex_admin_cron",
+              "codex_dev_cron",
+              "codex_planner_cron",
+              "codex_qa_cron",
+              "codex_tester_cron"
+            ],
+            "expected_core": [
+              "planner",
+              "dev",
+              "admin"
+            ],
+            "missing_core": [],
+            "found_core": {
+              "planner": "codex_planner_cron",
+              "dev": "codex_dev_cron",
+              "admin": "codex_admin_cron"
+            },
+            "advisory_optional": "scrum_master",
+            "stderr": ""
+          },
+          "locks": {
+            "status": "ok",
+            "tick_lock_dir": "/tmp/fc-agent-locks",
+            "state_dir": "/home/venom/.openclaw/cron/role-state",
+            "stale_tick_locks": [],
+            "stale_state_locks": [],
+            "stale_total": 0
+          },
+          "queue_workboard": {
+            "status": "degraded",
+            "queue_file": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+            "workboard_file": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/parallel-workstreams.json",
+            "queue_exists": true,
+            "workboard_exists": true,
+            "queue_total": 28,
+            "workboard_total": 95,
+            "queue_states": {
+              "CLOSED": 10,
+              "IN_PROGRESS": 2,
+              "WAITING_DEP": 16
+            },
+            "workboard_states": {
+              "DONE": 75,
+              "IN_PROGRESS": 2,
+              "WAITING_DEP": 18
+            },
+            "mismatch": [
+              "BATCH-01:queue=CLOSED:workboard=DONE",
+              "BATCH-02:queue=CLOSED:workboard=DONE",
+              "BATCH-03:queue=CLOSED:workboard=DONE",
+              "BATCH-04:queue=CLOSED:workboard=DONE",
+              "BATCH-05:queue=CLOSED:workboard=DONE",
+              "BATCH-06:queue=CLOSED:workboard=DONE",
+              "BATCH-07:queue=CLOSED:workboard=DONE",
+              "BATCH-08:queue=CLOSED:workboard=DONE",
+              "BATCH-09:queue=CLOSED:workboard=DONE",
+              "BATCH-10:queue=IN_PROGRESS:workboard=DONE",
+              "BATCH-26:queue=CLOSED:workboard=DONE",
+              "BATCH-27:queue=IN_PROGRESS:workboard=DONE"
+            ]
+          },
+          "providers": {
+            "status": "ok",
+            "api_base": "http://127.0.0.1:8050",
+            "monitor_base": "http://127.0.0.1:7779",
+            "api_health_ok": true,
+            "api_status": 200,
+            "api_probe": "{\"status\":\"ok\",\"backend_up\":true,\"timestamp\":\"2026-03-04T21:50:26.570817\",\"version\":\"1.0.0\",\"last_updates\":{\"forecasts\":\"2026-03-04T02:41:39.980547\",\"news\":\"2026-03-04T21:50:16.614905\",\"brief_weekly\":",
+            "monitor_status_ok": true,
+            "monitor_status_code": 200,
+            "monitor_probe": "{\"ts_utc\":\"2026-03-04T21:50:26.572676+00:00\",\"health\":\"OK\",\"instance\":\"venom-Apple-Virtualization-Generic-Platform:/home/venom/analyse-financiere\",\"root\":\"/home/venom/analyse-financiere\",\"state_dir\":\"",
+            "rate_limit_caches": [
+              {
+                "path": "/home/venom/.openclaw/cron/role-state/codex.rate_limit_gate_cache",
+                "exists": false
+              },
+              {
+                "path": "/home/venom/.openclaw/cron/role-state/qwen.rate_limit_gate_cache",
+                "exists": false
+              }
+            ]
+          }
+        },
+        "meta": {
+          "schema_version": "doctor.v1",
+          "duration_ms": 55
+        }
+      }
+    },
+    "status_api": {
+      "rc": 0,
+      "summary": {
+        "status": "ok",
+        "po_scrum_master": {
+          "name": "po_scrum_master",
+          "lane_role": "scrum_master",
+          "mode": "scheduled_advisory",
+          "active": false,
+          "last_run": "2026-02-27T10:43:39.513972Z",
+          "last_run_age_min": 312,
+          "status": "REPRISE_READY_BATCH-02_SANS_SLOT_WORKBOARD_ROLE",
+          "verdict": "PASS",
+          "blocker": "NONE",
+          "next": "owner=adminapp-codex; action=attribuer_un_slot_scrum_master_et_lancer_DISPATCH_BATCH02_REOPENED_AND_RESUME_ROLE_LANES; amelioration=automatiser_l_assignation_des_slots_roles_ready_sans_workboard",
+          "last_report_path": "/home/venom/analyse-financiere/docs/ops/PO_SCRUM_MASTER_REPORTS.md",
+          "last_report_ts": "2026-03-04T15:04:55.054876Z",
+          "last_report_age_min": 405,
+          "last_messages_posted": 0,
+          "recent_messages": [],
+          "tick_tail": [
+            "2026-03-04T16:23:12 [RESULT_TAIL] ????-??-??????????? ???????_??????] role?scrum_master status??allback_env ?ile?/?sers/venom/?ocuments/analyse-?inanciere/plat?orm/automation/con?ig/runner.v?.ya",
+            "2026-03-04T16:23:12 [TRILOCK_RELEASE] layer=tick role=scrum_master mode=dirlock hold_s=611 release_reason=exit_rc_0",
+            "2026-03-04T16:28:00 [TRILOCK_ACQUIRE] layer=tick role=scrum_master mode=dirlock lock_file=/tmp/fc-agent-locks/scrum_master.lock order=tick>run>memory",
+            "",
+            "2026-03-04T16:28:01 [START] role=scrum_master",
+            "2026-03-04T16:28:01 [START_SESSION] codex_scrum_master_cron agent=codex",
+            "2026-03-04T16:28:05 [MODEL] role=scrum_master model=gpt-5.3-codex-spark thinking=medium",
+            "2026-03-04T16:28:05 [CONFIG] role=scrum_master allow_file_edits=0",
+            "2026-03-04T16:28:05 [MODEL_EFFECTIVE] role=scrum_master model=gpt-5.3-codex-spark thinking=medium resume=1 precheck=0",
+            "2026-03-04T16:28:05 [TICK] role=scrum_master agent=codex session=codex_scrum_master_cron timeout=540s",
+            "2026-03-04T16:33:00 [TRILOCK_SKIP] layer=tick role=scrum_master reason=busy_dirlock lock_dir=/tmp/fc-agent-locks/scrum_master.lock.dirlock",
+            "2026-03-04T16:38:01 [TRILOCK_SKIP] layer=tick role=scrum_master reason=busy_dirlock lock_dir=/tmp/fc-agent-locks/scrum_master.lock.dirlock",
+            "2026-03-04T16:38:11 [END] role=scrum_master agent=codex rc=124",
+            "2026-03-04T16:38:11 [RESULT_TAIL] ????-??-??????????? ???????_??????] role?scrum_master status??allback_env ?ile?/?sers/venom/?ocuments/analyse-?inanciere/plat?orm/automation/con?ig/runner.v?.ya",
+            "2026-03-04T16:38:12 [TRILOCK_RELEASE] layer=tick role=scrum_master mode=dirlock hold_s=612 release_reason=exit_rc_0",
+            "2026-03-04T16:43:00 [TRILOCK_ACQUIRE] layer=tick role=scrum_master mode=dirlock lock_file=/tmp/fc-agent-locks/scrum_master.lock order=tick>run>memory",
+            "",
+            "2026-03-04T16:43:01 [START] role=scrum_master",
+            "2026-03-04T16:43:01 [START_SESSION] codex_scrum_master_cron agent=codex",
+            "2026-03-04T16:43:04 [MODEL] role=scrum_master model=gpt-5.3-codex-spark thinking=medium",
+            "2026-03-04T16:43:05 [CONFIG] role=scrum_master allow_file_edits=0",
+            "2026-03-04T16:43:05 [MODEL_EFFECTIVE] role=scrum_master model=gpt-5.3-codex-spark thinking=medium resume=1 precheck=0",
+            "2026-03-04T16:43:05 [TICK] role=scrum_master agent=codex session=codex_scrum_master_cron timeout=540s",
+            "2026-03-04T16:48:01 [TRILOCK_SKIP] layer=tick role=scrum_master reason=busy_dirlock lock_dir=/tmp/fc-agent-locks/scrum_master.lock.dirlock"
+          ],
+          "runner_tail": [
+            "2026-03-04T20:28:08Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:28:08Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:28:10Z role=scrum_master primary_prompt_begin tick=P1772656090_1385 timeout=300s channel=codex_exec",
+            "2026-03-04T20:28:10Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772656090_1385 bytes=12815 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T20:43:07Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:43:08Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:43:10Z role=scrum_master primary_prompt_begin tick=P1772656990_12719 timeout=300s channel=codex_exec",
+            "2026-03-04T20:43:10Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772656990_12719 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T20:58:08Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:58:09Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:58:10Z role=scrum_master primary_prompt_begin tick=P1772657890_29352 timeout=300s channel=codex_exec",
+            "2026-03-04T20:58:10Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772657890_29352 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:13:08Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:13:09Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:13:11Z role=scrum_master primary_prompt_begin tick=P1772658790_21005 timeout=300s channel=codex_exec",
+            "2026-03-04T21:13:11Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772658790_21005 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:28:07Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:28:08Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:28:09Z role=scrum_master primary_prompt_begin tick=P1772659689_14838 timeout=300s channel=codex_exec",
+            "2026-03-04T21:28:09Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772659689_14838 bytes=12963 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:43:07Z role=scrum_master startup session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:43:08Z role=scrum_master prompt_memory_context role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:43:09Z role=scrum_master primary_prompt_begin tick=P1772660589_8688 timeout=300s channel=codex_exec",
+            "2026-03-04T21:43:10Z role=scrum_master dispatch_prompt scope=primary channel=codex_exec tick=P1772660589_8688 bytes=12815 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default"
+          ],
+          "events_tail": [
+            "2026-03-04T20:28:08Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:28:08Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:28:10Z role=scrum_master event=primary_prompt_begin detail=tick=P1772656090_1385 timeout=300s channel=codex_exec",
+            "2026-03-04T20:28:10Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772656090_1385 bytes=12815 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T20:43:07Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:43:08Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:43:10Z role=scrum_master event=primary_prompt_begin detail=tick=P1772656990_12719 timeout=300s channel=codex_exec",
+            "2026-03-04T20:43:10Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772656990_12719 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T20:58:08Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T20:58:09Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T20:58:10Z role=scrum_master event=primary_prompt_begin detail=tick=P1772657890_29352 timeout=300s channel=codex_exec",
+            "2026-03-04T20:58:10Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772657890_29352 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:13:08Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:13:09Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:13:11Z role=scrum_master event=primary_prompt_begin detail=tick=P1772658790_21005 timeout=300s channel=codex_exec",
+            "2026-03-04T21:13:11Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772658790_21005 bytes=12816 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:28:07Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:28:08Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:28:09Z role=scrum_master event=primary_prompt_begin detail=tick=P1772659689_14838 timeout=300s channel=codex_exec",
+            "2026-03-04T21:28:09Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772659689_14838 bytes=12963 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default",
+            "2026-03-04T21:43:07Z role=scrum_master event=startup detail=session=codex_scrum_master_cron agent=codex primary_channel=codex_exec startup_note=startup_mode=codex_exec_resume config_version=v1 config_source=/Users/venom/Documents/analyse-financiere/platform/automation/config/runner.v1.yaml config_hash=dee9140602f367f9",
+            "2026-03-04T21:43:08Z role=scrum_master event=prompt_memory_context detail=role=scrum_master mode=lean profile=coordination daily_lines=12 role_history_lines=10 bytes=4656",
+            "2026-03-04T21:43:09Z role=scrum_master event=primary_prompt_begin detail=tick=P1772660589_8688 timeout=300s channel=codex_exec",
+            "2026-03-04T21:43:10Z role=scrum_master event=dispatch_prompt detail=scope=primary channel=codex_exec tick=P1772660589_8688 bytes=12815 timeout_budget=300s retry_timeout_budget=120s timeout_tier=default"
+          ],
+          "source": "runtime_contract"
+        }
+      }
+    }
+  }
+}

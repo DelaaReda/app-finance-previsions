@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-26-BATCH-26-DEV-03-20260304T004039Z-330"
+stream_id: "BATCH-26"
+task_id: "BATCH-26-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-04T00:40:39Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope: harden startup/validation hygiene for orchestration reliability"
+    - "dependency impact: keep runtime invocation compatibility while removing brittle shims"
+    - "risk: avoid startup regression by limiting logic to wrappers and checks only"
+    - "verification: syntax checks plus import smoke and validator execution output"
+    - "rollback: changes isolated to three files for fast revert"
+  architecture_checks:
+    - "startup_path_hooks_must_be_deterministic_and_opt-in_for_workspace_walk"
+    - "validator_must_enforce_canonical_runtime_path_and_fake-rag_absence"
+    - "entrypoint_wrapper_must_avoid_file-spec_loader_anti-pattern"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "bash -n validate script; py_compile sitecustomize+run_api; run_api import smoke; workspace validator execution; monitor status smoke"
+      rc: "0"
+      started_at_utc: "2026-03-04T00:40:39Z"
+      ended_at_utc: "2026-03-04T00:40:39Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "validator SUMMARY pass=24 warn=5 fail=0; run_api shim removed; sitecustomize gating enabled; monitor smoke OK"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/run_api.py"
+handoff:
+  to_role: "admin"
+  handoff_id: "HO-20260304004039-735"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-ea21bdfa0777"
+  review_ref: "none"
+  note: "F-010/F-012/F-015 traites: side-effects startup reduits, wrapper run_api simplifie, validator durci (runtime ghost/fake rag/stub debt) avec preuves smoke et syntax"

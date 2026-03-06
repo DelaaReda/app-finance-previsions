@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-10-BATCH-10-GOV_REVIEW-20260305T053343Z-914"
+stream_id: "BATCH-10"
+task_id: "BATCH-10-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-05T05:33:43Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(governance_review_task)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-05T05:33:43Z"
+      ended_at_utc: "2026-03-05T05:33:43Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(governance_review_task)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-10/BATCH-10-GOV_REVIEW/review.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-e606981f2b75"
+  review_ref: "BATCH-10-GOV_REVIEW"
+  note: "Governance gate reviewed: GO_WITH_CAUTION; rollback path validated; proceed to next dependency chain."

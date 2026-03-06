@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-03-04T05:17:21.801242Z",
+  "verdict": "OK",
+  "services": {
+    "launcher_start_rc": 0,
+    "api_base_url": "http://127.0.0.1:8050",
+    "monitor_base_url": "http://127.0.0.1:7779"
+  },
+  "checks": {
+    "monitor_contract": {
+      "rc": 0,
+      "summary": "PASS health=DEGRADED roles=3 agents=3 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=6"
+    },
+    "critical_endpoints": {
+      "rc": 0,
+      "summary": "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0\nPASS /api/forecasts?horizon=short&limit=24\nPASS /api/recommendations/daily?limit=3\nPASS /api/stocks/AAPL/sheet"
+    }
+  }
+}

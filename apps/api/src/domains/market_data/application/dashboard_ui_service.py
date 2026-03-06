@@ -25,6 +25,11 @@ except ImportError:  # pragma: no cover - defensive fallback
   def load_json(key: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
     return None
 
+try:
+  from services.service_standard import ensure_decision_contract  # type: ignore
+except Exception:  # pragma: no cover
+  ensure_decision_contract = None  # type: ignore
+
 
 def _safe_pct(value: Optional[float]) -> Optional[float]:
   """Convert a ratio (0-1) to percent if needed, rounded to 2 decimals."""
@@ -429,7 +434,7 @@ def build_portfolio_summary() -> Dict[str, Any]:
 
   portfolio_value = backtest.get("final_capital") or backtest.get("initial_capital")
 
-  return {
+  payload = {
     "portfolio_value": portfolio_value,
     "initial_capital": backtest.get("initial_capital"),
     "total_return_pct": backtest.get("total_return_pct"),
@@ -447,6 +452,29 @@ def build_portfolio_summary() -> Dict[str, Any]:
       "forecasts.json",
     ],
   }
+
+  if callable(ensure_decision_contract):
+    expected_pct = payload.get("forecast_next_30d_pct")
+    try:
+      expected_pct_v = float(expected_pct) if expected_pct is not None else 0.0
+    except (TypeError, ValueError):
+      expected_pct_v = 0.0
+    verdict = "buy" if expected_pct_v > 0 else "sell" if expected_pct_v < 0 else "hold"
+    conf_pct = payload.get("forecast_confidence_pct")
+    ensure_decision_contract(
+      payload,
+      default_source="dashboard_ui_service",
+      verdict=verdict,
+      confidence=conf_pct,
+      why=[
+        f"Forecast next 30d: {expected_pct_v:.2f}%",
+        f"Backtest return: {payload.get('total_return_pct')}",
+      ],
+      risk_level="medium",
+      freshness=payload.get("generated_at"),
+    )
+
+  return payload
 
 
 def load_portfolio_allocation() -> Dict[str, Any]:

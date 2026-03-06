@@ -1,187 +1,97 @@
 {
   "version": 1,
-  "updated_at": "2026-03-04T10:50:13.069013+00:00",
+  "updated_at": "2026-03-06T11:00:03Z",
   "items": [
     {
       "id": "BATCH-01",
-      "title": "Stabiliser contrats API MVP",
+      "title": "Contrats API",
       "state": "CLOSED",
       "priority": "P0",
-      "owner_role": "planner",
-      "blocker_id": "NONE",
-      "qa_signoff": "YES",
-      "qa_signoff_artifact": "finance-app/openclaw-gates/batch-01-20260225-000127.md",
       "next_action": "CLOSE_BATCH01_AND_HANDOFF_BATCH02",
       "depends_on": [],
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
-      "closed_at": "2026-02-28T20:01:54Z"
+      "closed_at": "2026-02-28T20:01:54Z",
+      "updated_at": "2026-03-05T22:51:26Z",
+      "created_at": "2026-03-05T22:47:19Z"
     },
     {
       "id": "BATCH-02",
-      "title": "Contrats multi-ticker + news",
+      "title": "Multi-ticker + news",
       "state": "CLOSED",
       "priority": "P1",
-      "owner_role": "planner",
-      "blocker_id": "NONE",
-      "dispatch_authorized": false,
-      "gate_reference": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
-      "qa_signoff": "YES",
-      "qa_signoff_artifact": "finance-app/openclaw-gates/batch-02-20260225-202042.md",
       "next_action": "CLOSE_BATCH02_AND_PREPARE_NEXT_PRIORITY_BATCH",
-      "depends_on": [
+      "depends_on": [],
+      "closed_at": "2026-02-28T20:01:54Z",
+      "updated_at": "2026-03-05T23:04:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "legacy_depends_on": [
         "BATCH-01"
       ],
-      "evidence_required": [
-        "VERDICT: PASS",
-        "QA_SIGNOFF: YES"
-      ],
-      "closed_at": "2026-02-28T20:01:54Z"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-03",
-      "title": "Connecter frontend API live + qualité données",
+      "title": "Frontend Live + Qualit\u00e9 Donn\u00e9es",
       "state": "CLOSED",
       "priority": "P0",
-      "owner_role": "planner",
-      "blocker_id": "NONE",
-      "dispatch_authorized": true,
       "next_action": "DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
-      "depends_on": [
+      "depends_on": [],
+      "created_at": "2026-02-28T20:01:54Z",
+      "updated_at": "2026-03-05T23:04:01Z",
+      "closed_at": "2026-03-02T20:04:33.039712+00:00",
+      "legacy_depends_on": [
         "BATCH-02"
       ],
-      "created_at": "2026-02-28T20:01:54Z",
-      "goals": [
-        "frontend_engineer: connecter news/forecasts/stocks à l'API live (apiConnector.js déjà créé par admin)",
-        "backend_engineer: corriger confidence des forecasts (actuellement 0 high-confidence sur 19)",
-        "data_analyst: activer backtests (actuellement null/pending)",
-        "infra_engineer: ajouter monitoring cron et alerting si job fail"
-      ],
-      "evidence_required": [
-        "DELTA",
-        "VERDICT: PASS",
-        "API_UI_PROOF"
-      ],
-      "notes": "Frontend DONE (admin validated 2026-03-01). Backend fix confidence in progress.",
-      "updated_at": "2026-03-01T04:19:30Z",
-      "closed_at": "2026-03-02T20:04:33.039712+00:00",
-      "closed_reason": "all_workboard_tasks_done"
-    },
-    {
-      "id": "BATCH-03-BACKEND",
-      "title": "Fix forecast confidence calculation",
-      "state": "CLOSED",
-      "priority": "P0",
-      "owner_role": "backend_engineer",
-      "blocker_id": "NONE",
-      "next_action": "Fix forecasts_simple.py to use price history, not change_percent=0.0",
-      "depends_on": [],
-      "created_at": "2026-03-01T04:19:30Z",
-      "success_criteria": "curl /api/forecasts shows >0 forecasts with confidence >65%",
-      "closed_at": "2026-03-02T20:04:33.039712+00:00",
-      "closed_reason": "all_workboard_tasks_done"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-04",
-      "title": "Dashboard Vision — Brief quotidien + Secteurs réels",
+      "title": "Dashboard Vision",
       "state": "CLOSED",
       "priority": "P0",
       "closed_at": "2026-03-02T20:04:33.039712+00:00",
-      "closed_reason": "all_workboard_tasks_done",
       "next_action": "",
-      "depends_on": [
+      "depends_on": [],
+      "updated_at": "2026-03-05T23:04:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "legacy_depends_on": [
         "BATCH-03"
-      ]
+      ],
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-05",
-      "title": "Copilot 'Que faire aujourd'hui ?'",
+      "title": "Copilot \"Que faire aujourd'hui ?\"",
       "state": "CLOSED",
       "priority": "P0",
       "created_at": "2026-03-02T20:04:33.039712+00:00",
       "next_action": "planner=BATCH-05-PLAN READY; backend=BATCH-05-BACKEND READY; frontend=BATCH-05-FRONTEND READY",
-      "depends_on": [
+      "depends_on": [],
+      "closed_at": "2026-03-03T01:09:05.384438+00:00",
+      "updated_at": "2026-03-05T23:04:01Z",
+      "legacy_depends_on": [
         "BATCH-04"
       ],
-      "closed_at": "2026-03-03T01:09:05.384438+00:00",
-      "closed_by": "admin_reconcile"
-    },
-    {
-      "id": "BATCH-05-PLAN",
-      "title": "Copilot 'Que faire aujourd'hui ?' [PLAN]",
-      "state": "CLOSED",
-      "priority": "P0",
-      "role": "planner",
-      "created_at": "2026-03-02T20:04:33.039712+00:00",
-      "next_action": "planner: prendre BATCH-05 workboard task et livrer",
-      "depends_on": [
-        "BATCH-05"
-      ],
-      "closed_at": "2026-03-03T01:15:12.730249+00:00",
-      "closed_by": "admin_reconcile_batch05_done"
-    },
-    {
-      "id": "BATCH-05-BACKEND",
-      "title": "Copilot 'Que faire aujourd'hui ?' [BACKEND]",
-      "state": "CLOSED",
-      "priority": "P0",
-      "role": "backend_engineer",
-      "created_at": "2026-03-02T20:04:33.039712+00:00",
-      "next_action": "backend_engineer: prendre BATCH-05 workboard task et livrer",
-      "depends_on": [
-        "BATCH-05"
-      ],
-      "closed_at": "2026-03-03T01:15:12.730249+00:00",
-      "closed_by": "admin_reconcile_batch05_done"
-    },
-    {
-      "id": "BATCH-05-FRONTEND",
-      "title": "Copilot 'Que faire aujourd'hui ?' [FRONTEND]",
-      "state": "CLOSED",
-      "priority": "P0",
-      "role": "frontend_engineer",
-      "created_at": "2026-03-02T20:04:33.039712+00:00",
-      "next_action": "frontend_engineer: prendre BATCH-05 workboard task et livrer",
-      "depends_on": [
-        "BATCH-05"
-      ],
-      "closed_at": "2026-03-03T01:15:12.730249+00:00",
-      "closed_by": "admin_reconcile_batch05_done"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-06",
-      "title": "Forecasts Multi-Assets + LLM Judge",
+      "title": "Forecasts Multi-Assets + Judge",
       "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis exécuter BATCH-06-DEV-01/02/03 en lane dev unique.",
-      "depends_on": [
+      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis ex\u00e9cuter BATCH-06-DEV-01/02/03 en lane dev unique.",
+      "depends_on": [],
+      "updated_at": "2026-03-05T23:04:01Z",
+      "closed_at": "2026-03-03T15:18:01.915327+00:00",
+      "legacy_depends_on": [
         "BATCH-05"
       ],
-      "updated_at": "2026-03-03T01:09:05.384438+00:00",
-      "notes": [
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: prioriser corrections critiques sur modules existants avant toute nouvelle feature.",
-        "critical_scope_from_claude: F-001 forecast_service ghost imports/backend.* + compute cache sync mismatch.",
-        "critical_scope_from_claude: F-002/F-003 news+market_data layering/imports a realigner vers domains/* et platform/legacy/* existants.",
-        "critical_scope_from_claude: F-004/F-005 supprimer data RAG fake et supprimer chemin fantome apps/api/src/runtime au profit de apps/api/runtime.",
-        "reuse_targets: apps/api/src/domains/judge/application/g4f_client.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/market_data/application/cache_layer.py, apps/api/src/platform/legacy/storage/io.py",
-        "remaining_high_value_from_report: F-007/F-019 retirer bridges sys.path + resolution g4f circulaire; F-008/F-012 simplifier entrypoints (api/main shim + run_api wrapper); F-010 supprimer sitecustomize non deterministe.",
-        "remaining_high_value_from_report: F-015 renforcer platform/automation/validate_agent_workspace_layout.sh avec checks runtime fantome + .bak + RAG fake + stubs; F-016/F-017 cleanup .bak et fichiers parasites src root; F-020 unifier signatures save_json.",
-        "new_delta_useful: corriger F-002 path bug dans apps/api/src/domains/judge/application/g4f_client.py (_backend_root/_src_root) pour re-activer ranking LLM base fichiers working/tested.",
-        "new_delta_useful: traiter F-025/F-028 dans forecasts_simple.py (random fallback non deterministe + sys.path.insert) et F-026 dans domains/copilot/application/copilot_service.py (import cross-layer services.service_standard).",
-        "new_delta_useful: traiter F-029 (clarifier validate_agent_workspace_layout gate semantics) et schema alias hygiene dans apps/api/src/schemas/__init__.py pour éviter erreurs silencieuses.",
-        "deferred_careful: F-006/F-009 necessitent migration progressive (platform/legacy rename + stubs aliases) pour eviter regression massive; traiter apres stabilisation BATCH-06.",
-        "definition_of_done_hardening: publier un rapport court (F-id, statut, preuve, risque residuel) + commandes de verification executees + impact sur delivery cadence."
-      ],
-      "closed_at": "2026-03-03T15:18:01.915327+00:00",
-      "closed_by": "auto_batch_close"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-07",
@@ -189,330 +99,171 @@
       "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "attendre la clôture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec détails Deep Dive, recherche universelle et scoring d'impact.",
-      "depends_on": [
+      "next_action": "attendre la cl\u00f4ture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec d\u00e9tails Deep Dive, recherche universelle et scoring d'impact.",
+      "depends_on": [],
+      "updated_at": "2026-03-05T23:04:01Z",
+      "closed_at": "2026-03-03T16:02:01.603336+00:00",
+      "legacy_depends_on": [
         "BATCH-06"
       ],
-      "updated_at": "2026-03-03T15:18:01.915327+00:00",
-      "closed_at": "2026-03-03T16:02:01.603336+00:00",
-      "closed_by": "auto_batch_close"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-08",
       "title": "Decision UX 2-3 clics + Flux portefeuille",
       "state": "CLOSED",
       "priority": "P1",
-      "owner_role": "planner",
-      "depends_on": [
-        "BATCH-07",
-        "BATCH-26"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-04T00:55:42.778818+00:00",
+      "updated_at": "2026-03-05T23:04:01Z",
       "next_action": "planner completes BATCH-08-PLAN then dispatches canonical chain BATCH-08-DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV_REVIEW.",
-      "goals": [
-        "Unifier le contrat decision API->UI (verdict/confidence/why/risk).",
-        "Reduire le parcours principal a 2-3 clics sur desktop et mobile.",
-        "Stabiliser le mode degrade avec messages actionnables."
-      ],
-      "success_criteria": [
-        "Clickpath valide: dashboard -> recommendation <= 3 actions.",
-        "Payload UI conforme au contrat decision unique sans mapping ad hoc.",
-        "Tests smoke UI passes sur viewport desktop + mobile."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-08",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
-      "notes": [
-        "implementation_architecture: keep existing domain contracts (apps/api/src/domains/*) and existing forecast UI wiring (apps/web/src/domains/forecasts/*); no parallel stack.",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: canonical runtime chain uses planner/dev/admin only; avoid backend/frontend/data/infra lane names for active tasks.",
-        "reuse_targets_api: apps/api/src/domains/judge/api/judge.py + apps/api/src/domains/judge/application/judge_pipeline.py + apps/api/src/domains/judge/application/g4f_client.py",
-        "reuse_targets_ui: apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/domains/forecasts/components/widgets/*.html + apps/web/src/domains/forecasts/pages/app.js",
-        "validation_path: planner PLAN/ARCH complete -> dev chain with targeted tests -> admin runtime validation -> planner GOV_REVIEW close with proof."
-      ],
-      "unblocked_by": "BATCH-26-gov-review-20260304",
       "closed_at": "2026-03-04T01:10:21.892112+00:00",
-      "closed_by": "auto_batch_close"
+      "legacy_depends_on": [
+        "BATCH-07"
+      ],
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-09",
-      "title": "Alertes et surveillance orientees decision",
+      "title": "Alertes & Surveillance orient\u00e9es d\u00e9cision",
       "state": "CLOSED",
       "priority": "P1",
-      "owner_role": "planner",
-      "depends_on": [
+      "depends_on": [],
+      "created_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-05T23:04:01Z",
+      "next_action": "preparer BATCH-09-PLAN avec matrice severite, dedupe strategy et runbook de verification SLA.",
+      "closed_at": "2026-03-04T10:49:57Z",
+      "legacy_depends_on": [
         "BATCH-08"
       ],
-      "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-04T10:50:13.069013+00:00",
-      "next_action": "preparer BATCH-09-PLAN avec matrice severite, dedupe strategy et runbook de verification SLA.",
-      "goals": [
-        "Introduire alerting priorise actif+macro avec deduplication.",
-        "Definir un SLA runtime pour latence alerte et faux positifs.",
-        "Rendre les alertes exploitables directement dans le flux decision."
-      ],
-      "success_criteria": [
-        "Alertes dedupes et ordonnees par impact dans l UI.",
-        "SLA d alerte mesure et publie dans monitoring.",
-        "Aucune alerte critique perdue sur fenetre 24h de test."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-09",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
-      "notes": [
-        "implementation_architecture: extend existing monitor + notification pipeline, avoid parallel alert stack.",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse jobs and monitor endpoints already in apps/api/src/platform/legacy/jobs and apps/monitor/server.py.",
-        "reuse_targets: apps/api/src/platform/legacy/jobs/market_brief.py, apps/api/src/platform/legacy/jobs/forecasts_simple.py, scripts/fc_health_check.sh, scripts/monitor_agents.sh",
-        "validation_path: signal generation tests + monitor visibility + end-to-end alert acknowledgment."
-      ],
-      "closed_at": "2026-03-04T10:49:57Z"
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-10",
-      "title": "Cost runtime governance et release gate MVP",
-      "state": "READY",
+      "title": "Cost/Runtime Governance + Release Gate MVP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-09"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-04T10:50:13.069013+00:00",
+      "updated_at": "2026-03-05T23:04:01Z",
       "next_action": "ouvrir BATCH-10-PLAN et cadrer gate GO/NO-GO avec checklist et rollback testable.",
-      "goals": [
-        "Plafonner cout runtime via cache/fallback/quotas/timeouts.",
-        "Formaliser gate release API+UI+robustesse avec preuves.",
-        "Produire decision GO/NO-GO avec rollback explicite."
-      ],
-      "success_criteria": [
-        "Budget runtime journalise et respecte sur fenetre canary.",
-        "Gate release complete avec evidences traceables.",
-        "Rollback rehearse avec procedure validee."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-10",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: centralize runtime guard logic in existing orchestration scripts, no duplicate quota logic per endpoint.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: mirror Judge API pattern for endpoint gating and provider fallback orchestration.",
         "reuse_targets: platform/config/lm_used_model_config.sh, scripts/fc_agent_tick.sh, platform/automation/cron_tmux_role_runner.sh, apps/api/src/domains/judge/application/intelligence_service.py",
         "validation_path: stress run + rate-limit simulation + release checklist artifacts."
-      ]
+      ],
+      "closed_at": "2026-03-05T05:33:50Z",
+      "legacy_depends_on": [
+        "BATCH-09"
+      ],
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-11",
-      "title": "Data ingestion core et freshness SLO",
-      "state": "WAITING_DEP",
+      "title": "Data Ingestion Core + Freshness SLO",
+      "state": "READY_DEV",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-10"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
-      "next_action": "ouvrir BATCH-11-PLAN et preparer lanes backend/data/infra avec contrat de fraicheur.",
-      "goals": [
-        "Stabiliser ingestion multi-source prix/news/macro.",
-        "Exposer endpoint ingestion health et observabilite erreurs.",
-        "Garantir un SLO de fraicheur exploitable en UI."
-      ],
-      "success_criteria": [
-        "Ingestion continue sans rupture sur 24h.",
-        "health endpoint expose statut source par source.",
-        "Freshness visible dans payload API et UI."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-11",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
+      "updated_at": "2026-03-06T11:22:24Z",
+      "next_action": "claim BATCH-11-ARCH (READY pour planner) \u2192 produire artefact architecture \u2192 d\u00e9bloquer DEV-01",
       "notes": [
         "implementation_architecture: keep ingestion in existing legacy jobs + domain services, normalize outputs before UI.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing market_data + forecasts modules and avoid parallel ingestion frameworks.",
         "reuse_targets: apps/api/src/platform/legacy/jobs/forecasts_simple.py, apps/api/src/platform/legacy/jobs/market_brief.py, apps/api/src/domains/forecasts",
         "validation_path: ingest smoke + freshness assertions + degraded mode checks."
-      ]
+      ],
+      "legacy_depends_on": [
+        "BATCH-10"
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-05T22:47:19Z"
     },
     {
       "id": "BATCH-12",
-      "title": "Portfolio state et risk profile core",
+      "title": "Portfolio State + Risk Profile Core",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-11"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-12-PLAN avec schema portefeuille/risk profile et plan de migration.",
-      "goals": [
-        "Rendre portefeuille/watchlist/risk profile persistants.",
-        "Brancher copilot sur portefeuille sauvegarde sans resaisie.",
-        "Durcir edition UI en nominal et degrade."
-      ],
-      "success_criteria": [
-        "Etat portefeuille persiste et recharge sans corruption.",
-        "Copilot answers utilisent le contexte portefeuille sauve.",
-        "Fallback UX fiable en cas indisponibilite source."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-12",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: persistence adapter behind existing copilot context service; avoid duplicate portfolio stores.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and existing web state contracts before adding new storage abstractions.",
         "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/pages/app.js",
         "validation_path: persistence tests + copilot context injection tests + UI recovery scenario."
+      ],
+      "legacy_depends_on": [
+        "BATCH-11"
       ]
     },
     {
       "id": "BATCH-13",
-      "title": "Decision journal et outcome feedback loop",
+      "title": "Decision Journal + Outcome Feedback Loop",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-12"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-13-PLAN avec schema journal, outcomes, et cadence review hebdo.",
-      "goals": [
-        "Journaliser recommandations et contexte de decision.",
-        "Mesurer outcomes sur horizons 1d/1w/1m.",
-        "Fermer la boucle produit par revue hebdo mesurable."
-      ],
-      "success_criteria": [
-        "Journal complet consultable par actif et horizon.",
-        "KPI hit-rate et calibration calcules automatiquement.",
-        "Review hebdo genere un backlog actionnable."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-13",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: append-only decision log + analytics pass on top, no mutation-heavy workflow.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing judge outputs and forecasts artifacts for journaling keys.",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/kpi-history.jsonl, docs/operations/orchestrator/proofs/",
         "validation_path: event integrity checks + KPI recomputation consistency."
+      ],
+      "legacy_depends_on": [
+        "BATCH-12"
       ]
     },
     {
       "id": "BATCH-14",
-      "title": "Finalisation core v2 robustesse et GO NO-GO",
+      "title": "Finalisation Core v2: Robustness Drills + GO/NO-GO",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-13"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-14-PLAN et cadrer gate final production avec preuves obligatoires.",
-      "goals": [
-        "Executer drills robustesse provider down/stale/timeout/restart.",
-        "Valider parcours complet nominal + degrade.",
-        "Produire gate final GO/NO-GO avec plan J+7."
-      ],
-      "success_criteria": [
-        "Drills executes avec preuves et resultats conserves.",
-        "Parcours utilisateur valide en bout en bout.",
-        "Decision GO/NO-GO signee avec rollback et suivi J+7."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-14",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: orchestrate drills via existing cron/health scripts and monitor APIs; avoid custom one-off harness.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse fc_health_check, monitor_agents, and role proof manifests as release evidence backbone.",
         "reuse_targets: scripts/fc_health_check.sh, scripts/monitor_agents.sh, platform/automation/parallel_workstream.py, docs/orchestrator-ops/proofs/",
         "validation_path: resilience suite + release checklist + rollback rehearsal."
+      ],
+      "legacy_depends_on": [
+        "BATCH-13"
       ]
     },
     {
       "id": "BATCH-15",
-      "title": "Strategy playbooks engine",
+      "title": "Strategy Playbooks Engine",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-14"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-03T13:01:49.535081Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-15-PLAN puis decomposer en lanes backend/frontend/data avec contrat playbook commun.",
-      "goals": [
-        "Formaliser playbooks decision par regime et risque.",
-        "Rendre la recommandation explicable par strategie active.",
-        "Signaler les conflits strategie vs signal brut."
-      ],
-      "success_criteria": [
-        "Playbook selection deterministe exposee en API/UI.",
-        "Every recommendation references strategy rationale.",
-        "Conflict warning rendered with actionable next step."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-15",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: strategy layer wraps existing signal/judge outputs instead of replacing them.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API decision format and copilot context pipeline to inject strategy constraints.",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
         "validation_path: strategy conflict tests + end-to-end recommendation coherence checks."
+      ],
+      "legacy_depends_on": [
+        "BATCH-14"
       ]
     },
     {
@@ -521,78 +272,40 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-15"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-16-PLAN et cadrer scenarios standards + impacts portefeuille avec contrat de restitution unique.",
-      "goals": [
-        "Mettre en place un moteur what-if sur chocs macro et actifs.",
-        "Estimer impact portefeuille avec recommandations actionnables.",
-        "Rendre comparables au moins 5 scenarios standards."
-      ],
-      "success_criteria": [
-        "Comparateur UI affiche >=5 scenarios avec deltas explicites.",
-        "Chaque scenario produit une recommendation avec rationale traceable.",
-        "Tests API/UI valident format de sortie unique et stable."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-16",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: branch stress layer on top of existing judge + forecasts pipeline, no separate scoring engine.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API endpoint orchestration pattern (input normalization, fallback, verdict payload).",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/forecasts, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
         "integration_contract: scenario_input + portfolio_snapshot -> decision_payload(verdict,confidence,risks,actions) identical to existing UI contracts.",
         "validation_path: scenario fixture tests + API contract tests + mobile/desktop rendering smoke."
+      ],
+      "legacy_depends_on": [
+        "BATCH-15"
       ]
     },
     {
       "id": "BATCH-17",
-      "title": "Regime Detection and Allocation Drift Alerts",
+      "title": "Regime Detection + Allocation Drift Alerts",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-16"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-17-PLAN et definir matrice regime->posture + alertes de derive allocation.",
-      "goals": [
-        "Detecter changements de regime risk-on/risk-off/transition.",
-        "Signaler derive allocation versus posture cible.",
-        "Exposer posture recommandee avec niveau de confiance."
-      ],
-      "success_criteria": [
-        "Detection regime disponible en API et visible en UI.",
-        "Alertes derivees dedupees avec severite explicite.",
-        "Matrice posture validee sur jeux de donnees historiques."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-17",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: extend current signal scoring and alert channels instead of introducing a new alert subsystem.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor/status surfaces and existing forecast factors before new abstractions.",
         "reuse_targets: apps/api/src/platform/legacy/jobs/forecasts_simple.py, scripts/monitor_agents.sh, apps/web/src/domains/forecasts/pages/app.js",
         "integration_contract: regime_state + drift_metrics must map to existing alert card format consumed by dashboard.",
         "validation_path: drift threshold tests + alert ranking assertions + UX smoke for acknowledgment flow."
+      ],
+      "legacy_depends_on": [
+        "BATCH-16"
       ]
     },
     {
@@ -601,78 +314,40 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-17"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-18-PLAN pour integrer calendrier macro/earnings dans le contexte copilot avec fenetre 24-48h.",
-      "goals": [
-        "Injecter calendrier macro et earnings dans le raisonnement.",
-        "Produire timeline impact 24-48h orientee decision.",
-        "Rendre le copilot sensible a la proximite evenementielle."
-      ],
-      "success_criteria": [
-        "Timeline evenementielle exposee dans payload copilot.",
-        "Recommandation change lorsqu un event critique approche.",
-        "Tests de non-regression sur endpoint copilot passes."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-18",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: enrich copilot context service and keep response schema compatible with judge-style decision outputs.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and llm_client/g4f integration already proven in judge/coprocess flows.",
         "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/platform/legacy/research/llm_client.py, apps/api/src/domains/judge/application/intelligence_service.py",
         "integration_contract: event_timeline appended to existing copilot context without breaking current frontend connector parsing.",
         "validation_path: context injection tests + endpoint contract tests + canary prompt quality checks."
+      ],
+      "legacy_depends_on": [
+        "BATCH-17"
       ]
     },
     {
       "id": "BATCH-19",
-      "title": "Explainability Graph and Source Traceability",
+      "title": "Explainability Graph + Source Traceability",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-18"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-19-PLAN et formaliser graphe d explication avec poids/fraicheur/sources.",
-      "goals": [
-        "Rendre chaque recommendation traçable jusqu aux sources.",
-        "Afficher poids, fraicheur et contribution par signal.",
-        "Ajouter indicateurs de qualite source visibles en UI."
-      ],
-      "success_criteria": [
-        "Graph explainability disponible pour chaque verdict.",
-        "Source traceability complete sans trou dans les champs requis.",
-        "UI affiche contribution/fraicheur avec code couleur cohérent."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-19",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: build explainability layer from existing judge/forecast intermediate artifacts, no parallel provenance store.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align with Judge API verdict object and reuse its normalization path.",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/proofs/, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
         "integration_contract: explanation_graph nodes and edges must remain serializable in current API connector payload shape.",
         "validation_path: provenance completeness checks + explainability snapshot tests + UI rendering tests."
+      ],
+      "legacy_depends_on": [
+        "BATCH-18"
       ]
     },
     {
@@ -681,78 +356,40 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-19"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-20-PLAN et definir politique utilisateur (risque/exclusions/limites) avec downgrade explicite.",
-      "goals": [
-        "Encadrer recommandations par politiques personnelles.",
-        "Bloquer ou downgrader suggestions hors limites.",
-        "Tracer tout override dans journal auditable."
-      ],
-      "success_criteria": [
-        "Violations policy detectees avant publication recommendation.",
-        "Downgrade explicite affiche en UI + API.",
-        "Overrides historises avec auteur et motif."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-20",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: policy guard wraps existing decision object post-judge and pre-ui serialization.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse current decision payload and add guard fields instead of a separate policy endpoint.",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/contracts/apiConnector.js",
         "integration_contract: policy_verdict and override_reason appended to existing contract keys consumed by monitor and dashboard.",
         "validation_path: policy boundary tests + override audit tests + UI downgrade behavior checks."
+      ],
+      "legacy_depends_on": [
+        "BATCH-19"
       ]
     },
     {
       "id": "BATCH-21",
-      "title": "Paper Trading Simulator and Execution Journal",
+      "title": "Paper Trading Simulator + Execution Journal",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-20"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-21-PLAN et preparer simulation execution + journal outcome pour boucle apprentissage.",
-      "goals": [
-        "Simuler execution paper trading depuis recommandations.",
-        "Enregistrer slippage, fees et qualite de fill.",
-        "Relier outcome execution au moteur de recommandations."
-      ],
-      "success_criteria": [
-        "Scenario paper trade complet de recommendation a outcome.",
-        "Journal execution expose KPI slippage/fees par decision.",
-        "Feedback loop exploitable par batch analytics suivant."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-21",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: simulate fills in lightweight domain service while reusing decision journal schema.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing journaling and judge identifiers as primary foreign keys.",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, docs/operations/orchestrator/kpi-history.jsonl, apps/web/src/domains/forecasts/pages/app.js",
         "integration_contract: execution_journal entries must reference recommendation_id and preserve current timeline display contract.",
         "validation_path: simulation deterministic tests + journal integrity checks + dashboard summary snapshots."
+      ],
+      "legacy_depends_on": [
+        "BATCH-20"
       ]
     },
     {
@@ -761,78 +398,40 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-21"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-22-PLAN et cadrer proposition de rebalancing en un ecran avec contraintes policy.",
-      "goals": [
-        "Proposer rebalancing simple sous contraintes utilisateur.",
-        "Afficher turnover, delta risque et couts attendus.",
-        "Permettre decision rapide en quelques minutes."
-      ],
-      "success_criteria": [
-        "Optimizer fournit proposition unique et explicable.",
-        "Contraintes policy appliquees avant proposition finale.",
-        "UI one-screen validee desktop et mobile."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-22",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: optimize from current portfolio state and existing risk policy service, no separate optimizer microservice.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse policy guardrails and portfolio context contracts already in copilot path.",
         "reuse_targets: apps/api/src/domains/copilot/application/context_service.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/web/src/domains/forecasts/contracts/apiConnector.js",
         "integration_contract: rebalancing proposal payload extends current recommendation card schema with turnover and risk_delta fields.",
         "validation_path: optimizer constraint tests + end-to-end policy compliance checks + UI acceptance flow."
+      ],
+      "legacy_depends_on": [
+        "BATCH-21"
       ]
     },
     {
       "id": "BATCH-23",
-      "title": "Tax Fees and Slippage Awareness",
+      "title": "Tax, Fees, and Slippage Awareness",
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-22"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-23-PLAN pour estimer impact net et activer alertes edge-net insuffisant.",
-      "goals": [
-        "Estimer fiscalite, fees et slippage par decision.",
-        "Afficher impact brut versus impact net.",
-        "Alerter lorsque edge net devient non pertinent."
-      ],
-      "success_criteria": [
-        "Chaque recommendation expose cout estime et edge net.",
-        "Alerte edge-net faible activee avec seuil configurable.",
-        "Regression tests garantissent coherence des calculs net."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-23",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: cost awareness computed as post-processing stage over existing recommendation payload.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse execution journal outputs and avoid duplicating transaction models.",
         "reuse_targets: docs/operations/orchestrator/kpi-history.jsonl, apps/api/src/domains/judge/application/intelligence_service.py, apps/web/src/domains/forecasts/components/widgets/sector-performance.html",
         "integration_contract: cost_breakdown fields added to existing decision response and consumed by current frontend cards.",
         "validation_path: edge-net threshold tests + snapshot tests + UX alert verification."
+      ],
+      "legacy_depends_on": [
+        "BATCH-22"
       ]
     },
     {
@@ -841,38 +440,19 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-23"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-24-PLAN et finaliser file alertes priorisee avec controle fatigue et urgences top queue.",
-      "goals": [
-        "Prioriser alertes selon impact decisionnel reel.",
-        "Reduire bruit via dedupe et controle fatigue.",
-        "Conserver surface d urgence claire en top queue."
-      ],
-      "success_criteria": [
-        "Backlog alertes montre priorite/severite sans doublons.",
-        "Snooze/ack fonctionnent sans perte d alertes critiques.",
-        "Mesure bruit reduit sur fenetre 24h compare baseline."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-24",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: iterate on existing monitor + alert channels; preserve single ingestion and dispatch pipeline.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor server and existing fc health checks before adding new daemons.",
         "reuse_targets: apps/monitor/server.py, scripts/monitor_agents.sh, scripts/fc_health_check.sh, apps/api/src/platform/legacy/jobs/market_brief.py",
         "integration_contract: alert_v2 schema must stay backward-compatible with current monitor dashboard cards.",
         "validation_path: dedupe rate tests + urgent queue checks + monitor API regression tests."
+      ],
+      "legacy_depends_on": [
+        "BATCH-23"
       ]
     },
     {
@@ -881,115 +461,47 @@
       "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-24"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-03T14:12:00Z",
+      "updated_at": "2026-03-06T10:49:36Z",
       "next_action": "ouvrir BATCH-25-PLAN pour pipeline brief matinal automatique avec top actions/risques et fallback degrade.",
-      "goals": [
-        "Automatiser generation du brief matinal decisionnel.",
-        "Mettre en avant top 3 actions et risques cles.",
-        "Garantir fallback explicite en cas d echec source/provider."
-      ],
-      "success_criteria": [
-        "Brief matinal produit automatiquement a cadence definie.",
-        "Sections actions/risques coherees avec etat runtime reel.",
-        "Fallback degrade visible et actionnable lorsqu un composant echoue."
-      ],
-      "gate_reference": "docs/product/planning/PRODUCT_VISION.md#batch-25",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
       "notes": [
         "implementation_architecture: compose morning brief from existing forecasts + judge + monitor data without separate pipeline stack.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse generate_brief flow and Judge API fallback strategy for robust brief synthesis.",
         "reuse_targets: scripts/generate_brief.py, apps/api/src/domains/forecasts/api/brief.py, apps/api/src/platform/legacy/research/llm_client.py, apps/api/src/domains/judge/application/intelligence_service.py",
         "integration_contract: morning_brief output reuses current brief route schema and embeds degradation metadata.",
         "validation_path: scheduled run dry-tests + content contract checks + degraded mode simulation."
+      ],
+      "legacy_depends_on": [
+        "BATCH-24"
       ]
     },
     {
       "id": "BATCH-26",
-      "title": "Architecture Hardening Pack (Audit 2026-03-03)",
+      "title": "Weekly Investment Committee Mode",
       "state": "CLOSED",
       "priority": "P0",
-      "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T20:44:58.684171Z",
-      "updated_at": "2026-03-04T00:37:01.810720+00:00",
+      "updated_at": "2026-03-05T23:04:01Z",
       "next_action": "Continue BATCH-26-DEV-02 (READY), then chain DEV-03 -> ADMIN-01 -> GOV-REVIEW with proofs.",
-      "goals": [
-        "Restore forecast/judge runtime determinism by fixing missing imports, wrong roots, and ghost paths.",
-        "Eliminate fake/runtime-split data paths and unblock real data flow to APIs.",
-        "Reduce architectural drift by removing fragile shims/bridges and clarifying domain boundaries."
-      ],
-      "success_criteria": [
-        "F-001/F-002/F-003 fixed with import-time proof (python import + endpoint smoke PASS).",
-        "F-004/F-005/F-006 fixed with single runtime data path and no fake RAG artifacts.",
-        "F-007/F-008/F-010/F-011/F-012 reduced to documented, test-covered state with no silent fallback behavior."
-      ],
-      "gate_reference": "docs/product/planning/tasks.md#addendum-audit-2026-03-03-architecture-hardening-pack-p0p1",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
-      "notes": [
-        "Execution chain (lean canonical): BATCH-26-PLAN -> BATCH-26-DEV-01 -> BATCH-26-DEV-02 -> BATCH-26-DEV-03 -> BATCH-26-ADMIN-01 -> BATCH-26-GOV-REVIEW.",
-        "BATCH-26-DEV-01 scope: F-001/F-002/F-003 module-load and cross-layer import fixes with import-time proofs.",
-        "BATCH-26-DEV-02 scope: F-004/F-005/F-006/F-008 runtime data-path unification and fake-data purge verification.",
-        "BATCH-26-DEV-03 scope: F-010/F-011/F-012/F-015/F-020 hardening, validator guardrails, and bridge reduction without regressions.",
-        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing domain modules (judge, copilot, market_data, legacy storage) before any new file/module.",
-        "Do not start feature work from BATCH-08 until BATCH-26 verdict PASS or explicit risk accept by owner.",
-        "Proof commands must include: import checks, targeted pytest, workboard status transitions, and runtime monitor snapshot."
-      ],
-      "reopen_reason": "Reopened: auto_batch_close bug (multi-part task IDs ignored). Tasks DEV-02/DEV-03/ADMIN-01/GOV-REVIEW not DONE. Was=CLOSED",
       "closed_at": "2026-03-04T00:44:37.961711+00:00",
-      "closed_by": "auto_batch_close"
+      "legacy_depends_on": [
+        "BATCH-25"
+      ],
+      "dependency_policy": "single_batch",
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
     },
     {
       "id": "BATCH-27",
-      "title": "Frontend Dynamic Data Coverage (Facettes + Widgets)",
-      "state": "WAITING_DEP",
+      "title": "Reliability SRE Pack + Chaos Drills",
+      "state": "READY_DEV",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-09"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-04T02:48:16Z",
-      "next_action": "ouvrir BATCH-27-PLAN des cloture de BATCH-09, puis chaine canonique DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV-REVIEW.",
-      "goals": [
-        "Aligner les contrats backend->frontend (judge/forecasts/news/portfolio/search) pour un payload stable et versionnable.",
-        "Remplacer les contenus facettes statiques par des renderers branches au flux live existant.",
-        "Supprimer les divergences de mapping (duplication connector + champs aleatoires/non deterministes)."
-      ],
-      "success_criteria": [
-        "Contrat API unifie: memes champs critiques entre reponse backend et consommateur UI (verdict/confidence/why/risk/freshness).",
-        "loadFacetteContent n injecte plus de sample synthetique quand les donnees live existent.",
-        "Aucune transformation aleatoire dans le connecteur forecasts/news (zero Math.random sur payload API)."
-      ],
-      "gate_reference": "docs/product/planning/FRONTEND_DYNAMIC_DATA_GAP_MAP_2026-03-03.md#batch-mapping",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
+      "updated_at": "2026-03-06T11:22:24Z",
+      "next_action": "claim BATCH-27-DEV-01 (READY pour dev) \u2192 Reliability SRE Pack + Chaos Drills",
       "notes": [
         "reuse_targets_ui: apps/web/src/domains/forecasts/pages/app.js, apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/pages/index.html.",
         "dynamic_gap_refs: generateFacetteContent placeholder flow, fallback-heavy widgets, deterministic transform required for news effect.",
@@ -997,47 +509,447 @@
         "validation_path: browser smoke + payload trace + targeted frontend tests/lint + degraded-mode checks.",
         "reuse_targets_backend: apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/search/api/universal_search.py, apps/api/src/platform/routes/dashboard.py.",
         "reuse_targets_frontend: apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/domains/forecasts/pages/app.js (no second connector source of truth)."
-      ]
+      ],
+      "note_unclaim": "Auto-unclaimed 2026-03-04T11:56:34.931192+00:00: planner claimed BATCH-27-PLAN simultaneously with BATCH-10-PLAN (WIP violation). Reverted to READY; BATCH-10 must complete first.",
+      "legacy_depends_on": [
+        "BATCH-09"
+      ],
+      "parked_by_rebuild": true,
+      "parked_reason": "strict_order_rebuild",
+      "parked_at": "2026-03-05T22:47:19Z",
+      "origin_state": "IN_PROGRESS",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T00:18:03Z"
     },
     {
       "id": "BATCH-28",
-      "title": "Frontend Dynamic UX Hardening (Freshness + Error States)",
-      "state": "WAITING_DEP",
+      "title": "MVP v3 Release Gate + Adoption Analytics",
+      "state": "READY_DEV",
       "priority": "P1",
       "owner_role": "planner",
-      "depends_on": [
-        "BATCH-27"
-      ],
+      "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-04T02:48:16Z",
-      "next_action": "ouvrir BATCH-28-PLAN apres fermeture BATCH-27 pour finaliser freshness UX, erreurs colorees, et preuves e2e.",
-      "goals": [
-        "Rendre visibles les etats runtime front/back: loading, stale, degraded, error par widget critique.",
-        "Uniformiser freshness et envelopes d erreur cote backend puis propagation UI sans ambiguite.",
-        "Ajouter des checks de non-regression e2e sur scenarios nominal + degrade."
-      ],
-      "success_criteria": [
-        "Backend expose freshness + error metadata coherents pour les endpoints utilises par le dashboard.",
-        "Chaque widget critique affiche son etat freshness/error avec severite visuelle claire.",
-        "Runbook e2e valide desktop/mobile et fallback degrade avec preuves de rendu."
-      ],
-      "gate_reference": "docs/product/planning/FRONTEND_DYNAMIC_DATA_GAP_MAP_2026-03-03.md#success-gates",
-      "evidence_required": [
-        "DELTA",
-        "EVIDENCE",
-        "RISKS",
-        "NEXT",
-        "VERDICT",
-        "BLOCKER_ID",
-        "NEXT_ACTION_UNIQUE"
-      ],
+      "updated_at": "2026-03-06T11:22:24Z",
+      "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
       "notes": [
         "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",
         "reuse-first: exploit existing live event financecopilot:live-dashboard-updated and window.getLiveDashboardData().",
         "admin signoff requires monitor snapshot + frontend smoke proof in degraded mode.",
         "backend_scope: harmoniser metadonnees freshness/error dans endpoints dashboard/judge/search utilises par app.js.",
         "frontend_scope: afficher badges freshness + erreurs colorees par severite et CTA de recovery."
+      ],
+      "legacy_depends_on": [
+        "BATCH-27"
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T00:20:02Z"
+    },
+    {
+      "id": "BATCH-29",
+      "title": "Probabilistic Forecast Calibration Lab",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-28"
       ]
+    },
+    {
+      "id": "BATCH-30",
+      "title": "Multi-Horizon Forecast Decomposition",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-29"
+      ]
+    },
+    {
+      "id": "BATCH-31",
+      "title": "Cross-Asset Correlation Regime Map",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-30"
+      ]
+    },
+    {
+      "id": "BATCH-32",
+      "title": "Forecast Ensemble Governance",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-31"
+      ]
+    },
+    {
+      "id": "BATCH-33",
+      "title": "Macro Narrative-to-Signal Parser",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-32"
+      ]
+    },
+    {
+      "id": "BATCH-34",
+      "title": "Alternative Data Sentiment Fusion",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-33"
+      ]
+    },
+    {
+      "id": "BATCH-35",
+      "title": "Forecast Drift Sentinel + Auto-Recalibration",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-34"
+      ]
+    },
+    {
+      "id": "BATCH-36",
+      "title": "Uncertainty Visualization UX",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-35"
+      ]
+    },
+    {
+      "id": "BATCH-37",
+      "title": "Hypothesis Workbench",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-36"
+      ]
+    },
+    {
+      "id": "BATCH-38",
+      "title": "Walk-Forward Forecast Scoreboard",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-37"
+      ]
+    },
+    {
+      "id": "BATCH-39",
+      "title": "Forecast Data Quality SLA + Provenance",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-38"
+      ]
+    },
+    {
+      "id": "BATCH-40",
+      "title": "Predictive Research Hub Finalization Gate",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-39"
+      ]
+    },
+    {
+      "id": "BATCH-41",
+      "title": "Free Global Signal Mesh",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-40"
+      ]
+    },
+    {
+      "id": "BATCH-42",
+      "title": "Geopolitical Risk Graph + Conflict Escalation",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-41"
+      ]
+    },
+    {
+      "id": "BATCH-43",
+      "title": "Law and Policy Change Impact Engine",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-42"
+      ]
+    },
+    {
+      "id": "BATCH-44",
+      "title": "Insider Behavior Intelligence Layer",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-43"
+      ]
+    },
+    {
+      "id": "BATCH-45",
+      "title": "Supply Chain + Commodity Shock Propagation",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-44"
+      ]
+    },
+    {
+      "id": "BATCH-46",
+      "title": "Country/Continent/World Macro Regime Forecasts",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-45"
+      ]
+    },
+    {
+      "id": "BATCH-47",
+      "title": "Sector-to-Company Impact Transmission",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-46"
+      ]
+    },
+    {
+      "id": "BATCH-48",
+      "title": "Event Impact Horizon Matrix",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-47"
+      ]
+    },
+    {
+      "id": "BATCH-49",
+      "title": "Multi-Layer Forecast Fusion + Attribution",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-48"
+      ]
+    },
+    {
+      "id": "BATCH-50",
+      "title": "Global Forecast Board Final Gate",
+      "state": "PLANNED",
+      "depends_on": [],
+      "updated_at": "2026-03-05T22:54:01Z",
+      "created_at": "2026-03-05T22:47:19Z",
+      "priority": "P2",
+      "legacy_depends_on": [
+        "BATCH-49"
+      ]
+    },
+    {
+      "id": "BATCH-51",
+      "title": "PRODUCT VISION \u2014 Finance Copilot",
+      "state": "IN_PROGRESS",
+      "priority": "P2",
+      "next_action": "CLAIM_PLANNER_ANALYSIS",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T01:00:02Z",
+      "updated_at": "2026-03-06T11:00:02Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T01:45:01Z"
+    },
+    {
+      "id": "BATCH-52",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-52-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T02:22:01Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T03:04:01Z",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-53",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-53-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T03:22:01Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T04:04:01Z",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-54",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-54-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T04:22:01Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T05:00:36Z",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-55",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-55-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T05:22:02Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T06:00:47Z",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-56",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-56-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T06:22:02Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T07:04:01Z",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-57",
+      "title": "_Document de r\u00e9f\u00e9rence pour tous les agents \u2014 mis \u00e0 jour 2026-03-02 par admin-claude_",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
+      "next_action": "ouvrir BATCH-57-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T07:22:02Z",
+      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "closed_at": "2026-03-06T10:57:32.847640+00:00",
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+    },
+    {
+      "id": "BATCH-58",
+      "title": "**Profil:** Reda (venom) \u2014 professionnel non-expert en finance qui g\u00e8re ses investissements pers",
+      "state": "READY_PLANNER",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md#\ud83c\udfaf Qui est l'utilisateur",
+      "next_action": "ouvrir BATCH-58-PLAN",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-06T11:00:03Z",
+      "updated_at": "2026-03-06T11:30:04Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-06T11:30:04Z"
     }
-  ]
+  ],
+  "meta": {
+    "strict_order_rebuild": {
+      "at": "2026-03-05T22:51:26Z",
+      "source": "docs/product/planning/PRODUCT_VISION.md",
+      "parked_batches": [],
+      "first_open_batch": "BATCH-11"
+    }
+  }
 }

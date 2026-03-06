@@ -16,6 +16,12 @@ from services.cache_layer import load_or_compute
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+try:
+    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+except Exception:  # pragma: no cover
+    ensure_decision_contract = None  # type: ignore
+    utc_now_iso = lambda: datetime.utcnow().isoformat() + "Z"  # type: ignore
+
 @router.get("/news/feed")
 def get_filtered_news_feed(
     tickers: Optional[List[str]] = Query(None, description="Filter news by specific tickers"),
@@ -30,6 +36,7 @@ def get_filtered_news_feed(
     Dashboard news feed endpoint with filtering capabilities.
     Returns news data with sentiment scoring and proper structure for dashboard UI components.
     """
+    now_iso = utc_now_iso()
     logger.info(f"📰 GET /api/news/feed - Request received", extra={
         "tickers": tickers,
         "since": since,
@@ -65,7 +72,7 @@ def get_filtered_news_feed(
                 },
                 "message": "No news data available - system ingesting in background",
                 "freshness": "unknown",
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": now_iso,
                 "source": ["fallback_empty", "news_pipeline"]
             })
         
@@ -220,9 +227,43 @@ def get_filtered_news_feed(
                 "order": order
             },
             "freshness": news_data.get("freshness", news_data.get("last_update")),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": now_iso,
             "source": news_data.get("source", ["news_pipeline", "rss_ingest"])
         }
+
+        if callable(ensure_decision_contract):
+            sentiment_values = []
+            ticker_counter: Dict[str, int] = {}
+            for article in formatted_articles:
+                sent = (article.get("sentiment") or {}).get("score") if isinstance(article.get("sentiment"), dict) else None
+                try:
+                    sentiment_values.append(float(sent))
+                except (TypeError, ValueError):
+                    pass
+                for token in (article.get("tickers") or []):
+                    upper = str(token).strip().upper()
+                    if upper:
+                        ticker_counter[upper] = ticker_counter.get(upper, 0) + 1
+
+            avg_sent = sum(sentiment_values) / len(sentiment_values) if sentiment_values else 0.0
+            verdict = "buy" if avg_sent > 0.2 else "sell" if avg_sent < -0.2 else "hold"
+            risk_level = "high" if avg_sent < -0.4 else "medium" if avg_sent < -0.2 else "low"
+            top_tickers = sorted(ticker_counter.items(), key=lambda x: x[1], reverse=True)[:3]
+            top_tickers_str = ", ".join(f"{t}({c})" for t, c in top_tickers) if top_tickers else "none"
+
+            ensure_decision_contract(
+                response_data,
+                default_source="news_feed",
+                verdict=verdict,
+                confidence=min(1.0, abs(avg_sent)),
+                why=[
+                    f"Avg sentiment={avg_sent:.2f} on {len(formatted_articles)} articles",
+                    f"Top tickers={top_tickers_str}",
+                ],
+                risk_level=risk_level,
+                risk_caveat="News sentiment skew negative." if avg_sent < -0.2 else "",
+                freshness=response_data.get("freshness") or now_iso,
+            )
         
         logger.info(f"✅ Returning {len(formatted_articles)} news articles to client")
         return ok(response_data)
@@ -253,7 +294,7 @@ def get_filtered_news_feed(
             },
             "error": str(e),
             "message": "News feed temporarily unavailable - showing fallback data",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": now_iso,
             "source": ["fallback", "error_handling", "news_pipeline"]
         }
         return ok(error_response)

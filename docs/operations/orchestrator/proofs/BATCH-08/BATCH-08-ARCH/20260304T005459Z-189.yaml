@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-08-BATCH-08-ARCH-20260304T005459Z-189"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-04T00:54:59Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/parallel_workstream.py status --role planner --compact && python3 platform/automation/parallel_workstream.py status --role dev --compact"
+      rc: "0"
+      started_at_utc: "2026-03-04T00:54:59Z"
+      ended_at_utc: "2026-03-04T00:54:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner architecture et dispatch)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-ARCH/20260304T005407Z-arch.md"
+handoff:
+  to_role: "dev"
+  handoff_id: "HO-20260304005459-143"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-f6bf7f654a0d"
+  review_ref: "none"
+  note: "Architecture exécutable validée: chaîne dev en 3 étapes + admin validation; lanes legacy retirées du batch actif; dispatch dev immédiat."

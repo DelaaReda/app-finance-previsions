@@ -1905,3 +1905,29 @@ Les rapports suivants ont été publiés dans l'ancien `docs/ops/ADMIN_TEAM_CHAT
 - [2026-03-02 15:04:01 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=27600 gateway=unknown kick=kicked=0 triage=issue=none owner=none next=none 
 - [2026-03-03 18:20 EST] [adminapp-codex] TYPE: PROMPT_PATCH_POLICY MSG: cadence admin passee a */5 via fc_setup_crons; permission explicite de self-heal prompt admin activee (cron_tmux_role_runner). Audit obligatoire: toute modif prompt admin doit ecrire une note dans ADMIN_TEAM_CHAT + ADMIN_TEAM_ITERATIONS. NEXT: verifier stabilite admin sur 3 cycles et conserver preuve runtime.
 - [2026-03-03 18:46 EST] [adminapp-codex] TYPE: RUNTIME_DIAG_RECHECK MSG: rapport P0/P1 relu et validé contre runtime actuel; root-resolver, timeout admin (300/120/480) et fallback recovery déjà corrigés; recovery false-down réduit (session shell idle traitée UP); cron admin confirmé @*/5 avec rc=0 sur ticks 18:40/18:45.
+- [2026-03-03 22:32:22 EST] [main] TYPE: ROUTE MSG: id=DG_DIR_20260304T033225Z ts=2026-03-03 22:32:22 EST issue=none ready=BATCH-09 dispatch_needed=0 ready_unassigned=none roles_blocked=none roles_issue=infra_engineer,integrator,analyst,architect,tester,qa,scrum_master,clawsentinel,po app="✅ Backend : EN COURS (http://localhost:8050) | ✅ Frontend : EN COURS (http://localhost:5173)"
+- [2026-03-03 22:33:06 EST] [admin-agents] TYPE: INFO MSG: deterministic tick 20260304T033256Z => top_issue=roles_disabled_admins_only_mode, sessions=3/3, idle_prompt=0, trace_stale=0, role_enabled=0/0, role_error=0, artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260304T033256Z.json. NEXT: if_delivery_needed_enable_sequential_mode_starting_planner.
+- [2026-03-03 22:33:06 EST] [admin-agents] TYPE: ALERT MSG: exec_issue=DISPATCH_PREFLIGHT_BLOCKED; evidence=scripts/preflight_dispatch.sh; impact=delivery; suggestion=fix_preflight_then_retry
+- [2026-03-03 22:31:31 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=90 gateway=active kick=kicked=3 triage=issue=none owner=none next=none 
+
+---
+## [2026-03-04 HUMAN INTERVENTION] BATCH-09 fermé manuellement
+
+**Action**: GOV_REVIEW marquée DONE + BATCH-09 CLOSED + BATCH-10 READY.
+
+**Raison**: planner était en boucle infinie `handoff GOV_REVIEW → dev` (10+ ticks).
+GOV_REVIEW est une tâche PLANNER de gouvernance, pas un handoff dev.
+Tous les prérequis étaient DONE (DEV-01/02/03, ADMIN-01).
+
+**État actuel**:
+- BATCH-09: CLOSED ✓
+- BATCH-10: READY → tâches PLAN/ANALYSIS/ARCH/DEV-01/02/03/ADMIN-01/GOV_REVIEW créées
+- `ready=2` (BATCH-10-PLAN + BATCH-10-ANALYSIS)
+
+**Action attendue planner**: claim BATCH-10-PLAN en priorité.
+**Action attendue dev**: attendre handoff de planner sur BATCH-10-DEV-01.
+**Action attendue admin**: surveiller progression BATCH-10.
+
+- [2026-03-04 15:22:47 EST] [main] TYPE: ROUTE MSG: id=DG_DIR_20260304T202252Z ts=2026-03-04 15:22:47 EST issue=none ready=none dispatch_needed=0 ready_unassigned=none roles_blocked=none roles_issue=none app="✅ Backend : EN COURS (http://localhost:8050) | ✅ Frontend : EN COURS (http://localhost:5173)"
+- [2026-03-04 15:22:01 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=1199 gateway=unknown kick=kicked=3 triage=issue=none owner=none next=none 
+- [2026-03-05 17:48:01 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=23519 gateway=unknown kick=kicked=0 triage=issue=QUEUE_READY_NOT_DISPATCHED owner=admin-agents next=DISPATCH_READY_ITEM 

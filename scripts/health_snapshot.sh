@@ -2,26 +2,88 @@
 # health_snapshot.sh — Snapshot santé + métriques vélocité
 # Appelé en cron toutes les 30min et par monitor_agents.sh
 set -uo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+if [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+fi
 cd "$ROOT"
+export FC_WORKSPACE_ROOT="$ROOT"
 
 python3 << 'PY'
 import json, re, time
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
+import os
 
 ts_now = datetime.now(timezone.utc)
 ts_str = ts_now.strftime('%Y-%m-%dT%H:%M:%SZ')
 now_ep = ts_now.timestamp()
 STATE_DIR = Path('/home/venom/.openclaw/cron/role-state')
+ROOT = Path(os.environ.get('FC_WORKSPACE_ROOT', '.')).resolve()
+
+canonical_orch = ROOT / 'docs' / 'operations' / 'orchestrator'
+legacy_orch = ROOT / 'docs' / 'orchestrator-ops'
+
+def _json_dict(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding='utf-8', errors='ignore'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def resolve_primary_orchestrator_root() -> Path:
+    candidates = []
+    for d in (canonical_orch, legacy_orch):
+        if d.exists():
+            score = 0.0
+            queue_path = d / 'priority-queue.json'
+            workboard_path = d / 'parallel-workstreams.json'
+            if queue_path.exists():
+                score += 40.0
+            if workboard_path.exists():
+                score += 40.0
+            latest = max(
+                queue_path.stat().st_mtime if queue_path.exists() else 0.0,
+                workboard_path.stat().st_mtime if workboard_path.exists() else 0.0,
+            )
+            score += min(30.0, max(0.0, (time.time() - latest) / -60.0 + 30.0)) if latest > 0 else 0.0
+            candidates.append((score, d))
+    if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+    return canonical_orch
+
+PRIMARY_ORCH = resolve_primary_orchestrator_root()
+
+WRITE_ORCH_ROOTS = []
+seen = set()
+for d in (canonical_orch, legacy_orch, PRIMARY_ORCH):
+    try:
+        key = str(d.resolve())
+    except Exception:
+        key = str(d)
+    if key in seen:
+        continue
+    seen.add(key)
+    WRITE_ORCH_ROOTS.append(d)
+
+for d in WRITE_ORCH_ROOTS:
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
 
 def load_json(p):
-    try: return json.loads(Path(p).read_text(encoding='utf-8', errors='ignore'))
-    except: return {}
+    return _json_dict(PRIMARY_ORCH / p)
 
 # ── Workboard ────────────────────────────────────────────────────────────────
-wb    = load_json('docs/orchestrator-ops/parallel-workstreams.json')
+wb    = load_json('parallel-workstreams.json')
 tasks = wb.get('tasks', [])
 by_state = defaultdict(int)
 for t in tasks: by_state[t.get('state','?')] += 1
@@ -43,11 +105,13 @@ for t in tasks:
     except: pass
 
 # ── Priority queue ────────────────────────────────────────────────────────────
-pq      = load_json('docs/orchestrator-ops/priority-queue.json')
+pq      = load_json('priority-queue.json')
 items   = pq.get('items', [])
-q_ready  = sum(1 for i in items if i.get('state') == 'READY')
-q_closed = sum(1 for i in items if i.get('state') in ('CLOSED','DONE'))
-q_total  = len(items)
+top_level = [i for i in items if re.fullmatch(r'BATCH-\d{2}', str(i.get('id', '')).strip())]
+queue_rows = top_level if top_level else items
+q_ready  = sum(1 for i in queue_rows if i.get('state') == 'READY')
+q_closed = sum(1 for i in queue_rows if i.get('state') in ('CLOSED','DONE','PASS'))
+q_total  = len(queue_rows)
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 agent_states = {}
@@ -117,7 +181,9 @@ for role in ['planner', 'dev', 'admin']:
 stale_agents = [r for r, age in tick_age_min.items() if age > 45]
 
 # ── Proofs ───────────────────────────────────────────────────────────────────
-proofs_dir = Path('docs/operations/orchestrator/proofs')
+proofs_dir = canonical_orch / 'proofs'
+if not proofs_dir.exists():
+    proofs_dir = PRIMARY_ORCH / 'proofs'
 proofs_count = len(list(proofs_dir.iterdir())) if proofs_dir.exists() else 0
 
 # ── Health global ─────────────────────────────────────────────────────────────
@@ -158,26 +224,43 @@ snapshot = {
 }
 
 # ── Append kpi-history.jsonl ──────────────────────────────────────────────────
-jsonl_path = Path('docs/operations/orchestrator/kpi-history.jsonl')
-with open(jsonl_path, 'a') as f:
-    f.write(json.dumps(snapshot, ensure_ascii=False) + '\n')
+for orch_dir in WRITE_ORCH_ROOTS:
+    # ── Append kpi-history.jsonl ──────────────────────────────────────────────
+    jsonl_path = orch_dir / 'kpi-history.jsonl'
+    try:
+        with open(jsonl_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(snapshot, ensure_ascii=False) + '\n')
+    except Exception:
+        pass
 
-# ── Update executors-monitoring-latest.json ───────────────────────────────────
-mon_path = Path('docs/operations/orchestrator/executors-monitoring-latest.json')
-try:    mon = json.loads(mon_path.read_text(encoding='utf-8', errors='ignore'))
-except: mon = {'roles': {}}
+    # ── Update executors-monitoring-latest.json ───────────────────────────────
+    mon_path = orch_dir / 'executors-monitoring-latest.json'
+    try:
+        mon = json.loads(mon_path.read_text(encoding='utf-8', errors='ignore'))
+    except Exception:
+        mon = {'roles': {}}
 
-for role, state in agent_states.items():
-    entry = mon['roles'].get(role, {})
-    entry.update({'verdict': state['verdict'], 'status': state['status'],
-                  'blocker_id': state['blocker'], 'delta': state['delta'],
-                  'ts_utc': ts_str, 'source': 'health_snapshot'})
-    mon['roles'][role] = entry
+    roles_map = mon.get('roles')
+    if not isinstance(roles_map, dict):
+        roles_map = {}
+        mon['roles'] = roles_map
 
-mon['updated_at']     = ts_str
-mon['health']         = health
-mon['velocity']       = snapshot['velocity']
-mon_path.write_text(json.dumps(mon, indent=2, ensure_ascii=False))
+    for role, state in agent_states.items():
+        entry = roles_map.get(role, {})
+        if not isinstance(entry, dict):
+            entry = {}
+        entry.update({'verdict': state['verdict'], 'status': state['status'],
+                      'blocker_id': state['blocker'], 'delta': state['delta'],
+                      'ts_utc': ts_str, 'source': 'health_snapshot'})
+        roles_map[role] = entry
+
+    mon['updated_at'] = ts_str
+    mon['health'] = health
+    mon['velocity'] = snapshot['velocity']
+    try:
+        mon_path.write_text(json.dumps(mon, indent=2, ensure_ascii=False), encoding='utf-8')
+    except Exception:
+        pass
 
 # ── Sortie console ────────────────────────────────────────────────────────────
 icon = {'OK':'✅','DEGRADED':'⚠️ ','STALE':'🔶'}.get(health,'❓')

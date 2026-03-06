@@ -27,6 +27,9 @@ DEFAULT_QUEUE_FILE = Path(os.environ.get("EXEC_MONITOR_QUEUE_FILE", "docs/orches
 DEFAULT_WORKBOARD_FILE = Path(
     os.environ.get("EXEC_MONITOR_WORKBOARD_FILE", "docs/orchestrator-ops/parallel-workstreams.json")
 )
+ISSUE_CODE_RE = re.compile(r"^[a-z0-9_]{3,64}$")
+ISSUE_SEVERITIES = {"none", "low", "medium", "high", "critical"}
+ISSUE_BLOCKED_MIN_SEVERITIES = {"medium", "high", "critical"}
 
 
 def read_text(path: Path) -> str:
@@ -90,8 +93,99 @@ def parse_evidence_kv(raw: str) -> dict[str, str]:
     return out
 
 
-def build_record(role: str, source: str, values: dict[str, str], evidence_kv: dict[str, str]) -> dict[str, str]:
+def _safe_int(raw: str, default: int = 0) -> int:
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return default
+
+
+def normalize_issue_reporting(
+    evidence_kv: dict[str, str], *, blocker_id: str = "", task_update: str = ""
+) -> dict[str, object]:
+    missing: list[str] = []
+    errors: list[str] = []
+
+    for key in ("issues", "issue_count", "issue_severity"):
+        if key not in evidence_kv:
+            missing.append(key)
+
+    issues_raw = (evidence_kv.get("issues", "none") or "none").strip()
+    issue_count_raw = (evidence_kv.get("issue_count", "0") or "0").strip()
+    issue_severity = (evidence_kv.get("issue_severity", "none") or "none").strip().lower()
+
+    issue_codes: list[str] = []
+    invalid_codes: list[str] = []
+    issues_is_none = issues_raw.lower() == "none"
+    if not issues_is_none:
+        for token in issues_raw.split(","):
+            code = token.strip().lower()
+            if not code:
+                continue
+            if ISSUE_CODE_RE.fullmatch(code):
+                issue_codes.append(code)
+            else:
+                invalid_codes.append(code)
+        if invalid_codes:
+            errors.append("invalid_codes")
+        if not issue_codes:
+            errors.append("no_valid_issue_code")
+            issue_codes = ["issue_report_invalid"]
+
+    if not re.fullmatch(r"\d+", issue_count_raw):
+        errors.append("issue_count_invalid")
+    issue_count = _safe_int(issue_count_raw, 0)
+
+    if issue_severity not in ISSUE_SEVERITIES:
+        errors.append("issue_severity_invalid")
+
+    if issues_is_none:
+        if issue_count != 0 or issue_severity != "none":
+            errors.append("none_inconsistent")
+    else:
+        if issue_count <= 0:
+            errors.append("count_non_positive")
+        if issue_count != len(issue_codes):
+            errors.append("count_mismatch")
+        if issue_severity == "none":
+            errors.append("severity_none_with_issues")
+
+    blocker_present = not none_like(blocker_id)
+    if task_update == "blocked" or blocker_present:
+        if issues_is_none or issue_count < 1 or issue_severity not in ISSUE_BLOCKED_MIN_SEVERITIES:
+            errors.append("blocked_without_issue_report")
+
+    if issues_is_none:
+        issues_norm = "none"
+        issue_codes = []
+        issue_count = 0
+        issue_severity = "none" if issue_severity in ISSUE_SEVERITIES else "none"
+    else:
+        issues_norm = ",".join(issue_codes)
+        if issue_count <= 0:
+            issue_count = len(issue_codes)
+        if issue_severity not in ISSUE_SEVERITIES:
+            issue_severity = "medium"
+
+    issue_reporting_ok = (not missing) and (not errors)
+    return {
+        "issues": one_line(issues_norm or "none"),
+        "issue_count": int(issue_count),
+        "issue_severity": issue_severity,
+        "issue_codes": issue_codes,
+        "issue_reporting_ok": issue_reporting_ok,
+        "issue_reporting_errors": sorted(set(missing + errors)),
+    }
+
+
+def build_record(role: str, source: str, values: dict[str, str], evidence_kv: dict[str, str]) -> dict[str, object]:
     ts_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    task_update = one_line(evidence_kv.get("task_update", "none_no_signal") or "none_no_signal")
+    issue_report = normalize_issue_reporting(
+        evidence_kv,
+        blocker_id=values.get("BLOCKER_ID", ""),
+        task_update=task_update.lower(),
+    )
     return {
         "ts_utc": ts_utc,
         "role": role,
@@ -102,8 +196,14 @@ def build_record(role: str, source: str, values: dict[str, str], evidence_kv: di
         "blocker_id": one_line(values.get("BLOCKER_ID", "")),
         "next_action_unique": one_line(values.get("NEXT_ACTION_UNIQUE", "")),
         "next": one_line(values.get("NEXT", ""), 420),
+        "task_update": task_update,
         "exec_report": one_line(evidence_kv.get("exec_report", "none") or "none"),
-        "issues": one_line(evidence_kv.get("issues", "none") or "none"),
+        "issues": str(issue_report.get("issues", "none")),
+        "issue_count": int(issue_report.get("issue_count", 0)),
+        "issue_severity": str(issue_report.get("issue_severity", "none")),
+        "issue_codes": issue_report.get("issue_codes", []),
+        "issue_reporting_ok": bool(issue_report.get("issue_reporting_ok", False)),
+        "issue_reporting_errors": issue_report.get("issue_reporting_errors", []),
         "suggestions": one_line(evidence_kv.get("suggestions", "none") or "none"),
         "stream_id": one_line(evidence_kv.get("stream_id", "none") or "none"),
         "task_id": one_line(evidence_kv.get("task_id", "none") or "none"),
@@ -156,18 +256,26 @@ def update_latest(latest_path: Path, role: str, record: dict[str, str]) -> None:
     )
 
     issue_roles = sorted(
-        name for name, data in active_roles.items() if not none_like(str(data.get("issues", "")))
+        name for name, data in active_roles.items() if int(data.get("issue_count", 0) or 0) > 0
+    )
+    issue_reporting_missing_roles = sorted(
+        name for name, data in active_roles.items() if not bool(data.get("issue_reporting_ok", False))
+    )
+    critical_issue_roles = sorted(
+        name
+        for name, data in active_roles.items()
+        if str(data.get("issue_severity", "")).strip().lower() == "critical"
     )
     process_issue_roles = sorted(
         name
         for name, data in active_roles.items()
-        if (not none_like(str(data.get("issues", ""))))
+        if int(data.get("issue_count", 0) or 0) > 0
         and process_issue_re.search(str(data.get("issues", "")) or "")
     )
     flow_gap_roles = sorted(
         name
         for name, data in active_roles.items()
-        if (not none_like(str(data.get("issues", ""))))
+        if int(data.get("issue_count", 0) or 0) > 0
         and flow_gap_re.search(str(data.get("issues", "")) or "")
     )
     delivery_probe_roles = sorted(
@@ -194,6 +302,11 @@ def update_latest(latest_path: Path, role: str, record: dict[str, str]) -> None:
         "fresh_roles_total": len(active_roles),
         "stale_context_open": len(stale_context_roles),
         "issues_open": len(issue_roles),
+        "issue_reports_open": len(issue_roles),
+        "issue_reporting_missing_count": len(issue_reporting_missing_roles),
+        "issue_reporting_missing_roles": issue_reporting_missing_roles[:8],
+        "critical_count": len(critical_issue_roles),
+        "critical_issue_roles": critical_issue_roles[:8],
         "process_issues_open": len(process_issue_roles),
         "delivery_gaps_open": len(delivery_gap_roles),
         "delivery_probe_loops_open": len(delivery_probe_roles),

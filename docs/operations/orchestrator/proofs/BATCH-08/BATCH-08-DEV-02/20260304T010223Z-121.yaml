@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-08-BATCH-08-DEV-02-20260304T010223Z-121"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-04T01:02:23Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope update frontend connector mapping for the stabilized decision contract fields"
+    - "dependency impact preserve existing app.js consumers while adding why and risk aliases"
+    - "risk avoid regressions in copilot card rendering and fallback text"
+    - "verification run targeted javascript syntax and mapper smoke checks"
+    - "rollback confine edits to apiconnector contract mapping for quick revert"
+  architecture_checks:
+    - "reuse_existing_forecasts_apiconnector_and_app.js_mapping_flow_before_adding_components"
+    - "keep_frontend_changes_inside_apps/web/src/domains/forecasts_canonical_paths"
+    - "preserve_existing_response_compatibility_while_exposing_why_and_risk_fields"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "node --check apps/web/src/domains/forecasts/pages/app.js && ssh venom@dev-vm-utm 'cd ~/analyse-financiere && node --check apps/web/src/domains/forecasts/pages/app.js'"
+      rc: "0"
+      started_at_utc: "2026-03-04T01:02:23Z"
+      ended_at_utc: "2026-03-04T01:02:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "js_syntax_check_local:PASS; js_syntax_check_vm:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-DEV-02/20260304T010205Z-dev02.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-9f99c8a39003"
+  review_ref: "none"
+  note: "Mapper UI copilot aligné sur contrat décision stabilisé (why/risk) avec compatibilité legacy conservée; aucun nouveau composant créé."

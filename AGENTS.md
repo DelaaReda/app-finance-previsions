@@ -83,6 +83,15 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - `trash` > `rm` (recoverable beats gone forever)
 - When in doubt, ask.
 
+### VM-Only Runtime Rule (Critical)
+
+- This project runtime is **VM-only**.
+- Never run backend/frontend/monitor servers, cron installers, or role runner ticks on macOS host.
+- All execution must happen inside VM workspace: `/home/venom/analyse-financiere`.
+- Before running runtime commands, verify host with:
+  - `bash scripts/runtime_host_check.sh`
+- If `runtime_is_vm=0`, stop and do not execute runtime commands.
+
 Engineering reference (API endpoints):
 - `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
 

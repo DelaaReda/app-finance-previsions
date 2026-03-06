@@ -58,6 +58,19 @@ def _coerce_verdict(raw_verdict: Optional[str]) -> str:
     return "hold"
 
 
+def _normalize_risk_level(raw_level: Any, fallback: str = "medium") -> str:
+    value = _safe_text(raw_level).lower()
+    if value in {"low", "medium", "high", "critical"}:
+        return value
+    if value in {"faible", "bas"}:
+        return "low"
+    if value in {"modere", "modéré", "moyen"}:
+        return "medium"
+    if value in {"eleve", "élevé"}:
+        return "high"
+    return fallback
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -223,6 +236,35 @@ def _extract_json_from_text(raw: str) -> Optional[Dict[str, Any]]:
             pass
 
     return None
+
+
+def _derive_risk_level(
+    *,
+    parsed_payload: Optional[Dict[str, Any]],
+    market_context_payload: Dict[str, Any],
+    confidence: float,
+) -> str:
+    parsed_payload = parsed_payload if isinstance(parsed_payload, dict) else {}
+
+    parsed_risk_level = parsed_payload.get("risk_level")
+    if parsed_risk_level is None and isinstance(parsed_payload.get("risk"), dict):
+        parsed_risk_level = (parsed_payload.get("risk") or {}).get("level")
+    if parsed_risk_level is None and not isinstance(parsed_payload.get("risk"), dict):
+        parsed_risk_level = parsed_payload.get("risk")
+    if parsed_risk_level is not None:
+        return _normalize_risk_level(parsed_risk_level)
+
+    characteristics = market_context_payload.get("characteristics")
+    if isinstance(characteristics, dict):
+        ctx_risk_level = characteristics.get("risk_level")
+        if _safe_text(ctx_risk_level):
+            return _normalize_risk_level(ctx_risk_level)
+
+    if confidence >= 0.75:
+        return "low"
+    if confidence >= 0.45:
+        return "medium"
+    return "high"
 
 
 def _resolve_context_service_class(context_service_cls: Optional[Any] = None) -> Optional[Any]:
@@ -401,6 +443,11 @@ async def build_ask_payload(
     except Exception as import_exc:
         return {
             "answer": f"Copilot unavailable: {import_exc}",
+            "action": "hold",
+            "verdict": "hold",
+            "why": ["Copilot indisponible, fallback de sécurité activé."],
+            "risk": {"level": "high", "caveat": "Service copilot indisponible."},
+            "risk_level": "high",
             "sources": [],
             "citations": [],
             "model": "unconfigured",
@@ -435,6 +482,11 @@ async def build_ask_payload(
                     "Je n'ai pas trouvé d'informations pertinentes pour répondre à votre "
                     f"question: '{question}'."
                 ),
+                "action": "hold",
+                "verdict": "hold",
+                "why": ["Aucune source contextuelle disponible pour une recommandation fiable."],
+                "risk": {"level": "high", "caveat": "Aucune source trouvée dans la mémoire."},
+                "risk_level": "high",
                 "sources": [],
                 "citations": [],
                 "model": "rag_empty",
@@ -495,12 +547,20 @@ async def build_ask_payload(
         if market_context_payload and float(market_context_payload.get("confidence") or 0.0) < 0.45:
             risk_fragments.append("Confiance marché faible.")
         risk_caveat = " ".join(risk_fragments) or "Contexte marché et sources disponibles."
+        risk_level = _derive_risk_level(
+            parsed_payload=parsed if isinstance(parsed, dict) else None,
+            market_context_payload=market_context_payload,
+            confidence=confidence,
+        )
 
         return {
             "answer": str(llm_response.get("answer") or "").strip(),
             "action": action,
             "verdict": action,
             "reasoning": reasoning,
+            "why": reasoning,
+            "risk": {"level": risk_level, "caveat": risk_caveat},
+            "risk_level": risk_level,
             "risk_caveat": risk_caveat,
             "sources": sources,
             "citations": llm_response.get("citations", []),
@@ -517,6 +577,11 @@ async def build_ask_payload(
     except Exception as exc:
         return {
             "answer": f"Désolé, une erreur s'est produite lors du traitement: {exc}",
+            "action": "hold",
+            "verdict": "hold",
+            "why": ["Erreur interne copilot, recommandation conservatrice appliquée."],
+            "risk": {"level": "high", "caveat": "Erreur interne copilot."},
+            "risk_level": "high",
             "sources": [],
             "citations": [],
             "model": "error",

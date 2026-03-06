@@ -179,11 +179,11 @@ def _default_dev_models() -> List[str]:
 
 
 def _default_fastest_models() -> List[str]:
+    # You+gpt-4o-mini = seul provider confirme sans auth (2026-03-03)
     return [
+        "gpt-4o-mini",
         "qwen-3-235b",
         "deepseek-v3",
-        "qwen/qwen3-235b-a22b",
-        "deepseek/deepseek-v3",
     ]
 
 
@@ -749,6 +749,37 @@ def call_g4f(
         max_attempts=max_attempts,
     )
     max_tries = mode_max_attempts
+
+    # === FAST PATH: You+gpt-4o-mini confirme sans auth 2026-03-03 ===
+    # Tente en premier avant tous les autres candidats, silencieusement
+    try:
+        import g4f as _g4f
+        _you = getattr(_g4f.Provider, "You", None)
+        if _you is not None:
+            _fast_client = G4FClient(provider=_you)
+            _fast_resp = _fast_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                timeout=min(timeout, 15),
+            )
+            _fast_ans = str(
+                _fast_resp.choices[0].message.content
+                if _fast_resp and hasattr(_fast_resp, "choices") and _fast_resp.choices
+                else ""
+            ).strip()
+            if _fast_ans:
+                return {
+                    "ok": True,
+                    "answer": _fast_ans,
+                    "model": "gpt-4o-mini",
+                    "provider": "You",
+                    "provider_raw": "You",
+                    "llm_mode": normalized_mode,
+                    "attempted": [],
+                }
+    except Exception:
+        pass
+    # === END FAST PATH ===
 
     for candidate_provider, candidate_model in candidates[:max_tries]:
         kwargs: Dict[str, Any] = {

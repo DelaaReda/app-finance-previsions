@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-08-BATCH-08-ANALYSIS-20260304T005431Z-629"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-04T00:54:31Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "rg -n 'verdict|confidence|why|risk|INTEGRATION-APP-EENGINEER-RECOMMENDATIONS' docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-ANALYSIS/20260304T005406Z-analysis.md docs/operations/orchestrator/priority-queue.json docs/operations/orchestrator/parallel-workstreams.json"
+      rc: "0"
+      started_at_utc: "2026-03-04T00:54:31Z"
+      ended_at_utc: "2026-03-04T00:54:31Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner analyse documentaire et architecture contractuelle)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-ANALYSIS/20260304T005406Z-analysis.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-36b06b605d18"
+  review_ref: "none"
+  note: "Analyse verrouillée: contrat décision API->UI fixé (verdict/confidence/why/risk), réutilisation modules imposée, anti-duplication explicite."

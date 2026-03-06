@@ -1,0 +1,56 @@
+proof_id: "PRF-BATCH-10-BATCH-10-DEV-01-20260304T215747Z-309"
+stream_id: "BATCH-10"
+task_id: "BATCH-10-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-04T21:57:47Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "1) définir scope exact du patch"
+    - "2) valider dépendances et impact cross-feature"
+    - "3) évaluer risque technique et opérationnel"
+    - "4) vérifier réutilisation existante puis tests ciblés"
+    - "5) définir rollback clair avec restauration planifiée"
+    - "6) préparer handoff et validation runtime"
+  architecture_checks:
+    - "domain_boundary"
+    - "contract_stability"
+    - "reuse_first"
+    - "no_sys_path_bridge"
+    - "artifact_traceability"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(no_cmd_recorded)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-04T21:57:47Z"
+      ended_at_utc: "2026-03-04T21:57:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_tests_recorded)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "platform/automation/cron_tmux_role_runner.sh"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-21bcc7af19a6"
+  review_ref: "none"
+  note: "none"

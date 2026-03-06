@@ -31,6 +31,17 @@ ROLE_MIN_REFLECTION_PASSES="${ROLE_MIN_REFLECTION_PASSES:-${LM_USED_ROLE_MIN_REF
 ROLE_ALLOW_FILE_EDITS="${ROLE_ALLOW_FILE_EDITS:-auto}"
 ADMIN_LOCK_SCRIPT="${OPENCLAW_CRON_ADMIN_LOCK_SCRIPT:-${WORKDIR}/scripts/cron_admin_lock.sh}"
 
+normalize_reasoning_level() {
+  local raw="${1:-high}"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "$normalized" in
+    minimal|low|medium|high) printf '%s\n' "$normalized" ;;
+    xhigh|extra|extra_high|veryhigh|max|maximum|"") printf 'high\n' ;;
+    *) printf 'high\n' ;;
+  esac
+}
+
 if ! [[ "${CRON_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || [[ "${CRON_TIMEOUT_SECONDS}" -lt 300 ]]; then
   CRON_TIMEOUT_SECONDS=900
 fi
@@ -64,6 +75,7 @@ fi
 if ! [[ "${ROLE_MIN_REFLECTION_PASSES}" =~ ^[0-9]+$ ]] || [[ "${ROLE_MIN_REFLECTION_PASSES}" -lt 2 ]]; then
   ROLE_MIN_REFLECTION_PASSES=2
 fi
+ROLE_THINKING="$(normalize_reasoning_level "$ROLE_THINKING")"
 
 with_admin_lock() {
   if [[ -x "${ADMIN_LOCK_SCRIPT}" ]]; then

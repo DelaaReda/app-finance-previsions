@@ -35,6 +35,11 @@ except Exception:  # pragma: no cover
         utc_now_iso,
     )
 
+try:
+    from services.service_standard import ensure_decision_contract  # type: ignore
+except Exception:  # pragma: no cover
+    ensure_decision_contract = None  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 
@@ -743,6 +748,20 @@ async def get_forecasts_payload(
 
             if len(paginated_rows) == 0:
                 payload["message"] = "No forecasts matched current filters."
+
+            if callable(ensure_decision_contract):
+                head = paginated_rows[0] if paginated_rows else {}
+                ensure_decision_contract(
+                    payload,
+                    default_source="forecasts_service",
+                    verdict=head.get("action") or head.get("verdict"),
+                    confidence=head.get("confidence") or payload.get("stats", {}).get("avg_confidence"),
+                    why=head.get("why"),
+                    risk_level=head.get("risk_level"),
+                    risk_caveat=head.get("risk_caveat"),
+                    freshness=payload.get("freshness"),
+                )
+
             append_source_tag(
                 payload, "forecasts_live_compute", default_source="forecasts_route"
             )

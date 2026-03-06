@@ -6,6 +6,7 @@ Author: LENA-LLM-STRATEGIST-WONDERWOMAN-21
 import sys
 import os
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 # Add backend to path for imports
 backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up 2 levels to backend/
@@ -13,10 +14,63 @@ sys.path.insert(0, backend_root)
 
 from core.data_quality import run_quality_audit, run_quality_gate
 from storage.io import save_json
+try:
+    from storage.io import load_json
+except Exception:  # pragma: no cover
+    from storage.base import load_json  # type: ignore
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _unwrap_storage_payload(payload: Any) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    data = payload.get("data")
+    if isinstance(data, dict):
+        return data
+    return payload
+
+
+def _load_provider_gap_warnings() -> Dict[str, Any]:
+    warnings: Dict[str, Any] = {}
+
+    news_stats = _unwrap_storage_payload(load_json("provider_fallback_news") or {})
+    macro_stats_payload = _unwrap_storage_payload(load_json("provider_fallback_macro") or {})
+    macro_stats = macro_stats_payload.get("macro") if isinstance(macro_stats_payload, dict) else {}
+    if not isinstance(macro_stats, dict):
+        macro_stats = {}
+
+    yahoo_empty_total = int(news_stats.get("yahoo_empty_events_total") or 0)
+    yahoo_empty_by_ticker = news_stats.get("yahoo_empty_by_ticker")
+    if not isinstance(yahoo_empty_by_ticker, dict):
+        yahoo_empty_by_ticker = {}
+
+    macro_attempted_total = int(macro_stats.get("fred_empty_fallback_attempted_total") or 0)
+    macro_recovered_total = int(macro_stats.get("fred_empty_fallback_recovered_total") or 0)
+    macro_failed_total = int(macro_stats.get("fred_empty_fallback_failed_total") or 0)
+    macro_by_series = macro_stats.get("fred_empty_fallback_by_series")
+    if not isinstance(macro_by_series, dict):
+        macro_by_series = {}
+
+    provider_gaps = {
+        "news": {
+            "yahoo_empty_events_total": yahoo_empty_total,
+            "yahoo_empty_by_ticker": yahoo_empty_by_ticker,
+        },
+        "macro": {
+            "fred_empty_fallback_attempted_total": macro_attempted_total,
+            "fred_empty_fallback_recovered_total": macro_recovered_total,
+            "fred_empty_fallback_failed_total": macro_failed_total,
+            "fred_empty_fallback_by_series": macro_by_series,
+        },
+    }
+    provider_gaps["has_non_blocking_warnings"] = bool(
+        yahoo_empty_total > 0 or macro_attempted_total > 0
+    )
+    warnings["provider_gaps"] = provider_gaps
+    return warnings
 
 
 def run_data_quality_job():
@@ -30,12 +84,21 @@ def run_data_quality_job():
         # Run comprehensive audit
         audit_results = run_quality_audit()
         
+        warnings = _load_provider_gap_warnings()
+        provider_gaps = warnings.get("provider_gaps") if isinstance(warnings, dict) else {}
+        if not isinstance(provider_gaps, dict):
+            provider_gaps = {}
+
         # Save results to persistent storage
         result_payload = {
             "audit_results": audit_results,
             "job_execution_time": _utc_now_iso(),
             "job_type": "data_quality_audit",
-            "task_id": "FC-DATA-007"
+            "task_id": "FC-DATA-007",
+            # Provider fallbacks are informational (non-blocking) when recovered.
+            "warnings": warnings,
+            "non_blocking_warnings": bool(provider_gaps.get("has_non_blocking_warnings")),
+            "degraded_flag": bool((audit_results or {}).get("degraded_flag", False)),
         }
         save_json("quality_report", result_payload, source=["quality_job", "data_validation", "fc-data-007"])
         
@@ -45,6 +108,8 @@ def run_data_quality_job():
         print(f"  Files failed: {audit_results['summary']['files_failed']}")
         print(f"  Overall quality: {audit_results['summary']['overall_quality_score']:.2f}%")
         print(f"  Degraded domains: {', '.join(audit_results['summary']['degraded_domains'])}")
+        if provider_gaps.get("has_non_blocking_warnings"):
+            print("  Provider gap warnings: present (non-blocking)")
         
         return result_payload
         
@@ -52,6 +117,7 @@ def run_data_quality_job():
         print(f"Error in data quality job: {str(e)}")
         
         # Create fallback results to maintain never-empty contract
+        fallback_warnings = _load_provider_gap_warnings()
         fallback_results = {
             "audit_results": {
                 "summary": {
@@ -68,6 +134,11 @@ def run_data_quality_job():
             "job_execution_time": _utc_now_iso(),
             "job_type": "data_quality_audit_fallback",
             "task_id": "FC-DATA-007",
+            "warnings": fallback_warnings,
+            "non_blocking_warnings": bool(
+                (fallback_warnings.get("provider_gaps") or {}).get("has_non_blocking_warnings")
+            ),
+            "degraded_flag": True,
             "error": str(e),
             "message": "Data quality job failed, but fallback report generated to maintain never-empty contract"
         }

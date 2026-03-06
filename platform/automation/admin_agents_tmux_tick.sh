@@ -191,8 +191,8 @@ Objectif du tick:
 5) journaliser INTENT/DONE dans docs/ops/ADMIN_TEAM_CHAT.md et une ligne dans docs/ops/ADMIN_TEAM_ITERATIONS.md;
 6) publier en fin de tick un rapport compact orienté incidents: exec_report=<resume>, issues=<none|liste_priorisee>, suggestions=<none|actions>.
 Contraintes:
-- garder les crons role sur gpt-5.3-spark et thinking xhigh;
-- garder le main agent OpenClaw sur gpt-5.2 + xhigh;
+- garder les crons role sur gpt-5.3-spark et thinking high;
+- garder le main agent OpenClaw sur gpt-5.2 + high;
 - ne pas utiliser de commande git destructive.
 TICK: ${tick}
 EOF
@@ -694,9 +694,13 @@ session_present=0
 
 deterministic_delivery_tick "$TICK"
 
-# Auto-dispatch READY queue item to avoid long stalls (optional)
-if [[ "${ADMIN_AGENTS_AUTO_DISPATCH_ENABLED:-1}" -eq 1 ]]; then
-  bash scripts/admin_agents_auto_dispatch_ready.sh >/dev/null 2>&1 || true
+# Auto-dispatch READY queue item to avoid long stalls (optional).
+if [[ "${ADMIN_DISPATCHER_ENABLED:-${ADMIN_AGENTS_AUTO_DISPATCH_ENABLED:-1}}" -eq 1 ]]; then
+  dispatch_out="$(bash scripts/admin_agents_auto_dispatch_ready.sh 2>&1 || true)"
+  if [[ -n "${dispatch_out}" ]]; then
+    dispatch_compact="$(printf '%s' "$dispatch_out" | tr '\n' '|' | sed 's/|*$//')"
+    echo "admin_dispatcher ${dispatch_compact}"
+  fi
 fi
 
 pane_changed=0

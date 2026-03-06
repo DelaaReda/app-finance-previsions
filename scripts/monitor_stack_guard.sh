@@ -14,7 +14,7 @@ source "$WORKSPACE_HELPER"
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 LOG_DIR="${FC_MONITOR_LOG_DIR:-$ROOT/logs-codex-runs}"
 GUARD_LOG="${LOG_DIR}/monitor-guard.log"
-LOCK_FILE="${FC_MONITOR_GUARD_LOCK_FILE:-/tmp/fc-monitor-guard.lock}"
+LOCK_FILE="${FC_MONITOR_GUARD_LOCK_FILE:-/tmp/fc-monitor-guard.v2.lock}"
 LOCK_DIR_FALLBACK=""
 LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/status}"
 LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-diagnostics}"
@@ -23,7 +23,7 @@ PUBLIC_HEADER_KEY="${FC_MONITOR_PUBLIC_HEADER_KEY:-bypass-tunnel-reminder}"
 PUBLIC_HEADER_VALUE="${FC_MONITOR_PUBLIC_HEADER_VALUE:-1}"
 PUBLIC_URL_STATE_FILE="${FC_MONITOR_PUBLIC_URL_STATE_FILE:-${LOG_DIR}/monitor-public-url.txt}"
 PUBLIC_FAILURE_STATE_FILE="${FC_MONITOR_PUBLIC_FAILURE_STATE_FILE:-${LOG_DIR}/monitor-public-fail-streak.txt}"
-PUBLIC_FAILURE_THRESHOLD="${FC_MONITOR_PUBLIC_FAILURE_THRESHOLD:-3}"
+PUBLIC_FAILURE_THRESHOLD="${FC_MONITOR_PUBLIC_FAILURE_THRESHOLD:-2}"
 LT_SUBDOMAIN="${FC_MONITOR_LT_SUBDOMAIN:-fc-monitor}"
 LT_HOST="${FC_MONITOR_LT_HOST:-https://loca.lt}"
 LT_PORT="${FC_MONITOR_LT_PORT:-7779}"
@@ -38,6 +38,13 @@ if [[ "$ROOT" == /Users/* ]]; then
 else
   ENFORCE_PUBLIC_ROOT_MATCH="${FC_MONITOR_ENFORCE_PUBLIC_ROOT_MATCH:-1}"
 fi
+if [[ "$ROOT" == /Users/* ]]; then
+  FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
+else
+  FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-1}"
+fi
+FC_MONITOR_AUTO_START_COOLDOWN_SECONDS="${FC_MONITOR_AUTO_START_COOLDOWN_SECONDS:-600}"
+AUTO_START_STATE_FILE="${FC_MONITOR_AUTO_START_STATE_FILE:-${LOG_DIR}/monitor-auto-start.last}"
 STALE_LOCK_MINUTES="${FC_MONITOR_GUARD_STALE_LOCK_MINUTES:-30}"
 
 mkdir -p "$LOG_DIR"
@@ -89,9 +96,33 @@ write_public_fail_streak() {
   printf '%s\n' "$n" > "$PUBLIC_FAILURE_STATE_FILE"
 }
 
+read_auto_start_epoch() {
+  if [[ -f "$AUTO_START_STATE_FILE" ]]; then
+    local n=""
+    n="$(head -n 1 "$AUTO_START_STATE_FILE" 2>/dev/null | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+    if [[ "$n" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$n"
+      return 0
+    fi
+  fi
+  printf '0\n'
+}
+
+write_auto_start_epoch() {
+  local n="${1:-0}"
+  if ! [[ "$n" =~ ^[0-9]+$ ]]; then
+    n=0
+  fi
+  printf '%s\n' "$n" > "$AUTO_START_STATE_FILE"
+}
+
 monitor_server_running() {
   pgrep -f 'scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779' >/dev/null 2>&1 \
     || ss -ltn 2>/dev/null | awk '$4 ~ /:7779$/ {found=1} END{exit(found?0:1)}'
+}
+
+stack_process_running() {
+  pgrep -f 'python.*run_api.py|uvicorn.*8050|http.server 5173|vite.*5173|scripts/monitor_server.py|apps/monitor/server.py' >/dev/null 2>&1
 }
 
 other_guard_running() {
@@ -166,6 +197,50 @@ restart_monitor_server() {
   start_monitor_server
 }
 
+auto_start_stack_if_needed() {
+  if [[ "$FC_MONITOR_AUTO_START_STACK" != "1" ]]; then
+    return 0
+  fi
+  if is_local_up; then
+    return 0
+  fi
+  if stack_process_running; then
+    return 0
+  fi
+  if ! [[ "$FC_MONITOR_AUTO_START_COOLDOWN_SECONDS" =~ ^[0-9]+$ ]] || [[ "$FC_MONITOR_AUTO_START_COOLDOWN_SECONDS" -lt 60 ]]; then
+    FC_MONITOR_AUTO_START_COOLDOWN_SECONDS=600
+  fi
+
+  local now last elapsed
+  now="$(date +%s)"
+  last="$(read_auto_start_epoch)"
+  elapsed=$((now - last))
+  if [[ "$last" -gt 0 && "$elapsed" -lt "$FC_MONITOR_AUTO_START_COOLDOWN_SECONDS" ]]; then
+    log "auto_start_stack cooldown active elapsed=${elapsed}s threshold=${FC_MONITOR_AUTO_START_COOLDOWN_SECONDS}s"
+    return 0
+  fi
+
+  local exec_safe="$ROOT/platform/policies/exec_safe.sh"
+  local output="" rc=0
+  if [[ ! -x "$exec_safe" ]]; then
+    log "auto_start_stack skipped: exec_safe missing at $exec_safe"
+    return 0
+  fi
+
+  set +e
+  # Prevent lock-fd inheritance into long-lived children (run_api/monitor),
+  # otherwise future guard runs may permanently fail to acquire the lock.
+  output="$( (exec 9>&-; "$exec_safe" --workdir "$ROOT" -- "./finance-copilot.sh start") 2>&1 )"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    write_auto_start_epoch "$now"
+    log "auto_start_stack success cooldown=${FC_MONITOR_AUTO_START_COOLDOWN_SECONDS}s detail=$(printf '%s' "$output" | tail -n 1 | tr -s ' ' | cut -c1-180)"
+  else
+    log "auto_start_stack failed rc=${rc} detail=$(printf '%s' "$output" | tail -n 2 | tr '\n' ' ' | tr -s ' ' | cut -c1-220)"
+  fi
+}
+
 start_tunnel() {
   local mode="${1:-host}"
   local -a cmd=(npx --yes localtunnel --port "${LT_PORT}" --local-host 127.0.0.1)
@@ -175,18 +250,38 @@ start_tunnel() {
   if [[ "$mode" == "host" && -n "$LT_HOST" ]]; then
     cmd+=(--host "$LT_HOST")
   fi
+
+  local before_lines=0
+  if [[ -f "${LOG_DIR}/monitor-tunnel.log" ]]; then
+    before_lines="$(wc -l < "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null || echo 0)"
+    if ! [[ "$before_lines" =~ ^[0-9]+$ ]]; then
+      before_lines=0
+    fi
+  fi
+
   (
     exec 9>&-
     nohup "${cmd[@]}" >> "${LOG_DIR}/monitor-tunnel.log" 2>&1 < /dev/null &
   )
-  sleep 3
+  sleep 4
+
   local discovered_url=""
-  discovered_url="$(tail -n 30 "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\\.loca\\.lt' | tail -n 1 || true)"
-  if [[ -n "$discovered_url" ]]; then
-    write_public_url_state "${discovered_url}/api/status"
-    log "tunnel url discovered mode=${mode} url=${discovered_url}"
-  elif [[ "$mode" == "host" ]]; then
+  local from_new=""
+  from_new="$(tail -n +"$((before_lines + 1))" "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\.loca\.lt' | tail -n 1 || true)"
+  if [[ -n "$from_new" ]]; then
+    discovered_url="$from_new"
+  else
+    discovered_url="$(tail -n 40 "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\.loca\.lt' | tail -n 1 || true)"
+  fi
+
+  if [[ "$mode" == "host" ]]; then
     write_public_url_state "$PUBLIC_URL"
+  fi
+  if [[ -n "$discovered_url" ]]; then
+    if [[ "$mode" != "host" || "$discovered_url" == *"${LT_SUBDOMAIN}.loca.lt" ]]; then
+      write_public_url_state "${discovered_url}/api/status"
+    fi
+    log "tunnel url discovered mode=${mode} url=${discovered_url}"
   fi
 }
 
@@ -270,6 +365,10 @@ if is_local_up; then
   initial_local_up=1
 fi
 
+if [[ "$initial_local_up" -eq 0 ]]; then
+  auto_start_stack_if_needed
+fi
+
 if ! monitor_server_running; then
   if [[ "$initial_local_up" -eq 1 ]]; then
     log "monitor process not detected but local api already up; skip forced restart"
@@ -291,7 +390,7 @@ fi
 
 if [[ "$MANAGE_TUNNEL" == "1" ]]; then
   if ! [[ "$PUBLIC_FAILURE_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$PUBLIC_FAILURE_THRESHOLD" -lt 1 ]]; then
-    PUBLIC_FAILURE_THRESHOLD=3
+    PUBLIC_FAILURE_THRESHOLD=2
   fi
   tc="$(tunnel_process_count)"
   if [[ "$tc" -gt 1 ]]; then
@@ -307,17 +406,23 @@ if [[ "$MANAGE_TUNNEL" == "1" ]]; then
   if is_public_up; then
     write_public_fail_streak 0
   else
-    fail_streak="$(read_public_fail_streak)"
-    fail_streak="$((fail_streak + 1))"
-    write_public_fail_streak "$fail_streak"
-    if [[ "$fail_streak" -ge "$PUBLIC_FAILURE_THRESHOLD" ]]; then
-      log "public tunnel unavailable streak=${fail_streak}; restarting tunnel"
-      restart_tunnel || true
-      if is_public_up; then
-        write_public_fail_streak 0
-      fi
+    # Retry once before counting a failure to reduce transient public 503 windows.
+    sleep 2
+    if is_public_up; then
+      write_public_fail_streak 0
     else
-      log "public tunnel unavailable streak=${fail_streak}/${PUBLIC_FAILURE_THRESHOLD}; defer restart"
+      fail_streak="$(read_public_fail_streak)"
+      fail_streak="$((fail_streak + 1))"
+      write_public_fail_streak "$fail_streak"
+      if [[ "$fail_streak" -ge "$PUBLIC_FAILURE_THRESHOLD" ]]; then
+        log "public tunnel unavailable streak=${fail_streak}; restarting tunnel"
+        restart_tunnel || true
+        if is_public_up; then
+          write_public_fail_streak 0
+        fi
+      else
+        log "public tunnel unavailable streak=${fail_streak}/${PUBLIC_FAILURE_THRESHOLD}; defer restart"
+      fi
     fi
   fi
 

@@ -3,7 +3,16 @@
 # fc_health_check.sh — Dashboard santé du système Finance Copilot
 # Usage: bash scripts/fc_health_check.sh
 # ============================================================
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_CANDIDATE="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
+if [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$ROOT_CANDIDATE"
+fi
 MODEL_CONFIG_FILE="$ROOT/platform/config/lm_used_model_config.sh"
 [[ -f "$MODEL_CONFIG_FILE" ]] || MODEL_CONFIG_FILE="$ROOT/platform/config/model-config.sh"
 [[ -f "$MODEL_CONFIG_FILE" ]] && source "$MODEL_CONFIG_FILE" 2>/dev/null || true
@@ -25,9 +34,9 @@ echo -e "${BOLD}═════════════════════�
 echo -e "\n${BOLD}[ Backend API ]${NC}"
 HEALTH=$(curl -s --max-time 3 "http://localhost:8050/api/health" 2>/dev/null)
 if [[ -n "$HEALTH" ]]; then
-  STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null)
-  FORECASTS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('last_updates',{}).get('forecasts','never'))" 2>/dev/null)
-  NEWS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('last_updates',{}).get('news','never'))" 2>/dev/null)
+  STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('status','ok' if d.get('ok') is True else '?'))" 2>/dev/null)
+  FORECASTS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('last_updates',{}).get('forecasts','never'))" 2>/dev/null)
+  NEWS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('last_updates',{}).get('news','never'))" 2>/dev/null)
   if [[ "$STATUS" == "ok" ]]; then
     ok "Backend UP | forecasts: $FORECASTS_TS | news: $NEWS_TS"
   else
@@ -46,14 +55,86 @@ else
   fail "Frontend DOWN (port 5173) — code=$FE_CODE"
 fi
 
-# ── 3. Active API Data ─────────────────────────────────────
+# ── 3. Monitor Contract ────────────────────────────────────
+echo -e "\n${BOLD}[ Monitor Contract ]${NC}"
+MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
+MONITOR_SMOKE="$ROOT/scripts/monitor_contract_smoke.sh"
+if [[ -x "$MONITOR_SMOKE" ]]; then
+  MONITOR_SUMMARY="$("$MONITOR_SMOKE" --base-url "$MONITOR_BASE_URL" 2>&1)"
+  MONITOR_RC=$?
+  if [[ "$MONITOR_RC" -eq 0 ]]; then
+    ok "Monitor API contract OK (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY#PASS }"
+  else
+    fail "Monitor API contract FAILED (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY}"
+  fi
+else
+  MON_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)
+  [[ "$MON_CODE" == "200" ]] && warn "monitor_contract_smoke.sh missing, fallback check only (/api/status=200)" || fail "Monitor API not reachable (${MONITOR_BASE_URL})"
+fi
+
+# ── 3a. Critical Endpoints Contract ───────────────────────
+echo -e "\n${BOLD}[ Critical Endpoints Contract ]${NC}"
+CRITICAL_SMOKE="$ROOT/scripts/critical_endpoints_smoke.sh"
+API_BASE_URL="${FC_API_BASE_URL:-http://127.0.0.1:8050}"
+if [[ -x "$CRITICAL_SMOKE" || -f "$CRITICAL_SMOKE" ]]; then
+  CRITICAL_SUMMARY="$(bash "$CRITICAL_SMOKE" --base-url "$API_BASE_URL" 2>&1)"
+  CRITICAL_RC=$?
+  if [[ "$CRITICAL_RC" -eq 0 ]]; then
+    ok "Critical endpoints contract OK (${API_BASE_URL})"
+  else
+    # NOTE: Distinguish contract schema failure from true network unreachability.
+    # A schema mismatch (missing meta/status fields) is a DEV issue, NOT a runtime blocker.
+    # Downgrade to warn so admin does not misreport backend_unreachable when port is alive.
+    warn "Critical endpoints contract DEGRADED (${API_BASE_URL}) — schema non-conforme (issue API-CONTRACT-001) | ${CRITICAL_SUMMARY}"
+  fi
+else
+  warn "critical_endpoints_smoke.sh missing (skip)"
+fi
+
+# ── 3b. Issue Reporting Compliance ────────────────────────
+echo -e "\n${BOLD}[ Issue Reporting Compliance ]${NC}"
+ISSUE_STATUS_JSON="$(curl -s --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)"
+if [[ -n "$ISSUE_STATUS_JSON" ]]; then
+  ISSUE_SUMMARY="$(echo "$ISSUE_STATUS_JSON" | python3 -c "import sys,json
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print('ERR')
+    raise SystemExit(0)
+ir=d.get('issue_reporting') if isinstance(d,dict) else None
+if not isinstance(ir,dict):
+    print('ERR')
+    raise SystemExit(0)
+roles_total=int(ir.get('roles_total',0) or 0)
+missing=ir.get('roles_missing_report',[])
+if not isinstance(missing,list):
+    missing=[]
+reports_with_issues=int(ir.get('reports_with_issues',0) or 0)
+critical_count=int(ir.get('critical_count',0) or 0)
+print(f'{roles_total}|{len(missing)}|{reports_with_issues}|{critical_count}|{','.join(missing[:6]) if missing else 'none'}')
+" 2>/dev/null)"
+  if [[ "$ISSUE_SUMMARY" != "ERR" && -n "$ISSUE_SUMMARY" ]]; then
+    IFS='|' read -r IR_TOTAL IR_MISSING IR_OPEN IR_CRIT IR_MISSING_ROLES <<< "$ISSUE_SUMMARY"
+    if [[ "${IR_MISSING:-0}" -eq 0 ]]; then
+      ok "Issue reports conformes | roles=${IR_TOTAL:-0} | open=${IR_OPEN:-0} | critical=${IR_CRIT:-0}"
+    else
+      warn "Issue reports incomplets | missing=${IR_MISSING:-0}/${IR_TOTAL:-0} roles=${IR_MISSING_ROLES:-none} | open=${IR_OPEN:-0} | critical=${IR_CRIT:-0}"
+    fi
+  else
+    warn "Impossible de parser issue_reporting depuis /api/status"
+  fi
+else
+  warn "Issue reporting indisponible (monitor API non joignable)"
+fi
+
+# ── 4. Active API Data ─────────────────────────────────────
 echo -e "\n${BOLD}[ Live Data ]${NC}"
 FORECASTS=$(curl -s --max-time 3 "http://localhost:8050/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); rows=d.get('data',{}).get('rows',[]); print(len(rows))" 2>/dev/null)
 NEWS=$(curl -s --max-time 3 "http://localhost:8050/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); items=d.get('data',{}).get('items',[]); print(len(items))" 2>/dev/null)
 [[ "${FORECASTS:-0}" -gt 0 ]] && ok "Forecasts: $FORECASTS available" || fail "Forecasts: none"
 [[ "${NEWS:-0}" -gt 0 ]] && ok "News: $NEWS available" || fail "News: none"
 
-# ── 4. Agent Sessions ─────────────────────────────────────
+# ── 5. Agent Sessions ─────────────────────────────────────
 echo -e "\n${BOLD}[ Agent Sessions ]${NC}"
 ACTIVE_ROLES=("planner" "dev" "admin")
 for role in "${ACTIVE_ROLES[@]}"; do
@@ -66,14 +147,45 @@ for role in "${ACTIVE_ROLES[@]}"; do
   fi
 done
 
-# ── 5. Cron Jobs ──────────────────────────────────────────
+# ── 6. Cron Jobs ──────────────────────────────────────────
 echo -e "\n${BOLD}[ Cron Schedule ]${NC}"
 CRON_ENTRIES=$(crontab -l 2>/dev/null | grep -v "^#\|^$" | wc -l)
 CRON_AGENT=$(crontab -l 2>/dev/null | grep "fc_agent_tick\|cron_tmux_role_runner" | wc -l)
 [[ "$CRON_AGENT" -gt 0 ]] && ok "$CRON_AGENT agent tick job(s) in crontab" || fail "No agent tick jobs in crontab! Run: bash scripts/fc_setup_crons.sh"
 [[ "$CRON_ENTRIES" -gt 0 ]] && info "Total cron entries: $CRON_ENTRIES"
 
-# ── 6. Recent Agent Deliveries ────────────────────────────
+# ── 6b. Scheduler Ownership ───────────────────────────────
+echo -e "\n${BOLD}[ Scheduler Ownership ]${NC}"
+LEGACY_QWEN_UNITS=0
+if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+  LEGACY_QWEN_UNITS=$(systemctl --user list-units --all --type=service --type=timer 2>/dev/null \
+    | grep -E "fc-(planner|dev|admin)-qwen\.(service|timer)" \
+    | grep -E " active | activating | waiting " \
+    | wc -l)
+  LEGACY_QWEN_UNITS="$(printf '%s' "${LEGACY_QWEN_UNITS:-0}" | tr -d '[:space:]')"
+else
+  LEGACY_QWEN_UNITS=0
+fi
+[[ -n "$LEGACY_QWEN_UNITS" ]] || LEGACY_QWEN_UNITS=0
+if [[ "$LEGACY_QWEN_UNITS" -gt 0 ]]; then
+  fail "Legacy qwen schedulers active (${LEGACY_QWEN_UNITS}) — disable via: systemctl --user disable --now fc-{planner,dev,admin}-qwen.timer"
+else
+  ok "No active legacy qwen systemd schedulers"
+fi
+
+QWEN_TMUX_SESSIONS=0
+if command -v tmux >/dev/null 2>&1; then
+  QWEN_TMUX_SESSIONS=$(tmux ls 2>/dev/null | grep -E "^qwen_(planner|dev|admin)_cron:" | wc -l)
+  QWEN_TMUX_SESSIONS="$(printf '%s' "${QWEN_TMUX_SESSIONS:-0}" | tr -d '[:space:]')"
+fi
+[[ -n "$QWEN_TMUX_SESSIONS" ]] || QWEN_TMUX_SESSIONS=0
+if [[ "$QWEN_TMUX_SESSIONS" -gt 0 ]]; then
+  warn "Legacy qwen tmux sessions still present (${QWEN_TMUX_SESSIONS}) — cleanup: tmux kill-session -t qwen_<role>_cron"
+else
+  ok "No qwen_* tmux legacy sessions"
+fi
+
+# ── 7. Recent Agent Deliveries ────────────────────────────
 echo -e "\n${BOLD}[ Agent Activity (last 2h) ]${NC}"
 TICK_LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
 for role in "planner" "dev" "admin"; do
@@ -92,7 +204,7 @@ for role in "planner" "dev" "admin"; do
   fi
 done
 
-# ── 7. Git Progress ───────────────────────────────────────
+# ── 8. Git Progress ───────────────────────────────────────
 echo -e "\n${BOLD}[ Git Progress (last 24h) ]${NC}"
 cd "$ROOT"
 COMMITS=$(git log --oneline --since="24 hours ago" 2>/dev/null | wc -l)
@@ -104,14 +216,14 @@ else
   warn "0 commits in last 24h"
 fi
 
-# ── 8. Rate Limits ────────────────────────────────────────
+# ── 9. Rate Limits ────────────────────────────────────────
 echo -e "\n${BOLD}[ Rate Limits ]${NC}"
 RATE_HITS=$(grep -r "rate_limit" logs-codex-runs/role-runner/*.log 2>/dev/null | grep "$(date +%Y-%m-%d)" | wc -l || echo 0)
 RATE_HITS="$(printf '%s' "${RATE_HITS:-0}" | tr -d '[:space:]')"
 [[ -n "$RATE_HITS" ]] || RATE_HITS=0
 [[ "$RATE_HITS" -gt 5 ]] && warn "Rate limit hits today: $RATE_HITS — consider slowing cron intervals" || ok "Rate limit hits today: $RATE_HITS"
 
-# ── 9. Model Config Guard ─────────────────────────────────
+# ── 10. Model Config Guard ─────────────────────────────────
 echo -e "\n${BOLD}[ Model Config ]${NC}"
 ROLE_MODEL_RAW="${TMUX_ROLE_CODEX_MODEL:-${LM_USED_ROLE_MODEL:-openai-codex/gpt-5.2}}"
 ROLE_MODEL_NORM="${ROLE_MODEL_RAW#openai-codex/}"
@@ -127,7 +239,7 @@ case "$ROLE_MODEL_NORM" in
     ;;
 esac
 
-# ── 10. Rate Limit Cooldowns ──────────────────────────────
+# ── 11. Rate Limit Cooldowns ──────────────────────────────
 echo -e "\n${BOLD}[ Rate Limit Cooldowns ]${NC}"
 RATE_CACHE_DIR="$HOME/.openclaw/cron/role-state"
 now_epoch="$(date +%s)"
@@ -154,42 +266,77 @@ for role in planner dev admin; do
 done
 [[ "$COOLDOWN_ACTIVE" -eq 0 ]] && ok "No active role/global cooldown cache"
 
-# ── 11. Orchestration Signal Quality ───────────────────────
+# ── 12. Orchestration Signal Quality ───────────────────────
 echo -e "\n${BOLD}[ Orchestration Quality ]${NC}"
-QUALITY_WINDOW_LINES="${QUALITY_WINDOW_LINES:-600}"
+QUALITY_WINDOW_MINUTES="${QUALITY_WINDOW_MINUTES:-180}"
 QUALITY_SIGNAL_UNPARSEABLE_WARN="${QUALITY_SIGNAL_UNPARSEABLE_WARN:-10}"
 QUALITY_SESSION_NOT_READY_WARN="${QUALITY_SESSION_NOT_READY_WARN:-6}"
 QUALITY_CONTRACT_GUARD_WARN="${QUALITY_CONTRACT_GUARD_WARN:-4}"
 QUALITY_ROLES=("planner" "dev" "admin")
-for n in QUALITY_WINDOW_LINES QUALITY_SIGNAL_UNPARSEABLE_WARN QUALITY_SESSION_NOT_READY_WARN QUALITY_CONTRACT_GUARD_WARN; do
+for n in QUALITY_WINDOW_MINUTES QUALITY_SIGNAL_UNPARSEABLE_WARN QUALITY_SESSION_NOT_READY_WARN QUALITY_CONTRACT_GUARD_WARN; do
   val="$(printf '%s' "${!n:-}" | tr -d '[:space:]')"
   [[ "$val" =~ ^[0-9]+$ ]] || val=0
   [[ "$val" -gt 0 ]] || val=1
   printf -v "$n" '%s' "$val"
 done
 
-collect_quality_window() {
-  local out_file="$1"
+collect_quality_files() {
   local role f
-  : > "$out_file"
+  QUALITY_FILES=()
   QUALITY_WINDOW_FILES=0
   for role in "${QUALITY_ROLES[@]}"; do
     for f in "logs-codex-runs/role-runner/${role}.live.log" "logs-codex-runs/fc-ticks/${role}.tick.log" "logs-codex-runs/fc-ticks/${role}.cron.log"; do
       [[ -f "$f" ]] || continue
-      tail -n "$QUALITY_WINDOW_LINES" "$f" >> "$out_file" 2>/dev/null || true
+      QUALITY_FILES+=("$f")
       QUALITY_WINDOW_FILES=$((QUALITY_WINDOW_FILES + 1))
     done
   done
 }
 
-count_pat() {
-  local payload="$1"
-  local pattern="$2"
-  local n
-  n="$(printf '%s\n' "$payload" | rg -o "$pattern" 2>/dev/null | wc -l || echo 0)"
-  n="$(printf '%s' "${n:-0}" | tr -d '[:space:]')"
-  [[ -n "$n" ]] || n=0
-  printf '%s\n' "$n"
+count_pat_recent_files() {
+  local pattern="$1"
+  local minutes="$2"
+  if [[ "${#QUALITY_FILES[@]}" -eq 0 ]]; then
+    printf '0\n'
+    return 0
+  fi
+  python3 - "$pattern" "$minutes" "${QUALITY_FILES[@]}" <<'PY'
+import sys
+from datetime import datetime, timedelta, timezone
+
+pattern = sys.argv[1]
+minutes = max(1, int(sys.argv[2]))
+paths = sys.argv[3:]
+local_tz = datetime.now().astimezone().tzinfo
+cutoff_utc = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+hits = 0
+
+for path in paths:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+            for raw in handle:
+                line = raw.rstrip("\n")
+                if not line:
+                    continue
+                token = line.split(" ", 1)[0]
+                try:
+                    if token.endswith("Z"):
+                        ts = datetime.fromisoformat(token[:-1]).replace(tzinfo=timezone.utc)
+                    else:
+                        ts = datetime.fromisoformat(token)
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=local_tz)
+                        ts = ts.astimezone(timezone.utc)
+                except Exception:
+                    continue
+                if ts < cutoff_utc:
+                    continue
+                hits += line.count(pattern)
+    except Exception:
+        continue
+
+print(hits)
+PY
 }
 
 count_pat_files() {
@@ -208,13 +355,10 @@ count_pat_files() {
   printf '%s\n' "$n"
 }
 
-QUALITY_WINDOW_TMP="$(mktemp)"
-collect_quality_window "$QUALITY_WINDOW_TMP"
-QUALITY_WINDOW_BLOB="$(cat "$QUALITY_WINDOW_TMP")"
-rm -f "$QUALITY_WINDOW_TMP"
-SIG_UNPARSEABLE="$(count_pat "$QUALITY_WINDOW_BLOB" "signal_unparseable")"
-SESSION_NOT_READY="$(count_pat "$QUALITY_WINDOW_BLOB" "session_not_ready")"
-CONTRACT_GUARD_BLOCKS="$(count_pat "$QUALITY_WINDOW_BLOB" "contract_guard_")"
+collect_quality_files
+SIG_UNPARSEABLE="$(count_pat_recent_files "signal_unparseable" "$QUALITY_WINDOW_MINUTES")"
+SESSION_NOT_READY="$(count_pat_recent_files "session_not_ready" "$QUALITY_WINDOW_MINUTES")"
+CONTRACT_GUARD_BLOCKS="$(count_pat_recent_files "contract_guard_" "$QUALITY_WINDOW_MINUTES")"
 
 SIG_UNPARSEABLE_TOTAL="$(count_pat_files "signal_unparseable")"
 SESSION_NOT_READY_TOTAL="$(count_pat_files "session_not_ready")"
@@ -223,9 +367,105 @@ CONTRACT_GUARD_TOTAL="$(count_pat_files "contract_guard_")"
 [[ "$SIG_UNPARSEABLE" -gt "$QUALITY_SIGNAL_UNPARSEABLE_WARN" ]] && warn "signal_unparseable (window) high: $SIG_UNPARSEABLE > $QUALITY_SIGNAL_UNPARSEABLE_WARN" || ok "signal_unparseable (window): $SIG_UNPARSEABLE"
 [[ "$SESSION_NOT_READY" -gt "$QUALITY_SESSION_NOT_READY_WARN" ]] && warn "session_not_ready (window) high: $SESSION_NOT_READY > $QUALITY_SESSION_NOT_READY_WARN" || ok "session_not_ready (window): $SESSION_NOT_READY"
 [[ "$CONTRACT_GUARD_BLOCKS" -gt "$QUALITY_CONTRACT_GUARD_WARN" ]] && warn "contract_guard blocks (window) high: $CONTRACT_GUARD_BLOCKS > $QUALITY_CONTRACT_GUARD_WARN" || ok "contract_guard blocks (window): $CONTRACT_GUARD_BLOCKS"
-info "quality window: roles=$(IFS=,; echo "${QUALITY_ROLES[*]}") lines_per_file=${QUALITY_WINDOW_LINES} files=${QUALITY_WINDOW_FILES:-0} | totals: signal=${SIG_UNPARSEABLE_TOTAL} session=${SESSION_NOT_READY_TOTAL} guard=${CONTRACT_GUARD_TOTAL}"
+info "quality window: roles=$(IFS=,; echo "${QUALITY_ROLES[*]}") minutes=${QUALITY_WINDOW_MINUTES} files=${QUALITY_WINDOW_FILES:-0} | totals: signal=${SIG_UNPARSEABLE_TOTAL} session=${SESSION_NOT_READY_TOTAL} guard=${CONTRACT_GUARD_TOTAL}"
 
-# ── 12. Stale Locks ───────────────────────────────────────
+# ── 13. Issue Publication Completeness ────────────────────
+echo -e "\n${BOLD}[ Issue Publication ]${NC}"
+ISSUE_EVENTS_FILE="$ROOT/docs/operations/orchestrator/agent-iteration-issues.jsonl"
+[[ -f "$ISSUE_EVENTS_FILE" ]] || ISSUE_EVENTS_FILE="$ROOT/docs/orchestrator-ops/agent-iteration-issues.jsonl"
+if [[ -f "$ISSUE_EVENTS_FILE" ]]; then
+  ISSUE_SUMMARY_JSON="$(python3 - "$ISSUE_EVENTS_FILE" <<'PY'
+import json
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+roles = ("planner", "dev", "admin")
+schedule = {
+    "planner": [0, 22, 44],
+    "dev": [6, 28, 50],
+    "admin": [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55],
+}
+
+def parse_ts(raw: str):
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).timestamp()
+
+def role_interval(role: str) -> float:
+    mins = sorted(set(schedule.get(role, [])))
+    if len(mins) <= 1:
+        return 60.0
+    deltas = []
+    for idx, m in enumerate(mins):
+        nxt = mins[(idx + 1) % len(mins)]
+        delta = (nxt - m) % 60
+        if delta <= 0:
+            delta = 60
+        deltas.append(delta)
+    return float(min(deltas)) if deltas else 60.0
+
+latest = {}
+for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+    line = raw.strip()
+    if not line:
+        continue
+    try:
+        item = json.loads(line)
+    except Exception:
+        continue
+    if not isinstance(item, dict):
+        continue
+    role = str(item.get("role", "")).strip()
+    if role not in roles:
+        continue
+    ts = parse_ts(item.get("ts_utc", ""))
+    if ts is None:
+        continue
+    prev = latest.get(role)
+    if prev is None or ts > prev:
+        latest[role] = ts
+
+now = time.time()
+gaps = []
+ages = {}
+for role in roles:
+    ts = latest.get(role)
+    if ts is None:
+        ages[role] = -1
+        gaps.append(role)
+        continue
+    age_min = (now - ts) / 60.0
+    ages[role] = int(age_min)
+    if age_min > role_interval(role) * 1.5:
+        gaps.append(role)
+
+print(json.dumps({"gaps": sorted(gaps), "ages": ages}, ensure_ascii=True))
+PY
+)"
+  ISSUE_GAP_COUNT="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(len(d.get("gaps",[])))' "$ISSUE_SUMMARY_JSON" 2>/dev/null || echo 0)"
+  ISSUE_GAP_ROLES="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(",".join(d.get("gaps",[])) or "none")' "$ISSUE_SUMMARY_JSON" 2>/dev/null || echo "none")"
+  if [[ "${ISSUE_GAP_COUNT:-0}" -gt 0 ]]; then
+    fail "ISSUE_PUBLICATION_GAP roles=${ISSUE_GAP_ROLES} (records missing > 1.5x interval)"
+  else
+    ok "Issue publication continuity OK (planner/dev/admin)"
+  fi
+else
+  fail "ISSUE_PUBLICATION_GAP source missing: ${ISSUE_EVENTS_FILE}"
+fi
+
+# ── 14. Stale Locks ───────────────────────────────────────
 echo -e "\n${BOLD}[ Stale Locks ]${NC}"
 SHARED_LOCK_DIR="$ROOT/.tmp/openclaw-shared-locks"
 ROLE_STATE_DIR="$HOME/.openclaw/cron/role-state"

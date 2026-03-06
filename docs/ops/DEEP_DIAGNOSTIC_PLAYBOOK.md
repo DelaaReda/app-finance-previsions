@@ -11,6 +11,10 @@ Standard obligatoire pour tous les rôles agents (planner/dev/admin + spécialis
 - Mix d'engines sur une même lane (`codex` + `qwen`) dans `role-runner/*.events.log`.
 
 ## Méthode Deep standard (ordre strict)
+0. **Poser une matrice d'hypothèses (avant patch)**
+   - Lister au moins 3 causes candidates.
+   - Pour chaque cause: 1 test d'invalidation court (commande + sortie attendue).
+   - Interdit de patcher tant que la cause candidate #1 n'est pas prouvée.
 1. **Isoler cause racine vs bruit**
    - Capturer l'erreur précise: `rc`, stacktrace, process exact, timestamp.
    - Séparer symptôme final et source réelle.
@@ -31,6 +35,19 @@ Standard obligatoire pour tous les rôles agents (planner/dev/admin + spécialis
    - Contrôler `cron/session/health` après correction.
    - Vérifier que la correction n'a pas cassé les lanes actives.
 
+## Priorisation sévérité (obligatoire)
+- `P0`: bloque livraison/rôle/runtime (batch fermé à tort, claim impossible, boucle crash/timeout, guard hard-block).
+- `P1`: dégrade fortement la fiabilité/perf mais contournable.
+- `P2`: dette opérationnelle ou bruit non bloquant.
+- Ordre d'exécution: `P0 -> P1 -> P2` (pas d'optimisation P2 tant qu'un P0 reste ouvert).
+
+## Triangulation minimale (anti-fausse cause)
+Toujours recouper au moins 3 sources:
+- `queue/workboard` (état logique),
+- `role-runner/events` (état exécution),
+- `health/monitor` (état système).
+Un seul signal ne suffit pas pour conclure.
+
 ## Commandes minimales recommandées
 - `bash scripts/agent_deep_troubleshoot.sh <role>`
 - `python3 platform/automation/parallel_workstream.py context --role <role> --limit 5`
@@ -48,6 +65,14 @@ Lecture rapide de `agent_deep_troubleshoot.sh`:
 - `fix_applied=<patch_minimal>`
 - `verify=<before:...; after:...; test:...>`
 - `run_note` en mini paragraphe clair (>=5 mots).
+
+## Template de clôture "complex issue" (inspiré terrain)
+1. `N problèmes -> N fixes` (mapping explicite).
+2. Pour chaque fix: commande de preuve + résultat observé.
+3. Ligne d'état final obligatoire:
+   - `health=<...>`
+   - `blocked_roles=<...>`
+   - `ready_tasks=<...>`
 
 ## Phrase opérationnelle à réutiliser (copier-coller autorisé)
 - isoler cause racine vs bruit (rc/stack/proc exact)

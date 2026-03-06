@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-08-BATCH-08-DEV-03-20260304T010632Z-403"
+stream_id: "BATCH-08"
+task_id: "BATCH-08-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-04T01:06:32Z"
+inputs:
+  queue_snapshot_ref: "docs/orchestrator-ops/priority-queue.json"
+  workboard_snapshot_ref: "docs/orchestrator-ops/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope add reusable contract smoke for copilot ask endpoint integration checks"
+    - "dependency impact keep existing monitor and regression scripts unchanged while adding focused check"
+    - "risk avoid false positives by supporting explicit base url and clear failure output"
+    - "verification run smoke script against local and vm backend endpoints"
+    - "rollback isolate addition to one script and proof artifact for easy revert"
+  architecture_checks:
+    - "reuse_existing_scripts_and_endpoint_contract_patterns_before_adding_new_harnesses"
+    - "keep_smoke_checker_in_canonical_scripts_path_and_use_existing_api_endpoint"
+    - "validate_required_decision_fields_verdict_confidence_why_risk_without_mutating_runtime_state"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "ssh venom@dev-vm-utm 'cd ~/analyse-financiere && ./finance-copilot.sh restart && bash scripts/copilot_decision_contract_smoke.sh http://127.0.0.1:8050'"
+      rc: "0"
+      started_at_utc: "2026-03-04T01:06:32Z"
+      ended_at_utc: "2026-03-04T01:06:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "copilot_decision_contract_smoke_vm:PASS; endpoint_contract_fields:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-08/BATCH-08-DEV-03/20260304T010614Z-dev03.md"
+handoff:
+  to_role: "admin"
+  handoff_id: "HO-20260304010632-308"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-19cbca366db6"
+  review_ref: "none"
+  note: "Intégration durcie avec smoke contractuel live copilot/ask; vérification explicite des champs verdict/confidence/why/risk pour sécuriser la livraison BATCH-08."

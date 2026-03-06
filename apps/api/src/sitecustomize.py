@@ -9,6 +9,7 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+import os
 
 
 def _register_src_alias() -> None:
@@ -30,6 +31,10 @@ def _register_src_alias() -> None:
 
 
 def _ensure_workspace_root_on_sys_path() -> None:
+    # Default OFF to avoid non-deterministic path side effects.
+    # Enable explicitly only when needed for local troubleshooting.
+    if os.environ.get("FC_ENABLE_WORKSPACE_ROOT_SYSPATH", "0").strip() not in {"1", "true", "yes"}:
+        return
     backend_root = Path(__file__).resolve().parent
     for candidate in backend_root.parents:
         if (candidate / "AGENTS.md").exists() and str(candidate) not in sys.path:

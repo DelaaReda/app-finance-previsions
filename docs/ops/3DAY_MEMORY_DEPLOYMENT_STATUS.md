@@ -91,7 +91,7 @@ python3 scripts/qwen_orchestrator.py --tmux-cmd health \
 | Injection | `scripts/cron_tmux_role_runner.sh#L1422-1424` | ✅ Deployed |
 | Guards | `scripts/cron_tmux_role_runner.sh#L1424-1436` | ✅ Deployed |
 | Doc | `docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md` | ✅ Ready |
-| Memory (Mac) | `/Users/venom/Documents/analyse-financiere/memory/` | ✅ 4 files |
+| Memory (VM canonical) | `/home/venom/analyse-financiere/memory/` | ✅ active |
 | Memory (VM) | `/home/venom/analyse-financiere/memory/` | ✅ 4 files |
 | Agents (Mac) | `memory/agents/` | ✅ 17 files |
 | Agents (VM) | `/home/venom/analyse-financiere/memory/agents/` | ✅ 17 files |
@@ -123,7 +123,7 @@ If issues occur, revert to pre-3-day strategy:
 
 ```bash
 # Local
-cd /Users/venom/Documents/analyse-financiere
+cd /home/venom/analyse-financiere
 git diff scripts/cron_tmux_role_runner.sh  # Review changes
 git checkout scripts/cron_tmux_role_runner.sh  # Revert
 
