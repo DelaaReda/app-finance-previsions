@@ -39,7 +39,13 @@
         "type": "object"
       }
     },
-    "features": { "type": "object" },
+    "features": {
+      "type": "object",
+      "properties": {
+        "force_allow_file_edits_all": { "type": "integer", "enum": [0, 1] }
+      },
+      "additionalProperties": true
+    },
     "paths": { "type": "object" },
     "timeouts": { "type": "object" },
     "retries": { "type": "object" },

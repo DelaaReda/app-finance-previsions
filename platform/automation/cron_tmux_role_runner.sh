@@ -780,7 +780,7 @@ PRIMARY_CHANNEL="${PRIMARY_CHANNEL:-tmux}"
 
 if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
   ROLE_ALLOW_FILE_EDITS="1"
-  echo "$(ts) [ALLOW_FILE_EDITS_OVERRIDE] role=$ROLE mode=global force=1" >> "$LOG"
+  echo "$(date '+%Y-%m-%dT%H:%M:%S%z') [ALLOW_FILE_EDITS_OVERRIDE] role=$ROLE mode=global force=1" >> "${TRACE_FILE:-/tmp/fc-role-runner.log}"
 fi
 
 ROLE_ALLOW_FILE_EDITS_EFFECTIVE=0

@@ -1,52 +1,49 @@
-# OpenClaw Admin Notes (Legacy Pointer)
+# OpenClaw Admin Notes
 
-Cette note est conservee pour historique.
-Source active de gouvernance:
-- `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`
+## Current Runtime Truth
+- OpenClaw is the runtime/session transport layer under the planner orchestrator.
+- Planner remains the only scheduled orchestration role.
+- `dev`, `admin`, and `scrum_master` are planner-owned capabilities, not independent cron lanes.
 
-## Identite
-- Tri-admin actifs:
-  - `adminapp-codex`
-  - `admin-agents`
-  - `clawsentinel`
-- Role: equipe admin agents pour `analyse-financiere`
-- Chaine de pilotage:
-  - directeur operationnel = main agent WhatsApp
-  - le directeur pilote les admins uniquement
-  - les admins pilotent ensuite l'equipe livraison
+## Active Gateway Baseline
+- Service: `systemctl --user status openclaw-gateway.service`
+- Heap baseline: `--max-old-space-size=1024`
+- Semi-space baseline: `--max-semi-space-size=32`
+- Expected state: `active (running)` without restart loop
 
-## Mandat
-- Maintenir des cron jobs stables, predictibles, et auditables.
-- Garantir que les payloads restent `runner-only` (pas d'appel direct a un orchestrator legacy dans `payload.message`).
-- Reduire le bruit (`tmux_unparseable`, `NO_DELTA` inutile) et augmenter le signal actionnable.
+## Active Config Baseline
+- Config file: `~/.openclaw/openclaw.json`
+- Logging level: `warn`
+- Console logging: `warn`
+- Memory search sources: `["memory"]`
+- Session-memory indexing: disabled
+- Sync watch: disabled
+- Cache max entries: `20000`
+- Default verbosity: `on`
 
-## Non-negotiables
-1. Lock admin avant toute modification cron.
-2. Backup de `~/.openclaw/cron/jobs.json` avant changement.
-3. Modification minimale, une variable a la fois.
-4. Force-run de validation apres changement.
-5. Journal obligatoire dans:
-   - `docs/orchestrator-ops/agent-watchdog.md`
-   - `memory/YYYY-MM-DD.md`
+These settings are intentional. They reduce gateway churn and prevent Node OOM under planner-owned subagent load.
 
-## Checklist quotidienne (tri-admin)
-1. Verifier gateway et scheduler (`openclaw status --deep`, `openclaw cron list --all`).
-2. Verifier derive payload (`runner-only`, `codex/tmux/high`, timeout coherent).
-3. Scanner les derniers runs par role et mesurer:
-   - erreurs
-   - fallback
-   - `tmux_unparseable`
-4. Appliquer corrections ciblees (prompt contract, timeout, recovery) si seuil depasse.
-5. Publier un court recap des actions et risques.
+## Canonical Planner Bridge
+- Config source: `platform/config/runner/runner.v1.yaml`
+- Active backend: `features.planner_orchestrator.backend = "openclaw"`
+- Planner bridge implementation: `platform/automation/planner_subagent_manager.py`
 
-## KPIs de pilotage
-- Taux d'erreur par role (<5% cible).
-- Taux de fallback (`NO_DELTA` + `tmux_unparseable`) en tendance baissiere.
-- Duree moyenne des runs par role.
-- Nombre d'interventions manuelles admin par jour.
+## Operator Checks
+1. `systemctl --user --no-pager --full status openclaw-gateway.service`
+2. `openclaw agent --agent planner --json --thinking low --timeout 60 --message 'Reply with exactly {\"status\":\"ok\"}'`
+3. `curl -s http://127.0.0.1:7779/api/status`
 
-## Escalade
-- Si 3 echecs consecutifs sur un role:
-  - marquer BLOCKED,
-  - lancer recovery cible,
-  - documenter cause racine et action unique.
+Expected:
+- gateway active
+- OpenClaw probe returns JSON
+- monitor reports `execution_mode=planner_experimental`
+
+## Log Hygiene
+- Active log: `~/.openclaw/logs/gateway-debug.log`
+- Archive path: `~/.openclaw/logs/archive/`
+- If the active log grows abnormally, archive and recreate it before blaming planner orchestration.
+
+## Non-goals
+- Do not reintroduce legacy role-session assumptions (`tester`, `qa`, four-lane watchdog health).
+- Do not build a second worker platform on top of OpenClaw.
+- Do not let subagents mutate backlog/workboard truth directly.

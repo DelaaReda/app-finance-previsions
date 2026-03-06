@@ -1,37 +1,21 @@
 {
-  "version": 3,
-  "note": "Active roles only - 3-role lean mode",
-  "updated_at": "2026-03-03",
+  "version": 4,
+  "execution_mode": "planner_experimental",
+  "note": "Canonical active topology: planner is the sole scheduled orchestrator; dev/admin/scrum_master run as planner-owned capabilities.",
+  "updated_at": "2026-03-06",
+  "core_roles": ["planner"],
+  "capabilities": ["dev", "admin", "scrum_master"],
   "roles": [
     {
       "role": "planner",
-      "lane": "coordination",
+      "enabled": true,
+      "lane": "orchestrator",
       "every": "22m",
       "allow_file_edits": 1,
       "wip_limit": 1,
-      "description": "Planner lane (absorbs analyst/architect/po/scrum)",
+      "description": "Planner orchestrator; sole scheduled role and final authority for delivery, runtime arbitration, and planner-owned capability dispatch.",
       "session_name": "codex_planner_cron",
       "trace_file": "logs-codex-runs/role-runner/planner.live.log"
-    },
-    {
-      "role": "dev",
-      "lane": "build",
-      "every": "22m",
-      "allow_file_edits": 1,
-      "wip_limit": 1,
-      "description": "Delivery lane (absorbs backend/frontend/data/integrator/test/qa)",
-      "session_name": "codex_dev_cron",
-      "trace_file": "logs-codex-runs/role-runner/dev.live.log"
-    },
-    {
-      "role": "admin",
-      "lane": "ops",
-      "every": "22m",
-      "allow_file_edits": 1,
-      "wip_limit": 1,
-      "description": "Ops lane (health/unblock/recovery)",
-      "session_name": "codex_admin_cron",
-      "trace_file": "logs-codex-runs/role-runner/admin.live.log"
     }
   ]
 }

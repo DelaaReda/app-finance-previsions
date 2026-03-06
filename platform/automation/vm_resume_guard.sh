@@ -61,6 +61,46 @@ ensure_tmux_session() {
   tmux send-keys -t "$session:0.0" "echo '[RESUME_GUARD] recreated tmux session $session'" C-m >/dev/null 2>&1 || true
 }
 
+planner_orchestrator_active() {
+  if [[ "${FC_PLANNER_ORCHESTRATOR_ENABLED:-0}" == "1" && "${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}" == "1" ]]; then
+    return 0
+  fi
+  local cfg=""
+  if [[ -f "$ROOT/platform/config/runner/runner.v1.yaml" ]]; then
+    cfg="$ROOT/platform/config/runner/runner.v1.yaml"
+  elif [[ -f "$ROOT/platform/config/runner/runner_config.v1.yaml" ]]; then
+    cfg="$ROOT/platform/config/runner/runner_config.v1.yaml"
+  fi
+  if [[ -n "$cfg" ]] && command -v jq >/dev/null 2>&1; then
+    local enabled cron_only
+    enabled="$(jq -r '.features.planner_orchestrator.enabled // 0' "$cfg" 2>/dev/null || echo 0)"
+    cron_only="$(jq -r '.features.planner_orchestrator.cron_planner_only // 0' "$cfg" 2>/dev/null || echo 0)"
+    [[ "$enabled" == "1" && "$cron_only" == "1" ]]
+    return
+  fi
+  return 1
+}
+
+resume_guard_sessions() {
+  local topology_file="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/operations/orchestrator/parallel-role-topology-active.json}"
+  local -a sessions=("adminapp_codex_sync" "admin-agents-sync-cron" "clawsentinel")
+  local -a topology_sessions=()
+  if [[ ! -f "$topology_file" ]]; then
+    topology_file="$ROOT/docs/orchestrator-ops/parallel-role-topology-active.json"
+  fi
+  if [[ -f "$topology_file" ]] && command -v jq >/dev/null 2>&1; then
+    mapfile -t topology_sessions < <(jq -r '.roles[]? | select((.enabled // true) != false) | .session_name // empty' "$topology_file" 2>/dev/null)
+    for session in "${topology_sessions[@]}"; do
+      [[ -n "$session" ]] && sessions+=("$session")
+    done
+  elif planner_orchestrator_active; then
+    sessions+=("codex_planner_cron")
+  else
+    sessions+=("codex_planner_cron" "codex_dev_cron" "codex_admin_cron")
+  fi
+  printf '%s\n' "${sessions[@]}" | awk 'NF && !seen[$0]++'
+}
+
 if [[ "$is_resume" -eq 0 ]]; then
   echo "VM_RESUME_GUARD status=OK resume=0 gap_s=${gap}"
   exit 0
@@ -80,10 +120,11 @@ svc2="$(systemctl --user is-active openclaw-gateway.service 2>/dev/null || true)
 stale_out="$(bash scripts/stale_cron_tick.sh 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-260 || true)"
 [[ -n "$stale_out" ]] || stale_out="stale_tick_no_output"
 
-# 3) Ensure tmux sessions (admins + core roles)
-for s in adminapp_codex_sync admin-agents-sync-cron clawsentinel codex_planner_cron codex_dev_cron codex_tester_cron codex_qa_cron; do
+# 3) Ensure infra sessions plus active role sessions from current topology/config
+while IFS= read -r s; do
+  [[ -n "$s" ]] || continue
   ensure_tmux_session "$s"
-done
+done < <(resume_guard_sessions)
 
 # 4) Deterministic triage snapshot
 triage_top="$(bash scripts/triage_now.sh 2>/dev/null | sed -n 's/^TOP //p' | head -n 1 | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-240 || true)"

@@ -132,6 +132,28 @@ def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
     except Exception:
         return text, ""
 
+    result = payload.get("result") if isinstance(payload, dict) else None
+    if isinstance(result, dict):
+        payloads = result.get("payloads")
+        if isinstance(payloads, list):
+            text_candidates = []
+            for item in payloads:
+                if isinstance(item, dict):
+                    candidate = item.get("text")
+                    if isinstance(candidate, str) and candidate.strip():
+                        text_candidates.append(candidate.strip())
+            if text_candidates:
+                meta = result.get("meta")
+                refs: list[str] = []
+                if isinstance(meta, dict):
+                    agent_meta = meta.get("agentMeta")
+                    if isinstance(agent_meta, dict):
+                        for key in ("sessionId", "provider", "model"):
+                            value = agent_meta.get(key)
+                            if isinstance(value, str) and value.strip():
+                                refs.append(f"{key}={value}")
+                return text_candidates[-1], ",".join(refs[:4])
+
     candidates: list[str] = []
     refs: list[str] = []
 
@@ -427,15 +449,24 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         f"TARGET_ROLE={target_role}\n"
         f"OWNER_TASK_ID={owner_task_id}\n"
         f"TASK_KIND={task_kind}\n"
+        "Authoritative runtime sources:\n"
+        "- Monitor status: http://127.0.0.1:7779/api/status\n"
+        "- Doctor snapshot: bash scripts/fc_doctor.sh\n"
+        "- Canonical target spec: docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md\n"
         "Rules:\n"
         "- Planner remains the only source of orchestration truth.\n"
+        "- Treat planner-only scheduling as current reality: planner is the sole scheduled role; dev/admin/scrum_master are planner capabilities.\n"
+        "- Do not assume legacy tester/qa lanes, legacy core-role tmux requirements, or old four-lane health rules.\n"
         "- Do not call parallel_workstream.py claim/complete/handoff.\n"
         "- Do not update queue/workboard/contracts directly.\n"
+        "- Do not use qwen_orchestrator.py, auto_recover_tmux_roles.sh, or legacy tmux lane recovery as evidence for current planner-only truth.\n"
         "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
         "- If a bounded technical sub-task helps, prefer Codex multi-agent delegation through repo_scan_worker, test_worker, patch_proposal_worker, runtime_diag_worker, or quick_worker.\n"
         "- Keep any delegated technical worker ephemeral and scoped to this instruction only.\n"
         "- Keep scope narrow to the owner task and the planner instruction.\n"
         "- If blocked, say exactly what the planner should do next.\n"
+        "- Return ONLY one JSON object with keys: status, summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.\n"
+        "- If no file or test applies, use 'none' or 'SKIP(reason)' explicitly.\n"
         f"Planner instruction: {message.strip()}\n"
     )
     if target_role == "dev":

@@ -333,7 +333,7 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
         _as_int(planner_orchestrator.get("retry_max", 2), 2)
     )
     out["FC_PLANNER_ORCHESTRATOR_BACKEND"] = _as_text(
-        planner_orchestrator.get("backend"), "codex_exec"
+        planner_orchestrator.get("backend"), "openclaw"
     )
     out["FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES"] = ",".join(
         str(tok).strip() for tok in raw_managed_roles if str(tok).strip()
