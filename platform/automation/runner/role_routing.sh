@@ -3,6 +3,9 @@
 runner_normalize_role() {
   local role="${1:-}"
   case "$role" in
+    planner_architect_orchestrator)
+      printf "planner\n"
+      ;;
     vision-architect-tasks-planner|vision_architect_tasks_planner)
       printf "planner\n"
       ;;
@@ -27,6 +30,7 @@ runner_normalize_role() {
 runner_is_supported_role() {
   local role="${1:-}"
   case "$role" in
+    planner_architect_orchestrator) return 0 ;;
     planner|dev|admin|scrum_master) return 0 ;;
     *) return 1 ;;
   esac

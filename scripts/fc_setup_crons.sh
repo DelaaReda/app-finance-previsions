@@ -66,6 +66,7 @@ FC_SCRUM_MASTER_FULL_REMEDIATION="${FC_SCRUM_MASTER_FULL_REMEDIATION:-1}"
 FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES="${FC_SCRUM_MASTER_ESCALATE_AFTER_CYCLES:-2}"
 PLANNER_ORCHESTRATOR_ENABLED="${FC_PLANNER_ORCHESTRATOR_ENABLED:-}"
 PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-}"
+EXPERIMENTAL_PLANNER_ONLY="${FC_EXPERIMENTAL_PLANNER_ONLY:-}"
 ROLE_RECOVERY_LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-${ROOT}/logs-codex-runs}"
 if [[ "$ROOT" == /Users/* ]]; then
   MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
@@ -124,6 +125,10 @@ while [[ $# -gt 0 ]]; do
       CRON_PROFILE="${2:-full}"
       shift 2
       ;;
+    --planner-experimental)
+      CRON_PROFILE="planner-experimental"
+      shift
+      ;;
     --canary)
       CRON_PROFILE="canary"
       shift
@@ -134,22 +139,22 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1" >&2
-      echo "Usage: bash scripts/fc_setup_crons.sh [--profile full|canary|--canary|--full]" >&2
+      echo "Usage: bash scripts/fc_setup_crons.sh [--profile full|canary|planner-experimental|--planner-experimental|--canary|--full]" >&2
       exit 2
       ;;
   esac
 done
 
 case "$CRON_PROFILE" in
-  full|canary) ;;
+  full|canary|planner-experimental) ;;
   *)
-    echo "Invalid profile: $CRON_PROFILE (expected: full|canary)" >&2
+    echo "Invalid profile: $CRON_PROFILE (expected: full|canary|planner-experimental)" >&2
     exit 2
     ;;
 esac
 
 if [[ -z "${SCRUM_MASTER_CRON_ENABLED}" ]]; then
-  if [[ "$CRON_PROFILE" == "canary" ]]; then
+  if [[ "$CRON_PROFILE" == "canary" || "$CRON_PROFILE" == "planner-experimental" ]]; then
     SCRUM_MASTER_CRON_ENABLED=0
   else
     SCRUM_MASTER_CRON_ENABLED=1
@@ -197,6 +202,14 @@ PY
       [[ -n "$PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY" ]] || PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${cfg_planner_cron_only:-0}"
     fi
   fi
+fi
+if [[ "$EXPERIMENTAL_PLANNER_ONLY" == "1" ]]; then
+  PLANNER_ORCHESTRATOR_ENABLED="1"
+  PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="1"
+fi
+if [[ "$CRON_PROFILE" == "planner-experimental" ]]; then
+  PLANNER_ORCHESTRATOR_ENABLED="1"
+  PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="1"
 fi
 PLANNER_ORCHESTRATOR_ENABLED="${PLANNER_ORCHESTRATOR_ENABLED:-0}"
 PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY="${PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}"

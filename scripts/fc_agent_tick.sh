@@ -68,7 +68,7 @@ export PATH="/home/venom/.npm-global/bin:$PATH"
 mkdir -p "$LOG_DIR" "$LOCK_DIR"
 
 if [[ -z "$ROLE" ]]; then
-  echo "Usage: $0 <role|vision-architect-tasks-planner>" >&2
+  echo "Usage: $0 <role|planner_architect_orchestrator|vision-architect-tasks-planner>" >&2
   exit 1
 fi
 
@@ -84,6 +84,10 @@ FC_ADMIN_RUNTIME_STALE_AUTOHEAL="${FC_ADMIN_RUNTIME_STALE_AUTOHEAL:-1}"
 FC_SCRUM_ARTIFACT_AUTOFILL="${FC_SCRUM_ARTIFACT_AUTOFILL:-1}"
 FC_SCRUM_AUTO_INTENTS_HARDENED="${FC_SCRUM_AUTO_INTENTS_HARDENED:-1}"
 FC_MONITOR_READY_DEV_FROM_WORKBOARD="${FC_MONITOR_READY_DEV_FROM_WORKBOARD:-1}"
+FC_EXPERIMENTAL_PLANNER_ONLY="${FC_EXPERIMENTAL_PLANNER_ONLY:-0}"
+if [[ "${FC_PLANNER_ORCHESTRATOR_ENABLED:-0}" == "1" && "${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}" == "1" ]]; then
+  FC_EXPERIMENTAL_PLANNER_ONLY="1"
+fi
 LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-skip}"
 DEFAULT_ROLE_ALLOW_FILE_EDITS="0"
 if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
@@ -94,6 +98,9 @@ fi
 # Tout ce qui était architect / po / analyst → planner
 # Tout ce qui était clawsentinel / infra_engineer / qa → admin
 case "$ROLE" in
+  planner_architect_orchestrator)
+    ROLE="planner"
+    ;;
   backend_engineer|frontend_engineer|data_analyst|integrator)
     if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
       echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'dev' (legacy alias mode=map)" >&2
@@ -148,6 +155,18 @@ LOCK_ACQUIRED=0
 LOCK_MODE="none"
 LOCK_ACQUIRED_AT=0
 LOCK_DIR_FALLBACK=""
+
+if [[ "$FC_EXPERIMENTAL_PLANNER_ONLY" == "1" ]]; then
+  case "$ROLE" in
+    planner)
+      ;;
+    *)
+      echo "$(date '+%Y-%m-%dT%H:%M:%S') [MONOLANE_ROLE_DISABLED] role=${ROLE_INPUT} canonical=${ROLE} planner_only=1 - ignoring tick" >> "$LOG"
+      echo "[fc_tick] MONOLANE_ROLE_DISABLED role='${ROLE_INPUT}' canonical='${ROLE}' planner_only=1" >&2
+      exit 0
+      ;;
+  esac
+fi
 
 ts() { date '+%Y-%m-%dT%H:%M:%S'; }
 

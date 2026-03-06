@@ -131,6 +131,12 @@ def _apply_env_whitelist(cfg: dict[str, Any]) -> tuple[dict[str, Any], list[str]
         _set_path(out, dotted, value)
         applied.append(env_key)
 
+    experimental_planner_only = os.environ.get("FC_EXPERIMENTAL_PLANNER_ONLY", "").strip()
+    if experimental_planner_only:
+        _set_path(out, "features.planner_orchestrator.enabled", experimental_planner_only)
+        _set_path(out, "features.planner_orchestrator.cron_planner_only", experimental_planner_only)
+        applied.append("FC_EXPERIMENTAL_PLANNER_ONLY")
+
     for role, prefix in ROLE_ENV_PREFIX.items():
         prefixes = [prefix]
         if role == "scrum_master":

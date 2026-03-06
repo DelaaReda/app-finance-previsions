@@ -112,6 +112,13 @@ def _role_prefix(role: str) -> str:
     return mapping.get(role, f"FC_{role.upper()}")
 
 
+def _canonical_role(role: str) -> str:
+    token = str(role or "").strip()
+    if token == "planner_architect_orchestrator":
+        return "planner"
+    return token
+
+
 def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]:
     out: dict[str, str] = {}
     missing: list[str] = []
@@ -331,6 +338,12 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     out["FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES"] = ",".join(
         str(tok).strip() for tok in raw_managed_roles if str(tok).strip()
     )
+    out["FC_EXPERIMENTAL_PLANNER_ONLY"] = str(
+        1
+        if out["FC_PLANNER_ORCHESTRATOR_ENABLED"] == "1"
+        and out["FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"] == "1"
+        else 0
+    )
 
     dynamic_workers = (
         features.get("dynamic_workers", {})
@@ -426,7 +439,7 @@ def cmd_emit_env(args: argparse.Namespace) -> int:
     if not result.ok:
         print(json.dumps({"ok": False, "errors": result.errors}, ensure_ascii=True), file=sys.stderr)
         return 2
-    role = str(args.role).strip()
+    role = _canonical_role(str(args.role).strip())
     if role not in REQUIRED_ROLES:
         print(f"invalid role: {role}", file=sys.stderr)
         return 2
