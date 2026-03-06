@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -142,6 +143,70 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         cleaned = cleanup_subagents(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("planner_scrum_expired", cleaned["removed"])
+
+    def test_plan_refuses_openclaw_backend_when_binary_missing(self) -> None:
+        with patch.object(MODULE, "_openclaw_available", return_value=False):
+            result = plan_subagent(
+                self.config,
+                "planner",
+                "dev",
+                "BATCH-61-DEV-02",
+                "delivery",
+                backend_override="openclaw",
+            )
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["reason"], "openclaw_missing")
+
+    def test_run_openclaw_backend_extracts_structured_result(self) -> None:
+        envelope = {
+            "agent_id": "planner_dev_openclaw",
+            "response": {
+                "text": json.dumps(
+                    {
+                        "status": "completed",
+                        "summary": "OpenClaw dev subagent completed targeted patch verification",
+                        "artifact": "logs/openclaw/dev.result.json",
+                        "verify": "proof=openclaw",
+                        "files_touched": "src/app.py",
+                        "tests_run": "pytest tests/test_app.py -q",
+                        "recommended_next": "planner_merge_result",
+                        "blocking_issue": "none",
+                    }
+                )
+            },
+        }
+
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_ensure_openclaw_agent", return_value=(True, "planner_dev_openclaw")),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 0, "stdout": json.dumps(envelope), "stderr": ""},
+                )(),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-02",
+                task_kind="delivery",
+                message="Apply a minimal fix and return structured evidence.",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["backend"], "openclaw")
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["artifact"], "logs/openclaw/dev.result.json")
+        self.assertEqual(payload["tests_run"], "pytest tests/test_app.py -q")
 
 
 if __name__ == "__main__":

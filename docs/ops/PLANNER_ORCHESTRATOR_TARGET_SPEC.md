@@ -25,6 +25,7 @@ The target is:
 - pre-tick runtime reconciliation already exists
 - delivery gating already exists
 - planner-owned delegation already exists and must remain thin
+- live planner delegation transport is still `codex_exec` until `openclaw agent` is stable enough to replace it without runtime regressions
 
 Canonical implementation anchors:
 - `platform/config/runner/runner.v1.yaml`
@@ -237,10 +238,14 @@ Not allowed:
 
 Bridge contract:
 - planner requests bounded work
-- OpenClaw handles runtime/session transport where needed
+- OpenClaw is the target runtime/session transport once agent execution is healthy
 - Codex executes specialized task
 - structured result comes back
 - planner merges it into authoritative app state
+
+Current implementation note:
+- keep the live planner bridge on the proven backend until `openclaw agent` passes a real execution probe
+- do not switch transport by configuration alone
 
 ## Model Policy
 - model choice is config-driven

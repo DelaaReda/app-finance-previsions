@@ -9,16 +9,24 @@ prevent_idle_sleep = true
 
 [agents]
 max_threads = 4
-max_depth = 2
+max_depth = 1
 
-[agents.dev_subagent]
+[agents.repo_scan_worker]
 model = "gpt-5.4"
 model_reasoning_effort = "high"
 
-[agents.admin_subagent]
+[agents.test_worker]
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+
+[agents.patch_proposal_worker]
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+
+[agents.runtime_diag_worker]
 model = "gpt-5.4"
 model_reasoning_effort = "medium"
 
-[agents.scrum_subagent]
+[agents.quick_worker]
 model = "gpt-5.3-codex-spark"
 model_reasoning_effort = "low"

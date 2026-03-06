@@ -12,6 +12,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from worker_manager import _ensure_agent as _ensure_openclaw_agent
+from worker_manager import shutil_which
+
 
 ACTIVE_STATUSES = {"spawned", "running"}
 FINISHED_STATUSES = {"completed", "failed", "merged"}
@@ -114,6 +117,50 @@ def _codex_available() -> bool:
     from shutil import which
 
     return bool(which("codex"))
+
+
+def _openclaw_available() -> bool:
+    return bool(shutil_which("openclaw"))
+
+
+def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
+    text = (raw_text or "").strip()
+    if not text:
+        return "", ""
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return text, ""
+
+    candidates: list[str] = []
+    refs: list[str] = []
+
+    def walk(obj: Any) -> None:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                lowered = str(key).lower()
+                if lowered in {
+                    "text",
+                    "message",
+                    "reply",
+                    "summary",
+                    "response",
+                    "output",
+                    "content",
+                } and isinstance(value, str):
+                    candidates.append(value)
+                elif lowered in {"session_id", "id", "agent_id"} and isinstance(value, str):
+                    refs.append(f"{key}={value}")
+                else:
+                    walk(value)
+        elif isinstance(obj, list):
+            for value in obj:
+                walk(value)
+        elif isinstance(obj, str):
+            candidates.append(obj)
+
+    walk(payload)
+    return (candidates[-1] if candidates else text, ",".join(refs[:4]))
 
 
 @dataclass
@@ -342,6 +389,13 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
             kept.append(record)
             continue
         _emit_event(config, "planner_subagent_cleanup", record, {"reason": "ttl_expired"})
+        if record.backend == "openclaw" and record.backend_ref and _openclaw_available():
+            subprocess.run(
+                ["openclaw", "agents", "delete", record.backend_ref],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
         removed.append(record.subagent_id)
     return kept, removed
 
@@ -378,6 +432,8 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "- Do not call parallel_workstream.py claim/complete/handoff.\n"
         "- Do not update queue/workboard/contracts directly.\n"
         "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
+        "- If a bounded technical sub-task helps, prefer Codex multi-agent delegation through repo_scan_worker, test_worker, patch_proposal_worker, runtime_diag_worker, or quick_worker.\n"
+        "- Keep any delegated technical worker ephemeral and scoped to this instruction only.\n"
         "- Keep scope narrow to the owner task and the planner instruction.\n"
         "- If blocked, say exactly what the planner should do next.\n"
         f"Planner instruction: {message.strip()}\n"
@@ -441,9 +497,19 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
     )
 
 
-def plan_subagent(config: PlannerSubagentConfig, role: str, target_role: str, owner_task_id: str, task_kind: str) -> dict[str, Any]:
+def plan_subagent(
+    config: PlannerSubagentConfig,
+    role: str,
+    target_role: str,
+    owner_task_id: str,
+    task_kind: str,
+    backend_override: str = "",
+) -> dict[str, Any]:
     parent_role = canonical_role(role)
     target = canonical_role(target_role)
+    chosen_backend = str(backend_override or config.backend or "codex_exec").strip().lower()
+    if chosen_backend == "auto":
+        chosen_backend = config.backend
     records = _records_from_registry(_load_registry(config.registry_path))
     records, _ = _cleanup_records(config, records)
     duplicate = _find_duplicate(records, target, owner_task_id)
@@ -468,9 +534,15 @@ def plan_subagent(config: PlannerSubagentConfig, role: str, target_role: str, ow
     elif active_count >= config.max_active:
         allowed = False
         reason = f"max_active_reached:{active_count}/{config.max_active}"
-    elif config.backend == "codex_exec" and not _codex_available():
+    elif chosen_backend == "codex_exec" and not _codex_available():
         allowed = False
         reason = "codex_missing"
+    elif chosen_backend == "openclaw" and not _openclaw_available():
+        allowed = False
+        reason = "openclaw_missing"
+    elif chosen_backend not in {"codex_exec", "openclaw", "mock"}:
+        allowed = False
+        reason = f"unsupported_backend:{chosen_backend}"
     model, thinking, sandbox = _role_runtime_defaults(config, target)
     return {
         "allowed": allowed,
@@ -482,7 +554,7 @@ def plan_subagent(config: PlannerSubagentConfig, role: str, target_role: str, ow
         "active_count": active_count,
         "max_active": config.max_active,
         "default_ttl_min": config.default_ttl_min,
-        "backend": config.backend,
+        "backend": chosen_backend,
         "model": model,
         "thinking": thinking,
         "sandbox": sandbox,
@@ -501,7 +573,7 @@ def run_subagent(
     backend: str,
     timeout_seconds: int,
 ) -> tuple[int, dict[str, Any]]:
-    plan = plan_subagent(config, role, target_role, owner_task_id, task_kind)
+    plan = plan_subagent(config, role, target_role, owner_task_id, task_kind, backend)
     if not plan["allowed"]:
         return 2, plan
 
@@ -527,7 +599,7 @@ def run_subagent(
     _save_registry(config.registry_path, records)
     _emit_event(config, "planner_subagent_spawn", record, {"task_kind": task_kind})
 
-    chosen_backend = config.backend if backend == "auto" else backend
+    chosen_backend = plan["backend"]
     record.status = "running"
     record.last_update_at = _iso()
     _save_registry(config.registry_path, records)
@@ -553,6 +625,33 @@ def run_subagent(
             },
             ensure_ascii=True,
         )
+    elif chosen_backend == "openclaw":
+        ok, backend_ref = _ensure_openclaw_agent(subagent_id, config.root, plan["model"])
+        if not ok:
+            rc = 5
+            stderr = "openclaw_agent_create_failed"
+        else:
+            proc = subprocess.run(
+                [
+                    "openclaw",
+                    "agent",
+                    "--agent",
+                    subagent_id,
+                    "--json",
+                    "--thinking",
+                    str(plan["thinking"]),
+                    "--timeout",
+                    str(max(30, timeout_seconds)),
+                    "--message",
+                    prompt,
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            rc = proc.returncode
+            stdout = proc.stdout or ""
+            stderr = proc.stderr or ""
     elif chosen_backend == "codex_exec":
         with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
             tmpdir = Path(td)
@@ -605,8 +704,14 @@ def run_subagent(
     config.results_dir.mkdir(parents=True, exist_ok=True)
     raw_path = config.results_dir / f"{subagent_id}.raw.txt"
     raw_path.write_text(stdout if stdout else stderr, encoding="utf-8")
+    result_source = stdout if stdout else stderr
+    if chosen_backend == "openclaw" and stdout:
+        extracted_text, extracted_ref = _extract_openclaw_payload_text(stdout)
+        result_source = extracted_text or stdout
+        if extracted_ref:
+            backend_ref = extracted_ref
     result = _parse_result_payload(
-        stdout if stdout else stderr,
+        result_source,
         subagent_id,
         plan["target_role"],
         owner_task_id,
@@ -621,9 +726,9 @@ def run_subagent(
     if rc != 0:
         result.status = "failed"
         if result.blocking_issue == "none":
-            result.blocking_issue = _compact(stderr or f"codex_exec_rc_{rc}", 160)
+            result.blocking_issue = _compact(stderr or f"{chosen_backend}_rc_{rc}", 160)
         if result.summary == "none":
-            result.summary = _compact(stderr or "codex_exec_failed", 220)
+            result.summary = _compact(stderr or f"{chosen_backend}_failed", 220)
     result_path = config.results_dir / f"{subagent_id}.result.json"
     result_path.write_text(json.dumps(result.as_dict(), indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
@@ -747,7 +852,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--task-kind", default="delivery")
     p_run.add_argument("--message", required=True)
     p_run.add_argument("--ttl-min", type=int, default=0)
-    p_run.add_argument("--backend", default="auto", choices=["auto", "codex_exec", "mock"])
+    p_run.add_argument("--backend", default="auto", choices=["auto", "openclaw", "codex_exec", "mock"])
     p_run.add_argument("--timeout-seconds", type=int, default=240)
 
     p_collect = sub.add_parser("collect")

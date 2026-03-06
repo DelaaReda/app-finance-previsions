@@ -12,6 +12,7 @@ Current target:
 - app keeps orchestration truth
 - OpenClaw provides runtime/session transport
 - Codex provides specialized execution
+- live planner bridge transport remains `codex_exec` until `openclaw agent` passes a stable execution probe
 
 ## Batch 1 — Runtime Truth
 Commit:
@@ -76,11 +77,13 @@ Scope:
 - harden `platform/automation/planner_subagent_manager.py`
 - keep delegation minimal: `plan`, `run`, `collect`, `cleanup`
 - connect planner-owned delegation cleanly to OpenClaw/Codex
+- keep the backend switch blocked until OpenClaw transport is proven healthy in real execution
 
 Acceptance:
 - planner can delegate bounded work to `dev/admin/scrum_master` capabilities
 - results are structured and mergeable
 - workers/subagents never own final business truth
+- OpenClaw-backed execution is not enabled live until its execution probe stops failing
 
 ## Batch 5 — Capability Contracts And Monitor
 Commit:
