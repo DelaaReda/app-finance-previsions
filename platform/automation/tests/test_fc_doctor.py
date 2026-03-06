@@ -4,6 +4,8 @@ from __future__ import annotations
 import unittest
 import importlib.util
 import sys
+import json
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,19 +26,48 @@ class FCDoctorTests(unittest.TestCase):
         self.assertFalse(fc_doctor._states_equivalent("READY", "WAITING_DEP"))
 
     def test_check_sessions_matches_role_tokens(self) -> None:
-        fake = SimpleNamespace(
-            returncode=0,
-            stdout="codex_planner_cron\ncodex_dev_cron\ncodex_admin_cron\n",
-            stderr="",
-        )
-        with patch.object(fc_doctor.subprocess, "run", return_value=fake):
-            result = fc_doctor.check_sessions(Path("."))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 0, "cron_planner_only": 0}}}),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(
+                returncode=0,
+                stdout="codex_planner_cron\ncodex_dev_cron\ncodex_admin_cron\n",
+                stderr="",
+            )
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                result = fc_doctor.check_sessions(root)
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.detail.get("missing_core"), [])
         found = result.detail.get("found_core", {})
         self.assertIn("planner", found)
         self.assertIn("dev", found)
         self.assertIn("admin", found)
+
+    def test_check_sessions_uses_planner_only_core_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(
+                returncode=0,
+                stdout="codex_planner_cron\n",
+                stderr="",
+            )
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                result = fc_doctor.check_sessions(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("expected_core"), ["planner"])
+        self.assertEqual(result.detail.get("missing_core"), [])
+        self.assertEqual(result.detail.get("execution_mode"), "planner_experimental")
 
     def test_build_payload_has_expected_schema(self) -> None:
         payload, code = fc_doctor.build_payload(

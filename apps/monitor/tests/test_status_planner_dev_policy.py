@@ -147,5 +147,112 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertIn("PLANNER_AUTONOMY_CREATE_CLAIM", ids)
 
 
+    def test_status_autoheals_admin_runtime_stale_blocker(self) -> None:
+        contracts = {
+            "planner": {"STATUS": "IN_PROGRESS", "VERDICT": "GO_WITH_CAUTION", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=claim"},
+            "dev": {"STATUS": "WAIT", "VERDICT": "PASS", "DELTA": "DEV_WAIT_NO_READY_TASK", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=none_no_ready"},
+            "admin": {
+                "STATUS": "BLOCKED",
+                "VERDICT": "BLOCKED",
+                "DELTA": "RUNTIME_DOWN_BLOCKS_READY_QUEUE",
+                "BLOCKER_ID": "RUNTIME_DOWN",
+                "EVIDENCE": "task_update=blocked",
+            },
+        }
+        doctor = {
+            "status": "ok",
+            "checks": {
+                "providers": {
+                    "status": "ok",
+                    "detail": {
+                        "api_health_ok": True,
+                        "monitor_status_ok": True,
+                    },
+                }
+            },
+        }
+        with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
+            self.module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(self.module, "rate_limits", lambda: []), mock.patch.object(
+            self.module, "doctor_snapshot", lambda force_refresh=False: doctor
+        ), mock.patch.object(self.module, "_probe_http_ok", lambda url: True):
+            payload = self.module.status()
+
+        admin = payload.get("agents", {}).get("admin", {})
+        self.assertEqual(admin.get("status"), "PASS")
+        self.assertEqual(admin.get("verdict"), "PASS")
+        self.assertEqual(admin.get("blocker"), "NONE")
+        self.assertEqual(str(admin.get("delta", "")).upper(), "RUNTIME_VERIFIED_OK")
+
+    def test_status_ready_dev_metrics_come_from_workboard_runtime(self) -> None:
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "priority-queue.json").write_text(
+            json.dumps({"items": [{"id": "BATCH-10", "state": "READY_PLANNER"}]}), encoding="utf-8"
+        )
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "BATCH-10-DEV-01",
+                            "stream_id": "BATCH-10",
+                            "state": "READY",
+                            "assignee": "dev",
+                            "title": "Implement endpoint",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        contracts = {
+            "planner": {"STATUS": "IN_PROGRESS", "VERDICT": "GO_WITH_CAUTION", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=claim"},
+            "dev": {"STATUS": "WAIT", "VERDICT": "PASS", "DELTA": "DEV_WAIT_NO_READY_TASK", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=none_no_ready"},
+            "admin": {"STATUS": "IN_PROGRESS", "VERDICT": "PASS", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=none_no_signal"},
+        }
+        with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
+            self.module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(self.module, "rate_limits", lambda: []):
+            payload = self.module.status()
+
+        queue = payload.get("queue", {})
+        self.assertEqual(queue.get("ready_dev_source"), "workboard_runtime")
+        self.assertEqual(queue.get("dev_ready_task_count"), 1)
+        self.assertEqual(queue.get("dev_claimable_ready_count"), 1)
+        self.assertEqual(queue.get("ready_dev_count"), 1)
+
+    def test_status_uses_planner_only_core_roles_when_planner_experimental(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "IN_PROGRESS",
+                "VERDICT": "PASS",
+                "DELTA": "NO_DELTA",
+                "BLOCKER_ID": "NONE",
+                "EVIDENCE": "task_update=claim",
+            }
+        }
+        with mock.patch.object(module, "active_roles", lambda: ("planner",)), mock.patch.object(
+            module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(module, "tick_age", lambda role: 1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []):
+            payload = module.status()
+
+        self.assertEqual(payload.get("execution_mode"), "planner_experimental")
+        self.assertEqual(payload.get("roles"), ["planner"])
+        self.assertEqual(payload.get("health_breakdown", {}).get("core_roles"), ["planner"])
+
+
 if __name__ == "__main__":
     unittest.main()

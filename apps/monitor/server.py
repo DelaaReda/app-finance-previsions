@@ -162,7 +162,52 @@ INSTANCE_ID = os.environ.get(
     "FC_MONITOR_INSTANCE_ID",
     f"{socket.gethostname()}:{ROOT}",
 )
-CORE_ROLES = ("planner", "dev", "admin", "scrum_master")
+
+
+def _runner_config_path(root: Path) -> Path:
+    primary = root / "platform" / "config" / "runner" / "runner.v1.yaml"
+    if primary.exists():
+        return primary
+    return root / "platform" / "config" / "runner" / "runner_config.v1.yaml"
+
+
+def _bool_token(value: object, default: bool = False) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return default
+    return token not in {"0", "false", "False"}
+
+
+def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
+    config = _load_json_file(_runner_config_path(root))
+    features = config.get("features", {}) if isinstance(config, dict) else {}
+    planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+    enabled = _bool_token(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED"), _bool_token(planner.get("enabled"), False))
+    cron_planner_only = _bool_token(
+        os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"),
+        _bool_token(planner.get("cron_planner_only"), False),
+    )
+    experimental = os.environ.get("FC_EXPERIMENTAL_PLANNER_ONLY", "").strip()
+    if experimental:
+        enabled = _bool_token(experimental, enabled)
+        cron_planner_only = _bool_token(experimental, cron_planner_only)
+    return enabled, cron_planner_only
+
+
+def _execution_mode(root: Path) -> str:
+    enabled, cron_planner_only = _planner_orchestrator_flags(root)
+    if enabled and cron_planner_only:
+        return "planner_experimental"
+    return "parallel_roles"
+
+
+def _core_roles_for_root(root: Path) -> tuple[str, ...]:
+    if _execution_mode(root) == "planner_experimental":
+        return ("planner",)
+    return ("planner", "dev", "admin", "scrum_master")
+
+
+CORE_ROLES = _core_roles_for_root(ROOT)
 ERROR_FEED_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_ERROR_FEED_RECENT_MINUTES", "90")))
 RUNTIME_DIAG_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_RUNTIME_DIAG_RECENT_MINUTES", "90")))
 AGENT_MESSAGES_RECENT_MINUTES = max(10, int(os.environ.get("FC_MONITOR_AGENT_MESSAGES_RECENT_MINUTES", "1440")))
@@ -416,8 +461,7 @@ def _planner_subagents_snapshot() -> dict:
             active.append(normalized)
         else:
             recent.append(normalized)
-    enabled = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED", "0")).strip() not in {"0", "false", "False"}
-    cron_planner_only = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", "0")).strip() not in {"0", "false", "False"}
+    enabled, cron_planner_only = _planner_orchestrator_flags(ROOT)
     return {
         "enabled": enabled,
         "cron_planner_only": cron_planner_only,
@@ -2893,11 +2937,13 @@ def status():
     activity_summary = _activity_summary_from_bundle(activity_bundle)
     dynamic_workers = _dynamic_workers_snapshot()
     planner_subagents = _planner_subagents_snapshot()
+    execution_mode = _execution_mode(ROOT)
 
     payload = {"ts_utc":now.isoformat(),"health":health,
             "instance":INSTANCE_ID,
             "root":str(ROOT),
             "state_dir":str(STATE),
+            "execution_mode": execution_mode,
             "roles":list(roles),
             "done": workboard_done,
             "ready": workboard_ready,

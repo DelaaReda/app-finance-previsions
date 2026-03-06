@@ -39,6 +39,43 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def _runner_config_path(root: Path) -> Path:
+    primary = root / "platform" / "config" / "runner" / "runner.v1.yaml"
+    if primary.exists():
+        return primary
+    return root / "platform" / "config" / "runner" / "runner_config.v1.yaml"
+
+
+def _bool_token(value: object, default: bool = False) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return default
+    return token not in {"0", "false", "False"}
+
+
+def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
+    config = _read_json(_runner_config_path(root))
+    features = config.get("features", {}) if isinstance(config, dict) else {}
+    planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+    enabled = _bool_token(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED"), _bool_token(planner.get("enabled"), False))
+    cron_planner_only = _bool_token(
+        os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"),
+        _bool_token(planner.get("cron_planner_only"), False),
+    )
+    experimental = os.environ.get("FC_EXPERIMENTAL_PLANNER_ONLY", "").strip()
+    if experimental:
+        enabled = _bool_token(experimental, enabled)
+        cron_planner_only = _bool_token(experimental, cron_planner_only)
+    return enabled, cron_planner_only
+
+
+def _expected_core_roles(root: Path) -> tuple[str, ...]:
+    enabled, cron_planner_only = _planner_orchestrator_flags(root)
+    if enabled and cron_planner_only:
+        return ("planner",)
+    return ("planner", "dev", "admin")
+
+
 def check_workspace_root(root: Path) -> CheckResult:
     exists = root.exists()
     writable = os.access(root, os.W_OK) if exists else False
@@ -153,7 +190,7 @@ def check_sessions(root: Path) -> CheckResult:
     except Exception as exc:
         rc = 2
         err = str(exc)
-    expected = ("planner", "dev", "admin")
+    expected = _expected_core_roles(root)
     found_by_role: dict[str, str] = {}
     for role in expected:
         for name in sessions:
@@ -171,6 +208,7 @@ def check_sessions(root: Path) -> CheckResult:
             "expected_core": list(expected),
             "missing_core": missing,
             "found_core": found_by_role,
+            "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
             "advisory_optional": "scrum_master",
             "stderr": err[:300],
         },
