@@ -516,6 +516,66 @@ def _planner_subagents_snapshot() -> dict:
     }
 
 
+def _planner_dispatch_snapshot(
+    *,
+    runtime_state: dict,
+    queue_snapshot: dict,
+    workboard_snapshot: dict,
+    activity_summary: dict,
+    planner_subagents: dict,
+    system_summary: dict,
+) -> dict:
+    lifecycle = str(runtime_state.get("lifecycle", "running") or "running").strip().lower() or "running"
+    ready_dev_count = int(queue_snapshot.get("ready_dev_count", 0) or 0)
+    ready_planner_count = int(queue_snapshot.get("ready_planner_count", 0) or 0)
+    in_progress_count = int(workboard_snapshot.get("in_progress", 0) or 0)
+    active_count = int(planner_subagents.get("active_count", 0) or 0)
+    recent_success_rate = float(planner_subagents.get("recent_success_rate", 1.0) or 0.0)
+    recent_failed_count = int(planner_subagents.get("recent_failed_count", 0) or 0)
+    recent_blocked_count = int(planner_subagents.get("recent_blocked_count", 0) or 0)
+    recent_fallback_like_count = int(planner_subagents.get("recent_fallback_like_count", 0) or 0)
+    tasks_progressed_last_1h = int(activity_summary.get("tasks_progressed_last_1h", 0) or 0)
+    current_bottleneck = str(activity_summary.get("current_bottleneck", "none") or "none").strip() or "none"
+    recommended_next_action = str(system_summary.get("recommended_next_action", "monitor") or "monitor").strip() or "monitor"
+
+    needs_dispatch = lifecycle == "running" and active_count == 0 and (ready_dev_count > 0 or ready_planner_count > 0)
+    stalled_ready_dev = lifecycle == "running" and ready_dev_count > 0 and active_count == 0 and tasks_progressed_last_1h == 0
+
+    status = "ok"
+    if lifecycle != "running":
+        status = lifecycle
+    elif active_count > 0:
+        status = "active"
+    elif recent_failed_count > 0 or recent_fallback_like_count > 0:
+        status = "degraded"
+    elif needs_dispatch:
+        status = "dispatch_needed"
+
+    return {
+        "status": status,
+        "lifecycle": lifecycle,
+        "execution_mode": str(runtime_state.get("execution_mode", "") or "").strip(),
+        "active_subagents": active_count,
+        "active": planner_subagents.get("active", []) if isinstance(planner_subagents.get("active", []), list) else [],
+        "recent": planner_subagents.get("recent", []) if isinstance(planner_subagents.get("recent", []), list) else [],
+        "recent_total": int(planner_subagents.get("recent_total", 0) or 0),
+        "recent_success_rate": recent_success_rate,
+        "recent_failed_count": recent_failed_count,
+        "recent_blocked_count": recent_blocked_count,
+        "recent_fallback_like_count": recent_fallback_like_count,
+        "recent_by_role": planner_subagents.get("recent_by_role", {}) if isinstance(planner_subagents.get("recent_by_role", {}), dict) else {},
+        "ready_dev_count": ready_dev_count,
+        "ready_planner_count": ready_planner_count,
+        "in_progress_count": in_progress_count,
+        "tasks_progressed_last_1h": tasks_progressed_last_1h,
+        "current_bottleneck": current_bottleneck,
+        "recommended_next_action": recommended_next_action,
+        "needs_dispatch": needs_dispatch,
+        "stalled_ready_dev": stalled_ready_dev,
+        "registry_path": str(planner_subagents.get("registry_path", "") or ""),
+    }
+
+
 def _runtime_state_snapshot() -> dict:
     state = load_runtime_state(ROOT)
     lifecycle = str(state.get("lifecycle", "running")).strip().lower() or "running"
@@ -3204,8 +3264,22 @@ def status():
     }
     activity_bundle = _activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, min(ACTIVITY_FEED_MAX_EVENTS, 220))
     activity_summary = _activity_summary_from_bundle(activity_bundle)
+    system_summary = activity_bundle.get("system_summary", {}) if isinstance(activity_bundle, dict) else {}
+    if not isinstance(system_summary, dict):
+        system_summary = {}
     dynamic_workers = _dynamic_workers_snapshot()
     planner_subagents = _planner_subagents_snapshot()
+    planner_dispatch = _planner_dispatch_snapshot(
+        runtime_state=runtime_state,
+        queue_snapshot={
+            "ready_dev_count": ready_dev_display_count,
+            "ready_planner_count": queue_ready_planner + queue_ready_legacy,
+        },
+        workboard_snapshot={"in_progress": workboard_in_progress},
+        activity_summary=activity_summary,
+        planner_subagents=planner_subagents,
+        system_summary=system_summary,
+    )
     delivery_integrity = _delivery_integrity_snapshot()
     product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
@@ -3255,6 +3329,7 @@ def status():
             "queue_workboard_integrity": queue_workboard_integrity,
             "dynamic_workers": dynamic_workers,
             "planner_subagents": planner_subagents,
+            "planner_dispatch": planner_dispatch,
             "delivery_integrity": delivery_integrity,
             "product_value_metrics": product_value_metrics,
             "po_scrum_master": po_scrum_master,
@@ -4437,7 +4512,7 @@ async function load(){
     D=s.data;
     D.__status_unavailable=false;
   }else if(!D){
-    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,browser_proof_required_count:0,browser_proof_present_count:0,browser_proof_coverage:1,browser_proof_missing_task_ids:[],suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
+    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_state:{lifecycle:'unknown',execution_mode:'unknown',reason:'',operator_mode:'',updated_at:'',state_root:'',docs_root:'',legacy_docs_root:'',state_file:''},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},planner_subagents:{enabled:false,cron_planner_only:false,active_count:0,active:[],recent:[],recent_total:0,recent_success_count:0,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_success_rate:1,recent_by_role:{},status:'unknown',registry_path:''},planner_dispatch:{status:'unknown',lifecycle:'unknown',execution_mode:'unknown',active_subagents:0,active:[],recent:[],recent_total:0,recent_success_rate:1,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_by_role:{},ready_dev_count:0,ready_planner_count:0,in_progress_count:0,tasks_progressed_last_1h:0,current_bottleneck:'none',recommended_next_action:'monitor',needs_dispatch:false,stalled_ready_dev:false,registry_path:''},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,browser_proof_required_count:0,browser_proof_present_count:0,browser_proof_coverage:1,browser_proof_missing_task_ids:[],suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
   }else{
     D.__status_unavailable=true;
   }
@@ -4812,6 +4887,103 @@ function dependencyMapHtml(){
     }</div>
   </div>`;
 }
+function plannerDispatchStatusClass(status){
+  const s=String(status||'unknown').toLowerCase();
+  if(['ok','active','running'].includes(s))return'ok';
+  if(['paused','dispatch_needed','degraded'].includes(s))return'warn';
+  return'err';
+}
+function plannerDispatchRowsHtml(items, mode){
+  const rows=Array.isArray(items)?items:[];
+  if(!rows.length){
+    return `<div class="log-empty">${mode==='active'?'Aucun subagent actif':'Aucune exécution récente'}</div>`;
+  }
+  return `<div class="iter-issues">${
+    rows.slice(0,8).map(item=>{
+      const status=String(item.status||'unknown');
+      const sev=mode==='active'?'warn':(String(status).toLowerCase().match(/completed|merged|done|pass|ok|success/)?'info':'warn');
+      const role=String(item.target_role||item.parent_role||'unknown');
+      const task=String(item.owner_task_id||'task: none');
+      const backend=String(item.backend||item.backend_ref||'');
+      const updated=String(item.last_update_at||item.created_at||'');
+      const summary=String(item.summary||item.artifact||'');
+      return `<div class="issue-row ${sev}">
+        <div class="issue-head"><span class="issue-role">${esc(role)} · ${esc(status)}</span><span class="issue-sev ${sev}">${esc(updated.slice(11,19)||'--:--:--')}</span></div>
+        <div class="issue-meta">${esc(task)}${backend?` · ${esc(backend)}`:''}</div>
+        ${summary?`<div class="issue-text">${esc(summary).slice(0,180)}</div>`:''}
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function plannerDispatchRoleHtml(byRole){
+  const entries=Object.entries(byRole||{});
+  if(!entries.length){
+    return '<div class="log-empty">Aucune métrique capability récente</div>';
+  }
+  return `<div class="iter-issues">${
+    entries.sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([role,stats])=>{
+      const total=Number(stats&&stats.total||0);
+      const success=Number(stats&&stats.success||0);
+      const failed=Number(stats&&stats.failed||0);
+      const blocked=Number(stats&&stats.blocked||0);
+      const fallback=Number(stats&&stats.fallback_like||0);
+      const sev=(failed>0||fallback>0)?'warn':(success>0?'info':'warn');
+      return `<div class="issue-row ${sev}">
+        <div class="issue-head"><span class="issue-role">${esc(role)}</span><span class="issue-sev ${sev}">total=${total}</span></div>
+        <div class="issue-meta">success=${success} · failed=${failed} · blocked=${blocked} · fallback=${fallback}</div>
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function plannerDispatchHtml(){
+  const pd=(D&&D.planner_dispatch)||{};
+  const ps=(D&&D.planner_subagents)||{};
+  const rt=(D&&D.runtime_state)||{};
+  const activitySummary=(D&&D.activity_summary)||{};
+  const systemSummary=(A&&A.system_summary)||{};
+  const status=String(pd.status||ps.status||'unknown');
+  const lifecycle=String(pd.lifecycle||rt.lifecycle||'unknown');
+  const cls=plannerDispatchStatusClass(status);
+  const readyDev=Number(pd.ready_dev_count ?? ((D&&D.queue&&D.queue.ready_dev_count)||0));
+  const readyPlanner=Number(pd.ready_planner_count ?? ((D&&D.queue&&D.queue.ready_planner_count)||0));
+  const inProgress=Number(pd.in_progress_count ?? ((D&&D.workboard&&D.workboard.in_progress)||0));
+  const activeCount=Number(pd.active_subagents ?? (ps.active_count||0));
+  const progressed1h=Number(pd.tasks_progressed_last_1h ?? (activitySummary.tasks_progressed_last_1h||0));
+  const recentRate=Number(pd.recent_success_rate ?? (ps.recent_success_rate||0));
+  const recentFailed=Number(pd.recent_failed_count ?? (ps.recent_failed_count||0));
+  const recentBlocked=Number(pd.recent_blocked_count ?? (ps.recent_blocked_count||0));
+  const recentFallback=Number(pd.recent_fallback_like_count ?? (ps.recent_fallback_like_count||0));
+  const nextAction=String(pd.recommended_next_action || systemSummary.recommended_next_action || 'monitor');
+  const bottleneck=String(pd.current_bottleneck || activitySummary.current_bottleneck || 'none');
+  const dispatchFlags=[];
+  if(pd.needs_dispatch)dispatchFlags.push('dispatch required');
+  if(pd.stalled_ready_dev)dispatchFlags.push('READY_DEV stalled');
+  const flagsHtml=dispatchFlags.length
+    ? `<div class="queue-sync warn" style="margin-top:8px"><strong>Dispatch pressure</strong> · ${esc(dispatchFlags.join(' · '))}</div>`
+    : '';
+  const registryPath=String(pd.registry_path || ps.registry_path || '');
+  const activeRows=plannerDispatchRowsHtml(pd.active&&pd.active.length?pd.active:ps.active,'active');
+  const recentRows=plannerDispatchRowsHtml(pd.recent&&pd.recent.length?pd.recent:ps.recent,'recent');
+  const byRoleRows=plannerDispatchRoleHtml(pd.recent_by_role&&Object.keys(pd.recent_by_role).length?pd.recent_by_role:ps.recent_by_role);
+  return `
+    <div class="queue-sync ${cls}"><strong>Planner dispatch</strong> · status=${esc(status)} · lifecycle=${esc(lifecycle)} · next=${esc(nextAction)}</div>
+    <div class="queue-sync ${activeCount>0?'ok':'warn'}" style="margin-top:8px"><strong>Queue pressure</strong> · READY_DEV=${readyDev} · READY_PLANNER=${readyPlanner} · IN_PROGRESS=${inProgress} · active_subagents=${activeCount} · progressed_1h=${progressed1h}</div>
+    <div class="queue-sync ${recentFailed===0&&recentFallback===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · success_rate=${esc((recentRate*100).toFixed(0))}% · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · bottleneck=${esc(bottleneck)}</div>
+    ${flagsHtml}
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+      <div class="log-box"><div class="log-head">Active subagents</div><div class="log-scroll">${activeRows}</div></div>
+      <div class="log-box"><div class="log-head">Recent dispatches</div><div class="log-scroll">${recentRows}</div></div>
+      <div class="log-box"><div class="log-head">Capability breakdown</div><div class="log-scroll">${byRoleRows}</div></div>
+    </div>
+    <div class="link-row">
+      <a class="ext-link" href="/api/status" target="_blank">⬡ Status JSON</a>
+      <a class="ext-link" href="/api/doctor?refresh=1" target="_blank">⬡ Doctor refresh</a>
+      <a class="ext-link" href="/api/planner/log-bundle" target="_blank">⬡ Planner bundle</a>
+      <a class="ext-link" href="/api/planner/timeline?n=120" target="_blank">⬡ Planner timeline</a>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>registry:</strong> ${esc(shortPath(registryPath||'—'))}</div>
+  `;
+}
 function errorFeedHtml(){
   const items=(F&&F.items)||[];
   if(!items.length)return '<div class="log-empty">Aucune alerte récente.</div>';
@@ -5088,6 +5260,7 @@ function render(){
     </div>
 	    <div class="col-right">
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Planner Dispatch</span><span style="font-size:10px;color:var(--ghost)">mode=${esc((D&&D.execution_mode)||'unknown')} · subagents=${((D&&D.planner_dispatch&&D.planner_dispatch.active_subagents) ?? (D&&D.planner_subagents&&D.planner_subagents.active_count) ?? 0)}</span></div><div class="panel-body">${plannerDispatchHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
 	      ${poPanel}

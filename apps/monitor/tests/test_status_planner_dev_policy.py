@@ -107,7 +107,10 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertIn("delivery_integrity", payload)
         self.assertIn("product_value_metrics", payload)
         self.assertIn("planner_subagents", payload)
+        self.assertIn("planner_dispatch", payload)
         self.assertIn("recent_success_rate", payload.get("planner_subagents", {}))
+        self.assertEqual(payload.get("planner_dispatch", {}).get("ready_dev_count"), 0)
+        self.assertEqual(payload.get("planner_dispatch", {}).get("status"), "dispatch_needed")
         self.assertEqual(payload.get("planner_autonomy_last_action"), "create_and_claim")
         self.assertEqual(payload.get("planner_autonomy_last_outcome"), "resolved")
         self.assertEqual(payload.get("dev_wait_reason"), "no_dev_ready_task")
@@ -258,6 +261,9 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
             module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
         ), mock.patch.object(module, "rate_limits", lambda: []):
             payload = module.status()
+
+        self.assertEqual(payload.get("planner_dispatch", {}).get("status"), "dispatch_needed")
+        self.assertEqual(payload.get("planner_dispatch", {}).get("lifecycle"), "running")
 
         self.assertEqual(payload.get("execution_mode"), "planner_experimental")
         self.assertEqual(payload.get("roles"), ["planner"])
