@@ -32,6 +32,11 @@ class OpenClawControlPlaneTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.config_path = self.root / ".openclaw" / "openclaw.json"
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        skills_root = self.root / "skills"
+        for skill_name in MODULE.CANONICAL_OPENCLAW_SKILLS:
+            skill_dir = skills_root / skill_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text(f"# {skill_name}\n", encoding="utf-8")
         payload = {
             "agents": {
                 "defaults": {
@@ -55,21 +60,23 @@ class OpenClawControlPlaneTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_sync_control_plane_prunes_legacy_agents_and_aligns_defaults(self) -> None:
-        result = sync_control_plane(
-            config_path=self.config_path,
-            workspace="/home/venom/analyse-financiere",
-            primary_model="codex-cli/gpt-5.4",
-            apply=True,
-            prune_dirs=True,
-            reset_kept_dirs=False,
-        )
+        workspace = str(self.root)
+        with patch.object(MODULE, "CANONICAL_MAIN_WORKSPACE", str(self.root)):
+            result = sync_control_plane(
+                config_path=self.config_path,
+                workspace=workspace,
+                primary_model="codex-cli/gpt-5.4",
+                apply=True,
+                prune_dirs=True,
+                reset_kept_dirs=False,
+            )
         self.assertTrue(result["ok"])
         self.assertIn("admin-agents", result["removed_ids"])
         self.assertIn("dev", result["removed_ids"])
         reloaded = json.loads(self.config_path.read_text(encoding="utf-8"))
         defaults = reloaded["agents"]["defaults"]
         self.assertEqual(defaults["model"]["primary"], "codex-cli/gpt-5.4")
-        self.assertIn("/home/venom/analyse-financiere/logs-codex-runs/openclaw-control-plane/default", defaults["workspace"])
+        self.assertIn("/logs-codex-runs/openclaw-control-plane/default", defaults["workspace"])
         self.assertEqual(defaults["cliBackends"]["codex-cli"]["command"], "codex")
         self.assertEqual(
             defaults["cliBackends"]["codex-cli"]["resumeArgs"],
@@ -80,13 +87,19 @@ class OpenClawControlPlaneTests(unittest.TestCase):
         self.assertTrue(reloaded["agents"]["list"][1]["workspace"].endswith("/openclaw-control-plane/planner"))
         self.assertFalse((self.root / ".openclaw" / "agents" / "admin-agents").exists())
         self.assertFalse((self.root / ".openclaw" / "agents" / "dev").exists())
+        for skill_name in MODULE.CANONICAL_OPENCLAW_SKILLS:
+            planner_skill = self.root / "logs-codex-runs" / "openclaw-control-plane" / "planner" / "skills" / skill_name
+            self.assertTrue(planner_skill.is_symlink(), planner_skill)
+        for skill_name in MODULE.CANONICAL_OPENCLAW_SKILLS:
+            main_skill = self.root / "skills" / skill_name
+            self.assertTrue(main_skill.exists(), main_skill)
 
     def test_sync_control_plane_can_reset_kept_agent_dirs(self) -> None:
         for agent_id in ("planner", "adminapp-codex", "clawsentinel"):
             (self.root / ".openclaw" / "agents" / agent_id / "agent").mkdir(parents=True, exist_ok=True)
         result = sync_control_plane(
             config_path=self.config_path,
-            workspace="/home/venom/analyse-financiere",
+            workspace=str(self.root),
             primary_model="codex-cli/gpt-5.4",
             apply=True,
             prune_dirs=False,

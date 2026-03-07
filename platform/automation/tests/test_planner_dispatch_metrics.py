@@ -65,7 +65,51 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["recent_success_count"], 1)
             self.assertEqual(metrics["recent_failed_count"], 1)
             self.assertEqual(metrics["recent_fallback_like_count"], 1)
+            self.assertEqual(metrics["latest_status"], "failed")
+            self.assertTrue(metrics["latest_fallback_like"])
             self.assertEqual(metrics["status"], "degraded")
+
+    def test_latest_clean_success_clears_dispatch_degraded_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            results = orch / "planner-subagents-results"
+            results.mkdir(parents=True, exist_ok=True)
+            registry = {
+                "subagents": [
+                    {
+                        "subagent_id": "planner_dev_fail",
+                        "target_role": "dev",
+                        "parent_role": "planner",
+                        "owner_task_id": "BATCH-1-DEV-01",
+                        "status": "merged",
+                        "summary": "fallback merged",
+                        "artifact": "none",
+                        "last_update_at": "2026-03-07T06:00:00Z",
+                    },
+                    {
+                        "subagent_id": "planner_dev_ok",
+                        "target_role": "dev",
+                        "parent_role": "planner",
+                        "owner_task_id": "BATCH-2-DEV-01",
+                        "status": "completed",
+                        "summary": "clean success",
+                        "artifact": "artifact.txt",
+                        "last_update_at": "2026-03-07T06:05:00Z",
+                    },
+                ]
+            }
+            (orch / "planner-subagents-registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            (results / "planner_dev_fail.raw.txt").write_text("Gateway agent failed; falling back to embedded", encoding="utf-8")
+            (results / "planner_dev_ok.raw.txt").write_text("clean success", encoding="utf-8")
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertEqual(metrics["recent_fallback_like_count"], 1)
+            self.assertEqual(metrics["latest_status"], "completed")
+            self.assertFalse(metrics["latest_fallback_like"])
+            self.assertEqual(metrics["latest_owner_task_id"], "BATCH-2-DEV-01")
+            self.assertEqual(metrics["status"], "ok")
 
 
 if __name__ == "__main__":

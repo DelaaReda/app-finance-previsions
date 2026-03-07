@@ -58,6 +58,25 @@ is_open_by_fd() {
   return 1
 }
 
+list_holder_commands() {
+  local file="$1"
+  command -v lsof >/dev/null 2>&1 || return 0
+  lsof "$file" 2>/dev/null | awk 'NR>1 {print $1 ":" $2}' | sort -u
+}
+
+role_runtime_process_alive() {
+  local role="$1"
+  pgrep -af "fc_agent_tick\\.sh[[:space:]]+${role}($|[[:space:]])|cron_tmux_role_runner\\.sh[[:space:]]+${role}($|[[:space:]])" >/dev/null 2>&1
+}
+
+tmux_session_for_role() {
+  local role="$1"
+  case "$role" in
+    clawsentinel) printf '%s\n' "clawsentinel" ;;
+    *) printf '%s\n' "codex_${role}_cron" ;;
+  esac
+}
+
 log_event() {
   local kind="$1"
   local layer="$2"
@@ -91,7 +110,7 @@ process_lock_file() {
   local layer="$1"
   local lock_path="$2"
   local meta_path="${lock_path}.meta"
-  local role owner_pid owner_host start_epoch age_s
+  local role owner_pid owner_host start_epoch age_s holder_cmds session
   local reason=""
 
   [[ -f "$lock_path" ]] || return 0
@@ -120,8 +139,19 @@ process_lock_file() {
   fi
 
   if is_open_by_fd "$lock_path"; then
+    holder_cmds="$(list_holder_commands "$lock_path" | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-220)"
+    if [[ "$layer" == "tick" && ! -f "$meta_path" && "$holder_cmds" == *"tmux:"* ]] && ! role_runtime_process_alive "$role"; then
+      session="$(tmux_session_for_role "$role")"
+      if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$session" 2>/dev/null; then
+        tmux kill-session -t "$session" >/dev/null 2>&1 || true
+      fi
+      rm -f "$lock_path" "$meta_path" 2>/dev/null || true
+      cleaned=$((cleaned + 1))
+      log_event "CLEANED" "$layer" "$lock_path" "$role" "$age_s" "$owner_pid" "$owner_host" "tmux_inherited_fd_cleanup"
+      return 0
+    fi
     skipped_active=$((skipped_active + 1))
-    log_event "SKIP_ACTIVE" "$layer" "$lock_path" "$role" "$age_s" "$owner_pid" "$owner_host" "open_fd"
+    log_event "SKIP_ACTIVE" "$layer" "$lock_path" "$role" "$age_s" "$owner_pid" "$owner_host" "open_fd${holder_cmds:+:$holder_cmds}"
     return 0
   fi
 

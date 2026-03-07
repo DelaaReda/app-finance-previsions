@@ -534,6 +534,10 @@ def _planner_dispatch_snapshot(
     recent_failed_count = int(planner_subagents.get("recent_failed_count", 0) or 0)
     recent_blocked_count = int(planner_subagents.get("recent_blocked_count", 0) or 0)
     recent_fallback_like_count = int(planner_subagents.get("recent_fallback_like_count", 0) or 0)
+    latest_status = str(planner_subagents.get("latest_status", "") or "").strip().lower()
+    latest_fallback_like = bool(planner_subagents.get("latest_fallback_like"))
+    latest_owner_task_id = str(planner_subagents.get("latest_owner_task_id", "") or "").strip()
+    latest_update_at = str(planner_subagents.get("latest_update_at", "") or "").strip()
     tasks_progressed_last_1h = int(activity_summary.get("tasks_progressed_last_1h", 0) or 0)
     current_bottleneck = str(activity_summary.get("current_bottleneck", "none") or "none").strip() or "none"
     recommended_next_action = str(system_summary.get("recommended_next_action", "monitor") or "monitor").strip() or "monitor"
@@ -546,7 +550,7 @@ def _planner_dispatch_snapshot(
         status = lifecycle
     elif active_count > 0:
         status = "active"
-    elif recent_failed_count > 0 or recent_fallback_like_count > 0:
+    elif (recent_failed_count > 0 and latest_status not in {"", "completed", "merged", "done", "pass", "ok", "success"}) or latest_fallback_like:
         status = "degraded"
     elif needs_dispatch:
         status = "dispatch_needed"
@@ -564,6 +568,10 @@ def _planner_dispatch_snapshot(
         "recent_blocked_count": recent_blocked_count,
         "recent_fallback_like_count": recent_fallback_like_count,
         "recent_by_role": planner_subagents.get("recent_by_role", {}) if isinstance(planner_subagents.get("recent_by_role", {}), dict) else {},
+        "latest_status": latest_status,
+        "latest_fallback_like": latest_fallback_like,
+        "latest_owner_task_id": latest_owner_task_id,
+        "latest_update_at": latest_update_at,
         "ready_dev_count": ready_dev_count,
         "ready_planner_count": ready_planner_count,
         "in_progress_count": in_progress_count,
@@ -2902,6 +2910,20 @@ def status():
             planner_status_up = str(status_value or "").strip().upper()
             planner_blocker_up = str(blocker_value or "").strip().upper()
             planner_hard_incident = planner_blocker_up in planner_hard_blockers
+            planner_dispatch_active = (
+                str(runtime_state.get("execution_mode", "") or "").strip() == "planner_experimental"
+                and workboard_in_progress > 0
+                and planner_blocker_up == "PLANNER_NO_READY_TASK_AFTER_SYNC"
+            )
+            if planner_dispatch_active and not planner_hard_incident:
+                status_value = "IN_PROGRESS"
+                verdict = "GO_WITH_CAUTION"
+                if str(delta_value or "").strip().upper() in {"NO_DELTA", "NO_DATA", "NONE", "SYNC_PRIORITY_THEN_CLAIM_FAILED"}:
+                    delta_value = "PLANNER_DISPATCH_ACTIVE"
+                blocker_value = "NONE"
+                soft_blocker = True
+                planner_status_up = str(status_value or "").strip().upper()
+                planner_blocker_up = str(blocker_value or "").strip().upper()
             if planner_policy_enforced and planner_status_up in {"WAIT", "MUTED"} and not planner_hard_incident:
                 status_value = "IN_PROGRESS"
                 verdict = "GO_WITH_CAUTION"

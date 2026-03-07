@@ -41,6 +41,7 @@ class DevActivationReadinessTests(unittest.TestCase):
                 "needs_dispatch": True,
                 "stalled_ready_dev": True,
                 "recent_fallback_like_count": 1,
+                "latest_fallback_like": True,
                 "recent_failed_count": 0,
             },
         }
@@ -83,6 +84,45 @@ class DevActivationReadinessTests(unittest.TestCase):
                 "needs_dispatch": False,
                 "stalled_ready_dev": False,
                 "recent_fallback_like_count": 0,
+                "latest_fallback_like": False,
+                "recent_failed_count": 0,
+            },
+        }
+        doctor_payload = {"status": "ok"}
+
+        with mock.patch.object(
+            MODULE,
+            "_probe_json",
+            side_effect=[(status_payload, ""), (doctor_payload, "")],
+        ), mock.patch.object(MODULE, "_validate_bridge") as validate_bridge:
+            payload = MODULE.build_readiness(self.root)
+
+        self.assertTrue(payload["ready"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["blockers"], [])
+        self.assertEqual(payload["checks"]["openclaw_bridge"]["detail"]["source"], "live_planner_dispatch")
+        validate_bridge.assert_not_called()
+
+    def test_build_readiness_ignores_old_fallback_when_latest_dispatch_is_clean(self) -> None:
+        status_payload = {
+            "runtime_state": {"lifecycle": "running"},
+            "execution_mode": "planner_experimental",
+            "delivery_integrity": {"status": "ok"},
+            "product_value_metrics": {
+                "priority_guard": {
+                    "status": "ok",
+                    "blocked_reasons": [],
+                }
+            },
+            "planner_dispatch": {
+                "status": "ok",
+                "ready_dev_count": 0,
+                "active_subagents": 0,
+                "needs_dispatch": False,
+                "stalled_ready_dev": False,
+                "recent_fallback_like_count": 1,
+                "latest_fallback_like": False,
+                "latest_status": "completed",
                 "recent_failed_count": 0,
             },
         }
@@ -100,8 +140,45 @@ class DevActivationReadinessTests(unittest.TestCase):
             payload = MODULE.build_readiness(self.root)
 
         self.assertTrue(payload["ready"])
-        self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["blockers"], [])
+        self.assertNotIn("recent_dispatch_fallback_like", payload["blockers"])
+
+    def test_build_readiness_validates_bridge_when_no_live_dispatch_exists(self) -> None:
+        status_payload = {
+            "runtime_state": {"lifecycle": "running"},
+            "execution_mode": "planner_experimental",
+            "delivery_integrity": {"status": "ok"},
+            "product_value_metrics": {
+                "priority_guard": {
+                    "status": "ok",
+                    "blocked_reasons": [],
+                }
+            },
+            "planner_dispatch": {
+                "status": "ok",
+                "ready_dev_count": 0,
+                "active_subagents": 0,
+                "needs_dispatch": False,
+                "stalled_ready_dev": False,
+                "recent_fallback_like_count": 0,
+                "latest_fallback_like": False,
+                "recent_failed_count": 0,
+            },
+        }
+        doctor_payload = {"status": "ok"}
+
+        with mock.patch.object(
+            MODULE,
+            "_probe_json",
+            side_effect=[(status_payload, ""), (doctor_payload, "")],
+        ), mock.patch.object(
+            MODULE,
+            "_validate_bridge",
+            return_value=({"ok": True, "bridge_validation": {"ok": True}}, ""),
+        ) as validate_bridge:
+            payload = MODULE.build_readiness(self.root)
+
+        self.assertTrue(payload["ready"])
+        validate_bridge.assert_called_once()
 
 
 if __name__ == "__main__":

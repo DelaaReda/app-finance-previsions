@@ -38,6 +38,11 @@ class WorkerManagerTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         cfg_dir = self.root / "platform" / "config" / "runner"
         cfg_dir.mkdir(parents=True, exist_ok=True)
+        skills_root = self.root / "skills"
+        for skill_name in ("browser-smoke", "repo-scan", "runtime-triage", "delivery-proof-check"):
+            skill_dir = skills_root / skill_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text(f"# {skill_name}\n", encoding="utf-8")
         (self.root / "docs" / "operations" / "orchestrator").mkdir(parents=True, exist_ok=True)
         (cfg_dir / "runner.v1.yaml").write_text(
             json.dumps(
@@ -147,6 +152,9 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort = "high"', body)
         self.assertIn("[features]", body)
         self.assertNotIn("[agents]", body)
+        for skill_name in ("browser-smoke", "repo-scan", "runtime-triage", "delivery-proof-check"):
+            target = workspace / "skills" / skill_name
+            self.assertTrue(target.is_symlink(), target)
 
 
 if __name__ == "__main__":

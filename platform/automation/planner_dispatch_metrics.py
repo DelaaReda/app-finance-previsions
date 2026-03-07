@@ -114,8 +114,28 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
 
     recent_total = len(recent_rows)
     success_rate = round(success_count / recent_total, 3) if recent_total else 1.0
+    latest: dict[str, Any] = {}
+    latest_status = ""
+    latest_fallback_like = False
+    latest_update_at = ""
+    latest_owner_task_id = ""
+    if recent_rows:
+        latest = dict(recent_rows[-1])
+        latest_status = str(latest.get("status", "")).strip().lower()
+        latest_fallback_like = _is_fallback_like(root, str(latest.get("subagent_id", "")))
+        latest_update_at = str(
+            latest.get("last_update_at")
+            or latest.get("merged_at")
+            or latest.get("finished_at")
+            or latest.get("created_at")
+            or ""
+        ).strip()
+        latest_owner_task_id = str(latest.get("owner_task_id", "")).strip()
     status = "ok"
-    if recent_total and (failed_count > 0 or fallback_like_count > 0):
+    if recent_total and (
+        latest_status not in SUCCESS_STATUSES
+        or latest_fallback_like
+    ):
         status = "degraded"
     return {
         "registry_path": str(registry_path),
@@ -129,5 +149,9 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         "recent_fallback_like_count": fallback_like_count,
         "recent_success_rate": success_rate,
         "recent_by_role": by_role,
+        "latest_status": latest_status,
+        "latest_fallback_like": latest_fallback_like,
+        "latest_owner_task_id": latest_owner_task_id,
+        "latest_update_at": latest_update_at,
         "status": status,
     }

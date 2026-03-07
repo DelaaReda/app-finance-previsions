@@ -16,6 +16,12 @@ CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
 CANONICAL_MAIN_MODEL = "codex-cli-main/gpt-5.4"
 CANONICAL_DEFAULT_THINKING = "xhigh"
 CANONICAL_OWNER_E164 = "+14389799898"
+CANONICAL_OPENCLAW_SKILLS = (
+    "browser-smoke",
+    "repo-scan",
+    "runtime-triage",
+    "delivery-proof-check",
+)
 CANONICAL_CODEX_CLI_BACKEND = {
     "command": "codex",
     "args": [
@@ -145,6 +151,38 @@ def _write_text_if_changed(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def sync_canonical_skills(workspace: str | Path, repo_root: str | Path) -> list[str]:
+    workspace_path = Path(workspace).expanduser().resolve()
+    repo_root_path = Path(repo_root).expanduser().resolve()
+    repo_skills_root = repo_root_path / "skills"
+    synced: list[str] = []
+    if not repo_skills_root.exists():
+        return synced
+    target_root = workspace_path / "skills"
+    target_root.mkdir(parents=True, exist_ok=True)
+    for skill_name in CANONICAL_OPENCLAW_SKILLS:
+        source = repo_skills_root / skill_name
+        if not source.exists():
+            continue
+        target = target_root / skill_name
+        if target.is_symlink():
+            try:
+                if target.resolve() == source.resolve():
+                    synced.append(skill_name)
+                    continue
+            except Exception:
+                pass
+            target.unlink(missing_ok=True)
+        elif target.exists():
+            if target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                target.unlink(missing_ok=True)
+        target.symlink_to(source, target_is_directory=True)
+        synced.append(skill_name)
+    return synced
+
+
 def _control_workspace(repo_root: str, agent_id: str, model: str, thinking: str) -> str:
     base = Path(repo_root) / "logs-codex-runs" / "openclaw-control-plane" / agent_id
     config_path = base / ".codex" / "config.toml"
@@ -152,18 +190,21 @@ def _control_workspace(repo_root: str, agent_id: str, model: str, thinking: str)
         config_path,
         OPENCLAW_MINIMAL_CODEX_CONFIG.format(model=model, thinking=thinking),
     )
+    sync_canonical_skills(base, repo_root)
     return str(base)
 
 
 def _canonical_agent_entry(agent_id: str, config_path: Path, repo_root: str, primary_model: str) -> dict[str, Any]:
     spec = CANONICAL_PERSISTENT_AGENTS[agent_id]
     if agent_id == "main":
+        main_workspace = spec.get("workspace", CANONICAL_MAIN_WORKSPACE)
+        sync_canonical_skills(main_workspace, repo_root)
         return {
             "id": "main",
             "default": True,
             "name": spec.get("name", "Main"),
             "model": spec.get("model", primary_model),
-            "workspace": spec.get("workspace", CANONICAL_MAIN_WORKSPACE),
+            "workspace": main_workspace,
             "tools": spec.get("tools", {}),
             "sandbox": spec.get("sandbox", {}),
             "memorySearch": spec.get("memorySearch", {}),

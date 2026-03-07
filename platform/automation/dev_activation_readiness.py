@@ -22,6 +22,7 @@ from orchestrator_paths import resolve_orchestrator_write_path
 
 
 DEFAULT_MONITOR_BASE = "http://127.0.0.1:7779"
+PLANNER_DISPATCH_SUCCESS_STATUSES = {"completed", "merged", "done", "pass", "ok", "success"}
 
 
 def _iso_now() -> str:
@@ -75,19 +76,28 @@ def _validate_bridge(root: Path, *, timeout_s: int) -> tuple[dict[str, Any], str
 def _planner_dispatch_check(planner_dispatch: dict[str, Any]) -> tuple[str, list[str]]:
     reasons: list[str] = []
     status = str(planner_dispatch.get("status", "unknown") or "unknown").strip().lower()
+    latest_status = str(planner_dispatch.get("latest_status", "") or "").strip().lower()
+    latest_fallback_like = bool(planner_dispatch.get("latest_fallback_like"))
     if status in {"degraded", "error"}:
         reasons.append(f"planner_dispatch_status={status}")
     if bool(planner_dispatch.get("needs_dispatch")):
         reasons.append("planner_dispatch_needed")
     if bool(planner_dispatch.get("stalled_ready_dev")):
         reasons.append("ready_dev_stalled")
-    if int(planner_dispatch.get("recent_failed_count", 0) or 0) > 0:
+    if int(planner_dispatch.get("recent_failed_count", 0) or 0) > 0 and latest_status not in {"", *PLANNER_DISPATCH_SUCCESS_STATUSES}:
         reasons.append("recent_dispatch_failed")
-    if int(planner_dispatch.get("recent_fallback_like_count", 0) or 0) > 0:
+    if latest_fallback_like:
         reasons.append("recent_dispatch_fallback_like")
     if reasons:
         return "blocked", reasons
     return "ok", []
+
+
+def _bridge_is_live_via_dispatch(planner_dispatch: dict[str, Any]) -> bool:
+    status = str(planner_dispatch.get("status", "unknown") or "unknown").strip().lower()
+    active_subagents = int(planner_dispatch.get("active_subagents", 0) or 0)
+    latest_fallback_like = bool(planner_dispatch.get("latest_fallback_like"))
+    return active_subagents > 0 and status in {"active", "ok"} and not latest_fallback_like
 
 
 def _priority_guard_check(priority_guard: dict[str, Any]) -> tuple[str, list[str]]:
@@ -202,7 +212,16 @@ def build_readiness(
     if checks["doctor"]["status"] != "ok":
         blockers.append("doctor_not_ok")
 
-    if validate_bridge:
+    if validate_bridge and _bridge_is_live_via_dispatch(planner_dispatch):
+        checks["openclaw_bridge"] = {
+            "status": "ok",
+            "detail": {
+                "source": "live_planner_dispatch",
+                "active_subagents": int(planner_dispatch.get("active_subagents", 0) or 0),
+                "planner_dispatch_status": str(planner_dispatch.get("status", "unknown") or "unknown"),
+            },
+        }
+    elif validate_bridge:
         bridge_payload, bridge_error = _validate_bridge(root, timeout_s=bridge_timeout_s)
         bridge_ok = bool(bridge_payload.get("ok")) and bool((bridge_payload.get("bridge_validation") or {}).get("ok"))
         checks["openclaw_bridge"] = {

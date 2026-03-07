@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from openclaw_control_plane import sync_canonical_skills
 from worker_contract import (
     ALLOWED_PARENT_ROLES,
     WorkerRecord,
@@ -262,6 +263,7 @@ def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, t
         thinking=str(thinking or "medium").strip(),
     )
     _write_text_if_changed(config_path, config_body)
+    sync_canonical_skills(workspace, root)
     return workspace
 
 

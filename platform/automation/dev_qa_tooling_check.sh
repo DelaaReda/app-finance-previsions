@@ -68,10 +68,10 @@ if [[ -n "$OPENCLAW_BIN" ]]; then
     check_fail "openclaw_config:browser.cdpUrl=${cdp_url:-UNSET}"
   fi
 
-  if SKILLS_OUTPUT="$(openclaw skills check 2>/dev/null)"; then
+  if SKILLS_OUTPUT="$(openclaw skills check --json 2>/dev/null)"; then
     check_ok "openclaw_skills_check=ok"
-    for skill in api-tester test-runner playwright-mcp finance-regression-gate debug-pro tmux codex-orchestration; do
-      if printf '%s\n' "$SKILLS_OUTPUT" | rg -q "(^|[[:space:]])${skill}([[:space:]]|$)"; then
+    for skill in api-tester test-runner finance-regression-gate debug-pro tmux codex-orchestration browser-smoke repo-scan runtime-triage delivery-proof-check; do
+      if printf '%s\n' "$SKILLS_OUTPUT" | python3 -c 'import json,sys; obj=json.load(sys.stdin); ready={entry.get("name") for entry in obj.get("ready", []) if isinstance(entry, dict)}; missing={entry.get("name") for entry in obj.get("missing", []) if isinstance(entry, dict)}; skill=sys.argv[1]; raise SystemExit(0 if skill in ready and skill not in missing else 1)' "$skill"; then
         check_ok "skill_ready:${skill}"
       else
         check_fail "skill_missing_or_unavailable:${skill}"

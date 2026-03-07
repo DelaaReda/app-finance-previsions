@@ -308,6 +308,68 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("runtime_state", {}).get("lifecycle"), "paused")
         self.assertEqual(payload.get("agents", {}).get("planner", {}).get("status"), "PAUSED")
 
+    def test_status_softens_stale_planner_claim_failure_when_dispatch_is_active(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        runtime_state_dir = self.root / "logs-codex-runs" / "orchestrator-state"
+        runtime_state_dir.mkdir(parents=True, exist_ok=True)
+        (runtime_state_dir / "runtime-state.json").write_text(
+            json.dumps(
+                {
+                    "lifecycle": "running",
+                    "execution_mode": "planner_experimental",
+                    "operator_mode": "planner-experimental",
+                    "source": "unit_test",
+                }
+            ),
+            encoding="utf-8",
+        )
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "BATCH-28-DEV-01",
+                            "stream_id": "BATCH-28",
+                            "state": "IN_PROGRESS",
+                            "assignee": "dev",
+                            "title": "Dispatch active",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "BLOCKED",
+                "VERDICT": "BLOCKED",
+                "DELTA": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
+                "BLOCKER_ID": "PLANNER_NO_READY_TASK_AFTER_SYNC",
+                "EVIDENCE": "task_update=blocked",
+            }
+        }
+        with mock.patch.object(module, "active_roles", lambda: ("planner",)), mock.patch.object(
+            module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(module, "tick_age", lambda role: 1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []), mock.patch.object(
+            module, "doctor_snapshot", lambda force_refresh=False: {"status": "ok", "checks": {}}
+        ):
+            payload = module.status()
+
+        planner = payload.get("agents", {}).get("planner", {})
+        self.assertEqual(planner.get("status"), "IN_PROGRESS")
+        self.assertEqual(planner.get("blocker"), "NONE")
+        self.assertEqual(planner.get("delta"), "PLANNER_DISPATCH_ACTIVE")
+
 
 if __name__ == "__main__":
     unittest.main()

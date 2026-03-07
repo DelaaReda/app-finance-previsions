@@ -219,6 +219,20 @@ meta_field() {
   sed -n "s/.*${key}=\\([^[:space:]]*\\).*/\\1/p" "$file" | head -n 1
 }
 
+mark_fd_cloexec() {
+  local fd="${1:-}"
+  [[ "$fd" =~ ^[0-9]+$ ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$fd" <<'PY' >/dev/null 2>&1 || return 0
+import fcntl
+import sys
+
+fd = int(sys.argv[1])
+flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+fcntl.fcntl(fd, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
+PY
+}
+
 release_tick_lock() {
   local rc="${1:-0}"
   local now_epoch hold_s
@@ -257,6 +271,7 @@ if command -v flock >/dev/null 2>&1; then
   fi
   LOCK_ACQUIRED=1
   LOCK_MODE="flock"
+  mark_fd_cloexec 9
 else
   LOCK_DIR_FALLBACK="${LOCK}.dirlock"
   if ! mkdir "$LOCK_DIR_FALLBACK" 2>/dev/null; then
