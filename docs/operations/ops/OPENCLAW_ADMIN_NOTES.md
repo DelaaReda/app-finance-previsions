@@ -26,6 +26,10 @@
   - `planner`
   - `adminapp-codex`
   - `clawsentinel`
+- Main WhatsApp agent policy:
+  - `main` must use `codex-cli/gpt-5.4`
+  - default OpenClaw thinking must remain `xhigh`
+  - do not add `thinkingDefault` under `agents.list[].main`; OpenClaw rejects that schema and the gateway will fail to load
 - Canonical capability workspaces:
   - `logs-codex-runs/openclaw-capabilities/planner_dev/`
   - `logs-codex-runs/openclaw-capabilities/planner_admin/`

@@ -12,6 +12,7 @@ from typing import Any
 
 CANONICAL_WORKSPACE = "/home/venom/analyse-financiere"
 CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
+CANONICAL_DEFAULT_THINKING = "xhigh"
 CANONICAL_CODEX_CLI_BACKEND = {
     "command": "codex",
     "args": [
@@ -47,7 +48,10 @@ js_repl = true
 prevent_idle_sleep = true
 """
 CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
-    "main": {},
+    "main": {
+        "name": "Main",
+        "model": CANONICAL_PRIMARY_MODEL,
+    },
     "planner": {
         "name": "Planner",
         "model": CANONICAL_PRIMARY_MODEL,
@@ -103,7 +107,12 @@ def _control_workspace(repo_root: str, agent_id: str, model: str, thinking: str)
 def _canonical_agent_entry(agent_id: str, config_path: Path, repo_root: str, primary_model: str) -> dict[str, Any]:
     spec = CANONICAL_PERSISTENT_AGENTS[agent_id]
     if agent_id == "main":
-        return {"id": "main"}
+        return {
+            "id": "main",
+            "default": True,
+            "name": spec.get("name", "Main"),
+            "model": spec.get("model", primary_model),
+        }
     workspace = _control_workspace(
         repo_root,
         agent_id,
@@ -129,6 +138,7 @@ def _sync_defaults(payload: dict[str, Any], workspace: str, primary_model: str) 
     defaults["workspace"] = _control_workspace(workspace, "default", primary_model, "high")
     defaults.setdefault("maxConcurrent", 2)
     defaults.setdefault("subagents", {}).setdefault("maxConcurrent", 3)
+    defaults["thinkingDefault"] = CANONICAL_DEFAULT_THINKING
     cli_backends = defaults.setdefault("cliBackends", {})
     cli_backends["codex-cli"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_BACKEND))
 
