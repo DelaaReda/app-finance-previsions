@@ -65,6 +65,22 @@ ORCHESTRATION_KEYWORDS = (
     "lock cleanup",
     "state truth",
 )
+BROWSER_PROOF_KEYWORDS = (
+    "apps/web/",
+    "apps/monitor/",
+    "frontend",
+    "ui",
+    "dashboard",
+    "browser",
+    "monitor",
+)
+BROWSER_PROOF_MARKERS = (
+    "browser_proof=",
+    "browser_smoke=",
+    "openclaw_browser_smoke",
+    "logs-codex-runs/browser-smoke/",
+    "/.openclaw/media/browser/",
+)
 COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
 
 
@@ -438,6 +454,25 @@ def _is_doc_only_completion(task: dict[str, Any], manifest_text: str, artifact: 
     return artifact_token.endswith(".md")
 
 
+def _task_requires_browser_proof(task: dict[str, Any], manifest_text: str, artifact: str) -> bool:
+    joined = " | ".join(
+        [
+            str(task.get("title", "")),
+            str(task.get("next_action", "")),
+            str(task.get("code", "")),
+            str(task.get("files_touched", "")),
+            str(artifact or ""),
+            manifest_text[:600],
+        ]
+    ).lower()
+    return any(token in joined for token in BROWSER_PROOF_KEYWORDS)
+
+
+def _has_browser_proof(manifest_text: str, artifact: str) -> bool:
+    lowered = " | ".join([str(manifest_text or ""), str(artifact or "")]).lower()
+    return any(marker in lowered for marker in BROWSER_PROOF_MARKERS)
+
+
 def build_delivery_integrity_metrics(
     root: Path,
     *,
@@ -468,7 +503,10 @@ def build_delivery_integrity_metrics(
     with_manifest = 0
     with_tests = 0
     with_commit_evidence = 0
+    with_browser_proof = 0
+    browser_proof_required = 0
     suspicious: list[str] = []
+    browser_missing: list[str] = []
     for event in recent:
         details = event.get("details") if isinstance(event.get("details"), dict) else {}
         task_id = str(details.get("task_id", "")).strip() or "unknown_task"
@@ -489,10 +527,18 @@ def build_delivery_integrity_metrics(
             or bool(COMMIT_RE.search(manifest_text))
             or bool(COMMIT_RE.search(task_commit))
         )
+        requires_browser = _task_requires_browser_proof(task, manifest_text, artifact)
+        has_browser_proof = _has_browser_proof(manifest_text, artifact)
         if has_tests:
             with_tests += 1
         if has_commit:
             with_commit_evidence += 1
+        if requires_browser:
+            browser_proof_required += 1
+            if has_browser_proof:
+                with_browser_proof += 1
+            else:
+                browser_missing.append(task_id)
         if not manifest_text or not has_tests or not has_commit:
             suspicious.append(task_id)
 
@@ -506,6 +552,10 @@ def build_delivery_integrity_metrics(
         "proof_manifest_coverage": round(with_manifest / total, 3) if total else 1.0,
         "tests_evidence_coverage": round(with_tests / total, 3) if total else 1.0,
         "commit_evidence_coverage": round(with_commit_evidence / total, 3) if total else 1.0,
+        "browser_proof_required_count": browser_proof_required,
+        "browser_proof_present_count": with_browser_proof,
+        "browser_proof_coverage": round(with_browser_proof / browser_proof_required, 3) if browser_proof_required else 1.0,
+        "browser_proof_missing_task_ids": browser_missing[:8],
         "suspicious_completion_count": len(suspicious),
         "suspicious_task_ids": suspicious[:8],
         "status": status,

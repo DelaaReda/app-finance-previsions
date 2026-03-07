@@ -27,6 +27,7 @@ For code/config/runtime/product work, check:
 3. Run the regression gate when the task affects product behavior:
    - `bash scripts/run_delivery_gate.sh <artifact>`
 4. If web-visible behavior changed, require browser-backed proof.
+   - Preferred command: `python3 platform/automation/browser_smoke.py --url "<URL>" --label "<task-id>"`
 5. Return one of:
    - `PASS`
    - `BLOCKED`
@@ -40,5 +41,6 @@ For code/config/runtime/product work, check:
 ## References
 
 - `platform/automation/delivery_value_gate.py`
+- `platform/automation/browser_smoke.py`
 - `skills/finance-regression-gate/SKILL.md`
 - `docs/operations/ops/ENGINEERING_PLAYBOOK.md`

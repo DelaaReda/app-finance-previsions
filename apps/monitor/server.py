@@ -474,39 +474,45 @@ def _dynamic_workers_snapshot() -> dict:
 
 
 def _planner_subagents_snapshot() -> dict:
-    registry_path = orchestrator_file("planner-subagents-registry.json")
-    payload = _load_json_file(registry_path) if registry_path.exists() else {}
-    subagents = payload.get("subagents", []) if isinstance(payload, dict) else []
-    if not isinstance(subagents, list):
-        subagents = []
-    active = []
-    recent = []
-    for item in subagents:
-        if not isinstance(item, dict):
-            continue
-        status = str(item.get("status", "")).strip().lower()
-        normalized = {
-            "subagent_id": str(item.get("subagent_id", "")),
-            "target_role": str(item.get("target_role", "")),
-            "parent_role": str(item.get("parent_role", "")),
-            "owner_task_id": str(item.get("owner_task_id", "")),
-            "status": str(item.get("status", "")),
-            "summary": str(item.get("summary", "")),
-            "artifact": str(item.get("artifact", "")),
-            "last_update_at": str(item.get("last_update_at", "")),
+    module = _planner_dispatch_metrics_module()
+    if module is not None and hasattr(module, "build_planner_dispatch_metrics"):
+        try:
+            snapshot = module.build_planner_dispatch_metrics(ROOT, recent_limit=12)
+        except Exception as exc:
+            snapshot = {
+                "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
+                "active_count": 0,
+                "active": [],
+                "recent": [],
+                "recent_total": 0,
+                "recent_success_count": 0,
+                "recent_failed_count": 0,
+                "recent_blocked_count": 0,
+                "recent_fallback_like_count": 0,
+                "recent_success_rate": 1.0,
+                "recent_by_role": {},
+                "status": f"error:{exc}",
+            }
+    else:
+        snapshot = {
+            "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
+            "active_count": 0,
+            "active": [],
+            "recent": [],
+            "recent_total": 0,
+            "recent_success_count": 0,
+            "recent_failed_count": 0,
+            "recent_blocked_count": 0,
+            "recent_fallback_like_count": 0,
+            "recent_success_rate": 1.0,
+            "recent_by_role": {},
+            "status": "unknown",
         }
-        if status in {"spawned", "running"}:
-            active.append(normalized)
-        else:
-            recent.append(normalized)
     enabled, cron_planner_only = _planner_orchestrator_flags(ROOT)
     return {
         "enabled": enabled,
         "cron_planner_only": cron_planner_only,
-        "registry_path": str(registry_path),
-        "active_count": len(active),
-        "active": active[:8],
-        "recent": recent[-8:],
+        **snapshot,
     }
 
 
@@ -527,6 +533,19 @@ def _runtime_state_snapshot() -> dict:
         "legacy_docs_root": str(LEGACY_ORCH_ROOT),
         "state_file": str(state.get("path", "") or resolve_orchestrator_write_path(ROOT, "runtime-state.json")),
     }
+
+
+@lru_cache(maxsize=1)
+def _planner_dispatch_metrics_module():
+    module_path = ROOT / "platform" / "automation" / "planner_dispatch_metrics.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_monitor", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @lru_cache(maxsize=1)
@@ -584,6 +603,10 @@ def _delivery_integrity_snapshot() -> dict:
             "proof_manifest_coverage": 1.0,
             "tests_evidence_coverage": 1.0,
             "commit_evidence_coverage": 1.0,
+            "browser_proof_required_count": 0,
+            "browser_proof_present_count": 0,
+            "browser_proof_coverage": 1.0,
+            "browser_proof_missing_task_ids": [],
             "suspicious_completion_count": 0,
             "suspicious_task_ids": [],
             "status": "unknown",
@@ -598,6 +621,10 @@ def _delivery_integrity_snapshot() -> dict:
             "proof_manifest_coverage": 0.0,
             "tests_evidence_coverage": 0.0,
             "commit_evidence_coverage": 0.0,
+            "browser_proof_required_count": 0,
+            "browser_proof_present_count": 0,
+            "browser_proof_coverage": 0.0,
+            "browser_proof_missing_task_ids": [],
             "suspicious_completion_count": 0,
             "suspicious_task_ids": [],
             "status": f"error:{exc}",
@@ -4410,7 +4437,7 @@ async function load(){
     D=s.data;
     D.__status_unavailable=false;
   }else if(!D){
-    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
+    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,browser_proof_required_count:0,browser_proof_present_count:0,browser_proof_coverage:1,browser_proof_missing_task_ids:[],suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
   }else{
     D.__status_unavailable=true;
   }

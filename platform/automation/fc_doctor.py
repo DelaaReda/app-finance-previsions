@@ -501,6 +501,18 @@ def _load_product_priority_guard(root: Path):
     return module
 
 
+def _load_planner_dispatch_metrics(root: Path):
+    module_path = root / "platform" / "automation" / "planner_dispatch_metrics.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_doctor", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def check_product_value(root: Path, api_base: str) -> CheckResult:
     module = _load_product_priority_guard(root)
     if module is None or not hasattr(module, "build_product_value_metrics"):
@@ -541,6 +553,18 @@ def check_delivery_integrity(root: Path) -> CheckResult:
     return CheckResult(status=status, detail=metrics)
 
 
+def check_planner_dispatch(root: Path) -> CheckResult:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
+    try:
+        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    status = "ok" if str(metrics.get("status", "unknown")) == "ok" else "degraded"
+    return CheckResult(status=status, detail=metrics)
+
+
 def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[str, Any], int]:
     start = time.time()
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
@@ -555,6 +579,7 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
         "product_value": check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
+        "planner_dispatch": check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
     effective_checks = {

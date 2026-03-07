@@ -106,6 +106,8 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertTrue(payload.get("planner_policy_enforced"))
         self.assertIn("delivery_integrity", payload)
         self.assertIn("product_value_metrics", payload)
+        self.assertIn("planner_subagents", payload)
+        self.assertIn("recent_success_rate", payload.get("planner_subagents", {}))
         self.assertEqual(payload.get("planner_autonomy_last_action"), "create_and_claim")
         self.assertEqual(payload.get("planner_autonomy_last_outcome"), "resolved")
         self.assertEqual(payload.get("dev_wait_reason"), "no_dev_ready_task")

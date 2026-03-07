@@ -13,20 +13,10 @@ Use this skill when a change touches:
 
 ## Workflow
 
-1. Verify browser tooling:
-   - `openclaw browser status --json`
-2. Open target URL:
-   - `openclaw browser open "<URL>"`
-3. Wait for DOM:
-   - `openclaw browser wait --load domcontentloaded`
-4. Capture proof:
-   - `openclaw browser snapshot --labels --limit 200`
-   - `openclaw browser requests --json`
-   - `openclaw browser console --level error`
-   - `openclaw browser errors`
-   - `openclaw browser screenshot --full-page`
-5. Close the browser tab:
-   - `openclaw browser close`
+1. Use the canonical helper first:
+   - `python3 platform/automation/browser_smoke.py --url "<URL>" --label "<short-label>"`
+2. Only fall back to raw `openclaw browser ...` commands if the helper is insufficient.
+3. Attach the generated proof JSON and screenshot path to delivery evidence.
 
 ## Required output
 
@@ -35,11 +25,13 @@ Return:
 - whether page loaded correctly
 - network/API anomalies
 - console/runtime errors
+- proof JSON path
 - screenshot/snapshot reference
 - PASS or BLOCKED
 
 ## Reference
 
 For the exact command sequence and troubleshooting:
+- `platform/automation/browser_smoke.py`
 - `docs/ops/OPENCLAW_BROWSER_QA.md`
 - `docs/operations/ops/ENGINEERING_PLAYBOOK.md`

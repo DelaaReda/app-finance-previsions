@@ -313,6 +313,124 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["recent_completions"], 1)
             self.assertEqual(metrics["suspicious_completion_count"], 0)
 
+    def test_delivery_integrity_requires_browser_proof_for_web_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-90" / "BATCH-90-DEV-01"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 7, 6, 0, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-web.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/web/src/pages/dashboard.js"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-90-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Update dashboard UI",
+                                "artifact": "apps/web/src/pages/dashboard.js",
+                                "commit_sha": "abcdef1234567",
+                                "tests_run": "npm test -- dashboard",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-90-DEV-01",
+                                    "artifact": "apps/web/src/pages/dashboard.js",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-90/BATCH-90-DEV-01/proof-web.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["browser_proof_required_count"], 1)
+            self.assertEqual(metrics["browser_proof_present_count"], 0)
+            self.assertIn("BATCH-90-DEV-01", metrics["browser_proof_missing_task_ids"])
+
+    def test_delivery_integrity_accepts_browser_proof_for_web_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-91" / "BATCH-91-DEV-01"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 7, 6, 5, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-web.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'browser_proof=logs-codex-runs/browser-smoke/20260307T060500Z-dashboard.json',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/monitor/server.py"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-91-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Refine monitor dashboard panel",
+                                "artifact": "apps/monitor/server.py",
+                                "commit_sha": "abcdef1234567",
+                                "tests_run": "pytest apps/monitor/tests",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-91-DEV-01",
+                                    "artifact": "apps/monitor/server.py",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-91/BATCH-91-DEV-01/proof-web.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["browser_proof_required_count"], 1)
+            self.assertEqual(metrics["browser_proof_present_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

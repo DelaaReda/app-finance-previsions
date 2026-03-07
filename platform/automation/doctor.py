@@ -307,6 +307,18 @@ def _load_product_priority_guard(root: Path):
     return module
 
 
+def _load_planner_dispatch_metrics(root: Path):
+    module_path = root / "platform" / "automation" / "planner_dispatch_metrics.py"
+    if not module_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_unified", module_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -349,6 +361,7 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
 
     product_value: dict[str, Any] = {}
     delivery_integrity: dict[str, Any] = {}
+    planner_dispatch: dict[str, Any] = {}
     guard_module = _load_product_priority_guard(root)
     if guard_module is not None:
         api_base = os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050")
@@ -366,6 +379,15 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         except Exception as exc:
             warnings.append("delivery_integrity_error")
             delivery_integrity = {"error": str(exc)}
+    dispatch_module = _load_planner_dispatch_metrics(root)
+    if dispatch_module is not None:
+        try:
+            planner_dispatch = dispatch_module.build_planner_dispatch_metrics(root, recent_limit=12)
+            if str(planner_dispatch.get("status", "ok")) != "ok":
+                warnings.append("planner_dispatch_degraded")
+        except Exception as exc:
+            warnings.append("planner_dispatch_error")
+            planner_dispatch = {"error": str(exc)}
 
     if errors:
         verdict = "BLOCKED"
@@ -433,6 +455,7 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         },
         "product_value": product_value,
         "delivery_integrity": delivery_integrity,
+        "planner_dispatch": planner_dispatch,
         "verdict": verdict,
         "errors": errors,
         "warnings": warnings,
