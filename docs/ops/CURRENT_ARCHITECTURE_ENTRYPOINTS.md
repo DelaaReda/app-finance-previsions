@@ -1,6 +1,6 @@
 ---
 status: canonical
-last_verified: 2026-03-06
+last_verified: 2026-03-07
 canonical_replaces:
   - docs/operations/README.md
 ---
@@ -10,10 +10,12 @@ canonical_replaces:
 Read these first. Ignore historical reports unless you are debugging a past incident.
 
 ## Canonical docs
+- Product vision: [PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
 - Workspace and path rules: [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
 - Target runtime architecture: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
 - Execution order: [PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md](/home/venom/analyse-financiere/docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md)
 - Monitor/runtime behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
+- Forecast/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
 
 ## Canonical code entrypoints
 - Runner config: [runner.v1.yaml](/home/venom/analyse-financiere/platform/config/runner/runner.v1.yaml)
@@ -33,6 +35,22 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Repo triage: [skills/repo-scan/SKILL.md](/home/venom/analyse-financiere/skills/repo-scan/SKILL.md)
 - Runtime incident triage: [skills/runtime-triage/SKILL.md](/home/venom/analyse-financiere/skills/runtime-triage/SKILL.md)
 - Delivery proof gate helper: [skills/delivery-proof-check/SKILL.md](/home/venom/analyse-financiere/skills/delivery-proof-check/SKILL.md)
+- These four skills are projected into OpenClaw workspaces by:
+  - [openclaw_control_plane.py](/home/venom/analyse-financiere/platform/automation/openclaw_control_plane.py)
+  - [worker_manager.py](/home/venom/analyse-financiere/platform/automation/worker_manager.py)
+
+## Agent/operator quick rules
+- Explainable-first: output without sources, freshness, or reasoning is not a finished product behavior.
+- Proof-first delivery: a task is not done until code/config/API/UI proof exists, not just a claimed delta.
+- Use canonical paths: prefer current `apps/`, `platform/`, and `docs/ops` paths over historical aliases.
+- Keep network-heavy validation explicit: unit and local checks by default, broader provider checks only when required by the task.
+- Do not treat `dev`, `admin`, or `scrum_master` as autonomous cron lanes in planning docs; they are capability domains under planner authority.
+
+## Branch decisions
+- `main` is historical and not the implementation baseline.
+- `origin/docs/direct-main` contributed concise vision/onboarding ideas only; its content is harvested semantically into current docs.
+- `origin/cursor/define-integration-engineer-roles-39a9` contributed pipeline-proof discipline only; its legacy code paths are not canonical.
+- Branches already absorbed into current architecture do not need separate reintegration work unless a canonical doc says otherwise.
 
 ## Historical docs
 - Anything under `docs/operations/` that is an incident log, worklog, batch report, or migration diary is historical unless a canonical doc points to it explicitly.

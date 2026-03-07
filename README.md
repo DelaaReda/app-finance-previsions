@@ -3,16 +3,18 @@
 ## 🏗️ Nouvelle Architecture (Post-Migration Feb 2026)
 
 **Structure cible:**
-- Backend: `apps/api/src/` (ex: `copilot-app/backend/`)
-- Frontend: `apps/web/src/` (ex: `copilot-app/frontend/`)
+- Backend: `apps/api/src/`
+- Frontend: `apps/web/src/`
 - Runtime: `apps/api/runtime/` (data, cache, logs)
 - Platform: `platform/` (config, automation, policies)
 - Packages: `packages/` (contracts, sdk, ui-kit)
 - Archive: `archive/` (ancienne structure)
 
 **Documentation:**
+- Product vision: `docs/product/PRODUCT_VISION.md`
 - Architecture: `docs/architecture/AGENT_ONBOARDING.md`
 - Workspace Index: `docs/ops/AGENT_WORKSPACE_INDEX.md`
+- Current architecture entrypoints: `docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md`
 - Migration Summary: `docs/ops/MIGRATION_SUMMARY.md`
 
 ---
@@ -58,9 +60,26 @@
   `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
 - Gouvernance d'exécution globale (gates/process):
   `docs/ops/ENGINEERING_PLAYBOOK.md`
+- Runbook de preuve forecasts/data:
+  `docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md`
 
 ## Dépendances / env
-- Variables : `apps/api/src/.env` (OPEN_ROUTER_API_KEY, clés FRED, etc.).
+- Les fichiers `.env` existants restent valides et ne doivent pas être supprimés.
+- Template canonique pour l'onboarding: `apps/api/src/.env.example`
+- Fichier local de travail habituel: `apps/api/src/.env`
+- Variables minimales à renseigner pour le MVP local:
+  - `API_HOST`, `API_PORT`
+  - `AF_ALLOW_INTERNET`
+  - `OPEN_ROUTER_API_KEY`
+  - `FRED_API_KEY` si vous activez la couche macro
+- Variables optionnelles / providers:
+  - `FIRECRAWL_API_KEY`
+  - `SERPER_API_KEY`
+  - `TAVILY_API_KEY`
+  - `CODESTRAL_API_KEY`
+  - `GROK_API_KEY`
+  - `NEWSAPI_ORG_KEY`
+  - `FINNHUB_API_KEY`
 - Installer manquants (ex : feedparser, duckdb) :
   ```bash
   cd apps/api/src
@@ -73,24 +92,6 @@
 - Gate backend standard (agents) :
   - sans checks live : `./scripts/backend_regression_gate.sh --no-live`
   - avec checks live : `./scripts/backend_regression_gate.sh`
-
-## Mise a Jour 2026-03-03 (Hotfix)
-- Orchestration resynchronisee:
-  - `BATCH-05`: `IN_PROGRESS`
-  - `BATCH-06`: `WAITING_DEP` (`depends_on=BATCH-05`)
-  - `BATCH-07`: `WAITING_DEP` (`depends_on=BATCH-06`)
-- Fichiers source de verite:
-  - `docs/operations/orchestrator/priority-queue.json`
-  - `docs/operations/orchestrator/parallel-workstreams.json`
-  - `docs/product/planning/WORKSTATE.md`
-- Forecast fallback corrige (`apps/api/src/platform/legacy/jobs/forecasts_simple.py`):
-  - ordre de fallback: history/cache -> `price` vs `previous_close` -> `change_percent`.
-  - evite les inversions de direction quand l'historique est absent.
-- Validation rapide:
-  ```bash
-  cd apps/api/src
-  PYTHONPATH=. pytest -q platform/legacy/jobs/tests/test_forecasts_simple.py
-  ```
 
 ## Notes
 - Pas de build frontend : le script sert directement `apps/web/src` via `python -m http.server 5173`.
