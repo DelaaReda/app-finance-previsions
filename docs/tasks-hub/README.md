@@ -2,12 +2,13 @@
 
 ## Référentiel principal
 
-- Vision produit : [docs/product/planning/PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/planning/PRODUCT_VISION.md)
+- Vision produit : [docs/product/PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
+- Backlog produit canonique : [docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md)
 - Portée MVP : [docs/product/planning/MVP_SCOPE.md](/home/venom/analyse-financiere/docs/product/planning/MVP_SCOPE.md)
 - Backlog produit : [docs/product/scrum/product-backlog.md](/home/venom/analyse-financiere/docs/product/scrum/product-backlog.md)
 - Sprint courant : [docs/product/scrum/sprint-current.md](/home/venom/analyse-financiere/docs/product/scrum/sprint-current.md)
 - Tickets/épics : [docs/product/planning/tasks.md](/home/venom/analyse-financiere/docs/product/planning/tasks.md), [docs/product/planning/epics.md](/home/venom/analyse-financiere/docs/product/planning/epics.md)
-- Priorité/état global : [docs/product/planning/PROJECT_BOARD.md](/home/venom/analyse-financiere/docs/product/planning/PROJECT_BOARD.md), [docs/product/planning/WORKSTATE.md](/home/venom/analyse-financiere/docs/product/planning/WORKSTATE.md)
+- Priorité/état global : [docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md), [docs/product/planning/WORKSTATE.md](/home/venom/analyse-financiere/docs/product/planning/WORKSTATE.md)
 
 ## Exécution
 
