@@ -114,8 +114,81 @@ def never_empty_payload(
     return payload
 
 
+_VALID_ENDPOINT_STATUSES = {"ok", "degraded", "error"}
 _VALID_VERDICTS = {"buy", "sell", "hold"}
 _VALID_RISK_LEVELS = {"low", "medium", "high", "critical"}
+
+
+def ensure_endpoint_metadata(
+    payload: Dict[str, Any],
+    *,
+    default_source: str,
+    freshness: Optional[str] = None,
+    status: Optional[str] = None,
+    error: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Ensure stable freshness/error/status metadata for UI-facing payloads."""
+    if not isinstance(payload, dict):
+        return payload
+
+    now_iso = utc_now_iso()
+    generated_at = str(payload.get("generated_at") or now_iso).strip() or now_iso
+    payload["generated_at"] = generated_at
+
+    resolved_freshness = str(freshness or payload.get("freshness") or generated_at).strip()
+    if not resolved_freshness or resolved_freshness == "error":
+        resolved_freshness = generated_at
+    payload["freshness"] = resolved_freshness
+
+    raw_error = payload.get("error") if error is None else error
+    if raw_error in (None, ""):
+        payload["error"] = None
+    elif isinstance(raw_error, dict):
+        payload["error"] = raw_error
+    else:
+        payload["error"] = str(raw_error)
+
+    raw_status = str(status or payload.get("status") or "").strip().lower()
+    if raw_status not in _VALID_ENDPOINT_STATUSES:
+        raw_status = "degraded" if payload["error"] is not None else "ok"
+    payload["status"] = raw_status
+
+    warnings = payload.get("warnings")
+    if warnings is None:
+        payload["warnings"] = []
+    elif isinstance(warnings, list):
+        payload["warnings"] = warnings
+    else:
+        payload["warnings"] = [str(warnings)]
+
+    payload["source"] = ensure_source_list(payload.get("source"), default_source=default_source)
+    append_source_tag(payload, "metadata_contract_v1", default_source=default_source)
+    return payload
+
+
+def service_response_with_metadata(
+    data: Dict[str, Any],
+    *,
+    default_source: str,
+    freshness: Optional[str] = None,
+    status: Optional[str] = None,
+    error: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Canonical response envelope with stable metadata mirrored at the top level."""
+    normalized = ensure_endpoint_metadata(
+        data,
+        default_source=default_source,
+        freshness=freshness,
+        status=status,
+        error=error,
+    )
+    return {
+        "ok": True,
+        "data": normalized,
+        "freshness": normalized.get("freshness"),
+        "status": normalized.get("status"),
+        "error": normalized.get("error"),
+    }
 
 
 def coerce_confidence(value: Any, *, default: float = 0.5) -> float:
@@ -240,6 +313,7 @@ __all__ = [
     "append_source_tag",
     "coerce_confidence",
     "coerce_verdict",
+    "ensure_endpoint_metadata",
     "ensure_source_list",
     "ensure_decision_contract",
     "never_empty_payload",
@@ -247,6 +321,7 @@ __all__ = [
     "safe_float",
     "safe_int",
     "service_response",
+    "service_response_with_metadata",
     "unwrap_storage_payload",
     "utc_now_iso",
 ]

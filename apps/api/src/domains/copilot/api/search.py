@@ -6,19 +6,27 @@ Task: API-SEARCH-001 - Global search functionality
 from datetime import datetime, timezone
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
-from core.response import ok
 import logging
     
 try:
-    from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
+    from services.service_standard import (  # type: ignore
+        ensure_decision_contract,
+        ensure_endpoint_metadata,
+        service_response_with_metadata,
+        utc_now_iso,
+    )
 except Exception:  # pragma: no cover
     try:
         from platform.legacy.services.service_standard import (  # type: ignore
             ensure_decision_contract,
+            ensure_endpoint_metadata,
+            service_response_with_metadata,
             utc_now_iso,
         )
     except Exception:  # pragma: no cover
         ensure_decision_contract = None  # type: ignore
+        ensure_endpoint_metadata = None  # type: ignore
+        service_response_with_metadata = None  # type: ignore
         utc_now_iso = None  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -43,18 +51,38 @@ def _apply_search_contract(payload: Dict[str, Any], *, source: str) -> Dict[str,
             risk_level="low",
             freshness=payload.get("freshness"),
         )
-        return payload
+    else:
+        payload.setdefault("verdict", "hold")
+        payload.setdefault("confidence", 0.45)
+        payload.setdefault("why", ["Search payload is informative-only, not an action recommendation."])
+        payload.setdefault("risk_level", "low")
+        payload.setdefault("risk", {"level": "low", "caveat": ""})
+        payload.setdefault("risk_flag", False)
+        payload.setdefault("generated_at", payload.get("generated_at") or _now_iso())
+        payload.setdefault("freshness", payload.get("freshness") or payload.get("generated_at"))
+        payload.setdefault("source", [source])
 
-    payload.setdefault("verdict", "hold")
-    payload.setdefault("confidence", 0.45)
-    payload.setdefault("why", ["Search payload is informative-only, not an action recommendation."])
-    payload.setdefault("risk_level", "low")
-    payload.setdefault("risk", {"level": "low", "caveat": ""})
-    payload.setdefault("risk_flag", False)
-    payload.setdefault("generated_at", payload.get("generated_at") or _now_iso())
-    payload.setdefault("freshness", payload.get("freshness") or payload.get("generated_at"))
-    payload.setdefault("source", [source])
+    if callable(ensure_endpoint_metadata):
+        ensure_endpoint_metadata(
+            payload,
+            default_source=source,
+            freshness=payload.get("freshness"),
+            error=payload.get("error"),
+        )
     return payload
+
+
+def _search_response(payload: Dict[str, Any], *, source: str) -> Dict[str, Any]:
+    normalized = _apply_search_contract(payload, source=source)
+    if callable(service_response_with_metadata):
+        return service_response_with_metadata(
+            normalized,
+            default_source=source,
+            freshness=normalized.get("freshness"),
+            status=normalized.get("status"),
+            error=normalized.get("error"),
+        )
+    return {"ok": True, "data": normalized}
 
 
 def _search_error_payload(
@@ -239,21 +267,20 @@ async def search_tickers(
             "freshness": now_iso,
             "source": ["search_tickers"],
         }
-        _apply_search_contract(response_data, source="search_tickers")
-        
         logger.info(f"Search tickers: found {len(matches)} matches")
-        return ok(response_data)
+        return _search_response(response_data, source="search_tickers")
         
     except Exception as e:
         logger.error(f"Error searching tickers: {str(e)}")
-        return ok(
+        return _search_response(
             _search_error_payload(
                 source="search_tickers",
                 error=str(e),
                 query=q,
                 matches=[],
                 has_more=False,
-            )
+            ),
+            source="search_tickers",
         )
 
 
@@ -326,12 +353,11 @@ async def search_global(
             "freshness": now_iso,
             "source": ["search_global"],
         }
-        _apply_search_contract(response_data, source="search_global")
-        return ok(response_data)
+        return _search_response(response_data, source="search_global")
         
     except Exception as e:
         logger.error(f"Error in global search: {str(e)}")
-        return ok(
+        return _search_response(
             _search_error_payload(
                 source="search_global",
                 error=str(e),
@@ -339,12 +365,10 @@ async def search_global(
                 results={},
                 total=0,
                 execution_time=0,
-            )
+            ),
+            source="search_global",
         )
-
-
 import time
-from core.response import ok
 from storage.io import load_json
 
 def calculate_similarity(query: str, target: str) -> float:
@@ -394,19 +418,19 @@ async def get_sectors():
             "sectors": sectors,
             "total": len(sectors)
         }
-        _apply_search_contract(response_data, source="search_sectors")
-        return ok(response_data)
+        return _search_response(response_data, source="search_sectors")
         
     except Exception as e:
         logger.error(f"Error getting sectors: {str(e)}")
-        return ok(
+        return _search_response(
             _search_error_payload(
                 source="search_sectors",
                 error=str(e),
                 query=None,
                 sectors=[],
                 total=0,
-            )
+            ),
+            source="search_sectors",
         )
 
 
@@ -658,12 +682,11 @@ async def universal_search_endpoint(
                 'sort_by': sort_by
             }
         }
-        _apply_search_contract(response_data, source="search_universal")
-        return ok(response_data)
+        return _search_response(response_data, source="search_universal")
         
     except Exception as e:
         logger.error(f"Error in universal search: {str(e)}", exc_info=True)
-        return ok(
+        return _search_response(
             _search_error_payload(
                 source="search_universal",
                 query=q,
@@ -677,7 +700,8 @@ async def universal_search_endpoint(
                     "sort_by": sort_by,
                 },
                 error=str(e),
-            )
+            ),
+            source="search_universal",
         )
 
 # Export router with expected name for main.py registration

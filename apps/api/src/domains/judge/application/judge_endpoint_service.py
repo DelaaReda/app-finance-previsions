@@ -16,16 +16,18 @@ except Exception:  # pragma: no cover
 
 try:
     from services.service_standard import (
+        ensure_endpoint_metadata,
         ensure_decision_contract,
         safe_int,
-        service_response,
+        service_response_with_metadata,
         utc_now_iso,
     )
 except Exception:  # pragma: no cover
     from src.services.service_standard import (  # type: ignore
+        ensure_endpoint_metadata,
         ensure_decision_contract,
         safe_int,
-        service_response,
+        service_response_with_metadata,
         utc_now_iso,
     )
 
@@ -81,8 +83,18 @@ async def get_judge_verdicts_payload(
         risk_caveat=head.get("risk_caveat") or head.get("risk_reason"),
         freshness=response.get("freshness") or data.get("generated_at"),
     )
-    response.setdefault("freshness", data.get("freshness") or data.get("generated_at"))
-    return response
+    ensure_endpoint_metadata(
+        data,
+        default_source="judge_endpoint_service",
+        freshness=response.get("freshness") or data.get("generated_at"),
+    )
+    return service_response_with_metadata(
+        data,
+        default_source="judge_endpoint_service",
+        freshness=data.get("freshness"),
+        status=data.get("status"),
+        error=data.get("error"),
+    )
 
 
 async def get_judge_quality_payload(
@@ -94,7 +106,7 @@ async def get_judge_quality_payload(
     now_iso = utc_now_iso()
     try:
         if not build_judge_quality_report:
-            return service_response(
+            return service_response_with_metadata(
                 {
                     "as_of": now_iso,
                     "horizon_days": horizon_days,
@@ -106,6 +118,7 @@ async def get_judge_quality_payload(
                         "message": "Judge quality service unavailable in this runtime.",
                     },
                 },
+                default_source="judge_quality_service",
                 freshness=now_iso,
             )
 
@@ -114,9 +127,13 @@ async def get_judge_quality_payload(
             min_samples=min_samples,
         )
         freshness = report.get("as_of") or now_iso
-        return service_response(report, freshness=str(freshness))
+        return service_response_with_metadata(
+            report,
+            default_source="judge_quality_service",
+            freshness=str(freshness),
+        )
     except Exception as exc:
-        return service_response(
+        return service_response_with_metadata(
             {
                 "as_of": now_iso,
                 "horizon_days": horizon_days,
@@ -129,7 +146,10 @@ async def get_judge_quality_payload(
                 },
                 "error": str(exc),
             },
-            freshness="error",
+            default_source="judge_quality_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
         )
 
 
@@ -157,7 +177,7 @@ async def get_judge_quality_history_payload(
         filtered = filtered[-int(limit) :]
         latest = filtered[-1] if filtered else None
 
-        return service_response(
+        return service_response_with_metadata(
             {
                 "as_of": now_iso,
                 "scope": {
@@ -168,10 +188,11 @@ async def get_judge_quality_history_payload(
                 "latest": latest,
                 "points": filtered,
             },
+            default_source="judge_quality_history_service",
             freshness=str((latest or {}).get("as_of", now_iso)),
         )
     except Exception as exc:
-        return service_response(
+        return service_response_with_metadata(
             {
                 "as_of": now_iso,
                 "scope": {
@@ -184,7 +205,10 @@ async def get_judge_quality_history_payload(
                 "error": str(exc),
                 "message": "Judge quality history unavailable; fallback returned.",
             },
-            freshness="error",
+            default_source="judge_quality_history_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
         )
 
 
@@ -215,9 +239,13 @@ async def get_judge_options_payload(
             "generated_at": now_iso,
             "source": ["judge_options_service", "ui_helper_data", "merged"],
         }
-        return service_response(options, freshness=now_iso)
+        return service_response_with_metadata(
+            options,
+            default_source="judge_options_service",
+            freshness=now_iso,
+        )
     except Exception as exc:
-        return service_response(
+        return service_response_with_metadata(
             {
                 "sort_options": [
                     {"value": "confidence", "label": "Confiance"},
@@ -235,7 +263,10 @@ async def get_judge_options_payload(
                     "to maintain never-empty contract"
                 ),
             },
-            freshness="error",
+            default_source="judge_options_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
         )
 
 

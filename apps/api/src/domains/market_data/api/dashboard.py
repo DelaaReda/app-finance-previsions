@@ -13,6 +13,12 @@ from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter
+from storage.io import load_json
+
+try:
+  from services.service_standard import service_response_with_metadata  # type: ignore
+except Exception:  # pragma: no cover
+  from platform.legacy.services.service_standard import service_response_with_metadata  # type: ignore
 
 # Reuse the shared V16 dashboard UI service helpers (pure Python, no FastAPI).
 from ..application.dashboard_ui_service import (  # type: ignore
@@ -28,6 +34,23 @@ from ..application.dashboard_ui_service import (  # type: ignore
 # and mounts it with `prefix="/api/dashboard"`. Therefore the paths
 # below are relative to `/api/dashboard`.
 dashboard_router = APIRouter(tags=["dashboard"])
+
+
+def _dashboard_response(
+  payload: Dict[str, Any],
+  *,
+  source: str,
+  freshness: str | None = None,
+  status: str | None = None,
+  error: Any = None,
+) -> Dict[str, Any]:
+  return service_response_with_metadata(
+    payload,
+    default_source=source,
+    freshness=freshness,
+    status=status,
+    error=error,
+  )
 
 @dashboard_router.get("/kpis-legacy")
 async def dashboard_kpis() -> Dict[str, Any]:
@@ -47,9 +70,7 @@ async def dashboard_kpis() -> Dict[str, Any]:
     news_count = len(articles)
     positive_news = sum(1 for a in articles if (a.get("sentiment_score") or 0) >= 0.1)
 
-    return {
-      "ok": True,
-      "data": {
+    payload = {
         "kpi_forecasts": {
           "active_forecasts": total_forecasts,
           "high_confidence_forecasts": high_conf_count,
@@ -66,12 +87,15 @@ async def dashboard_kpis() -> Dict[str, Any]:
           "overall_health": "healthy" if (total_forecasts > 0 and news_count > 0) else "degraded",
         },
         "generated_at": datetime.utcnow().isoformat() + "Z",
-      },
     }
+    return _dashboard_response(
+      payload,
+      source="dashboard_kpis",
+      freshness=payload.get("generated_at"),
+    )
   except Exception as e:  # never-empty fallback
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "kpi_forecasts": {
           "active_forecasts": 0,
           "high_confidence_forecasts": 0,
@@ -80,9 +104,13 @@ async def dashboard_kpis() -> Dict[str, Any]:
         },
         "kpi_news": {"total_news": 0, "positive_news": 0},
         "health": {"overall_health": "error"},
+        "generated_at": datetime.utcnow().isoformat() + "Z",
         "error": str(e),
       },
-    }
+      source="dashboard_kpis",
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/portfolio-summary")
@@ -93,17 +121,16 @@ async def get_portfolio_summary() -> Dict[str, Any]:
   """
   try:
     summary = build_portfolio_summary()
-    return {
-      "ok": True,
-      "data": summary,
-      "freshness": summary.get("generated_at", datetime.utcnow().isoformat() + "Z"),
-    }
+    return _dashboard_response(
+      summary,
+      source="dashboard_portfolio_summary",
+      freshness=summary.get("generated_at", datetime.utcnow().isoformat() + "Z"),
+    )
   except Exception as e:
     # Never-empty contract: always return a well-formed payload, even on error.
     now = datetime.utcnow().isoformat() + "Z"
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "portfolio_value": None,
         "initial_capital": None,
         "total_return_pct": None,
@@ -118,8 +145,11 @@ async def get_portfolio_summary() -> Dict[str, Any]:
         "error": str(e),
         "source": ["dashboard_ui_service", "error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_portfolio_summary",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/allocation")
@@ -130,17 +160,16 @@ async def get_portfolio_allocation() -> Dict[str, Any]:
   """
   try:
     payload = load_portfolio_allocation()
-    return {
-      "ok": True,
-      "data": payload,
-      "freshness": payload.get("generated_at", datetime.utcnow().isoformat() + "Z"),
-    }
+    return _dashboard_response(
+      payload,
+      source="dashboard_allocation",
+      freshness=payload.get("generated_at", datetime.utcnow().isoformat() + "Z"),
+    )
   except Exception as e:
     now = datetime.utcnow().isoformat() + "Z"
     # Never-empty contract: always return a well-formed structure.
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "holdings": [],
         "sectors": [],
         "total_value": 0.0,
@@ -148,8 +177,11 @@ async def get_portfolio_allocation() -> Dict[str, Any]:
         "error": str(e),
         "source": ["dashboard_ui_service", "allocation_error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_allocation",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/health")
@@ -161,15 +193,14 @@ async def get_portfolio_health() -> Dict[str, Any]:
   now = datetime.utcnow().isoformat() + "Z"
   try:
     payload = build_portfolio_health()
-    return {
-      "ok": True,
-      "data": payload,
-      "freshness": payload.get("generated_at", now),
-    }
+    return _dashboard_response(
+      payload,
+      source="dashboard_health",
+      freshness=payload.get("generated_at", now),
+    )
   except Exception as e:
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "portfolio_health": {
           "overall": 50,
           "suggestion": "Indicateurs de backtest indisponibles (fallback).",
@@ -184,8 +215,11 @@ async def get_portfolio_health() -> Dict[str, Any]:
         "error": str(e),
         "source": ["dashboard_ui_service", "health_error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_health",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/market-drivers")
@@ -197,23 +231,25 @@ async def get_market_drivers() -> Dict[str, Any]:
   now = datetime.utcnow().isoformat() + "Z"
   try:
     payload = build_market_drivers_snapshot()
-    return {
-      "ok": True,
-      "data": payload,
-      "freshness": payload.get("generated_at", now),
-    }
+    return _dashboard_response(
+      payload,
+      source="dashboard_market_drivers",
+      freshness=payload.get("generated_at", now),
+    )
   except Exception as e:
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "drivers": [],
         "totals": {},
         "generated_at": now,
         "error": str(e),
         "source": ["dashboard_ui_service", "market_drivers_error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_market_drivers",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/news-impact")
@@ -225,23 +261,25 @@ async def get_news_impact() -> Dict[str, Any]:
   now = datetime.utcnow().isoformat() + "Z"
   try:
     payload = build_news_impact_table(limit=10)
-    return {
-      "ok": True,
-      "data": payload,
-      "freshness": payload.get("generated_at", now),
-    }
+    return _dashboard_response(
+      payload,
+      source="dashboard_news_impact",
+      freshness=payload.get("generated_at", now),
+    )
   except Exception as e:
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "items": [],
         "count": 0,
         "generated_at": now,
         "error": str(e),
         "source": ["dashboard_ui_service", "news_impact_error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_news_impact",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 @dashboard_router.get("/performance")
@@ -252,23 +290,25 @@ async def get_performance_snapshot() -> Dict[str, Any]:
   now = datetime.utcnow().isoformat() + "Z"
   try:
     payload = build_performance_snapshot()
-    return {
-      "ok": True,
-      "data": payload,
-      "freshness": payload.get("generated_at", now),
-    }
+    return _dashboard_response(
+      payload,
+      source="dashboard_performance",
+      freshness=payload.get("generated_at", now),
+    )
   except Exception as e:
-    return {
-      "ok": True,
-      "data": {
+    return _dashboard_response(
+      {
         "top_stocks": [],
         "opportunities": [],
         "generated_at": now,
         "error": str(e),
         "source": ["dashboard_ui_service", "performance_error_fallback"],
       },
-      "freshness": now,
-    }
+      source="dashboard_performance",
+      freshness=now,
+      status="degraded",
+      error=str(e),
+    )
 
 
 # For backward compatibility with older include patterns

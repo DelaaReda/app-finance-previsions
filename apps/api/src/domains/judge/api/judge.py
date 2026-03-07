@@ -38,6 +38,24 @@ from storage.io import load_json
 from core.ticker_normalization import normalize_ticker, normalize_tickers
 
 try:
+    from services.service_standard import service_response_with_metadata  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from platform.legacy.services.service_standard import service_response_with_metadata  # type: ignore
+    except Exception:  # pragma: no cover
+        def service_response_with_metadata(data, *, default_source, freshness=None, status=None, error=None):
+            resolved_error = error if error is not None else data.get("error")
+            resolved_status = status or ("degraded" if resolved_error else "ok")
+            resolved_freshness = freshness or data.get("freshness") or data.get("generated_at")
+            return {
+                "ok": True,
+                "data": data,
+                "freshness": resolved_freshness,
+                "status": resolved_status,
+                "error": resolved_error,
+            }
+
+try:
     from services.cache_layer import load_or_compute
 except ImportError:  # pragma: no cover
     def load_or_compute(key, compute_fn, **_):
@@ -3332,19 +3350,18 @@ async def _legacy_get_judge_verdicts(
             )
             verdicts_data["cache"] = cache_meta
 
-        return {
-            "ok": True,
-            "data": verdicts_data,
-            "freshness": verdicts_data.get(
+        return service_response_with_metadata(
+            verdicts_data,
+            default_source="judge_route",
+            freshness=verdicts_data.get(
                 "generated_at", datetime.utcnow().isoformat() + "Z"
             ),
-        }
+        )
     except Exception as e:
         logger.error(f"Critical error in /judge endpoint: {str(e)}")
         now_iso = datetime.utcnow().isoformat() + "Z"
-        return {
-            "ok": True,
-            "data": {
+        return service_response_with_metadata(
+            {
                 "verdicts": [],
                 "count": 0,
                 "stats": {
@@ -3369,8 +3386,11 @@ async def _legacy_get_judge_verdicts(
                 "error": str(e),
                 "message": "Judge endpoint failed critically but fallback data returned to maintain never-empty contract",
             },
-            "freshness": "error",
-        }
+            default_source="judge_route",
+            freshness=now_iso,
+            status="degraded",
+            error=str(e),
+        )
 
 
 # Backward compatibility export
