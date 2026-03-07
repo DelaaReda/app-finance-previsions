@@ -31,6 +31,7 @@ Use this index before reading operational documentation.
 - [FC_DOCTOR_SPEC.md](/home/venom/analyse-financiere/docs/ops/FC_DOCTOR_SPEC.md)
 - [DOCTOR_JSON_SPEC.md](/home/venom/analyse-financiere/docs/ops/DOCTOR_JSON_SPEC.md)
 - [API_ENDPOINTS.md](/home/venom/analyse-financiere/docs/ops/API_ENDPOINTS.md)
+- Local git hygiene helper for runtime-generated files: `scripts/runtime_git_hygiene.sh`
 
 ## Historical / compatibility docs
 These can still be useful, but they must not be treated as current architectural truth.

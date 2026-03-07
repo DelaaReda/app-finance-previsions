@@ -1,0 +1,26 @@
+# Runtime-generated compatibility artifacts that should not pollute normal git work.
+# These remain tracked for historical/compatibility reasons, but local clones should
+# usually mark them skip-worktree via scripts/runtime_git_hygiene.sh.
+
+docs/operations/ops/ADMIN_TEAM_CHAT.md
+
+docs/operations/orchestrator/agent-iteration-issues-digest.txt
+docs/operations/orchestrator/agent-iteration-issues-latest.json
+docs/operations/orchestrator/agent-iteration-issues.jsonl
+docs/operations/orchestrator/executors-monitoring-latest.json
+docs/operations/orchestrator/kpi-history.jsonl
+docs/operations/orchestrator/parallel-role-cron-map.json
+docs/operations/orchestrator/parallel-role-topology-active.json
+docs/operations/orchestrator/parallel-workstreams.json
+docs/operations/orchestrator/planner-audit-events.jsonl
+docs/operations/orchestrator/planner-guardian-events.jsonl
+docs/operations/orchestrator/planner-guardian-latest.json
+docs/operations/orchestrator/planner-subagents-events.jsonl
+docs/operations/orchestrator/planner-subagents-registry.json
+docs/operations/orchestrator/planner-subagents-results/*.raw.txt
+docs/operations/orchestrator/planner-subagents-results/*.result.json
+docs/operations/orchestrator/priority-queue.json
+docs/operations/orchestrator/state-reconcile-report.json
+
+memory/agents/*.md
+memory/agents/summaries/*.md
