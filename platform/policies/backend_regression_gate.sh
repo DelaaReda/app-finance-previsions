@@ -57,7 +57,12 @@ echo "pytest_bin=$PYTEST_BIN"
 
 pushd "$BACKEND_DIR" >/dev/null
 
-PYTHONPATH=. "$PYTEST_BIN" -q domains/
+PYTHONPATH_PREFIX="$ROOT:$BACKEND_DIR"
+if [[ -n "${PYTHONPATH:-}" ]]; then
+  PYTHONPATH_PREFIX="$PYTHONPATH_PREFIX:$PYTHONPATH"
+fi
+
+PYTHONPATH="$PYTHONPATH_PREFIX" "$PYTEST_BIN" -q domains/
 
 if [[ "$LIVE_CHECK" -eq 1 ]]; then
   if command -v curl >/dev/null 2>&1; then
