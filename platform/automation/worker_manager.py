@@ -267,11 +267,22 @@ def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, t
     return workspace
 
 
-def _ensure_agent(agent_id: str, root: Path, model: str, workspace_key: str = "shared", thinking: str = "medium") -> tuple[bool, str]:
+def _ensure_agent(
+    agent_id: str,
+    root: Path,
+    model: str,
+    workspace_key: str = "shared",
+    thinking: str = "medium",
+    workspace_path: Path | None = None,
+) -> tuple[bool, str]:
     if not shutil_which("openclaw"):
         return False, "openclaw_missing"
     openclaw_model = _openclaw_cli_model(model)
-    capability_workspace = _openclaw_capability_workspace(root, workspace_key, model, thinking)
+    capability_workspace = (
+        Path(workspace_path).expanduser().resolve()
+        if workspace_path is not None
+        else _openclaw_capability_workspace(root, workspace_key, model, thinking)
+    )
     listed = subprocess.run(
         ["openclaw", "agents", "list", "--json"],
         text=True,

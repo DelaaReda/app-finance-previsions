@@ -229,6 +229,50 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertEqual(payload["artifact"], "logs/openclaw/dev.result.json")
         self.assertEqual(payload["tests_run"], "pytest tests/test_app.py -q")
 
+    def test_run_openclaw_dev_uses_capability_workspace_and_writable_backend(self) -> None:
+        captured: dict[str, object] = {}
+
+        def _fake_ensure(agent_id, root, model, workspace_key="shared", thinking="medium", workspace_path=None):
+            captured["agent_id"] = agent_id
+            captured["root"] = root
+            captured["model"] = model
+            captured["workspace_key"] = workspace_key
+            captured["thinking"] = thinking
+            captured["workspace_path"] = workspace_path
+            return True, "planner_dev_openclaw"
+
+        envelope = {"response": {"text": json.dumps({"status": "completed", "summary": "ok", "artifact": "artifact.txt", "verify": "proof=openclaw", "files_touched": "x.py", "tests_run": "pytest -q", "commit_sha": "abc1234", "architecture_check": "layer=api", "vision_alignment": "batch=BATCH-61", "recommended_next": "planner_merge", "blocking_issue": "none"})}}
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_ensure_openclaw_agent", side_effect=_fake_ensure),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 0, "stdout": json.dumps(envelope), "stderr": ""},
+                )(),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-09",
+                task_kind="delivery",
+                message="Apply a minimal backend fix.",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(captured["model"], "codex-cli-write/gpt-5.4")
+        self.assertIsNone(captured["workspace_path"])
+        self.assertEqual(captured["workspace_key"], "planner-dev")
+
     def test_run_openclaw_backend_parses_embedded_final_json(self) -> None:
         embedded = (
             "progress line 1\n"

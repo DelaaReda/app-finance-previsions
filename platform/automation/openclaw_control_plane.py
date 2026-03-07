@@ -47,6 +47,39 @@ CANONICAL_CODEX_CLI_BACKEND = {
     "imageMode": "repeat",
     "serialize": True,
 }
+CANONICAL_CODEX_CLI_WRITE_BACKEND = {
+    "command": "codex",
+    "args": [
+        "exec",
+        "--json",
+        "--sandbox",
+        "workspace-write",
+        "--add-dir",
+        CANONICAL_WORKSPACE,
+        "--full-auto",
+        "--skip-git-repo-check",
+    ],
+    "resumeArgs": [
+        "exec",
+        "resume",
+        "{sessionId}",
+        "--sandbox",
+        "workspace-write",
+        "--add-dir",
+        CANONICAL_WORKSPACE,
+        "--full-auto",
+        "--skip-git-repo-check",
+    ],
+    "output": "jsonl",
+    "resumeOutput": "text",
+    "input": "arg",
+    "modelArg": "--model",
+    "sessionIdFields": ["thread_id"],
+    "sessionMode": "existing",
+    "imageArg": "--image",
+    "imageMode": "repeat",
+    "serialize": True,
+}
 CANONICAL_MAIN_CODEX_CLI_BACKEND = {
     "command": "codex",
     "args": [
@@ -237,6 +270,7 @@ def _sync_defaults(payload: dict[str, Any], workspace: str, primary_model: str) 
     defaults["thinkingDefault"] = CANONICAL_DEFAULT_THINKING
     cli_backends = defaults.setdefault("cliBackends", {})
     cli_backends["codex-cli"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_BACKEND))
+    cli_backends["codex-cli-write"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_WRITE_BACKEND))
     cli_backends["codex-cli-main"] = json.loads(json.dumps(CANONICAL_MAIN_CODEX_CLI_BACKEND))
 
 

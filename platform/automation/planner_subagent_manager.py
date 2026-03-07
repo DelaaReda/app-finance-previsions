@@ -77,6 +77,15 @@ def _openclaw_cli_model(model: str) -> str:
     return f"codex-cli/{token}"
 
 
+def _openclaw_runtime_model(model: str, sandbox: str) -> str:
+    token = str(model or "").strip() or "gpt-5.4"
+    if "/" in token:
+        return token
+    if str(sandbox or "").strip().lower() == "workspace-write":
+        return f"codex-cli-write/{token}"
+    return f"codex-cli/{token}"
+
+
 def canonical_role(value: Any) -> str:
     token = str(value or "").strip().replace("-", "_").lower()
     if token in {"po_scrum_master", "scrum"}:
@@ -753,7 +762,7 @@ def run_subagent(
             ensure_ascii=True,
         )
     elif chosen_backend == "openclaw":
-        openclaw_model = _openclaw_cli_model(plan["model"])
+        openclaw_model = _openclaw_runtime_model(plan["model"], plan["sandbox"])
         ok, backend_ref = _ensure_openclaw_agent(
             subagent_id,
             config.root,
