@@ -45,6 +45,8 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Use canonical paths: prefer current `apps/`, `platform/`, and `docs/ops` paths over historical aliases.
 - Keep network-heavy validation explicit: unit and local checks by default, broader provider checks only when required by the task.
 - Do not treat `dev`, `admin`, or `scrum_master` as autonomous cron lanes in planning docs; they are capability domains under planner authority.
+- Backend-first product changes: prefer adapting backend contracts to the current frontend before changing UI structure.
+- Preserve the existing frontend theme: design tokens, palette, and shell continuity are protected unless a change is explicitly justified.
 
 ## Branch decisions
 - `main` is historical and not the implementation baseline.

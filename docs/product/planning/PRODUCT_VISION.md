@@ -23,6 +23,8 @@ Use this document when translating vision into delivery batches, not when redefi
   - proof-first delivery
   - freshness as a correctness requirement
   - personal-use and low-cost runtime constraints
+  - backend-first evolution when frontend behavior can be preserved
+  - explicit protection of the existing frontend theme and shell
 - If a planning document conflicts with the canonical vision, the canonical vision wins.
 
 ## What belongs here
@@ -31,8 +33,11 @@ Use this document when translating vision into delivery batches, not when redefi
 - Delivery gates
 - Dependencies between product milestones
 - Rollout and proof expectations
+- Backend contract changes needed to support product flows without frontend redesign
+- Minimal frontend adaptation rules when UI change is unavoidable
 
 ## What does not belong here
 - A second long-form product manifesto
 - Legacy architecture assumptions based on autonomous lanes
 - Historical migration notes unless explicitly linked from a current batch/spec
+- Feature plans that assume a frontend rewrite as the default path

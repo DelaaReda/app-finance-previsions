@@ -20,6 +20,11 @@ Current target:
 - OpenClaw provides runtime/session transport
 - Codex provides specialized execution
 
+Product/UI constraint:
+- prefer backend contract evolution over frontend redesign
+- preserve the current frontend theme and shell by default
+- accept only minor frontend adaptations unless a larger UI change is explicitly justified
+
 ## Batch 1 — Runtime Truth
 Commit:
 - `feat(orchestration): harden state reconciler`
