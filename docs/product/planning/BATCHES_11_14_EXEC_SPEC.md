@@ -1,4 +1,16 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # BATCHES 11-14 — Core Completion Execution Spec
+
+Historical note:
+- This pack remains as detailed historical scope for batches 11-14.
+- The canonical backlog is now [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
+- Use this file only for detailed background or recovery of intent, not as the active planning source of truth.
 
 Updated: 2026-03-02
 Owner: planner (dispatch), avec exécution multi-rôles.

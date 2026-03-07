@@ -190,6 +190,104 @@ Acceptance:
 5. Minimal frontend adaptation
 6. Proof and release gate
 
+## Merged legacy batch map
+The older batch packs remain useful as detailed archives, but they are now merged into this canonical backlog.
+
+### Stream A — Core decision foundation
+Merged from:
+- `BATCH-11` to `BATCH-14`
+
+What survives:
+- ingestion health and freshness
+- portfolio state and risk profile core
+- decision journal and outcome loop
+- robustness drills and final go/no-go discipline
+
+Backend-first interpretation:
+- stabilize ingestion, freshness, portfolio context, and journaling contracts first
+- only add minimal UI surfaces needed to expose those contracts inside the existing shell
+
+### Stream B — Decision intelligence expansion
+Merged from:
+- `BATCH-15` to `BATCH-19`
+
+What survives:
+- strategy playbooks
+- scenarios and stress tests
+- regime and drift detection
+- event-aware recommendations
+- explainability graph and source traceability
+
+Backend-first interpretation:
+- add these as memo and brief enrichments first
+- only expose lightweight selectors, badges, and trace panels in the current UI
+
+### Stream C — Personal risk and execution discipline
+Merged from:
+- `BATCH-20` to `BATCH-23`
+
+What survives:
+- personal policy guardrails
+- paper trading and execution journal
+- rebalance optimization
+- fees, taxes, and slippage awareness
+
+Backend-first interpretation:
+- build policy and execution contracts first
+- keep frontend additions limited to panels/cards inside current portfolio and copilot surfaces
+
+### Stream D — Routine automation and reliability
+Merged from:
+- `BATCH-24` to `BATCH-28`
+
+What survives:
+- alerting intelligence
+- autonomous morning brief pipeline
+- weekly investment committee mode
+- reliability drills
+- final release/adoption gate
+
+Backend-first interpretation:
+- deliver jobs, storage, telemetry, and gate logic first
+- only then wire brief/alerts/committee views into the current theme
+
+### Stream E — Forecast research and model governance
+Merged from:
+- `BATCH-29` to `BATCH-40`
+
+What survives:
+- forecast calibration
+- multi-horizon decomposition
+- correlation/regime mapping
+- ensemble governance
+- uncertainty and provenance
+- predictive research gate
+
+Backend-first interpretation:
+- treat these as forecast contract and quality-layer work first
+- expose only compact visual affordances that fit the current forecasts shell
+
+### Stream F — Global multi-layer intelligence
+Merged from:
+- `BATCH-41` to `BATCH-50`
+
+What survives:
+- geopolitical and policy impact layers
+- insider/supply chain/global regime layers
+- event horizon matrices
+- multi-layer attribution and global forecast gate
+
+Backend-first interpretation:
+- these are advanced analytical layers that must not force a UI rewrite
+- they enter the product as deeper memo/context enrichments before any major visual expansion
+
+## Legacy batch packs status
+These older specs are now detailed historical references, not competing backlog sources:
+- `BATCHES_11_14_EXEC_SPEC.md`
+- `BATCHES_15_28_EXEC_SPEC.md`
+- `BATCHES_29_40_FORECAST_EXEC_SPEC.md`
+- `BATCHES_41_50_GLOBAL_FORECAST_SPEC.md`
+
 ## Out of scope for this backlog
 - full frontend redesign
 - theme rewrite

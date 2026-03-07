@@ -1,4 +1,16 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # BATCHES 29-40 - Forecast-First Expansion Spec
+
+Historical note:
+- This pack remains as detailed historical scope for batches 29-40.
+- The canonical backlog is now [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
+- Use this file only for detailed background or recovery of intent, not as the active planning source of truth.
 
 Updated: 2026-03-02
 Scope: analysis and prediction only, no execution-trading intent.

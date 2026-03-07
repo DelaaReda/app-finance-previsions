@@ -1,4 +1,16 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # BATCHES 15-28 - Expansion Execution Spec
+
+Historical note:
+- This pack remains as detailed historical scope for batches 15-28.
+- The canonical backlog is now [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
+- Use this file only for detailed background or recovery of intent, not as the active planning source of truth.
 
 Updated: 2026-03-02
 Scope: expansion creative aligned with personal-first finance copilot vision.
