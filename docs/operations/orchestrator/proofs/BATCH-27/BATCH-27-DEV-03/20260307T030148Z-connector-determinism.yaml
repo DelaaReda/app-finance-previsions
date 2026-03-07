@@ -1,0 +1,23 @@
+proof_id: "PRF-BATCH-27-BATCH-27-DEV-03-20260307T030148Z-CONNECTOR"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-07T03:01:48Z"
+summary:
+  - "Removed non-deterministic news effect generation from the canonical forecasts connector."
+  - "Collapsed the legacy connector into a compatibility loader so the forecasts domain keeps a single connector source of truth."
+  - "Added a targeted backend->connector->UI smoke/contract check for regression evidence."
+evidence:
+  before:
+    - "apps/web/src/domains/forecasts/contracts/apiConnector.js used Math.random() inside transformNewsItem(), so repeated refreshes could produce different news effect values for the same backend payload."
+    - "apps/web/src/apiConnector.js duplicated a second connector implementation, creating drift risk against the canonical forecasts connector."
+  after:
+    - "transformNewsItem() formats effect from backend fields / score-derived fallback, yielding stable output for identical payloads."
+    - "apps/web/src/apiConnector.js only injects domains/forecasts/contracts/apiConnector.js, eliminating duplicate connector logic."
+    - "tests/smoke/batch_27_dev_03_connector_contract_check.mjs proves backend fixture -> connector payload -> UI contract coherence and repeated refresh stability."
+validation:
+  commands:
+    - "node tests/smoke/batch_27_dev_03_connector_contract_check.mjs"
+    - "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js"
+    - "node --check apps/web/src/apiConnector.js"
+    - "node --check apps/web/src/domains/forecasts/pages/app.js"

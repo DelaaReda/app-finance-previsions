@@ -154,6 +154,17 @@ async function getPortfolioSummary() {
   };
 }
 
+async function getMarketDriversSnapshot() {
+  const payload = await fetchWithCache('/dashboard/market-drivers', 'market-drivers');
+  if (!payload) return null;
+  return {
+    ok: payload.ok ?? true,
+    data: getResponseData(payload),
+    freshness: payload.freshness || payload.generated_at || payload.data?.generated_at || new Date().toISOString(),
+    source: payload.data?.source || payload.source || ['dashboard-market-drivers']
+  };
+}
+
 async function getJudgeAnalysis(limit) {
   if (!limit) limit = 5;
   const data = await fetchWithCache('/judge?limit=' + limit, 'judge');
@@ -235,6 +246,13 @@ async function searchUniverse(query, options) {
 
 // ─── Transform API data → app.js format ──────────────────────────────────────
 
+function formatNewsEffect(item, sentimentEffect) {
+  const rawEffect = item.effect_percent ?? item.change_percent ?? item.market_effect_pct;
+  const fallbackEffect = normalizeNumber(item.score, 50) / 25;
+  const magnitude = Math.max(0.1, Math.abs(normalizeNumber(rawEffect, fallbackEffect)));
+  return `${sentimentEffect}${magnitude.toFixed(1)}%`;
+}
+
 function transformNewsItem(item) {
   const sentimentEffect = item.sentiment === 'positive' ? '+' : item.sentiment === 'negative' ? '-' : '~';
   const score = item.score != null ? item.score : 50;
@@ -250,7 +268,7 @@ function transformNewsItem(item) {
   return {
     headline: item.title || 'No title',
     impact: parseFloat(impact),
-    effect: sentimentEffect + (Math.random() * 2 + 0.5).toFixed(1) + '%',
+    effect: formatNewsEffect(item, sentimentEffect),
     time: timeAgo,
     source: item.source || 'API',
     category: (item.tickers && item.tickers.length > 0) ? item.tickers[0] : 'Market',
@@ -325,7 +343,7 @@ function transformTopStocks(payload) {
 }
 
 function transformAlert(payload) {
-  const raw = isObject(payload) ? payload : {};
+  const raw = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
   const confidenceRaw = normalizeNumber(raw.confidence ?? raw.score ?? raw.probability, 0);
   const confidence = confidenceRaw > 1 ? confidenceRaw : confidenceRaw * 100;
   const timestamp = raw.timestamp || raw.generated_at || raw.generatedAt || raw.generated_at_iso || new Date().toISOString();
@@ -348,7 +366,7 @@ function transformAlert(payload) {
     category: String(raw.category || '').toLowerCase(),
     description,
     detail: description,
-    signals: isObject(raw.signals) ? raw.signals : {}
+    signals: raw.signals && typeof raw.signals === 'object' && !Array.isArray(raw.signals) ? raw.signals : {}
   };
 }
 
@@ -367,8 +385,8 @@ function transformOpportunities(payload) {
 function transformBrief(payload) {
   const payloadSummary = payload.summary || payload.message || payload.overview;
   const sectorRotation = payload.sector_rotation || payload.sectorRotation || {};
-  const topSectors = toArray(sectorRotation.top).map((entry) => String(entry || '').trim()).filter(Boolean);
-  const bottomSectors = toArray(sectorRotation.bottom).map((entry) => String(entry || '').trim()).filter(Boolean);
+  const topSectors = (Array.isArray(sectorRotation.top) ? sectorRotation.top : []).map((entry) => String(entry || '').trim()).filter(Boolean);
+  const bottomSectors = (Array.isArray(sectorRotation.bottom) ? sectorRotation.bottom : []).map((entry) => String(entry || '').trim()).filter(Boolean);
   const summary = payloadSummary || 'Le marché reste actif avec une lecture mitigée.';
   const headline = payload.title || payload.headline || 'Aperçu du marché';
   const sentiment = payload.sentiment || 'neutral';
@@ -390,6 +408,98 @@ function transformBrief(payload) {
     sectorRotationBottom: bottomSectors,
     sectorRotationSummary: rotationText.join(' | ')
   };
+}
+
+function buildTradeIdeasFromForecasts(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  return rows.slice(0, 6).map((row) => {
+    const currentPrice = normalizeNumber(row.currentPrice ?? row.current_price ?? 0, 0);
+    const targetPrice = normalizeNumber(row.targetPrice ?? row.target_price ?? currentPrice, currentPrice);
+    const confidence = normalizeNumber(row.confidence ?? row.confidence_pct ?? 0, 0);
+    return {
+      symbol: String(row.ticker || row.symbol || 'MARKET').toUpperCase(),
+      signalType: String(row.action || row.direction || 'hold').toUpperCase(),
+      entry: currentPrice,
+      target: targetPrice,
+      confidence: Math.max(0, Math.min(100, Math.round(confidence)))
+    };
+  });
+}
+
+function resolveDriverColor(factor) {
+  const normalized = String(factor || '').toLowerCase();
+  if (normalized.includes('tech')) return '#1F40AF';
+  if (normalized.includes('sent')) return '#8B5CF6';
+  if (normalized.includes('news') || normalized.includes('nouv')) return '#F59E0B';
+  if (normalized.includes('macro')) return '#10B981';
+  return '#1F40AF';
+}
+
+function transformMarketDrivers(payload) {
+  const data = getResponseData(payload);
+  const drivers = extractArray(data, ['drivers', 'items', 'data']);
+  return drivers.map((item) => ({
+    factor: item.factor || 'Market',
+    contribution: Math.max(0, Math.min(100, Math.round(normalizeNumber(item.contribution, 0)))),
+    color: item.color || resolveDriverColor(item.factor)
+  }));
+}
+
+function formatCalendarDate(value, fallback) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return fallback || 'TBA';
+  return new Date(parsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function mapImpactLabel(value) {
+  const score = normalizeNumber(value, 0);
+  if (score >= 0.75 || score >= 75) return 'High';
+  if (score >= 0.45 || score >= 45) return 'Medium';
+  return 'Low';
+}
+
+function looksLikeEarningsEvent(item) {
+  const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+  return ['earnings', 'revenue', 'guidance', 'quarter', 'eps', 'results'].some((token) => text.includes(token));
+}
+
+function buildMarketCalendar(brief, newsItems, alerts) {
+  const safeBrief = brief && typeof brief === 'object' ? brief : {};
+  const newsRows = Array.isArray(newsItems) ? newsItems : [];
+  const alertRows = Array.isArray(alerts) ? alerts : [];
+
+  const earnings = newsRows
+    .filter((item) => looksLikeEarningsEvent(item))
+    .slice(0, 3)
+    .map((item) => ({
+      stock: item.tickers && item.tickers.length ? String(item.tickers[0]).toUpperCase() : 'MARKET',
+      date: formatCalendarDate(item.published_at || item.date || item.created_at, 'TBA'),
+      impact: mapImpactLabel(item.score ?? item.relevance ?? 0.6),
+      holding: Boolean(item.tickers && item.tickers.length)
+    }));
+
+  const macroSignals = Array.isArray(safeBrief.macro_signals) ? safeBrief.macro_signals : [];
+  const economicData = macroSignals.slice(0, 3).map((item) => ({
+    event: item.topic || item.name || 'Macro signal',
+    date: formatCalendarDate(safeBrief.generated_at, 'Today'),
+    impact: mapImpactLabel(item.confidence ?? item.score ?? 0.5)
+  }));
+
+  const exDividend = alertRows
+    .filter((item) => String(item.type || '').toLowerCase().includes('dividend'))
+    .slice(0, 2)
+    .map((item) => ({
+      stock: String(item.ticker || item.symbol || 'MARKET').toUpperCase(),
+      date: formatCalendarDate(item.timestamp || item.generated_at, 'TBA'),
+      amount: normalizeNumber(item.amount, 0)
+    }));
+
+  return { earnings, economicData, exDividend };
+}
+
+function hasCalendarEntries(calendar) {
+  if (!calendar || typeof calendar !== 'object') return false;
+  return ['earnings', 'economicData', 'exDividend'].some((key) => Array.isArray(calendar[key]) && calendar[key].length > 0);
 }
 
 function transformJudgeData(payload) {
@@ -436,16 +546,20 @@ async function populateWindowGlobals() {
   console.log('[API] Loading live data...');
 
   try {
+    const contractWarnings = [];
+
     // News
     const rawNews = await getNewsFeed(20);
     if (rawNews.length > 0) {
       window.newsItems = rawNews.map(transformNewsItem);
       console.log("[API] ✅ " + window.newsItems.length + " news chargées depuis l'API");
+    } else {
+      contractWarnings.push('newsItems-unavailable');
     }
 
     // Alerts
     const rawAlerts = await getAlerts();
-    window.alertTimeline = toArray(rawAlerts, []).map(transformAlert);
+    window.alertTimeline = (Array.isArray(rawAlerts) ? rawAlerts : []).map(transformAlert);
     if (window.alertTimeline.length > 0) {
       console.log('[API] ✅ ' + window.alertTimeline.length + ' alerts chargées depuis l\'API');
     }
@@ -454,10 +568,13 @@ async function populateWindowGlobals() {
     const rawForecasts = await getForecasts(20);
     if (rawForecasts.length > 0) {
       window.liveForecasts = rawForecasts.map(transformForecast);
+      window.tradeIdeas = buildTradeIdeasFromForecasts(window.liveForecasts);
       // Also expose in v11Data format used by some widgets
       if (!window.v11Data) window.v11Data = {};
       window.v11Data.forecasts = window.liveForecasts;
       console.log('[API] ✅ ' + window.liveForecasts.length + ' forecasts loaded');
+    } else {
+      contractWarnings.push('tradeIdeas-unavailable');
     }
 
     // Stocks - build top movers with real % change from price history
@@ -496,6 +613,8 @@ async function populateWindowGlobals() {
     const brief = await getDailyBrief();
     if (brief && typeof brief === 'object') {
       window.storyData = transformBrief(brief);
+    } else {
+      contractWarnings.push('story-unavailable');
     }
 
     // Sector performance -> Sector widget
@@ -503,6 +622,22 @@ async function populateWindowGlobals() {
     if (sectorPayload && typeof sectorPayload === 'object') {
       window.sectorPerformance = transformSectorPerformance(sectorPayload);
     }
+
+    const marketDriversPayload = await getMarketDriversSnapshot();
+    const transformedMarketDrivers = marketDriversPayload ? transformMarketDrivers(marketDriversPayload.data || marketDriversPayload) : [];
+    if (transformedMarketDrivers.length > 0) {
+      window.marketDrivers = transformedMarketDrivers;
+    } else {
+      contractWarnings.push('marketDrivers-unavailable');
+    }
+
+    const derivedCalendar = buildMarketCalendar(brief, rawNews, window.alertTimeline || []);
+    if (hasCalendarEntries(derivedCalendar)) {
+      window.marketCalendar = derivedCalendar;
+    } else {
+      contractWarnings.push('marketCalendar-unavailable');
+    }
+    window.liveContractWarnings = contractWarnings;
 
     // LLM Judge snapshot
     const judgePayload = await getLlmJudgeSnapshot();
@@ -558,6 +693,7 @@ async function populateWindowGlobals() {
         data: {
           newsItems: window.newsItems || [],
           forecasts: window.liveForecasts || [],
+          tradeIdeas: window.tradeIdeas || [],
           alerts: window.alertTimeline || [],
           topMovers: window.topMovers || [],
           stocks: window.liveStocks || {},
@@ -565,6 +701,8 @@ async function populateWindowGlobals() {
           opportunities: window.liveOpportunities || [],
           sectorPerformance: window.sectorPerformance || [],
           story: window.storyData || null,
+          marketCalendar: window.marketCalendar || null,
+          marketDrivers: window.marketDrivers || [],
           llmJudgeData: window.llmJudgeData || null,
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
@@ -574,6 +712,8 @@ async function populateWindowGlobals() {
         generatedAt: new Date().toISOString(),
         sources: ['api-connector'],
         modelVersions: ['live']
+        ,
+        warnings: contractWarnings
       }
     });
     window.dispatchEvent(liveEvent);
@@ -621,6 +761,7 @@ window.getLiveDashboardData = () => ({
   data: {
     newsItems: window.newsItems || [],
     forecasts: window.liveForecasts || [],
+    tradeIdeas: window.tradeIdeas || [],
     alerts: window.alertTimeline || [],
     topMovers: window.topMovers || [],
     stocks: window.liveStocks || {},
@@ -628,6 +769,8 @@ window.getLiveDashboardData = () => ({
     opportunities: window.liveOpportunities || [],
     sectorPerformance: window.sectorPerformance || [],
     story: window.storyData || null,
+    marketCalendar: window.marketCalendar || null,
+    marketDrivers: window.marketDrivers || [],
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
     llmJudgeData: window.llmJudgeData || null
@@ -635,7 +778,7 @@ window.getLiveDashboardData = () => ({
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
   sources: ['api-connector'],
   modelVersions: ['live'],
-  warnings: ['live-connector'],
+  warnings: window.liveContractWarnings || ['live-connector'],
   freshness: { lastFetchedAt: Date.now(), ttlMs: cache.TTL }
 });
 
