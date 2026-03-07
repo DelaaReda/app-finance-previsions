@@ -15,6 +15,7 @@
 - Config file: `~/.openclaw/openclaw.json`
 - Logging level: `warn`
 - Console logging: `warn`
+- `agents.defaults.cliBackends.codex-cli` must override the built-in resume path so it does not pass unsupported flags like `--color` or `--sandbox` to `codex exec resume`
 - Memory search sources: `["memory"]`
 - Session-memory indexing: disabled
 - Sync watch: disabled
@@ -41,12 +42,12 @@ These settings are intentional. They reduce gateway churn and prevent Node OOM u
 
 ## Operator Checks
 1. `systemctl --user --no-pager --full status openclaw-gateway.service`
-2. `openclaw agent --agent planner --json --thinking low --timeout 60 --message 'Reply with exactly {\"status\":\"ok\"}'`
+2. `python3 platform/automation/openclaw_control_plane.py --apply --validate-bridge --validate-agent planner --validate-timeout 45`
 3. `curl -s http://127.0.0.1:7779/api/status`
 
 Expected:
 - gateway active
-- OpenClaw probe returns JSON
+- control-plane bridge validation returns `bridge_validation.ok=true`
 - monitor reports `execution_mode=planner_experimental`
 
 ## Log Hygiene
@@ -59,3 +60,4 @@ Expected:
 - Do not build a second worker platform on top of OpenClaw.
 - Do not let subagents mutate backlog/workboard truth directly.
 - Do not launch planner-owned capabilities from repo root when the repo `.codex/config.toml` is incompatible with the OpenClaw Codex parser; use the dedicated capability workspace instead.
+- Do not rely on OpenClaw's built-in `codex-cli` backend defaults without the control-plane override; current Codex resume does not accept `--color`.

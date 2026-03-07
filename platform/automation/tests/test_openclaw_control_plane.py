@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -22,6 +23,7 @@ SPEC.loader.exec_module(MODULE)
 
 
 sync_control_plane = MODULE.sync_control_plane
+validate_bridge = MODULE.validate_bridge
 
 
 class OpenClawControlPlaneTests(unittest.TestCase):
@@ -68,6 +70,11 @@ class OpenClawControlPlaneTests(unittest.TestCase):
         defaults = reloaded["agents"]["defaults"]
         self.assertEqual(defaults["model"]["primary"], "codex-cli/gpt-5.4")
         self.assertIn("/home/venom/analyse-financiere/logs-codex-runs/openclaw-control-plane/default", defaults["workspace"])
+        self.assertEqual(defaults["cliBackends"]["codex-cli"]["command"], "codex")
+        self.assertEqual(
+            defaults["cliBackends"]["codex-cli"]["resumeArgs"],
+            ["exec", "resume", "{sessionId}", "--skip-git-repo-check"],
+        )
         ids = [row["id"] for row in reloaded["agents"]["list"]]
         self.assertEqual(ids, ["main", "planner", "adminapp-codex", "clawsentinel"])
         self.assertTrue(reloaded["agents"]["list"][1]["workspace"].endswith("/openclaw-control-plane/planner"))
@@ -87,6 +94,18 @@ class OpenClawControlPlaneTests(unittest.TestCase):
         )
         self.assertIn("planner", result["reset_dirs"])
         self.assertFalse((self.root / ".openclaw" / "agents" / "planner").exists())
+
+    def test_validate_bridge_requires_two_successful_attempts(self) -> None:
+        class Proc:
+            def __init__(self, rc: int, stdout: str, stderr: str = "") -> None:
+                self.returncode = rc
+                self.stdout = stdout
+                self.stderr = stderr
+
+        with patch.object(MODULE.subprocess, "run", side_effect=[Proc(0, '{"result":{"payloads":[{"text":"OK"}]}}'), Proc(0, '{"result":{"payloads":[{"text":"OK"}]}}')]):
+            result = validate_bridge("planner", 30)
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["attempts"]), 2)
 
 
 if __name__ == "__main__":

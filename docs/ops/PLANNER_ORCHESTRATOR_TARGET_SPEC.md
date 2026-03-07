@@ -83,6 +83,7 @@ Codex multi-agent execution
   - transport
   - agent lifecycle where needed
   - dedicated control-plane and capability workspaces under `logs-codex-runs/`
+  - a control-plane `codex-cli` backend override compatible with the installed Codex resume CLI
 - Codex is authoritative for:
   - bounded specialized execution
   - parallel delegated work

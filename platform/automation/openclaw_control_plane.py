@@ -3,13 +3,40 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
 
 CANONICAL_WORKSPACE = "/home/venom/analyse-financiere"
 CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
+CANONICAL_CODEX_CLI_BACKEND = {
+    "command": "codex",
+    "args": [
+        "exec",
+        "--json",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+    ],
+    "resumeArgs": [
+        "exec",
+        "resume",
+        "{sessionId}",
+        "--skip-git-repo-check",
+    ],
+    "output": "jsonl",
+    "resumeOutput": "text",
+    "input": "arg",
+    "modelArg": "--model",
+    "sessionIdFields": ["thread_id"],
+    "sessionMode": "existing",
+    "imageArg": "--image",
+    "imageMode": "repeat",
+    "serialize": True,
+}
 OPENCLAW_MINIMAL_CODEX_CONFIG = """model = "{model}"
 model_reasoning_effort = "{thinking}"
 
@@ -102,6 +129,8 @@ def _sync_defaults(payload: dict[str, Any], workspace: str, primary_model: str) 
     defaults["workspace"] = _control_workspace(workspace, "default", primary_model, "high")
     defaults.setdefault("maxConcurrent", 2)
     defaults.setdefault("subagents", {}).setdefault("maxConcurrent", 3)
+    cli_backends = defaults.setdefault("cliBackends", {})
+    cli_backends["codex-cli"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_BACKEND))
 
 
 def _sync_agent_list(payload: dict[str, Any], config_path: Path, workspace: str, primary_model: str) -> tuple[list[str], list[str]]:
@@ -132,6 +161,46 @@ def _remove_agent_dirs(config_path: Path, agent_ids: list[str]) -> list[str]:
             shutil.rmtree(target, ignore_errors=True)
             removed.append(agent_id)
     return removed
+
+
+def validate_bridge(agent_id: str, timeout_seconds: int) -> dict[str, Any]:
+    attempts: list[dict[str, Any]] = []
+    env = dict(os.environ)
+    desired = str(env.get("OPENCLAW_NODE_OPTIONS", "")).strip() or "--max-old-space-size=1536 --max-semi-space-size=64"
+    existing = str(env.get("NODE_OPTIONS", "")).strip()
+    if desired not in existing:
+        env["NODE_OPTIONS"] = f"{existing} {desired}".strip()
+    for index in range(2):
+        proc = subprocess.run(
+            [
+                "openclaw",
+                "agent",
+                "--agent",
+                agent_id,
+                "--json",
+                "--thinking",
+                "low",
+                "--timeout",
+                str(max(30, timeout_seconds)),
+                "--message",
+                "Reply with exactly OK",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+            timeout=max(45, timeout_seconds + 15),
+        )
+        attempts.append(
+            {
+                "attempt": index + 1,
+                "rc": proc.returncode,
+                "stdout": (proc.stdout or "").strip()[:600],
+                "stderr": (proc.stderr or "").strip()[:600],
+            }
+        )
+    ok = all(item["rc"] == 0 and "OK" in item["stdout"] for item in attempts)
+    return {"ok": ok, "agent_id": agent_id, "attempts": attempts}
 
 
 def sync_control_plane(config_path: Path, workspace: str, primary_model: str, apply: bool, prune_dirs: bool, reset_kept_dirs: bool) -> dict[str, Any]:
@@ -170,6 +239,9 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--prune-dirs", action="store_true")
     parser.add_argument("--reset-kept-dirs", action="store_true")
+    parser.add_argument("--validate-bridge", action="store_true")
+    parser.add_argument("--validate-agent", default="planner")
+    parser.add_argument("--validate-timeout", type=int, default=60)
     args = parser.parse_args()
 
     result = sync_control_plane(
@@ -180,6 +252,11 @@ def main() -> int:
         prune_dirs=bool(args.prune_dirs),
         reset_kept_dirs=bool(args.reset_kept_dirs),
     )
+    if args.validate_bridge:
+        result["bridge_validation"] = validate_bridge(
+            agent_id=str(args.validate_agent).strip() or "planner",
+            timeout_seconds=max(15, int(args.validate_timeout)),
+        )
     print(json.dumps(result, indent=2, ensure_ascii=True))
     return 0
 
