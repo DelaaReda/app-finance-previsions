@@ -1,0 +1,14 @@
+Gateway agent failed; falling back to embedded: Error: Error: All models failed (2): codex-cli/gpt-5.4: Error loading config.toml: invalid type: integer `1`, expected struct AgentRoleToml
+in `agents` (unknown) | openai-codex/gpt-5.2: OAuth token refresh failed for openai-codex: Failed to refresh OAuth token for openai-codex. Please try again or re-authenticate. (auth)
+[openai-codex] Token refresh failed: 401 {
+  "error": {
+    "message": "Your refresh token has already been used to generate a new access token. Please try signing in again.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": "refresh_token_reused"
+  }
+}
+[diagnostic] lane task error: lane=main durationMs=265 error="Error: OAuth token refresh failed for openai-codex: Failed to refresh OAuth token for openai-codex. Please try again or re-authenticate."
+[diagnostic] lane task error: lane=session:agent:planner_dev_4409272757:main durationMs=281 error="Error: OAuth token refresh failed for openai-codex: Failed to refresh OAuth token for openai-codex. Please try again or re-authenticate."
+Error: All models failed (2): codex-cli/gpt-5.4: Error loading config.toml: invalid type: integer `1`, expected struct AgentRoleToml
+in `agents` (unknown) | openai-codex/gpt-5.2: OAuth token refresh failed for openai-codex: Failed to refresh OAuth token for openai-codex. Please try again or re-authenticate. (auth)

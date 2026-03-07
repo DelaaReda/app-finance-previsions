@@ -1,5 +1,5 @@
 {
-  "ts_utc": "2026-03-07T03:00:33Z",
+  "ts_utc": "2026-03-07T04:22:36Z",
   "guardian_version": "2026-03-03.v1",
   "role": "planner",
   "source": "primary_structured",
@@ -29,7 +29,7 @@
     "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
     "verdict": "BLOCKED",
     "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
-    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772852412_14778",
+    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772857327_28227",
     "task_update": "blocked",
     "planner_artifact": "docs/operations/orchestrator/parallel-workstreams.json",
     "batch_created": "",

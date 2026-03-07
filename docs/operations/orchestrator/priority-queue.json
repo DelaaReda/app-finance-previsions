@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-07T03:05:25Z",
+  "updated_at": "2026-03-07T04:22:36Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -545,12 +545,12 @@
     {
       "id": "BATCH-28",
       "title": "MVP v3 Release Gate + Adoption Analytics",
-      "state": "READY_DEV",
+      "state": "WAITING_DEP",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-07T02:34:22Z",
+      "updated_at": "2026-03-07T04:22:36Z",
       "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
       "notes": [
         "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",

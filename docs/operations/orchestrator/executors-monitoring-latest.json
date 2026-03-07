@@ -1,8 +1,8 @@
 {
-  "updated_at_utc": "2026-03-07T03:00:32Z",
+  "updated_at_utc": "2026-03-07T04:22:36Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-07T02:38:01Z",
+      "ts_utc": "2026-03-07T04:08:02Z",
       "role": "dev",
       "source": "health_snapshot",
       "status": "BLOCKED",
@@ -34,23 +34,23 @@
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-07T03:00:32Z",
+      "ts_utc": "2026-03-07T04:22:36Z",
       "role": "planner",
       "source": "primary_structured",
       "status": "BLOCKED",
       "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
       "verdict": "BLOCKED",
       "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
-      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772852412_14778",
+      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772857327_28227",
       "next": "owner=planner; action=relancer claim --role planner sur BATCH-11-ARCH apres reconciliation du workboard",
       "task_update": "blocked",
       "exec_report": "none",
-      "issues": "planner_no_ready_task_after_sync,queue_workboard_desync",
+      "issues": "planner_no_ready_task_after_sync,planner_orchestrator_dev_dispatch_failed",
       "issue_count": 2,
       "issue_severity": "medium",
       "issue_codes": [
         "planner_no_ready_task_after_sync",
-        "queue_workboard_desync"
+        "planner_orchestrator_dev_dispatch_failed"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
@@ -63,11 +63,11 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1772852402_9ff1e1ede33d",
-      "workboard_version": "workboard_1772852405_144cc36f8bed"
+      "queue_version": "queue_1772857321_f38108b1968a",
+      "workboard_version": "workboard_1772857323_5cca710a3ad8"
     },
     "admin": {
-      "ts_utc": "2026-03-07T02:38:01Z",
+      "ts_utc": "2026-03-07T04:08:02Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "IN_PROGRESS",
@@ -164,11 +164,11 @@
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1772852402_88402c4d080e",
-      "workboard_version": "workboard_1772852420_53f80854efdf"
+      "queue_version": "queue_1772857356_b3f3c54bd2d3",
+      "workboard_version": "workboard_1772857356_c515e38e4989"
     }
   },
-  "updated_at": "2026-03-07T02:38:01Z",
+  "updated_at": "2026-03-07T04:08:02Z",
   "health_snapshot": {
     "ts_utc": "2026-03-03T11:03:54Z",
     "workboard": {
@@ -209,8 +209,8 @@
   },
   "health": "DEGRADED",
   "velocity": {
-    "done_24h": 58,
-    "done_7d": 117,
+    "done_24h": 55,
+    "done_7d": 119,
     "proofs": 49
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
