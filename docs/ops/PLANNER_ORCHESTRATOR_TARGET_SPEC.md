@@ -82,6 +82,7 @@ Codex multi-agent execution
   - runtime sessions
   - transport
   - agent lifecycle where needed
+  - dedicated control-plane and capability workspaces under `logs-codex-runs/`
 - Codex is authoritative for:
   - bounded specialized execution
   - parallel delegated work
@@ -92,6 +93,7 @@ Codex multi-agent execution
 - the parent keeps authority
 - no worker directly completes a business task
 - no worker directly mutates final orchestration truth
+- OpenClaw-backed planner capabilities must not launch from repo root when repo-level `.codex/config.toml` is more expressive than the OpenClaw Codex parser; use dedicated generated workspaces under `logs-codex-runs/openclaw-capabilities/`
 
 ## Responsibilities Mapping
 

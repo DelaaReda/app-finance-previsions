@@ -19,11 +19,18 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Runner config: [runner.v1.yaml](/home/venom/analyse-financiere/platform/config/runner/runner.v1.yaml)
 - Runtime state/path helper: [orchestrator_paths.py](/home/venom/analyse-financiere/platform/automation/orchestrator_paths.py)
 - Planner bridge: [planner_subagent_manager.py](/home/venom/analyse-financiere/platform/automation/planner_subagent_manager.py)
+- OpenClaw control plane sync: [openclaw_control_plane.py](/home/venom/analyse-financiere/platform/automation/openclaw_control_plane.py)
 - Pre-tick reconciliation: [state_reconciler.py](/home/venom/analyse-financiere/platform/automation/state_reconciler.py)
 - Delivery gate: [delivery_value_gate.py](/home/venom/analyse-financiere/platform/automation/delivery_value_gate.py)
 - Product guard: [product_priority_guard.py](/home/venom/analyse-financiere/platform/automation/product_priority_guard.py)
 - Monitor API: [server.py](/home/venom/analyse-financiere/apps/monitor/server.py)
 - Doctor CLI: [fc_doctor.py](/home/venom/analyse-financiere/platform/automation/fc_doctor.py)
+
+## Canonical reusable skills
+- Browser validation: [skills/browser-smoke/SKILL.md](/home/venom/analyse-financiere/skills/browser-smoke/SKILL.md)
+- Repo triage: [skills/repo-scan/SKILL.md](/home/venom/analyse-financiere/skills/repo-scan/SKILL.md)
+- Runtime incident triage: [skills/runtime-triage/SKILL.md](/home/venom/analyse-financiere/skills/runtime-triage/SKILL.md)
+- Delivery proof gate helper: [skills/delivery-proof-check/SKILL.md](/home/venom/analyse-financiere/skills/delivery-proof-check/SKILL.md)
 
 ## Historical docs
 - Anything under `docs/operations/` that is an incident log, worklog, batch report, or migration diary is historical unless a canonical doc points to it explicitly.

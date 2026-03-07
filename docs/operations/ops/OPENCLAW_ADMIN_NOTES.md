@@ -20,6 +20,15 @@
 - Sync watch: disabled
 - Cache max entries: `20000`
 - Default verbosity: `on`
+- Canonical persistent agents:
+  - `main`
+  - `planner`
+  - `adminapp-codex`
+  - `clawsentinel`
+- Canonical capability workspaces:
+  - `logs-codex-runs/openclaw-capabilities/planner_dev/`
+  - `logs-codex-runs/openclaw-capabilities/planner_admin/`
+  - `logs-codex-runs/openclaw-capabilities/planner_scrum_master/`
 
 These settings are intentional. They reduce gateway churn and prevent Node OOM under planner-owned subagent load.
 
@@ -27,6 +36,8 @@ These settings are intentional. They reduce gateway churn and prevent Node OOM u
 - Config source: `platform/config/runner/runner.v1.yaml`
 - Active backend: `features.planner_orchestrator.backend = "openclaw"`
 - Planner bridge implementation: `platform/automation/planner_subagent_manager.py`
+- OpenClaw control-plane alignment tool: `platform/automation/openclaw_control_plane.py`
+- OpenClaw capability workspace provisioning: `platform/automation/worker_manager.py`
 
 ## Operator Checks
 1. `systemctl --user --no-pager --full status openclaw-gateway.service`
@@ -47,3 +58,4 @@ Expected:
 - Do not reintroduce legacy role-session assumptions (`tester`, `qa`, four-lane watchdog health).
 - Do not build a second worker platform on top of OpenClaw.
 - Do not let subagents mutate backlog/workboard truth directly.
+- Do not launch planner-owned capabilities from repo root when the repo `.codex/config.toml` is incompatible with the OpenClaw Codex parser; use the dedicated capability workspace instead.

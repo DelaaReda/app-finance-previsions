@@ -23,6 +23,7 @@ SPEC.loader.exec_module(MODULE)
 
 WorkerRecord = MODULE.WorkerRecord
 _load_config = MODULE._load_config
+_openclaw_capability_workspace = MODULE._openclaw_capability_workspace
 plan_worker = MODULE.plan_worker
 run_worker = MODULE.run_worker
 collect_worker = MODULE.collect_worker
@@ -136,6 +137,16 @@ class WorkerManagerTests(unittest.TestCase):
         cleaned = cleanup_workers(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("worker_expired_01", cleaned["removed"])
+
+    def test_openclaw_capability_workspace_writes_minimal_codex_config(self) -> None:
+        workspace = _openclaw_capability_workspace(self.root, "planner-dev", "gpt-5.4", "high")
+        config_path = workspace / ".codex" / "config.toml"
+        self.assertTrue(config_path.exists())
+        body = config_path.read_text(encoding="utf-8")
+        self.assertIn('model = "gpt-5.4"', body)
+        self.assertIn('model_reasoning_effort = "high"', body)
+        self.assertIn("[features]", body)
+        self.assertNotIn("[agents]", body)
 
 
 if __name__ == "__main__":

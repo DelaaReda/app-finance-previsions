@@ -753,7 +753,13 @@ def run_subagent(
         )
     elif chosen_backend == "openclaw":
         openclaw_model = _openclaw_cli_model(plan["model"])
-        ok, backend_ref = _ensure_openclaw_agent(subagent_id, config.root, openclaw_model)
+        ok, backend_ref = _ensure_openclaw_agent(
+            subagent_id,
+            config.root,
+            openclaw_model,
+            workspace_key=f"planner-{plan['target_role']}",
+            thinking=plan["thinking"],
+        )
         if not ok:
             rc = 5
             stderr = backend_ref or "openclaw_agent_create_failed"

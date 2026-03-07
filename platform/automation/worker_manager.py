@@ -223,6 +223,17 @@ def _openclaw_cli_model(model: str) -> str:
     return f"codex-cli/{token}"
 
 
+OPENCLAW_CAPABILITY_CONFIG_TEMPLATE = """model = "{model}"
+model_reasoning_effort = "{thinking}"
+
+[features]
+multi_agent = true
+apps = true
+js_repl = true
+prevent_idle_sleep = true
+"""
+
+
 def _openclaw_env() -> dict[str, str]:
     env = dict(os.environ)
     desired = str(env.get("OPENCLAW_NODE_OPTIONS", "")).strip() or "--max-old-space-size=1536 --max-semi-space-size=64"
@@ -232,10 +243,33 @@ def _openclaw_env() -> dict[str, str]:
     return env
 
 
-def _ensure_agent(agent_id: str, root: Path, model: str) -> tuple[bool, str]:
+def _write_text_if_changed(path: Path, content: str) -> None:
+    existing = ""
+    if path.exists():
+        existing = path.read_text(encoding="utf-8", errors="ignore")
+    if existing == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, thinking: str = "medium") -> Path:
+    safe_key = canonical_role(workspace_key).replace("/", "_") or "shared"
+    workspace = root / "logs-codex-runs" / "openclaw-capabilities" / safe_key
+    config_path = workspace / ".codex" / "config.toml"
+    config_body = OPENCLAW_CAPABILITY_CONFIG_TEMPLATE.format(
+        model=str(model or "gpt-5.4").strip(),
+        thinking=str(thinking or "medium").strip(),
+    )
+    _write_text_if_changed(config_path, config_body)
+    return workspace
+
+
+def _ensure_agent(agent_id: str, root: Path, model: str, workspace_key: str = "shared", thinking: str = "medium") -> tuple[bool, str]:
     if not shutil_which("openclaw"):
         return False, "openclaw_missing"
     openclaw_model = _openclaw_cli_model(model)
+    capability_workspace = _openclaw_capability_workspace(root, workspace_key, model, thinking)
     listed = subprocess.run(
         ["openclaw", "agents", "list", "--json"],
         text=True,
@@ -251,9 +285,19 @@ def _ensure_agent(agent_id: str, root: Path, model: str) -> tuple[bool, str]:
         if isinstance(payload, list):
             for item in payload:
                 if isinstance(item, dict) and str(item.get("id", "")) == agent_id:
-                    return True, agent_id
+                    existing_workspace = str(item.get("workspace", "")).strip()
+                    existing_model = str(item.get("model", "")).strip()
+                    if existing_workspace == str(capability_workspace) and existing_model == openclaw_model:
+                        return True, agent_id
+                    subprocess.run(
+                        ["openclaw", "agents", "delete", agent_id],
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        env=_openclaw_env(),
+                    )
     created = subprocess.run(
-        ["openclaw", "agents", "add", agent_id, "--workspace", str(root), "--model", openclaw_model, "--non-interactive", "--json"],
+        ["openclaw", "agents", "add", agent_id, "--workspace", str(capability_workspace), "--model", openclaw_model, "--non-interactive", "--json"],
         text=True,
         capture_output=True,
         check=False,
@@ -389,7 +433,13 @@ def run_worker(
         chosen_backend = "openclaw" if shutil_which("openclaw") else "unavailable"
 
     if chosen_backend == "openclaw":
-        ok, backend_ref = _ensure_agent(worker_id, config.root, os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "gpt-5.4"))
+        ok, backend_ref = _ensure_agent(
+            worker_id,
+            config.root,
+            os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "gpt-5.4"),
+            workspace_key=f"worker-{role}-{worker_type}",
+            thinking=thinking or "medium",
+        )
         if not ok:
             rc = 5
             stderr = "openclaw_agent_create_failed"

@@ -99,6 +99,7 @@ Priority:
 
 Scope:
 - harden `platform/automation/planner_subagent_manager.py`
+- provision dedicated OpenClaw capability workspaces with minimal Codex config
 - keep delegation minimal: `plan`, `run`, `collect`, `cleanup`
 - connect planner-owned delegation cleanly to OpenClaw/Codex
 
@@ -106,6 +107,7 @@ Acceptance:
 - planner can delegate bounded work to `dev/admin/scrum_master` capabilities
 - results are structured and mergeable
 - workers/subagents never own final business truth
+- OpenClaw-backed capability runs no longer fail on repo-root Codex config parsing
 
 ## Batch 5 — Capability Contracts And Monitor
 Commit:
