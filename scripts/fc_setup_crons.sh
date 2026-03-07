@@ -324,6 +324,18 @@ EOF
 crontab /tmp/fc_new_crontab
 rm -f /tmp/fc_new_crontab
 
+RUNTIME_EXECUTION_MODE="parallel_roles"
+if [[ "$PLANNER_ORCHESTRATOR_ACTIVE" == "1" ]]; then
+  RUNTIME_EXECUTION_MODE="planner_experimental"
+fi
+python3 "$ROOT/platform/automation/runtime_state.py" write \
+  --root "$ROOT" \
+  --lifecycle running \
+  --reason "cron_profile_${CRON_PROFILE}" \
+  --execution-mode "$RUNTIME_EXECUTION_MODE" \
+  --operator-mode "$CRON_PROFILE" \
+  --source "fc_setup_crons" >/dev/null 2>&1 || true
+
 echo ""
 echo "✅ Cron jobs installed!"
 echo ""

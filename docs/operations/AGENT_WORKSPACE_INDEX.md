@@ -1,3 +1,10 @@
+---
+status: canonical
+last_verified: 2026-03-06
+canonical_replaces:
+  - docs/operations/README.md
+---
+
 # Agent Workspace Index (Canonical Reference)
 
 ## Changelog
@@ -7,6 +14,7 @@
 This index provides canonical paths and ownership boundaries for agents and operators.
 
 It is the primary path map used by orchestration docs, monitor diagnostics, and troubleshooting workflows.
+For the shortest current doc set, start with `docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md`.
 
 ## 2) Normative Rules (MUST/SHOULD/MUST NOT)
 - Agents **MUST** prefer canonical paths over compatibility aliases.
@@ -22,10 +30,12 @@ It is the primary path map used by orchestration docs, monitor diagnostics, and 
 ### Canonical workspace root
 - `/home/venom/analyse-financiere`
 
-### Core orchestration files
-- Queue: `/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json`
-- Workboard: `/home/venom/analyse-financiere/docs/operations/orchestrator/parallel-workstreams.json`
-- Monitoring latest: `/home/venom/analyse-financiere/docs/operations/orchestrator/executors-monitoring-latest.json`
+### Core orchestration state
+- Runtime mutable state root: `/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/`
+- Runtime state file: `/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/runtime-state.json`
+- Queue (compatibility-read during migration): `/home/venom/analyse-financiere/docs/operations/orchestrator/priority-queue.json`
+- Workboard (compatibility-read during migration): `/home/venom/analyse-financiere/docs/operations/orchestrator/parallel-workstreams.json`
+- Monitoring latest (compatibility-read during migration): `/home/venom/analyse-financiere/docs/operations/orchestrator/executors-monitoring-latest.json`
 
 ### Runtime logs
 - Tick logs: `/home/venom/analyse-financiere/logs-codex-runs/fc-ticks/`
@@ -42,7 +52,8 @@ It is the primary path map used by orchestration docs, monitor diagnostics, and 
 
 ## 4) Runtime Behavior and Edge Cases
 - Compatibility alias `/home/venom/analyse-financiere/docs/orchestrator-ops` may exist and be readable.
-- Canonical orchestrator directory is `docs/operations/orchestrator`.
+- Canonical mutable runtime writes must target `logs-codex-runs/orchestrator-state/`.
+- `docs/operations/orchestrator` remains readable for compatibility and human-facing evidence.
 - If monitor/root detection sees stale shared roots, writable canonical root must win.
 
 ## 5) Operator Commands and Expected Outputs
@@ -56,18 +67,19 @@ Expected:
 
 - Verify canonical paths:
 ```bash
-ls -ld docs/operations/orchestrator docs/orchestrator-ops
+ls -ld logs-codex-runs/orchestrator-state docs/operations/orchestrator docs/orchestrator-ops
 ```
 Expected:
-- canonical directory present; compatibility alias may be symlink.
+- runtime state directory present; docs path present; compatibility alias may be symlink.
 
 - Verify critical files:
 ```bash
+test -f logs-codex-runs/orchestrator-state/runtime-state.json && echo OK_RUNTIME_STATE || true
 test -f docs/operations/orchestrator/priority-queue.json && echo OK_QUEUE
 test -f docs/operations/orchestrator/parallel-workstreams.json && echo OK_WORKBOARD
 ```
 Expected:
-- both checks print `OK_*`.
+- runtime state exists when scheduler or orchestration mode has been applied; queue/workboard may still exist in docs during compatibility migration.
 
 ## 6) Observability and Troubleshooting
 When path drift is suspected:
@@ -78,9 +90,10 @@ When path drift is suspected:
 ## 7) Compatibility and Migration Notes
 - `docs/ops/*` may symlink into `docs/operations/*`; this is expected.
 - Historical `docs/orchestrator-ops/*` remains compatibility-only.
+- New runtime readers must resolve queue/workboard paths through `platform/automation/orchestrator_paths.py`.
 - Migration summary tracks deprecation and cutover windows.
 
 ## 8) Acceptance Criteria
 - All operational runbooks point to canonical paths.
-- Queue/workboard references are consistent across monitor, runner, and docs.
+- Queue/workboard references are resolved through shared helpers across monitor, doctor, and guards.
 - Alias paths are documented as compatibility-only where applicable.

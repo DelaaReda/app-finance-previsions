@@ -264,6 +264,42 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertNotIn("dev", payload.get("health_breakdown", {}).get("by_role", {}))
         self.assertNotIn("scrum_master", payload.get("roles", []))
 
+    def test_status_reports_paused_runtime_state_explicitly(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        runtime_state_dir = self.root / "logs-codex-runs" / "orchestrator-state"
+        runtime_state_dir.mkdir(parents=True, exist_ok=True)
+        (runtime_state_dir / "runtime-state.json").write_text(
+            json.dumps(
+                {
+                    "lifecycle": "paused",
+                    "reason": "operator_paused_runtime",
+                    "execution_mode": "planner_experimental",
+                    "operator_mode": "paused",
+                    "source": "unit_test",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        module = _load_server_module(self.root, self.state)
+        with mock.patch.object(module, "active_roles", lambda: ("planner",)), mock.patch.object(
+            module, "contract", lambda role: {}
+        ), mock.patch.object(module, "tick_age", lambda role: -1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []), mock.patch.object(
+            module, "doctor_snapshot", lambda force_refresh=False: {"status": "ok", "checks": {}}
+        ):
+            payload = module.status()
+
+        self.assertEqual(payload.get("health"), "PAUSED")
+        self.assertEqual(payload.get("runtime_state", {}).get("lifecycle"), "paused")
+        self.assertEqual(payload.get("agents", {}).get("planner", {}).get("status"), "PAUSED")
+
 
 if __name__ == "__main__":
     unittest.main()

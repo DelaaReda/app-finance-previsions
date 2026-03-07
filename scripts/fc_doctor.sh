@@ -9,7 +9,11 @@ if [[ ! -f "$WORKSPACE_HELPER" ]]; then
 fi
 # shellcheck source=/dev/null
 source "$WORKSPACE_HELPER"
-ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+if [[ -n "${PWD:-}" ]] && fc_workspace_has_layout "$PWD" && fc_workspace_writable "$PWD"; then
+  ROOT="$PWD"
+else
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+fi
 if [[ "${FC_DOCTOR_LEGACY:-0}" == "1" ]]; then
   PY="${ROOT}/platform/automation/doctor.py"
 else

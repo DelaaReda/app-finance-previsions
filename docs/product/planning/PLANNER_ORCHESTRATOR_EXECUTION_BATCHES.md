@@ -1,3 +1,10 @@
+---
+status: canonical
+last_verified: 2026-03-06
+canonical_replaces:
+  - docs/product/planning/ARCH_BATCHES_RUNTIME_REFACTOR_2026-03-06.md
+---
+
 # Planner Orchestrator Execution Batches
 
 ## Purpose
@@ -30,6 +37,24 @@ Acceptance:
 - stale/orphan locks are removed
 - parked/in-progress contradictions are repaired
 - READY starvation is surfaced
+
+## Batch 1.5 — Runtime State Boundary
+Commit:
+- `feat(orchestration): centralize runtime state paths and paused semantics`
+
+Priority:
+- P0
+
+Scope:
+- add `platform/automation/orchestrator_paths.py`
+- move new mutable runtime state writes under `logs-codex-runs/orchestrator-state/`
+- keep compatibility reads from `docs/operations/orchestrator`
+- expose explicit `paused` runtime lifecycle in monitor/doctor
+
+Acceptance:
+- monitor and doctor agree on planner-only paused maintenance mode
+- mutable runtime state no longer requires direct hard-coded docs paths in new code
+- canonical docs describe runtime state and documentation as separate concerns
 
 ## Batch 2 — Delivery Truth
 Commit:

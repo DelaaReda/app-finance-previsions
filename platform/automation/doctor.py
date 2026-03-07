@@ -8,11 +8,18 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(THIS_DIR))
+
+from orchestrator_paths import load_runtime_state, resolve_orchestrator_read_path
 
 CORE_ROLES = ("planner", "dev", "admin")
 
@@ -34,6 +41,59 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8", errors="ignore"))
     except Exception:
         return None
+
+
+def _runner_config_path(root: Path) -> Path:
+    primary = root / "platform" / "config" / "runner" / "runner.v1.yaml"
+    if primary.exists():
+        return primary
+    return root / "platform" / "config" / "runner" / "runner_config.v1.yaml"
+
+
+def _bool_token(value: object, default: bool = False) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return default
+    return token not in {"0", "false", "False"}
+
+
+def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
+    config = _read_json(_runner_config_path(root))
+    features = config.get("features", {}) if isinstance(config, dict) else {}
+    planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+    enabled = _bool_token(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED"), _bool_token(planner.get("enabled"), False))
+    cron_planner_only = _bool_token(
+        os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"),
+        _bool_token(planner.get("cron_planner_only"), False),
+    )
+    experimental = os.environ.get("FC_EXPERIMENTAL_PLANNER_ONLY", "").strip()
+    if experimental:
+        enabled = _bool_token(experimental, enabled)
+        cron_planner_only = _bool_token(experimental, cron_planner_only)
+    return enabled, cron_planner_only
+
+
+def _expected_core_roles(root: Path) -> tuple[str, ...]:
+    enabled, cron_planner_only = _planner_orchestrator_flags(root)
+    if enabled and cron_planner_only:
+        return ("planner",)
+    return CORE_ROLES
+
+
+def _runtime_state(root: Path) -> dict[str, Any]:
+    state = load_runtime_state(root)
+    lifecycle = str(state.get("lifecycle", "running")).strip().lower() or "running"
+    if lifecycle == "maintenance":
+        lifecycle = "paused"
+    return {
+        "lifecycle": lifecycle,
+        "reason": str(state.get("reason", "inferred") or "inferred").strip() or "inferred",
+        "operator_mode": str(state.get("operator_mode", "") or "").strip(),
+        "execution_mode": str(state.get("execution_mode", "") or "").strip(),
+        "source": str(state.get("source", "inferred") or "inferred").strip() or "inferred",
+        "updated_at": str(state.get("updated_at", "") or "").strip(),
+        "state_file": str(state.get("path", "") or ""),
+    }
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -61,6 +121,10 @@ def _tmux_sessions() -> list[str]:
 
 def _expected_sessions() -> list[str]:
     return [f"codex_{role}_cron" for role in CORE_ROLES]
+
+
+def _expected_sessions_for_root(root: Path) -> list[str]:
+    return [f"codex_{role}_cron" for role in _expected_core_roles(root)]
 
 
 def _lock_family_snapshot(state_dir: Path) -> dict[str, Any]:
@@ -93,12 +157,8 @@ def _lock_family_snapshot(state_dir: Path) -> dict[str, Any]:
 
 
 def _queue_workboard_snapshot(root: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    orch = root / "docs" / "operations" / "orchestrator"
-    if not orch.exists() and (root / "docs" / "orchestrator-ops").exists():
-        orch = root / "docs" / "orchestrator-ops"
-
-    queue_file = orch / "priority-queue.json"
-    workboard_file = orch / "parallel-workstreams.json"
+    queue_file = resolve_orchestrator_read_path(root, "priority-queue.json")
+    workboard_file = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue_obj = _read_json(queue_file) or {}
     workboard_obj = _read_json(workboard_file) or {}
 
@@ -250,6 +310,7 @@ def _load_product_priority_guard(root: Path):
 def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+    runtime_state = _runtime_state(root)
 
     root_resolved = str(root.resolve())
     root_writable = root.exists() and os.access(root, os.W_OK)
@@ -259,10 +320,10 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         errors.append("workspace_root_not_writable")
 
     sessions_active = _tmux_sessions()
-    sessions_expected = _expected_sessions()
+    sessions_expected = _expected_sessions_for_root(root)
     missing = [name for name in sessions_expected if name not in sessions_active]
     orphans = [name for name in sessions_active if name.startswith("codex_") and name not in sessions_expected]
-    if missing:
+    if missing and runtime_state.get("lifecycle") != "paused":
         warnings.append(f"missing_core_sessions:{','.join(missing)}")
 
     locks = _lock_family_snapshot(state_dir)
@@ -310,14 +371,23 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         verdict = "BLOCKED"
     else:
         stale_like = []
-        if missing:
+        if missing and runtime_state.get("lifecycle") != "paused":
             stale_like.append("missing_sessions")
         if consistency_flags.get("queue_workboard_mismatch"):
             stale_like.append("state_mismatch")
         if any(locks.get(k, {}).get("stale_count", 0) > 0 for k in ("tick", "run", "memory")):
             stale_like.append("stale_locks")
 
-        if codex_rl.active or qwen_rl.active:
+        if runtime_state.get("lifecycle") == "paused":
+            non_pause_errors = list(errors)
+            non_pause_warnings = [item for item in warnings if not item.startswith("missing_core_sessions:")]
+            if non_pause_errors:
+                verdict = "BLOCKED"
+            elif non_pause_warnings:
+                verdict = "DEGRADED"
+            else:
+                verdict = "OK"
+        elif codex_rl.active or qwen_rl.active:
             verdict = "DEGRADED"
         elif stale_like:
             verdict = "STALE"
@@ -330,10 +400,13 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
             "root_resolved": root_resolved,
             "root_writable": bool(root_writable),
         },
+        "runtime_state": runtime_state,
         "sessions": {
             "expected": sessions_expected,
             "active": sessions_active,
             "orphans": orphans,
+            "missing": [] if runtime_state.get("lifecycle") == "paused" else missing,
+            "missing_raw": missing,
         },
         "locks": locks,
         "orchestrator": {

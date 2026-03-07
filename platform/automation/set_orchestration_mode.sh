@@ -384,6 +384,18 @@ esac
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "DRY_RUN mode applied only (no changes committed)."
 else
+  runtime_lifecycle="running"
+  runtime_reason="operator_mode_applied"
+  if [[ "$MODE" == "paused" ]]; then
+    runtime_lifecycle="paused"
+    runtime_reason="operator_paused_runtime"
+  fi
+  python3 "$ROOT/platform/automation/runtime_state.py" write \
+    --root "$ROOT" \
+    --lifecycle "$runtime_lifecycle" \
+    --reason "$runtime_reason" \
+    --operator-mode "$MODE" \
+    --source "set_orchestration_mode" >/dev/null 2>&1 || true
   echo "ORCHESTRATION_MODE_APPLIED mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS}"
 fi
 openclaw cron list

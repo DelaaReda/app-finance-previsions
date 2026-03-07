@@ -69,6 +69,28 @@ class FCDoctorTests(unittest.TestCase):
         self.assertEqual(result.detail.get("missing_core"), [])
         self.assertEqual(result.detail.get("execution_mode"), "planner_experimental")
 
+    def test_check_sessions_paused_runtime_suppresses_missing_core(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            runtime_state_dir = root / "logs-codex-runs" / "orchestrator-state"
+            runtime_state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_state_dir / "runtime-state.json").write_text(
+                json.dumps({"lifecycle": "paused", "reason": "operator_paused_runtime"}),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(returncode=1, stdout="", stderr="no server running on /tmp/tmux-1000/default")
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                result = fc_doctor.check_sessions(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("missing_core"), [])
+        self.assertEqual(result.detail.get("missing_core_raw"), ["planner"])
+
     def test_build_payload_has_expected_schema(self) -> None:
         payload, code = fc_doctor.build_payload(
             root=ROOT,
@@ -80,7 +102,7 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("status", payload)
         self.assertIn("checks", payload)
         self.assertIn("meta", payload)
-        for key in ("workspace_root", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity"):
+        for key in ("workspace_root", "runtime_state", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity"):
             self.assertIn(key, payload["checks"])
         queue_workboard = payload["checks"].get("queue_workboard", {})
         self.assertIsInstance(queue_workboard, dict)

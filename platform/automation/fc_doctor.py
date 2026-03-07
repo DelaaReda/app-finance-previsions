@@ -22,6 +22,16 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(THIS_DIR))
+
+from orchestrator_paths import (
+    load_runtime_state,
+    resolve_orchestrator_read_path,
+    runtime_state_root,
+)
+
 
 @dataclass
 class CheckResult:
@@ -75,6 +85,22 @@ def _expected_core_roles(root: Path) -> tuple[str, ...]:
     if enabled and cron_planner_only:
         return ("planner",)
     return ("planner", "dev", "admin")
+
+
+def _runtime_state_detail(root: Path) -> dict[str, Any]:
+    state = load_runtime_state(root)
+    lifecycle = str(state.get("lifecycle", "running")).strip().lower() or "running"
+    if lifecycle == "maintenance":
+        lifecycle = "paused"
+    return {
+        "lifecycle": lifecycle,
+        "reason": str(state.get("reason", "inferred") or "inferred").strip() or "inferred",
+        "operator_mode": str(state.get("operator_mode", "") or "").strip(),
+        "execution_mode": str(state.get("execution_mode", "") or "").strip(),
+        "source": str(state.get("source", "inferred") or "inferred").strip() or "inferred",
+        "updated_at": str(state.get("updated_at", "") or "").strip(),
+        "state_file": str(state.get("path", "") or (runtime_state_root(root) / "runtime-state.json")),
+    }
 
 
 def check_workspace_root(root: Path) -> CheckResult:
@@ -179,6 +205,8 @@ def check_scheduler_authority(root: Path) -> CheckResult:
 
 
 def check_sessions(root: Path) -> CheckResult:
+    runtime_state = _runtime_state_detail(root)
+    runtime_paused = runtime_state.get("lifecycle") == "paused"
     cmd = ["tmux", "list-sessions", "-F", "#{session_name}"]
     sessions: list[str] = []
     rc = 0
@@ -200,7 +228,10 @@ def check_sessions(root: Path) -> CheckResult:
                 found_by_role[role] = name
                 break
     missing = [name for name in expected if name not in found_by_role]
-    status = "ok" if rc == 0 and not missing else "degraded"
+    raw_missing = list(missing)
+    if runtime_paused:
+        missing = []
+    status = "ok" if (runtime_paused or (rc == 0 and not missing)) else "degraded"
     return CheckResult(
         status=status,
         detail={
@@ -208,8 +239,10 @@ def check_sessions(root: Path) -> CheckResult:
             "sessions": sessions[:60],
             "expected_core": list(expected),
             "missing_core": missing,
+            "missing_core_raw": raw_missing,
             "found_core": found_by_role,
             "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+            "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
             "advisory_optional": "scrum_master",
             "stderr": err[:300],
         },
@@ -309,11 +342,8 @@ def _states_equivalent(queue_state: str, workboard_state: str) -> bool:
 
 
 def check_queue_workboard(root: Path) -> CheckResult:
-    orch = root / "docs" / "operations" / "orchestrator"
-    if not orch.exists():
-        orch = root / "docs" / "orchestrator-ops"
-    queue_file = orch / "priority-queue.json"
-    workboard_file = orch / "parallel-workstreams.json"
+    queue_file = resolve_orchestrator_read_path(root, "priority-queue.json")
+    workboard_file = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue_obj = _read_json(queue_file) or {}
     wb_obj = _read_json(workboard_file) or {}
     queue_items = queue_obj.get("items", []) if isinstance(queue_obj, dict) else []
@@ -514,8 +544,10 @@ def check_delivery_integrity(root: Path) -> CheckResult:
 def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[str, Any], int]:
     start = time.time()
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
+    runtime_state = _runtime_state_detail(root)
     checks = {
         "workspace_root": check_workspace_root(root),
+        "runtime_state": CheckResult(status="ok", detail=runtime_state),
         "scheduler_authority": check_scheduler_authority(root),
         "sessions": check_sessions(root),
         "locks": check_locks(root, state_dir),
@@ -524,7 +556,13 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "product_value": check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
     }
-    statuses = [check.status for check in checks.values()]
+    runtime_paused = runtime_state.get("lifecycle") == "paused"
+    effective_checks = {
+        name: check
+        for name, check in checks.items()
+        if not (runtime_paused and name in {"scheduler_authority", "sessions"})
+    }
+    statuses = [check.status for check in effective_checks.values()]
     if "error" in statuses:
         status = "error"
         code = 2

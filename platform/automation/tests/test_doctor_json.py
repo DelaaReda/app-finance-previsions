@@ -31,6 +31,7 @@ class DoctorJsonContractTests(unittest.TestCase):
 
         checks = payload["checks"]
         self.assertIn("workspace_root", checks)
+        self.assertIn("runtime_state", checks)
         self.assertIn("scheduler_authority", checks)
         self.assertIn("sessions", checks)
         self.assertIn("locks", checks)

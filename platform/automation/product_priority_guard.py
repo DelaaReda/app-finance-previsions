@@ -6,11 +6,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.insert(0, str(THIS_DIR))
+
+from orchestrator_paths import resolve_orchestrator_read_path
 
 
 DEFAULT_TIMEOUT_S = 0.6
@@ -302,7 +309,7 @@ def _classify_work_text(text: str) -> str:
 
 
 def _delivery_mix(root: Path) -> dict[str, Any]:
-    workboard = _read_json(root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json")
+    workboard = _read_json(resolve_orchestrator_read_path(root, "parallel-workstreams.json"))
     streams = workboard.get("streams", []) if isinstance(workboard, dict) else []
     tasks = workboard.get("tasks", []) if isinstance(workboard, dict) else []
     items: list[dict[str, Any]] = []
@@ -438,7 +445,7 @@ def build_delivery_integrity_metrics(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = now or _now()
-    workboard = _read_json(root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json")
+    workboard = _read_json(resolve_orchestrator_read_path(root, "parallel-workstreams.json"))
     tasks_by_id: dict[str, dict[str, Any]] = {}
     if isinstance(workboard, dict):
         for task in workboard.get("tasks", []):

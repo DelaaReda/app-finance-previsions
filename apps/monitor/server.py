@@ -19,9 +19,25 @@ try:
 except Exception:  # pragma: no cover - Python without zoneinfo
     ZoneInfo = None
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+AUTOMATION_DIR = REPO_ROOT / "platform" / "automation"
+if str(AUTOMATION_DIR) not in sys.path:
+    sys.path.insert(0, str(AUTOMATION_DIR))
+
 MONITOR_SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(MONITOR_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(MONITOR_SRC_DIR))
+
+from orchestrator_paths import (
+    canonical_docs_root,
+    legacy_docs_root,
+    load_runtime_state,
+    resolve_orchestrator_read_path,
+    resolve_orchestrator_write_path,
+    runtime_state_root,
+)
 
 from collectors import (  # type: ignore
     collect_activity_events as monitor_collect_activity_events,
@@ -80,18 +96,13 @@ def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
         return False
 
 def _orchestrator_root_for_workspace(p: Path) -> Path | None:
-    canonical = p / "docs" / "operations" / "orchestrator"
-    legacy = p / "docs" / "orchestrator-ops"
-    if canonical.exists() and legacy.exists():
-        try:
-            return canonical if canonical.stat().st_mtime >= legacy.stat().st_mtime else legacy
-        except Exception:
-            return canonical
-    if canonical.exists():
-        return canonical
-    if legacy.exists():
-        return legacy
-    return None
+    queue_file = resolve_orchestrator_read_path(p, "priority-queue.json")
+    workboard_file = resolve_orchestrator_read_path(p, "parallel-workstreams.json")
+    if queue_file.exists():
+        return queue_file.parent
+    if workboard_file.exists():
+        return workboard_file.parent
+    return runtime_state_root(p)
 
 def _score_root_candidate(p: Path) -> float:
     score = 0.0
@@ -224,19 +235,20 @@ DEFAULT_SCHEDULE_MAP = {
     "scrum_master": [3, 18, 33, 48],
 }
 ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
-ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or (ROOT / "docs" / "operations" / "orchestrator")
-CANONICAL_ORCH_ROOT = ROOT / "docs" / "operations" / "orchestrator"
-LEGACY_ORCH_ROOT = ROOT / "docs" / "orchestrator-ops"
+ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or runtime_state_root(ROOT)
+CANONICAL_ORCH_ROOT = canonical_docs_root(ROOT)
+LEGACY_ORCH_ROOT = legacy_docs_root(ROOT)
+RUNTIME_ORCH_ROOT = runtime_state_root(ROOT)
 ITERATION_ISSUES_EVENTS_FILE = Path(
     os.environ.get(
         "FC_MONITOR_ITERATION_ISSUES_EVENTS_FILE",
-        str(CANONICAL_ORCH_ROOT / "agent-iteration-issues.jsonl"),
+        str(resolve_orchestrator_write_path(ROOT, "agent-iteration-issues.jsonl")),
     )
 ).expanduser()
 ITERATION_ISSUES_LATEST_FILE = Path(
     os.environ.get(
         "FC_MONITOR_ITERATION_ISSUES_LATEST_FILE",
-        str(CANONICAL_ORCH_ROOT / "agent-iteration-issues-latest.json"),
+        str(resolve_orchestrator_write_path(ROOT, "agent-iteration-issues-latest.json")),
     )
 ).expanduser()
 # Backward-compat alias.
@@ -495,6 +507,25 @@ def _planner_subagents_snapshot() -> dict:
         "active_count": len(active),
         "active": active[:8],
         "recent": recent[-8:],
+    }
+
+
+def _runtime_state_snapshot() -> dict:
+    state = load_runtime_state(ROOT)
+    lifecycle = str(state.get("lifecycle", "running")).strip().lower() or "running"
+    if lifecycle == "maintenance":
+        lifecycle = "paused"
+    return {
+        "lifecycle": lifecycle,
+        "reason": str(state.get("reason", "inferred") or "inferred").strip() or "inferred",
+        "operator_mode": str(state.get("operator_mode", "") or "").strip(),
+        "execution_mode": str(state.get("execution_mode", "") or _execution_mode(ROOT)).strip() or _execution_mode(ROOT),
+        "source": str(state.get("source", "inferred") or "inferred").strip() or "inferred",
+        "updated_at": str(state.get("updated_at", "") or "").strip(),
+        "state_root": str(RUNTIME_ORCH_ROOT),
+        "docs_root": str(CANONICAL_ORCH_ROOT),
+        "legacy_docs_root": str(LEGACY_ORCH_ROOT),
+        "state_file": str(state.get("path", "") or resolve_orchestrator_write_path(ROOT, "runtime-state.json")),
     }
 
 
@@ -1009,17 +1040,7 @@ def jload(p):
     except: return {}
 
 def orchestrator_file(rel: str) -> Path:
-    rel = (rel or "").strip().lstrip("/")
-    canonical = ROOT / "docs" / "operations" / "orchestrator" / rel
-    legacy = ROOT / "docs" / "orchestrator-ops" / rel
-    existing = [p for p in (canonical, legacy) if p.exists()]
-    if existing:
-        try:
-            existing.sort(key=lambda p: float(p.stat().st_mtime), reverse=True)
-        except Exception:
-            pass
-        return existing[0]
-    return canonical
+    return resolve_orchestrator_read_path(ROOT, rel)
 
 
 def monitor_latest_snapshot() -> dict:
@@ -2561,6 +2582,7 @@ def _unknown_agent_payload(role: str, source: str = "unknown") -> dict:
 def status():
     now=datetime.now(timezone.utc); m=now.minute
     now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    runtime_state = _runtime_state_snapshot()
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
     latest_roles = latest_roles_raw if isinstance(latest_roles_raw, dict) else {}
@@ -2923,6 +2945,22 @@ def status():
                       "last_action_message_id": (scrum_last_action_message_id if role == "scrum_master" else ""),
                       "source": source}
     agents, incomplete_roles = monitor_ensure_core_agents(agents, core_roles=CORE_ROLES)
+    runtime_paused = runtime_state.get("lifecycle") == "paused"
+    if runtime_paused:
+        for role in CORE_ROLES:
+            paused_agent = dict(agents.get(role, _unknown_agent_payload(role, "maintenance_state")))
+            paused_agent.update(
+                {
+                    "status": "PAUSED",
+                    "verdict": "PAUSED",
+                    "delta": "MAINTENANCE_MODE",
+                    "blocker": "NONE",
+                    "soft_blocker": True,
+                    "source": "maintenance_state",
+                }
+            )
+            agents[role] = paused_agent
+        incomplete_roles = []
     kpi={}
     try:
         kd=kpi_last(); v=kd.get("velocity",{}); wb2=kd.get("workboard",{})
@@ -3011,6 +3049,8 @@ def status():
         has_rate_limited_agents=rate_limited_agents,
         summary_blocker_roles=blocker_roles,
     )
+    if runtime_paused:
+        health = "PAUSED"
     health_breakdown = {
         "core_roles": list(CORE_ROLES),
         "by_role": {
@@ -3147,6 +3187,7 @@ def status():
             "instance":INSTANCE_ID,
             "root":str(ROOT),
             "state_dir":str(STATE),
+            "runtime_state": runtime_state,
             "execution_mode": execution_mode,
             "core_roles": list(CORE_ROLES),
             "roles":list(roles),
@@ -3208,6 +3249,7 @@ def status():
                 "iteration_issues_latest": str(ITERATION_ISSUES_LATEST_FILE),
                 "planner_guardian_latest": str(orchestrator_file("planner-guardian-latest.json")),
                 "planner_guardian_events": str(orchestrator_file("planner-guardian-events.jsonl")),
+                "runtime_state": str(resolve_orchestrator_write_path(ROOT, "runtime-state.json")),
                 }}
     try:
         from apps.monitor.services.status_service import build_status_snapshot

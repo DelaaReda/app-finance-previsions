@@ -1,3 +1,10 @@
+---
+status: canonical
+last_verified: 2026-03-06
+canonical_replaces:
+  - docs/ops/PLANNER_MONO_LANE_CUTOVER_RUNBOOK.md
+---
+
 # Planner Orchestrator Target Spec
 
 ## Purpose
@@ -31,10 +38,17 @@ Canonical implementation anchors:
 - `platform/config/runner/runner.v1.yaml`
 - `scripts/fc_setup_crons.sh`
 - `platform/automation/planner_subagent_manager.py`
+- `platform/automation/orchestrator_paths.py`
 - `platform/automation/state_reconciler.py`
 - `platform/automation/delivery_value_gate.py`
 - `apps/monitor/server.py`
 - `platform/automation/fc_doctor.py`
+
+## Runtime State Boundary
+- Mutable orchestration runtime state must write first to `logs-codex-runs/orchestrator-state/`.
+- `docs/operations/orchestrator` is a compatibility-read and evidence/documentation space during migration.
+- Queue/workboard readers must resolve paths through `platform/automation/orchestrator_paths.py`, not hard-coded docs paths.
+- Operator pause/maintenance state must be stored in `logs-codex-runs/orchestrator-state/runtime-state.json` and surfaced consistently in monitor and doctor.
 
 ## Target Architecture
 
