@@ -152,6 +152,9 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort = "high"', body)
         self.assertIn("[features]", body)
         self.assertNotIn("[agents]", body)
+        self.assertIn("bounded planner-owned capability executor", (workspace / "SOUL.md").read_text(encoding="utf-8"))
+        self.assertIn("Do not spawn subagents", (workspace / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertFalse((workspace / "BOOTSTRAP.md").exists())
         for skill_name in ("browser-smoke", "repo-scan", "runtime-triage", "delivery-proof-check"):
             target = workspace / "skills" / skill_name
             self.assertTrue(target.is_symlink(), target)

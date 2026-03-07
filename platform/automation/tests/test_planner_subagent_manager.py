@@ -165,6 +165,26 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertTrue(cleaned["ok"])
         self.assertIn("planner_dev_stale", cleaned["removed"])
 
+    def test_cleanup_removes_missing_openclaw_agent_immediately(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_missing",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-98",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="openclaw",
+            last_update_at="2099-03-06T12:00:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        with patch.object(MODULE, "_openclaw_agent_ids", return_value=set()):
+            cleaned = cleanup_subagents(self.config)
+        self.assertTrue(cleaned["ok"])
+        self.assertIn("planner_dev_missing", cleaned["removed"])
+
     def test_plan_refuses_openclaw_backend_when_binary_missing(self) -> None:
         with patch.object(MODULE, "_openclaw_available", return_value=False):
             result = plan_subagent(
@@ -312,7 +332,10 @@ class PlannerSubagentManagerTests(unittest.TestCase):
 
     def test_run_codex_exec_timeout_returns_failed_payload(self) -> None:
         timeout = subprocess.TimeoutExpired(cmd=["codex", "exec"], timeout=30)
-        with patch.object(MODULE.subprocess, "run", side_effect=timeout):
+        with (
+            patch.object(MODULE, "_openclaw_agent_ids", return_value=set()),
+            patch.object(MODULE.subprocess, "run", side_effect=timeout),
+        ):
             rc, payload = run_subagent(
                 self.config,
                 role="planner",

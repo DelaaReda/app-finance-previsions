@@ -153,6 +153,32 @@ def _openclaw_available() -> bool:
     return bool(shutil_which("openclaw"))
 
 
+def _openclaw_agent_ids() -> set[str]:
+    if not _openclaw_available():
+        return set()
+    proc = subprocess.run(
+        ["openclaw", "agents", "list", "--json"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=_openclaw_env(),
+    )
+    if proc.returncode != 0:
+        return set()
+    try:
+        payload = json.loads(proc.stdout or "[]")
+    except Exception:
+        return set()
+    agent_ids: set[str] = set()
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                token = str(item.get("id", "")).strip()
+                if token:
+                    agent_ids.add(token)
+    return agent_ids
+
+
 def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
     text = (raw_text or "").strip()
     if not text:
@@ -459,11 +485,26 @@ def _active_count(records: list[PlannerSubagentRecord]) -> int:
 def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord], now: datetime | None = None) -> tuple[list[PlannerSubagentRecord], list[str]]:
     now = now or _now()
     stale_active_seconds = max(300, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_ACTIVE_SECONDS", "600")))
+    active_openclaw_ids = _openclaw_agent_ids()
     kept: list[PlannerSubagentRecord] = []
     removed: list[str] = []
     for record in records:
         result_path = config.results_dir / f"{record.subagent_id}.result.json"
         last_seen = _parse_iso(record.last_update_at) or _parse_iso(record.created_at)
+        if (
+            record.status in ACTIVE_STATUSES
+            and record.backend == "openclaw"
+            and record.subagent_id not in active_openclaw_ids
+            and not result_path.exists()
+        ):
+            _emit_event(
+                config,
+                "planner_subagent_cleanup",
+                record,
+                {"reason": "openclaw_agent_missing"},
+            )
+            removed.append(record.subagent_id)
+            continue
         if (
             record.status in ACTIVE_STATUSES
             and not result_path.exists()

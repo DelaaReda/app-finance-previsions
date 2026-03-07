@@ -286,10 +286,11 @@ def _payload_has_delivery_evidence(payload: dict[str, Any]) -> bool:
     return True
 
 
-def _select_ready_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
+def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
     index = task_index(board)
     candidates: list[tuple[int, int, dict[str, Any]]] = []
     retry_candidates: list[tuple[int, int, dict[str, Any]]] = []
+    in_progress_candidates: list[tuple[int, int, dict[str, Any]]] = []
     for idx, task in enumerate(board.get("tasks", [])):
         if not isinstance(task, dict):
             continue
@@ -303,6 +304,9 @@ def _select_ready_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
         if state in {STATE_READY, STATE_READY_DEV}:
             candidates.append(row)
             continue
+        if state == STATE_IN_PROGRESS:
+            in_progress_candidates.append(row)
+            continue
         blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
         if state == STATE_BLOCKED and blocked_reason.startswith("planner_dev_capability_failed:"):
             retry_candidates.append(row)
@@ -310,20 +314,12 @@ def _select_ready_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
         retry_candidates.sort(key=lambda row: (row[0], row[1]))
         return retry_candidates[0][2]
     if not candidates:
-        return None
+        if not in_progress_candidates:
+            return None
+        in_progress_candidates.sort(key=lambda row: (row[0], row[1]))
+        return in_progress_candidates[0][2]
     candidates.sort(key=lambda row: (row[0], row[1]))
     return candidates[0][2]
-
-
-def _active_dev_task_exists(board: dict[str, Any]) -> bool:
-    for task in board.get("tasks", []):
-        if not isinstance(task, dict):
-            continue
-        if str(task.get("role", "")).strip().lower() != "dev":
-            continue
-        if str(task.get("state", "")).strip().upper() == STATE_IN_PROGRESS:
-            return True
-    return False
 
 
 def _complete_task_from_evidence(
@@ -432,9 +428,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     with board_lock(board_path):
         board = load_board(board_path)
-        if _active_dev_task_exists(board):
-            return {"dispatched": False, "reason": "dev_in_progress"}
-        candidate = _select_ready_dev_task(board)
+        candidate = _select_dispatchable_dev_task(board)
         if candidate is None:
             return {"dispatched": False, "reason": "no_ready_dev"}
         task_id_value = str(candidate.get("id", "")).strip()
@@ -443,9 +437,18 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             candidate["blocked_reason"] = ""
             candidate["updated_at"] = now_iso()
             append_event(
+                    board,
+                    "planner_orchestrator_retry_ready",
+                    {"task_id": task_id_value, "source": source, "reason": "recoverable_capability_failure"},
+                )
+        elif str(candidate.get("state", "")).strip().upper() == STATE_IN_PROGRESS:
+            candidate["blocked_reason"] = ""
+            candidate["stalled_reason"] = ""
+            candidate["updated_at"] = now_iso()
+            append_event(
                 board,
-                "planner_orchestrator_retry_ready",
-                {"task_id": task_id_value, "source": source, "reason": "recoverable_capability_failure"},
+                "planner_orchestrator_resume_in_progress",
+                {"task_id": task_id_value, "source": source, "reason": "no_active_dev_capability"},
             )
         _claim_task(board_path=board_path, role="dev", task_id_value=task_id_value, source=source, board=board)
 

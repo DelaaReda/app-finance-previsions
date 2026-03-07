@@ -233,6 +233,39 @@ apps = true
 js_repl = true
 prevent_idle_sleep = true
 """
+OPENCLAW_CAPABILITY_SOUL = """# SOUL.md
+
+You are a bounded planner-owned capability executor.
+
+Core rules:
+- Stay narrow and task-focused.
+- Prefer direct implementation over exploration.
+- Do not ask bootstrap or identity questions.
+- Do not create your own orchestration layer.
+"""
+OPENCLAW_CAPABILITY_USER = """# USER.md
+
+- You are helping the planner orchestrator of the analyse-financiere project.
+- This workspace is ephemeral and task-scoped.
+"""
+OPENCLAW_CAPABILITY_AGENTS = """# AGENTS.md
+
+This workspace is a minimal capability runner for planner-owned execution.
+
+Rules:
+1. Do not perform bootstrap or identity setup.
+2. Do not spawn subagents, explorers, or workers.
+3. Do not read MEMORY.md or daily memory unless the task explicitly asks for it.
+4. Read only the files directly required by the task prompt.
+5. Prefer one minimal patch plus targeted verification.
+6. Return only the final structured result requested by the prompt.
+"""
+OPENCLAW_CAPABILITY_IDENTITY = """# IDENTITY.md
+
+name: Planner Capability
+role: bounded execution helper
+"""
+OPENCLAW_CAPABILITY_HEARTBEAT = "HEARTBEAT_OK\n"
 
 
 def _openclaw_env() -> dict[str, str]:
@@ -263,6 +296,14 @@ def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, t
         thinking=str(thinking or "medium").strip(),
     )
     _write_text_if_changed(config_path, config_body)
+    _write_text_if_changed(workspace / "SOUL.md", OPENCLAW_CAPABILITY_SOUL)
+    _write_text_if_changed(workspace / "USER.md", OPENCLAW_CAPABILITY_USER)
+    _write_text_if_changed(workspace / "AGENTS.md", OPENCLAW_CAPABILITY_AGENTS)
+    _write_text_if_changed(workspace / "IDENTITY.md", OPENCLAW_CAPABILITY_IDENTITY)
+    _write_text_if_changed(workspace / "HEARTBEAT.md", OPENCLAW_CAPABILITY_HEARTBEAT)
+    bootstrap = workspace / "BOOTSTRAP.md"
+    if bootstrap.exists():
+        bootstrap.unlink()
     sync_canonical_skills(workspace, root)
     return workspace
 

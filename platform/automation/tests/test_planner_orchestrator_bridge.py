@@ -431,6 +431,49 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "DONE")
         self.assertIn("dev_collect:BATCH-27-DEV-02", updated)
 
+    def test_dispatch_restarts_in_progress_dev_when_no_active_subagent(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-28", "state": "IN_PROGRESS", "updated_at": "2026-03-07T00:00:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-28-DEV-01", "stream_id": "BATCH-28", "role": "dev", "state": "IN_PROGRESS", "priority": "P1", "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-28", "state": "IN_PROGRESS", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                "EVIDENCE: task_update=analysis_only; run_note=resume missing dev capability; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=resume dev",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: RESUME_DEV_B28",
+            ]
+        )
+        with patch.object(MODULE.subprocess, "Popen") as popen_mock:
+            updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
+        self.assertTrue(payload["dispatch"]["dispatched"])
+        self.assertEqual(payload["dispatch"]["task_id"], "BATCH-28-DEV-01")
+        self.assertIn("dev_dispatch:BATCH-28-DEV-01", payload["actions"])
+        popen_mock.assert_called_once()
+        board = json.loads(self.board_path.read_text())
+        tasks = {task["id"]: task for task in board["tasks"]}
+        self.assertEqual(tasks["BATCH-28-DEV-01"]["state"], "IN_PROGRESS")
+        self.assertIn("dev_dispatch:BATCH-28-DEV-01", updated)
+
 
 if __name__ == "__main__":
     unittest.main()
