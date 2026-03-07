@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -92,10 +93,11 @@ class PlannerSubagentManagerTests(unittest.TestCase):
             parent_role="planner",
             task_kind="delivery",
             status="running",
-            created_at="2026-03-06T12:00:00Z",
+            created_at="2099-03-06T12:00:00Z",
             expires_at="2099-03-06T12:30:00Z",
             ttl_min=30,
             backend="mock",
+            last_update_at="2099-03-06T12:00:00Z",
         )
         _save_registry(self.config.registry_path, [record])
         result = plan_subagent(self.config, "planner", "dev", "BATCH-61-DEV-01", "delivery")
@@ -143,6 +145,25 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         cleaned = cleanup_subagents(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("planner_scrum_expired", cleaned["removed"])
+
+    def test_cleanup_removes_stale_running_subagent_without_result(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_stale",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-99",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2026-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="codex_exec",
+            last_update_at="2026-03-06T12:00:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        cleaned = cleanup_subagents(self.config)
+        self.assertTrue(cleaned["ok"])
+        self.assertIn("planner_dev_stale", cleaned["removed"])
 
     def test_plan_refuses_openclaw_backend_when_binary_missing(self) -> None:
         with patch.object(MODULE, "_openclaw_available", return_value=False):
@@ -207,6 +228,63 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "completed")
         self.assertEqual(payload["artifact"], "logs/openclaw/dev.result.json")
         self.assertEqual(payload["tests_run"], "pytest tests/test_app.py -q")
+
+    def test_run_openclaw_backend_parses_embedded_final_json(self) -> None:
+        embedded = (
+            "progress line 1\n"
+            "progress line 2\n"
+            '{"status":"blocked","summary":"need writable sandbox","artifact":"none","verify":"none","files_touched":"none","tests_run":"SKIP(no_tests)","commit_sha":"none","architecture_check":"none","vision_alignment":"none","recommended_next":"rerun with writable backend","blocking_issue":"read_only_sandbox"}'
+        )
+        envelope = {"result": {"payloads": [{"text": embedded}]}}
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_ensure_openclaw_agent", return_value=(True, "planner_dev_openclaw")),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 0, "stdout": json.dumps(envelope), "stderr": ""},
+                )(),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-03",
+                task_kind="delivery",
+                message="Return the final embedded JSON only.",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 6)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["blocking_issue"], "read_only_sandbox")
+
+    def test_run_codex_exec_timeout_returns_failed_payload(self) -> None:
+        timeout = subprocess.TimeoutExpired(cmd=["codex", "exec"], timeout=30)
+        with patch.object(MODULE.subprocess, "run", side_effect=timeout):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-04",
+                task_kind="delivery",
+                message="Timeout path",
+                ttl_min=15,
+                backend="codex_exec",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(rc, 6)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "failed")
+        self.assertIn("timeout", payload["blocking_issue"])
 
 
 if __name__ == "__main__":

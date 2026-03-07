@@ -198,6 +198,121 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["suspicious_completion_count"], 1)
             self.assertIn("BATCH-11-DEV-01", metrics["suspicious_task_ids"])
 
+    def test_delivery_integrity_ignores_planner_doc_only_completions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-58" / "BATCH-58-ANALYSIS"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 7, 2, 30, tzinfo=timezone.utc)
+
+            proof_doc = proofs / "proof-doc.yaml"
+            proof_doc.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        '      evidence: "NONE(planner_doc_only)"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "docs/operations/orchestrator/proofs/BATCH-58-ANALYSIS.md"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-58-ANALYSIS",
+                                "role": "planner",
+                                "artifact": "docs/operations/orchestrator/proofs/BATCH-58-ANALYSIS.md",
+                                "commit_sha": "NONE(doc_only)",
+                                "tests_run": "SKIP(planner_doc_only)",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-58-ANALYSIS",
+                                    "artifact": "docs/operations/orchestrator/proofs/BATCH-58-ANALYSIS.md",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-58/BATCH-58-ANALYSIS/proof-doc.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["recent_completions"], 0)
+            self.assertEqual(metrics["suspicious_completion_count"], 0)
+
+    def test_delivery_integrity_accepts_task_commit_sha_without_manifest_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-27" / "BATCH-27-DEV-02"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 7, 3, 0, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-task-commit.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        '      evidence: "node --check apps/web/src/domains/forecasts/pages/app.js"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/web/src/domains/forecasts/pages/app.js"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-27-DEV-02",
+                                "role": "dev",
+                                "state": "DONE",
+                                "artifact": "apps/web/src/domains/forecasts/pages/app.js",
+                                "commit_sha": "554932d6b8215db60ff9c802f6d94ad11f036a7b",
+                                "tests_run": "node --check apps/web/src/domains/forecasts/pages/app.js",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-27-DEV-02",
+                                    "artifact": "apps/web/src/domains/forecasts/pages/app.js",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-DEV-02/proof-task-commit.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["recent_completions"], 1)
+            self.assertEqual(metrics["suspicious_completion_count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

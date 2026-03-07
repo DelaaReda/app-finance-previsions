@@ -149,6 +149,34 @@ def _runtime_probes_ok() -> bool:
         return False
 
 
+def _active_planner_subagent_owner_tasks(root: Path) -> set[str]:
+    registry_path = root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+    raw = _load_json(registry_path, [])
+    rows: list[dict] = []
+    if isinstance(raw, list):
+        rows = [item for item in raw if isinstance(item, dict)]
+    elif isinstance(raw, dict):
+        items = raw.get("items")
+        if isinstance(items, list):
+            rows = [item for item in items if isinstance(item, dict)]
+    owners: set[str] = set()
+    for item in rows:
+        status = str(item.get("status", "")).strip().lower()
+        owner_task_id = str(item.get("owner_task_id", "")).strip()
+        if status in ACTIVE_IN_PROGRESS_STATES or status in {"spawned", "running"}:
+            if owner_task_id:
+                owners.add(owner_task_id)
+    return owners
+
+
+def _task_has_delivery_evidence(task: dict) -> bool:
+    for key in ("artifact", "verify", "commit_sha", "files_touched"):
+        token = str(task.get(key, "") or "").strip().lower()
+        if token and token not in {"none", "n/a", "na"}:
+            return True
+    return False
+
+
 def _parse_contract(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
@@ -252,7 +280,10 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         "stale_locks_removed": 0,
         "stale_inprogress_marked": 0,
         "ready_starvation_detected": 0,
+        "dependency_starvation_detected": 0,
     }
+    active_subagent_owner_tasks = _active_planner_subagent_owner_tasks(config.root)
+    capability_stall_seconds = max(60, int(os.environ.get("FC_RECONCILE_CAPABILITY_STALL_SECONDS", "300")))
 
     with board_lock(config.board_path):
         board = load_board(config.board_path)
@@ -312,6 +343,22 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
             if state not in ACTIVE_IN_PROGRESS_STATES:
                 continue
             updated_epoch = _parse_iso_epoch(str(task.get("updated_at", "")))
+            task_id_value = str(task.get("id", "")).strip()
+            task_role = _canonical_role(str(task.get("role") or task.get("assignee") or ""))
+            if (
+                task_role == "dev"
+                and updated_epoch > 0
+                and (now_epoch - updated_epoch) >= capability_stall_seconds
+                and task_id_value not in active_subagent_owner_tasks
+                and not _task_has_delivery_evidence(task)
+            ):
+                task["state"] = _preferred_ready_state_for_role(task_role)
+                task["stalled_reason"] = "planner_capability_stall_no_active_subagent"
+                task["last_progress_at"] = str(updated_epoch)
+                task["reconciled_at"] = now
+                task["updated_at"] = now
+                report["stale_inprogress_marked"] = int(report["stale_inprogress_marked"]) + 1
+                continue
             if updated_epoch <= 0 or (now_epoch - updated_epoch) < config.stale_in_progress_seconds:
                 continue
             task["state"] = _preferred_ready_state_for_role(str(task.get("role") or task.get("assignee") or ""))
@@ -321,12 +368,49 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
             task["updated_at"] = now
             report["stale_inprogress_marked"] = int(report["stale_inprogress_marked"]) + 1
 
+        for task in board.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            state = str(task.get("state", "")).strip().upper()
+            updated_epoch = _parse_iso_epoch(str(task.get("updated_at", ""))) or _parse_iso_epoch(str(task.get("ready_at", "")))
+            if state in READY_STATES and updated_epoch > 0 and (now_epoch - updated_epoch) >= config.ready_starvation_seconds:
+                if not task.get("ready_starvation"):
+                    task["ready_starvation"] = True
+                    task["ready_starved_at"] = now
+                    task["stalled_reason"] = task.get("stalled_reason") or f"ready_starvation>{config.ready_starvation_seconds}s"
+                    task["reconciled_at"] = now
+                    report["ready_starvation_detected"] = int(report["ready_starvation_detected"]) + 1
+            if state == "WAITING_DEP" and updated_epoch > 0 and (now_epoch - updated_epoch) >= max(config.ready_starvation_seconds * 2, 600):
+                if not task.get("dependency_starvation"):
+                    task["dependency_starvation"] = True
+                    task["dependency_starved_at"] = now
+                    task["stalled_reason"] = task.get("stalled_reason") or "dependency_starvation"
+                    task["reconciled_at"] = now
+                    report["dependency_starvation_detected"] = int(report["dependency_starvation_detected"]) + 1
+
+        for stream in board.get("streams", []):
+            if not isinstance(stream, dict):
+                continue
+            state = str(stream.get("state", "")).strip().upper()
+            updated_epoch = _parse_iso_epoch(str(stream.get("updated_at", ""))) or _parse_iso_epoch(str(stream.get("ready_at", "")))
+            if state in READY_STATES and updated_epoch > 0 and (now_epoch - updated_epoch) >= config.ready_starvation_seconds:
+                if not stream.get("ready_starvation"):
+                    stream["ready_starvation"] = True
+                    stream["ready_starved_at"] = now
+                    stream["stalled_reason"] = stream.get("stalled_reason") or f"ready_starvation>{config.ready_starvation_seconds}s"
+                    stream["reconciled_at"] = now
+
         _write_json(config.queue_path, queue_obj)
         recompute_states(board)
         queue_sync = reconcile_state(board, config.queue_path)
         save_board(config.board_path, board)
         report["fixes_applied"] = int(report["fixes_applied"]) + int(queue_sync.get("queue_synced", 0))
-        if int(report["parked_inprogress_fixed"]) or int(report["stale_inprogress_marked"]):
+        if (
+            int(report["parked_inprogress_fixed"])
+            or int(report["stale_inprogress_marked"])
+            or int(report["ready_starvation_detected"])
+            or int(report["dependency_starvation_detected"])
+        ):
             append_event(
                 board,
                 "state_reconcile",
@@ -334,6 +418,8 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
                     "role": config.role,
                     "parked_inprogress_fixed": str(report["parked_inprogress_fixed"]),
                     "stale_inprogress_marked": str(report["stale_inprogress_marked"]),
+                    "ready_starvation_detected": str(report["ready_starvation_detected"]),
+                    "dependency_starvation_detected": str(report["dependency_starvation_detected"]),
                 },
             )
             save_board(config.board_path, board)
@@ -402,6 +488,7 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         + int(report["stale_locks_removed"])
         + int(report["stale_inprogress_marked"])
         + int(report["ready_starvation_detected"])
+        + int(report["dependency_starvation_detected"])
     )
     _write_json(config.report_path, report)
     return report

@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from worker_manager import _ensure_agent as _ensure_openclaw_agent
+from worker_manager import _openclaw_env
 from worker_manager import shutil_which
 
 
 ACTIVE_STATUSES = {"spawned", "running"}
 FINISHED_STATUSES = {"completed", "failed", "merged"}
+SUCCESS_RESULT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 ALLOWED_PARENT_ROLES = {"planner"}
 DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
 ROLE_MODELS = {
@@ -36,24 +38,43 @@ RESULT_SCHEMA: dict[str, Any] = {
     "required": [
         "status",
         "summary",
+        "root_cause",
+        "fix_applied",
         "artifact",
         "verify",
         "files_touched",
         "tests_run",
+        "commit_sha",
+        "architecture_check",
+        "vision_alignment",
         "recommended_next",
         "blocking_issue",
     ],
     "properties": {
         "status": {"type": "string"},
         "summary": {"type": "string"},
+        "root_cause": {"type": "string"},
+        "fix_applied": {"type": "string"},
         "artifact": {"type": "string"},
         "verify": {"type": "string"},
         "files_touched": {"type": "string"},
         "tests_run": {"type": "string"},
+        "commit_sha": {"type": "string"},
+        "architecture_check": {"type": "string"},
+        "vision_alignment": {"type": "string"},
         "recommended_next": {"type": "string"},
         "blocking_issue": {"type": "string"},
     },
 }
+
+
+def _openclaw_cli_model(model: str) -> str:
+    token = str(model or "").strip()
+    if not token:
+        return "codex-cli/gpt-5.4"
+    if "/" in token:
+        return token
+    return f"codex-cli/{token}"
 
 
 def canonical_role(value: Any) -> str:
@@ -209,6 +230,8 @@ class PlannerSubagentResult:
     task_kind: str
     status: str
     summary: str
+    root_cause: str
+    fix_applied: str
     artifact: str
     verify: str
     raw_output_ref: str
@@ -216,6 +239,9 @@ class PlannerSubagentResult:
     backend_ref: str = ""
     files_touched: str = "none"
     tests_run: str = "SKIP(no_tests)"
+    commit_sha: str = "none"
+    architecture_check: str = "none"
+    vision_alignment: str = "none"
     recommended_next: str = "none"
     blocking_issue: str = "none"
     started_at: str = ""
@@ -230,6 +256,8 @@ class PlannerSubagentResult:
             "task_kind": self.task_kind,
             "status": self.status,
             "summary": self.summary,
+            "root_cause": self.root_cause,
+            "fix_applied": self.fix_applied,
             "artifact": self.artifact,
             "verify": self.verify,
             "raw_output_ref": self.raw_output_ref,
@@ -237,6 +265,9 @@ class PlannerSubagentResult:
             "backend_ref": self.backend_ref,
             "files_touched": self.files_touched,
             "tests_run": self.tests_run,
+            "commit_sha": self.commit_sha,
+            "architecture_check": self.architecture_check,
+            "vision_alignment": self.vision_alignment,
             "recommended_next": self.recommended_next,
             "blocking_issue": self.blocking_issue,
             "started_at": self.started_at,
@@ -259,10 +290,15 @@ class PlannerSubagentRecord:
     backend_ref: str = ""
     last_update_at: str = ""
     summary: str = ""
+    root_cause: str = ""
+    fix_applied: str = ""
     artifact: str = ""
     verify: str = ""
     files_touched: str = "none"
     tests_run: str = "SKIP(no_tests)"
+    commit_sha: str = "none"
+    architecture_check: str = "none"
+    vision_alignment: str = "none"
     recommended_next: str = "none"
     blocking_issue: str = "none"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -283,10 +319,15 @@ class PlannerSubagentRecord:
             "backend_ref": self.backend_ref,
             "last_update_at": self.last_update_at,
             "summary": self.summary,
+            "root_cause": self.root_cause,
+            "fix_applied": self.fix_applied,
             "artifact": self.artifact,
             "verify": self.verify,
             "files_touched": self.files_touched,
             "tests_run": self.tests_run,
+            "commit_sha": self.commit_sha,
+            "architecture_check": self.architecture_check,
+            "vision_alignment": self.vision_alignment,
             "recommended_next": self.recommended_next,
             "blocking_issue": self.blocking_issue,
             "metadata": self.metadata,
@@ -309,10 +350,15 @@ class PlannerSubagentRecord:
             backend_ref=str(payload.get("backend_ref", "")).strip(),
             last_update_at=str(payload.get("last_update_at", "")).strip(),
             summary=str(payload.get("summary", "")).strip(),
+            root_cause=str(payload.get("root_cause", "")).strip(),
+            fix_applied=str(payload.get("fix_applied", "")).strip(),
             artifact=str(payload.get("artifact", "")).strip(),
             verify=str(payload.get("verify", "")).strip(),
             files_touched=str(payload.get("files_touched", "none")).strip() or "none",
             tests_run=str(payload.get("tests_run", "SKIP(no_tests)")).strip() or "SKIP(no_tests)",
+            commit_sha=str(payload.get("commit_sha", "none")).strip() or "none",
+            architecture_check=str(payload.get("architecture_check", "none")).strip() or "none",
+            vision_alignment=str(payload.get("vision_alignment", "none")).strip() or "none",
             recommended_next=str(payload.get("recommended_next", "none")).strip() or "none",
             blocking_issue=str(payload.get("blocking_issue", "none")).strip() or "none",
             metadata=payload.get("metadata", {}) if isinstance(payload.get("metadata", {}), dict) else {},
@@ -403,9 +449,26 @@ def _active_count(records: list[PlannerSubagentRecord]) -> int:
 
 def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord], now: datetime | None = None) -> tuple[list[PlannerSubagentRecord], list[str]]:
     now = now or _now()
+    stale_active_seconds = max(300, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_ACTIVE_SECONDS", "600")))
     kept: list[PlannerSubagentRecord] = []
     removed: list[str] = []
     for record in records:
+        result_path = config.results_dir / f"{record.subagent_id}.result.json"
+        last_seen = _parse_iso(record.last_update_at) or _parse_iso(record.created_at)
+        if (
+            record.status in ACTIVE_STATUSES
+            and not result_path.exists()
+            and last_seen is not None
+            and int((now - last_seen).total_seconds()) >= stale_active_seconds
+        ):
+            _emit_event(
+                config,
+                "planner_subagent_cleanup",
+                record,
+                {"reason": f"stale_active_no_result>{stale_active_seconds}s"},
+            )
+            removed.append(record.subagent_id)
+            continue
         expires_at = _parse_iso(record.expires_at)
         if expires_at is None or expires_at > now:
             kept.append(record)
@@ -417,6 +480,7 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
                 text=True,
                 capture_output=True,
                 check=False,
+                env=_openclaw_env(),
             )
         removed.append(record.subagent_id)
     return kept, removed
@@ -449,23 +513,15 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         f"TARGET_ROLE={target_role}\n"
         f"OWNER_TASK_ID={owner_task_id}\n"
         f"TASK_KIND={task_kind}\n"
-        "Authoritative runtime sources:\n"
-        "- Monitor status: http://127.0.0.1:7779/api/status\n"
-        "- Doctor snapshot: bash scripts/fc_doctor.sh\n"
-        "- Canonical target spec: docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md\n"
         "Rules:\n"
         "- Planner remains the only source of orchestration truth.\n"
         "- Treat planner-only scheduling as current reality: planner is the sole scheduled role; dev/admin/scrum_master are planner capabilities.\n"
-        "- Do not assume legacy tester/qa lanes, legacy core-role tmux requirements, or old four-lane health rules.\n"
         "- Do not call parallel_workstream.py claim/complete/handoff.\n"
         "- Do not update queue/workboard/contracts directly.\n"
-        "- Do not use qwen_orchestrator.py, auto_recover_tmux_roles.sh, or legacy tmux lane recovery as evidence for current planner-only truth.\n"
         "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
-        "- If a bounded technical sub-task helps, prefer Codex multi-agent delegation through repo_scan_worker, test_worker, patch_proposal_worker, runtime_diag_worker, or quick_worker.\n"
-        "- Keep any delegated technical worker ephemeral and scoped to this instruction only.\n"
         "- Keep scope narrow to the owner task and the planner instruction.\n"
         "- If blocked, say exactly what the planner should do next.\n"
-        "- Return ONLY one JSON object with keys: status, summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.\n"
+        "- Return ONLY one JSON object with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
         "- If no file or test applies, use 'none' or 'SKIP(reason)' explicitly.\n"
         f"Planner instruction: {message.strip()}\n"
     )
@@ -473,12 +529,20 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         return common + (
             "Dev mission:\n"
             "- Produce the smallest concrete patch or verification step that advances delivery.\n"
+            "- Do not inspect monitor, doctor, or unrelated architecture docs unless the task is explicitly blocked by runtime truth.\n"
+            "- Do not broaden the task into a repo-wide audit.\n"
+            "- Prefer one minimal vertical slice tied directly to the owner task notes.\n"
             "- Prefer targeted tests only.\n"
+            "- If you changed code or config, commit it and return the real commit_sha.\n"
+            "- verify must include before=..., after=..., test=...\n"
+            "- architecture_check must include layer=..., imports_ok=..., path_target=...\n"
+            "- vision_alignment must include batch=..., target=..., impact=...\n"
             "- Return files_touched and tests_run precisely.\n"
         )
     if target_role == "admin":
         return common + (
             "Admin mission:\n"
+            "- Use runtime probes only when they are directly required.\n"
             "- Repair runtime truth, stale locks, stale blockers, or broken execution paths.\n"
             "- Prefer reversible fixes and concrete verification.\n"
             "- If the issue is not runtime/infra, point planner back to dev or scrum_master.\n"
@@ -486,6 +550,7 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
     return common + (
         "Scrum mission:\n"
         "- Act as unblock-first coordinator.\n"
+        "- Do not inspect the full repo or launch technical workers.\n"
         "- Do not edit files or claim tasks.\n"
         "- Return one precise unblock action or escalation.\n"
     )
@@ -501,12 +566,32 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
                 payload = {}
         except Exception:
             payload = {}
-    status = str(payload.get("status", "failed" if not text else "completed")).strip() or "completed"
+        if not payload:
+            markers = ('{"status"', '{\n"status"')
+            start = -1
+            for marker in markers:
+                pos = text.rfind(marker)
+                if pos > start:
+                    start = pos
+            if start >= 0:
+                candidate = text[start:].strip()
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict):
+                        payload = parsed
+                except Exception:
+                    payload = {}
+    status = str(payload.get("status", "failed")).strip() or "failed"
     summary = _compact(payload.get("summary", text or "no_summary"), 260)
+    root_cause = _compact(payload.get("root_cause", "none"), 220)
+    fix_applied = _compact(payload.get("fix_applied", "none"), 220)
     artifact = _compact(payload.get("artifact", "none"), 220)
     verify = _compact(payload.get("verify", "none"), 220)
     files_touched = _compact(payload.get("files_touched", "none"), 220)
     tests_run = _compact(payload.get("tests_run", "SKIP(no_tests)"), 220)
+    commit_sha = _compact(payload.get("commit_sha", "none"), 120)
+    architecture_check = _compact(payload.get("architecture_check", "none"), 220)
+    vision_alignment = _compact(payload.get("vision_alignment", "none"), 220)
     recommended_next = _compact(payload.get("recommended_next", "none"), 220)
     blocking_issue = _compact(payload.get("blocking_issue", "none"), 160)
     return PlannerSubagentResult(
@@ -517,12 +602,17 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
         task_kind=task_kind,
         status=status,
         summary=summary,
+        root_cause=root_cause,
+        fix_applied=fix_applied,
         artifact=artifact,
         verify=verify,
         raw_output_ref="",
         backend=backend,
         files_touched=files_touched,
         tests_run=tests_run,
+        commit_sha=commit_sha,
+        architecture_check=architecture_check,
+        vision_alignment=vision_alignment,
         recommended_next=recommended_next,
         blocking_issue=blocking_issue,
     )
@@ -647,42 +737,56 @@ def run_subagent(
             {
                 "status": "completed",
                 "summary": f"Mock {plan['target_role']} subagent executed for {owner_task_id}",
+                "root_cause": f"mock_root_cause_for_{owner_task_id}",
+                "fix_applied": f"mock_fix_for_{owner_task_id}",
                 "artifact": "mock://artifact",
-                "verify": "proof=mock",
-                "files_touched": "none",
+                "verify": "before=mock_before; after=mock_after; test=mock_probe",
+                "files_touched": "mock/file.py",
                 "tests_run": "SKIP(mock)",
+                "commit_sha": "mock-commit-sha",
+                "architecture_check": "layer=platform; imports_ok=yes; path_target=mock/file.py",
+                "vision_alignment": f"batch={owner_task_id.split('-', 2)[0] if '-' in owner_task_id else owner_task_id}; target=mock_delivery; impact=planner_bridge_validation",
                 "recommended_next": "planner_merge_mock_result",
                 "blocking_issue": "none",
             },
             ensure_ascii=True,
         )
     elif chosen_backend == "openclaw":
-        ok, backend_ref = _ensure_openclaw_agent(subagent_id, config.root, plan["model"])
+        openclaw_model = _openclaw_cli_model(plan["model"])
+        ok, backend_ref = _ensure_openclaw_agent(subagent_id, config.root, openclaw_model)
         if not ok:
             rc = 5
-            stderr = "openclaw_agent_create_failed"
+            stderr = backend_ref or "openclaw_agent_create_failed"
+            backend_ref = subagent_id
         else:
-            proc = subprocess.run(
-                [
-                    "openclaw",
-                    "agent",
-                    "--agent",
-                    subagent_id,
-                    "--json",
-                    "--thinking",
-                    str(plan["thinking"]),
-                    "--timeout",
-                    str(max(30, timeout_seconds)),
-                    "--message",
-                    prompt,
-                ],
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            rc = proc.returncode
-            stdout = proc.stdout or ""
-            stderr = proc.stderr or ""
+            try:
+                proc = subprocess.run(
+                    [
+                        "openclaw",
+                        "agent",
+                        "--agent",
+                        subagent_id,
+                        "--json",
+                        "--thinking",
+                        str(plan["thinking"]),
+                        "--timeout",
+                        str(max(30, timeout_seconds)),
+                        "--message",
+                        prompt,
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    env=_openclaw_env(),
+                    timeout=max(30, timeout_seconds + 15),
+                )
+                rc = proc.returncode
+                stdout = proc.stdout or ""
+                stderr = proc.stderr or ""
+            except subprocess.TimeoutExpired as exc:
+                rc = 124
+                stdout = str(exc.stdout or "")
+                stderr = str(exc.stderr or "") or f"openclaw_timeout_after_{max(30, timeout_seconds + 15)}s"
     elif chosen_backend == "codex_exec":
         with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
             tmpdir = Path(td)
@@ -716,17 +820,22 @@ def run_subagent(
             ]
             if plan["sandbox"] == "workspace-write":
                 cmd.append("--full-auto")
-            proc = subprocess.run(
-                cmd + [prompt],
-                text=True,
-                capture_output=True,
-                check=False,
-                cwd=str(config.root),
-                timeout=max(30, timeout_seconds),
-            )
-            rc = proc.returncode
-            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
-            stderr = proc.stderr or ""
+            try:
+                proc = subprocess.run(
+                    cmd + [prompt],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    cwd=str(config.root),
+                    timeout=max(30, timeout_seconds),
+                )
+                rc = proc.returncode
+                stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
+                stderr = proc.stderr or ""
+            except subprocess.TimeoutExpired as exc:
+                rc = 124
+                stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else str(exc.stdout or "")
+                stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{max(30, timeout_seconds)}s"
             backend_ref = f"codex_exec:{subagent_id}"
     else:
         rc = 5
@@ -770,10 +879,15 @@ def run_subagent(
             records[idx].backend_ref = backend_ref
             records[idx].last_update_at = result.finished_at
             records[idx].summary = result.summary
+            records[idx].root_cause = result.root_cause
+            records[idx].fix_applied = result.fix_applied
             records[idx].artifact = result.artifact
             records[idx].verify = result.verify
             records[idx].files_touched = result.files_touched
             records[idx].tests_run = result.tests_run
+            records[idx].commit_sha = result.commit_sha
+            records[idx].architecture_check = result.architecture_check
+            records[idx].vision_alignment = result.vision_alignment
             records[idx].recommended_next = result.recommended_next
             records[idx].blocking_issue = result.blocking_issue
             break
@@ -781,8 +895,10 @@ def run_subagent(
     emitted = next((row for row in records if row.subagent_id == subagent_id), record)
     _emit_event(config, "planner_subagent_result", emitted, {"rc": rc, "result_path": str(result_path.relative_to(config.root))})
     payload = result.as_dict()
-    payload["ok"] = rc == 0 and result.status != "failed"
+    payload["ok"] = rc == 0 and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES
     payload["rc"] = rc
+    if chosen_backend == "openclaw":
+        payload["model"] = _openclaw_cli_model(plan["model"])
     if stderr:
         payload["stderr"] = _compact(stderr, 220)
     return (0 if payload["ok"] else 6), payload

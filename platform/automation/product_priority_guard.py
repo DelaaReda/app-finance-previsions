@@ -417,6 +417,20 @@ def _manifest_text(path: Path) -> str:
         return ""
 
 
+def _is_doc_only_completion(task: dict[str, Any], manifest_text: str, artifact: str) -> bool:
+    role = str(task.get("role", "")).strip().lower()
+    commit_sha = str(task.get("commit_sha", "")).strip().lower()
+    tests_run = str(task.get("tests_run", "")).strip().lower()
+    artifact_token = str(artifact or task.get("artifact", "")).strip().lower()
+    if role != "planner":
+        return False
+    if "planner_doc_only" in manifest_text.lower():
+        return True
+    if commit_sha in {"none(doc_only)", "none", "skip(doc_only)"} and tests_run.startswith("skip("):
+        return True
+    return artifact_token.endswith(".md")
+
+
 def build_delivery_integrity_metrics(
     root: Path,
     *,
@@ -425,6 +439,13 @@ def build_delivery_integrity_metrics(
 ) -> dict[str, Any]:
     current = now or _now()
     workboard = _read_json(root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json")
+    tasks_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(workboard, dict):
+        for task in workboard.get("tasks", []):
+            if isinstance(task, dict):
+                task_id = str(task.get("id", "")).strip()
+                if task_id:
+                    tasks_by_id[task_id] = task
     events = workboard.get("events", []) if isinstance(workboard, dict) else []
     recent: list[dict[str, Any]] = []
     cutoff_epoch = int(current.timestamp()) - int(window_hours * 3600)
@@ -436,6 +457,7 @@ def build_delivery_integrity_metrics(
             continue
         recent.append(event)
 
+    total = 0
     with_manifest = 0
     with_tests = 0
     with_commit_evidence = 0
@@ -447,10 +469,19 @@ def build_delivery_integrity_metrics(
         artifact = str(details.get("artifact", "")).strip()
         manifest_path = root / proof_manifest if proof_manifest and not proof_manifest.startswith("/") else Path(proof_manifest or "")
         manifest_text = _manifest_text(manifest_path) if manifest_path.exists() else ""
+        task = tasks_by_id.get(task_id, {})
+        task_commit = str(task.get("commit_sha", "")).strip()
+        if _is_doc_only_completion(task, manifest_text, artifact):
+            continue
+        total += 1
         if manifest_text:
             with_manifest += 1
         has_tests = 'result: "PASS"' in manifest_text or "tests:" in manifest_text
-        has_commit = bool(COMMIT_RE.search(artifact)) or bool(COMMIT_RE.search(manifest_text))
+        has_commit = (
+            bool(COMMIT_RE.search(artifact))
+            or bool(COMMIT_RE.search(manifest_text))
+            or bool(COMMIT_RE.search(task_commit))
+        )
         if has_tests:
             with_tests += 1
         if has_commit:
@@ -458,7 +489,6 @@ def build_delivery_integrity_metrics(
         if not manifest_text or not has_tests or not has_commit:
             suspicious.append(task_id)
 
-    total = len(recent)
     status = "ok"
     if total and suspicious:
         status = "degraded"

@@ -120,6 +120,31 @@ class StateReconcilerTests(unittest.TestCase):
         self.assertEqual(board["tasks"][0]["state"], "READY_PLANNER")
         self.assertIn("stale_in_progress", board["tasks"][0]["stalled_reason"])
 
+    def test_dev_in_progress_without_active_subagent_is_downgraded_early(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "version": "x",
+            "tasks": [{
+                "id": "BATCH-27-DEV-02",
+                "stream_id": "BATCH-27",
+                "role": "dev",
+                "state": "IN_PROGRESS",
+                "updated_at": "2026-03-06T00:00:00Z",
+                "started_at": "2026-03-06T00:00:00Z",
+                "artifact": "",
+                "verify": "",
+                "commit_sha": "",
+                "files_touched": "",
+            }],
+            "streams": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-06T00:00:00Z"}],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({"items": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-06T00:00:00Z"}]}), encoding="utf-8")
+        report = run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1772800000)
+        board = json.loads(self.board_path.read_text())
+        self.assertEqual(report["stale_inprogress_marked"], 1)
+        self.assertEqual(board["tasks"][0]["state"], "READY_DEV")
+        self.assertEqual(board["tasks"][0]["stalled_reason"], "planner_capability_stall_no_active_subagent")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -356,6 +356,7 @@ AGENT_MESSAGE_BUS_SCRIPT="$(resolve_helper_script "platform/automation/agent_mes
 DELIVERY_VALUE_GATE_SCRIPT="$(resolve_helper_script "platform/automation/delivery_value_gate.py" "scripts/delivery_value_gate.py")"
 SCRUM_POLICY_SCRIPT="$(resolve_helper_script "platform/automation/scrum_policy.py" "scripts/scrum_policy.py")"
 PLANNER_SUBAGENT_MANAGER_SCRIPT="$(resolve_helper_script "platform/automation/planner_subagent_manager.py" "scripts/planner_subagent_manager.py")"
+PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT="$(resolve_helper_script "platform/automation/planner_orchestrator_bridge.py" "scripts/planner_orchestrator_bridge.py")"
 PLANNER_GUARDIAN_ENABLED="${TMUX_ROLE_PLANNER_GUARDIAN_ENABLED:-1}"
 PLANNER_GUARDIAN_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_GUARDIAN_INCLUDE_IN_PROMPT:-1}"
 PLANNER_GUARDIAN_LATEST_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-latest.json}"
@@ -3060,6 +3061,41 @@ apply_delivery_value_gate_safe() {
     trace_event "delivery_value_gate_failed source=${source} rc=${gate_rc}; mode=${mode}"
     cat "$tmp"
   fi
+  rm -f "$tmp"
+}
+
+apply_planner_orchestrator_bridge_safe() {
+  local source="${1:-unknown}"
+  local tmp=""
+  local bridge_rc=0
+  tmp="$(mktemp)"
+  cat > "$tmp"
+
+  if [[ "$ROLE" != "planner" || "${FC_PLANNER_ORCHESTRATOR_ENABLED:-0}" != "1" ]]; then
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT" ]]; then
+    trace_event "planner_orchestrator_bridge_unavailable source=${source}; fallback=raw_payload"
+    cat "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  set +e
+  python3 "$PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT" \
+    --root "$ROOT" \
+    --role "$ROLE" \
+    --source "$source" \
+    --backend "${FC_PLANNER_ORCHESTRATOR_BACKEND:-auto}" \
+    --contract-file "$tmp" >/dev/null
+  bridge_rc=$?
+  set -e
+  if [[ "$bridge_rc" -ne 0 ]]; then
+    trace_event "planner_orchestrator_bridge_failed source=${source} rc=${bridge_rc}; fallback=raw_payload"
+  fi
+  cat "$tmp"
   rm -f "$tmp"
 }
 
@@ -5857,6 +5893,7 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "primary_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "primary_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "primary_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$PRIMARY_TICK"
         sanitize_tmux_logs
@@ -5924,6 +5961,7 @@ if [[ "$DO_RETRY" -eq 1 ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "retry_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "retry_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$RETRY_TICK"
         sanitize_tmux_logs
@@ -5974,6 +6012,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "codex_exec_fallback")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "codex_exec_fallback")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "codex_exec_fallback")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$CODEX_TICK"
         sanitize_tmux_logs
@@ -6145,6 +6184,7 @@ FALLBACK_OUTPUT="$(apply_reconcile_runtime_truth_safe "$FALLBACK_OUTPUT")"
 FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_delivery_value_gate_safe "fallback_checkpoint")"
+FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_planner_orchestrator_bridge_safe "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(normalize_advisory_contract_if_needed "$FALLBACK_OUTPUT")"
 record_agent_message_receipts "$FALLBACK_OUTPUT" "$FALLBACK_TICK"
 sanitize_tmux_logs

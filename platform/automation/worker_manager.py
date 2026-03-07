@@ -202,6 +202,7 @@ def _cleanup_records(config: WorkerManagerConfig, records: list[WorkerRecord], n
                 text=True,
                 capture_output=True,
                 check=False,
+                env=_openclaw_env(),
             )
         removed.append(record.worker_id)
     return kept, removed
@@ -213,14 +214,34 @@ def shutil_which(binary: str) -> str:
     return which(binary) or ""
 
 
+def _openclaw_cli_model(model: str) -> str:
+    token = str(model or "").strip()
+    if not token:
+        return "codex-cli/gpt-5.4"
+    if "/" in token:
+        return token
+    return f"codex-cli/{token}"
+
+
+def _openclaw_env() -> dict[str, str]:
+    env = dict(os.environ)
+    desired = str(env.get("OPENCLAW_NODE_OPTIONS", "")).strip() or "--max-old-space-size=1536 --max-semi-space-size=64"
+    existing = str(env.get("NODE_OPTIONS", "")).strip()
+    if desired not in existing:
+        env["NODE_OPTIONS"] = f"{existing} {desired}".strip()
+    return env
+
+
 def _ensure_agent(agent_id: str, root: Path, model: str) -> tuple[bool, str]:
     if not shutil_which("openclaw"):
         return False, "openclaw_missing"
+    openclaw_model = _openclaw_cli_model(model)
     listed = subprocess.run(
         ["openclaw", "agents", "list", "--json"],
         text=True,
         capture_output=True,
         check=False,
+        env=_openclaw_env(),
     )
     if listed.returncode == 0:
         try:
@@ -232,12 +253,18 @@ def _ensure_agent(agent_id: str, root: Path, model: str) -> tuple[bool, str]:
                 if isinstance(item, dict) and str(item.get("id", "")) == agent_id:
                     return True, agent_id
     created = subprocess.run(
-        ["openclaw", "agents", "add", agent_id, "--workspace", str(root), "--model", model, "--non-interactive", "--json"],
+        ["openclaw", "agents", "add", agent_id, "--workspace", str(root), "--model", openclaw_model, "--non-interactive", "--json"],
         text=True,
         capture_output=True,
         check=False,
+        env=_openclaw_env(),
     )
-    return created.returncode == 0, agent_id
+    if created.returncode == 0:
+        return True, agent_id
+    detail = (created.stderr or created.stdout or "").strip()
+    if not detail:
+        detail = "openclaw_agent_add_failed"
+    return False, _compact(detail, 220)
 
 
 def _extract_summary(stdout: str) -> tuple[str, str]:
@@ -385,6 +412,7 @@ def run_worker(
                 text=True,
                 capture_output=True,
                 check=False,
+                env=_openclaw_env(),
             )
             rc = proc.returncode
             stdout = proc.stdout or ""
