@@ -11,8 +11,11 @@ from typing import Any
 
 
 CANONICAL_WORKSPACE = "/home/venom/analyse-financiere"
+CANONICAL_MAIN_WORKSPACE = "/home/venom"
 CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
+CANONICAL_MAIN_MODEL = "codex-cli-main/gpt-5.4"
 CANONICAL_DEFAULT_THINKING = "xhigh"
+CANONICAL_OWNER_E164 = "+14389799898"
 CANONICAL_CODEX_CLI_BACKEND = {
     "command": "codex",
     "args": [
@@ -38,6 +41,41 @@ CANONICAL_CODEX_CLI_BACKEND = {
     "imageMode": "repeat",
     "serialize": True,
 }
+CANONICAL_MAIN_CODEX_CLI_BACKEND = {
+    "command": "codex",
+    "args": [
+        "exec",
+        "--json",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
+    ],
+    "resumeArgs": [
+        "exec",
+        "resume",
+        "{sessionId}",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
+    ],
+    "output": "jsonl",
+    "resumeOutput": "text",
+    "input": "arg",
+    "modelArg": "--model",
+    "sessionIdFields": ["thread_id"],
+    "sessionMode": "existing",
+    "imageArg": "--image",
+    "imageMode": "repeat",
+    "serialize": True,
+}
+CANONICAL_MAIN_MEMORY_EXTRA_PATHS = [
+    "/home/venom/analyse-financiere/SOUL.md",
+    "/home/venom/analyse-financiere/USER.md",
+    "/home/venom/analyse-financiere/MEMORY.md",
+    "/home/venom/analyse-financiere/memory",
+    "/home/venom/analyse-financiere/docs",
+    "/home/venom/analyse-financiere/docs/ops",
+    "/home/venom/analyse-financiere/docs/operations/orchestrator",
+    "/home/venom/.openclaw/workspace/memory",
+]
 OPENCLAW_MINIMAL_CODEX_CONFIG = """model = "{model}"
 model_reasoning_effort = "{thinking}"
 
@@ -50,7 +88,20 @@ prevent_idle_sleep = true
 CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
     "main": {
         "name": "Main",
-        "model": CANONICAL_PRIMARY_MODEL,
+        "model": CANONICAL_MAIN_MODEL,
+        "workspace": CANONICAL_MAIN_WORKSPACE,
+        "tools": {
+            "exec": {"host": "gateway", "security": "full", "ask": "off"},
+        },
+        "sandbox": {
+            "mode": "off",
+            "browser": {"autoStart": True, "autoStartTimeoutMs": 30000},
+        },
+        "memorySearch": {
+            "enabled": True,
+            "sources": ["memory", "sessions"],
+            "extraPaths": CANONICAL_MAIN_MEMORY_EXTRA_PATHS,
+        },
     },
     "planner": {
         "name": "Planner",
@@ -112,6 +163,10 @@ def _canonical_agent_entry(agent_id: str, config_path: Path, repo_root: str, pri
             "default": True,
             "name": spec.get("name", "Main"),
             "model": spec.get("model", primary_model),
+            "workspace": spec.get("workspace", CANONICAL_MAIN_WORKSPACE),
+            "tools": spec.get("tools", {}),
+            "sandbox": spec.get("sandbox", {}),
+            "memorySearch": spec.get("memorySearch", {}),
         }
     workspace = _control_workspace(
         repo_root,
@@ -141,6 +196,7 @@ def _sync_defaults(payload: dict[str, Any], workspace: str, primary_model: str) 
     defaults["thinkingDefault"] = CANONICAL_DEFAULT_THINKING
     cli_backends = defaults.setdefault("cliBackends", {})
     cli_backends["codex-cli"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_BACKEND))
+    cli_backends["codex-cli-main"] = json.loads(json.dumps(CANONICAL_MAIN_CODEX_CLI_BACKEND))
 
 
 def _sync_agent_list(payload: dict[str, Any], config_path: Path, workspace: str, primary_model: str) -> tuple[list[str], list[str]]:
@@ -160,6 +216,25 @@ def _sync_agent_list(payload: dict[str, Any], config_path: Path, workspace: str,
         for agent_id in kept_ids
     ]
     return kept_ids, removed_ids
+
+
+def _sync_channels(payload: dict[str, Any]) -> None:
+    channels = payload.setdefault("channels", {})
+    whatsapp = channels.setdefault("whatsapp", {})
+    whatsapp["enabled"] = True
+    whatsapp.setdefault("dmPolicy", "allowlist")
+    whatsapp.setdefault("groupPolicy", "allowlist")
+    whatsapp.setdefault("selfChatMode", True)
+    whatsapp.setdefault("debounceMs", 0)
+    whatsapp.setdefault("mediaMaxMb", 50)
+    allow_from = [str(item).strip() for item in whatsapp.get("allowFrom", []) if str(item).strip()]
+    if CANONICAL_OWNER_E164 not in allow_from:
+        allow_from.append(CANONICAL_OWNER_E164)
+    whatsapp["allowFrom"] = allow_from
+    group_allow_from = [str(item).strip() for item in whatsapp.get("groupAllowFrom", []) if str(item).strip()]
+    if CANONICAL_OWNER_E164 not in group_allow_from:
+        group_allow_from.append(CANONICAL_OWNER_E164)
+    whatsapp["groupAllowFrom"] = group_allow_from
 
 
 def _remove_agent_dirs(config_path: Path, agent_ids: list[str]) -> list[str]:
@@ -217,6 +292,7 @@ def sync_control_plane(config_path: Path, workspace: str, primary_model: str, ap
     payload = _load_json(config_path)
     _sync_defaults(payload, workspace, primary_model)
     kept_ids, removed_ids = _sync_agent_list(payload, config_path, workspace, primary_model)
+    _sync_channels(payload)
     removed_dirs: list[str] = []
     reset_dirs: list[str] = []
     if apply:

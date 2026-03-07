@@ -27,9 +27,22 @@
   - `adminapp-codex`
   - `clawsentinel`
 - Main WhatsApp agent policy:
-  - `main` must use `codex-cli/gpt-5.4`
+  - `main` must use `codex-cli-main/gpt-5.4`
   - default OpenClaw thinking must remain `xhigh`
+  - `main.workspace` must be `/home/venom`
+  - `main` is the broad-access director agent for WhatsApp-driven requests across the VM/project
+  - `main.memorySearch.extraPaths` must include repo `SOUL.md`, `USER.md`, `MEMORY.md`, `memory/`, docs paths, and OpenClaw workspace memory
+  - `channels.whatsapp.enabled` must stay `true` with allowlist access for `+14389799898`
+  - `codex-cli-main` must run `codex exec --dangerously-bypass-approvals-and-sandbox`
+  - validated director scope:
+    - VM write/read works from `main`
+    - project memory/doc reads work from `main`
+    - `sudo` write/read/delete works from `main` on the current gateway/runtime
   - do not add `thinkingDefault` under `agents.list[].main`; OpenClaw rejects that schema and the gateway will fail to load
+- Planner/control-plane policy:
+  - `planner`, `adminapp-codex`, and `clawsentinel` remain on the narrower `codex-cli/gpt-5.4`
+  - keep their dedicated capability/control-plane workspaces under `logs-codex-runs/openclaw-control-plane/`
+  - do not widen planner bridge permissions just because `main` is a VM-level director
 - Canonical capability workspaces:
   - `logs-codex-runs/openclaw-capabilities/planner_dev/`
   - `logs-codex-runs/openclaw-capabilities/planner_admin/`
