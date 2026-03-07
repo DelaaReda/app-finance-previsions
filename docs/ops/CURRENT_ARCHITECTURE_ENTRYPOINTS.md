@@ -18,6 +18,7 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Target runtime architecture: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
 - Execution order: [PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md](/home/venom/analyse-financiere/docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md)
 - Monitor/runtime behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
+- Dev activation gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - Forecast/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
 
 ## Canonical code entrypoints
@@ -30,6 +31,7 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Delivery gate: [delivery_value_gate.py](/home/venom/analyse-financiere/platform/automation/delivery_value_gate.py)
 - Browser smoke proof: [browser_smoke.py](/home/venom/analyse-financiere/platform/automation/browser_smoke.py)
 - Product guard: [product_priority_guard.py](/home/venom/analyse-financiere/platform/automation/product_priority_guard.py)
+- Dev activation readiness: [dev_activation_readiness.py](/home/venom/analyse-financiere/platform/automation/dev_activation_readiness.py)
 - Monitor API: [server.py](/home/venom/analyse-financiere/apps/monitor/server.py)
 - Doctor CLI: [fc_doctor.py](/home/venom/analyse-financiere/platform/automation/fc_doctor.py)
 

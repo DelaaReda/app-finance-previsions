@@ -15,6 +15,7 @@ Use this index before reading operational documentation.
 - Runtime/monitor behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
 - Reliability and gates: [ORCHESTRATION_RELIABILITY_SPEC.md](/home/venom/analyse-financiere/docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md)
 - Cron/runtime profiles: [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
+- Development cutover gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - Product/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
 
 ## Canonical docs
@@ -23,6 +24,7 @@ Use this index before reading operational documentation.
 - [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
 - [ORCHESTRATION_RELIABILITY_SPEC.md](/home/venom/analyse-financiere/docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md)
 - [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
+- [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
 
 ## Reference docs
