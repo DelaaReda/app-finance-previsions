@@ -1,3 +1,11 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+  - /home/venom/analyse-financiere/docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md
+---
+
 # Architecture Batches VM — Deep Diagnostic (P0→P2)
 
 Date: 2026-03-04  

@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # Epics MVP — orientées exécution agents codex (OpenClaw)
+
+Historical note:
+- This file reflects an older epic decomposition model.
+- It remains useful for background detail only.
+- Do not treat it as the current backlog source of truth; use [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
 
 ## EPIC A — Stabiliser les contrats API MVP
 

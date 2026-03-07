@@ -2,6 +2,7 @@
 
 ## Référentiel principal
 
+- Carte planning canonique : [docs/product/planning/README.md](/home/venom/analyse-financiere/docs/product/planning/README.md)
 - Vision produit : [docs/product/PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
 - Backlog produit canonique : [docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md)
 - Portée MVP : [docs/product/planning/MVP_SCOPE.md](/home/venom/analyse-financiere/docs/product/planning/MVP_SCOPE.md)

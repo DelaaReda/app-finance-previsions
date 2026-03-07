@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # Sprint Next (Vision Clarifier Baseline)
+
+Historical note:
+- This file is an old sprint planning snapshot.
+- It remains useful for historical trace only.
+- Do not use it as the current planning or execution source of truth.
 
 ## Sprint Meta
 - Sprint ID: SPRINT-2026-W10

@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # WORKSTATE (MVP Planner Continuity)
+
+Historical note:
+- This file is an old planning/runtime snapshot.
+- Do not use it as the active backlog or architecture source of truth.
+- Start from [README.md](/home/venom/analyse-financiere/docs/product/planning/README.md) and [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md) instead.
 _Mis à jour: 2026-03-04 par architect (audit complet — désync queue/workstreams résolue, GOV_REVIEW normalisé, streams DONE→CLOSED standardisés)_
 
 ## ⚡ LECTURE OBLIGATOIRE À CHAQUE RUN

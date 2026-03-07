@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # User Stories MVP (détaillées)
+
+Historical note:
+- This file reflects older story-level breakdowns.
+- It remains useful for background detail only.
+- Do not treat it as the current backlog source of truth; use [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
 
 ## Story A1 — Contrat santé & observabilité minimale
 

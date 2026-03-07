@@ -1,3 +1,11 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+  - /home/venom/analyse-financiere/docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md
+---
+
 # ARCH Batches Runtime Refactor — 2026-03-06
 
 Superseded for current target architecture.

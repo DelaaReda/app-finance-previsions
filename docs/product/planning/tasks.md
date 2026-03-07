@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # pTasks détaillées orientées exécution par agents codex (OpenClaw)
+
+Historical note:
+- This file reflects an older execution decomposition model.
+- It remains useful for background task detail only.
+- Do not treat it as the current backlog source of truth; use [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md).
 
 ## Gate Status (source of truth)
 

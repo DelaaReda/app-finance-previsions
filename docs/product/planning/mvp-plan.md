@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # Plan MVP Exécution (Finance Copilot) — 2026-02-24
+
+Historical note:
+- This file captures an older MVP execution plan.
+- It remains useful as background only.
+- Do not treat it as the current backlog or architecture source of truth.
 
 ## 1) Constat rapide du repo
 

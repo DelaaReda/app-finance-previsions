@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # Product Backlog
+
+Historical note:
+- This file is an older backlog prioritization snapshot.
+- It remains useful for background only.
+- Do not treat it as the canonical backlog source of truth.
 
 Source alignment:
 - Product vision: `docs/planning/PRODUCT_VISION.md`

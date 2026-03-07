@@ -11,6 +11,7 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 
 ## Canonical docs
 - Product vision: [PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
+- Product planning map: [docs/product/planning/README.md](/home/venom/analyse-financiere/docs/product/planning/README.md)
 - Product backlog: [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md)
 - Workspace and path rules: [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
 - Target runtime architecture: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)

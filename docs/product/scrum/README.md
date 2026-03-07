@@ -1,4 +1,17 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/product/planning/README.md
+  - /home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md
+---
+
 # Scrum Operating Model (analyse-financiere)
+
+Historical note:
+- This scrum subtree contains older operating snapshots and backlog views.
+- It is not the canonical product-planning source anymore.
+- Use [docs/product/planning/README.md](/home/venom/analyse-financiere/docs/product/planning/README.md) and [BACKEND_FIRST_PRODUCT_BACKLOG.md](/home/venom/analyse-financiere/docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md) for current planning truth.
 
 ## Cadence
 - Sprint length: **1 week** (Mon → Sun)
