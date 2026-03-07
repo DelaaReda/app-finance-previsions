@@ -123,6 +123,7 @@ function openFacette(facetteId) {
 
     // Load initial content
     loadFacetteContent(facetteId, facette.tabs[0]);
+    scheduleCriticalWidgetHealthRender();
 
     showToast(`🚀 Ouverture ${facette.name}`);
   } catch (e) {
@@ -137,6 +138,7 @@ function closeFacette() {
   v16State.currentFacette = null;
   v16State.currentTab = null;
   v16State.breadcrumbs = [];
+  scheduleCriticalWidgetHealthRender();
 }
 
 function renderFacetteTabs(facette) {
@@ -390,12 +392,14 @@ function loadFacetteContent(facetteId, tabName) {
   if (liveContent.html) {
     contentContainer.innerHTML = liveContent.html;
     renderFacetteLiveWidgets(contentContainer);
+    scheduleCriticalWidgetHealthRender();
     return;
   }
 
   // Generate sample content based on facette and tab
   const sampleContent = generateFacetteContent(facetteId, tabName);
   contentContainer.innerHTML = sampleContent;
+  scheduleCriticalWidgetHealthRender();
 }
 
 // V15: Draw Professional Volatility Chart
@@ -1231,6 +1235,68 @@ let liveDataMeta = {
   warnings: ['offline-fallback'],
   freshness: { lastFetchedAt: Date.now(), ttlMs: 60000 }
 };
+const CRITICAL_WIDGET_HEALTH_TARGETS = {
+  hero: {
+    selectors: ['#heroSection', '#hero-what-need-container'],
+    anchorSelector: '.hero-subtitle',
+    copy: {
+      loading: 'Live sync in progress. Quick actions stay available while cached context remains visible.',
+      stale: 'This portfolio snapshot is aging. Refresh before launching a new action.',
+      degraded: 'Fallback sources are driving the hero summary. Confirm key numbers before acting.',
+      error: 'Live portfolio sync is unavailable. Retry before using this entry point.'
+    }
+  },
+  news: {
+    selectors: ['#news-feed-widget-container .news-feed-widget', '#news-feed-widget-container'],
+    anchorSelector: '.widget-header',
+    copy: {
+      loading: 'Live headlines are loading. Cached cards remain available in the meantime.',
+      stale: 'These headlines are beyond the normal freshness window. Refresh before reacting.',
+      degraded: 'Some news sources are unavailable. Cross-check in Market before trading on this feed.',
+      error: 'The live news feed failed to load. Retry sync or stay on cached headlines.'
+    }
+  },
+  forecasts: {
+    selectors: ['#forecast-scenarios-widget-container .forecast-scenarios-widget', '#forecast-scenarios-widget-container'],
+    anchorSelector: '.widget-header',
+    copy: {
+      loading: 'Forecast scenarios are recalculating. Cached ranges stay visible until sync completes.',
+      stale: 'Scenario ranges are older than expected. Refresh before using them for decisions.',
+      degraded: 'Forecasts are running with partial signals. Treat the ranges as directional only.',
+      error: 'The forecast engine is unavailable. Retry sync before relying on this widget.'
+    }
+  },
+  judge: {
+    selectors: ['#llm-judge-widget-container .llm-judge-widget', '#llm-judge-widget-container'],
+    anchorSelector: '.widget-header',
+    copy: {
+      loading: 'The judge is loading live context. You can still review the cached workflow.',
+      stale: 'Judge consensus is no longer fresh. Refresh before asking for a new verdict.',
+      degraded: 'The judge is running on partial context. Keep prompts narrow or refresh first.',
+      error: 'The multi-model judge is unreachable. Retry sync before using this panel.'
+    }
+  },
+  'deep-dive': {
+    selectors: ['#facetteView'],
+    anchorSelector: '.facette-header',
+    shouldRender: () => v16State.currentFacette === 'deep-dive',
+    copy: {
+      loading: 'Deep-dive context is preparing live data. You can still open a ticker while sync runs.',
+      stale: 'Deep-dive context is aging. Refresh before starting another ticker review.',
+      degraded: 'Deep-dive is using partial sources. Recheck critical values before taking action.',
+      error: 'Deep-dive context is unavailable. Retry sync before trusting this analysis path.'
+    }
+  }
+};
+const CRITICAL_WIDGET_HEALTH_STATE_META = {
+  loading: { badge: 'LOADING', actionLabel: 'Syncing...', actionDisabled: true },
+  stale: { badge: 'STALE', actionLabel: 'Refresh live data', actionDisabled: false },
+  degraded: { badge: 'DEGRADED', actionLabel: 'Retry live sync', actionDisabled: false },
+  error: { badge: 'ERROR', actionLabel: 'Retry live data', actionDisabled: false }
+};
+let criticalWidgetHealthOverride = { state: 'loading' };
+let criticalWidgetHealthObserver = null;
+let criticalWidgetHealthFrame = null;
 
 function isObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -1777,6 +1843,203 @@ function formatRelativeTime(input) {
   return `${deltaDays}d ago`;
 }
 
+function getCriticalWidgetHealthAgeMs(meta = {}) {
+  const freshness = isObject(meta.cache) ? meta.cache : isObject(meta.freshness) ? meta.freshness : {};
+  const lastFetchedAt = toFiniteNumber(freshness.lastFetchedAt, 0);
+  if (lastFetchedAt > 0) {
+    return Math.max(0, Date.now() - lastFetchedAt);
+  }
+  const generatedAt = Date.parse(meta.generatedAt);
+  return Number.isFinite(generatedAt) ? Math.max(0, Date.now() - generatedAt) : 0;
+}
+
+function getCriticalWidgetHealthStatus() {
+  if (criticalWidgetHealthOverride && criticalWidgetHealthOverride.state) {
+    return criticalWidgetHealthOverride;
+  }
+
+  const warnings = toArray(liveDataMeta.warnings, []).map((entry) => toString(entry, '').toLowerCase());
+  const sources = toArray(liveDataMeta.sources, []).map((entry) => toString(entry, '').toLowerCase());
+  const apiStatus = toString(window.apiHealth && window.apiHealth.status, '').toLowerCase();
+  const apiLastUpdates = isObject(window.apiHealth && window.apiHealth.last_updates)
+    ? Object.values(window.apiHealth.last_updates)
+    : [];
+  const apiAgeMs = apiLastUpdates
+    .map((entry) => Date.parse(entry))
+    .filter((entry) => Number.isFinite(entry))
+    .map((entry) => Math.max(0, Date.now() - entry))
+    .reduce((maxAge, entry) => Math.max(maxAge, entry), 0);
+  const baseAgeMs = getCriticalWidgetHealthAgeMs(liveDataMeta);
+  const ageMs = Math.max(baseAgeMs, apiAgeMs);
+  const ttlMs = Math.max(60000, toFiniteNumber(liveDataMeta.freshness?.ttlMs || liveDataMeta.cache?.ttlMs, 60000));
+
+  if (apiStatus && apiStatus !== 'ok' && apiStatus !== 'healthy') {
+    return { state: apiStatus.includes('degraded') ? 'degraded' : 'error' };
+  }
+  if (warnings.some((entry) => /(error|failed|timeout|exception)/.test(entry))) {
+    return { state: 'error' };
+  }
+  if (warnings.some((entry) => /(stale|delay|lag|aged)/.test(entry)) || ageMs > ttlMs * 2) {
+    return { state: 'stale' };
+  }
+  if (
+    sources.some((entry) => entry.includes('fallback'))
+    || warnings.some((entry) => /(fallback|unavailable|partial|missing)/.test(entry))
+  ) {
+    return { state: 'degraded' };
+  }
+  return null;
+}
+
+function buildCriticalWidgetHealthDetail(status) {
+  if (status && status.reason) {
+    return status.reason;
+  }
+
+  if (status && status.state === 'loading') {
+    return 'Cached data remains visible until live sync completes.';
+  }
+
+  const warnings = toArray(liveDataMeta.warnings, [])
+    .map((entry) => toString(entry, '').replace(/[_-]+/g, ' ').trim())
+    .filter(Boolean);
+  if (warnings.length) {
+    return warnings.slice(0, 2).join(' | ');
+  }
+
+  const sources = toArray(liveDataMeta.sources, []).map((entry) => toString(entry, '')).filter(Boolean);
+  if (sources.length) {
+    return `Source: ${sources.join(', ')}`;
+  }
+
+  return `Updated ${formatRelativeTime(liveDataMeta.generatedAt)}`;
+}
+
+function setCriticalWidgetHealthOverride(state, detail = {}) {
+  criticalWidgetHealthOverride = state ? { state, ...detail } : null;
+  scheduleCriticalWidgetHealthRender();
+}
+
+function resolveCriticalWidgetHealthHost(target) {
+  const selectors = toArray(target && target.selectors, []);
+  for (const selector of selectors) {
+    const node = document.querySelector(selector);
+    if (node) {
+      return node;
+    }
+  }
+  return null;
+}
+
+function clearCriticalWidgetHealthBanner(widgetKey) {
+  document
+    .querySelectorAll(`.dashboard-widget-health[data-widget="${widgetKey}"]`)
+    .forEach((node) => node.remove());
+}
+
+function mountCriticalWidgetHealthBanner(host, banner, anchorSelector = '') {
+  const anchor = anchorSelector ? host.querySelector(anchorSelector) : null;
+  if (anchor) {
+    anchor.insertAdjacentElement('afterend', banner);
+    return;
+  }
+  host.prepend(banner);
+}
+
+function renderCriticalWidgetHealth() {
+  criticalWidgetHealthFrame = null;
+  const status = getCriticalWidgetHealthStatus();
+
+  Object.entries(CRITICAL_WIDGET_HEALTH_TARGETS).forEach(([widgetKey, target]) => {
+    clearCriticalWidgetHealthBanner(widgetKey);
+    const shouldRender = Boolean(status) && (!target.shouldRender || target.shouldRender());
+    if (!shouldRender) {
+      return;
+    }
+
+    const host = resolveCriticalWidgetHealthHost(target);
+    const copy = target.copy && status ? target.copy[status.state] : '';
+    if (!host || !copy) {
+      return;
+    }
+
+    const stateMeta = CRITICAL_WIDGET_HEALTH_STATE_META[status.state] || CRITICAL_WIDGET_HEALTH_STATE_META.error;
+    const banner = document.createElement('div');
+    banner.className = 'dashboard-widget-health';
+    banner.dataset.widget = widgetKey;
+    banner.dataset.state = status.state;
+    banner.setAttribute('role', 'status');
+    banner.setAttribute('aria-live', 'polite');
+
+    const summary = document.createElement('div');
+    summary.className = 'dashboard-widget-health__summary';
+
+    const meta = document.createElement('div');
+    meta.className = 'dashboard-widget-health__meta';
+
+    const badge = document.createElement('span');
+    badge.className = 'dashboard-widget-health__badge';
+    badge.textContent = stateMeta.badge;
+
+    const detail = document.createElement('span');
+    detail.className = 'dashboard-widget-health__detail';
+    detail.textContent = buildCriticalWidgetHealthDetail(status);
+
+    const message = document.createElement('p');
+    message.className = 'dashboard-widget-health__message';
+    message.textContent = copy;
+
+    meta.appendChild(badge);
+    meta.appendChild(detail);
+    summary.appendChild(meta);
+    summary.appendChild(message);
+    banner.appendChild(summary);
+
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'dashboard-widget-health__action';
+    action.textContent = stateMeta.actionLabel;
+    action.disabled = Boolean(stateMeta.actionDisabled);
+    if (!stateMeta.actionDisabled) {
+      action.addEventListener('click', () => refreshData());
+    }
+    banner.appendChild(action);
+
+    mountCriticalWidgetHealthBanner(host, banner, target.anchorSelector);
+  });
+}
+
+function scheduleCriticalWidgetHealthRender() {
+  if (criticalWidgetHealthFrame) {
+    cancelAnimationFrame(criticalWidgetHealthFrame);
+  }
+  criticalWidgetHealthFrame = requestAnimationFrame(() => {
+    renderCriticalWidgetHealth();
+  });
+}
+
+function observeCriticalWidgetMounts() {
+  if (criticalWidgetHealthObserver || typeof MutationObserver !== 'function') {
+    return;
+  }
+
+  criticalWidgetHealthObserver = new MutationObserver(() => {
+    scheduleCriticalWidgetHealthRender();
+  });
+
+  [
+    'hero-what-need-container',
+    'news-feed-widget-container',
+    'forecast-scenarios-widget-container',
+    'llm-judge-widget-container'
+  ].forEach((id) => {
+    const node = document.getElementById(id);
+    if (node) {
+      criticalWidgetHealthObserver.observe(node, { childList: true, subtree: true });
+    }
+  });
+}
+
 function updateLiveProvenance(meta = {}) {
   const lineage = document.getElementById('liveDataProvenance');
   if (!lineage) return;
@@ -1857,6 +2120,7 @@ function renderLiveDashboardWidgets() {
   renderTopMoversWidget();
   drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));
   drawWinRateCircle();
+  scheduleCriticalWidgetHealthRender();
 }
 
 function renderForecastScenarioWidget() {
@@ -2707,6 +2971,7 @@ function refreshData() {
   }
 
   showLoading();
+  setCriticalWidgetHealthOverride('loading');
   const refresh = (typeof window.refreshLiveData === 'function')
     ? window.refreshLiveData()
     : Promise.resolve(window.getLiveDashboardData ? window.getLiveDashboardData() : {});
@@ -2715,13 +2980,18 @@ function refreshData() {
     .then((payload) => {
       if (payload) {
         applyLiveDashboardData(payload);
+        setCriticalWidgetHealthOverride(null);
         showToast('Data refreshed from live endpoint');
       } else {
+        setCriticalWidgetHealthOverride(null);
         showToast('Data refreshed with cached content');
       }
     })
     .catch((error) => {
       console.error('refreshData failed:', error);
+      setCriticalWidgetHealthOverride('error', {
+        reason: toString(error && error.message, 'refresh failed')
+      });
       showToast('Refresh failed, keeping last known data', 'error');
     })
     .finally(() => {
@@ -4267,10 +4537,22 @@ function drawWinRateCircle() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  observeCriticalWidgetMounts();
+  scheduleCriticalWidgetHealthRender();
   if (typeof window.initLiveData === 'function') {
-    window.initLiveData().catch((error) => {
-      console.warn('[Finance Copilot] live init failed, fallback data remains active:', error?.message || error);
-    });
+    setCriticalWidgetHealthOverride('loading');
+    window.initLiveData()
+      .then(() => {
+        setCriticalWidgetHealthOverride(null);
+      })
+      .catch((error) => {
+        console.warn('[Finance Copilot] live init failed, fallback data remains active:', error?.message || error);
+        setCriticalWidgetHealthOverride('error', {
+          reason: toString(error && error.message, 'live init failed')
+        });
+      });
+  } else {
+    setCriticalWidgetHealthOverride(null);
   }
 
   console.log('🚀 Finance Copilot V16 ULTIMATE initializing...');
