@@ -132,7 +132,9 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         ).strip()
         latest_owner_task_id = str(latest.get("owner_task_id", "")).strip()
     status = "ok"
-    if recent_total and (
+    if active:
+        status = "ok"
+    elif recent_total and (
         latest_status not in SUCCESS_STATUSES
         or latest_fallback_like
     ):
