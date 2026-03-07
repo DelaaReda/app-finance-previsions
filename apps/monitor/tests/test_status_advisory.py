@@ -124,6 +124,53 @@ class MonitorStatusAdvisoryTests(unittest.TestCase):
             self.assertEqual(self.module.contract("dev"), {})
             self.assertEqual(self.module.contract_raw("dev"), "")
 
+    def test_stale_admin_takeover_state_is_hidden_in_planner_mode(self) -> None:
+        (self.state / "admin.tshape.state.json").write_text(
+            json.dumps(
+                {
+                    "active": True,
+                    "target_role": "dev",
+                    "since_ts": "2026-03-06T10:00:00Z",
+                    "reason_blocker": "DEV_ARCH_CHECK_FORMAT_INVALID",
+                    "last_action": "takeover_preflight_ok",
+                    "resolved": False,
+                    "blocked_roles": ["dev"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.state / "admin_autonomy_state.json").write_text(
+            json.dumps(
+                {
+                    "active": True,
+                    "trigger": "blocked_explicit",
+                    "target_role": "dev",
+                    "target_task": "none",
+                    "reason_blocker": "BLOCKED_RUNTIME",
+                    "last_action": "takeover_active",
+                    "last_outcome": "partial",
+                    "since_ts": "2026-03-06T10:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "FC_PLANNER_ORCHESTRATOR_ENABLED": "1",
+                "FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY": "1",
+            },
+            clear=False,
+        ), mock.patch.object(self.module, "_active_planner_subagent_roles", lambda: ()), mock.patch.object(
+            self.module.time, "time", lambda: 1772800000
+        ):
+            tshape = self.module.admin_tshape_snapshot()
+            autonomy = self.module.admin_autonomy_snapshot()
+        self.assertFalse(tshape.get("active"))
+        self.assertEqual(tshape.get("reason_blocker"), "STALE_SUPPRESSED")
+        self.assertFalse(autonomy.get("active"))
+        self.assertEqual(autonomy.get("trigger"), "stale_suppressed")
+
 
 if __name__ == "__main__":
     unittest.main()

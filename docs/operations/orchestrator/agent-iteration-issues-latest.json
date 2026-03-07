@@ -55,8 +55,8 @@
       "workboard_version": "workboard_1772799304_53b1a5b33495"
     },
     "planner": {
-      "ts_utc": "2026-03-06T22:22:16Z",
-      "tick_id": "P1772835723_14494",
+      "ts_utc": "2026-03-07T01:44:18Z",
+      "tick_id": "P1772847843_17733",
       "role": "planner",
       "agent_bin": "codex",
       "channel": "codex_exec",
@@ -70,16 +70,16 @@
       "issue_count": 0,
       "max_severity": "INFO",
       "issues": [],
-      "next_action": "CLAIM_BATCH_11_ARCH_P1772835723_14494",
+      "next_action": "CLAIM_BATCH_11_ARCH_P1772847843_17733",
       "evidence_paths": [
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.A3IisuVlcj",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.hsJWkvXatD",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.Xvz9X4aZCO",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.5BmKWCHoY9",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.AWTA0mlSPO",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.lgq1Z2whIv",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.o7Z9gpGoeh",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.mMMLCVfSy2",
         "/home/venom/analyse-financiere/logs-codex-runs/role-runner/planner.events.log"
       ],
-      "queue_version": "queue_1772835721_514fdb133eec",
-      "workboard_version": "workboard_1772835722_5db1f4f872c6"
+      "queue_version": "queue_1772847841_e72ac9d31155",
+      "workboard_version": "workboard_1772847842_661e6ca0e458"
     },
     "scrum_master": {
       "ts_utc": "2026-03-06T22:18:27Z",
@@ -109,7 +109,7 @@
       "workboard_version": "workboard_1772835503_f8bb2c1be057"
     }
   },
-  "updated_at_utc": "2026-03-06T22:22:16Z",
+  "updated_at_utc": "2026-03-07T01:44:18Z",
   "summary": {
     "roles_total": 4,
     "has_issues_roles": [],

@@ -1,5 +1,5 @@
 {
-  "ts_utc": "2026-03-06T22:22:16Z",
+  "ts_utc": "2026-03-07T01:44:18Z",
   "guardian_version": "2026-03-03.v1",
   "role": "planner",
   "source": "primary_structured",
@@ -29,7 +29,7 @@
     "delta": "COMPLETE_BATCH_58_ANALYSIS",
     "verdict": "GO_WITH_CAUTION",
     "blocker_id": "NONE",
-    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772835723_14494",
+    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772847843_17733",
     "task_update": "complete",
     "planner_artifact": "docs/operations/orchestrator/proofs/BATCH-58-ANALYSIS-20260306T114425Z.md",
     "batch_created": "",

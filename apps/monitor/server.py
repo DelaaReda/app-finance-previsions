@@ -1052,6 +1052,21 @@ def _contract_is_stale_for_planner_mode(role: str, path: Path, now_ts: float | N
     return age_s > 3600
 
 
+def _capability_state_is_stale_for_planner_mode(target_role: str, since_ts: str, now_ts: float | None = None) -> bool:
+    if _execution_mode(ROOT) != "planner_experimental":
+        return False
+    role_token = str(target_role or "").strip().lower()
+    if role_token in {"", "planner"}:
+        return False
+    if role_token in set(_active_planner_subagent_roles()):
+        return False
+    ts_epoch = _parse_ts_epoch(since_ts)
+    if ts_epoch is None:
+        return False
+    age_s = (now_ts if now_ts is not None else time.time()) - ts_epoch
+    return age_s > 3600
+
+
 def _dev_autonomy_from_parent(parent: dict | None) -> dict:
     data = parent if isinstance(parent, dict) else {}
     return {
@@ -1859,6 +1874,22 @@ def admin_tshape_snapshot(now_ts: float | None = None) -> dict:
             "source": str(base.get("source") or state_file),
         }
     )
+    if payload["active"] and _capability_state_is_stale_for_planner_mode(
+        payload.get("target_role", ""),
+        payload.get("since_ts", ""),
+        now_epoch,
+    ):
+        payload.update(
+            {
+                "active": False,
+                "target_role": "",
+                "reason_blocker": "STALE_SUPPRESSED",
+                "last_action": "stale_suppressed",
+                "resolved": True,
+                "blocked_streak": 0,
+                "blocked_roles": [],
+            }
+        )
     return payload
 
 
@@ -1879,7 +1910,7 @@ def admin_autonomy_snapshot(now_ts: float | None = None) -> dict:
     needs_review = state.get("needs_human_review_by_role", {})
     if not isinstance(needs_review, dict):
         needs_review = {}
-    return {
+    payload = {
         "active": bool(state.get("active", False)),
         "trigger": str(state.get("trigger", "none") or "none").strip() or "none",
         "target_role": str(state.get("target_role", "") or "").strip(),
@@ -1900,6 +1931,26 @@ def admin_autonomy_snapshot(now_ts: float | None = None) -> dict:
         },
         "source": str(state.get("source", ADMIN_AUTONOMY_STATE_FILE)),
     }
+    if payload["active"] and _capability_state_is_stale_for_planner_mode(
+        payload.get("target_role", ""),
+        payload.get("since_ts", ""),
+        now_epoch,
+    ):
+        payload.update(
+            {
+                "active": False,
+                "trigger": "stale_suppressed",
+                "target_role": "",
+                "target_task": "none",
+                "reason_blocker": "STALE_SUPPRESSED",
+                "last_action": "stale_suppressed",
+                "last_outcome": "resolved",
+                "last_action_seq": "",
+                "streak_by_role": {"planner": 0, "dev": 0},
+                "needs_human_review_by_role": {"planner": False, "dev": False},
+            }
+        )
+    return payload
 
 
 def admin_dispatch_snapshot(now_ts: float | None = None) -> dict:
