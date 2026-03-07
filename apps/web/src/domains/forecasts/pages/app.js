@@ -162,8 +162,236 @@ function switchFacetteTab(facetteName, tabName) {
   showToast(`📋 Viewing ${tabName}`);
 }
 
+const FACETTE_LIVE_TEMPLATE_SELECTORS = {
+  story: '#market-pulse-widget-container',
+  news: '#news-feed-widget-container',
+  trade: '#trade-ideas-widget-container',
+  calendar: '#market-calendar-widget-container',
+  marketDrivers: '#market-drivers-widget-container'
+};
+
+const FACETTE_LIVE_SLOT_IDS = {
+  story: [],
+  news: ['newsFilter', 'newsCardsGrid'],
+  trade: ['tradeIdeasGrid'],
+  calendar: ['calendarSections'],
+  marketDrivers: ['driversBarsVisual']
+};
+
+const FACETTE_LIVE_WARNING_KEYS = {
+  story: 'story-unavailable',
+  news: 'newsItems-unavailable',
+  trade: 'tradeIdeas-unavailable',
+  calendar: 'marketCalendar-unavailable',
+  marketDrivers: 'marketDrivers-unavailable'
+};
+
+const FACETTE_LIVE_ROUTES = {
+  marche: {
+    synthese: ['story', 'marketDrivers', 'calendar'],
+    actualites: ['news']
+  },
+  economie: {
+    marche: ['story', 'marketDrivers'],
+    'macro economie': ['marketDrivers', 'calendar'],
+    'news economiques': ['news']
+  },
+  news: {
+    '*': ['news']
+  },
+  trading: {
+    'trade ideas': ['trade']
+  }
+};
+
+function normalizeFacetteRouteToken(value) {
+  return toString(value, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getFacetteWidgetSlot(root, slotId) {
+  if (!root) return null;
+  if (typeof root.querySelector !== 'function') return null;
+  return root.querySelector(`[data-widget-slot="${slotId}"]`) || root.querySelector(`#${slotId}`);
+}
+
+function getFacetteLiveWarnings() {
+  const currentWarnings = toArray(liveDataMeta && liveDataMeta.warnings, []);
+  if (currentWarnings.length) {
+    return currentWarnings;
+  }
+  return toArray(window.liveContractWarnings, []);
+}
+
+function facetteLiveRouteFallback(tabToken) {
+  if (!tabToken) return [];
+  if (tabToken.includes('news') || tabToken.includes('actualite')) {
+    return ['news'];
+  }
+  if (tabToken.includes('trade') || tabToken.includes('opportunit')) {
+    return ['trade'];
+  }
+  if (tabToken.includes('calendar') || tabToken.includes('calendrier') || tabToken.includes('earnings')) {
+    return ['calendar'];
+  }
+  if (tabToken.includes('marche') || tabToken.includes('synthese')) {
+    return ['story', 'marketDrivers'];
+  }
+  return [];
+}
+
+function resolveFacetteLiveWidgets(facetteId, tabName) {
+  const facetteToken = normalizeFacetteRouteToken(facetteId);
+  const tabToken = normalizeFacetteRouteToken(tabName);
+  const facetteRoutes = FACETTE_LIVE_ROUTES[facetteToken];
+  if (facetteRoutes) {
+    if (facetteRoutes[tabToken]) {
+      return facetteRoutes[tabToken];
+    }
+    if (facetteRoutes['*']) {
+      return facetteRoutes['*'];
+    }
+  }
+  return facetteLiveRouteFallback(tabToken);
+}
+
+function rewriteFacetteWidgetIds(template, widgetKey, widgetScope) {
+  const slotIds = FACETTE_LIVE_SLOT_IDS[widgetKey] || [];
+  return slotIds.reduce((html, slotId) => {
+    const scopedId = `${slotId}-${widgetScope}`;
+    return html.replace(new RegExp(`id="${slotId}"`, 'g'), `id="${scopedId}" data-widget-slot="${slotId}"`);
+  }, template);
+}
+
+function buildFacetteLiveWidgetMarkup(widgetKey, widgetScope) {
+  const selector = FACETTE_LIVE_TEMPLATE_SELECTORS[widgetKey];
+  const source = selector ? document.querySelector(selector) : null;
+  const template = toString(source && source.innerHTML, '').trim();
+  if (!template) {
+    return '';
+  }
+  const scopedTemplate = rewriteFacetteWidgetIds(template, widgetKey, widgetScope);
+  return `
+    <div class="facette-live-widget" data-facette-widget="${widgetKey}" data-widget-scope="${widgetScope}">
+      ${scopedTemplate}
+    </div>
+  `;
+}
+
+function buildFacetteLiveContent(facetteId, tabName) {
+  const widgets = resolveFacetteLiveWidgets(facetteId, tabName);
+  if (!widgets.length) {
+    return { html: '', widgets: [] };
+  }
+
+  const scopeBase = `${normalizeFacetteRouteToken(facetteId) || 'facette'}-${normalizeFacetteRouteToken(tabName) || 'tab'}`;
+  const html = widgets
+    .map((widgetKey, index) => buildFacetteLiveWidgetMarkup(widgetKey, `${scopeBase}-${index}`))
+    .filter(Boolean)
+    .join('');
+
+  return { html, widgets };
+}
+
+function applyFacetteLiveFallbackNotice(root, widgetKey) {
+  const warningKey = FACETTE_LIVE_WARNING_KEYS[widgetKey];
+  if (!warningKey) return;
+  const warnings = getFacetteLiveWarnings();
+  if (!warnings.includes(warningKey)) return;
+  if (root.querySelector('[data-facette-fallback-note="true"]')) return;
+
+  const notice = document.createElement('div');
+  notice.dataset.facetteFallbackNote = 'true';
+  notice.style.cssText = 'margin-bottom:12px;padding:10px 12px;border-radius:12px;border:1px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.12);color:var(--color-text-light);font-size:12px;';
+  notice.textContent = 'Fallback data shown: live API unavailable for this view.';
+
+  const target = root.querySelector('.widget-body') || root;
+  target.prepend(notice);
+}
+
+function renderMarketPulse(root = document) {
+  if (!root || typeof root.querySelector !== 'function') return;
+  const widget = root.querySelector('.market-pulse-widget');
+  if (!widget) return;
+
+  const story = isObject(appData.story) ? appData.story : {};
+  const storyContent = widget.querySelector('.story-content');
+  const storyDetail = widget.querySelector('.story-detail');
+  const title = widget.querySelector('.widget-title');
+  const timestamp = widget.querySelector('.widget-timestamp');
+  const updateTime = widget.querySelector('.update-time');
+
+  if (title) {
+    title.textContent = toString(story.headline, 'What\'s Moving Your Portfolio Today');
+  }
+  if (storyContent) {
+    storyContent.textContent = toString(
+      story.content,
+      'Live market story unavailable. Check back after the next backend refresh.'
+    );
+  }
+  if (storyDetail) {
+    storyDetail.textContent = toString(
+      story.summary || story.detail || story.content,
+      'The unified market brief did not return additional detail for this update.'
+    );
+  }
+  if (timestamp) {
+    timestamp.textContent = `Updated ${formatRelativeTime(toString(story.timestamp, liveDataMeta.generatedAt))}`;
+  }
+  if (updateTime) {
+    updateTime.textContent = `Updated ${formatRelativeTime(toString(story.timestamp, liveDataMeta.generatedAt))}`;
+  }
+
+  applyFacetteLiveFallbackNotice(widget, 'story');
+}
+
+function renderFacetteLiveWidgets(root) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+
+  root.querySelectorAll('[data-facette-widget]').forEach((widgetRoot) => {
+    const widgetKey = widgetRoot.dataset.facetteWidget;
+    if (widgetKey === 'story') {
+      renderMarketPulse(widgetRoot);
+      return;
+    }
+    if (widgetKey === 'news') {
+      renderNewsFeed(widgetRoot);
+      applyFacetteLiveFallbackNotice(widgetRoot, widgetKey);
+      return;
+    }
+    if (widgetKey === 'trade') {
+      renderTradeIdeas(widgetRoot);
+      applyFacetteLiveFallbackNotice(widgetRoot, widgetKey);
+      return;
+    }
+    if (widgetKey === 'calendar') {
+      renderMarketCalendar(widgetRoot);
+      applyFacetteLiveFallbackNotice(widgetRoot, widgetKey);
+      return;
+    }
+    if (widgetKey === 'marketDrivers') {
+      renderMarketDrivers(widgetRoot);
+      applyFacetteLiveFallbackNotice(widgetRoot, widgetKey);
+    }
+  });
+}
+
 function loadFacetteContent(facetteId, tabName) {
+  v16State.currentTab = tabName;
   const contentContainer = document.getElementById('facetteContent');
+  if (!contentContainer) return;
+
+  const liveContent = buildFacetteLiveContent(facetteId, tabName);
+  if (liveContent.html) {
+    contentContainer.innerHTML = liveContent.html;
+    renderFacetteLiveWidgets(contentContainer);
+    return;
+  }
 
   // Generate sample content based on facette and tab
   const sampleContent = generateFacetteContent(facetteId, tabName);
@@ -1617,6 +1845,7 @@ function syncDashboardCards() {
 }
 
 function renderLiveDashboardWidgets() {
+  renderMarketPulse();
   renderTradeIdeas();
   renderMarketCalendar();
   renderNewsFeed();
@@ -1813,6 +2042,9 @@ function applyLiveDashboardData(payload = {}) {
 
 window.addEventListener(LIVE_DATA_EVENT, (event) => {
   applyLiveDashboardData(event.detail || {});
+  if (v16State.currentFacette && v16State.currentTab) {
+    loadFacetteContent(v16State.currentFacette, v16State.currentTab);
+  }
 });
 
 // V11 State Management
@@ -3628,8 +3860,8 @@ function selectTab(button, tab) {
 
 // ============ INITIALIZATION ============
 // V13: Render Trade Ideas
-function renderTradeIdeas() {
-  const container = document.getElementById('tradeIdeasGrid');
+function renderTradeIdeas(root = document) {
+  const container = getFacetteWidgetSlot(root, 'tradeIdeasGrid');
   if (!container) return;
 
   container.innerHTML = tradeIdeas.map(idea => `
@@ -3657,8 +3889,8 @@ function renderTradeIdeas() {
 }
 
 // V13: Render Market Calendar
-function renderMarketCalendar() {
-  const container = document.getElementById('calendarSections');
+function renderMarketCalendar(root = document) {
+  const container = getFacetteWidgetSlot(root, 'calendarSections');
   if (!container) return;
 
   let html = '<div class="calendar-section">';
@@ -3704,8 +3936,8 @@ function renderMarketCalendar() {
 }
 
 // V13: Render News Feed
-function renderNewsFeed() {
-  const container = document.getElementById('newsCardsGrid');
+function renderNewsFeed(root = document) {
+  const container = getFacetteWidgetSlot(root, 'newsCardsGrid');
   if (!container) return;
 
   container.innerHTML = newsItems.map(news => `
@@ -3737,8 +3969,8 @@ function renderNewsFeed() {
 }
 
 // V13: Render Market Drivers Visual
-function renderMarketDrivers() {
-  const container = document.getElementById('driversBarsVisual');
+function renderMarketDrivers(root = document) {
+  const container = getFacetteWidgetSlot(root, 'driversBarsVisual');
   if (!container) return;
 
   container.innerHTML = marketDrivers.map(driver => `
