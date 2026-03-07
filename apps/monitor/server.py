@@ -2913,12 +2913,21 @@ def status():
             planner_dispatch_active = (
                 str(runtime_state.get("execution_mode", "") or "").strip() == "planner_experimental"
                 and workboard_in_progress > 0
-                and planner_blocker_up == "PLANNER_NO_READY_TASK_AFTER_SYNC"
+                and planner_blocker_up in {
+                    "PLANNER_NO_READY_TASK_AFTER_SYNC",
+                    "DELIVERY_VALUE_INSUFFICIENT",
+                }
             )
             if planner_dispatch_active and not planner_hard_incident:
                 status_value = "IN_PROGRESS"
                 verdict = "GO_WITH_CAUTION"
-                if str(delta_value or "").strip().upper() in {"NO_DELTA", "NO_DATA", "NONE", "SYNC_PRIORITY_THEN_CLAIM_FAILED"}:
+                if str(delta_value or "").strip().upper() in {
+                    "NO_DELTA",
+                    "NO_DATA",
+                    "NONE",
+                    "SYNC_PRIORITY_THEN_CLAIM_FAILED",
+                    "DELIVERY_VALUE_INSUFFICIENT",
+                }:
                     delta_value = "PLANNER_DISPATCH_ACTIVE"
                 blocker_value = "NONE"
                 soft_blocker = True

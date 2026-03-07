@@ -294,27 +294,15 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
                 "NEXT_ACTION_UNIQUE: DISPATCH_DEV_B27",
             ]
         )
-        blocked_payload = {
-            "ok": True,
-            "status": "blocked",
-            "summary": "blocked by runtime",
-            "artifact": "none",
-            "verify": "none",
-            "tests_run": "SKIP(no_tests)",
-            "commit_sha": "none",
-            "recommended_next": "fix runtime",
-            "blocking_issue": "runtime_blocked",
-            "subagent_id": "planner_dev_testblocked",
-        }
-        with patch.object(MODULE, "run_subagent", return_value=(0, blocked_payload)), patch.object(
-            MODULE, "collect_subagent", return_value=(0, {"ok": True})
-        ):
+        with patch.object(MODULE.subprocess, "Popen") as popen_mock:
             _, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
-        self.assertEqual(payload["dispatch"]["reason"], "subagent_blocked")
+        self.assertEqual(payload["dispatch"]["reason"], "subagent_running")
+        self.assertFalse(payload["dispatch"]["completed"])
+        popen_mock.assert_called_once()
         board = json.loads(self.board_path.read_text())
         tasks = {task["id"]: task for task in board["tasks"]}
-        self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "BLOCKED")
-        self.assertIn("runtime_blocked", tasks["BATCH-27-DEV-02"]["blocked_reason"])
+        self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "IN_PROGRESS")
+        self.assertEqual(tasks["BATCH-27-DEV-02"].get("blocked_reason", ""), "")
 
     def test_dev_dispatch_honors_requested_backend(self) -> None:
         self.board_path.write_text(
@@ -349,31 +337,99 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
                 "NEXT_ACTION_UNIQUE: DISPATCH_DEV_B27",
             ]
         )
-        seen: dict[str, str] = {}
-
-        def _fake_run_subagent(*args, **kwargs):
-            seen["backend"] = kwargs.get("backend", "")
-            return 0, {
-                "ok": True,
-                "status": "completed",
-                "root_cause": "x",
-                "fix_applied": "y",
-                "artifact": "abc1234",
-                "verify": "before=a; after=b; test=c",
-                "files_touched": "a.py",
-                "tests_run": "pytest -q",
-                "commit_sha": "abc1234",
-                "architecture_check": "layer=platform; imports_ok=yes; path_target=a.py",
-                "vision_alignment": "batch=BATCH-27; target=delivery; impact=done",
-                "subagent_id": "planner_dev_backend",
-            }
-
-        with patch.object(MODULE, "run_subagent", side_effect=_fake_run_subagent), patch.object(
-            MODULE, "collect_subagent", return_value=(0, {"ok": True})
-        ):
+        with patch.object(MODULE.subprocess, "Popen") as popen_mock:
             _, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
-        self.assertTrue(payload["dispatch"]["completed"])
-        self.assertEqual(seen["backend"], "openclaw")
+        self.assertFalse(payload["dispatch"]["completed"])
+        self.assertEqual(payload["dispatch"]["backend"], "openclaw")
+        popen_mock.assert_called_once()
+
+    def test_collect_finished_dev_subagent_merges_result(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-07T00:00:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-27-DEV-01", "stream_id": "BATCH-27", "role": "dev", "state": "DONE", "updated_at": "2026-03-06T00:00:00Z"},
+                        {"id": "BATCH-27-DEV-02", "stream_id": "BATCH-27", "role": "dev", "state": "IN_PROGRESS", "priority": "P1", "depends_on": ["BATCH-27-DEV-01"], "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-07T00:00:00Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_dev_finished",
+                            "target_role": "dev",
+                            "owner_task_id": "BATCH-27-DEV-02",
+                            "parent_role": "planner",
+                            "task_kind": "delivery",
+                            "status": "completed",
+                            "created_at": "2026-03-07T00:00:00Z",
+                            "expires_at": "2026-03-07T01:00:00Z",
+                            "ttl_min": 15,
+                            "backend": "openclaw",
+                            "backend_ref": "sessionId=abc",
+                            "last_update_at": "2026-03-07T00:01:00Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (results_dir / "planner_dev_finished.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_finished",
+                    "owner_task_id": "BATCH-27-DEV-02",
+                    "status": "completed",
+                    "artifact": "abc1234",
+                    "verify": "before=a; after=b; test=c",
+                    "tests_run": "pytest -q",
+                    "commit_sha": "abc1234",
+                    "files_touched": "a.py",
+                    "root_cause": "x",
+                    "fix_applied": "y",
+                    "architecture_check": "layer=platform; imports_ok=yes; path_target=a.py",
+                    "vision_alignment": "batch=BATCH-27; target=delivery; impact=done",
+                }
+            ),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                "EVIDENCE: task_update=analysis_only; run_note=collect dev subagent result; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=merge result",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: COLLECT_DEV_B27",
+            ]
+        )
+        updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
+        self.assertTrue(payload["ok"])
+        self.assertIn("dev_collect:BATCH-27-DEV-02", payload["actions"])
+        self.assertIn("dev_complete:BATCH-27-DEV-02", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        tasks = {task["id"]: task for task in board["tasks"]}
+        self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "DONE")
+        self.assertIn("dev_collect:BATCH-27-DEV-02", updated)
 
 
 if __name__ == "__main__":

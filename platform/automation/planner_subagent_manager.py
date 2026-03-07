@@ -693,6 +693,7 @@ def run_subagent(
     ttl_min: int,
     backend: str,
     timeout_seconds: int,
+    subagent_id_override: str = "",
 ) -> tuple[int, dict[str, Any]]:
     plan = plan_subagent(config, role, target_role, owner_task_id, task_kind, backend)
     if not plan["allowed"]:
@@ -700,7 +701,7 @@ def run_subagent(
 
     records = _records_from_registry(_load_registry(config.registry_path))
     records, _ = _cleanup_records(config, records)
-    subagent_id = f"planner_{plan['target_role']}_{uuid.uuid4().hex[:10]}"
+    subagent_id = str(subagent_id_override or "").strip() or f"planner_{plan['target_role']}_{uuid.uuid4().hex[:10]}"
     now = _now()
     ttl = max(5, ttl_min or config.default_ttl_min)
     record = PlannerSubagentRecord(
@@ -1007,6 +1008,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--ttl-min", type=int, default=0)
     p_run.add_argument("--backend", default="auto", choices=["auto", "openclaw", "codex_exec", "mock"])
     p_run.add_argument("--timeout-seconds", type=int, default=240)
+    p_run.add_argument("--subagent-id", default="")
 
     p_collect = sub.add_parser("collect")
     p_collect.add_argument("--role", required=True)
@@ -1043,6 +1045,7 @@ def main() -> int:
             ttl_min=args.ttl_min,
             backend=args.backend,
             timeout_seconds=args.timeout_seconds,
+            subagent_id_override=args.subagent_id,
         )
         print(json.dumps(payload, ensure_ascii=True))
         return rc
