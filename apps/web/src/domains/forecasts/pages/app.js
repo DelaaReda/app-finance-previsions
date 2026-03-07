@@ -1237,8 +1237,13 @@ let liveDataMeta = {
 };
 const CRITICAL_WIDGET_HEALTH_TARGETS = {
   hero: {
-    selectors: ['#heroSection', '#hero-what-need-container'],
-    anchorSelector: '.hero-subtitle',
+    selectors: [
+      '#heroSection',
+      '#hero-glassmorphic-container .hero-glassmorphic',
+      '#mainHeroSection',
+      '#hero-what-need-container'
+    ],
+    anchorSelector: '.hero-subtitle, .hero-header',
     copy: {
       loading: 'Live sync in progress. Quick actions stay available while cached context remains visible.',
       stale: 'This portfolio snapshot is aging. Refresh before launching a new action.',
@@ -1920,15 +1925,37 @@ function setCriticalWidgetHealthOverride(state, detail = {}) {
   scheduleCriticalWidgetHealthRender();
 }
 
+function isCriticalWidgetHealthHostVisible(node) {
+  if (!node || !node.isConnected) {
+    return false;
+  }
+  const style = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function'
+    ? window.getComputedStyle(node)
+    : null;
+  if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+    return false;
+  }
+  if (typeof node.getClientRects === 'function' && node.getClientRects().length > 0) {
+    return true;
+  }
+  return node.offsetParent !== null;
+}
+
 function resolveCriticalWidgetHealthHost(target) {
   const selectors = toArray(target && target.selectors, []);
+  let fallbackHost = null;
   for (const selector of selectors) {
     const node = document.querySelector(selector);
     if (node) {
-      return node;
+      if (isCriticalWidgetHealthHostVisible(node)) {
+        return node;
+      }
+      if (!fallbackHost) {
+        fallbackHost = node;
+      }
     }
   }
-  return null;
+  return fallbackHost;
 }
 
 function clearCriticalWidgetHealthBanner(widgetKey) {
@@ -2029,9 +2056,11 @@ function observeCriticalWidgetMounts() {
 
   [
     'hero-what-need-container',
+    'hero-glassmorphic-container',
     'news-feed-widget-container',
     'forecast-scenarios-widget-container',
-    'llm-judge-widget-container'
+    'llm-judge-widget-container',
+    'facette-view-container'
   ].forEach((id) => {
     const node = document.getElementById(id);
     if (node) {
