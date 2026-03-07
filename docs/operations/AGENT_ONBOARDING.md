@@ -1,40 +1,25 @@
-# Agent Onboarding (Architecture & Delivery)
+---
+status: deprecated
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md
+  - /home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md
+---
 
-## Rôle de ce document
+# Agent Onboarding (Deprecated Entry)
 
-Ce document est la fiche de démarrage pour toute personne ou agent qui rejoint le projet.
-Il vise à stabiliser :
+This onboarding entry is kept for backward compatibility only.
 
-- la structure d’architecture cible,
-- les règles d’orchestration multi-agents,
-- les sources de vérité opérationnelles et produit.
+Do not use it as the first read for the current system.
 
-## Ordre de lecture recommandé
+## Use these instead
+1. [CURRENT_ARCHITECTURE_ENTRYPOINTS.md](/home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md)
+2. [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
+3. [PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
 
-1. [`README.md`](../../README.md) pour la vue produit.
-2. [`docs/architecture/ARCHITECTURE_MAP.md`](../architecture/ARCHITECTURE_MAP.md).
-3. [`docs/architecture/ARCHITECTURE_STYLE_GUIDE.md`](../architecture/ARCHITECTURE_STYLE_GUIDE.md).
-4. [`docs/architecture/TARGET_ARCHITECTURE_LAYOUT.md`](../architecture/TARGET_ARCHITECTURE_LAYOUT.md).
-5. [`docs/ops/AGENT_WORKSPACE_INDEX.md`](../ops/AGENT_WORKSPACE_INDEX.md).
-6. `docs/product/planning/*` pour les tâches actives (WORKSTATE → epics → stories → tasks).
+## Why this file is deprecated
+- it was written for an older documentation layout
+- it references architecture paths that are no longer the cleanest entrypoint set
+- the current planner-only capability model is documented elsewhere, more precisely
 
-## Commandes de base
-
-- Validation workspace: `bash scripts/validate_agent_workspace_layout.sh`
-- Vue d’état run/parallélisme: `python3 scripts/parallel_workstream.py status`
-- Vérification rapide des plannings: `python3 scripts/parallel_workstream.py sync-priority`
-- Contrôle orchestration: `openclaw cron list --all`
-
-## Références opérationnelles obligatoires
-
-- Config runtime modèle LLM : `platform/config/lm_used_model_config.sh`
-- Contrats de coordination : `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`
-- Source de vérité API : `docs/ops/API_ENDPOINTS.md`
-- Playbook cron admin : `docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md`
-- Baseline Codex : `docs/ops/ADMIN_CODEX_BASELINE.md`
-- Coordination admin → livraison : `docs/ops/ADMIN_TEAM_CHAT.md`, `docs/ops/ADMIN_TEAM_ITERATIONS.md`, `docs/orchestrator-ops/agent-watchdog.md`
-
-## Règles de stabilité documentaire
-
-- Toute action de livraison doit respecter les conventions d’unicité de source (`source of truth`) déjà définies par doc.
-- Pour les runbooks opérationnels, privilégier les docs dans `docs/ops` et éviter de réviser les archives historiques (`docs/operations/*` datées) sans note de version claire.
+Keep this file only as a redirect for older references.

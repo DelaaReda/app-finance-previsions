@@ -53,5 +53,6 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Branches already absorbed into current architecture do not need separate reintegration work unless a canonical doc says otherwise.
 
 ## Historical docs
-- Anything under `docs/operations/` that is an incident log, worklog, batch report, or migration diary is historical unless a canonical doc points to it explicitly.
-- `docs/orchestrator-ops/` is compatibility/historical.
+- Historical archive boundary: [docs/operations/README.md](/home/venom/analyse-financiere/docs/operations/README.md)
+- Orchestrator evidence/runtime boundary: [docs/operations/orchestrator/README.md](/home/venom/analyse-financiere/docs/operations/orchestrator/README.md)
+- `docs/orchestrator-ops/` is a compatibility alias to the same historical orchestrator tree.

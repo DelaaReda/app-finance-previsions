@@ -1,35 +1,43 @@
-# docs/operations/ → docs/ops/
-
-This directory contains **legacy/duplicate documentation** from the pre-Feb 2026 migration phase.
-
-## ⚠️ CANONICAL LOCATION
-
-For current operational documentation, use **[docs/ops/](../ops/)** instead.
-
-All files here are mirrored in [docs/ops/](../ops/) with the same content. New updates should be made to docs/ops only.
-
-## Migration Timeline
-
-- **Feb 25-28, 2026:** docs/operations/ created during post-migration reorganization
-- **Feb 28, 2026:** docs/ops/ established as canonical (includes newer files like ROLE_MEMORY_STRATEGY_3DAY.md)
-- **Current:** Both directories exist for backward compatibility
-
-## Transition Plan
-
-1. All references should now point to `docs/ops/` (see [WORKSPACE_MAP.md](../WORKSPACE_MAP.md))
-2. This directory will be archived after 2026-03-15 once all migrations fully stabilized
-3. Historical content preserved for reference
-
-## Quick Navigation
-
-| Document | Canonical Location |
-|----------|-------------------|
-| Migration Summary | [docs/ops/MIGRATION_SUMMARY.md](../ops/MIGRATION_SUMMARY.md) |
-| Post-Migration Recovery | [docs/ops/POST_MIGRATION_RECOVERY.md](../ops/POST_MIGRATION_RECOVERY.md) |
-| Stabilization Guide | [docs/ops/STABILISATION_POST_MIGRATION.md](../ops/STABILISATION_POST_MIGRATION.md) |
-| Agent Workspace Index | [docs/ops/AGENT_WORKSPACE_INDEX.md](../ops/AGENT_WORKSPACE_INDEX.md) |
-| 3-Day Memory Strategy | [docs/ops/ROLE_MEMORY_STRATEGY_3DAY.md](../ops/ROLE_MEMORY_STRATEGY_3DAY.md) |
-
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md
+  - /home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md
 ---
 
-**Questions?** Check [docs/ops/](../ops/) or [AGENTS.md](../../AGENTS.md)
+# Historical Operations Index
+
+This tree is no longer the primary source of truth for architecture or day-to-day operational entrypoints.
+
+Use it for:
+- migration history
+- incident reports
+- archived runbooks
+- legacy coordination references
+- human-facing orchestration evidence
+
+Do not use it as the default starting point for implementation or operator decisions.
+
+## Start here instead
+- current entrypoints: [CURRENT_ARCHITECTURE_ENTRYPOINTS.md](/home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md)
+- workspace/path truth: [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
+- product vision: [PRODUCT_VISION.md](/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md)
+- runtime target: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
+
+## How to read this tree
+### `docs/operations/*.md`
+Mostly migration notes, incident reports, and superseded guidance from earlier orchestration phases.
+
+### `docs/operations/ops/*`
+Historical or compatibility copies of operational docs. The canonical operational set lives under `docs/ops/`.
+
+### `docs/operations/orchestrator/*`
+Mixed human-facing evidence, archived plans/checklists, and runtime-generated artifacts. See the local boundary note in [orchestrator/README.md](/home/venom/analyse-financiere/docs/operations/orchestrator/README.md).
+
+### `docs/operations/safety/*`
+Historical safety and audit material. Read only when the current canonical docs point here explicitly.
+
+## Editing rule
+- Update `docs/ops/*` for current policy.
+- Update `docs/operations/*` only when archiving, annotating history, or preserving a past incident.
