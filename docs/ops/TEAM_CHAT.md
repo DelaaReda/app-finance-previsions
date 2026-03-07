@@ -1,4 +1,15 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/operations/README.md
+---
+
 # 📢 Finance Copilot - Team General Chat
+
+Historical note:
+- This file reflects an older team-chat convention.
+- It is not a canonical runtime or planning source of truth.
 
 **Purpose**: General communication channel for ALL team members (not just admins)
 

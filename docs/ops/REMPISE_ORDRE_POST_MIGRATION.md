@@ -1,4 +1,16 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md
+  - /home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+---
+
 # Remise en ordre post-migration – Plan d'action
+
+Historical note:
+- This file reflects a post-migration recovery moment.
+- It is background only and not the current operational source of truth.
 
 **Date:** 2026-02-28  
 **Contexte:** Plusieurs agents ont travaillé après la grosse migration Feb 27–28. Audit complet effectué pour identifier ce qui doit être corrigé.

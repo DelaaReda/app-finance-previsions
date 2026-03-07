@@ -1,4 +1,14 @@
+---
+status: reference
+last_verified: 2026-03-07
+boundary_note: apply as delivery-quality coaching guidance for dev capability under planner authority
+---
+
 # DEV_AGENT_PARENTING_PLAN
+
+Compatibility note:
+- Interpret this document as quality/coaching guidance for the `dev` capability.
+- It does not redefine the planner-only execution topology.
 
 Objectif: rendre `dev` autonome, rapide, fiable, avec preuves de livraison vérifiables en continu.
 

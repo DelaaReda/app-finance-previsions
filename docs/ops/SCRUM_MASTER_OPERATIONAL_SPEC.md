@@ -1,4 +1,14 @@
+---
+status: reference
+last_verified: 2026-03-07
+boundary_note: apply as scrum capability guidance under planner authority, not as an autonomous cron lane
+---
+
 # Scrum Master Operational Specification
+
+Compatibility note:
+- Interpret this document as capability guidance only.
+- In the current architecture, `scrum_master` is planner-owned and not an independently scheduled lane.
 
 ## Purpose
 Define scrum_master as an operational unblock lane that converts stalled orchestration signals into concrete actions.

@@ -1,3 +1,11 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/SCRUM_MASTER_OPERATIONAL_SPEC.md
+  - /home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+---
+
 # Scrum Master Operational Worklog
 
 ## 2026-03-06

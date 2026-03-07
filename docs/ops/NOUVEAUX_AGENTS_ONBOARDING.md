@@ -1,4 +1,16 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md
+  - /home/venom/analyse-financiere/docs/ops/AGENTS_READY.md
+---
+
 # 📘 Guide d'Onboarding pour Nouveaux Agents
+
+Historical note:
+- This onboarding guide reflects a migration-era state.
+- Use current canonical entrypoints and agent-ready docs instead.
 
 **Date:** 2026-02-28  
 **Version:** 1.0  

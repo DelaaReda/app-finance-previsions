@@ -1,4 +1,14 @@
+---
+status: reference
+last_verified: 2026-03-07
+boundary_note: apply as dev capability quality guidance under planner authority, not as an autonomous cron lane
+---
+
 # Dev Agent Autonomy Protocol
+
+Compatibility note:
+- Interpret this document as `dev` capability guidance only.
+- In the current architecture, `dev` is planner-owned and not an independently scheduled delivery lane.
 
 ## Changelog
 - **2026-03-04**: Full rewrite in English; added strict issue-reporting contract, message-ack behavior, and autonomy coaching metrics.

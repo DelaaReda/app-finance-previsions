@@ -1,3 +1,11 @@
+---
+status: historical
+last_verified: 2026-03-07
+superseded_by:
+  - /home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+  - /home/venom/analyse-financiere/docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md
+---
+
 # PO Scrum Master Advisory Specification
 
 ## Status
