@@ -1,0 +1,1 @@
+<--- Last few GCs ---> [1888918:0xeba591430000] 4306 ms: Mark-Compact 396.0 (408.9) -> 395.4 (414.2) MB, pooled: 0 MB, 116.77 / 0.00 ms (average mu = 0.258, current mu = 0.110) allocation failure; scavenge might not succ

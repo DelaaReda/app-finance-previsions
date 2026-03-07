@@ -1,8 +1,8 @@
 {
-  "updated_at_utc": "2026-03-07T01:44:18Z",
+  "updated_at_utc": "2026-03-07T03:00:32Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-07T01:38:01Z",
+      "ts_utc": "2026-03-07T02:38:01Z",
       "role": "dev",
       "source": "health_snapshot",
       "status": "BLOCKED",
@@ -34,40 +34,40 @@
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-07T01:44:18Z",
+      "ts_utc": "2026-03-07T03:00:32Z",
       "role": "planner",
       "source": "primary_structured",
-      "status": "IN_PROGRESS",
-      "delta": "COMPLETE_BATCH_58_ANALYSIS",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
-      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772847843_17733",
-      "next": "owner=planner; action=claim --role planner sur BATCH-11-ARCH puis publier l artefact ARCH",
-      "task_update": "complete",
+      "status": "BLOCKED",
+      "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
+      "verdict": "BLOCKED",
+      "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
+      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772852412_14778",
+      "next": "owner=planner; action=relancer claim --role planner sur BATCH-11-ARCH apres reconciliation du workboard",
+      "task_update": "blocked",
       "exec_report": "none",
-      "issues": "dependency_policy_not_enforced,planner_quality_autofill_missing",
+      "issues": "planner_no_ready_task_after_sync,queue_workboard_desync",
       "issue_count": 2,
-      "issue_severity": "low",
+      "issue_severity": "medium",
       "issue_codes": [
-        "dependency_policy_not_enforced",
-        "planner_quality_autofill_missing"
+        "planner_no_ready_task_after_sync",
+        "queue_workboard_desync"
       ],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
       "suggestions": "none",
-      "stream_id": "BATCH-58",
-      "task_id": "BATCH-58-ANALYSIS",
+      "stream_id": "none",
+      "task_id": "none",
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1772847841_e72ac9d31155",
-      "workboard_version": "workboard_1772847842_661e6ca0e458"
+      "queue_version": "queue_1772852402_9ff1e1ede33d",
+      "workboard_version": "workboard_1772852405_144cc36f8bed"
     },
     "admin": {
-      "ts_utc": "2026-03-07T01:38:01Z",
+      "ts_utc": "2026-03-07T02:38:01Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "IN_PROGRESS",
@@ -164,11 +164,11 @@
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1772847841_6f85605accd6",
-      "workboard_version": "workboard_1772847842_06e7e9948e3a"
+      "queue_version": "queue_1772852402_88402c4d080e",
+      "workboard_version": "workboard_1772852420_53f80854efdf"
     }
   },
-  "updated_at": "2026-03-07T01:38:01Z",
+  "updated_at": "2026-03-07T02:38:01Z",
   "health_snapshot": {
     "ts_utc": "2026-03-03T11:03:54Z",
     "workboard": {
@@ -209,8 +209,8 @@
   },
   "health": "DEGRADED",
   "velocity": {
-    "done_24h": 59,
-    "done_7d": 115,
+    "done_24h": 58,
+    "done_7d": 117,
     "proofs": 49
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",

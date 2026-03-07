@@ -1,5 +1,5 @@
-window=60m total=3 warn=0 error=0 critical=0
+window=60m total=7 warn=0 error=0 critical=0
 planner issues_60m=0 last=none sev=INFO age=0m
-dev issues_60m=0 last=none sev=INFO age=807m
-admin issues_60m=0 last=none sev=INFO age=807m
+dev issues_60m=0 last=none sev=INFO age=883m
+admin issues_60m=0 last=none sev=INFO age=883m
 next=none

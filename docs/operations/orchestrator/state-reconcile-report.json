@@ -1,9 +1,10 @@
 {
-  "at": "2026-03-07T01:44:01Z",
-  "fixes_applied": 0,
-  "parked_inprogress_fixed": 0,
+  "at": "2026-03-07T03:00:02Z",
+  "fixes_applied": 2,
+  "parked_inprogress_fixed": 2,
   "runtime_blockers_cleared": 0,
   "stale_locks_removed": 0,
   "stale_inprogress_marked": 0,
-  "ready_starvation_detected": 0
+  "ready_starvation_detected": 0,
+  "dependency_starvation_detected": 0
 }

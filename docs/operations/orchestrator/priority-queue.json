@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-06T19:21:19Z",
+  "updated_at": "2026-03-07T03:05:25Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -505,12 +505,12 @@
     {
       "id": "BATCH-27",
       "title": "Reliability SRE Pack + Chaos Drills",
-      "state": "READY_DEV",
+      "state": "READY_PLANNER",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T19:29:01Z",
+      "updated_at": "2026-03-07T03:05:25Z",
       "next_action": "claim BATCH-27-DEV-01 (READY pour dev) \u2192 Reliability SRE Pack + Chaos Drills",
       "notes": [
         "reuse_targets_ui: apps/web/src/domains/forecasts/pages/app.js, apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/pages/index.html.",
@@ -532,14 +532,15 @@
       "ready_at": "2026-03-06T00:18:03Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-06T14:20:01Z",
-      "reconciled_at": "2026-03-06T14:20:01Z",
+      "reconciled_at": "2026-03-07T03:00:02Z",
       "meta": {
         "planner_monolane": {
           "migrated_at": "2026-03-06T19:21:19Z",
           "migrated_from_role": "planner",
           "migrated_from_state": "READY_DEV"
         }
-      }
+      },
+      "stalled_reason": "parked_by_rebuild_cannot_stay_in_progress"
     },
     {
       "id": "BATCH-28",
@@ -549,7 +550,7 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-06T19:29:01Z",
+      "updated_at": "2026-03-07T02:34:22Z",
       "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
       "notes": [
         "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",
@@ -1147,7 +1148,7 @@
     {
       "id": "BATCH-58",
       "title": "**Profil:** Reda (venom) \u2014 professionnel non-expert en finance qui g\u00e8re ses investissements pers",
-      "state": "READY_PLANNER",
+      "state": "READY_DEV",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
@@ -1156,9 +1157,12 @@
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-07T01:52:35Z",
+      "updated_at": "2026-03-07T02:13:28Z",
       "dispatch_authorized": true,
-      "ready_at": "2026-03-06T11:30:04Z"
+      "ready_at": "2026-03-06T11:30:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-07T02:44:01Z",
+      "reconciled_at": "2026-03-07T02:44:01Z"
     }
   ],
   "meta": {

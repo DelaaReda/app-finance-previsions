@@ -1,5 +1,5 @@
 {
-  "ts_utc": "2026-03-07T01:44:18Z",
+  "ts_utc": "2026-03-07T03:00:33Z",
   "guardian_version": "2026-03-03.v1",
   "role": "planner",
   "source": "primary_structured",
@@ -19,22 +19,22 @@
   },
   "runtime": {
     "queue_has_ready": 1,
-    "workboard_role_has_work": 1,
+    "workboard_role_has_work": 0,
     "workboard_role_has_ready": 0,
-    "workboard_role_has_in_progress": 1,
+    "workboard_role_has_in_progress": 0,
     "planner_batch_runway_short": 0
   },
   "summary": {
-    "status": "IN_PROGRESS",
-    "delta": "COMPLETE_BATCH_58_ANALYSIS",
-    "verdict": "GO_WITH_CAUTION",
-    "blocker_id": "NONE",
-    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772847843_17733",
-    "task_update": "complete",
-    "planner_artifact": "docs/operations/orchestrator/proofs/BATCH-58-ANALYSIS-20260306T114425Z.md",
+    "status": "BLOCKED",
+    "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
+    "verdict": "BLOCKED",
+    "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
+    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772852412_14778",
+    "task_update": "blocked",
+    "planner_artifact": "docs/operations/orchestrator/parallel-workstreams.json",
     "batch_created": "",
     "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md",
-    "vision_alignment": "batch=BATCH-unknown",
+    "vision_alignment": "batch=BATCH-11",
     "architecture_audit": "apps/api/src/domains,apps/api/runtime,apps/web/src"
   }
 }

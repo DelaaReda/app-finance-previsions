@@ -55,14 +55,14 @@
       "workboard_version": "workboard_1772799304_53b1a5b33495"
     },
     "planner": {
-      "ts_utc": "2026-03-07T01:44:18Z",
-      "tick_id": "P1772847843_17733",
+      "ts_utc": "2026-03-07T03:00:33Z",
+      "tick_id": "P1772852412_14778",
       "role": "planner",
       "agent_bin": "codex",
       "channel": "codex_exec",
       "source": "primary_structured",
-      "status": "IN_PROGRESS",
-      "verdict": "GO_WITH_CAUTION",
+      "status": "BLOCKED",
+      "verdict": "BLOCKED",
       "rc_primary": 0,
       "rc_retry": 0,
       "rc_final": 0,
@@ -70,16 +70,16 @@
       "issue_count": 0,
       "max_severity": "INFO",
       "issues": [],
-      "next_action": "CLAIM_BATCH_11_ARCH_P1772847843_17733",
+      "next_action": "CLAIM_BATCH_11_ARCH_P1772852412_14778",
       "evidence_paths": [
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.AWTA0mlSPO",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.lgq1Z2whIv",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.o7Z9gpGoeh",
-        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.mMMLCVfSy2",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.N8iL5buRUo",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.Wy8fvhDZ8h",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.uMA7Vl5ny4",
+        "/home/venom/analyse-financiere/.tmp/role-runner/planner/tmp.opwixMddVy",
         "/home/venom/analyse-financiere/logs-codex-runs/role-runner/planner.events.log"
       ],
-      "queue_version": "queue_1772847841_e72ac9d31155",
-      "workboard_version": "workboard_1772847842_661e6ca0e458"
+      "queue_version": "queue_1772852402_9ff1e1ede33d",
+      "workboard_version": "workboard_1772852405_144cc36f8bed"
     },
     "scrum_master": {
       "ts_utc": "2026-03-06T22:18:27Z",
@@ -109,7 +109,7 @@
       "workboard_version": "workboard_1772835503_f8bb2c1be057"
     }
   },
-  "updated_at_utc": "2026-03-07T01:44:18Z",
+  "updated_at_utc": "2026-03-07T03:00:33Z",
   "summary": {
     "roles_total": 4,
     "has_issues_roles": [],

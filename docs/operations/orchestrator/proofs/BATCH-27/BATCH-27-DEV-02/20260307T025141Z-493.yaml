@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-27-BATCH-27-DEV-02-20260307T025141Z-493"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-07T02:51:41Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope reliability sre pack + chaos drills [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_reliability_sre_pack_+_chaos_drills_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-07T02:51:41Z"
+      ended_at_utc: "2026-03-07T02:51:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --check apps/web/src/domains/forecasts/pages/app.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/pages/app.js:165-377 (live facette routing + scoped widget reuse), apps/web/src/domains/forecasts/pages/app.js:1847-1859 (dashboard story widget now bound to live payload), apps/web/src/dom"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-27-DEV-02"
+  review_ref: "manual_dispatch:BATCH-27-DEV-02"
+  note: "source=manual_dispatch | root_cause=`loadFacetteContent()` in `apps/web/src/domains/forecasts/pages/app.js` always fell through to `generateFacetteContent()` on the nominal path, so facette tabs ignored the unified backend payload already applied by `apply | fix_applied=Added explicit facette/tab live routing, cloned existing widget templates with scoped IDs, reused the existing widget renderers against scoped roots, introduced live-API-unavailable fallback notices, updated the market p | verify=before=`loadFacetteContent()` always rendered `generateFacetteContent()` placeholders for facettes/tabs; after=`marche/Synthèse`, `marche/Actualités`, `economie/{Marché, Macro Économie, News Économiques}`, `news/*`, and  | architecture_check=layer=frontend forecasts page controller, imports_ok=yes (no new module boundaries/imports introduced; reused existing widget/platform wiring in-place), path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-27, target=FRONTEND facette/tab nominal path on unified live payload, impact=removes placeholder facette content for the targeted SRE pack slice while staying inside existing forecasts widgets and shared UI w"
