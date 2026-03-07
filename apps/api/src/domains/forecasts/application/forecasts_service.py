@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from storage.io import load_json
+from storage.io import load_json, save_json
 
 try:
     from api.templates.judge_like_endpoint import (
@@ -60,7 +60,7 @@ HIGH_CONFIDENCE_THRESHOLD = max(
     ),
 )
 FORECASTS_STALE_SECONDS = max(
-    30, int(os.getenv("FORECASTS_STALE_SECONDS", "600") or "600")
+    300, int(os.getenv("FORECASTS_STALE_SECONDS", "86400") or "86400")
 )
 FORECASTS_MIN_CONFIDENCE = max(
     0.0, min(1.0, float(os.getenv("FORECASTS_MIN_CONFIDENCE", "0.01") or "0.01"))
@@ -74,6 +74,12 @@ _FORECASTS_INFLIGHT: Dict[str, asyncio.Task] = {}
 _FORECASTS_INFLIGHT_LOCK = asyncio.Lock()
 
 RISK_LEVEL_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+NOMINAL_REFRESH_MARKERS = ("forecasts_simple", "simple_momentum")
+
+try:
+    from platform.legacy.models.forecast_hybrid_v1 import ForecastHybridV1
+except Exception:  # pragma: no cover
+    ForecastHybridV1 = None  # type: ignore[misc,assignment]
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -248,6 +254,10 @@ def _normalize_forecast_row(
         elif isinstance(summary, str):
             why = summary.strip()
     if not why:
+        explanation = normalized.get("explanation")
+        if isinstance(explanation, str):
+            why = explanation.strip()
+    if not why:
         why = "No rationale provided."
     normalized["why"] = why
 
@@ -264,7 +274,7 @@ def _normalize_forecast_row(
     provider_chain = _normalize_provider_chain(
         provider_chain=normalized.get("provider_chain"),
         provider=normalized.get("provider"),
-        model=normalized.get("model"),
+        model=normalized.get("model") or normalized.get("model_version"),
         source_markers=source_markers,
     )
     normalized["provider_chain"] = provider_chain
@@ -295,6 +305,87 @@ def _normalize_forecast_row(
     normalized["forecast_id"] = forecast_id
     normalized["id"] = forecast_id
     return normalized
+
+
+def _snapshot_markers(
+    payload: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+) -> List[str]:
+    markers = [
+        *_normalize_source(payload.get("source")),
+        *_normalize_source(payload.get("provider_chain")),
+    ]
+    for row in rows[:25]:
+        markers.extend(_normalize_source(row.get("source")))
+        model = str(row.get("model") or row.get("model_version") or "").strip()
+        if model:
+            markers.append(model)
+    return list(dict.fromkeys(marker for marker in markers if marker))
+
+
+def _requires_nominal_refresh(
+    payload: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    *,
+    snapshot_age: float,
+) -> bool:
+    if snapshot_age < 0 or not rows:
+        return True
+    markers = [marker.lower() for marker in _snapshot_markers(payload, rows)]
+    return any(
+        refresh_marker in marker
+        for marker in markers
+        for refresh_marker in NOMINAL_REFRESH_MARKERS
+    )
+
+
+def _refresh_nominal_snapshot(
+    *,
+    tickers: List[str],
+    now_iso: str,
+) -> Optional[Dict[str, Any]]:
+    if ForecastHybridV1 is None:
+        return None
+    try:
+        generator = ForecastHybridV1()
+        refreshed = generator.run_forecast_job(tickers or None)
+        if not isinstance(refreshed, dict):
+            return None
+        rows = refreshed.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return None
+        payload = dict(refreshed)
+        payload["generated_at"] = str(
+            payload.get("generated_at")
+            or payload.get("last_update")
+            or now_iso
+        )
+        payload["last_update"] = str(
+            payload.get("last_update")
+            or payload.get("generated_at")
+            or now_iso
+        )
+        payload["freshness"] = str(payload.get("freshness") or payload["generated_at"])
+        payload["fallback_used"] = False
+        payload["source"] = list(
+            dict.fromkeys(
+                [
+                    *_normalize_source(payload.get("source")),
+                    "forecasts_nominal_refresh",
+                ]
+            )
+        )
+        payload["provider_chain"] = _normalize_provider_chain(
+            provider_chain=payload.get("provider_chain"),
+            provider=None,
+            model=payload.get("model_version"),
+            source_markers=_normalize_source(payload.get("source")),
+        )
+        save_json("forecasts", payload, source=_normalize_source(payload.get("source")))
+        return payload
+    except Exception as exc:
+        logger.warning("Forecast nominal refresh failed: %s", exc)
+        return None
 
 
 def _build_filter_indexes(
@@ -561,6 +652,39 @@ async def get_forecasts_payload(
             snapshot_source = _normalize_source(forecasts_data.get("source"))
             snapshot_age = _freshness_age_seconds(snapshot_generated_at, now_iso)
             stale_snapshot = snapshot_age > float(FORECASTS_STALE_SECONDS)
+
+            if _requires_nominal_refresh(
+                forecasts_data,
+                raw_rows,
+                snapshot_age=snapshot_age,
+            ):
+                refresh_tickers = sorted(
+                    {
+                        str(row.get("ticker", "")).strip().upper()
+                        for row in raw_rows
+                        if isinstance(row, dict) and str(row.get("ticker", "")).strip()
+                    }
+                )
+                refreshed_payload = _refresh_nominal_snapshot(
+                    tickers=refresh_tickers,
+                    now_iso=now_iso,
+                )
+                if refreshed_payload:
+                    forecasts_data = refreshed_payload
+                    raw_rows = _safe_rows(forecasts_data)
+                    snapshot_generated_at = str(
+                        forecasts_data.get("generated_at")
+                        or forecasts_data.get("timestamp")
+                        or now_iso
+                    )
+                    snapshot_last_update = str(
+                        forecasts_data.get("last_update")
+                        or forecasts_data.get("generated_at")
+                        or snapshot_generated_at
+                    )
+                    snapshot_source = _normalize_source(forecasts_data.get("source"))
+                    snapshot_age = _freshness_age_seconds(snapshot_generated_at, now_iso)
+                    stale_snapshot = snapshot_age > float(FORECASTS_STALE_SECONDS)
 
             mock_detected = _contains_mock_marker(snapshot_source) or any(
                 _contains_mock_marker(_normalize_source(row.get("source")))

@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from api.routes import forecasts as forecasts_route
 
+FRESH_TS = "2099-02-27T00:00:00Z"
+
 
 def _client() -> TestClient:
     app = FastAPI()
@@ -65,8 +67,8 @@ def test_forecasts_cache_hit_and_debug_bypass(monkeypatch):
     forecasts_route._FORECASTS_INFLIGHT.clear()
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["test_snapshot"],
         "rows": [
             {
@@ -77,7 +79,7 @@ def test_forecasts_cache_hit_and_debug_bypass(monkeypatch):
                 "confidence": 0.7,
                 "expected_return": 0.03,
                 "risk_level": "high",
-                "timestamp": "2026-02-27T00:00:00Z",
+                "timestamp": FRESH_TS,
             }
         ],
     }
@@ -110,8 +112,8 @@ def test_forecasts_contract_rows_include_required_keys(monkeypatch):
     forecasts_route._FORECASTS_INFLIGHT.clear()
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["forecasts_job"],
         "rows": [
             {
@@ -161,13 +163,80 @@ def test_forecasts_contract_rows_include_required_keys(monkeypatch):
     assert row["freshness_status"] in {"fresh", "stale", "unknown"}
 
 
+def test_forecasts_refreshes_simple_snapshot_into_nominal_hybrid_payload(monkeypatch):
+    forecasts_route._FORECASTS_RESPONSE_CACHE.clear()
+    forecasts_route._FORECASTS_INFLIGHT.clear()
+
+    snapshot = {
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
+        "source": ["job:forecasts_simple", "yahoo_finance"],
+        "rows": [
+            {
+                "ticker": "AAPL",
+                "asset_type": "equity",
+                "horizon": "1d",
+                "score": 0.4,
+                "confidence": 0.55,
+                "expected_return": 0.01,
+                "timestamp": "2026-02-27T00:00:00Z",
+                "model": "simple_momentum_v1",
+            }
+        ],
+    }
+
+    class _FakeHybrid:
+        def run_forecast_job(self, tickers):
+            assert tickers == ["AAPL"]
+            return {
+                "rows": [
+                    {
+                        "ticker": "AAPL",
+                        "asset_type": "equity",
+                        "horizon": "1w",
+                        "direction": "up",
+                        "confidence": 0.72,
+                        "expected_return": 0.034,
+                        "timestamp": "2026-03-06T12:00:00Z",
+                        "generated_at": "2026-03-06T12:00:00Z",
+                        "model_version": "hybrid_v1_local_momentum",
+                        "source": ["forecast_hybrid_v1", "local_momentum"],
+                        "explanation": "Hybrid momentum signal is positive.",
+                    }
+                ],
+                "last_update": "2026-03-06T12:00:00Z",
+                "generated_at": "2026-03-06T12:00:00Z",
+                "source": ["forecast_hybrid_v1", "local_momentum"],
+                "model_version": "hybrid_v1_local_momentum",
+            }
+
+    monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
+    monkeypatch.setattr(forecasts_route.forecasts_service, "ForecastHybridV1", _FakeHybrid)
+    monkeypatch.setattr(forecasts_route.forecasts_service, "save_json", lambda *_args, **_kwargs: None)
+
+    client = _client()
+    resp = client.get("/forecasts?asset_type=equity&horizon=1w&limit=1")
+    assert resp.status_code == 200
+    payload = resp.json()["data"]
+
+    assert payload["fallback_used"] is False
+    assert payload["freshness_status"] == "fresh"
+    assert "forecasts_nominal_refresh" in (payload.get("source") or [])
+    assert "forecast_hybrid_v1" in (payload.get("source") or [])
+    assert "simple_momentum_v1" not in (payload.get("provider_chain") or [])
+    row = payload["rows"][0]
+    assert row["why"] == "Hybrid momentum signal is positive."
+    assert row["fallback_used"] is False
+    assert "hybrid_v1_local_momentum" in (row.get("provider_chain") or [])
+
+
 def test_forecasts_normalizes_invalid_confidence_values(monkeypatch):
     forecasts_route._FORECASTS_RESPONSE_CACHE.clear()
     forecasts_route._FORECASTS_INFLIGHT.clear()
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["forecasts_job"],
         "rows": [
             {
@@ -272,7 +341,7 @@ def test_forecasts_route_singleflight_computes_once(monkeypatch):
                 "confidence": 0.7,
                 "expected_return": 0.03,
                 "risk_level": "high",
-                "timestamp": "2026-02-27T00:00:00Z",
+                "timestamp": FRESH_TS,
             }
         ]
         * 500,
@@ -341,8 +410,8 @@ def test_forecasts_observability_aggregates_provider_chain_and_fallback(monkeypa
     forecasts_route._FORECASTS_INFLIGHT.clear()
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["forecasts_job"],
         "rows": [
             {
@@ -353,7 +422,7 @@ def test_forecasts_observability_aggregates_provider_chain_and_fallback(monkeypa
                 "confidence": 0.8,
                 "expected_return": 0.03,
                 "risk_level": "high",
-                "timestamp": "2026-02-27T00:00:00Z",
+                "timestamp": FRESH_TS,
                 "provider": "g4f",
                 "model": "deepseek-v3",
                 "latency_ms": 120.0,
@@ -367,7 +436,7 @@ def test_forecasts_observability_aggregates_provider_chain_and_fallback(monkeypa
                 "confidence": 0.6,
                 "expected_return": -0.01,
                 "risk_level": "medium",
-                "timestamp": "2026-02-27T00:00:00Z",
+                "timestamp": FRESH_TS,
                 "provider_chain": ["g4f", "qwen"],
                 "latency_ms": 180.0,
                 "fallback_used": True,
@@ -393,12 +462,12 @@ def test_forecasts_observability_aggregates_provider_chain_and_fallback(monkeypa
 
 def test_forecast_detail_lookup_supports_forecast_id_and_ticker(monkeypatch):
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["forecasts_job"],
         "rows": [
             {
-                "forecast_id": "AAPL:1w:2026-02-27T00:00:00Z",
+                "forecast_id": f"AAPL:1w:{FRESH_TS}",
                 "ticker": "AAPL",
                 "asset_type": "equity",
                 "horizon": "1w",
@@ -410,7 +479,7 @@ def test_forecast_detail_lookup_supports_forecast_id_and_ticker(monkeypatch):
     monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
     client = _client()
 
-    by_id = client.get("/forecasts/AAPL:1w:2026-02-27T00:00:00Z")
+    by_id = client.get(f"/forecasts/AAPL:1w:{FRESH_TS}")
     assert by_id.status_code == 200
     payload_by_id = by_id.json()["data"]
     assert payload_by_id["found"] is True
@@ -462,8 +531,8 @@ def test_forecasts_topk_fast_path_matches_full_sort(monkeypatch):
         )
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["test_snapshot"],
         "rows": rows,
     }
@@ -494,8 +563,8 @@ def test_forecasts_topk_fast_path_preserves_stable_tie_order(monkeypatch):
         {"ticker": "EEE", "asset_type": "equity", "horizon": "1w", "score": 0.8, "confidence": 0.4},
     ]
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["test_snapshot"],
         "rows": rows,
     }
