@@ -36,6 +36,8 @@ from planner_subagent_manager import (
     collect_subagent,
     run_subagent,
 )
+from worker_manager import _load_config as load_worker_config
+from worker_manager import collect_worker
 
 
 CONTRACT_KEYS = (
@@ -52,6 +54,7 @@ SUCCESS_SUBAGENT_STATUSES = {"completed", "done", "pass", "ok", "success", "merg
 DEV_CAPABILITY_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "900")))
 ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "600")))
 STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_GRACE_SECONDS", "30")))
+QA_REVIEW_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_QA_WORKER_TIMEOUT_SECONDS", "900")))
 
 
 def _parse_iso_utc(raw: str) -> datetime | None:
@@ -296,6 +299,117 @@ def _build_admin_dispatch_message(task: dict[str, Any]) -> str:
         for note in notes:
             lines.append(f"- {note}")
     return "\n".join(lines)
+
+
+def _build_qa_review_message(task: dict[str, Any]) -> str:
+    task_id_value = str(task.get("id", "")).strip()
+    title = str(task.get("title", "")).strip() or task_id_value
+    stream_id = str(task.get("stream_id", "")).strip() or _task_stream_id(task_id_value)
+    notes = _task_notes(task)
+    lines = [
+        f"Run QA review for {task_id_value}.",
+        f"Task title: {title}",
+        f"Stream: {stream_id}",
+        "Execution policy:",
+        "- Validate the delivered slice with targeted checks only.",
+        "- If you discover a local, bounded defect, fix it directly and verify it.",
+        "- Preserve the existing frontend theme; do not refactor UI styling broadly.",
+        "- Return concise proof: summary, artifact, verify, raw_output_ref.",
+    ]
+    if notes:
+        lines.append("Task notes:")
+        for note in notes:
+            lines.append(f"- {note}")
+    return "\n".join(lines)
+
+
+def _load_worker_rows(root: Path) -> tuple[Any, list[dict[str, Any]]]:
+    config = load_worker_config(root)
+    payload: dict[str, Any] = {}
+    if config.registry_path.exists():
+        try:
+            payload = json.loads(config.registry_path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            payload = {}
+    rows = payload.get("workers", []) if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        rows = []
+    return config, [row for row in rows if isinstance(row, dict)]
+
+
+def _qa_worker_active(root: Path, task_id_value: str) -> bool:
+    _, rows = _load_worker_rows(root)
+    for row in rows:
+        if str(row.get("parent_role", "")).strip().lower() != "planner":
+            continue
+        if str(row.get("worker_type", "")).strip() != "qa_review_worker":
+            continue
+        if str(row.get("owner_task_id", "")).strip() != task_id_value:
+            continue
+        if str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
+            return True
+    return False
+
+
+def _qa_review_already_done(task: dict[str, Any]) -> bool:
+    token = str(task.get("qa_status", "")).strip().lower()
+    return token in SUCCESS_SUBAGENT_STATUSES or token == "merged"
+
+
+def _launch_qa_review_worker(root: Path, task: dict[str, Any], source: str) -> dict[str, Any]:
+    task_id_value = str(task.get("id", "")).strip()
+    if not task_id_value:
+        return {"dispatched": False, "reason": "invalid_task"}
+    if _qa_review_already_done(task):
+        return {"dispatched": False, "reason": "qa_already_done", "task_id": task_id_value}
+    if _qa_worker_active(root, task_id_value):
+        return {"dispatched": False, "reason": "qa_already_active", "task_id": task_id_value}
+    launcher_log = root / "docs" / "operations" / "orchestrator" / "dynamic-workers-results" / f"{task_id_value}.qa.launcher.log"
+    cmd = [
+        sys.executable,
+        str(root / "platform" / "automation" / "worker_manager.py"),
+        "--root",
+        str(root),
+        "run",
+        "--role",
+        "planner",
+        "--worker-type",
+        "qa_review_worker",
+        "--owner-task-id",
+        task_id_value,
+        "--task-kind",
+        "qa_review",
+        "--message",
+        _build_qa_review_message(task),
+        "--ttl-min",
+        "30",
+        "--backend",
+        "openclaw",
+        "--timeout-seconds",
+        str(QA_REVIEW_TIMEOUT_SECONDS),
+        "--thinking",
+        "high",
+        "--result-kind",
+        "qa_fix_result",
+    ]
+    try:
+        launcher_log.parent.mkdir(parents=True, exist_ok=True)
+        with launcher_log.open("w", encoding="utf-8") as handle:
+            subprocess.Popen(
+                cmd,
+                cwd=str(root),
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except Exception as exc:
+        return {"dispatched": False, "reason": f"qa_spawn_failed:{exc}", "task_id": task_id_value}
+    return {
+        "dispatched": True,
+        "task_id": task_id_value,
+        "reason": "qa_running",
+        "launcher_log": str(launcher_log.relative_to(root)),
+    }
 
 
 def _payload_status(payload: dict[str, Any]) -> str:
@@ -667,6 +781,15 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             save_board(board_path, board)
     if subagent_id:
         collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+    if completed:
+        with board_lock(board_path):
+            board = load_board(board_path)
+            task = task_index(board).get(task_id_value, {})
+            qa_dispatch = _launch_qa_review_worker(root, task if isinstance(task, dict) else {"id": task_id_value}, source)
+            if qa_dispatch.get("dispatched"):
+                append_event(board, "planner_orchestrator_qa_review_dispatched", {"task_id": task_id_value, "source": source})
+                reconcile_state(board, board_path.parent / "priority-queue.json")
+                save_board(board_path, board)
     return {"dispatched": True, "completed": completed, "task_id": task_id_value, "subagent_id": subagent_id or "none", "backend": chosen_backend}
 
 
@@ -1049,6 +1172,21 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
                 )
                 if completed:
                     actions.append(f"dev_complete:{task_id_value}")
+                    task = task_index(board).get(task_id_value, {})
+                    qa_dispatch = _launch_qa_review_worker(
+                        root,
+                        task if isinstance(task, dict) else {"id": task_id_value},
+                        source,
+                    )
+                    if qa_dispatch.get("dispatched"):
+                        append_event(
+                            board,
+                            "planner_orchestrator_qa_review_dispatched",
+                            {"task_id": task_id_value, "source": source},
+                        )
+                        reconcile_state(board, board_path.parent / "priority-queue.json")
+                        save_board(board_path, board)
+                        actions.append(f"qa_dispatch:{task_id_value}")
                 else:
                     set_block_state(board, task_id_value=task_id_value, reason="planner_dev_capability_failed:complete_merge_failed", blocked=True)
                     append_event(board, "planner_orchestrator_dev_complete_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
@@ -1135,6 +1273,52 @@ def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
     return actions
 
 
+def _collect_finished_qa_workers(root: Path, source: str) -> list[str]:
+    config, rows = _load_worker_rows(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    actions: list[str] = []
+    for row in rows:
+        if str(row.get("parent_role", "")).strip().lower() != "planner":
+            continue
+        if str(row.get("worker_type", "")).strip() != "qa_review_worker":
+            continue
+        worker_id = str(row.get("worker_id", "")).strip()
+        if not worker_id:
+            continue
+        if str(row.get("status", "")).strip().lower() == "merged":
+            continue
+        result_path = config.results_dir / f"{worker_id}.result.json"
+        if not result_path.exists() and str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
+            continue
+        rc, payload = collect_worker(config, "planner", worker_id, "", mark_merged=True)
+        if rc != 0 or not isinstance(payload, dict):
+            continue
+        task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
+        if not task_id_value:
+            continue
+        actions.append(f"qa_collect:{task_id_value}")
+        with board_lock(board_path):
+            board = load_board(board_path)
+            index = task_index(board)
+            task = index.get(task_id_value)
+            if not isinstance(task, dict):
+                continue
+            task["qa_status"] = str(payload.get("status", "unknown")).strip() or "unknown"
+            task["qa_summary"] = str(payload.get("summary", "none")).strip() or "none"
+            task["qa_artifact"] = str(payload.get("artifact", "none")).strip() or "none"
+            task["qa_verify"] = str(payload.get("verify", "none")).strip() or "none"
+            task["qa_last_update_at"] = now_iso()
+            if str(payload.get("status", "")).strip().lower() == "completed":
+                append_event(board, "planner_orchestrator_qa_review_completed", {"task_id": task_id_value, "source": source, "worker_id": worker_id})
+                actions.append(f"qa_complete:{task_id_value}")
+            else:
+                append_event(board, "planner_orchestrator_qa_review_failed", {"task_id": task_id_value, "source": source, "worker_id": worker_id})
+                actions.append(f"qa_failed:{task_id_value}")
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+    return actions
+
+
 def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend: str = "auto") -> tuple[str, dict[str, Any]]:
     role_token = str(role or "").strip().lower()
     if role_token != "planner":
@@ -1149,6 +1333,7 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
     actions.extend(_mark_stale_admin_subagents(root, source))
     actions.extend(_collect_finished_dev_subagents(root, source))
     actions.extend(_collect_finished_admin_subagents(root, source))
+    actions.extend(_collect_finished_qa_workers(root, source))
 
     task_update = str(evidence.get("task_update", "")).strip().lower()
     task_id_value = str(evidence.get("task_id", "")).strip()
