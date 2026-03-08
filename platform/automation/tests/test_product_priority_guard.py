@@ -582,6 +582,188 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["pipeline_counts"]["qa_review_pending_count"], 1)
             self.assertEqual(metrics["pipeline_counts"]["browser_validation_pending_count"], 1)
 
+    def test_delivery_integrity_accepts_admin_runtime_no_code_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-27" / "BATCH-27-ADMIN-01"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 21, 0, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-runtime.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "logs/runtime/admin-repair.log"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-27-ADMIN-01",
+                                "role": "admin",
+                                "state": "DONE",
+                                "title": "Repair runtime session state",
+                                "artifact": "logs/runtime/admin-repair.log",
+                                "verify": "before=broken; after=healthy; test=doctor",
+                                "tests_run": "bash scripts/fc_doctor.sh",
+                                "completion_mode": "runtime_no_code",
+                                "no_code_change_reason": "runtime_repair_no_code_change",
+                                "runtime_artifact": "logs/runtime/admin-repair.log",
+                                "commit_sha": "NONE(runtime_no_code)",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-27-ADMIN-01",
+                                    "artifact": "logs/runtime/admin-repair.log",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/proof-runtime.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["suspicious_completion_count"], 0)
+
+    def test_delivery_integrity_infers_admin_runtime_no_code_from_skip_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-28" / "BATCH-28-ADMIN-01"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 21, 20, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-runtime.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e.json"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-28-ADMIN-01",
+                                "role": "admin",
+                                "state": "DONE",
+                                "title": "Release gate runtime validation",
+                                "artifact": "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e.json",
+                                "verify": "before=stale; after=healthy; test=runtime_gate",
+                                "tests_run": "bash scripts/runtime_e2e_gate.sh",
+                                "commit_sha": "SKIP(no code/config change)",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=3)),
+                                "details": {
+                                    "task_id": "BATCH-28-ADMIN-01",
+                                    "artifact": "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e.json",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-28/BATCH-28-ADMIN-01/proof-runtime.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["suspicious_completion_count"], 0)
+
+    def test_delivery_control_exposes_historical_browser_backfill_and_capability_stalls(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 21, 10, tzinfo=timezone.utc)
+
+            proof_file = proofs / "historical-web.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/monitor/server.py"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-91-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Refine monitor dashboard",
+                                "artifact": "apps/monitor/server.py",
+                                "commit_sha": "abcdef1234567",
+                                "tests_run": "pytest apps/monitor/tests",
+                            },
+                            {
+                                "id": "BATCH-27-ADMIN-01",
+                                "role": "admin",
+                                "state": "READY",
+                                "title": "Repair runtime drift",
+                                "stalled_capability_reason": "admin_timeout_streak:2",
+                                "admin_timeout_streak": 2,
+                                "planner_takeover_required": True,
+                            },
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(datetime(2026, 3, 8, 18, 30, tzinfo=timezone.utc)),
+                                "details": {
+                                    "task_id": "BATCH-91-DEV-01",
+                                    "artifact": "apps/monitor/server.py",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/historical-web.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_control_metrics(root, now=now)
+            self.assertEqual(metrics["browser_proof_backfill_queue"]["count"], 1)
+            self.assertEqual(metrics["capability_stall_summary"]["count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

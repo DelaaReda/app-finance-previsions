@@ -365,6 +365,8 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
     browser_proof_pipeline: dict[str, Any] = {}
     suspicious_completions: dict[str, Any] = {}
     qa_review_pipeline: dict[str, Any] = {}
+    capability_stall_recovery: dict[str, Any] = {}
+    historical_delivery_debt: dict[str, Any] = {}
     planner_dispatch: dict[str, Any] = {}
     guard_module = _load_product_priority_guard(root)
     if guard_module is not None:
@@ -387,6 +389,8 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
             browser_proof_pipeline = control.get("browser_proof_pipeline", {})
             suspicious_completions = control.get("suspicious_completions", {})
             qa_review_pipeline = control.get("qa_review_pipeline", {})
+            capability_stall_recovery = control.get("capability_stall_summary", {})
+            historical_delivery_debt = control.get("historical_debt", {})
             if str(delivery_future_integrity.get("status", "ok")) != "ok":
                 warnings.append("delivery_future_integrity_degraded")
             if str(browser_proof_pipeline.get("status", "ok")) != "ok":
@@ -395,12 +399,19 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
                 warnings.append("suspicious_completions_degraded")
             if str(qa_review_pipeline.get("status", "ok")) != "ok":
                 warnings.append("qa_review_pipeline_degraded")
+            if (
+                int(capability_stall_recovery.get("count", 0) or 0) > 0
+                and str(capability_stall_recovery.get("recovery_mode", "")) != "planner_takeover_active"
+            ):
+                warnings.append("capability_stall_recovery_degraded")
         except Exception as exc:
             warnings.append("delivery_control_error")
             delivery_future_integrity = {"error": str(exc)}
             browser_proof_pipeline = {"error": str(exc)}
             suspicious_completions = {"error": str(exc)}
             qa_review_pipeline = {"error": str(exc)}
+            capability_stall_recovery = {"error": str(exc)}
+            historical_delivery_debt = {"error": str(exc)}
     dispatch_module = _load_planner_dispatch_metrics(root)
     if dispatch_module is not None:
         try:
@@ -481,6 +492,8 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         "browser_proof_pipeline": browser_proof_pipeline,
         "suspicious_completions": suspicious_completions,
         "qa_review_pipeline": qa_review_pipeline,
+        "capability_stall_recovery": capability_stall_recovery,
+        "historical_delivery_debt": historical_delivery_debt,
         "planner_dispatch": planner_dispatch,
         "verdict": verdict,
         "errors": errors,

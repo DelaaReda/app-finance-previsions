@@ -85,6 +85,7 @@ BROWSER_PROOF_MARKERS = (
 COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
 QA_SUCCESS_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 DEFAULT_DELIVERY_FUTURE_ROLLOUT_AT = "2026-03-08T19:00:00Z"
+NO_CODE_COMPLETION_MODES = {"runtime_no_code", "no_code_runtime_fix", "runtime_repair_no_code"}
 
 
 def _now() -> datetime:
@@ -481,8 +482,18 @@ def _task_requires_browser_proof(task: dict[str, Any], manifest_text: str, artif
     return any(token in joined for token in BROWSER_PROOF_KEYWORDS)
 
 
-def _has_browser_proof(manifest_text: str, artifact: str) -> bool:
-    lowered = " | ".join([str(manifest_text or ""), str(artifact or "")]).lower()
+def _has_browser_proof(manifest_text: str, artifact: str, task: dict[str, Any] | None = None) -> bool:
+    task = task if isinstance(task, dict) else {}
+    task_browser_artifact = str(task.get("browser_proof_artifact", "")).strip()
+    task_browser_status = str(task.get("browser_proof_status", "")).strip().lower()
+    lowered = " | ".join(
+        [
+            str(manifest_text or ""),
+            str(artifact or ""),
+            task_browser_artifact,
+            task_browser_status,
+        ]
+    ).lower()
     return any(marker in lowered for marker in BROWSER_PROOF_MARKERS)
 
 
@@ -492,6 +503,39 @@ def _qa_status(task: dict[str, Any]) -> str:
 
 def _qa_completed(task: dict[str, Any]) -> bool:
     return _qa_status(task) in QA_SUCCESS_STATUSES
+
+
+def _completion_mode(task: dict[str, Any]) -> str:
+    return str(task.get("completion_mode", "")).strip().lower()
+
+
+def _runtime_no_code_evidence(task: dict[str, Any], has_tests: bool) -> bool:
+    mode = _completion_mode(task)
+    reason = str(task.get("no_code_change_reason", "")).strip()
+    runtime_artifact = str(task.get("runtime_artifact", "")).strip() or str(task.get("artifact", "")).strip()
+    verify = str(task.get("verify", "")).strip()
+    commit_sha = str(task.get("commit_sha", "")).strip().lower()
+    role = str(task.get("role", "")).strip().lower()
+
+    if mode in NO_CODE_COMPLETION_MODES:
+        return bool(reason and runtime_artifact and verify and has_tests)
+
+    if role != "admin":
+        return False
+
+    no_code_markers = (
+        "skip(",
+        "no code/config change",
+        "no repo code/config change",
+        "no code change",
+        "runtime only",
+    )
+    no_code_commit = any(marker in commit_sha for marker in no_code_markers)
+    if no_code_commit:
+        return bool(runtime_artifact and verify and has_tests)
+    if reason:
+        return bool(runtime_artifact and verify and has_tests)
+    return False
 
 
 def _build_delivery_event_record(
@@ -517,11 +561,12 @@ def _build_delivery_event_record(
         or bool(COMMIT_RE.search(task_commit))
     )
     requires_browser = _task_requires_browser_proof(task, manifest_text, artifact)
-    has_browser_proof = _has_browser_proof(manifest_text, artifact)
+    has_browser_proof = _has_browser_proof(manifest_text, artifact, task)
     role = str(task.get("role", "")).strip().lower()
     qa_required = role == "dev"
     qa_complete = _qa_completed(task)
-    suspicious = not has_manifest or not has_tests or not has_commit
+    runtime_no_code = _runtime_no_code_evidence(task, has_tests)
+    suspicious = not has_manifest or not has_tests or (not has_commit and not runtime_no_code)
     return {
         "task_id": task_id,
         "at": _iso(at_dt or _now()),
@@ -536,6 +581,8 @@ def _build_delivery_event_record(
         "qa_required": qa_required,
         "qa_completed": qa_complete,
         "qa_status": _qa_status(task) or "none",
+        "completion_mode": _completion_mode(task) or "unknown",
+        "runtime_no_code_evidence": runtime_no_code,
         "suspicious": suspicious,
         "proof_manifest": proof_manifest,
     }
@@ -686,6 +733,27 @@ def build_delivery_control_metrics(
     records = metrics.get("records", []) if isinstance(metrics, dict) else []
     if not isinstance(records, list):
         records = []
+    workboard = _read_json(resolve_orchestrator_read_path(root, "parallel-workstreams.json"))
+    stalled_capabilities: list[dict[str, Any]] = []
+    if isinstance(workboard, dict):
+        for task in workboard.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            task_id = str(task.get("id", "")).strip()
+            if not task_id:
+                continue
+            stalled_reason = str(task.get("stalled_capability_reason", "")).strip()
+            if not stalled_reason:
+                continue
+            stalled_capabilities.append(
+                {
+                    "task_id": task_id,
+                    "role": str(task.get("role", "unknown")).strip() or "unknown",
+                    "reason": stalled_reason,
+                    "timeout_streak": int(task.get("admin_timeout_streak", 0) or 0),
+                    "takeover_required": bool(task.get("planner_takeover_required")),
+                }
+            )
 
     healthy_items: list[dict[str, Any]] = []
     backfill_items: list[dict[str, Any]] = []
@@ -757,6 +825,14 @@ def build_delivery_control_metrics(
             "task_ids": [item["task_id"] for item in backfill_items[:8]],
             "items": backfill_items[:8],
         },
+        "browser_proof_backfill_queue": {
+            "count": len([item for item in backfill_items if item.get("reason") == "browser_proof_missing" and item.get("phase") == "historical"]),
+            "items": [
+                item
+                for item in backfill_items
+                if item.get("reason") == "browser_proof_missing" and item.get("phase") == "historical"
+            ][:8],
+        },
         "suspicious_completions": {
             "count": len(suspicious_items),
             "task_ids": [item["task_id"] for item in suspicious_items[:8]],
@@ -796,6 +872,11 @@ def build_delivery_control_metrics(
             "count": metrics.get("historical_debt_count", 0),
             "browser_proof_missing_task_ids": metrics.get("historical_browser_proof_missing_task_ids", []),
             "suspicious_task_ids": metrics.get("historical_suspicious_task_ids", []),
+        },
+        "historical_debt_remaining": int(metrics.get("historical_debt_count", 0) or 0),
+        "capability_stall_summary": {
+            "count": len(stalled_capabilities),
+            "items": stalled_capabilities[:8],
         },
     }
 

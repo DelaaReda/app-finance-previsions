@@ -570,6 +570,271 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(tasks["BATCH-28-DEV-01"]["state"], "IN_PROGRESS")
         self.assertIn("dev_dispatch:BATCH-28-DEV-01", updated)
 
+    def test_stale_admin_subagent_sets_takeover_after_timeout_streak(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-27-ADMIN-01",
+                            "stream_id": "BATCH-27",
+                            "role": "admin",
+                            "state": "IN_PROGRESS",
+                            "priority": "P1",
+                            "admin_timeout_streak": 1,
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-08T19:00:00Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_admin_stale",
+                            "target_role": "admin",
+                            "owner_task_id": "BATCH-27-ADMIN-01",
+                            "parent_role": "planner",
+                            "task_kind": "runtime",
+                            "status": "running",
+                            "created_at": "2026-03-08T18:40:00Z",
+                            "last_update_at": "2026-03-08T18:40:00Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+
+        actions = MODULE._mark_stale_admin_subagents(self.root, "test")
+        self.assertIn("admin_takeover_required:BATCH-27-ADMIN-01", actions)
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-27-ADMIN-01"]
+        self.assertTrue(task["planner_takeover_required"])
+        self.assertEqual(task["admin_timeout_streak"], 2)
+        self.assertIn(task["state"], {"READY", "READY_PLANNER"})
+
+    def test_collect_finished_admin_subagent_backfills_runtime_no_code_metadata(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-27-ADMIN-01",
+                            "stream_id": "BATCH-27",
+                            "role": "admin",
+                            "state": "IN_PROGRESS",
+                            "priority": "P1",
+                            "planner_takeover_required": True,
+                            "admin_timeout_streak": 2,
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-08T19:00:00Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_admin_finished",
+                            "target_role": "admin",
+                            "owner_task_id": "BATCH-27-ADMIN-01",
+                            "parent_role": "planner",
+                            "task_kind": "runtime",
+                            "status": "completed",
+                            "created_at": "2026-03-08T19:00:00Z",
+                            "last_update_at": "2026-03-08T19:05:00Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        (results_dir / "planner_admin_finished.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_admin_finished",
+                    "owner_task_id": "BATCH-27-ADMIN-01",
+                    "status": "completed",
+                    "artifact": "logs/runtime/admin-repair.log",
+                    "verify": "before=drift; after=healthy; test=doctor",
+                    "tests_run": "bash scripts/fc_doctor.sh",
+                    "commit_sha": "none",
+                    "files_touched": "none",
+                    "root_cause": "runtime drift",
+                    "fix_applied": "repair session state",
+                    "architecture_check": "layer=runtime; imports_ok=yes; path_target=logs/runtime/admin-repair.log",
+                    "vision_alignment": "batch=BATCH-27; target=runtime; impact=healthy",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        actions = MODULE._collect_finished_admin_subagents(self.root, "test")
+        self.assertIn("admin_complete:BATCH-27-ADMIN-01", actions)
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-27-ADMIN-01"]
+        self.assertEqual(task["completion_mode"], "runtime_no_code")
+        self.assertEqual(task["runtime_artifact"], "logs/runtime/admin-repair.log")
+        self.assertFalse(task["planner_takeover_required"])
+
+    def test_apply_bridge_backfills_browser_proof_for_historical_web_task(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-91", "state": "DONE", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-91-DEV-01",
+                            "stream_id": "BATCH-91",
+                            "role": "dev",
+                            "state": "DONE",
+                            "title": "Refine monitor panel",
+                            "artifact": "apps/monitor/server.py",
+                            "commit_sha": "abcdef1234567",
+                            "tests_run": "pytest apps/monitor/tests",
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [
+                        {
+                            "kind": "complete",
+                            "at": "2026-03-08T19:05:00Z",
+                            "details": {
+                                "task_id": "BATCH-91-DEV-01",
+                                "artifact": "apps/monitor/server.py",
+                                "proof_manifest": "docs/operations/orchestrator/proofs/historical-web.yaml",
+                            },
+                        }
+                    ],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        proofs = self.root / "docs" / "operations" / "orchestrator" / "proofs"
+        proofs.mkdir(parents=True, exist_ok=True)
+        (proofs / "historical-web.yaml").write_text(
+            'validations:\n  tests:\n    - result: "PASS"\noutputs:\n  artifacts:\n    - "apps/monitor/server.py"\n',
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(json.dumps({"items": []}), encoding="utf-8")
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_MONITOR",
+                "EVIDENCE: task_update=analysis_only; run_note=backfill proof debt; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=monitor",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: BACKFILL_BROWSER",
+            ]
+        )
+        with patch.object(MODULE, "run_browser_smoke", return_value={"proof_path": str(self.root / "logs-codex-runs" / "browser-smoke" / "proof.json")}):
+            updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="mock")
+        self.assertTrue(payload["ok"])
+        self.assertIn("browser_backfill:BATCH-91-DEV-01:ok", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-91-DEV-01"]
+        self.assertEqual(task["browser_proof_status"], "completed")
+        self.assertIn("browser_backfill:BATCH-91-DEV-01:ok", updated)
+
+    def test_apply_bridge_auto_completes_planner_gov_review_when_deps_done(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-28", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-28-ADMIN-01",
+                            "stream_id": "BATCH-28",
+                            "role": "admin",
+                            "code": "ADMIN-01",
+                            "state": "DONE",
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                        {
+                            "id": "BATCH-28-GOV_REVIEW",
+                            "stream_id": "BATCH-28",
+                            "role": "planner",
+                            "code": "GOV_REVIEW",
+                            "state": "IN_PROGRESS",
+                            "depends_on": ["BATCH-28-ADMIN-01"],
+                            "updated_at": "2026-03-08T19:00:00Z",
+                            "prechange_plan_items": ["close review"],
+                            "prechange_architecture_checks": ["reuse existing state transition"],
+                            "prechange_reflection_dimensions": ["scope", "verification", "rollback"],
+                            "prechange_gate_version": 2,
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-28", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: RESUME_BATCH_28_GOV_REVIEW_BLOCKED",
+                "EVIDENCE: task_update=blocked; run_note=gov_review blocked; issues=command_unavailable; issue_count=1; issue_severity=medium",
+                "RISKS: none",
+                "NEXT: owner=planner; action=complete BATCH-28-GOV_REVIEW",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW",
+                "NEXT_ACTION_UNIQUE: COMPLETE_BATCH_28_GOV_REVIEW",
+            ]
+        )
+        updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="mock")
+        self.assertTrue(payload["ok"])
+        self.assertIn("planner_gov_review_auto_complete:BATCH-28-GOV_REVIEW", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-28-GOV_REVIEW"]
+        self.assertEqual(task["state"], "DONE")
+        self.assertEqual(task["completion_mode"], "runtime_no_code")
+        self.assertIn("planner_gov_review_auto_complete:BATCH-28-GOV_REVIEW", updated)
+
 
 if __name__ == "__main__":
     unittest.main()

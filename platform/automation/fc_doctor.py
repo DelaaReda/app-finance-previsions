@@ -814,6 +814,40 @@ def check_qa_review_pipeline(root: Path) -> CheckResult:
     return CheckResult(status=status, detail=detail)
 
 
+def check_capability_stall_recovery(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("capability_stall_summary", {}) if isinstance(metrics, dict) else {}
+    items = detail.get("items", []) if isinstance(detail, dict) else []
+    recovering = bool(items) and all(bool(item.get("takeover_required")) for item in items if isinstance(item, dict))
+    status = "ok" if int(detail.get("count", 0) or 0) == 0 or recovering else "degraded"
+    if isinstance(detail, dict) and recovering:
+        detail = dict(detail)
+        detail["recovery_mode"] = "planner_takeover_active"
+    return CheckResult(status=status, detail=detail)
+
+
+def check_historical_delivery_debt(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("historical_debt", {}) if isinstance(metrics, dict) else {}
+    status = "ok"
+    if isinstance(detail, dict):
+        detail = dict(detail)
+        detail["advisory"] = int(detail.get("count", 0) or 0) > 0
+    return CheckResult(status=status, detail=detail)
+
+
 def check_planner_dispatch(root: Path) -> CheckResult:
     module = _load_planner_dispatch_metrics(root)
     if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
@@ -844,10 +878,12 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "browser_proof_pipeline": check_browser_proof_pipeline(root),
         "suspicious_completions": check_suspicious_completions(root),
         "qa_review_pipeline": check_qa_review_pipeline(root),
+        "capability_stall_recovery": check_capability_stall_recovery(root),
+        "historical_delivery_debt": check_historical_delivery_debt(root),
         "planner_dispatch": check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
-    advisory_checks = {"planner_dispatch", "delivery_integrity"}
+    advisory_checks = {"planner_dispatch", "delivery_integrity", "historical_delivery_debt"}
     effective_checks = {
         name: check
         for name, check in checks.items()

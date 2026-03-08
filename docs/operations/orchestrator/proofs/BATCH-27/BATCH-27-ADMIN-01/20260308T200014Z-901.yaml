@@ -1,0 +1,72 @@
+proof_id: "PRF-BATCH-27-BATCH-27-ADMIN-01-20260308T200014Z-901"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-08T20:00:14Z"
+execution:
+  commands:
+    - cmd: "bash scripts/health_snapshot.sh"
+      result: "PASS runtime=DEGRADED critical_widgets=degraded blocked=planner:PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+    - cmd: "timeout 45s node tests/smoke/batch_27_dev_03_connector_contract_check.mjs"
+      result: "PASS batch_27_dev_03_connector_contract_check"
+    - cmd: "bash scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050"
+      result: "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0"
+    - cmd: "timeout 90s bash scripts/runtime_e2e_gate.sh"
+      result: "DEGRADED doctor_status=degraded launcher_action=skipped endpoint_failures=0 quiet_period=PASS"
+      artifacts:
+        - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T195810Z.log"
+        - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T195810Z.json"
+fix:
+  file: "scripts/runtime_e2e_gate.sh"
+  summary: "Gate now probes frontend/backend/monitor first and skips launcher restart when the stack is already healthy."
+validations:
+  runtime:
+    preflight:
+      frontend_status: 200
+      backend_status: 200
+      monitor_status: 200
+      listeners:
+        "5173": "up"
+        "8050": "up"
+        "7779": "up"
+    quiet_period:
+      seconds: 30
+      result: "PASS"
+      frontend_status: 200
+      backend_status: 200
+      monitor_status: 200
+    scheduler_truth:
+      core_roles:
+        - "planner"
+      monitor_health: "DEGRADED"
+      planner_blocker: "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+      planner_next: "owner=planner; action=clore BATCH-28-GOV_REVIEW puis traiter BATCH-51-GOV_REVIEW et BATCH-58-GOV_REVIEW des que la commande complete est accessible"
+  widgets:
+    hero:
+      state: "DEGRADED"
+      recommendations_status: "ok"
+    news:
+      state: "fresh"
+      updated_at: "2026-03-08T19:56:30.480738"
+      live_data: true
+    forecasts:
+      status: "ok"
+      freshness_status: "fresh"
+      rows_count: 1
+      updated_at: "2026-03-08T06:29:08.411664Z"
+      live_data: true
+  frontend:
+    load_status: 200
+    refresh_contract: "PASS via connector smoke"
+    api_error_smoke: "Optional /ingestion/health and /status fetches logged errors during smoke, but dashboard live-data refresh still completed successfully."
+outputs:
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260308T200014Z-901.yaml"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T195810Z.log"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T195810Z.json"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "RUNTIME_OK_NONRUNTIME_BLOCKER"
+meta:
+  note: "The observed degraded state is now planner-governed visibility (gov-review completion blocker), not frontend/backend/monitor availability. The gate no longer causes avoidable restart downtime on healthy stacks."

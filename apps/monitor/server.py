@@ -296,7 +296,7 @@ DOCTOR_SCRIPT_FILE = Path(
     )
 ).expanduser()
 DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "120")))
-DOCTOR_RUN_TIMEOUT_SECONDS = max(2, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "4")))
+DOCTOR_RUN_TIMEOUT_SECONDS = max(4, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "8")))
 _DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 _DOCTOR_RUNNING = False
 
@@ -713,6 +713,7 @@ def _delivery_control_snapshot() -> dict:
             "needs_proof_backfill": {"count": 0, "task_ids": [], "items": []},
             "suspicious_completions": {"count": 0, "task_ids": [], "items": []},
             "healthy_deliveries": {"count": 0, "task_ids": [], "items": []},
+            "browser_proof_backfill_queue": {"count": 0, "items": []},
             "pipeline_counts": {
                 "recent_completions": 0,
                 "future_recent_completions": 0,
@@ -725,6 +726,8 @@ def _delivery_control_snapshot() -> dict:
             "qa_review_pipeline": {"status": "unknown", "pending_count": 0, "completed_count": 0},
             "future_delivery_integrity": {"status": "unknown", "recent_completions": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
             "historical_debt": {"count": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+            "historical_debt_remaining": 0,
+            "capability_stall_summary": {"count": 0, "items": []},
         }
     try:
         return module.build_delivery_control_metrics(ROOT, window_hours=24)
@@ -740,6 +743,7 @@ def _delivery_control_snapshot() -> dict:
             "needs_proof_backfill": {"count": 0, "task_ids": [], "items": []},
             "suspicious_completions": {"count": 0, "task_ids": [], "items": []},
             "healthy_deliveries": {"count": 0, "task_ids": [], "items": []},
+            "browser_proof_backfill_queue": {"count": 0, "items": []},
             "pipeline_counts": {
                 "recent_completions": 0,
                 "future_recent_completions": 0,
@@ -752,6 +756,8 @@ def _delivery_control_snapshot() -> dict:
             "qa_review_pipeline": {"status": "error", "pending_count": 0, "completed_count": 0},
             "future_delivery_integrity": {"status": "error", "recent_completions": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
             "historical_debt": {"count": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+            "historical_debt_remaining": 0,
+            "capability_stall_summary": {"count": 0, "items": []},
         }
 
 
@@ -938,6 +944,26 @@ def doctor_snapshot(force_refresh: bool = False) -> dict:
                     meta = {}
                 meta["rc"] = cp.returncode
                 payload["meta"] = meta
+        except subprocess.TimeoutExpired as exc:
+            if isinstance(cached_payload, dict) and cached_payload:
+                payload = dict(cached_payload)
+                meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+                if not isinstance(meta, dict):
+                    meta = {}
+                meta["warning"] = "doctor_timeout_using_cached_payload"
+                meta["timeout_seconds"] = DOCTOR_RUN_TIMEOUT_SECONDS
+                payload["meta"] = meta
+            else:
+                payload = {
+                    "status": "error",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "checks": {},
+                    "meta": {
+                        "schema_version": "doctor.v1",
+                        "error": f"doctor_exec_failed:{exc}",
+                        "timeout_seconds": DOCTOR_RUN_TIMEOUT_SECONDS,
+                    },
+                }
         except Exception as exc:
             payload = {
                 "status": "error",
@@ -2977,6 +3003,8 @@ def status():
                 and planner_blocker_up in {
                     "PLANNER_NO_READY_TASK_AFTER_SYNC",
                     "DELIVERY_VALUE_INSUFFICIENT",
+                    "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW",
+                    "PLANNER_BATCH_CREATE_COMMAND_UNAVAILABLE",
                 }
             )
             if planner_dispatch_active and not planner_hard_incident:
@@ -2988,6 +3016,8 @@ def status():
                     "NONE",
                     "SYNC_PRIORITY_THEN_CLAIM_FAILED",
                     "DELIVERY_VALUE_INSUFFICIENT",
+                    "RESUME_BATCH_28_GOV_REVIEW_BLOCKED",
+                    "SYNC_PRIORITY_THEN_CLAIM_FAILED",
                 }:
                     delta_value = "PLANNER_DISPATCH_ACTIVE"
                 blocker_value = "NONE"
@@ -5110,15 +5140,23 @@ function deliveryControlHtml(){
   const qaPipeline=dc.qa_review_pipeline||{};
   const healthy=dc.healthy_deliveries||{};
   const backfill=dc.needs_proof_backfill||{};
+  const browserBackfill=dc.browser_proof_backfill_queue||{};
   const suspicious=dc.suspicious_completions||{};
+  const historicalDebt=dc.historical_debt||{};
+  const stallSummary=dc.capability_stall_summary||{};
   return `
     <div class="queue-sync ${cls}"><strong>Delivery control</strong> · status=${esc(status)} · future=${esc(futureStatus)} · integrity=${esc(integrityStatus)}</div>
     <div class="queue-sync ${Number(suspicious.count||0)===0?'ok':'warn'}" style="margin-top:8px"><strong>Coverage</strong> · proof=${esc(String(Math.round(Number(coverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(coverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(coverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(coverage.browser_proof||0)*100)))}%</div>
     <div class="queue-sync ${(String(browserPipeline.status||'unknown')==='ok' && String(qaPipeline.status||'unknown')==='ok')?'ok':'warn'}" style="margin-top:8px"><strong>Future pipeline</strong> · recent=${counts.future_recent_completions||0} · qa_pending=${counts.qa_review_pending_count||0} · qa_done=${counts.qa_review_completed_count||0} · browser_pending=${counts.browser_validation_pending_count||0} · ready_to_close=${counts.delivery_ready_to_close_count||0}</div>
+    <div class="queue-sync ${(Number(stallSummary.count||0)===0 && Number(historicalDebt.count||0)===0)?'ok':'warn'}" style="margin-top:8px"><strong>Debt & stalls</strong> · historical=${historicalDebt.count||0} · browser_backfill=${browserBackfill.count||0} · capability_stalls=${stallSummary.count||0}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
       <div class="log-box"><div class="log-head">Healthy deliveries (${healthy.count||0})</div><div class="log-scroll">${deliveryControlRows(healthy.items,'Aucune livraison saine récente')}</div></div>
       <div class="log-box"><div class="log-head">Needs proof backfill (${backfill.count||0})</div><div class="log-scroll">${deliveryControlRows(backfill.items,'Aucune dette de preuve')}</div></div>
       <div class="log-box"><div class="log-head">Suspicious completion review (${suspicious.count||0})</div><div class="log-scroll">${deliveryControlRows(suspicious.items,'Aucune completion suspecte')}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+      <div class="log-box"><div class="log-head">Browser backfill queue (${browserBackfill.count||0})</div><div class="log-scroll">${deliveryControlRows(browserBackfill.items,'Aucune reprise browser en attente')}</div></div>
+      <div class="log-box"><div class="log-head">Capability stalls (${stallSummary.count||0})</div><div class="log-scroll">${deliveryControlRows(stallSummary.items,'Aucune capability bloquée')}</div></div>
     </div>
     <div class="link-row">
       <a class="ext-link" href="/api/status" target="_blank">⬡ Status JSON</a>
