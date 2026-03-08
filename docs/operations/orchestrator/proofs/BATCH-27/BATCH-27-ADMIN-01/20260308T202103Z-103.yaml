@@ -1,0 +1,89 @@
+proof_id: "PRF-BATCH-27-BATCH-27-ADMIN-01-20260308T202103Z-103"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-08T20:21:03Z"
+execution:
+  commands:
+    - cmd: "timeout 120s bash scripts/runtime_e2e_gate.sh"
+      result: "PASS result=OK doctor_status=degraded doctor_runtime_status=ok non_runtime=delivery_integrity,suspicious_completions endpoint_failures=0 quiet_period=PASS"
+      artifacts:
+        - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T201953Z.log"
+        - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T201953Z.json"
+    - cmd: "timeout 45s node tests/smoke/batch_27_dev_03_connector_contract_check.mjs"
+      result: "PASS batch_27_dev_03_connector_contract_check"
+    - cmd: "bash scripts/fc_health_check.sh"
+      result: "PASS backend=up frontend=200 monitor_contract=ok critical_endpoints=ok live_data=ok planner_only_scheduler_truth=ok stale_locks=0"
+    - cmd: "python3 runtime status snapshot"
+      result: "PASS health=DEGRADED critical_widget_state=degraded planner_blocker=PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+fix:
+  file: "scripts/runtime_e2e_gate.sh"
+  summary: "Gate now computes a runtime-scoped doctor verdict from provider/runtime/session/lock checks and records non-runtime degraded checks separately, so healthy runtime stacks do not fail on delivery-integrity debt."
+validations:
+  runtime:
+    preflight:
+      frontend_status: 200
+      backend_status: 200
+      monitor_status: 200
+      listeners:
+        "5173": "up"
+        "8050": "up"
+        "7779": "up"
+    quiet_period:
+      seconds: 30
+      result: "PASS"
+      frontend_status: 200
+      backend_status: 200
+      monitor_status: 200
+    doctor:
+      overall_status: "degraded"
+      runtime_status: "ok"
+      non_runtime_degraded_checks:
+        - "delivery_integrity"
+        - "suspicious_completions"
+    scheduler_truth:
+      core_roles:
+        - "planner"
+      monitor_health: "DEGRADED"
+      planner_blocker: "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+      planner_next: "owner=planner; action=clore BATCH-28-GOV_REVIEW puis traiter BATCH-51-GOV_REVIEW et BATCH-58-GOV_REVIEW des que la commande complete est accessible"
+  widgets:
+    hero:
+      state: "degraded"
+      recommendations_status: "ok"
+      degraded_explicit: true
+    news:
+      state: "degraded"
+      freshness: "fresh"
+      updated_at: "2026-03-08T19:56:30.480738"
+      degraded_explicit: true
+    forecasts:
+      state: "ok"
+      status: "ok"
+      freshness: "fresh"
+      updated_at: "2026-03-08T06:29:08.411664Z"
+      live_data: true
+    judge:
+      state: "degraded"
+      recommendations_status: "ok"
+      degraded_explicit: true
+    deep-dive:
+      state: "degraded"
+      recommendations_status: "ok"
+      forecasts_status: "ok"
+      degraded_explicit: true
+  frontend:
+    load_status: 200
+    refresh_contract: "PASS via connector smoke"
+    api_error_smoke: "Connector smoke logged optional /ingestion/health and /status misses in the fixture harness, but live refresh still completed and emitted financecopilot:live-dashboard-updated."
+outputs:
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260308T202103Z-103.yaml"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T201953Z.log"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T201953Z.json"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "RUNTIME_OK_NONRUNTIME_BLOCKER"
+meta:
+  note: "Runtime truth is healthy after the DEV-03 chain. Remaining degradation is explicit non-runtime observability debt plus a planner gov-review completion blocker, not frontend/backend/monitor availability."
