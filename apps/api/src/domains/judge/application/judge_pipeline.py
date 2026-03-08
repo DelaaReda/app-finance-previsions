@@ -34,6 +34,28 @@ class JudgeProfile:
     max_tokens: int = 1200
     focus: str = "balanced"  # "tech", "fundamental", "macro", "sentiment", "balanced"
 
+
+def _src_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _api_root() -> Path:
+    return _src_root().parent
+
+
+def _resolve_profile_path(name: str) -> Path:
+    filename = f"{name}.yaml"
+    runtime_path = _api_root() / "runtime" / "data" / "judge_profiles" / filename
+    if runtime_path.exists():
+        return runtime_path
+
+    cwd_path = Path("data") / "judge_profiles" / filename
+    if cwd_path.exists():
+        return cwd_path
+
+    return runtime_path
+
+
 def load_profile(name: str) -> JudgeProfile:
     """
     Load judge profile from YAML config.
@@ -53,7 +75,7 @@ def load_profile(name: str) -> JudgeProfile:
         >>> prof.horizon
         '1w'
     """
-    path = Path(f"data/judge_profiles/{name}.yaml")
+    path = _resolve_profile_path(name)
     if not path.exists():
         raise FileNotFoundError(f"Profile not found: {name} (looked in {path})")
     

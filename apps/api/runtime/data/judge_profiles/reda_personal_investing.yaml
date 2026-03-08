@@ -1,0 +1,27 @@
+name: reda_personal_investing
+horizon: 1m
+tickers:
+  - SPY
+  - QQQ
+  - DIA
+  - IWM
+  - AAPL
+  - MSFT
+  - JNJ
+  - WMT
+  - GLD
+focus: balanced
+sources_weights:
+  fundamental: 0.30
+  macro: 0.25
+  technical: 0.20
+  news: 0.15
+  sentiment: 0.10
+prompt_template: |
+  Analyse {ticker} pour un investisseur particulier prudent, non expert en finance.
+  Horizon: 1 mois.
+  Priorise la clarte, les risques concrets, le scenario central et une action simple.
+  Evite le jargon; si un terme technique est utile, explique-le tres brievement.
+  Ne recommande pas d'effet de levier ni de strategie complexe.
+  Garde la reponse sous 450 tokens.
+max_tokens: 1000
