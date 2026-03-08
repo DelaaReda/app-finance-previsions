@@ -156,3 +156,81 @@ def test_ask_payload_fallback_when_market_context_service_fails():
     assert response.get("sources_count") == 1
     assert response["quality_status"] == "insufficient_sources"
     assert response["requirements_met"]["min_sources_2"] is False
+
+
+def test_ask_payload_uses_structured_confidence_when_sources_are_sufficient():
+    fake_rag = _FakeRAGStore()
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert len(context_chunks) == 2
+        return {
+            "model": "test-llm",
+            "answer": json.dumps(
+                {
+                    "action": "buy",
+                    "confidence": 67,
+                    "reasoning": [
+                        "Momentum reste favorable",
+                        "Le contexte macro n'est pas deterioré",
+                        "Les risques sont identifiés mais contenus",
+                    ],
+                }
+            ),
+            "citations": [],
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Donne-moi un memo d'investissement sur NVDA.",
+            tickers=["NVDA"],
+            max_sources=2,
+            rag_store_cls=lambda: fake_rag,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response["quality_status"] == "sufficient_sources"
+    assert response["requirements_met"]["min_sources_2"] is True
+    assert response["confidence"] == 0.67
+    assert response["freshness"] == response["generated_at"]
+
+
+def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            return []
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert any(chunk.get("meta", {}).get("type") == "market_context" for chunk in context_chunks)
+        return {
+            "model": "test-llm",
+            "answer": json.dumps(
+                {
+                    "action": "buy",
+                    "confidence": 0.91,
+                    "reasoning": [
+                        "Le signal brut est fort",
+                        "Mais le contexte disponible reste partiel",
+                    ],
+                }
+            ),
+            "citations": [],
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Que faire sur AAPL ?",
+            tickers=["AAPL"],
+            max_sources=2,
+            rag_store_cls=_EmptyRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response["quality_status"] == "insufficient_sources"
+    assert response["requirements_met"]["min_sources_2"] is False
+    assert response["sources_count"] == 1
+    assert response["confidence"] == 0.45
+    assert "Sources insuffisantes" in response["risk_caveat"]

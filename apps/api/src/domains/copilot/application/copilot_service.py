@@ -8,6 +8,18 @@ from datetime import datetime, timezone
 from importlib import import_module
 from typing import Any, Dict, List, Optional
 
+try:
+    from services.service_standard import coerce_confidence, ensure_decision_contract  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from platform.legacy.services.service_standard import (  # type: ignore
+            coerce_confidence,
+            ensure_decision_contract,
+        )
+    except Exception:  # pragma: no cover
+        coerce_confidence = None  # type: ignore
+        ensure_decision_contract = None  # type: ignore
+
 
 def utc_now_iso() -> str:
     """Return canonical UTC ISO timestamp without service bridge dependencies."""
@@ -76,6 +88,41 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return float(default)
+
+
+def _normalize_confidence_value(value: Any, default: float) -> float:
+    if callable(coerce_confidence):
+        return float(coerce_confidence(value, default=default))
+
+    confidence = _to_float(value, default)
+    if confidence > 1.0:
+        confidence = confidence / 100.0 if confidence <= 100.0 else 1.0
+    return min(1.0, max(0.0, float(confidence)))
+
+
+def _resolve_payload_confidence(
+    *,
+    parsed_payload: Optional[Dict[str, Any]],
+    llm_response: Dict[str, Any],
+    has_min_sources: bool,
+    has_quality_model: bool,
+) -> float:
+    default_confidence = 0.8 if (has_min_sources and has_quality_model) else 0.4
+    payload = parsed_payload if isinstance(parsed_payload, dict) else {}
+
+    raw_confidence = None
+    for key in ("confidence", "confidence_score", "confidence_pct", "probability"):
+        if payload.get(key) is not None:
+            raw_confidence = payload.get(key)
+            break
+
+    if raw_confidence is None:
+        raw_confidence = llm_response.get("confidence")
+
+    resolved_confidence = _normalize_confidence_value(raw_confidence, default_confidence)
+    if not has_min_sources or not has_quality_model:
+        return min(resolved_confidence, 0.45)
+    return resolved_confidence
 
 
 def _collect_fallback_context(scope: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -418,6 +465,38 @@ def _fetch_live_market_context() -> str:
     except Exception:
         return ""
 
+
+def _finalize_ask_payload(payload: Dict[str, Any], *, default_source: str = "copilot.ask") -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+
+    freshness = _safe_text(payload.get("freshness") or payload.get("generated_at"), "")
+    if not freshness:
+        freshness = utc_now_iso()
+        payload.setdefault("generated_at", freshness)
+    payload.setdefault("freshness", freshness)
+
+    risk_obj = payload.get("risk") if isinstance(payload.get("risk"), dict) else {}
+    risk_level = payload.get("risk_level") or risk_obj.get("level")
+    risk_caveat = payload.get("risk_caveat") or risk_obj.get("caveat")
+
+    if callable(ensure_decision_contract):
+        ensure_decision_contract(
+            payload,
+            default_source=default_source,
+            verdict=payload.get("verdict") or payload.get("action"),
+            confidence=payload.get("confidence"),
+            why=payload.get("why") or payload.get("reasoning"),
+            risk_level=risk_level,
+            risk_caveat=risk_caveat,
+            freshness=freshness,
+        )
+    else:
+        payload.setdefault("risk_flag", str(risk_level or "").lower() in {"high", "critical"})
+        payload.setdefault("source", [default_source])
+
+    return payload
+
 async def build_ask_payload(
     *,
     question: str,
@@ -441,7 +520,7 @@ async def build_ask_payload(
         if context_service_cls is None:
             context_service_cls = _resolve_context_service_class()
     except Exception as import_exc:
-        return {
+        return _finalize_ask_payload({
             "answer": f"Copilot unavailable: {import_exc}",
             "action": "hold",
             "verdict": "hold",
@@ -457,7 +536,7 @@ async def build_ask_payload(
             "quality_status": "error",
             "requirements_met": {"min_sources_2": False, "quality_threshold": False},
             "error": str(import_exc),
-        }
+        })
 
     try:
         rag_store = rag_store_cls()
@@ -477,7 +556,7 @@ async def build_ask_payload(
             context_chunks = [_build_context_chunk_from_payload(market_context_payload)]
 
         if not context_chunks:
-            return {
+            return _finalize_ask_payload({
                 "answer": (
                     "Je n'ai pas trouvé d'informations pertinentes pour répondre à votre "
                     f"question: '{question}'."
@@ -499,7 +578,7 @@ async def build_ask_payload(
                     "min_sources_2": False,
                     "quality_threshold": False,
                 },
-            }
+            })
 
         # Injecter le contexte marché live (forecasts + brief + news)
         live_ctx = _fetch_live_market_context()
@@ -528,9 +607,14 @@ async def build_ask_payload(
         quality_status = (
             "sufficient_sources" if (has_min_sources and has_quality_model) else "insufficient_sources"
         )
-        confidence = 0.8 if quality_status == "sufficient_sources" else 0.4
 
         parsed = _extract_json_from_text(str(llm_response.get("answer") or ""))
+        confidence = _resolve_payload_confidence(
+            parsed_payload=parsed if isinstance(parsed, dict) else None,
+            llm_response=llm_response,
+            has_min_sources=has_min_sources,
+            has_quality_model=has_quality_model,
+        )
         parsed_answer = _safe_text((parsed or {}).get("answer") if isinstance(parsed, dict) else "")
         parsed_reasoning = _extract_reasoning((parsed or {}).get("reasoning", "")) if isinstance(parsed, dict) else []
         parsed_action = _coerce_verdict(_safe_text((parsed or {}).get("action") or (parsed or {}).get("verdict")))
@@ -553,8 +637,9 @@ async def build_ask_payload(
             confidence=confidence,
         )
 
-        return {
-            "answer": str(llm_response.get("answer") or "").strip(),
+        return _finalize_ask_payload({
+            "question": question,
+            "answer": final_answer,
             "action": action,
             "verdict": action,
             "reasoning": reasoning,
@@ -573,9 +658,9 @@ async def build_ask_payload(
                 "min_sources_2": has_min_sources,
                 "quality_threshold": has_quality_model,
             },
-        }
+        })
     except Exception as exc:
-        return {
+        return _finalize_ask_payload({
             "answer": f"Désolé, une erreur s'est produite lors du traitement: {exc}",
             "action": "hold",
             "verdict": "hold",
@@ -591,7 +676,7 @@ async def build_ask_payload(
             "quality_status": "error",
             "requirements_met": {"min_sources_2": False, "quality_threshold": False},
             "error": str(exc),
-        }
+        })
 
 
 def build_history_payload(*, limit: int) -> Dict[str, Any]:
