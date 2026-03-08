@@ -24,7 +24,8 @@ from orchestrator_paths import resolve_orchestrator_read_path
 DEFAULT_TIMEOUT_S = 0.6
 FRESHNESS_THRESHOLDS_S = {
     "prices": 12 * 3600,
-    "news": 6 * 3600,
+    # Keep monitor/doctor aligned with the backend ingestion health contract.
+    "news": 30 * 60,
     "forecasts": 24 * 3600,
     "backtests": 72 * 3600,
     "brief_daily": 24 * 3600,

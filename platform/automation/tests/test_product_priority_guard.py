@@ -145,6 +145,56 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertTrue(metrics["forecasts"]["valid"])
             self.assertEqual(metrics["priority_guard"]["status"], "ok")
 
+    def test_news_freshness_matches_ingestion_contract_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            now = datetime(2026, 3, 6, 12, 0, tzinfo=timezone.utc)
+            stale_news = now - timedelta(minutes=61)
+            (root / "data" / "stocks").mkdir(parents=True, exist_ok=True)
+
+            (root / "data" / "forecasts.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": _iso(now),
+                        "last_update": _iso(now),
+                        "source": ["forecasts_route"],
+                        "rows": [{"ticker": "AAPL"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "data" / "news_feed.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": _iso(stale_news),
+                        "last_update": _iso(stale_news),
+                        "articles": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for rel in ("brief_daily.json", "backtests.json", "stocks/prices.json"):
+                path = root / "data" / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps({"generated_at": _iso(now), "last_update": _iso(now), "data": {}}),
+                    encoding="utf-8",
+                )
+            orch = root / "docs" / "operations" / "orchestrator"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "parallel-workstreams.json").write_text(json.dumps({"streams": [], "tasks": []}), encoding="utf-8")
+
+            with patch.object(
+                product_priority_guard,
+                "_copilot_metrics",
+                return_value={"status": "ok", "usable": True, "fallback": False, "source_count": 3},
+            ):
+                metrics = product_priority_guard.build_product_value_metrics(root, api_base_url=None, now=now)
+
+            self.assertEqual(metrics["data_freshness"]["news"]["threshold_s"], 1800)
+            self.assertEqual(metrics["data_freshness"]["news"]["state"], "stale")
+            self.assertIn("news_stale", metrics["priority_guard"]["blocked_reasons"])
+
     def test_delivery_integrity_detects_missing_commit_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
