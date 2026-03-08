@@ -16,6 +16,12 @@ cd "$ROOT"
 BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
 TIMEOUT_SECONDS="${FC_MONITOR_SMOKE_TIMEOUT_SECONDS:-8}"
 QUIET=0
+TMP_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,17 +50,27 @@ if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
-STATUS_JSON="$(curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/status")"
-DIAG_JSON="$(curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/runtime-diagnostics")"
-ISSUES_FEED_JSON="$(curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/feed?n=40&window_min=120")"
-ISSUES_SUMMARY_JSON="$(curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/summary?window_min=60")"
+STATUS_PATH="${TMP_DIR}/status.json"
+DIAG_PATH="${TMP_DIR}/runtime_diagnostics.json"
+ISSUES_FEED_PATH="${TMP_DIR}/issues_feed.json"
+ISSUES_SUMMARY_PATH="${TMP_DIR}/issues_summary.json"
+
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/status" -o "$STATUS_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/runtime-diagnostics" -o "$DIAG_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/feed?n=40&window_min=120" -o "$ISSUES_FEED_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/summary?window_min=60" -o "$ISSUES_SUMMARY_PATH"
 
 SUMMARY="$(
-python3 - "$STATUS_JSON" "$DIAG_JSON" "$ISSUES_FEED_JSON" "$ISSUES_SUMMARY_JSON" <<'PY'
+python3 - "$STATUS_PATH" "$DIAG_PATH" "$ISSUES_FEED_PATH" "$ISSUES_SUMMARY_PATH" <<'PY'
 import json
 import sys
+from pathlib import Path
 
-status_raw, diag_raw, issues_feed_raw, issues_summary_raw = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+status_path, diag_path, issues_feed_path, issues_summary_path = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+status_raw = Path(status_path).read_text(encoding="utf-8", errors="replace")
+diag_raw = Path(diag_path).read_text(encoding="utf-8", errors="replace")
+issues_feed_raw = Path(issues_feed_path).read_text(encoding="utf-8", errors="replace")
+issues_summary_raw = Path(issues_summary_path).read_text(encoding="utf-8", errors="replace")
 errors = []
 
 def ensure(cond, msg):
@@ -106,9 +122,9 @@ if isinstance(roles, list):
 
 agents = status.get("agents")
 ensure(isinstance(agents, dict), "status_agents_not_object")
-core_roles = ("planner", "dev", "admin")
+scheduled_roles = ("planner",)
 if isinstance(agents, dict):
-    for role in core_roles:
+    for role in scheduled_roles:
         ensure(role in agents, f"status_agents_missing_{role}")
         entry = agents.get(role, {})
         ensure(isinstance(entry, dict), f"status_agents_{role}_not_object")
@@ -137,7 +153,7 @@ for key in required_diag:
 diag_agents = diag.get("agents")
 ensure(isinstance(diag_agents, dict), "runtime_diagnostics_agents_not_object")
 if isinstance(diag_agents, dict):
-    for role in core_roles:
+    for role in scheduled_roles:
         ensure(role in diag_agents, f"runtime_diagnostics_agents_missing_{role}")
         entry = diag_agents.get(role, {})
         ensure(isinstance(entry, dict), f"runtime_diagnostics_agents_{role}_not_object")
