@@ -29,6 +29,12 @@ STATE_DIR = Path(os.environ.get('FC_ROLE_STATE_DIR', '/home/venom/.openclaw/cron
 ROOT = Path(os.environ.get('FC_WORKSPACE_ROOT', '.')).resolve()
 MONITOR_BASE_URL = os.environ.get('FC_MONITOR_BASE_URL', 'http://127.0.0.1:7779').rstrip('/')
 API_BASE_URL = os.environ.get('FC_GATE_API_BASE_URL', 'http://127.0.0.1:8050').rstrip('/')
+try:
+    HEALTH_HTTP_TIMEOUT = float(os.environ.get('FC_HEALTH_SNAPSHOT_HTTP_TIMEOUT_SECONDS', '15') or '15')
+except Exception:
+    HEALTH_HTTP_TIMEOUT = 15.0
+if HEALTH_HTTP_TIMEOUT <= 0:
+    HEALTH_HTTP_TIMEOUT = 15.0
 
 canonical_orch = ROOT / 'docs' / 'operations' / 'orchestrator'
 legacy_orch = ROOT / 'docs' / 'orchestrator-ops'
@@ -42,7 +48,7 @@ def _json_dict(path: Path) -> dict:
 
 def _http_json(url: str) -> dict:
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with urllib.request.urlopen(url, timeout=HEALTH_HTTP_TIMEOUT) as response:
             raw = response.read().decode('utf-8', errors='ignore')
         data = json.loads(raw)
         return data if isinstance(data, dict) else {}
