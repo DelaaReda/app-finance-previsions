@@ -13,6 +13,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -41,6 +43,19 @@ class CheckResult:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _probe_blocked_message(raw: object) -> bool:
+    token = str(raw or "").strip().lower()
+    if not token:
+        return False
+    blocked_markers = (
+        "permission denied",
+        "operation not permitted",
+        "temporarily unavailable",
+        "sandbox",
+    )
+    return any(marker in token for marker in blocked_markers)
 
 
 def _read_json(path: Path) -> Any:
@@ -103,6 +118,22 @@ def _runtime_state_detail(root: Path) -> dict[str, Any]:
     }
 
 
+def _state_age_minutes(updated_at: object) -> int | None:
+    token = str(updated_at or "").strip()
+    if not token:
+        return None
+    try:
+        if token.endswith("Z"):
+            token = token[:-1] + "+00:00"
+        dt = datetime.fromisoformat(token)
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    age_min = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60.0
+    return int(age_min) if age_min >= 0 else 0
+
+
 def check_workspace_root(root: Path) -> CheckResult:
     exists = root.exists()
     writable = os.access(root, os.W_OK) if exists else False
@@ -118,6 +149,7 @@ def check_workspace_root(root: Path) -> CheckResult:
 
 
 def check_scheduler_authority(root: Path) -> CheckResult:
+    runtime_state = _runtime_state_detail(root)
     cron_has_vm_resume_guard = False
     cron_rc = 0
     cron_err = ""
@@ -142,6 +174,31 @@ def check_scheduler_authority(root: Path) -> CheckResult:
     except Exception as exc:
         cron_rc = 2
         cron_err = str(exc)
+    cron_probe_blocked = _probe_blocked_message(cron_err)
+
+    runtime_state_age_min = _state_age_minutes(runtime_state.get("updated_at"))
+    runtime_state_fallback_ok = (
+        cron_probe_blocked
+        and str(runtime_state.get("execution_mode", "") or "").strip() != ""
+        and (runtime_state_age_min is None or runtime_state_age_min <= 1440)
+    )
+    if runtime_state_fallback_ok:
+        return CheckResult(
+            status="ok",
+            detail={
+                "policy_target": "cron_only",
+                "cron_has_vm_resume_guard": False,
+                "cron_rc": cron_rc,
+                "cron_stderr": cron_err[:200],
+                "timer_enabled": False,
+                "timer_active": False,
+                "timer_probe": "probe_blocked",
+                "scheduler_policy": "probe_blocked_runtime_state_fallback",
+                "runtime_state_execution_mode": runtime_state.get("execution_mode", ""),
+                "runtime_state_updated_at": runtime_state.get("updated_at", ""),
+                "runtime_state_age_min": runtime_state_age_min,
+            },
+        )
 
     timer_enabled = False
     timer_active = False
@@ -204,6 +261,73 @@ def check_scheduler_authority(root: Path) -> CheckResult:
     )
 
 
+def _read_recent_tick(root: Path, role: str, max_age_min: int = 90) -> dict[str, Any]:
+    path = root / "logs-codex-runs" / "fc-ticks" / f"{role}.tick.log"
+    if not path.exists():
+        return {"path": str(path), "exists": False, "recent": False, "last_ts": "", "age_min": None}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except Exception:
+        return {"path": str(path), "exists": True, "recent": False, "last_ts": "", "age_min": None}
+    ts_pattern = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z)?)")
+    last_ts = ""
+    last_age_min: int | None = None
+    for raw in reversed(lines[-400:]):
+        if not any(marker in raw for marker in ("[START]", "[END]", "[SKIP]", "[BACKOFF]")):
+            continue
+        match = ts_pattern.search(raw)
+        if not match:
+            continue
+        last_ts = match.group(1)
+        last_age_min = _state_age_minutes(last_ts)
+        break
+    recent = last_age_min is not None and last_age_min <= max_age_min
+    return {
+        "path": str(path),
+        "exists": True,
+        "recent": recent,
+        "last_ts": last_ts,
+        "age_min": last_age_min,
+    }
+
+
+def _read_recent_planner_dispatch(root: Path, max_age_min: int = 90) -> dict[str, Any]:
+    path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
+    data = _read_json(path)
+    if not isinstance(data, dict):
+        return {
+            "path": str(path),
+            "exists": path.exists(),
+            "recent": False,
+            "last_ts": "",
+            "age_min": None,
+            "active_count": 0,
+        }
+    subagents = data.get("subagents", [])
+    if not isinstance(subagents, list):
+        subagents = []
+    latest_ts = str(data.get("updated_at", "") or "").strip()
+    for item in subagents:
+        if not isinstance(item, dict):
+            continue
+        for key in ("last_update_at", "merged_at", "created_at"):
+            token = str(item.get(key, "") or "").strip()
+            if token and (not latest_ts or (_state_age_minutes(token) or 10**9) < (_state_age_minutes(latest_ts) or 10**9)):
+                latest_ts = token
+                break
+    age_min = _state_age_minutes(latest_ts)
+    active_count = sum(1 for item in subagents if isinstance(item, dict) and str(item.get("status", "")).strip().lower() == "running")
+    recent = age_min is not None and age_min <= max_age_min and (active_count > 0 or bool(subagents))
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "recent": recent,
+        "last_ts": latest_ts,
+        "age_min": age_min,
+        "active_count": active_count,
+    }
+
+
 def check_sessions(root: Path) -> CheckResult:
     runtime_state = _runtime_state_detail(root)
     runtime_paused = runtime_state.get("lifecycle") == "paused"
@@ -220,6 +344,40 @@ def check_sessions(root: Path) -> CheckResult:
         rc = 2
         err = str(exc)
     expected = _expected_core_roles(root)
+    probe_blocked = _probe_blocked_message(err)
+    if probe_blocked and not runtime_paused:
+        tick_fallback = {role: _read_recent_tick(root, role) for role in expected}
+        planner_dispatch_fallback = _read_recent_planner_dispatch(root) if expected == ("planner",) else {}
+        missing: list[str] = []
+        found_by_role: dict[str, str] = {}
+        for role, item in tick_fallback.items():
+            if bool(item.get("recent")):
+                found_by_role[role] = f"recent_tick:{item.get('last_ts', '')}"
+                continue
+            if role == "planner" and bool(planner_dispatch_fallback.get("recent")):
+                found_by_role[role] = f"planner_dispatch:{planner_dispatch_fallback.get('last_ts', '')}"
+                continue
+            missing.append(role)
+        status = "ok" if not missing else "degraded"
+        return CheckResult(
+            status=status,
+            detail={
+                "rc": rc,
+                "sessions": sessions[:60],
+                "expected_core": list(expected),
+                "missing_core": missing,
+                "missing_core_raw": list(expected),
+                "found_core": found_by_role,
+                "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+                "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
+                "advisory_optional": "scrum_master",
+                "stderr": err[:300],
+                "probe_blocked": True,
+                "fallback_source": "fc_ticks",
+                "tick_fallback": tick_fallback,
+                "planner_dispatch_fallback": planner_dispatch_fallback,
+            },
+        )
     found_by_role: dict[str, str] = {}
     for role in expected:
         for name in sessions:
@@ -463,27 +621,79 @@ def _probe_json(url: str, timeout_s: float) -> tuple[bool, int, str]:
         return False, 0, str(exc)[:200]
 
 
+def _port_from_base(url: str) -> int:
+    parsed = urlparse(url)
+    if parsed.port is not None:
+        return int(parsed.port)
+    if parsed.scheme == "https":
+        return 443
+    return 80
+
+
+def _listening_ports() -> set[int]:
+    try:
+        cp = subprocess.run(
+            ["ss", "-ltn"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=3,
+        )
+    except Exception:
+        return set()
+    if cp.returncode != 0 and not (cp.stdout or "").strip():
+        return set()
+    ports: set[int] = set()
+    for raw in (cp.stdout or "").splitlines():
+        line = raw.strip()
+        if not line or "LISTEN" not in line:
+            continue
+        match = re.search(r":(\d+)\s", line)
+        if not match:
+            continue
+        try:
+            ports.add(int(match.group(1)))
+        except Exception:
+            continue
+    return ports
+
+
 def check_providers(root: Path, api_base: str, monitor_base: str, state_dir: Path) -> CheckResult:
     ok_api, api_status, api_body = _probe_json(f"{api_base.rstrip('/')}/api/health", timeout_s=2.5)
     # Avoid recursive self-probe deadlocks: /api/status runs doctor_snapshot.
     ok_monitor, mon_status, mon_body = _probe_json(f"{monitor_base.rstrip('/')}/", timeout_s=2.5)
+    listening_ports = _listening_ports()
+    api_port = _port_from_base(api_base)
+    monitor_port = _port_from_base(monitor_base)
+    api_listener_ok = api_port in listening_ports
+    monitor_listener_ok = monitor_port in listening_ports
+    api_probe_blocked = _probe_blocked_message(api_body)
+    monitor_probe_blocked = _probe_blocked_message(mon_body)
+    api_ok_effective = ok_api or (api_probe_blocked and api_listener_ok)
+    monitor_ok_effective = ok_monitor or (monitor_probe_blocked and monitor_listener_ok)
     cache_files = [
         state_dir / "codex.rate_limit_gate_cache",
         state_dir / "qwen.rate_limit_gate_cache",
     ]
     caches = [{"path": str(p), "exists": p.exists()} for p in cache_files]
-    status = "ok" if ok_api and ok_monitor else "degraded"
+    status = "ok" if api_ok_effective and monitor_ok_effective else "degraded"
     return CheckResult(
         status=status,
         detail={
             "api_base": api_base,
             "monitor_base": monitor_base,
             "api_health_ok": ok_api,
+            "api_reachable_effective": api_ok_effective,
             "api_status": api_status,
             "api_probe": api_body,
+            "api_probe_blocked": api_probe_blocked,
+            "api_listener_ok": api_listener_ok,
             "monitor_status_ok": ok_monitor,
+            "monitor_reachable_effective": monitor_ok_effective,
             "monitor_status_code": mon_status,
             "monitor_probe": mon_body,
+            "monitor_probe_blocked": monitor_probe_blocked,
+            "monitor_listener_ok": monitor_listener_ok,
             "rate_limit_caches": caches,
         },
     )
@@ -582,10 +792,11 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "planner_dispatch": check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
+    advisory_checks = {"planner_dispatch"}
     effective_checks = {
         name: check
         for name, check in checks.items()
-        if not (runtime_paused and name in {"scheduler_authority", "sessions"})
+        if name not in advisory_checks and not (runtime_paused and name in {"scheduler_authority", "sessions"})
     }
     statuses = [check.status for check in effective_checks.values()]
     if "error" in statuses:

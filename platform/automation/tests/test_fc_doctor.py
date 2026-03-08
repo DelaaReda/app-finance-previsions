@@ -39,8 +39,17 @@ class FCDoctorTests(unittest.TestCase):
                 stdout="codex_planner_cron\ncodex_dev_cron\ncodex_admin_cron\n",
                 stderr="",
             )
-            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
-                result = fc_doctor.check_sessions(root)
+            with patch.dict(
+                fc_doctor.os.environ,
+                {
+                    "FC_EXPERIMENTAL_PLANNER_ONLY": "0",
+                    "FC_PLANNER_ORCHESTRATOR_ENABLED": "0",
+                    "FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY": "0",
+                },
+                clear=False,
+            ):
+                with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                    result = fc_doctor.check_sessions(root)
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.detail.get("missing_core"), [])
         found = result.detail.get("found_core", {})
@@ -109,6 +118,28 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("mismatch_count", queue_workboard)
         self.assertIn("oldest_mismatch_age_s", queue_workboard)
 
+    def test_build_payload_treats_planner_dispatch_as_advisory(self) -> None:
+        ok = fc_doctor.CheckResult(status="ok", detail={})
+        degraded = fc_doctor.CheckResult(status="degraded", detail={"status": "degraded"})
+        with patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}):
+            with patch.object(fc_doctor, "check_workspace_root", return_value=ok):
+                with patch.object(fc_doctor, "check_scheduler_authority", return_value=ok):
+                    with patch.object(fc_doctor, "check_sessions", return_value=ok):
+                        with patch.object(fc_doctor, "check_locks", return_value=ok):
+                            with patch.object(fc_doctor, "check_queue_workboard", return_value=ok):
+                                with patch.object(fc_doctor, "check_providers", return_value=ok):
+                                    with patch.object(fc_doctor, "check_product_value", return_value=ok):
+                                        with patch.object(fc_doctor, "check_delivery_integrity", return_value=ok):
+                                            with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
+                                                payload, code = fc_doctor.build_payload(
+                                                    root=ROOT,
+                                                    api_base="http://127.0.0.1:8050",
+                                                    monitor_base="http://127.0.0.1:7779",
+                                                )
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "degraded")
+
     def test_scheduler_authority_dual_detected(self) -> None:
         def _fake_run(cmd, **kwargs):
             if cmd[:2] == ["crontab", "-l"]:
@@ -146,6 +177,134 @@ class FCDoctorTests(unittest.TestCase):
             result = fc_doctor.check_scheduler_authority(Path("."))
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.detail.get("scheduler_policy"), "cron_only")
+
+    def test_scheduler_authority_permission_denied_uses_runtime_state_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            runtime_state_dir = root / "logs-codex-runs" / "orchestrator-state"
+            runtime_state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_state_dir / "runtime-state.json").write_text(
+                json.dumps(
+                    {
+                        "execution_mode": "planner_experimental",
+                        "updated_at": "2026-03-08T15:24:09Z",
+                        "source": "fc_setup_crons",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(returncode=1, stdout="", stderr="crontabs/venom/: fopen: Permission denied")
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                with patch.object(fc_doctor, "datetime") as mock_datetime:
+                    mock_datetime.now.return_value = __import__("datetime").datetime(2026, 3, 8, 15, 40, tzinfo=__import__("datetime").timezone.utc)
+                    mock_datetime.fromisoformat.side_effect = __import__("datetime").datetime.fromisoformat
+                    result = fc_doctor.check_scheduler_authority(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("scheduler_policy"), "probe_blocked_runtime_state_fallback")
+
+    def test_check_sessions_permission_denied_uses_recent_tick_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            tick_dir = root / "logs-codex-runs" / "fc-ticks"
+            tick_dir.mkdir(parents=True, exist_ok=True)
+            (tick_dir / "planner.tick.log").write_text(
+                "2026-03-08T15:20:00Z [END] rc=0\n",
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(returncode=1, stdout="", stderr="error connecting to /tmp/tmux-1000/default (Operation not permitted)")
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                with patch.object(fc_doctor, "datetime") as mock_datetime:
+                    mock_datetime.now.return_value = __import__("datetime").datetime(2026, 3, 8, 15, 40, tzinfo=__import__("datetime").timezone.utc)
+                    mock_datetime.fromisoformat.side_effect = __import__("datetime").datetime.fromisoformat
+                    result = fc_doctor.check_sessions(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("fallback_source"), "fc_ticks")
+        self.assertEqual(result.detail.get("missing_core"), [])
+
+    def test_check_providers_permission_denied_uses_listener_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir)
+
+            def _fake_probe(url: str, timeout_s: float):
+                return (False, 0, "<urlopen error [Errno 1] Operation not permitted>")
+
+            def _fake_run(cmd, **kwargs):
+                if cmd[:2] == ["ss", "-ltn"]:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout=(
+                            "State Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n"
+                            "LISTEN 0 0 127.0.0.1:8050 0.0.0.0:*\n"
+                            "LISTEN 0 0 0.0.0.0:7779 0.0.0.0:*\n"
+                        ),
+                        stderr="",
+                    )
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+            with patch.object(fc_doctor, "_probe_json", side_effect=_fake_probe):
+                with patch.object(fc_doctor.subprocess, "run", side_effect=_fake_run):
+                    result = fc_doctor.check_providers(
+                        root=Path("."),
+                        api_base="http://127.0.0.1:8050",
+                        monitor_base="http://127.0.0.1:7779",
+                        state_dir=state_dir,
+                    )
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.detail.get("api_listener_ok"))
+        self.assertTrue(result.detail.get("monitor_listener_ok"))
+
+    def test_check_sessions_permission_denied_uses_planner_dispatch_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            tick_dir = root / "logs-codex-runs" / "fc-ticks"
+            tick_dir.mkdir(parents=True, exist_ok=True)
+            (tick_dir / "planner.tick.log").write_text(
+                "2026-03-08T11:31:38Z [END] rc=0\n",
+                encoding="utf-8",
+            )
+            orch_dir = root / "docs" / "operations" / "orchestrator"
+            orch_dir.mkdir(parents=True, exist_ok=True)
+            (orch_dir / "planner-subagents-registry.json").write_text(
+                json.dumps(
+                    {
+                        "updated_at": "2026-03-08T15:31:44Z",
+                        "subagents": [
+                            {
+                                "status": "running",
+                                "last_update_at": "2026-03-08T15:31:44Z",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(returncode=1, stdout="", stderr="error connecting to /tmp/tmux-1000/default (Operation not permitted)")
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                with patch.object(fc_doctor, "datetime") as mock_datetime:
+                    mock_datetime.now.return_value = __import__("datetime").datetime(2026, 3, 8, 15, 40, tzinfo=__import__("datetime").timezone.utc)
+                    mock_datetime.fromisoformat.side_effect = __import__("datetime").datetime.fromisoformat
+                    result = fc_doctor.check_sessions(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("missing_core"), [])
+        self.assertIn("planner", result.detail.get("found_core", {}))
 
 
 if __name__ == "__main__":
