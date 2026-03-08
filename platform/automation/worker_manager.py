@@ -232,6 +232,35 @@ def _openclaw_cli_model(model: str) -> str:
     return f"codex-cli/{token}"
 
 
+def _worker_runtime_model(worker_type: str) -> str:
+    env_override = str(os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "")).strip()
+    if env_override:
+        return env_override
+    if str(worker_type or "").strip() == "qa_review_worker":
+        return "codex-full/gpt-5.4"
+    return "gpt-5.4"
+
+
+def _worker_prompt(worker_type: str, owner_task_id: str, task_kind: str, message: str) -> str:
+    base = (
+        f"WORKER_TYPE={worker_type}\n"
+        f"OWNER_TASK_ID={owner_task_id}\n"
+        f"TASK_KIND={task_kind}\n"
+        "Rules:\n"
+        "- You are a bounded worker under planner/dev/admin authority.\n"
+        "- You may inspect, test, and modify the real repo through this workspace when that is the shortest safe path.\n"
+        "- Do not update queue/workboard/orchestration truth directly.\n"
+        "- Return concise evidence and the actual result of the work performed.\n"
+    )
+    if str(worker_type or "").strip() == "qa_review_worker":
+        base += (
+            "- You are allowed to resolve the issues you discover if the fix is local, bounded, and directly verifiable.\n"
+            "- Prefer fixing and proving the issue over only reporting it.\n"
+            "- Preserve the existing frontend theme; do not refactor UI styling broadly.\n"
+        )
+    return base + "\nTask:\n" + str(message or "").strip()
+
+
 OPENCLAW_CAPABILITY_CONFIG_TEMPLATE = """model = "{model}"
 model_reasoning_effort = "{thinking}"
 
@@ -539,7 +568,7 @@ def run_worker(
         ok, backend_ref = _ensure_agent(
             worker_id,
             config.root,
-            os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "gpt-5.4"),
+            _worker_runtime_model(worker_type),
             workspace_key=f"worker-{role}-{worker_type}",
             thinking=thinking or "medium",
         )
@@ -560,7 +589,7 @@ def run_worker(
                     "--timeout",
                     str(max(30, timeout_seconds)),
                     "--message",
-                    message,
+                    _worker_prompt(worker_type, owner_task_id, task_kind, message),
                 ],
                 text=True,
                 capture_output=True,

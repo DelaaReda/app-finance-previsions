@@ -24,6 +24,8 @@ SPEC.loader.exec_module(MODULE)
 WorkerRecord = MODULE.WorkerRecord
 _load_config = MODULE._load_config
 _openclaw_capability_workspace = MODULE._openclaw_capability_workspace
+_worker_prompt = MODULE._worker_prompt
+_worker_runtime_model = MODULE._worker_runtime_model
 plan_worker = MODULE.plan_worker
 run_worker = MODULE.run_worker
 collect_worker = MODULE.collect_worker
@@ -76,6 +78,11 @@ class WorkerManagerTests(unittest.TestCase):
         result = plan_worker(self.config, "planner", "repo_scan_worker", "BATCH-11-PLAN", "repo_scan")
         self.assertTrue(result["allowed"])
         self.assertEqual(result["result_kind"], "investigation_result")
+
+    def test_plan_allows_planner_qa_review(self) -> None:
+        result = plan_worker(self.config, "planner", "qa_review_worker", "BATCH-28-DEV-01", "qa_review")
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["result_kind"], "qa_fix_result")
 
     def test_plan_refuses_scrum_master(self) -> None:
         result = plan_worker(self.config, "scrum_master", "repo_scan_worker", "BATCH-11-SM", "repo_scan")
@@ -166,6 +173,12 @@ class WorkerManagerTests(unittest.TestCase):
         for relative in ("apps", "platform", "scripts", "docs", "data", "tests", "memory"):
             self.assertTrue((workspace / relative).is_symlink(), relative)
         self.assertIn("thin shell around the real project tree", (workspace / "WORKSPACE_MAP.md").read_text(encoding="utf-8"))
+
+    def test_qa_worker_uses_full_model_and_fix_prompt(self) -> None:
+        self.assertEqual(_worker_runtime_model("qa_review_worker"), "codex-full/gpt-5.4")
+        prompt = _worker_prompt("qa_review_worker", "BATCH-28-DEV-01", "qa_review", "Check and fix API contract drift.")
+        self.assertIn("allowed to resolve the issues you discover", prompt)
+        self.assertIn("Preserve the existing frontend theme", prompt)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,11 @@ WORKER_SPECS = {
         "result_kind": "test_result",
         "thinking": "medium",
     },
+    "qa_review_worker": {
+        "task_kinds": {"qa_review", "targeted_test", "browser_validation", "delivery_review"},
+        "result_kind": "qa_fix_result",
+        "thinking": "high",
+    },
     "runtime_diag_worker": {
         "task_kinds": {"heavy", "parallelizable", "runtime_diag", "investigation"},
         "result_kind": "investigation_result",
@@ -36,6 +41,7 @@ RESULT_KINDS = {
     "investigation_result",
     "test_result",
     "patch_proposal",
+    "qa_fix_result",
     "runtime_diag_result",
 }
 
