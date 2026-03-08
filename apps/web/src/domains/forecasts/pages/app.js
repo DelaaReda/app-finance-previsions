@@ -1135,6 +1135,108 @@ const FALLBACK_V11_DATA = {
   }
 };
 
+const DEFAULT_PROFILE_LABEL = 'Trader';
+const DEFAULT_PROFILE_JUDGE_PLACEHOLDER = 'Entrez votre portefeuille (ex: AAPL,MSFT,NVDA)';
+const DEFAULT_PROFILE_JUDGE_EXAMPLE = 'NVDA,META,AAPL,MSFT';
+const DEFAULT_PROFILE_AI_SUGGESTIONS = FALLBACK_V11_DATA.aiSuggestions.map((suggestion) => ({ ...suggestion }));
+const DEFAULT_PROFILE_QUICK_ACTIONS = [
+  {
+    priority: 'high',
+    badge: 'High Priority',
+    title: 'NVDA Breakout Signal Detected',
+    detailType: 'confidence',
+    detailLabel: 'Confidence',
+    detailValue: '92%',
+    primaryLabel: 'View Details',
+    primaryToast: 'Opening NVDA details...',
+    secondaryLabel: 'Add to Watchlist',
+    secondaryToast: 'Added to watchlist'
+  },
+  {
+    priority: 'medium',
+    badge: 'Medium Priority',
+    title: 'Rebalance Tech Exposure',
+    detailType: 'suggestion',
+    detailLabel: 'Suggestion',
+    detailValue: 'Diversify to Healthcare',
+    primaryLabel: 'See Plan',
+    primaryToast: 'Viewing rebalance plan...',
+    secondaryLabel: 'Execute',
+    secondaryToast: 'Executing rebalance...'
+  },
+  {
+    priority: 'low',
+    badge: 'Low Priority',
+    title: 'Weekly Report Ready',
+    detailType: 'suggestion',
+    detailLabel: 'Suggestion',
+    detailValue: 'Your performance summary is available',
+    primaryLabel: 'View Report',
+    primaryToast: 'Opening report...',
+    secondaryLabel: 'Schedule Email',
+    secondaryToast: 'Email scheduled'
+  }
+];
+const PROFILE_PRESETS = {
+  reda_personal_investing: {
+    label: 'Reda (Investissement perso)',
+    userProfileType: 'Investisseur particulier',
+    complexityLevel: 'guided',
+    refreshInterval: 300,
+    judgePlaceholder: 'Ex: SPY,QQQ,DIA,IWM,AAPL,MSFT,JNJ,WMT,GLD',
+    judgeExample: 'SPY,QQQ,DIA,IWM,AAPL,MSFT,JNJ,WMT,GLD',
+    aiSuggestions: [
+      { type: 'check', title: 'Verifier si le portefeuille est trop concentre en tech', priority: 'high', widget: 'Portfolio Health', tab: 'Portfolio', timestamp: 'Maintenant' },
+      { type: 'view', title: 'Revoir le calendrier macro avant tout arbitrage', priority: 'medium', widget: 'Market Calendar', tab: 'Market Intel', timestamp: 'Cette semaine' },
+      { type: 'action', title: 'Demander un avis simple sur le coeur de portefeuille', priority: 'high', widget: 'AI Multi-Model Judge', tab: 'AI Insights', timestamp: 'Pret' }
+    ],
+    quickActions: [
+      {
+        priority: 'high',
+        badge: 'Priorite haute',
+        title: 'Verifier la diversification du portefeuille coeur',
+        detailType: 'suggestion',
+        detailLabel: 'Suggestion',
+        detailValue: 'Comparer SPY, QQQ, DIA et IWM avant tout arbitrage',
+        primaryLabel: 'Voir le plan',
+        primaryToast: 'Ouverture du plan de diversification',
+        secondaryLabel: 'Ouvrir le Judge',
+        secondaryToast: 'Preparation du Judge portefeuille'
+      },
+      {
+        priority: 'medium',
+        badge: 'Priorite moyenne',
+        title: 'Planifier un rebalance mensuel simple',
+        detailType: 'suggestion',
+        detailLabel: 'Suggestion',
+        detailValue: 'Revenir vers un profil equilibre sans effet de levier',
+        primaryLabel: 'Voir la vue risque',
+        primaryToast: 'Ouverture de la vue risque',
+        secondaryLabel: 'Creer un rappel',
+        secondaryToast: 'Rappel mensuel cree'
+      },
+      {
+        priority: 'low',
+        badge: 'Priorite basse',
+        title: 'Suivre les actifs defensifs et dividendes',
+        detailType: 'suggestion',
+        detailLabel: 'Suggestion',
+        detailValue: 'Surveiller JNJ, WMT et GLD pour stabiliser le portefeuille',
+        primaryLabel: 'Voir le calendrier',
+        primaryToast: 'Ouverture du calendrier portefeuille',
+        secondaryLabel: 'Sauver en liste',
+        secondaryToast: 'Liste defensive mise a jour'
+      }
+    ]
+  }
+};
+const PROFILE_JUDGE_EXAMPLES = [
+  DEFAULT_PROFILE_JUDGE_EXAMPLE,
+  ...Object.values(PROFILE_PRESETS)
+    .map((preset) => preset.judgeExample)
+    .filter((example) => typeof example === 'string' && example.trim())
+];
+
 const FALLBACK_TRADE_IDEAS = [
   { symbol: 'NVDA', signalType: 'Breakout', entry: 875, target: 980, confidence: 92 },
   { symbol: 'META', signalType: 'Reversal', entry: 520, target: 565, confidence: 85 }
@@ -2419,15 +2521,105 @@ const appState = {
 // ============ V11 ENHANCED FUNCTIONS ============
 
 // Profile Management
+function cloneProfileItems(items) {
+  return Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+}
+
+function resolveProfilePreset(profile) {
+  const preset = PROFILE_PRESETS[profile];
+  return {
+    label: preset?.label || DEFAULT_PROFILE_LABEL,
+    userProfileType: preset?.userProfileType || DEFAULT_PROFILE_LABEL,
+    complexityLevel: preset?.complexityLevel || FALLBACK_V11_DATA.userProfile.preferences.complexityLevel,
+    refreshInterval: preset?.refreshInterval || FALLBACK_V11_DATA.userProfile.preferences.refreshInterval,
+    judgePlaceholder: preset?.judgePlaceholder || DEFAULT_PROFILE_JUDGE_PLACEHOLDER,
+    judgeExample: preset?.judgeExample || DEFAULT_PROFILE_JUDGE_EXAMPLE,
+    aiSuggestions: cloneProfileItems(preset?.aiSuggestions || DEFAULT_PROFILE_AI_SUGGESTIONS),
+    quickActions: cloneProfileItems(preset?.quickActions || DEFAULT_PROFILE_QUICK_ACTIONS)
+  };
+}
+
+function renderProfileQuickActions(profile) {
+  const container = document.getElementById('quick-actions-widget-container');
+  if (!container) return;
+
+  const { quickActions } = resolveProfilePreset(profile);
+  container.innerHTML = `
+    <section class="quick-actions-grid" aria-label="Quick actions">
+      ${quickActions.map((action) => {
+        const detailMarkup = action.detailType === 'confidence'
+          ? `<div class="action-confidence">${action.detailLabel}: <span class="confidence-value">${action.detailValue}</span></div>`
+          : `<div class="action-suggestion">${action.detailLabel}: ${action.detailValue}</div>`;
+        return `
+          <div class="action-card ${action.priority}-priority">
+            <div class="action-header">
+              <span class="priority-badge ${action.priority}">${action.badge}</span>
+            </div>
+            <h3 class="action-title">${action.title}</h3>
+            ${detailMarkup}
+            <div class="action-buttons">
+              <button class="action-btn primary" onclick="showToast('${action.primaryToast}')">${action.primaryLabel}</button>
+              <button class="action-btn secondary" onclick="showToast('${action.secondaryToast}')">${action.secondaryLabel}</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </section>
+  `;
+}
+
+function syncJudgeInputForProfile(profile) {
+  const input = document.getElementById('judgeQuestion');
+  if (!input) return;
+
+  const preset = resolveProfilePreset(profile);
+  const currentValue = toString(input.value, '').trim();
+  if (!currentValue || PROFILE_JUDGE_EXAMPLES.includes(currentValue)) {
+    input.value = preset.judgeExample;
+  }
+  input.placeholder = preset.judgePlaceholder;
+}
+
+function syncForecastProfileUI() {
+  const profile = v11State.currentProfile;
+  const preset = resolveProfilePreset(profile);
+  const currentUserProfile = isObject(v11Data.userProfile) ? v11Data.userProfile : {};
+  const currentPreferences = isObject(currentUserProfile.preferences) ? currentUserProfile.preferences : {};
+
+  v11Data = {
+    ...v11Data,
+    userProfile: {
+      ...currentUserProfile,
+      type: preset.userProfileType,
+      preferences: {
+        ...currentPreferences,
+        complexityLevel: preset.complexityLevel,
+        refreshInterval: preset.refreshInterval
+      }
+    },
+    aiSuggestions: cloneProfileItems(preset.aiSuggestions)
+  };
+
+  const selector = document.getElementById('profileSelector');
+  if (selector) {
+    selector.value = profile;
+  }
+
+  initAISuggestions();
+  renderProfileQuickActions(profile);
+  syncJudgeInputForProfile(profile);
+}
+
 function changeProfile(profile) {
   v11State.currentProfile = profile;
-  showToast(`Profile changed to ${profile}`);
+  const preset = resolveProfilePreset(profile);
+  showToast(`Profile changed to ${preset.label}`);
   // Reorganize widgets based on profile
   reorganizeWidgetsByProfile(profile);
 }
 
 function reorganizeWidgetsByProfile(profile) {
-  // Simulate profile-based reorganization
+  syncForecastProfileUI();
   console.log(`Reorganizing for ${profile} profile`);
 }
 
@@ -4947,6 +5139,7 @@ window.closeCommandK = closeCommandK;
 window.executeCommandKAction = executeCommandKAction;
 window.safeSwitchTab = safeSwitchTab;
 window.changeProfile = changeProfile;
+window.syncForecastProfileUI = syncForecastProfileUI;
 window.closeSuggestions = closeSuggestions;
 window.navigateToSuggestion = navigateToSuggestion;
 window.toggleStoryMode = toggleStoryMode;

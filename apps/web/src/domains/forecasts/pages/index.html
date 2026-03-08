@@ -1123,6 +1123,9 @@
 
         if (successCount === components.length) {
           console.log('🎉 All modals loaded! Modular architecture working perfectly!');
+          if (typeof window.syncForecastProfileUI === 'function') {
+            window.syncForecastProfileUI();
+          }
 
           // Initialize charts after components are loaded
           setTimeout(() => {
