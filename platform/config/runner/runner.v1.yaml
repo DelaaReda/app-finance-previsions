@@ -15,7 +15,7 @@
   "roles": {
     "planner": {
       "model": "gpt-5.4",
-      "thinking": "high",
+      "thinking": "xhigh",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 300,

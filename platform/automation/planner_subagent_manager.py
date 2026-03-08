@@ -23,8 +23,8 @@ SUCCESS_RESULT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged
 ALLOWED_PARENT_ROLES = {"planner"}
 DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
 ROLE_MODELS = {
-    "dev": ("gpt-5.4", "high", "workspace-write"),
-    "admin": ("gpt-5.4", "medium", "workspace-write"),
+    "dev": ("codex-full/gpt-5.4", "high", "off"),
+    "admin": ("codex-full/gpt-5.4", "xhigh", "off"),
     "scrum_master": ("gpt-5.3-codex-spark", "low", "read-only"),
 }
 ROLE_TASK_KINDS = {
@@ -568,9 +568,8 @@ def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> t
 
 def _effective_task_sandbox(target_role: str, task_kind: str, sandbox: str) -> str:
     role = canonical_role(target_role)
-    kind = str(task_kind or "").strip().lower()
     current = str(sandbox or "").strip().lower() or "workspace-write"
-    if role == "admin" and kind == "runtime":
+    if role in {"dev", "admin"}:
         return "off"
     return current
 

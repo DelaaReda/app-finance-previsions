@@ -47,7 +47,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
                     "version": "v1",
                     "defaults": {"prompt_timeout_seconds": 210, "retry_prompt_timeout_seconds": 90, "tick_timeout_seconds": 540},
                     "roles": {
-                        "planner": {"model": "gpt-5.4", "thinking": "high"},
+                        "planner": {"model": "gpt-5.4", "thinking": "xhigh"},
                         "dev": {"model": "gpt-5.4", "thinking": "high"},
                         "admin": {"model": "gpt-5.4", "thinking": "medium"},
                         "scrum_master": {"model": "gpt-5.3-codex-spark", "thinking": "low"},
@@ -260,7 +260,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertEqual(payload["artifact"], "logs/openclaw/dev.result.json")
         self.assertEqual(payload["tests_run"], "pytest tests/test_app.py -q")
 
-    def test_run_openclaw_dev_uses_capability_workspace_and_writable_backend(self) -> None:
+    def test_run_openclaw_dev_uses_capability_workspace_and_full_backend(self) -> None:
         captured: dict[str, object] = {}
 
         def _fake_ensure(agent_id, root, model, workspace_key="shared", thinking="medium", workspace_path=None):
@@ -300,7 +300,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertTrue(payload["ok"])
-        self.assertEqual(captured["model"], "codex-cli-write/gpt-5.4")
+        self.assertEqual(captured["model"], "codex-full/gpt-5.4")
         self.assertIsNone(captured["workspace_path"])
         self.assertEqual(captured["workspace_key"], "planner-dev")
 

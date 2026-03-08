@@ -165,6 +165,18 @@ CANONICAL_MAIN_MEMORY_EXTRA_PATHS = [
     "/home/venom/analyse-financiere/docs/operations/orchestrator",
     "/home/venom/.openclaw/workspace/memory",
 ]
+CANONICAL_PLANNER_MEMORY_EXTRA_PATHS = [
+    "/home/venom/analyse-financiere/SOUL.md",
+    "/home/venom/analyse-financiere/USER.md",
+    "/home/venom/analyse-financiere/MEMORY.md",
+    "/home/venom/analyse-financiere/memory",
+    "/home/venom/analyse-financiere/docs",
+    "/home/venom/analyse-financiere/docs/ops",
+    "/home/venom/analyse-financiere/docs/product",
+    "/home/venom/analyse-financiere/platform",
+    "/home/venom/analyse-financiere/scripts",
+    "/home/venom/analyse-financiere/tests",
+]
 OPENCLAW_MINIMAL_CODEX_CONFIG = """model = "{model}"
 model_reasoning_effort = "{thinking}"
 
@@ -173,6 +185,30 @@ multi_agent = true
 apps = true
 js_repl = true
 prevent_idle_sleep = true
+"""
+CONTROL_PLANE_AGENTS_TEMPLATE = """# AGENTS.md
+
+You are a control-plane agent for the analyse-financiere project.
+
+Rules:
+1. Read only the minimum current canon needed for the task.
+2. Treat planner as the source of orchestration truth.
+3. Prefer native Codex multi-agent helpers when bounded delegation wins.
+4. Return concise proof, not narrative.
+"""
+PLANNER_CONTROL_DIRECTIVE = """# PLANNER_DIRECTIVE.md
+
+You are the autonomous team lead of the project.
+
+Your job is to:
+- organize delivery
+- create or reshape batches from the product vision
+- dispatch dev/admin/scrum capabilities
+- merge their results
+- repair orchestration/config/spec/runtime bugs when they block delivery
+- preserve the frontend theme while adapting backend/orchestration freely
+
+Do not wait for another lane to act. If delivery is blocked and the shortest path is to patch orchestration, config, backend, specs, or tests, do it directly.
 """
 CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
     "main": {
@@ -194,9 +230,21 @@ CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
     },
     "planner": {
         "name": "Planner",
-        "model": CANONICAL_PRIMARY_MODEL,
-        "thinking": "high",
+        "model": CANONICAL_FULL_MODEL,
+        "thinking": "xhigh",
         "identity": {"name": "Planner", "theme": "planning"},
+        "tools": {
+            "exec": {"host": "gateway", "security": "full", "ask": "off"},
+        },
+        "sandbox": {
+            "mode": "off",
+            "browser": {"autoStart": True, "autoStartTimeoutMs": 30000},
+        },
+        "memorySearch": {
+            "enabled": True,
+            "sources": ["memory", "sessions"],
+            "extraPaths": CANONICAL_PLANNER_MEMORY_EXTRA_PATHS,
+        },
     },
     "adminapp-codex": {
         "name": "AdminApp Codex",
@@ -273,6 +321,9 @@ def _control_workspace(repo_root: str, agent_id: str, model: str, thinking: str)
         config_path,
         OPENCLAW_MINIMAL_CODEX_CONFIG.format(model=model, thinking=thinking),
     )
+    _write_text_if_changed(base / "AGENTS.md", CONTROL_PLANE_AGENTS_TEMPLATE)
+    if agent_id == "planner":
+        _write_text_if_changed(base / "PLANNER_DIRECTIVE.md", PLANNER_CONTROL_DIRECTIVE)
     sync_canonical_skills(base, repo_root)
     return str(base)
 

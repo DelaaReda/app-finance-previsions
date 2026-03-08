@@ -40,9 +40,10 @@
     - `sudo` write/read/delete works from `main` on the current gateway/runtime
   - do not add `thinkingDefault` under `agents.list[].main`; OpenClaw rejects that schema and the gateway will fail to load
 - Planner/control-plane policy:
-  - `planner`, `adminapp-codex`, and `clawsentinel` remain on the narrower `codex-cli/gpt-5.4`
+  - `planner` now runs as the full-rights team lead on `codex-full/gpt-5.4` with `thinking=xhigh`
+  - `adminapp-codex` and `clawsentinel` remain on the narrower `codex-cli/gpt-5.4`
   - keep their dedicated capability/control-plane workspaces under `logs-codex-runs/openclaw-control-plane/`
-  - do not widen planner bridge permissions just because `main` is a VM-level director
+  - `planner` may repair orchestration/config/spec/runtime/backend blockers directly when that is the shortest path to restore delivery
 - Canonical capability workspaces:
   - `logs-codex-runs/openclaw-capabilities/planner_dev/`
   - `logs-codex-runs/openclaw-capabilities/planner_admin/`

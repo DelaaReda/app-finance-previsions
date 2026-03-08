@@ -20,6 +20,7 @@ The target is not:
 The target is:
 - one scheduled orchestrator: `planner`
 - explicit business responsibility domains preserved under planner authority
+- a full-rights planner team lead that may repair orchestration/runtime/backend blockers directly
 - OpenClaw used for runtime/session/transport
 - Codex multi-agent used for specialized bounded execution
 - application code kept as source of truth for runtime state, delivery truth, and product priorities
