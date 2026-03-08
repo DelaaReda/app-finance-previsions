@@ -85,6 +85,11 @@ def _runtime_rate_limit_snapshot() -> dict[str, Any]:
     }
 
 
+def _utc_now_iso(now: datetime | None = None) -> str:
+    current = now or datetime.now(timezone.utc)
+    return current.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 INGESTION_SOURCE_OBSERVABILITY = (
     ("forecasts", "forecasts", "forecasts"),
     ("news", "news_feed", "news_feed"),
@@ -134,17 +139,17 @@ def _ingestion_source_status(
         "path": f"data/{file_key}.json",
     }
 
-def create_health_router(
-    *,
-    ok_response: OkFn,
-    freshness_payload: FreshnessFn,
-    frontend_runtime_config: FrontendConfigFn,
-    data_freshness_ttl: dict[str, int],
-) -> APIRouter:
-    router = APIRouter()
 
-    @router.get("/api/health")
-    async def health_check():
+def _build_status_payload(route_source: str) -> dict[str, Any]:
+    now_iso = _utc_now_iso()
+    data_paths = {
+        "forecasts": "data/forecasts.json",
+        "news": "data/news_feed.json",
+        "brief_weekly": "data/brief_weekly.json",
+        "backtests": "data/backtests.json",
+    }
+
+    try:
         last_updates: dict[str, Any] = {}
 
         forecasts_data = _load_json_compat("forecasts.json")
@@ -164,33 +169,80 @@ def create_health_router(
             last_updates["backtests"] = backtests_data.get("last_update")
 
         runtime_governance = _runtime_rate_limit_snapshot()
+        warnings = list(runtime_governance.get("warnings") or [])
+        status = "ok"
 
-        health_payload = {
-            "status": "ok",
+        return {
+            "status": status,
             "backend_up": True,
-            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "source": ["api_health"],
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": [route_source],
+            "timestamp": now_iso,
             "version": "0.1.0",
             "last_updates": last_updates,
-            "data_paths": {
-                "forecasts": "data/forecasts.json",
-                "news": "data/news_feed.json",
-                "brief_weekly": "data/brief_weekly.json",
-                "backtests": "data/backtests.json",
-            },
+            "data_paths": data_paths,
+            "filters_applied": {},
+            "warnings": warnings,
             "stats": {
                 "checked_sources": len(last_updates),
                 "runtime_governance_active_cooldowns": runtime_governance.get("active_count", 0),
+                "warnings_count": len(warnings),
             },
             "runtime_governance": runtime_governance,
+            "service_status": status,
+            "runtime_governance_active": runtime_governance.get("active_count", 0) > 0,
+        }
+    except Exception as exc:
+        warnings = ["status_payload_failed"]
+        return {
+            "status": "degraded",
+            "backend_up": True,
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": [route_source, "critical_error_fallback"],
+            "timestamp": now_iso,
+            "version": "0.1.0",
+            "last_updates": {},
+            "data_paths": data_paths,
+            "filters_applied": {},
+            "warnings": warnings,
+            "stats": {
+                "checked_sources": 0,
+                "runtime_governance_active_cooldowns": 0,
+                "warnings_count": len(warnings),
+            },
+            "runtime_governance": {
+                "state_dir": str(_role_state_dir()),
+                "active_count": 0,
+                "cooldowns": [],
+                "active_cooldowns": [],
+                "warnings": warnings,
+            },
+            "service_status": "degraded",
+            "runtime_governance_active": False,
+            "error": str(exc),
+            "message": "status endpoint fallback (never-empty contract).",
         }
 
-        return ok_response({
-            **health_payload,
-            "service_status": health_payload["status"],
-            "runtime_governance_active": runtime_governance.get("active_count", 0) > 0,
-        })
+def create_health_router(
+    *,
+    ok_response: OkFn,
+    freshness_payload: FreshnessFn,
+    frontend_runtime_config: FrontendConfigFn,
+    data_freshness_ttl: dict[str, int],
+) -> APIRouter:
+    router = APIRouter()
+
+    @router.get("/api/health")
+    async def health_check():
+        return ok_response(_build_status_payload("api_health"))
+
+    @router.get("/api/status")
+    async def status_check():
+        return ok_response(_build_status_payload("api_status"))
 
     @router.get("/api/freshness")
     async def data_freshness():
