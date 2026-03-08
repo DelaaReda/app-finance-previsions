@@ -13,9 +13,27 @@ fi
 
 BACKEND_DIR="$ROOT/apps/api/src"
 LIVE_CHECK=1
+PYTEST_TARGETS=()
 
-if [[ "${1:-}" == "--no-live" ]]; then
-  LIVE_CHECK=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-live)
+      LIVE_CHECK=0
+      ;;
+    --)
+      shift
+      PYTEST_TARGETS+=("$@")
+      break
+      ;;
+    *)
+      PYTEST_TARGETS+=("$1")
+      ;;
+  esac
+  shift
+done
+
+if [[ ${#PYTEST_TARGETS[@]} -eq 0 ]]; then
+  PYTEST_TARGETS=("domains/")
 fi
 
 check_endpoint() {
@@ -54,6 +72,7 @@ fi
 echo "== BACKEND REGRESSION GATE =="
 echo "backend_dir=$BACKEND_DIR"
 echo "pytest_bin=$PYTEST_BIN"
+echo "pytest_targets=${PYTEST_TARGETS[*]}"
 
 pushd "$BACKEND_DIR" >/dev/null
 
@@ -62,7 +81,7 @@ if [[ -n "${PYTHONPATH:-}" ]]; then
   PYTHONPATH_PREFIX="$PYTHONPATH_PREFIX:$PYTHONPATH"
 fi
 
-PYTHONPATH="$PYTHONPATH_PREFIX" "$PYTEST_BIN" -q domains/
+PYTHONPATH="$PYTHONPATH_PREFIX" "$PYTEST_BIN" -q "${PYTEST_TARGETS[@]}"
 
 if [[ "$LIVE_CHECK" -eq 1 ]]; then
   if command -v curl >/dev/null 2>&1; then
