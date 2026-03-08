@@ -1236,6 +1236,45 @@ const PROFILE_JUDGE_EXAMPLES = [
     .map((preset) => preset.judgeExample)
     .filter((example) => typeof example === 'string' && example.trim())
 ];
+const FORECAST_PROFILE_STORAGE_KEY = 'finance.forecasts.currentProfile';
+const FORECAST_PROFILE_FALLBACK = 'trader';
+const FORECAST_PROFILE_VALUES = new Set([
+  'auto',
+  'executive',
+  'trader',
+  'analyst',
+  ...Object.keys(PROFILE_PRESETS)
+]);
+
+function normalizeForecastProfile(profile) {
+  const value = typeof profile === 'string' ? profile.trim() : '';
+  return FORECAST_PROFILE_VALUES.has(value) ? value : FORECAST_PROFILE_FALLBACK;
+}
+
+function loadStoredForecastProfile() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return FORECAST_PROFILE_FALLBACK;
+  }
+  try {
+    return normalizeForecastProfile(window.localStorage.getItem(FORECAST_PROFILE_STORAGE_KEY));
+  } catch (error) {
+    console.warn('Unable to read stored forecasts profile:', error?.message || error);
+    return FORECAST_PROFILE_FALLBACK;
+  }
+}
+
+function storeForecastProfile(profile) {
+  const normalizedProfile = normalizeForecastProfile(profile);
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return normalizedProfile;
+  }
+  try {
+    window.localStorage.setItem(FORECAST_PROFILE_STORAGE_KEY, normalizedProfile);
+  } catch (error) {
+    console.warn('Unable to persist forecasts profile:', error?.message || error);
+  }
+  return normalizedProfile;
+}
 
 const FALLBACK_TRADE_IDEAS = [
   { symbol: 'NVDA', signalType: 'Breakout', entry: 875, target: 980, confidence: 92 },
@@ -2509,7 +2548,7 @@ const v11State = {
   currentStoryPoint: 0,
   splitViewEnabled: false,
   filterBarVisible: false,
-  currentProfile: 'trader'
+  currentProfile: loadStoredForecastProfile()
 };
 
 // ============ STATE MANAGEMENT ============
@@ -2584,7 +2623,10 @@ function syncJudgeInputForProfile(profile) {
 }
 
 function syncForecastProfileUI() {
-  const profile = v11State.currentProfile;
+  const profile = normalizeForecastProfile(v11State.currentProfile);
+  if (profile !== v11State.currentProfile) {
+    v11State.currentProfile = profile;
+  }
   const preset = resolveProfilePreset(profile);
   const currentUserProfile = isObject(v11Data.userProfile) ? v11Data.userProfile : {};
   const currentPreferences = isObject(currentUserProfile.preferences) ? currentUserProfile.preferences : {};
@@ -2614,11 +2656,12 @@ function syncForecastProfileUI() {
 }
 
 function changeProfile(profile) {
-  v11State.currentProfile = profile;
-  const preset = resolveProfilePreset(profile);
+  const nextProfile = storeForecastProfile(profile);
+  v11State.currentProfile = nextProfile;
+  const preset = resolveProfilePreset(nextProfile);
   showToast(`Profile changed to ${preset.label}`);
   // Reorganize widgets based on profile
-  reorganizeWidgetsByProfile(profile);
+  reorganizeWidgetsByProfile(nextProfile);
 }
 
 function reorganizeWidgetsByProfile(profile) {
