@@ -91,6 +91,77 @@ def test_judge_route_delegates_to_service(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_route_preserves_canonical_status_metadata(monkeypatch):
+    now_iso = "2026-03-08T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "horizon": "1w",
+                        "expected_return": 0.01,
+                        "risk_level": "medium",
+                        "confidence": 0.61,
+                        "summary": ["Synthetic verdict"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 0,
+                    "avg_confidence": 0.61,
+                    "generated_at": now_iso,
+                },
+                "filters_applied": {
+                    "min_confidence": 0.3,
+                    "tickers": ["AAPL"],
+                    "sort_by": "confidence",
+                    "sort_order": "desc",
+                    "limit": 1,
+                },
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "status": "degraded",
+                "warnings": ["partial_data_provider_timeout"],
+                "error": "provider timeout",
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+            "status": "degraded",
+            "error": "provider timeout",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge?limit=1&ticker=AAPL")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["status"] == "degraded"
+    assert payload["error"] == "provider timeout"
+    assert payload["data"]["status"] == "degraded"
+    assert payload["data"]["freshness"] == now_iso
+    assert payload["data"]["warnings"] == ["partial_data_provider_timeout"]
+
+
 def test_judge_quality_route_delegates_to_service(monkeypatch):
     async def fake_quality(**kwargs):
         return {

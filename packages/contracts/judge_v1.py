@@ -316,6 +316,9 @@ class JudgeData(BaseModel):
     filters_applied: JudgeFiltersApplied
     generated_at: datetime
     source: Optional[List[str]] = None
+    freshness: Optional[str] = None
+    status: Optional[Literal["ok", "degraded", "error"]] = None
+    warnings: Optional[List[str]] = None
     runtime: Optional[Dict[str, Any]] = None
     cache: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -328,3 +331,5 @@ class JudgeResponse(BaseModel):
     ok: bool
     data: JudgeData
     freshness: str
+    status: Optional[Literal["ok", "degraded", "error"]] = None
+    error: Optional[str] = None
