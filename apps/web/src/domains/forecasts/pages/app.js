@@ -1324,6 +1324,15 @@ function toArray(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
 }
 
+function escapeHtml(value) {
+  return toString(value, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function toNumberArray(value, fallback = []) {
   if (!Array.isArray(value)) return fallback;
   const normalized = value
@@ -2704,36 +2713,136 @@ function toggleAICopilot() {
   }
 }
 
+function appendCopilotChatMessage(containerId, content, type, options = {}) {
+  const panel = document.getElementById(containerId);
+  if (!panel) return null;
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'ai-message';
+
+  const bodyHtml = options.html === true
+    ? toString(content, '<p>Analysis unavailable for the moment.</p>')
+    : `<p>${escapeHtml(toString(content, '')).replace(/\n/g, '<br/>')}</p>`;
+
+  if (type === 'user') {
+    messageDiv.innerHTML = `
+      <div class="ai-avatar" style="background: var(--color-royal-blue);">👤</div>
+      <div class="ai-message-content">
+        ${bodyHtml}
+      </div>
+    `;
+  } else {
+    messageDiv.innerHTML = `
+      <div class="ai-avatar">🤖</div>
+      <div class="ai-message-content">
+        ${bodyHtml}
+      </div>
+    `;
+  }
+
+  panel.appendChild(messageDiv);
+  panel.scrollTop = panel.scrollHeight;
+  return messageDiv;
+}
+
+function buildCopilotChatResponseHtml(payload) {
+  const verdict = escapeHtml(toString(payload.consensus, 'HOLD'));
+  const confidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(payload.confidence, 0))));
+  const riskLevel = escapeHtml(toString(payload.risk && payload.risk.level, 'medium'));
+  const model = escapeHtml(toString(payload.model, 'Copilot'));
+  const quality = escapeHtml(toString(payload.qualityStatus, 'insufficient_sources').replace(/_/g, ' '));
+  const reasoning = toArray(payload.why, [])
+    .map((line) => toString(line, '').trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 3);
+  const reasoningHtml = reasoning.length
+    ? reasoning.map((line, index) => `<p${index ? ' style="margin-top: 8px;"' : ''}>${escapeHtml(line)}</p>`).join('')
+    : `<p>${escapeHtml(toString(payload.answer, 'Analysis unavailable for the moment.'))}</p>`;
+  const riskHtml = payload.risk && payload.risk.caveat
+    ? `<p style="margin-top: 8px;"><strong>Risk:</strong> ${escapeHtml(payload.risk.caveat)}</p>`
+    : '';
+  const sourceLabels = payload.dataSources
+    .slice(0, 3)
+    .map((source) => escapeHtml(toString(source.label, 'Source')))
+    .join(', ');
+  const updated = payload.generatedAt ? escapeHtml(formatRelativeTime(payload.generatedAt)) : 'just now';
+
+  return `
+    <p><strong>${verdict}</strong> position • Confidence ${confidence}% • Risk ${riskLevel}</p>
+    ${reasoningHtml}
+    ${riskHtml}
+    <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">Model: ${model} • Sources: ${sourceLabels || 'Unavailable'} • Quality: ${quality} • Updated ${updated}</p>
+  `;
+}
+
+async function submitCopilotChat(inputId, containerId) {
+  const input = document.getElementById(inputId);
+  if (!input || !input.value.trim()) return;
+
+  const sendButton = input.parentElement && typeof input.parentElement.querySelector === 'function'
+    ? input.parentElement.querySelector('.ai-send-btn')
+    : null;
+  const question = input.value.trim();
+  input.value = '';
+
+  appendCopilotChatMessage(containerId, question, 'user');
+  const pendingMessage = appendCopilotChatMessage(
+    containerId,
+    '<p>Building a live investment memo from the latest backend context...</p>',
+    'ai',
+    { html: true }
+  );
+
+  input.disabled = true;
+  if (sendButton) sendButton.disabled = true;
+
+  try {
+    const rawResponse = await (typeof window.FinanceAPI?.askCopilot === 'function'
+      ? window.FinanceAPI.askCopilot(question, [])
+      : Promise.resolve({
+        data: {
+          answer: 'Copilot API service unavailable.',
+          sources: [],
+          confidence: 0.2,
+          verdict: 'hold',
+          quality_status: 'api_unavailable',
+          risk_level: 'high',
+          risk_caveat: 'Live backend is unavailable, so the memo cannot be grounded in current sources.',
+          generated_at: new Date().toISOString()
+        }
+      }));
+    const payload = buildCopilotJudgePayload(
+      rawResponse && isObject(rawResponse) && isObject(rawResponse.data)
+        ? rawResponse.data
+        : rawResponse
+    );
+    if (!payload) {
+      throw new Error('Invalid Copilot response.');
+    }
+
+    pendingMessage?.remove();
+    appendCopilotChatMessage(containerId, buildCopilotChatResponseHtml(payload), 'ai', { html: true });
+    showToast('Copilot memo ready', 'success');
+  } catch (error) {
+    pendingMessage?.remove();
+    appendCopilotChatMessage(
+      containerId,
+      `<p>Copilot could not complete the memo.</p><p style="margin-top: 8px;">${escapeHtml(error?.message || toString(error, 'Unknown error'))}</p>`,
+      'ai',
+      { html: true }
+    );
+    showToast('Copilot temporarily unavailable', 'error');
+  } finally {
+    input.disabled = false;
+    if (sendButton) sendButton.disabled = false;
+    input.focus();
+  }
+}
+
 function sendOverlayMessage() {
   const input = document.getElementById('aiOverlayInput');
   if (!input || !input.value.trim()) return;
-
-  const message = input.value.trim();
-  input.value = '';
-
-  // Add user message
-  addAIMessage(message, 'user');
-
-  // Simulate AI response
-  setTimeout(() => {
-    const responses = {
-      'explain': 'Based on your current portfolio performance, the 1.88% gain is primarily driven by your tech holdings. NVDA is up 8.5% following strong earnings, while META gained 5.2% on positive market sentiment. This outperformance relative to the S&P 500 (+1.2%) demonstrates the strength of your tech allocation.',
-      'what should i do': 'Given current market conditions and your portfolio composition, I recommend: 1) Hold your current tech positions as momentum remains strong, 2) Set trailing stops on NVDA at 5% to protect gains, 3) Consider taking partial profits on META if it hits $550, and 4) Monitor Fed announcements closely as dovish signals could extend the rally.',
-      'simulate': 'Let me run a scenario analysis for you. If NVDA continues its current trajectory, your portfolio could see an additional 3-4% gain over the next 30 days. However, if tech sector volatility increases, we could see a 2-3% pullback. Would you like me to run a specific scenario with custom parameters?'
-    };
-
-    const lowerMessage = message.toLowerCase();
-    let response = 'I understand your question. Based on your portfolio data and current market conditions, I can provide detailed analysis. What specific aspect would you like me to focus on?';
-
-    for (const [key, value] of Object.entries(responses)) {
-      if (lowerMessage.includes(key)) {
-        response = value;
-        break;
-      }
-    }
-
-    addAIMessage(response, 'ai');
-  }, 1000);
+  return submitCopilotChat('aiOverlayInput', 'aiMessagesPanel');
 }
 
 function handleOverlayEnter(event) {
@@ -2744,9 +2853,9 @@ function handleOverlayEnter(event) {
 
 function quickAsk(action) {
   const questions = {
-    'explain': 'Explain what I\'m seeing on this screen',
-    'whatdo': 'What should I do with my portfolio right now?',
-    'simulate': 'Simulate a market scenario for me'
+    'explain': 'Explain what matters on this screen right now.',
+    'whatdo': 'What should I do with my portfolio today?',
+    'simulate': 'Give me a 1-week investment memo on NVDA.'
   };
 
   const input = document.getElementById('aiOverlayInput');
@@ -2756,68 +2865,15 @@ function quickAsk(action) {
   }
 }
 
-function addAIMessage(content, type) {
-  const panel = document.getElementById('aiMessagesPanel');
-  if (!panel) return;
-
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'ai-message';
-
-  if (type === 'user') {
-    messageDiv.innerHTML = `
-      <div class="ai-avatar" style="background: var(--color-royal-blue);">👤</div>
-      <div class="ai-message-content">
-        <p>${content}</p>
-      </div>
-    `;
-  } else {
-    messageDiv.innerHTML = `
-      <div class="ai-avatar">🤖</div>
-      <div class="ai-message-content">
-        <p>${content}</p>
-      </div>
-    `;
-  }
-
-  panel.appendChild(messageDiv);
-  panel.scrollTop = panel.scrollHeight;
+function addAIMessage(content, type, options = {}) {
+  return appendCopilotChatMessage('aiMessagesPanel', content, type, options);
 }
 
 // AI Lab Functions
 function sendAIMessage() {
   const input = document.getElementById('aiChatInput');
   if (!input || !input.value.trim()) return;
-
-  const message = input.value.trim();
-  input.value = '';
-
-  const container = document.getElementById('aiChatMessages');
-  if (!container) return;
-
-  // Add user message
-  const userMsg = document.createElement('div');
-  userMsg.className = 'ai-message';
-  userMsg.innerHTML = `
-    <div class="ai-avatar" style="background: var(--color-royal-blue);">👤</div>
-    <div class="ai-message-content">
-      <p>${message}</p>
-    </div>
-  `;
-  container.appendChild(userMsg);
-
-  // Simulate AI response
-  setTimeout(() => {
-    const aiMsg = document.createElement('div');
-    aiMsg.className = 'ai-message';
-    aiMsg.innerHTML = `
-      <div class="ai-avatar">🤖</div>
-      <div class="ai-message-content">
-        <p>I've analyzed your question. Based on your portfolio data and market conditions, here's my assessment: Your current strategy aligns well with your risk tolerance and investment goals. I recommend maintaining your current allocation while monitoring key support levels.</p>
-      </div>
-    `;
-    container.appendChild(aiMsg);
-    container.scrollTop = container.scrollHeight;
-  }, 1200);
+  return submitCopilotChat('aiChatInput', 'aiChatMessages');
 }
 
 function handleChatEnter(event) {

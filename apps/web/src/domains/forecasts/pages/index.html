@@ -744,23 +744,19 @@
               <div class="ai-message">
                 <div class="ai-avatar">🤖</div>
                 <div class="ai-message-content">
-                  <p>Hello! I'm your AI Copilot. I can help you understand your portfolio, analyze market trends, and
-                    make informed decisions. What would you like to know?</p>
+                  <p>Hello. Ask about today, a ticker, a theme, or your portfolio and I will return a memo with a verdict, reasons, risk, confidence, and sources.</p>
                 </div>
               </div>
             </div>
             <div class="ai-suggested-questions">
               <h4>Suggested Questions:</h4>
-              <button class="suggested-q-btn" onclick="askAI('Why is my portfolio underperforming?')">Why is my
-                portfolio underperforming?</button>
-              <button class="suggested-q-btn" onclick="askAI('What should I do after Fed meeting?')">What should I do
-                after Fed meeting?</button>
-              <button class="suggested-q-btn" onclick="askAI('Find me safe growth opportunities')">Find me safe growth
-                opportunities</button>
+              <button class="suggested-q-btn" onclick="askAI('What should I do with my portfolio today?')">What should I do with my portfolio today?</button>
+              <button class="suggested-q-btn" onclick="askAI('Give me a 1-week investment memo on NVDA.')">Give me a 1-week investment memo on NVDA.</button>
+              <button class="suggested-q-btn" onclick="askAI('Which market theme deserves a deep dive right now?')">Which market theme deserves a deep dive right now?</button>
             </div>
             <div class="ai-chat-input-container">
               <input type="text" class="ai-chat-input" id="aiChatInput"
-                placeholder="Ask anything about your portfolio..." onkeypress="handleChatEnter(event)">
+                placeholder="Ask about a ticker, theme, or your portfolio..." onkeypress="handleChatEnter(event)">
               <button class="ai-send-btn" onclick="sendAIMessage()" aria-label="Send message">→</button>
             </div>
           </div>
@@ -914,18 +910,17 @@
           <div class="ai-message">
             <div class="ai-avatar">🤖</div>
             <div class="ai-message-content">
-              <p>I can see you're viewing your portfolio overview. Your portfolio is up 1.88% today. What would you like
-                to know?</p>
+              <p>Ask about today, a ticker, a theme, or your portfolio. I will turn the latest backend context into a short investment memo.</p>
             </div>
           </div>
         </div>
         <div class="ai-quick-actions">
-          <button class="quick-action-btn" onclick="quickAsk('explain')">Explain this</button>
-          <button class="quick-action-btn" onclick="quickAsk('whatdo')">What should I do?</button>
-          <button class="quick-action-btn" onclick="quickAsk('simulate')">Simulate scenario</button>
+          <button class="quick-action-btn" onclick="quickAsk('explain')">Explain what matters now</button>
+          <button class="quick-action-btn" onclick="quickAsk('whatdo')">Portfolio today?</button>
+          <button class="quick-action-btn" onclick="quickAsk('simulate')">NVDA 1-week memo</button>
         </div>
         <div class="ai-input-panel">
-          <input type="text" class="ai-input" id="aiOverlayInput" placeholder="Ask anything..."
+          <input type="text" class="ai-input" id="aiOverlayInput" placeholder="Ask about a ticker, theme, or your portfolio..."
             onkeypress="handleOverlayEnter(event)">
           <button class="ai-send-btn" onclick="sendOverlayMessage()" aria-label="Send">→</button>
         </div>
