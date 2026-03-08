@@ -373,7 +373,29 @@ info "quality window: roles=$(IFS=,; echo "${QUALITY_ROLES[*]}") minutes=${QUALI
 echo -e "\n${BOLD}[ Issue Publication ]${NC}"
 ISSUE_EVENTS_FILE="$ROOT/docs/operations/orchestrator/agent-iteration-issues.jsonl"
 [[ -f "$ISSUE_EVENTS_FILE" ]] || ISSUE_EVENTS_FILE="$ROOT/docs/orchestrator-ops/agent-iteration-issues.jsonl"
-if [[ -f "$ISSUE_EVENTS_FILE" ]]; then
+ISSUE_STATUS_SNAPSHOT="$(curl -s --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)"
+ISSUE_STATUS_SUMMARY="$(printf '%s' "$ISSUE_STATUS_SNAPSHOT" | python3 -c "import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print('ERR')
+    raise SystemExit(0)
+roles=d.get('roles', [])
+if not isinstance(roles, list):
+    roles=[]
+gaps=d.get('issue_publication_gap_roles', [])
+if not isinstance(gaps, list):
+    gaps=[]
+print(f\"{len(gaps)}|{','.join(str(x) for x in gaps) or 'none'}|{','.join(str(x) for x in roles) or 'unknown'}\")
+" 2>/dev/null)"
+if [[ "$ISSUE_STATUS_SUMMARY" != "ERR" && -n "$ISSUE_STATUS_SUMMARY" ]]; then
+  IFS='|' read -r ISSUE_GAP_COUNT ISSUE_GAP_ROLES ISSUE_ROLE_SCOPE <<< "$ISSUE_STATUS_SUMMARY"
+  if [[ "${ISSUE_GAP_COUNT:-0}" -gt 0 ]]; then
+    fail "ISSUE_PUBLICATION_GAP roles=${ISSUE_GAP_ROLES} (monitor status)"
+  else
+    ok "Issue publication continuity OK (roles=${ISSUE_ROLE_SCOPE})"
+  fi
+elif [[ -f "$ISSUE_EVENTS_FILE" ]]; then
   ISSUE_SUMMARY_JSON="$(python3 - "$ISSUE_EVENTS_FILE" <<'PY'
 import json
 import sys
