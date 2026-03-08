@@ -1891,6 +1891,9 @@ function getCriticalWidgetHealthStatus() {
   if (contractState === 'stale') {
     return { state: 'stale', reason: 'Ingestion freshness contract reports stale sources.' };
   }
+  if (contractState === 'degraded') {
+    return { state: 'degraded', reason: 'Ingestion freshness contract reports partial source health.' };
+  }
   if (contractState === 'unknown') {
     return { state: 'degraded', reason: 'Ingestion freshness contract is unavailable.' };
   }

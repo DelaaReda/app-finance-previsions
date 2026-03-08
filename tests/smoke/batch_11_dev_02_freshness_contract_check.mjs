@@ -70,11 +70,49 @@ function createNode(tagName) {
   };
 }
 
-function createConnectorContext() {
+function createConnectorContext(overrides = {}) {
   const fixtureNow = '2026-03-07T03:00:00.000Z';
   const appendedNodes = [];
   const events = [];
   const intervals = [];
+  const healthPayload = overrides.healthPayload || {
+    status: 'ok',
+    last_updates: { news: '2026-03-07T02:55:00.000Z', forecasts: '2026-03-07T02:45:00.000Z' }
+  };
+  const ingestionHealthPayload = overrides.ingestionHealthPayload || {
+    ok: true,
+    data: {
+      status: 'degraded',
+      generated_at: fixtureNow,
+      all_fresh: false,
+      degraded_count: 1,
+      source: ['api_health', 'ingestion'],
+      sources: [
+        {
+          source: 'news',
+          status: 'fresh',
+          freshness: {
+            timestamp: '2026-03-07T02:55:00.000Z',
+            ttl_seconds: 1800,
+            age_seconds: 300,
+            is_fresh: true
+          },
+          errors: []
+        },
+        {
+          source: 'macro_series',
+          status: 'missing',
+          freshness: {
+            timestamp: '2026-03-07T02:30:00.000Z',
+            ttl_seconds: 604800,
+            age_seconds: 1800,
+            is_fresh: false
+          },
+          errors: ['payload_missing']
+        }
+      ]
+    }
+  };
 
   const document = {
     readyState: 'loading',
@@ -125,38 +163,8 @@ function createConnectorContext() {
     ['/dashboard/market-drivers', { ok: true, freshness: '2026-03-07T02:45:00.000Z', data: { drivers: [{ factor: 'Tech momentum', contribution: 62 }] } }],
     ['/dashboard/kpis', { ok: true, freshness: '2026-03-07T02:55:00.000Z', data: { source: ['dashboard-kpis'], generated_at: '2026-03-07T02:55:00.000Z', portfolio_value: 125000, portfolio_change_pct: 1.4 } }],
     ['/dashboard/portfolio-summary', { ok: true, freshness: '2026-03-07T02:54:00.000Z', data: { source: ['portfolio-summary'], generated_at: '2026-03-07T02:54:00.000Z', total_value: 125000, total_change_pct: 1.4 } }],
-    ['/health', { status: 'ok', last_updates: { news: '2026-03-07T02:55:00.000Z', forecasts: '2026-03-07T02:45:00.000Z' } }],
-    ['/ingestion/health', { ok: true, data: {
-      status: 'degraded',
-      generated_at: fixtureNow,
-      all_fresh: false,
-      degraded_count: 1,
-      source: ['api_health', 'ingestion'],
-      sources: [
-        {
-          source: 'news',
-          status: 'fresh',
-          freshness: {
-            timestamp: '2026-03-07T02:55:00.000Z',
-            ttl_seconds: 1800,
-            age_seconds: 300,
-            is_fresh: true
-          },
-          errors: []
-        },
-        {
-          source: 'macro_series',
-          status: 'missing',
-          freshness: {
-            timestamp: '2026-03-07T02:30:00.000Z',
-            ttl_seconds: 604800,
-            age_seconds: 1800,
-            is_fresh: false
-          },
-          errors: ['payload_missing']
-        }
-      ]
-    } }]
+    ['/health', healthPayload],
+    ['/ingestion/health', ingestionHealthPayload]
   ]);
 
   const fetch = async (url, options = {}) => {
@@ -295,15 +303,35 @@ assert.equal(intervals.length, 0, 'connector should not start polling before DOM
 const payload = await connectorContext.window.refreshLiveData();
 const latestEvent = events.at(-1);
 
-assert.equal(payload.contractState, 'stale', 'connector payload must expose stale contract state');
+assert.equal(payload.contractState, 'degraded', 'connector payload must preserve degraded contract state');
 assert.equal(payload.ingestionHealth.degraded_count, 1, 'connector payload must include ingestion health summary');
 assert.equal(payload.freshness.lastFetchedAt, Date.parse('2026-03-07T02:30:00.000Z'), 'connector freshness must reflect oldest ingestion contract timestamp');
 assert.equal(payload.freshness.ttlMs, 1800000, 'connector freshness must use ingestion TTL in milliseconds');
 assert.equal(latestEvent.type, 'financecopilot:live-dashboard-updated', 'connector must dispatch the live data event');
-assert.equal(latestEvent.detail.contractState, 'stale', 'event payload must include freshness contract state');
+assert.equal(latestEvent.detail.contractState, 'degraded', 'event payload must include freshness contract state');
 assert.equal(latestEvent.detail.ingestionHealth.status, 'degraded', 'event payload must include ingestion health data');
-assert.ok(latestEvent.detail.warnings.includes('ingestion-contract-stale'), 'connector must warn when ingestion contract is stale');
+assert.ok(latestEvent.detail.warnings.includes('ingestion-contract-degraded'), 'connector must warn when ingestion contract is degraded');
 assert.equal(appendedNodes.some((node) => node.id === 'live-badge'), true, 'connector should render live badge');
+
+const staleContract = connectorContext.buildLiveFreshnessContract(
+  {
+    status: 'degraded',
+    sources: [
+      {
+        source: 'news',
+        status: 'stale',
+        freshness: {
+          timestamp: '2026-03-07T02:10:00.000Z',
+          ttl_seconds: 1800,
+          age_seconds: 3000,
+          is_fresh: false
+        }
+      }
+    ]
+  },
+  { last_updates: { news: '2026-03-07T02:10:00.000Z' } }
+);
+assert.equal(staleContract.contractState, 'stale', 'connector must keep explicit stale sources as stale');
 
 const { context: appContext, lineage } = createAppContext();
 appContext.liveDataMeta = {
@@ -311,23 +339,95 @@ appContext.liveDataMeta = {
   warnings: [],
   sources: ['api-connector'],
   modelVersions: ['live'],
-  contractState: 'stale',
+  contractState: 'degraded',
   freshness: { lastFetchedAt: Date.parse('2026-03-07T02:30:00.000Z'), ttlMs: 1800000 },
   cache: { lastFetchedAt: Date.parse('2026-03-07T02:30:00.000Z'), ttlMs: 1800000 }
 };
 
 const healthStatus = vm.runInContext('batch11Smoke.getCriticalWidgetHealthStatus()', appContext);
-assert.equal(healthStatus.state, 'stale', 'app freshness banner must respect contract stale state');
+assert.equal(healthStatus.state, 'degraded', 'app freshness banner must respect contract degraded state');
 
 vm.runInContext(`
   batch11Smoke.updateLiveProvenance({
     generatedAt: '2026-03-07T03:00:00.000Z',
     sources: ['api-connector'],
     modelVersions: ['live'],
-    warnings: ['ingestion-contract-stale'],
-    contractState: 'stale'
+    warnings: ['ingestion-contract-degraded'],
+    contractState: 'degraded'
   });
 `, appContext);
-assert.ok(lineage.textContent.includes('freshness: STALE'), 'provenance must surface contract freshness state');
+assert.ok(lineage.textContent.includes('freshness: DEGRADED'), 'provenance must surface contract freshness state');
+
+const freshConnectorFixture = {
+  ok: true,
+  data: {
+    status: 'ok',
+    generated_at: '2026-03-07T03:00:00.000Z',
+    all_fresh: true,
+    degraded_count: 0,
+    source: ['api_health', 'ingestion'],
+    sources: [
+      {
+        source: 'news',
+        status: 'fresh',
+        freshness: {
+          timestamp: '2026-03-07T02:55:00.000Z',
+          ttl_seconds: 1800,
+          age_seconds: 300,
+          is_fresh: true
+        },
+        errors: []
+      },
+      {
+        source: 'macro_series',
+        status: 'fresh',
+        freshness: {
+          timestamp: '2026-03-07T02:50:00.000Z',
+          ttl_seconds: 604800,
+          age_seconds: 600,
+          is_fresh: true
+        },
+        errors: []
+      }
+    ]
+  }
+};
+
+const {
+  context: freshConnectorContext,
+  events: freshEvents
+} = createConnectorContext({ ingestionHealthPayload: freshConnectorFixture });
+vm.runInContext(connectorSource, freshConnectorContext, { filename: connectorPath });
+const freshPayload = await freshConnectorContext.window.refreshLiveData();
+const latestFreshEvent = freshEvents.at(-1);
+
+assert.equal(freshPayload.contractState, 'ok', 'connector must keep fully fresh ingestion state as ok');
+assert.equal(Array.isArray(latestFreshEvent.detail.warnings), true, 'connector must emit a warnings array');
+assert.equal(latestFreshEvent.detail.warnings.length, 0, 'connector must avoid degraded warnings when ingestion is fresh');
+
+const { context: freshAppContext, lineage: freshLineage } = createAppContext();
+freshAppContext.liveDataMeta = {
+  generatedAt: '2026-03-07T03:00:00.000Z',
+  warnings: [],
+  sources: ['api-connector'],
+  modelVersions: ['live'],
+  contractState: 'ok',
+  freshness: { lastFetchedAt: Date.parse('2026-03-07T02:55:00.000Z'), ttlMs: 1800000 },
+  cache: { lastFetchedAt: Date.parse('2026-03-07T02:55:00.000Z'), ttlMs: 1800000 }
+};
+
+const freshHealthStatus = vm.runInContext('batch11Smoke.getCriticalWidgetHealthStatus()', freshAppContext);
+assert.equal(freshHealthStatus, null, 'app must not render a health banner when the ingestion contract is fresh');
+
+vm.runInContext(`
+  batch11Smoke.updateLiveProvenance({
+    generatedAt: '2026-03-07T03:00:00.000Z',
+    sources: ['api-connector'],
+    modelVersions: ['live'],
+    warnings: [],
+    contractState: 'ok'
+  });
+`, freshAppContext);
+assert.ok(freshLineage.textContent.includes('freshness: OK'), 'provenance must surface the fresh contract state');
 
 console.log('PASS batch_11_dev_02_freshness_contract_check');

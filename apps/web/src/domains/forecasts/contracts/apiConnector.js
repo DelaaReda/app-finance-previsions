@@ -571,6 +571,7 @@ function buildLiveFreshnessContract(ingestionHealth, apiHealth) {
   const statuses = sourceEntries
     .map((entry) => String(entry && entry.status ? entry.status : '').toLowerCase())
     .filter(Boolean);
+  const healthStatus = String(ingestionHealth && ingestionHealth.status ? ingestionHealth.status : '').toLowerCase();
   const timestamps = [];
   const ttlCandidates = [];
 
@@ -596,11 +597,17 @@ function buildLiveFreshnessContract(ingestionHealth, apiHealth) {
 
   let contractState = 'unknown';
   if (statuses.length > 0) {
-    contractState = statuses.every((status) => status === 'fresh') ? 'ok' : 'stale';
-  } else if (ingestionHealth && ingestionHealth.all_fresh === true) {
+    if (statuses.every((status) => status === 'fresh')) {
+      contractState = 'ok';
+    } else if (statuses.some((status) => status === 'stale')) {
+      contractState = 'stale';
+    } else {
+      contractState = 'degraded';
+    }
+  } else if (healthStatus === 'ok' || (ingestionHealth && ingestionHealth.all_fresh === true)) {
     contractState = 'ok';
-  } else if (ingestionHealth && normalizeNumber(ingestionHealth.degraded_count, 0) > 0) {
-    contractState = 'stale';
+  } else if (healthStatus === 'degraded' || (ingestionHealth && normalizeNumber(ingestionHealth.degraded_count, 0) > 0)) {
+    contractState = 'degraded';
   }
 
   return {
@@ -755,6 +762,8 @@ async function populateWindowGlobals() {
     window.liveFreshnessContract = liveFreshnessContract;
     if (liveFreshnessContract.contractState === 'stale') {
       contractWarnings.push('ingestion-contract-stale');
+    } else if (liveFreshnessContract.contractState === 'degraded') {
+      contractWarnings.push('ingestion-contract-degraded');
     } else if (liveFreshnessContract.contractState === 'unknown') {
       contractWarnings.push('ingestion-contract-unknown');
     }
