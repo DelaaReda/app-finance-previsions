@@ -151,6 +151,50 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertIn("dev_dispatch:BATCH-27-DEV-02", updated)
         self.assertIn("dev_complete:BATCH-27-DEV-02", updated)
 
+    def test_ready_admin_is_claimed_and_completed_via_mock_capability(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [
+                        {"id": "BATCH-28", "state": "READY_PLANNER", "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "tasks": [
+                        {"id": "BATCH-28-DEV-03", "stream_id": "BATCH-28", "role": "dev", "state": "DONE", "updated_at": "2026-03-06T00:00:00Z"},
+                        {"id": "BATCH-28-ADMIN-01", "stream_id": "BATCH-28", "role": "admin", "state": "READY_PLANNER", "priority": "P1", "depends_on": ["BATCH-28-DEV-03"], "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-28", "state": "READY_PLANNER", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_PROGRESS_REQUIRED",
+                "EVIDENCE: task_update=analysis_only; run_note=dispatch admin capability now; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=dispatch admin",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: DISPATCH_ADMIN_B28",
+            ]
+        )
+        updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="mock")
+        self.assertTrue(payload["ok"])
+        board = json.loads(self.board_path.read_text())
+        tasks = {task["id"]: task for task in board["tasks"]}
+        self.assertEqual(tasks["BATCH-28-ADMIN-01"]["state"], "DONE")
+        self.assertEqual(tasks["BATCH-28-ADMIN-01"]["artifact"], "mock://artifact")
+        self.assertIn("admin_dispatch:BATCH-28-ADMIN-01", updated)
+        self.assertIn("admin_complete:BATCH-28-ADMIN-01", updated)
+
     def test_recoverable_blocked_dev_task_is_retried(self) -> None:
         self.board_path.write_text(
             json.dumps(

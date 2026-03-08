@@ -331,6 +331,8 @@ def _requires_nominal_refresh(
 ) -> bool:
     if snapshot_age < 0 or not rows:
         return True
+    if snapshot_age > float(FORECASTS_STALE_SECONDS):
+        return True
     markers = [marker.lower() for marker in _snapshot_markers(payload, rows)]
     return any(
         refresh_marker in marker

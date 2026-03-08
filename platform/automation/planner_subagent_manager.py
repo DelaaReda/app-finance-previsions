@@ -179,6 +179,19 @@ def _openclaw_agent_ids() -> set[str]:
     return agent_ids
 
 
+def _openclaw_delete_agent(agent_id: str) -> None:
+    token = str(agent_id or "").strip()
+    if not token or not _openclaw_available():
+        return
+    subprocess.run(
+        ["openclaw", "agents", "delete", "--force", token],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=_openclaw_env(),
+    )
+
+
 def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
     text = (raw_text or "").strip()
     if not text:
@@ -524,14 +537,8 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
             kept.append(record)
             continue
         _emit_event(config, "planner_subagent_cleanup", record, {"reason": "ttl_expired"})
-        if record.backend == "openclaw" and record.backend_ref and _openclaw_available():
-            subprocess.run(
-                ["openclaw", "agents", "delete", record.backend_ref],
-                text=True,
-                capture_output=True,
-                check=False,
-                env=_openclaw_env(),
-            )
+        if record.backend == "openclaw":
+            _openclaw_delete_agent(record.subagent_id)
         removed.append(record.subagent_id)
     return kept, removed
 

@@ -197,15 +197,15 @@ def test_forecasts_refreshes_simple_snapshot_into_nominal_hybrid_payload(monkeyp
                         "direction": "up",
                         "confidence": 0.72,
                         "expected_return": 0.034,
-                        "timestamp": "2026-03-06T12:00:00Z",
-                        "generated_at": "2026-03-06T12:00:00Z",
+                        "timestamp": "2026-03-08T12:00:00Z",
+                        "generated_at": "2026-03-08T12:00:00Z",
                         "model_version": "hybrid_v1_local_momentum",
                         "source": ["forecast_hybrid_v1", "local_momentum"],
                         "explanation": "Hybrid momentum signal is positive.",
                     }
                 ],
-                "last_update": "2026-03-06T12:00:00Z",
-                "generated_at": "2026-03-06T12:00:00Z",
+                "last_update": "2026-03-08T12:00:00Z",
+                "generated_at": "2026-03-08T12:00:00Z",
                 "source": ["forecast_hybrid_v1", "local_momentum"],
                 "model_version": "hybrid_v1_local_momentum",
             }
@@ -228,6 +228,73 @@ def test_forecasts_refreshes_simple_snapshot_into_nominal_hybrid_payload(monkeyp
     assert row["why"] == "Hybrid momentum signal is positive."
     assert row["fallback_used"] is False
     assert "hybrid_v1_local_momentum" in (row.get("provider_chain") or [])
+
+
+def test_forecasts_refreshes_stale_snapshot_into_nominal_hybrid_payload(monkeypatch):
+    forecasts_route._FORECASTS_RESPONSE_CACHE.clear()
+    forecasts_route._FORECASTS_INFLIGHT.clear()
+
+    snapshot = {
+        "generated_at": "2026-02-20T12:00:00Z",
+        "last_update": "2026-02-20T12:00:00Z",
+        "source": ["forecast_hybrid_v1", "local_momentum"],
+        "rows": [
+            {
+                "ticker": "AAPL",
+                "asset_type": "equity",
+                "horizon": "1w",
+                "score": 0.12,
+                "confidence": 0.58,
+                "expected_return": 0.01,
+                "timestamp": "2026-02-20T12:00:00Z",
+                "generated_at": "2026-02-20T12:00:00Z",
+                "model_version": "hybrid_v1_local_momentum",
+                "source": ["forecast_hybrid_v1", "local_momentum"],
+                "explanation": "Old hybrid output.",
+            }
+        ],
+    }
+
+    class _FakeHybrid:
+        def run_forecast_job(self, tickers):
+            assert tickers == ["AAPL"]
+            return {
+                "rows": [
+                    {
+                        "ticker": "AAPL",
+                        "asset_type": "equity",
+                        "horizon": "1w",
+                        "direction": "up",
+                        "confidence": 0.74,
+                        "expected_return": 0.031,
+                        "timestamp": "2026-03-08T12:00:00Z",
+                        "generated_at": "2026-03-08T12:00:00Z",
+                        "model_version": "hybrid_v1_local_momentum",
+                        "source": ["forecast_hybrid_v1", "local_momentum"],
+                        "explanation": "Fresh hybrid output.",
+                    }
+                ],
+                "last_update": "2026-03-08T12:00:00Z",
+                "generated_at": "2026-03-08T12:00:00Z",
+                "source": ["forecast_hybrid_v1", "local_momentum"],
+                "model_version": "hybrid_v1_local_momentum",
+            }
+
+    monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
+    monkeypatch.setattr(forecasts_route.forecasts_service, "ForecastHybridV1", _FakeHybrid)
+    monkeypatch.setattr(forecasts_route.forecasts_service, "save_json", lambda *_args, **_kwargs: None)
+
+    client = _client()
+    resp = client.get("/forecasts?asset_type=equity&horizon=1w&limit=1")
+    assert resp.status_code == 200
+    payload = resp.json()["data"]
+
+    assert payload["fallback_used"] is False
+    assert payload["freshness_status"] == "fresh"
+    assert "forecasts_nominal_refresh" in (payload.get("source") or [])
+    row = payload["rows"][0]
+    assert row["generated_at"] == "2026-03-08T12:00:00Z"
+    assert row["why"] == "Fresh hybrid output."
 
 
 def test_forecasts_normalizes_invalid_confidence_values(monkeypatch):
@@ -276,8 +343,8 @@ def test_forecasts_blocks_mock_source_in_nominal_mode(monkeypatch):
     forecasts_route._FORECASTS_INFLIGHT.clear()
 
     snapshot = {
-        "generated_at": "2026-02-27T00:00:00Z",
-        "last_update": "2026-02-27T00:00:00Z",
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
         "source": ["mock_forecasts_seed"],
         "rows": [
             {
@@ -392,6 +459,7 @@ def test_forecasts_marks_stale_snapshot_when_too_old(monkeypatch):
     }
 
     monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
+    monkeypatch.setattr(forecasts_route.forecasts_service, "ForecastHybridV1", None)
     client = _client()
     resp = client.get("/forecasts?asset_type=equity&horizon=1w&limit=1")
     assert resp.status_code == 200

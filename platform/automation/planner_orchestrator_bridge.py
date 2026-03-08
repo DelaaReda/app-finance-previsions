@@ -50,6 +50,7 @@ CONTRACT_KEYS = (
 )
 SUCCESS_SUBAGENT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 DEV_CAPABILITY_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "900")))
+ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "600")))
 STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_GRACE_SECONDS", "30")))
 
 
@@ -270,19 +271,50 @@ def _build_dev_dispatch_message(task: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _build_admin_dispatch_message(task: dict[str, Any]) -> str:
+    task_id_value = str(task.get("id", "")).strip()
+    title = str(task.get("title", "")).strip() or task_id_value
+    priority = str(task.get("priority", "P9")).strip() or "P9"
+    stream_id = str(task.get("stream_id", "")).strip() or _task_stream_id(task_id_value)
+    depends_on = [str(dep).strip() for dep in task.get("depends_on", []) if str(dep).strip()]
+    notes = _task_notes(task)
+    lines = [
+        f"Take ownership of {task_id_value}.",
+        f"Task title: {title}",
+        f"Stream: {stream_id}",
+        f"Priority: {priority}",
+        f"Dependencies already satisfied: {', '.join(depends_on) if depends_on else 'none'}",
+        "Execution policy:",
+        "- Validate runtime truth and observability only for this task scope.",
+        "- Prefer reversible fixes or precise evidence capture; do not broaden into planning.",
+        "- If no code/config change is needed, still return artifact + verify and use SKIP(...) fields explicitly.",
+        "- If you change code or config, commit it and return the real commit_sha.",
+        "- Return planner-mergeable evidence: artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment.",
+    ]
+    if notes:
+        lines.append("Task notes:")
+        for note in notes:
+            lines.append(f"- {note}")
+    return "\n".join(lines)
+
+
 def _payload_status(payload: dict[str, Any]) -> str:
     return str(payload.get("status", "")).strip().lower()
 
 
-def _payload_has_delivery_evidence(payload: dict[str, Any]) -> bool:
-    required = ("artifact", "verify", "tests_run")
+def _payload_has_delivery_evidence(payload: dict[str, Any], target_role: str = "dev") -> bool:
+    required = ("artifact", "verify")
     for key in required:
         value = str(payload.get(key, "")).strip().lower()
         if not value or value in {"none", "n/a", "na"}:
             return False
-    commit = str(payload.get("commit_sha", "")).strip().lower()
-    if not commit or commit in {"none", "n/a", "na"}:
-        return False
+    if str(target_role or "").strip().lower() == "dev":
+        tests_run = str(payload.get("tests_run", "")).strip().lower()
+        if not tests_run or tests_run in {"none", "n/a", "na"}:
+            return False
+        commit = str(payload.get("commit_sha", "")).strip().lower()
+        if not commit or commit in {"none", "n/a", "na"}:
+            return False
     return True
 
 
@@ -309,6 +341,42 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
             continue
         blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
         if state == STATE_BLOCKED and blocked_reason.startswith("planner_dev_capability_failed:"):
+            retry_candidates.append(row)
+    if retry_candidates:
+        retry_candidates.sort(key=lambda row: (row[0], row[1]))
+        return retry_candidates[0][2]
+    if not candidates:
+        if not in_progress_candidates:
+            return None
+        in_progress_candidates.sort(key=lambda row: (row[0], row[1]))
+        return in_progress_candidates[0][2]
+    candidates.sort(key=lambda row: (row[0], row[1]))
+    return candidates[0][2]
+
+
+def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | None:
+    index = task_index(board)
+    candidates: list[tuple[int, int, dict[str, Any]]] = []
+    retry_candidates: list[tuple[int, int, dict[str, Any]]] = []
+    in_progress_candidates: list[tuple[int, int, dict[str, Any]]] = []
+    for idx, task in enumerate(board.get("tasks", [])):
+        if not isinstance(task, dict):
+            continue
+        state = str(task.get("state", "")).strip().upper()
+        if str(task.get("role", "")).strip().lower() != "admin":
+            continue
+        deps = [dep for dep in task.get("depends_on", []) if dep]
+        if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
+            continue
+        row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
+        if state == STATE_READY:
+            candidates.append(row)
+            continue
+        if state == STATE_IN_PROGRESS:
+            in_progress_candidates.append(row)
+            continue
+        blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
+        if state == STATE_BLOCKED and blocked_reason.startswith("planner_admin_capability_failed:"):
             retry_candidates.append(row)
     if retry_candidates:
         retry_candidates.sort(key=lambda row: (row[0], row[1]))
@@ -562,7 +630,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         "cmd": "SKIP(subagent_exec_internal)",
         "next_action_unique": f"PLANNER_MERGE_{task_id_value}",
     }
-    if not _payload_has_delivery_evidence(payload):
+    if not _payload_has_delivery_evidence(payload, target_role="dev"):
         with board_lock(board_path):
             board = load_board(board_path)
             set_block_state(board, task_id_value=task_id_value, reason="planner_dev_capability_failed:delivery_evidence_incomplete", blocked=True)
@@ -593,6 +661,168 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             append_event(
                 board,
                 "planner_orchestrator_dev_complete_failed",
+                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
+            )
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+    if subagent_id:
+        collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+    return {"dispatched": True, "completed": completed, "task_id": task_id_value, "subagent_id": subagent_id or "none", "backend": chosen_backend}
+
+
+def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[str, Any]:
+    config = load_subagent_config(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    with board_lock(board_path):
+        board = load_board(board_path)
+        candidate = _select_dispatchable_admin_task(board)
+        if candidate is None:
+            return {"dispatched": False, "reason": "no_ready_admin"}
+        task_id_value = str(candidate.get("id", "")).strip()
+        if not task_id_value:
+            return {"dispatched": False, "reason": "invalid_admin_task"}
+        _claim_task(board_path=board_path, role="admin", task_id_value=task_id_value, source=source, board=board)
+    chosen_backend = str(backend or "auto").strip() or "auto"
+    message = _build_admin_dispatch_message(candidate)
+    if chosen_backend in {"openclaw", "codex_exec", "auto"}:
+        subagent_id = f"planner_admin_{os.urandom(5).hex()}"
+        launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
+        cmd = [
+            sys.executable,
+            str(root / "platform" / "automation" / "planner_subagent_manager.py"),
+            "--root",
+            str(root),
+            "run",
+            "--role",
+            "planner",
+            "--target-role",
+            "admin",
+            "--owner-task-id",
+            task_id_value,
+            "--task-kind",
+            "runtime",
+            "--message",
+            message,
+            "--ttl-min",
+            str(config.default_ttl_min),
+            "--backend",
+            chosen_backend,
+            "--timeout-seconds",
+            str(ADMIN_CAPABILITY_TIMEOUT_SECONDS),
+            "--subagent-id",
+            subagent_id,
+        ]
+        try:
+            launcher_log.parent.mkdir(parents=True, exist_ok=True)
+            with launcher_log.open("w", encoding="utf-8") as handle:
+                subprocess.Popen(
+                    cmd,
+                    cwd=str(root),
+                    stdout=handle,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+        except Exception as exc:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                set_block_state(board, task_id_value=task_id_value, reason=f"planner_admin_capability_failed:dispatch_spawn_failed:{exc}", blocked=True)
+                append_event(board, "planner_orchestrator_admin_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
+                reconcile_state(board, board_path.parent / "priority-queue.json")
+                save_board(board_path, board)
+            return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "dispatch_spawn_failed", "subagent_id": subagent_id, "backend": chosen_backend}
+        return {
+            "dispatched": True,
+            "completed": False,
+            "task_id": task_id_value,
+            "reason": "subagent_running",
+            "subagent_id": subagent_id,
+            "backend": chosen_backend,
+            "launcher_log": str(launcher_log.relative_to(root)),
+        }
+    rc, payload = run_subagent(
+        config,
+        role="planner",
+        target_role="admin",
+        owner_task_id=task_id_value,
+        task_kind="runtime",
+        message=message,
+        ttl_min=config.default_ttl_min,
+        backend=chosen_backend,
+        timeout_seconds=ADMIN_CAPABILITY_TIMEOUT_SECONDS,
+    )
+    subagent_id = str(payload.get("subagent_id", "")).strip()
+    if rc != 0 or not payload.get("ok"):
+        with board_lock(board_path):
+            board = load_board(board_path)
+            set_block_state(board, task_id_value=task_id_value, reason=f"planner_admin_capability_failed:{payload.get('blocking_issue') or payload.get('stderr') or 'unknown'}", blocked=True)
+            append_event(board, "planner_orchestrator_admin_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+        if subagent_id:
+            collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_failed", "subagent_id": subagent_id, "backend": chosen_backend}
+
+    status_token = _payload_status(payload)
+    if status_token not in SUCCESS_SUBAGENT_STATUSES:
+        blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
+        with board_lock(board_path):
+            board = load_board(board_path)
+            set_block_state(board, task_id_value=task_id_value, reason=f"planner_admin_capability_failed:{blocking_issue}", blocked=True)
+            append_event(
+                board,
+                "planner_orchestrator_admin_dispatch_blocked",
+                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "status": status_token or "unknown"},
+            )
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+        if subagent_id:
+            collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_blocked", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+
+    evidence = {
+        "root_cause": str(payload.get("root_cause", "none")),
+        "fix_applied": str(payload.get("fix_applied", "none")),
+        "artifact": str(payload.get("artifact", "none")),
+        "verify": str(payload.get("verify", "none")),
+        "files_touched": str(payload.get("files_touched", "none")),
+        "tests_run": str(payload.get("tests_run", "SKIP(no_tests)")),
+        "commit_sha": str(payload.get("commit_sha", "none")),
+        "architecture_check": str(payload.get("architecture_check", "none")),
+        "vision_alignment": str(payload.get("vision_alignment", "none")),
+        "cmd": "SKIP(subagent_exec_internal)",
+        "next_action_unique": f"PLANNER_MERGE_{task_id_value}",
+    }
+    if not _payload_has_delivery_evidence(payload, target_role="admin"):
+        with board_lock(board_path):
+            board = load_board(board_path)
+            set_block_state(board, task_id_value=task_id_value, reason="planner_admin_capability_failed:delivery_evidence_incomplete", blocked=True)
+            append_event(
+                board,
+                "planner_orchestrator_admin_dispatch_incomplete",
+                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
+            )
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+        if subagent_id:
+            collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "delivery_evidence_incomplete", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+
+    with board_lock(board_path):
+        board = load_board(board_path)
+        completed = _complete_task_from_evidence(
+            root=root,
+            board_path=board_path,
+            role="admin",
+            task_id_value=task_id_value,
+            evidence=evidence,
+            source=source,
+            board=board,
+        )
+        if not completed:
+            set_block_state(board, task_id_value=task_id_value, reason="planner_admin_capability_failed:complete_merge_failed", blocked=True)
+            append_event(
+                board,
+                "planner_orchestrator_admin_complete_failed",
                 {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
             )
             reconcile_state(board, board_path.parent / "priority-queue.json")
@@ -667,6 +897,63 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
                     actions.append(f"dev_stale_reset:{task_id_value}")
+        row["status"] = "merged"
+        row["merged_at"] = now_text
+        row["summary"] = "stale planner capability with no result requeued"
+        row["blocking_issue"] = "stale_no_result"
+        row["last_update_at"] = now_text
+        changed = True
+    if changed:
+        _write_planner_registry_rows(config, rows)
+    return actions
+
+
+def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
+    config, rows = _planner_registry_rows(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    threshold_seconds = ADMIN_CAPABILITY_TIMEOUT_SECONDS + STALE_SUBAGENT_GRACE_SECONDS
+    now_text = now_iso()
+    changed = False
+    actions: list[str] = []
+    for row in rows:
+        if str(row.get("parent_role", "")).strip().lower() != "planner":
+            continue
+        if str(row.get("target_role", "")).strip().lower() != "admin":
+            continue
+        if str(row.get("status", "")).strip().lower() not in ACTIVE_STATUSES:
+            continue
+        subagent_id = str(row.get("subagent_id", "")).strip()
+        if not subagent_id:
+            continue
+        result_path = config.results_dir / f"{subagent_id}.result.json"
+        if result_path.exists():
+            continue
+        created_raw = str(row.get("created_at", "")).strip() or str(row.get("last_update_at", "")).strip()
+        created_at = _parse_iso_utc(created_raw)
+        if created_at is None:
+            continue
+        age_seconds = max(0, int((datetime.now(timezone.utc) - created_at).total_seconds()))
+        if age_seconds < threshold_seconds:
+            continue
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        if task_id_value:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                task = task_index(board).get(task_id_value)
+                if isinstance(task, dict):
+                    task["state"] = STATE_READY
+                    task["blocked_reason"] = ""
+                    task["stalled_reason"] = "planner_capability_stale_no_result"
+                    task["updated_at"] = now_text
+                    task["last_progress_at"] = now_text
+                    append_event(
+                        board,
+                        "planner_orchestrator_admin_dispatch_stale",
+                        {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds},
+                    )
+                    reconcile_state(board, board_path.parent / "priority-queue.json")
+                    save_board(board_path, board)
+                    actions.append(f"admin_stale_reset:{task_id_value}")
         row["status"] = "merged"
         row["merged_at"] = now_text
         row["summary"] = "stale planner capability with no result requeued"
@@ -760,6 +1047,75 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
     return actions
 
 
+def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
+    config, rows = _planner_registry_rows(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    actions: list[str] = []
+    for row in rows:
+        if str(row.get("parent_role", "")).strip().lower() != "planner":
+            continue
+        if str(row.get("target_role", "")).strip().lower() != "admin":
+            continue
+        subagent_id = str(row.get("subagent_id", "")).strip()
+        if not subagent_id:
+            continue
+        if str(row.get("status", "")).strip().lower() == "merged":
+            continue
+        result_path = config.results_dir / f"{subagent_id}.result.json"
+        if not result_path.exists() and str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
+            continue
+        rc, payload = collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
+        if rc != 0 or not isinstance(payload, dict):
+            continue
+        task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
+        if not task_id_value:
+            continue
+        actions.append(f"admin_collect:{task_id_value}")
+        status_token = _payload_status(payload)
+        if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
+            evidence = {
+                "root_cause": str(payload.get("root_cause", "none")),
+                "fix_applied": str(payload.get("fix_applied", "none")),
+                "artifact": str(payload.get("artifact", "none")),
+                "verify": str(payload.get("verify", "none")),
+                "files_touched": str(payload.get("files_touched", "none")),
+                "tests_run": str(payload.get("tests_run", "SKIP(no_tests)")),
+                "commit_sha": str(payload.get("commit_sha", "none")),
+                "architecture_check": str(payload.get("architecture_check", "none")),
+                "vision_alignment": str(payload.get("vision_alignment", "none")),
+                "cmd": "SKIP(subagent_exec_internal)",
+                "next_action_unique": f"PLANNER_MERGE_{task_id_value}",
+            }
+            with board_lock(board_path):
+                board = load_board(board_path)
+                completed = _complete_task_from_evidence(
+                    root=root,
+                    board_path=board_path,
+                    role="admin",
+                    task_id_value=task_id_value,
+                    evidence=evidence,
+                    source=source,
+                    board=board,
+                )
+                if completed:
+                    actions.append(f"admin_complete:{task_id_value}")
+                else:
+                    set_block_state(board, task_id_value=task_id_value, reason="planner_admin_capability_failed:complete_merge_failed", blocked=True)
+                    append_event(board, "planner_orchestrator_admin_complete_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
+                    reconcile_state(board, board_path.parent / "priority-queue.json")
+                    save_board(board_path, board)
+            continue
+        blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
+        with board_lock(board_path):
+            board = load_board(board_path)
+            set_block_state(board, task_id_value=task_id_value, reason=f"planner_admin_capability_failed:{blocking_issue}", blocked=True)
+            append_event(board, "planner_orchestrator_admin_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+        actions.append(f"admin_block:{task_id_value}")
+    return actions
+
+
 def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend: str = "auto") -> tuple[str, dict[str, Any]]:
     role_token = str(role or "").strip().lower()
     if role_token != "planner":
@@ -771,7 +1127,9 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     actions: list[str] = []
     actions.extend(_mark_stale_dev_subagents(root, source))
+    actions.extend(_mark_stale_admin_subagents(root, source))
     actions.extend(_collect_finished_dev_subagents(root, source))
+    actions.extend(_collect_finished_admin_subagents(root, source))
 
     task_update = str(evidence.get("task_update", "")).strip().lower()
     task_id_value = str(evidence.get("task_id", "")).strip()
@@ -807,6 +1165,12 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
             actions.append(f"dev_dispatch:{dispatch.get('task_id', 'unknown')}")
             if dispatch.get("completed"):
                 actions.append(f"dev_complete:{dispatch.get('task_id', 'unknown')}")
+    if not dispatch.get("dispatched") and not _has_active_subagent(root, "admin"):
+        dispatch = _dispatch_admin_capability(root, source=source, backend=backend)
+        if dispatch.get("dispatched"):
+            actions.append(f"admin_dispatch:{dispatch.get('task_id', 'unknown')}")
+            if dispatch.get("completed"):
+                actions.append(f"admin_complete:{dispatch.get('task_id', 'unknown')}")
     contract = _append_bridge_actions(contract, actions)
     return _render_contract(contract), {"ok": True, "actions": actions, "dispatch": dispatch}
 

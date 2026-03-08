@@ -197,14 +197,8 @@ def _cleanup_records(config: WorkerManagerConfig, records: list[WorkerRecord], n
             kept.append(record)
             continue
         _emit_event(config, "worker_cleanup", record, {"reason": "ttl_expired"})
-        if record.backend == "openclaw" and record.backend_ref and shutil_which("openclaw"):
-            subprocess.run(
-                ["openclaw", "agents", "delete", record.backend_ref],
-                text=True,
-                capture_output=True,
-                check=False,
-                env=_openclaw_env(),
-            )
+        if record.backend == "openclaw":
+            _openclaw_delete_agent(record.worker_id)
         removed.append(record.worker_id)
     return kept, removed
 
@@ -213,6 +207,19 @@ def shutil_which(binary: str) -> str:
     from shutil import which
 
     return which(binary) or ""
+
+
+def _openclaw_delete_agent(agent_id: str) -> None:
+    token = str(agent_id or "").strip()
+    if not token or not shutil_which("openclaw"):
+        return
+    subprocess.run(
+        ["openclaw", "agents", "delete", "--force", token],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=_openclaw_env(),
+    )
 
 
 def _openclaw_cli_model(model: str) -> str:
