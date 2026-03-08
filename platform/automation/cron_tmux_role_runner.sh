@@ -4347,8 +4347,8 @@ Budget strict:
   - python3 platform/automation/planner_subagent_manager.py run --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <...> --message "<brief>"
   - python3 platform/automation/planner_subagent_manager.py collect --role planner --subagent-id <subagent_id> --mark-merged
   - python3 platform/automation/planner_subagent_manager.py cleanup
-  - python3 platform/automation/worker_manager.py plan --role planner --worker-type <repo_scan_worker|patch_proposal_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy>
-  - python3 platform/automation/worker_manager.py run --role planner --worker-type <repo_scan_worker|patch_proposal_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy> --message "<brief>"
+  - python3 platform/automation/worker_manager.py plan --role planner --worker-type <repo_scan_worker|patch_proposal_worker|qa_review_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy|qa_review|targeted_test|browser_validation|delivery_review>
+  - python3 platform/automation/worker_manager.py run --role planner --worker-type <repo_scan_worker|patch_proposal_worker|qa_review_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy|qa_review|targeted_test|browser_validation|delivery_review> --message "<brief>"
   - python3 platform/automation/worker_manager.py collect --role planner --worker-id <worker_id> --mark-merged
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
 Lis uniquement les sources canoniques: docs/product/PRODUCT_VISION.md, docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md, docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md, docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md, docs/operations/orchestrator/parallel-workstreams.json.
