@@ -81,6 +81,8 @@ def _openclaw_runtime_model(model: str, sandbox: str) -> str:
     token = str(model or "").strip() or "gpt-5.4"
     if "/" in token:
         return token
+    if str(sandbox or "").strip().lower() == "off":
+        return f"codex-full/{token}"
     if str(sandbox or "").strip().lower() == "workspace-write":
         return f"codex-cli-write/{token}"
     return f"codex-cli/{token}"
@@ -564,6 +566,15 @@ def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> t
     return model, thinking, sandbox
 
 
+def _effective_task_sandbox(target_role: str, task_kind: str, sandbox: str) -> str:
+    role = canonical_role(target_role)
+    kind = str(task_kind or "").strip().lower()
+    current = str(sandbox or "").strip().lower() or "workspace-write"
+    if role == "admin" and kind == "runtime":
+        return "off"
+    return current
+
+
 def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message: str) -> str:
     common = (
         "PLANNER_ORCHESTRATED_SUBAGENT=1\n"
@@ -723,6 +734,7 @@ def plan_subagent(
         allowed = False
         reason = f"unsupported_backend:{chosen_backend}"
     model, thinking, sandbox = _role_runtime_defaults(config, target)
+    sandbox = _effective_task_sandbox(target, task_kind, sandbox)
     return {
         "allowed": allowed,
         "reason": reason,

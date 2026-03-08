@@ -14,6 +14,7 @@ CANONICAL_WORKSPACE = "/home/venom/analyse-financiere"
 CANONICAL_MAIN_WORKSPACE = "/home/venom"
 CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
 CANONICAL_MAIN_MODEL = "codex-cli-main/gpt-5.4"
+CANONICAL_FULL_MODEL = "codex-full/gpt-5.4"
 CANONICAL_DEFAULT_THINKING = "xhigh"
 CANONICAL_OWNER_E164 = "+14389799898"
 CANONICAL_OPENCLAW_SKILLS = (
@@ -93,6 +94,37 @@ CANONICAL_CODEX_CLI_WRITE_BACKEND = {
     "serialize": True,
 }
 CANONICAL_MAIN_CODEX_CLI_BACKEND = {
+    "command": "codex",
+    "args": [
+        "exec",
+        "--json",
+        "--enable",
+        "multi_agent",
+        "--enable",
+        "apps",
+        "--enable",
+        "js_repl",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
+    ],
+    "resumeArgs": [
+        "exec",
+        "resume",
+        "{sessionId}",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
+    ],
+    "output": "jsonl",
+    "resumeOutput": "text",
+    "input": "arg",
+    "modelArg": "--model",
+    "sessionIdFields": ["thread_id"],
+    "sessionMode": "existing",
+    "imageArg": "--image",
+    "imageMode": "repeat",
+    "serialize": True,
+}
+CANONICAL_CODEX_FULL_BACKEND = {
     "command": "codex",
     "args": [
         "exec",
@@ -290,6 +322,7 @@ def _sync_defaults(payload: dict[str, Any], workspace: str, primary_model: str) 
     cli_backends["codex-cli"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_BACKEND))
     cli_backends["codex-cli-write"] = json.loads(json.dumps(CANONICAL_CODEX_CLI_WRITE_BACKEND))
     cli_backends["codex-cli-main"] = json.loads(json.dumps(CANONICAL_MAIN_CODEX_CLI_BACKEND))
+    cli_backends["codex-full"] = json.loads(json.dumps(CANONICAL_CODEX_FULL_BACKEND))
 
 
 def _sync_agent_list(payload: dict[str, Any], config_path: Path, workspace: str, primary_model: str) -> tuple[list[str], list[str]]:

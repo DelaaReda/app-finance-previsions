@@ -91,6 +91,11 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertIn("Codex native multi-agent helpers", prompt)
         self.assertIn("`monitor`", prompt)
 
+    def test_admin_runtime_uses_full_backend_sandbox(self) -> None:
+        result = plan_subagent(self.config, "planner", "admin", "BATCH-61-ADMIN-01", "runtime")
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["sandbox"], "off")
+
     def test_duplicate_guard_blocks_same_target_and_task(self) -> None:
         record = PlannerSubagentRecord(
             subagent_id="planner_dev_dup",
@@ -298,6 +303,47 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertEqual(captured["model"], "codex-cli-write/gpt-5.4")
         self.assertIsNone(captured["workspace_path"])
         self.assertEqual(captured["workspace_key"], "planner-dev")
+
+    def test_run_openclaw_admin_runtime_uses_codex_full_backend(self) -> None:
+        captured: dict[str, object] = {}
+
+        def _fake_ensure(agent_id, root, model, workspace_key="shared", thinking="medium", workspace_path=None):
+            captured["model"] = model
+            captured["workspace_key"] = workspace_key
+            captured["workspace_path"] = workspace_path
+            return True, "planner_admin_openclaw"
+
+        envelope = {"response": {"text": json.dumps({"status": "completed", "summary": "ok", "artifact": "artifact.txt", "verify": "proof=openclaw", "files_touched": "none", "tests_run": "SKIP(no_tests)", "commit_sha": "none", "architecture_check": "layer=runtime", "vision_alignment": "batch=BATCH-61", "recommended_next": "planner_merge", "blocking_issue": "none"})}}
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_ensure_openclaw_agent", side_effect=_fake_ensure),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 0, "stdout": json.dumps(envelope), "stderr": ""},
+                )(),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="admin",
+                owner_task_id="BATCH-61-ADMIN-09",
+                task_kind="runtime",
+                message="Repair runtime truth.",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(captured["model"], "codex-full/gpt-5.4")
+        self.assertIsNone(captured["workspace_path"])
+        self.assertEqual(captured["workspace_key"], "planner-admin")
 
     def test_run_openclaw_backend_parses_embedded_final_json(self) -> None:
         embedded = (
