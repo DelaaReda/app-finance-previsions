@@ -941,6 +941,36 @@ function closeCommandK() {
   }
 }
 
+function runCommandKCopilotPrompt(question) {
+  const overlay = document.getElementById('aiCopilotOverlay');
+  const input = document.getElementById('aiOverlayInput');
+  if (!overlay || !input) return;
+
+  const submitPrompt = () => {
+    input.value = question;
+    sendOverlayMessage();
+  };
+
+  const overlayClosed = overlay.style.display === 'none' || !overlay.style.display;
+  if (overlayClosed) {
+    toggleAICopilot();
+    setTimeout(submitPrompt, 30);
+    return;
+  }
+
+  submitPrompt();
+}
+
+function runCommandKTickerDeepDive(symbol) {
+  openFacette('deep-dive');
+  setTimeout(() => {
+    const input = document.getElementById('stockSymbolInput');
+    if (!input) return;
+    input.value = symbol;
+    searchStock();
+  }, 30);
+}
+
 function executeCommandKAction(action) {
   closeCommandK();
 
@@ -949,12 +979,12 @@ function executeCommandKAction(action) {
     'market': () => safeSwitchTab(document.querySelector('[data-tab="market"]'), 'market'),
     'opportunities': () => safeSwitchTab(document.querySelector('[data-tab="opportunities"]'), 'opportunities'),
     'copilot': () => toggleAICopilot(),
-    'nvda-analysis': () => showToast('Opening NVDA analysis...'),
-    'portfolio-risk': () => showToast('Analyzing portfolio risk...'),
-    'market-forecast': () => showToast('Loading market forecast...'),
-    'stock-nvda': () => showToast('NVDA: $875.60 (+8.5%) - Strong Buy Signal'),
-    'stock-meta': () => showToast('META: $523.45 (+5.2%) - Buy Signal'),
-    'stock-aapl': () => showToast('AAPL: $178.23 (+2.1%) - Hold'),
+    'nvda-analysis': () => runCommandKTickerDeepDive('NVDA'),
+    'portfolio-risk': () => runCommandKCopilotPrompt('Give me a portfolio risk memo for today with verdict, main reasons, invalidation conditions, confidence, freshness, and sources.'),
+    'market-forecast': () => runCommandKCopilotPrompt('Give me a 1-week market forecast memo with regime, drivers, risks, confidence, freshness, and sources.'),
+    'stock-nvda': () => runCommandKTickerDeepDive('NVDA'),
+    'stock-meta': () => runCommandKTickerDeepDive('META'),
+    'stock-aapl': () => runCommandKTickerDeepDive('AAPL'),
     'portfolio-value': () => openDrillDown('portfolio'),
     'win-rate': () => showToast('Win Rate: 72% (Above Target)'),
     'ai-forecast': () => openDrillDown('forecast')
