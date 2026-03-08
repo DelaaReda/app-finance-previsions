@@ -120,6 +120,43 @@ is_pid_alive() {
     kill -0 "$pid" >/dev/null 2>&1
 }
 
+listener_pid_for_port() {
+    local port="$1"
+    local pid=""
+    if command -v lsof >/dev/null 2>&1; then
+        pid="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | head -n 1 || true)"
+        if [[ "$pid" =~ ^[0-9]+$ ]]; then
+            printf '%s\n' "$pid"
+            return 0
+        fi
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        pid="$(ss -ltnp "( sport = :$port )" 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1 || true)"
+        if [[ "$pid" =~ ^[0-9]+$ ]]; then
+            printf '%s\n' "$pid"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+persist_listener_pid() {
+    local port="$1"
+    local pid_file="$2"
+    local fallback_pid="${3:-}"
+    local pid=""
+    pid="$(listener_pid_for_port "$port" || true)"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        echo "$pid" > "$pid_file"
+        return 0
+    fi
+    if [[ "$fallback_pid" =~ ^[0-9]+$ ]]; then
+        echo "$fallback_pid" > "$pid_file"
+        return 0
+    fi
+    return 1
+}
+
 backend_ready() {
     curl -fsS "http://localhost:8050/api/health" >/dev/null 2>&1
 }
@@ -439,16 +476,25 @@ start_frontend() {
         exit 1
     fi
 
-    # Servir les fichiers statiques (app/) avec Python (simple et rapide)
+    # Servir les fichiers statiques (app/) avec Python (simple et rapide).
+    # `setsid` keeps the static server alive after the launcher exits; some VM
+    # sessions were leaving a stale PID while the frontend listener disappeared.
     cd "$FRONTEND_DIST"
-    nohup python3 -m http.server 5173 > /tmp/frontend.log 2>&1 &
+    if command -v setsid >/dev/null 2>&1; then
+        setsid python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
+    else
+        nohup python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
+    fi
     FRONTEND_PID=$!
-    echo $FRONTEND_PID > /tmp/finance_copilot_frontend.pid
     
     # Attendre que le frontend réponde
     log "Attente du démarrage du frontend..."
     for i in {1..10}; do
         if curl -fsS "http://localhost:5173/" >/dev/null 2>&1; then
+            persist_listener_pid 5173 /tmp/finance_copilot_frontend.pid "$FRONTEND_PID" || true
+            if is_pid_alive /tmp/finance_copilot_frontend.pid; then
+                FRONTEND_PID="$(cat /tmp/finance_copilot_frontend.pid 2>/dev/null || echo "$FRONTEND_PID")"
+            fi
             log_success "✅ Frontend opérationnel (PID: $FRONTEND_PID)"
             log_success "   URL: http://localhost:5173"
             return 0
@@ -645,4 +691,6 @@ main() {
     esac
 }
 
-main "$@"
+if [[ "${FC_COPILOT_SOURCE_ONLY:-0}" != "1" ]]; then
+    main "$@"
+fi
