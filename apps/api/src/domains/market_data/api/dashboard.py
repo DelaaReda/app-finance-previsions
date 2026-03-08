@@ -21,14 +21,26 @@ except Exception:  # pragma: no cover
   from platform.legacy.services.service_standard import service_response_with_metadata  # type: ignore
 
 # Reuse the shared V16 dashboard UI service helpers (pure Python, no FastAPI).
-from ..application.dashboard_ui_service import (  # type: ignore
-  build_portfolio_summary,
-  build_portfolio_health,
-  build_market_drivers_snapshot,
-  build_news_impact_table,
-  build_performance_snapshot,
-  load_portfolio_allocation,
-)
+# Import through the canonical package path first so the module still loads
+# when this file is reached via the legacy `platform.routes.*` namespace.
+try:
+  from domains.market_data.application.dashboard_ui_service import (  # type: ignore
+    build_portfolio_summary,
+    build_portfolio_health,
+    build_market_drivers_snapshot,
+    build_news_impact_table,
+    build_performance_snapshot,
+    load_portfolio_allocation,
+  )
+except Exception:  # pragma: no cover
+  from ..application.dashboard_ui_service import (  # type: ignore
+    build_portfolio_summary,
+    build_portfolio_health,
+    build_market_drivers_snapshot,
+    build_news_impact_table,
+    build_performance_snapshot,
+    load_portfolio_allocation,
+  )
 
 # IMPORTANT: create_app() in src/api/main.py imports `dashboard_router`
 # and mounts it with `prefix="/api/dashboard"`. Therefore the paths
