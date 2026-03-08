@@ -7436,21 +7436,6 @@ input[type="checkbox"]:checked+.toggle-switch::after {
   font-weight: 600;
 }
 
-.conviction-badge.high {
-  background: rgba(45, 158, 120, 0.15);
-  color: var(--color-success);
-}
-
-.conviction-badge.medium {
-  background: rgba(184, 134, 11, 0.15);
-  color: var(--color-warning);
-}
-
-.conviction-badge.low {
-  background: rgba(176, 180, 204, 0.1);
-  color: var(--color-text-secondary);
-}
-
 .rec-title {
   font-size: 16px;
   font-weight: 600;
