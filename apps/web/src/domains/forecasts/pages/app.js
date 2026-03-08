@@ -1233,7 +1233,10 @@ let liveDataMeta = {
   sources: [LIVE_FALLBACK_TAG],
   modelVersions: [LIVE_FALLBACK_TAG],
   warnings: ['offline-fallback'],
-  freshness: { lastFetchedAt: Date.now(), ttlMs: 60000 }
+  freshness: { lastFetchedAt: Date.now(), ttlMs: 60000 },
+  cache: { lastFetchedAt: Date.now(), ttlMs: 60000 },
+  contractState: 'unknown',
+  ingestionHealth: null
 };
 const CRITICAL_WIDGET_HEALTH_TARGETS = {
   hero: {
@@ -1863,6 +1866,7 @@ function getCriticalWidgetHealthStatus() {
     return criticalWidgetHealthOverride;
   }
 
+  const contractState = toString(liveDataMeta.contractState, '').toLowerCase();
   const warnings = toArray(liveDataMeta.warnings, []).map((entry) => toString(entry, '').toLowerCase());
   const sources = toArray(liveDataMeta.sources, []).map((entry) => toString(entry, '').toLowerCase());
   const apiStatus = toString(window.apiHealth && window.apiHealth.status, '').toLowerCase();
@@ -1883,6 +1887,12 @@ function getCriticalWidgetHealthStatus() {
   }
   if (warnings.some((entry) => /(error|failed|timeout|exception)/.test(entry))) {
     return { state: 'error' };
+  }
+  if (contractState === 'stale') {
+    return { state: 'stale', reason: 'Ingestion freshness contract reports stale sources.' };
+  }
+  if (contractState === 'unknown') {
+    return { state: 'degraded', reason: 'Ingestion freshness contract is unavailable.' };
   }
   if (warnings.some((entry) => /(stale|delay|lag|aged)/.test(entry)) || ageMs > ttlMs * 2) {
     return { state: 'stale' };
@@ -2079,9 +2089,11 @@ function updateLiveProvenance(meta = {}) {
   const sources = configuredSources.length ? configuredSources : [LIVE_FALLBACK_TAG];
   const models = configuredModels.length ? configuredModels : ['unknown'];
   const warnings = configuredWarnings.length ? configuredWarnings : [];
+  const contractState = toString(meta.contractState, '').toLowerCase();
+  const contractText = contractState ? ` | freshness: ${contractState.toUpperCase()}` : '';
   const warningText = warnings.length ? ` | warnings: ${warnings.join(', ')}` : '';
   const freshness = formatRelativeTime(meta.generatedAt);
-  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${warningText}`;
+  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${warningText}`;
 }
 
 function syncDashboardCards() {
@@ -2283,7 +2295,11 @@ function applyLiveDashboardData(payload = {}) {
     modelVersions: toArray(payload.modelVersions, toArray(payloadMeta.modelVersions, ['unknown'])),
     warnings: toArray(payload.warnings, toArray(payloadMeta.warnings, [])),
     freshness: payload.freshness || payload.cache || { lastFetchedAt: Date.now(), ttlMs: 60000 },
-    cache: payload.cache || { lastFetchedAt: Date.now(), ttlMs: 60000 }
+    cache: payload.cache || { lastFetchedAt: Date.now(), ttlMs: 60000 },
+    contractState: toString(payload.contractState || payloadMeta.contractState || '', '').toLowerCase() || 'unknown',
+    ingestionHealth: isObject(payload.ingestionHealth)
+      ? payload.ingestionHealth
+      : (isObject(payloadMeta.ingestionHealth) ? payloadMeta.ingestionHealth : null)
   };
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);

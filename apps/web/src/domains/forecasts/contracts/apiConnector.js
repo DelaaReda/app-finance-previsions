@@ -61,6 +61,27 @@ function normalizeNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseIsoTimestamp(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveFreshnessTimestamp(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return parseIsoTimestamp(value);
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return (
+      parseIsoTimestamp(value.timestamp)
+      || parseIsoTimestamp(value.generated_at)
+      || parseIsoTimestamp(value.generatedAt)
+      || parseIsoTimestamp(value.last_update)
+      || parseIsoTimestamp(value.last_success_at)
+    );
+  }
+  return null;
+}
+
 async function getNewsFeed(limit) {
   if (!limit) limit = 20;
   const payload = getResponseData(await fetchWithCache('/news/feed?limit=' + limit, 'news'));
@@ -128,6 +149,11 @@ async function getLlmJudgeSnapshot() {
 
 async function getHealth() {
   return await fetchWithCache('/health', 'health');
+}
+
+async function getIngestionHealth() {
+  const payload = getResponseData(await fetchWithCache('/ingestion/health', 'ingestion-health'));
+  return payload && typeof payload === 'object' ? payload : null;
 }
 
 async function getDashboardKPIs() {
@@ -540,6 +566,52 @@ function transformJudgeData(payload) {
   };
 }
 
+function buildLiveFreshnessContract(ingestionHealth, apiHealth) {
+  const sourceEntries = ingestionHealth && Array.isArray(ingestionHealth.sources) ? ingestionHealth.sources : [];
+  const statuses = sourceEntries
+    .map((entry) => String(entry && entry.status ? entry.status : '').toLowerCase())
+    .filter(Boolean);
+  const timestamps = [];
+  const ttlCandidates = [];
+
+  sourceEntries.forEach((entry) => {
+    const timestamp = resolveFreshnessTimestamp(entry && entry.freshness);
+    if (timestamp !== null) {
+      timestamps.push(timestamp);
+    }
+    const ttlSeconds = normalizeNumber(entry && entry.freshness ? entry.freshness.ttl_seconds : 0, 0);
+    if (ttlSeconds > 0) {
+      ttlCandidates.push(ttlSeconds * 1000);
+    }
+  });
+
+  if (apiHealth && apiHealth.last_updates && typeof apiHealth.last_updates === 'object') {
+    Object.values(apiHealth.last_updates).forEach((value) => {
+      const timestamp = resolveFreshnessTimestamp(value);
+      if (timestamp !== null) {
+        timestamps.push(timestamp);
+      }
+    });
+  }
+
+  let contractState = 'unknown';
+  if (statuses.length > 0) {
+    contractState = statuses.every((status) => status === 'fresh') ? 'ok' : 'stale';
+  } else if (ingestionHealth && ingestionHealth.all_fresh === true) {
+    contractState = 'ok';
+  } else if (ingestionHealth && normalizeNumber(ingestionHealth.degraded_count, 0) > 0) {
+    contractState = 'stale';
+  }
+
+  return {
+    contractState,
+    freshness: {
+      lastFetchedAt: timestamps.length ? Math.min(...timestamps) : Date.now(),
+      ttlMs: ttlCandidates.length ? Math.min(...ttlCandidates) : cache.TTL
+    }
+  };
+}
+
 // ─── Populate window globals used by app.js ──────────────────────────────────
 
 async function populateWindowGlobals() {
@@ -662,6 +734,11 @@ async function populateWindowGlobals() {
       window.livePortfolioSummaryFreshness = portfolioSummary.freshness;
     }
 
+    const ingestionHealth = await getIngestionHealth();
+    if (ingestionHealth) {
+      window.ingestionHealth = ingestionHealth;
+    }
+
     // Health
     const health = await getHealth();
     if (health) {
@@ -672,6 +749,14 @@ async function populateWindowGlobals() {
         const mins = Math.floor(diff / 60000);
         console.log('[API] Data freshness: news updated ' + mins + ' min ago');
       }
+    }
+
+    const liveFreshnessContract = buildLiveFreshnessContract(window.ingestionHealth || null, window.apiHealth || null);
+    window.liveFreshnessContract = liveFreshnessContract;
+    if (liveFreshnessContract.contractState === 'stale') {
+      contractWarnings.push('ingestion-contract-stale');
+    } else if (liveFreshnessContract.contractState === 'unknown') {
+      contractWarnings.push('ingestion-contract-unknown');
     }
 
     // Show LIVE badge
@@ -713,7 +798,11 @@ async function populateWindowGlobals() {
         sources: ['api-connector'],
         modelVersions: ['live']
         ,
-        warnings: contractWarnings
+        warnings: contractWarnings,
+        freshness: liveFreshnessContract.freshness,
+        cache: liveFreshnessContract.freshness,
+        contractState: liveFreshnessContract.contractState,
+        ingestionHealth: window.ingestionHealth || null
       }
     });
     window.dispatchEvent(liveEvent);
@@ -779,7 +868,14 @@ window.getLiveDashboardData = () => ({
   sources: ['api-connector'],
   modelVersions: ['live'],
   warnings: window.liveContractWarnings || ['live-connector'],
-  freshness: { lastFetchedAt: Date.now(), ttlMs: cache.TTL }
+  freshness: window.liveFreshnessContract && window.liveFreshnessContract.freshness
+    ? window.liveFreshnessContract.freshness
+    : { lastFetchedAt: Date.now(), ttlMs: cache.TTL },
+  cache: window.liveFreshnessContract && window.liveFreshnessContract.freshness
+    ? window.liveFreshnessContract.freshness
+    : { lastFetchedAt: Date.now(), ttlMs: cache.TTL },
+  contractState: window.liveFreshnessContract ? window.liveFreshnessContract.contractState : 'unknown',
+  ingestionHealth: window.ingestionHealth || null
 });
 
 window.refreshLiveData = async () => {
