@@ -148,7 +148,16 @@ async function getLlmJudgeSnapshot() {
 }
 
 async function getHealth() {
-  return await fetchWithCache('/health', 'health');
+  const payload = getResponseData(await fetchWithCache('/health', 'health'));
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
+async function getStatus() {
+  const payload = getResponseData(await fetchWithCache('/status', 'status'));
+  if (payload && typeof payload === 'object' && Object.keys(payload).length > 0) {
+    return payload;
+  }
+  return await getHealth();
 }
 
 async function getIngestionHealth() {
@@ -747,10 +756,11 @@ async function populateWindowGlobals() {
     }
 
     // Health
-    const health = await getHealth();
-    if (health) {
-      window.apiHealth = health;
-      const lastUpdate = health.last_updates && health.last_updates.news;
+    const status = await getStatus();
+    if (status) {
+      window.apiStatus = status;
+      window.apiHealth = status;
+      const lastUpdate = status.last_updates && status.last_updates.news;
       if (lastUpdate) {
         const diff = Date.now() - new Date(lastUpdate).getTime();
         const mins = Math.floor(diff / 60000);
@@ -847,6 +857,7 @@ window.FinanceAPI = {
   getStockPrices,
   getTopMovers,
   getAlerts,
+  getStatus,
   getHealth,
   getJudgeAnalysis,
   askCopilot,
