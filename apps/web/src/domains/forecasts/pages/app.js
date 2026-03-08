@@ -1349,6 +1349,9 @@ const FALLBACK_APP_DATA = {
 
 let facettes = window.facettes || FALLBACK_FACETTES;
 let v11Data = window.v11Data || FALLBACK_V11_DATA;
+let baseProfileAISuggestions = Array.isArray(v11Data.aiSuggestions) && v11Data.aiSuggestions.length
+  ? v11Data.aiSuggestions.map((suggestion) => ({ ...suggestion }))
+  : DEFAULT_PROFILE_AI_SUGGESTIONS.map((suggestion) => ({ ...suggestion }));
 let tradeIdeas = sanitizeTradeIdeas(window.tradeIdeas || FALLBACK_TRADE_IDEAS);
 let marketCalendar = sanitizeMarketCalendar(window.marketCalendar || FALLBACK_MARKET_CALENDAR);
 let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
@@ -2534,7 +2537,7 @@ function resolveProfilePreset(profile) {
     refreshInterval: preset?.refreshInterval || FALLBACK_V11_DATA.userProfile.preferences.refreshInterval,
     judgePlaceholder: preset?.judgePlaceholder || DEFAULT_PROFILE_JUDGE_PLACEHOLDER,
     judgeExample: preset?.judgeExample || DEFAULT_PROFILE_JUDGE_EXAMPLE,
-    aiSuggestions: cloneProfileItems(preset?.aiSuggestions || DEFAULT_PROFILE_AI_SUGGESTIONS),
+    aiSuggestions: cloneProfileItems(preset?.aiSuggestions || baseProfileAISuggestions),
     quickActions: cloneProfileItems(preset?.quickActions || DEFAULT_PROFILE_QUICK_ACTIONS)
   };
 }
