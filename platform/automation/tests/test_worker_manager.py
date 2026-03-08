@@ -144,6 +144,9 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertIn("worker_expired_01", cleaned["removed"])
 
     def test_openclaw_capability_workspace_writes_minimal_codex_config(self) -> None:
+        for relative in ("apps", "platform", "scripts", "docs", "data", "tests", "memory"):
+            target = self.root / relative
+            target.mkdir(parents=True, exist_ok=True)
         workspace = _openclaw_capability_workspace(self.root, "planner-dev", "gpt-5.4", "high")
         config_path = workspace / ".codex" / "config.toml"
         self.assertTrue(config_path.exists())
@@ -153,11 +156,16 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertIn("[features]", body)
         self.assertNotIn("[agents]", body)
         self.assertIn("bounded planner-owned capability executor", (workspace / "SOUL.md").read_text(encoding="utf-8"))
-        self.assertIn("Do not spawn subagents", (workspace / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertIn("Codex native multi-agent helpers", (workspace / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertIn("real project tree is available via `./repo`", (workspace / "AGENTS.md").read_text(encoding="utf-8"))
         self.assertFalse((workspace / "BOOTSTRAP.md").exists())
         for skill_name in ("browser-smoke", "repo-scan", "runtime-triage", "delivery-proof-check"):
             target = workspace / "skills" / skill_name
             self.assertTrue(target.is_symlink(), target)
+        self.assertTrue((workspace / "repo").is_symlink())
+        for relative in ("apps", "platform", "scripts", "docs", "data", "tests", "memory"):
+            self.assertTrue((workspace / relative).is_symlink(), relative)
+        self.assertIn("thin shell around the real project tree", (workspace / "WORKSPACE_MAP.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

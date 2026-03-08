@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import uuid
@@ -261,11 +262,12 @@ This workspace is a minimal capability runner for planner-owned execution.
 
 Rules:
 1. Do not perform bootstrap or identity setup.
-2. Do not spawn subagents, explorers, or workers.
+2. Prefer Codex native multi-agent helpers (`worker`, `explorer`, `monitor`) when parallel exploration or long polling is genuinely useful; do not hand-roll your own orchestration loops.
 3. Do not read MEMORY.md or daily memory unless the task explicitly asks for it.
 4. Read only the files directly required by the task prompt.
 5. Prefer one minimal patch plus targeted verification.
 6. Return only the final structured result requested by the prompt.
+7. The real project tree is available via `./repo` and the symlinked top-level directories in this workspace.
 """
 OPENCLAW_CAPABILITY_IDENTITY = """# IDENTITY.md
 
@@ -273,6 +275,15 @@ name: Planner Capability
 role: bounded execution helper
 """
 OPENCLAW_CAPABILITY_HEARTBEAT = "HEARTBEAT_OK\n"
+OPENCLAW_CAPABILITY_VISIBLE_PATHS = (
+    "apps",
+    "platform",
+    "scripts",
+    "docs",
+    "data",
+    "tests",
+    "memory",
+)
 
 
 def _openclaw_env() -> dict[str, str]:
@@ -294,6 +305,36 @@ def _write_text_if_changed(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _ensure_workspace_symlink(link_path: Path, target_path: Path) -> None:
+    if not target_path.exists():
+        return
+    if link_path.is_symlink():
+        try:
+            if link_path.resolve() == target_path.resolve():
+                return
+        except Exception:
+            pass
+        link_path.unlink()
+    elif link_path.exists():
+        return
+    link_path.symlink_to(target_path, target_is_directory=target_path.is_dir())
+
+
+def _seed_capability_workspace_view(workspace: Path, root: Path) -> None:
+    _ensure_workspace_symlink(workspace / "repo", root)
+    for relative in OPENCLAW_CAPABILITY_VISIBLE_PATHS:
+        _ensure_workspace_symlink(workspace / relative, root / relative)
+    _write_text_if_changed(
+        workspace / "WORKSPACE_MAP.md",
+        (
+            "# WORKSPACE_MAP.md\n\n"
+            "This capability workspace is a thin shell around the real project tree.\n\n"
+            "Use `./repo` or the symlinked top-level directories (`apps/`, `platform/`, `scripts/`, `docs/`, `data/`, `tests/`, `memory/`) "
+            "to inspect and modify the actual repo.\n"
+        ),
+    )
+
+
 def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, thinking: str = "medium") -> Path:
     safe_key = canonical_role(workspace_key).replace("/", "_") or "shared"
     workspace = root / "logs-codex-runs" / "openclaw-capabilities" / safe_key
@@ -312,6 +353,7 @@ def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, t
     if bootstrap.exists():
         bootstrap.unlink()
     sync_canonical_skills(workspace, root)
+    _seed_capability_workspace_view(workspace, root)
     return workspace
 
 

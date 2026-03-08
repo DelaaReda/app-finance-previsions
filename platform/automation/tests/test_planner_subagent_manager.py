@@ -25,6 +25,7 @@ SPEC.loader.exec_module(MODULE)
 
 PlannerSubagentRecord = MODULE.PlannerSubagentRecord
 _load_config = MODULE._load_config
+_build_prompt = MODULE._build_prompt
 plan_subagent = MODULE.plan_subagent
 run_subagent = MODULE.run_subagent
 collect_subagent = MODULE.collect_subagent
@@ -84,6 +85,11 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         result = plan_subagent(self.config, "admin", "dev", "BATCH-61-DEV-01", "delivery")
         self.assertFalse(result["allowed"])
         self.assertIn("parent_role_forbidden", result["reason"])
+
+    def test_prompt_mentions_native_codex_multi_agent_helpers(self) -> None:
+        prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
+        self.assertIn("Codex native multi-agent helpers", prompt)
+        self.assertIn("`monitor`", prompt)
 
     def test_duplicate_guard_blocks_same_target_and_task(self) -> None:
         record = PlannerSubagentRecord(

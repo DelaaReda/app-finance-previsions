@@ -369,7 +369,7 @@ def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | N
         if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
-        if state == STATE_READY:
+        if state in {STATE_READY, "READY_PLANNER"}:
             candidates.append(row)
             continue
         if state == STATE_IN_PROGRESS:
@@ -681,6 +681,25 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
         task_id_value = str(candidate.get("id", "")).strip()
         if not task_id_value:
             return {"dispatched": False, "reason": "invalid_admin_task"}
+        candidate_state = str(candidate.get("state", "")).strip().upper()
+        if candidate_state == STATE_BLOCKED:
+            candidate["state"] = STATE_READY
+            candidate["blocked_reason"] = ""
+            candidate["updated_at"] = now_iso()
+            append_event(
+                board,
+                "planner_orchestrator_admin_retry_ready",
+                {"task_id": task_id_value, "source": source, "reason": "recoverable_capability_failure"},
+            )
+        elif candidate_state == STATE_IN_PROGRESS:
+            candidate["blocked_reason"] = ""
+            candidate["stalled_reason"] = ""
+            candidate["updated_at"] = now_iso()
+            append_event(
+                board,
+                "planner_orchestrator_admin_resume_in_progress",
+                {"task_id": task_id_value, "source": source, "reason": "no_active_admin_capability"},
+            )
         _claim_task(board_path=board_path, role="admin", task_id_value=task_id_value, source=source, board=board)
     chosen_backend = str(backend or "auto").strip() or "auto"
     message = _build_admin_dispatch_message(candidate)

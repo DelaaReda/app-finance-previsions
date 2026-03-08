@@ -301,6 +301,9 @@ ${CRON_CONTENT}
 # [finance-copilot] Stale role locks cleanup (memory + run locks >15min)
 */10 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && bash scripts/cleanup_stale_role_locks.sh' >> /tmp/fc-stale-lock-cleanup.log 2>&1
 
+# [finance-copilot] Planner delivery watchdog (self-heal capability dispatch between planner ticks)
+*/5 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && bash scripts/planner_delivery_watchdog.sh --duration 900 --interval 60' >> ${ROOT}/logs-codex-runs/ops/planner-delivery-watchdog.cron.log 2>&1
+
 # [finance-copilot] Monitor guard (api 7779 + tunnel fc-monitor.loca.lt)
 */1 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && FC_MONITOR_AUTO_START_STACK=${MONITOR_AUTO_START_STACK} FC_MONITOR_AUTO_START_COOLDOWN_SECONDS=${MONITOR_AUTO_START_COOLDOWN_SECONDS} bash scripts/monitor_stack_guard.sh' >> ${ROOT}/logs-codex-runs/monitor-guard.cron.log 2>&1
 

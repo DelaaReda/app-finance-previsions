@@ -576,6 +576,7 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "- Do not call parallel_workstream.py claim/complete/handoff.\n"
         "- Do not update queue/workboard/contracts directly.\n"
         "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
+        "- Use Codex native multi-agent helpers when beneficial: `explorer` for targeted repo inspection, `worker` for bounded implementation, `monitor` for waiting/polling on long-running checks. Keep helper usage narrow and role-appropriate.\n"
         "- Keep scope narrow to the owner task and the planner instruction.\n"
         "- If blocked, say exactly what the planner should do next.\n"
         "- Return ONLY one JSON object with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"

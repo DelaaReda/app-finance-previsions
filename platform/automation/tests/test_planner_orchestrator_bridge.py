@@ -195,6 +195,58 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertIn("admin_dispatch:BATCH-28-ADMIN-01", updated)
         self.assertIn("admin_complete:BATCH-28-ADMIN-01", updated)
 
+    def test_recoverable_blocked_admin_task_is_retried(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [
+                        {"id": "BATCH-27", "state": "BLOCKED", "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "tasks": [
+                        {"id": "BATCH-27-DEV-03", "stream_id": "BATCH-27", "role": "dev", "state": "DONE", "updated_at": "2026-03-06T00:00:00Z"},
+                        {
+                            "id": "BATCH-27-ADMIN-01",
+                            "stream_id": "BATCH-27",
+                            "role": "admin",
+                            "state": "BLOCKED",
+                            "priority": "P1",
+                            "depends_on": ["BATCH-27-DEV-03"],
+                            "blocked_reason": "planner_admin_capability_failed:workspace_scope_mismatch",
+                            "updated_at": "2026-03-07T00:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "BLOCKED", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: RETRY_ADMIN",
+                "EVIDENCE: task_update=analysis_only; run_note=retry recoverable admin capability; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=retry admin",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: RETRY_ADMIN_B27",
+            ]
+        )
+        _, payload = apply_bridge(self.root, "planner", contract, "test", backend="mock")
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["dispatch"]["completed"])
+        board = json.loads(self.board_path.read_text())
+        tasks = {task["id"]: task for task in board["tasks"]}
+        self.assertEqual(tasks["BATCH-27-ADMIN-01"]["state"], "DONE")
+        self.assertEqual(tasks["BATCH-27-ADMIN-01"].get("blocked_reason", ""), "")
+
     def test_recoverable_blocked_dev_task_is_retried(self) -> None:
         self.board_path.write_text(
             json.dumps(

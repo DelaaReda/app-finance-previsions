@@ -35,17 +35,21 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo $$ >"$PID_FILE"
-trap 'rm -f "$PID_FILE"' EXIT
-
 cd "$ROOT"
 bash scripts/runtime_host_check.sh >/dev/null
-
-end_ts=$(( $(date +%s) + DURATION_SECONDS ))
 
 log() {
   printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG_FILE"
 }
+
+echo $$ >"$PID_FILE"
+trap 'rc=$?; log "watchdog_exit rc=$rc"; rm -f "$PID_FILE"; exit $rc' EXIT INT TERM
+
+if [ "${DURATION_SECONDS}" -le 0 ]; then
+  end_ts=0
+else
+  end_ts=$(( $(date +%s) + DURATION_SECONDS ))
+fi
 
 cleanup_orphan_capabilities() {
   python3 - <<'PY'
@@ -120,9 +124,44 @@ print(pd.get("recommended_next_action") or "none")
 PY
 }
 
-log "watchdog_start interval=${INTERVAL_SECONDS}s duration=${DURATION_SECONDS}s"
+force_bridge_dispatch_if_needed() {
+  local tmp_status="/tmp/planner-watchdog-status-post.json"
+  curl -fsS "http://127.0.0.1:7779/api/status" >"$tmp_status" || return 0
+  local should_force
+  should_force="$(python3 - <<'PY' "$tmp_status"
+import json, pathlib, sys
+status = json.loads(pathlib.Path(sys.argv[1]).read_text())
+pd = status.get("planner_dispatch") or {}
+active = int(pd.get("active_subagents") or 0)
+pd_status = str(pd.get("status") or "").lower()
+needs_dispatch = bool(pd.get("needs_dispatch"))
+print("1" if active == 0 and (needs_dispatch or pd_status in {"dispatch_needed", "degraded"}) else "0")
+PY
+)"
+  if [ "$should_force" != "1" ]; then
+    return 0
+  fi
+  local contract_file
+  contract_file="$(mktemp /tmp/planner-watchdog-bridge.XXXXXX.txt)"
+  cat >"$contract_file" <<'EOF'
+STATUS: IN_PROGRESS
+DELTA: PLANNER_PROGRESS_REQUIRED
+EVIDENCE: task_update=analysis_only; run_note=watchdog forcing planner bridge dispatch from runtime truth; issues=none; issue_count=0; issue_severity=none
+RISKS: none
+NEXT: owner=planner; action=dispatch next capability now
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: WATCHDOG_FORCE_DISPATCH
+EOF
+  log "planner_bridge_force_start"
+  python3 platform/automation/planner_orchestrator_bridge.py --root "$ROOT" --role planner --source watchdog_recovery --backend auto --contract-file "$contract_file" >>"$LOG_FILE" 2>&1 || true
+  rm -f "$contract_file"
+  log "planner_bridge_force_end"
+}
 
-while [ "$(date +%s)" -lt "$end_ts" ]; do
+log "watchdog_start interval=${INTERVAL_SECONDS}s duration=${DURATION_SECONDS}s pid=$$"
+
+while [ "$end_ts" -eq 0 ] || [ "$(date +%s)" -lt "$end_ts" ]; do
   cleanup_result="$(cleanup_orphan_capabilities 2>>"$LOG_FILE" || true)"
   [ -n "$cleanup_result" ] && log "$cleanup_result"
   refresh_forecasts_if_needed
@@ -137,6 +176,7 @@ while [ "$(date +%s)" -lt "$end_ts" ]; do
     bash scripts/fc_agent_tick.sh planner >>"$LOG_FILE" 2>&1 || true
     log "planner_tick_end"
   fi
+  force_bridge_dispatch_if_needed
   sleep "$INTERVAL_SECONDS"
 done
 
