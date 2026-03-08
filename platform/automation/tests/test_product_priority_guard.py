@@ -431,6 +431,157 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["browser_proof_required_count"], 1)
             self.assertEqual(metrics["browser_proof_present_count"], 1)
 
+    def test_delivery_control_separates_historical_browser_debt_from_future_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 20, 0, tzinfo=timezone.utc)
+
+            old_proof = proofs / "old-web.yaml"
+            old_proof.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/web/src/pages/dashboard.js"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            new_proof = proofs / "new-api.yaml"
+            new_proof.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/api/src/service.py"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-90-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Update dashboard UI",
+                                "artifact": "apps/web/src/pages/dashboard.js",
+                                "commit_sha": "abcdef1234567",
+                                "tests_run": "npm test -- dashboard",
+                            },
+                            {
+                                "id": "BATCH-99-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Patch API contract",
+                                "artifact": "apps/api/src/service.py",
+                                "commit_sha": "fedcba9876543",
+                                "tests_run": "pytest -q",
+                                "qa_status": "completed",
+                            },
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(datetime(2026, 3, 8, 18, 30, tzinfo=timezone.utc)),
+                                "details": {
+                                    "task_id": "BATCH-90-DEV-01",
+                                    "artifact": "apps/web/src/pages/dashboard.js",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/old-web.yaml",
+                                },
+                            },
+                            {
+                                "kind": "complete",
+                                "at": _iso(datetime(2026, 3, 8, 19, 30, tzinfo=timezone.utc)),
+                                "details": {
+                                    "task_id": "BATCH-99-DEV-01",
+                                    "artifact": "apps/api/src/service.py",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/new-api.yaml",
+                                },
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_control_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["integrity_status"], "ok")
+            self.assertEqual(metrics["historical_debt"]["count"], 1)
+            self.assertEqual(metrics["browser_proof_pipeline"]["status"], "ok")
+
+    def test_delivery_control_marks_future_qa_and_browser_pipeline_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 20, 5, tzinfo=timezone.utc)
+
+            proof_file = proofs / "future-web.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "apps/monitor/server.py"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-100-DEV-01",
+                                "role": "dev",
+                                "state": "DONE",
+                                "title": "Refine monitor panel",
+                                "artifact": "apps/monitor/server.py",
+                                "commit_sha": "abcdef1234567",
+                                "tests_run": "pytest apps/monitor/tests",
+                                "qa_status": "running",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(datetime(2026, 3, 8, 19, 45, tzinfo=timezone.utc)),
+                                "details": {
+                                    "task_id": "BATCH-100-DEV-01",
+                                    "artifact": "apps/monitor/server.py",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/future-web.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_control_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "degraded")
+            self.assertEqual(metrics["qa_review_pipeline"]["status"], "degraded")
+            self.assertEqual(metrics["browser_proof_pipeline"]["status"], "degraded")
+            self.assertEqual(metrics["pipeline_counts"]["qa_review_pending_count"], 1)
+            self.assertEqual(metrics["pipeline_counts"]["browser_validation_pending_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

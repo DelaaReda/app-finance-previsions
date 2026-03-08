@@ -20,6 +20,7 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Monitor/runtime behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
 - Dev activation gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - Forecast/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
+- Delivery monitoring and triage: [DELIVERY_CONTROL_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/DELIVERY_CONTROL_RUNBOOK.md)
 
 ## Canonical code entrypoints
 - Runner config: [runner.v1.yaml](/home/venom/analyse-financiere/platform/config/runner/runner.v1.yaml)

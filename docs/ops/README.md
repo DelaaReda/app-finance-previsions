@@ -17,6 +17,7 @@ Use this index before reading operational documentation.
 - Cron/runtime profiles: [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
 - Development cutover gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - Product/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
+- Delivery monitoring and triage: [DELIVERY_CONTROL_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/DELIVERY_CONTROL_RUNBOOK.md)
 
 ## Canonical docs
 - [CURRENT_ARCHITECTURE_ENTRYPOINTS.md](/home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md)
@@ -26,6 +27,7 @@ Use this index before reading operational documentation.
 - [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
 - [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
+- [DELIVERY_CONTROL_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/DELIVERY_CONTROL_RUNBOOK.md)
 
 ## Reference docs
 - [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)

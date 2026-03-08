@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -82,6 +83,8 @@ BROWSER_PROOF_MARKERS = (
     "/.openclaw/media/browser/",
 )
 COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
+QA_SUCCESS_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
+DEFAULT_DELIVERY_FUTURE_ROLLOUT_AT = "2026-03-08T19:00:00Z"
 
 
 def _now() -> datetime:
@@ -119,6 +122,16 @@ def _age_s(raw: Any, *, now: datetime | None = None) -> int:
         return -1
     current = now or _now()
     return max(0, int((current - dt).total_seconds()))
+
+
+def _delivery_future_rollout_at() -> datetime:
+    configured = os.environ.get("FC_DELIVERY_FUTURE_ROLLOUT_AT", DEFAULT_DELIVERY_FUTURE_ROLLOUT_AT).strip()
+    parsed = _parse_dt(configured)
+    if parsed is not None:
+        return parsed
+    fallback = _parse_dt(DEFAULT_DELIVERY_FUTURE_ROLLOUT_AT)
+    assert fallback is not None
+    return fallback
 
 
 def _state_from_age(age_s: int, threshold_s: int) -> str:
@@ -473,6 +486,61 @@ def _has_browser_proof(manifest_text: str, artifact: str) -> bool:
     return any(marker in lowered for marker in BROWSER_PROOF_MARKERS)
 
 
+def _qa_status(task: dict[str, Any]) -> str:
+    return str(task.get("qa_status", "")).strip().lower()
+
+
+def _qa_completed(task: dict[str, Any]) -> bool:
+    return _qa_status(task) in QA_SUCCESS_STATUSES
+
+
+def _build_delivery_event_record(
+    root: Path,
+    event: dict[str, Any],
+    task: dict[str, Any],
+    *,
+    rollout_at: datetime,
+) -> dict[str, Any]:
+    details = event.get("details") if isinstance(event.get("details"), dict) else {}
+    task_id = str(details.get("task_id", "")).strip() or "unknown_task"
+    proof_manifest = str(details.get("proof_manifest", "")).strip()
+    artifact = str(details.get("artifact", "")).strip()
+    manifest_path = root / proof_manifest if proof_manifest and not proof_manifest.startswith("/") else Path(proof_manifest or "")
+    manifest_text = _manifest_text(manifest_path) if manifest_path.exists() else ""
+    task_commit = str(task.get("commit_sha", "")).strip()
+    at_dt = _parse_dt(event.get("at"))
+    has_manifest = bool(manifest_text)
+    has_tests = 'result: "PASS"' in manifest_text or "tests:" in manifest_text
+    has_commit = (
+        bool(COMMIT_RE.search(artifact))
+        or bool(COMMIT_RE.search(manifest_text))
+        or bool(COMMIT_RE.search(task_commit))
+    )
+    requires_browser = _task_requires_browser_proof(task, manifest_text, artifact)
+    has_browser_proof = _has_browser_proof(manifest_text, artifact)
+    role = str(task.get("role", "")).strip().lower()
+    qa_required = role == "dev"
+    qa_complete = _qa_completed(task)
+    suspicious = not has_manifest or not has_tests or not has_commit
+    return {
+        "task_id": task_id,
+        "at": _iso(at_dt or _now()),
+        "is_future": bool(at_dt and at_dt >= rollout_at),
+        "role": role or "unknown",
+        "artifact": artifact or str(task.get("artifact", "")).strip(),
+        "has_manifest": has_manifest,
+        "has_tests": has_tests,
+        "has_commit": has_commit,
+        "requires_browser_proof": requires_browser,
+        "has_browser_proof": has_browser_proof,
+        "qa_required": qa_required,
+        "qa_completed": qa_complete,
+        "qa_status": _qa_status(task) or "none",
+        "suspicious": suspicious,
+        "proof_manifest": proof_manifest,
+    }
+
+
 def build_delivery_integrity_metrics(
     root: Path,
     *,
@@ -480,6 +548,7 @@ def build_delivery_integrity_metrics(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current = now or _now()
+    rollout_at = _delivery_future_rollout_at()
     workboard = _read_json(resolve_orchestrator_read_path(root, "parallel-workstreams.json"))
     tasks_by_id: dict[str, dict[str, Any]] = {}
     if isinstance(workboard, dict):
@@ -507,6 +576,17 @@ def build_delivery_integrity_metrics(
     browser_proof_required = 0
     suspicious: list[str] = []
     browser_missing: list[str] = []
+    future_total = 0
+    future_with_manifest = 0
+    future_with_tests = 0
+    future_with_commit_evidence = 0
+    future_with_browser_proof = 0
+    future_browser_proof_required = 0
+    future_suspicious: list[str] = []
+    future_browser_missing: list[str] = []
+    historical_browser_missing: list[str] = []
+    historical_suspicious: list[str] = []
+    records: list[dict[str, Any]] = []
     for event in recent:
         details = event.get("details") if isinstance(event.get("details"), dict) else {}
         task_id = str(details.get("task_id", "")).strip() or "unknown_task"
@@ -515,38 +595,57 @@ def build_delivery_integrity_metrics(
         manifest_path = root / proof_manifest if proof_manifest and not proof_manifest.startswith("/") else Path(proof_manifest or "")
         manifest_text = _manifest_text(manifest_path) if manifest_path.exists() else ""
         task = tasks_by_id.get(task_id, {})
-        task_commit = str(task.get("commit_sha", "")).strip()
         if _is_doc_only_completion(task, manifest_text, artifact):
             continue
+        record = _build_delivery_event_record(root, event, task, rollout_at=rollout_at)
+        records.append(record)
         total += 1
-        if manifest_text:
+        if record["has_manifest"]:
             with_manifest += 1
-        has_tests = 'result: "PASS"' in manifest_text or "tests:" in manifest_text
-        has_commit = (
-            bool(COMMIT_RE.search(artifact))
-            or bool(COMMIT_RE.search(manifest_text))
-            or bool(COMMIT_RE.search(task_commit))
-        )
-        requires_browser = _task_requires_browser_proof(task, manifest_text, artifact)
-        has_browser_proof = _has_browser_proof(manifest_text, artifact)
-        if has_tests:
+        if record["has_tests"]:
             with_tests += 1
-        if has_commit:
+        if record["has_commit"]:
             with_commit_evidence += 1
-        if requires_browser:
+        if record["requires_browser_proof"]:
             browser_proof_required += 1
-            if has_browser_proof:
+            if record["has_browser_proof"]:
                 with_browser_proof += 1
             else:
                 browser_missing.append(task_id)
-        if not manifest_text or not has_tests or not has_commit:
+        if record["suspicious"]:
             suspicious.append(task_id)
+        if record["is_future"]:
+            future_total += 1
+            if record["has_manifest"]:
+                future_with_manifest += 1
+            if record["has_tests"]:
+                future_with_tests += 1
+            if record["has_commit"]:
+                future_with_commit_evidence += 1
+            if record["requires_browser_proof"]:
+                future_browser_proof_required += 1
+                if record["has_browser_proof"]:
+                    future_with_browser_proof += 1
+                else:
+                    future_browser_missing.append(task_id)
+            if record["suspicious"]:
+                future_suspicious.append(task_id)
+        else:
+            if record["requires_browser_proof"] and not record["has_browser_proof"]:
+                historical_browser_missing.append(task_id)
+            if record["suspicious"]:
+                historical_suspicious.append(task_id)
 
     status = "ok"
     if total and suspicious:
         status = "degraded"
+    future_status = "ok"
+    if future_total and (future_suspicious or future_browser_missing):
+        future_status = "degraded"
+    historical_debt = list(dict.fromkeys(historical_browser_missing + historical_suspicious))
     return {
         "generated_at": _iso(current),
+        "future_rollout_at": _iso(rollout_at),
         "window_hours": int(window_hours),
         "recent_completions": total,
         "proof_manifest_coverage": round(with_manifest / total, 3) if total else 1.0,
@@ -558,7 +657,146 @@ def build_delivery_integrity_metrics(
         "browser_proof_missing_task_ids": browser_missing[:8],
         "suspicious_completion_count": len(suspicious),
         "suspicious_task_ids": suspicious[:8],
+        "future_recent_completions": future_total,
+        "future_proof_manifest_coverage": round(future_with_manifest / future_total, 3) if future_total else 1.0,
+        "future_tests_evidence_coverage": round(future_with_tests / future_total, 3) if future_total else 1.0,
+        "future_commit_evidence_coverage": round(future_with_commit_evidence / future_total, 3) if future_total else 1.0,
+        "future_browser_proof_required_count": future_browser_proof_required,
+        "future_browser_proof_present_count": future_with_browser_proof,
+        "future_browser_proof_coverage": round(future_with_browser_proof / future_browser_proof_required, 3) if future_browser_proof_required else 1.0,
+        "future_browser_proof_missing_task_ids": future_browser_missing[:8],
+        "future_suspicious_completion_count": len(future_suspicious),
+        "future_suspicious_task_ids": future_suspicious[:8],
+        "future_status": future_status,
+        "historical_debt_count": len(historical_debt),
+        "historical_browser_proof_missing_task_ids": historical_browser_missing[:8],
+        "historical_suspicious_task_ids": historical_suspicious[:8],
+        "records": records,
         "status": status,
+    }
+
+
+def build_delivery_control_metrics(
+    root: Path,
+    *,
+    window_hours: int = 24,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    metrics = build_delivery_integrity_metrics(root, window_hours=window_hours, now=now)
+    records = metrics.get("records", []) if isinstance(metrics, dict) else []
+    if not isinstance(records, list):
+        records = []
+
+    healthy_items: list[dict[str, Any]] = []
+    backfill_items: list[dict[str, Any]] = []
+    suspicious_items: list[dict[str, Any]] = []
+    qa_pending = 0
+    qa_completed = 0
+    browser_pending = 0
+    delivery_ready = 0
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        task_id = str(record.get("task_id", "")).strip() or "unknown_task"
+        role = str(record.get("role", "unknown")).strip() or "unknown"
+        is_future = bool(record.get("is_future"))
+        suspicious = bool(record.get("suspicious"))
+        requires_browser = bool(record.get("requires_browser_proof"))
+        has_browser = bool(record.get("has_browser_proof"))
+        qa_required = bool(record.get("qa_required"))
+        qa_done = bool(record.get("qa_completed"))
+        reasons: list[str] = []
+        if qa_required:
+            if qa_done:
+                qa_completed += 1
+            elif is_future:
+                qa_pending += 1
+                reasons.append("qa_pending")
+        if requires_browser and not has_browser:
+            if is_future:
+                browser_pending += 1
+            reasons.append("browser_proof_missing")
+        if suspicious:
+            suspicious_items.append({"task_id": task_id, "role": role, "reason": "suspicious_completion"})
+            continue
+        if reasons:
+            backfill_items.append(
+                {
+                    "task_id": task_id,
+                    "role": role,
+                    "reason": ", ".join(reasons),
+                    "phase": "future" if is_future else "historical",
+                }
+            )
+            continue
+        healthy_items.append({"task_id": task_id, "role": role, "reason": "proof_complete"})
+        if is_future:
+            delivery_ready += 1
+
+    return {
+        "generated_at": metrics.get("generated_at", _iso()),
+        "status": metrics.get("future_status", "unknown"),
+        "integrity_status": metrics.get("status", "unknown"),
+        "future_status": metrics.get("future_status", "unknown"),
+        "future_rollout_at": metrics.get("future_rollout_at", "unknown"),
+        "coverage": {
+            "proof_manifest": metrics.get("proof_manifest_coverage", 1.0),
+            "tests_evidence": metrics.get("tests_evidence_coverage", 1.0),
+            "commit_evidence": metrics.get("commit_evidence_coverage", 1.0),
+            "browser_proof": metrics.get("browser_proof_coverage", 1.0),
+        },
+        "future_coverage": {
+            "proof_manifest": metrics.get("future_proof_manifest_coverage", 1.0),
+            "tests_evidence": metrics.get("future_tests_evidence_coverage", 1.0),
+            "commit_evidence": metrics.get("future_commit_evidence_coverage", 1.0),
+            "browser_proof": metrics.get("future_browser_proof_coverage", 1.0),
+        },
+        "needs_proof_backfill": {
+            "count": len(backfill_items),
+            "task_ids": [item["task_id"] for item in backfill_items[:8]],
+            "items": backfill_items[:8],
+        },
+        "suspicious_completions": {
+            "count": len(suspicious_items),
+            "task_ids": [item["task_id"] for item in suspicious_items[:8]],
+            "items": suspicious_items[:8],
+        },
+        "healthy_deliveries": {
+            "count": len(healthy_items),
+            "task_ids": [item["task_id"] for item in healthy_items[:8]],
+            "items": healthy_items[:8],
+        },
+        "pipeline_counts": {
+            "recent_completions": metrics.get("recent_completions", 0),
+            "future_recent_completions": metrics.get("future_recent_completions", 0),
+            "qa_review_pending_count": qa_pending,
+            "qa_review_completed_count": qa_completed,
+            "browser_validation_pending_count": browser_pending,
+            "delivery_ready_to_close_count": delivery_ready,
+        },
+        "browser_proof_pipeline": {
+            "status": "ok" if browser_pending == 0 else "degraded",
+            "required_count": metrics.get("future_browser_proof_required_count", 0),
+            "present_count": metrics.get("future_browser_proof_present_count", 0),
+            "missing_task_ids": metrics.get("future_browser_proof_missing_task_ids", []),
+        },
+        "qa_review_pipeline": {
+            "status": "ok" if qa_pending == 0 else "degraded",
+            "pending_count": qa_pending,
+            "completed_count": qa_completed,
+        },
+        "future_delivery_integrity": {
+            "status": metrics.get("future_status", "unknown"),
+            "recent_completions": metrics.get("future_recent_completions", 0),
+            "browser_proof_missing_task_ids": metrics.get("future_browser_proof_missing_task_ids", []),
+            "suspicious_task_ids": metrics.get("future_suspicious_task_ids", []),
+        },
+        "historical_debt": {
+            "count": metrics.get("historical_debt_count", 0),
+            "browser_proof_missing_task_ids": metrics.get("historical_browser_proof_missing_task_ids", []),
+            "suspicious_task_ids": metrics.get("historical_suspicious_task_ids", []),
+        },
     }
 
 
@@ -591,6 +829,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("metrics")
     sub.add_parser("delivery")
+    sub.add_parser("delivery-control")
     sub.add_parser("prompt-context")
     args = parser.parse_args(argv)
 
@@ -601,6 +840,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "delivery":
         print(json.dumps(build_delivery_integrity_metrics(root), ensure_ascii=True))
+        return 0
+    if args.cmd == "delivery-control":
+        print(json.dumps(build_delivery_control_metrics(root), ensure_ascii=True))
         return 0
     print(prompt_context(root, api_base_url=api_base_url, timeout_s=args.timeout_s))
     return 0

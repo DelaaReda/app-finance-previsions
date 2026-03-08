@@ -361,6 +361,10 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
 
     product_value: dict[str, Any] = {}
     delivery_integrity: dict[str, Any] = {}
+    delivery_future_integrity: dict[str, Any] = {}
+    browser_proof_pipeline: dict[str, Any] = {}
+    suspicious_completions: dict[str, Any] = {}
+    qa_review_pipeline: dict[str, Any] = {}
     planner_dispatch: dict[str, Any] = {}
     guard_module = _load_product_priority_guard(root)
     if guard_module is not None:
@@ -374,11 +378,29 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
             product_value = {"error": str(exc)}
         try:
             delivery_integrity = guard_module.build_delivery_integrity_metrics(root, window_hours=24)
-            if str(delivery_integrity.get("status", "ok")) != "ok":
-                warnings.append("delivery_integrity_degraded")
         except Exception as exc:
             warnings.append("delivery_integrity_error")
             delivery_integrity = {"error": str(exc)}
+        try:
+            control = guard_module.build_delivery_control_metrics(root, window_hours=24)
+            delivery_future_integrity = control.get("future_delivery_integrity", {})
+            browser_proof_pipeline = control.get("browser_proof_pipeline", {})
+            suspicious_completions = control.get("suspicious_completions", {})
+            qa_review_pipeline = control.get("qa_review_pipeline", {})
+            if str(delivery_future_integrity.get("status", "ok")) != "ok":
+                warnings.append("delivery_future_integrity_degraded")
+            if str(browser_proof_pipeline.get("status", "ok")) != "ok":
+                warnings.append("browser_proof_pipeline_degraded")
+            if int(suspicious_completions.get("count", 0) or 0) > 0:
+                warnings.append("suspicious_completions_degraded")
+            if str(qa_review_pipeline.get("status", "ok")) != "ok":
+                warnings.append("qa_review_pipeline_degraded")
+        except Exception as exc:
+            warnings.append("delivery_control_error")
+            delivery_future_integrity = {"error": str(exc)}
+            browser_proof_pipeline = {"error": str(exc)}
+            suspicious_completions = {"error": str(exc)}
+            qa_review_pipeline = {"error": str(exc)}
     dispatch_module = _load_planner_dispatch_metrics(root)
     if dispatch_module is not None:
         try:
@@ -455,6 +477,10 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         },
         "product_value": product_value,
         "delivery_integrity": delivery_integrity,
+        "delivery_future_integrity": delivery_future_integrity,
+        "browser_proof_pipeline": browser_proof_pipeline,
+        "suspicious_completions": suspicious_completions,
+        "qa_review_pipeline": qa_review_pipeline,
         "planner_dispatch": planner_dispatch,
         "verdict": verdict,
         "errors": errors,

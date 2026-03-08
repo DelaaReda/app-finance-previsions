@@ -699,6 +699,62 @@ def _delivery_integrity_snapshot() -> dict:
         }
 
 
+def _delivery_control_snapshot() -> dict:
+    module = _product_priority_guard_module()
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "status": "unknown",
+            "integrity_status": "unknown",
+            "future_status": "unknown",
+            "future_rollout_at": "unknown",
+            "coverage": {"proof_manifest": 1.0, "tests_evidence": 1.0, "commit_evidence": 1.0, "browser_proof": 1.0},
+            "future_coverage": {"proof_manifest": 1.0, "tests_evidence": 1.0, "commit_evidence": 1.0, "browser_proof": 1.0},
+            "needs_proof_backfill": {"count": 0, "task_ids": [], "items": []},
+            "suspicious_completions": {"count": 0, "task_ids": [], "items": []},
+            "healthy_deliveries": {"count": 0, "task_ids": [], "items": []},
+            "pipeline_counts": {
+                "recent_completions": 0,
+                "future_recent_completions": 0,
+                "qa_review_pending_count": 0,
+                "qa_review_completed_count": 0,
+                "browser_validation_pending_count": 0,
+                "delivery_ready_to_close_count": 0,
+            },
+            "browser_proof_pipeline": {"status": "unknown", "required_count": 0, "present_count": 0, "missing_task_ids": []},
+            "qa_review_pipeline": {"status": "unknown", "pending_count": 0, "completed_count": 0},
+            "future_delivery_integrity": {"status": "unknown", "recent_completions": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+            "historical_debt": {"count": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+        }
+    try:
+        return module.build_delivery_control_metrics(ROOT, window_hours=24)
+    except Exception as exc:
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "status": f"error:{exc}",
+            "integrity_status": "error",
+            "future_status": "error",
+            "future_rollout_at": "unknown",
+            "coverage": {"proof_manifest": 0.0, "tests_evidence": 0.0, "commit_evidence": 0.0, "browser_proof": 0.0},
+            "future_coverage": {"proof_manifest": 0.0, "tests_evidence": 0.0, "commit_evidence": 0.0, "browser_proof": 0.0},
+            "needs_proof_backfill": {"count": 0, "task_ids": [], "items": []},
+            "suspicious_completions": {"count": 0, "task_ids": [], "items": []},
+            "healthy_deliveries": {"count": 0, "task_ids": [], "items": []},
+            "pipeline_counts": {
+                "recent_completions": 0,
+                "future_recent_completions": 0,
+                "qa_review_pending_count": 0,
+                "qa_review_completed_count": 0,
+                "browser_validation_pending_count": 0,
+                "delivery_ready_to_close_count": 0,
+            },
+            "browser_proof_pipeline": {"status": "error", "required_count": 0, "present_count": 0, "missing_task_ids": []},
+            "qa_review_pipeline": {"status": "error", "pending_count": 0, "completed_count": 0},
+            "future_delivery_integrity": {"status": "error", "recent_completions": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+            "historical_debt": {"count": 0, "browser_proof_missing_task_ids": [], "suspicious_task_ids": []},
+        }
+
+
 def _active_planner_subagent_roles() -> tuple[str, ...]:
     snapshot = _planner_subagents_snapshot()
     roles: list[str] = []
@@ -975,6 +1031,8 @@ def _roles_from_crontab() -> tuple[str, ...]:
     return ordered if ordered else ()
 
 def discover_roles() -> tuple[str, ...]:
+    if _execution_mode(ROOT) == "planner_experimental":
+        return CORE_ROLES
     env_roles = [r.strip() for r in os.environ.get("FC_MONITOR_ROLES", "").split(",") if r.strip()]
     if env_roles:
         ordered = _ordered_roles(env_roles)
@@ -2705,6 +2763,9 @@ def status():
     hs = latest_snapshot.get("health_snapshot", {}) if isinstance(latest_snapshot, dict) else {}
     hs_queue = hs.get("queue", {}) if isinstance(hs, dict) else {}
     hs_workboard = hs.get("workboard", {}) if isinstance(hs, dict) else {}
+    critical_widget_health = latest_snapshot.get("critical_widget_health", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(critical_widget_health, dict):
+        critical_widget_health = {}
     planner_autonomy = planner_autonomy_snapshot()
     dispatcher_tshape = admin_tshape_snapshot()
     admin_autonomy = admin_autonomy_snapshot()
@@ -3312,6 +3373,7 @@ def status():
         system_summary=system_summary,
     )
     delivery_integrity = _delivery_integrity_snapshot()
+    delivery_control = _delivery_control_snapshot()
     product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
 
@@ -3362,10 +3424,13 @@ def status():
             "planner_subagents": planner_subagents,
             "planner_dispatch": planner_dispatch,
             "delivery_integrity": delivery_integrity,
+            "delivery_control": delivery_control,
             "product_value_metrics": product_value_metrics,
             "po_scrum_master": po_scrum_master,
             "agent_messages": agent_messages,
             "doctor": doctor,
+            "health_snapshot": hs if isinstance(hs, dict) else {},
+            "critical_widget_health": critical_widget_health,
             "issues_recent_by_role": issues_recent_by_role,
             "critical_open_count": critical_count,
             "issue_publication_gap_roles": issue_publication_gap_roles,
@@ -4543,7 +4608,7 @@ async function load(){
     D=s.data;
     D.__status_unavailable=false;
   }else if(!D){
-    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_state:{lifecycle:'unknown',execution_mode:'unknown',reason:'',operator_mode:'',updated_at:'',state_root:'',docs_root:'',legacy_docs_root:'',state_file:''},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},planner_subagents:{enabled:false,cron_planner_only:false,active_count:0,active:[],recent:[],recent_total:0,recent_success_count:0,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_success_rate:1,recent_by_role:{},status:'unknown',registry_path:''},planner_dispatch:{status:'unknown',lifecycle:'unknown',execution_mode:'unknown',active_subagents:0,active:[],recent:[],recent_total:0,recent_success_rate:1,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_by_role:{},ready_dev_count:0,ready_planner_count:0,in_progress_count:0,tasks_progressed_last_1h:0,current_bottleneck:'none',recommended_next_action:'monitor',needs_dispatch:false,stalled_ready_dev:false,registry_path:''},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,browser_proof_required_count:0,browser_proof_present_count:0,browser_proof_coverage:1,browser_proof_missing_task_ids:[],suspicious_completion_count:0,suspicious_task_ids:[]},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
+    D={health:'UNKNOWN',queue:null,workboard:null,agents:{},rate_limits:[],kpi:{},runtime_state:{lifecycle:'unknown',execution_mode:'unknown',reason:'',operator_mode:'',updated_at:'',state_root:'',docs_root:'',legacy_docs_root:'',state_file:''},runtime_freshness:{seconds:-1,state:'stale'},sources:{},doctor:{status:'unknown',meta:{}},planner_evidence_quality_score:0,queue_workboard_integrity:{status:'unknown',mismatch_count:0,oldest_mismatch_age_s:-1,queue_only:[],workboard_only:[],state_mismatch:[]},planner_subagents:{enabled:false,cron_planner_only:false,active_count:0,active:[],recent:[],recent_total:0,recent_success_count:0,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_success_rate:1,recent_by_role:{},status:'unknown',registry_path:''},planner_dispatch:{status:'unknown',lifecycle:'unknown',execution_mode:'unknown',active_subagents:0,active:[],recent:[],recent_total:0,recent_success_rate:1,recent_failed_count:0,recent_blocked_count:0,recent_fallback_like_count:0,recent_by_role:{},ready_dev_count:0,ready_planner_count:0,in_progress_count:0,tasks_progressed_last_1h:0,current_bottleneck:'none',recommended_next_action:'monitor',needs_dispatch:false,stalled_ready_dev:false,registry_path:''},delivery_integrity:{status:'unknown',recent_completions:0,proof_manifest_coverage:1,tests_evidence_coverage:1,commit_evidence_coverage:1,browser_proof_required_count:0,browser_proof_present_count:0,browser_proof_coverage:1,browser_proof_missing_task_ids:[],suspicious_completion_count:0,suspicious_task_ids:[]},delivery_control:{status:'unknown',integrity_status:'unknown',future_status:'unknown',future_rollout_at:'unknown',coverage:{proof_manifest:1,tests_evidence:1,commit_evidence:1,browser_proof:1},future_coverage:{proof_manifest:1,tests_evidence:1,commit_evidence:1,browser_proof:1},needs_proof_backfill:{count:0,task_ids:[],items:[]},suspicious_completions:{count:0,task_ids:[],items:[]},healthy_deliveries:{count:0,task_ids:[],items:[]},pipeline_counts:{recent_completions:0,future_recent_completions:0,qa_review_pending_count:0,qa_review_completed_count:0,browser_validation_pending_count:0,delivery_ready_to_close_count:0},browser_proof_pipeline:{status:'unknown',required_count:0,present_count:0,missing_task_ids:[]},qa_review_pipeline:{status:'unknown',pending_count:0,completed_count:0},future_delivery_integrity:{status:'unknown',recent_completions:0,browser_proof_missing_task_ids:[],suspicious_task_ids:[]},historical_debt:{count:0,browser_proof_missing_task_ids:[],suspicious_task_ids:[]}},product_value_metrics:{copilot:{status:'unknown',usable:null},forecasts:{status:'unknown',valid:null},data_freshness:{},delivery_mix:{},priority_guard:{status:'unknown',p0_broken:false,blocked_reasons:[]}},po_scrum_master:{name:'po_scrum_master',mode:'scheduled_advisory',active:false,last_run:'',last_run_age_min:-1,last_report_age_min:-1,lock_skip_streak:0,last_messages_posted:0},agent_messages:{open:0,open_count:0,delivered:0,delivered_count:0,actioned:0,actioned_count:0,closed:0,closed_count:0,delivered_recent:0,actioned_recent:0,closed_recent:0,expired:0,expired_count:0,posted:0,posted_count:0,pending_by_role:{},open_by_role:{},last_message_id_by_role:{},latest_action_status_by_role:{}},__status_unavailable:true};
   }else{
     D.__status_unavailable=true;
   }
@@ -5015,6 +5080,53 @@ function plannerDispatchHtml(){
     <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>registry:</strong> ${esc(shortPath(registryPath||'—'))}</div>
   `;
 }
+function deliveryControlRows(items, emptyLabel){
+  const rows=Array.isArray(items)?items:[];
+  if(!rows.length)return `<div class="log-empty">${esc(emptyLabel)}</div>`;
+  return `<div class="iter-issues">${
+    rows.slice(0,8).map(item=>{
+      const task=String(item.task_id||'unknown');
+      const role=String(item.role||'unknown');
+      const reason=String(item.reason||'none');
+      const phase=String(item.phase||'');
+      const sev=reason.includes('suspicious')?'warn':'info';
+      return `<div class="issue-row ${sev}">
+        <div class="issue-head"><span class="issue-role">${esc(task)}</span><span class="issue-sev ${sev}">${esc(role)}</span></div>
+        <div class="issue-meta">${phase?`phase=${esc(phase)} · `:''}${esc(reason)}</div>
+      </div>`;
+    }).join('')
+  }</div>`;
+}
+function deliveryControlHtml(){
+  const dc=(D&&D.delivery_control)||{};
+  const status=String(dc.status||'unknown');
+  const integrityStatus=String(dc.integrity_status||'unknown');
+  const futureStatus=String(dc.future_status||status||'unknown');
+  const cls=plannerDispatchStatusClass(status);
+  const coverage=dc.coverage||{};
+  const futureCoverage=dc.future_coverage||{};
+  const counts=dc.pipeline_counts||{};
+  const browserPipeline=dc.browser_proof_pipeline||{};
+  const qaPipeline=dc.qa_review_pipeline||{};
+  const healthy=dc.healthy_deliveries||{};
+  const backfill=dc.needs_proof_backfill||{};
+  const suspicious=dc.suspicious_completions||{};
+  return `
+    <div class="queue-sync ${cls}"><strong>Delivery control</strong> · status=${esc(status)} · future=${esc(futureStatus)} · integrity=${esc(integrityStatus)}</div>
+    <div class="queue-sync ${Number(suspicious.count||0)===0?'ok':'warn'}" style="margin-top:8px"><strong>Coverage</strong> · proof=${esc(String(Math.round(Number(coverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(coverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(coverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(coverage.browser_proof||0)*100)))}%</div>
+    <div class="queue-sync ${(String(browserPipeline.status||'unknown')==='ok' && String(qaPipeline.status||'unknown')==='ok')?'ok':'warn'}" style="margin-top:8px"><strong>Future pipeline</strong> · recent=${counts.future_recent_completions||0} · qa_pending=${counts.qa_review_pending_count||0} · qa_done=${counts.qa_review_completed_count||0} · browser_pending=${counts.browser_validation_pending_count||0} · ready_to_close=${counts.delivery_ready_to_close_count||0}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+      <div class="log-box"><div class="log-head">Healthy deliveries (${healthy.count||0})</div><div class="log-scroll">${deliveryControlRows(healthy.items,'Aucune livraison saine récente')}</div></div>
+      <div class="log-box"><div class="log-head">Needs proof backfill (${backfill.count||0})</div><div class="log-scroll">${deliveryControlRows(backfill.items,'Aucune dette de preuve')}</div></div>
+      <div class="log-box"><div class="log-head">Suspicious completion review (${suspicious.count||0})</div><div class="log-scroll">${deliveryControlRows(suspicious.items,'Aucune completion suspecte')}</div></div>
+    </div>
+    <div class="link-row">
+      <a class="ext-link" href="/api/status" target="_blank">⬡ Status JSON</a>
+      <a class="ext-link" href="/api/doctor?refresh=1" target="_blank">⬡ Doctor refresh</a>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>future rollout:</strong> ${esc(String(dc.future_rollout_at||'unknown'))}<br><strong>future coverage</strong> · proof=${esc(String(Math.round(Number(futureCoverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(futureCoverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(futureCoverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(futureCoverage.browser_proof||0)*100)))}%</div>
+  `;
+}
 function errorFeedHtml(){
   const items=(F&&F.items)||[];
   if(!items.length)return '<div class="log-empty">Aucune alerte récente.</div>';
@@ -5292,6 +5404,7 @@ function render(){
 	    <div class="col-right">
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Planner Dispatch</span><span style="font-size:10px;color:var(--ghost)">mode=${esc((D&&D.execution_mode)||'unknown')} · subagents=${((D&&D.planner_dispatch&&D.planner_dispatch.active_subagents) ?? (D&&D.planner_subagents&&D.planner_subagents.active_count) ?? 0)}</span></div><div class="panel-body">${plannerDispatchHtml()}</div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Delivery Control</span><span style="font-size:10px;color:var(--ghost)">future=${esc(String(((D&&D.delivery_control)||{}).future_status||'unknown'))} · integrity=${esc(String(((D&&D.delivery_control)||{}).integrity_status||'unknown'))}</span></div><div class="panel-body">${deliveryControlHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
 	      ${poPanel}

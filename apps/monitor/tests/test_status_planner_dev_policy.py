@@ -16,6 +16,9 @@ SERVER_PATH = REPO_ROOT / "apps" / "monitor" / "server.py"
 def _load_server_module(workspace: Path, state_dir: Path):
     os.environ["FC_MONITOR_ROOT"] = str(workspace)
     os.environ["FC_MONITOR_STATE_DIR"] = str(state_dir)
+    os.environ.pop("FC_PLANNER_ORCHESTRATOR_ENABLED", None)
+    os.environ.pop("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", None)
+    os.environ.pop("FC_EXPERIMENTAL_PLANNER_ONLY", None)
     spec = importlib.util.spec_from_file_location(
         f"fc_monitor_server_planner_dev_policy_{id(workspace)}", SERVER_PATH
     )
@@ -36,6 +39,12 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.root = Path(self._tmp.name)
         self.state = self.root / "state"
         self.state.mkdir(parents=True, exist_ok=True)
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 0, "cron_planner_only": 0}}}),
+            encoding="utf-8",
+        )
 
         orch = self.root / "docs" / "operations" / "orchestrator"
         orch.mkdir(parents=True, exist_ok=True)
@@ -105,12 +114,14 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("core_roles"), ["planner", "dev", "admin", "scrum_master"])
         self.assertTrue(payload.get("planner_policy_enforced"))
         self.assertIn("delivery_integrity", payload)
+        self.assertIn("delivery_control", payload)
         self.assertIn("product_value_metrics", payload)
         self.assertIn("planner_subagents", payload)
         self.assertIn("planner_dispatch", payload)
         self.assertIn("recent_success_rate", payload.get("planner_subagents", {}))
         self.assertEqual(payload.get("planner_dispatch", {}).get("ready_dev_count"), 0)
         self.assertEqual(payload.get("planner_dispatch", {}).get("status"), "dispatch_needed")
+        self.assertIn("future_status", payload.get("delivery_control", {}))
         self.assertEqual(payload.get("planner_autonomy_last_action"), "create_and_claim")
         self.assertEqual(payload.get("planner_autonomy_last_outcome"), "resolved")
         self.assertEqual(payload.get("dev_wait_reason"), "no_dev_ready_task")
@@ -195,6 +206,39 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(admin.get("blocker"), "NONE")
         self.assertEqual(str(admin.get("delta", "")).upper(), "RUNTIME_VERIFIED_OK")
 
+    def test_status_exposes_health_snapshot_and_critical_widget_health(self) -> None:
+        latest_snapshot = {
+            "roles": {},
+            "velocity": {},
+            "summary": {},
+            "health_snapshot": {
+                "ts_utc": "2026-03-08T16:54:00Z",
+                "health": "OK",
+                "scheduled_roles": ["planner"],
+            },
+            "critical_widget_health": {
+                "ts_utc": "2026-03-08T16:54:00Z",
+                "state": "ok",
+                "widgets": {"hero": {"state": "ok"}},
+            },
+        }
+        contracts = {
+            "planner": {"STATUS": "IN_PROGRESS", "VERDICT": "GO_WITH_CAUTION", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=claim"},
+            "dev": {"STATUS": "WAIT", "VERDICT": "PASS", "DELTA": "DEV_WAIT_NO_READY_TASK", "BLOCKER_ID": "NONE", "EVIDENCE": "task_update=none_no_ready"},
+            "admin": {"STATUS": "IN_PROGRESS", "VERDICT": "PASS", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE"},
+        }
+        with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
+            self.module, "monitor_latest_snapshot", lambda: latest_snapshot
+        ), mock.patch.object(self.module, "rate_limits", lambda: []):
+            payload = self.module.status()
+
+        self.assertEqual(payload.get("health_snapshot", {}).get("health"), "OK")
+        self.assertEqual(payload.get("health_snapshot", {}).get("scheduled_roles"), ["planner"])
+        self.assertEqual(payload.get("critical_widget_health", {}).get("state"), "ok")
+        self.assertEqual(payload.get("critical_widget_health", {}).get("widgets", {}).get("hero", {}).get("state"), "ok")
+
     def test_status_ready_dev_metrics_come_from_workboard_runtime(self) -> None:
         orch = self.root / "docs" / "operations" / "orchestrator"
         (orch / "priority-queue.json").write_text(
@@ -271,6 +315,35 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("agents_incomplete"), [])
         self.assertNotIn("dev", payload.get("health_breakdown", {}).get("by_role", {}))
         self.assertNotIn("scrum_master", payload.get("roles", []))
+
+    def test_planner_only_status_ignores_legacy_discovered_admin_role(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "IN_PROGRESS",
+                "VERDICT": "PASS",
+                "DELTA": "NO_DELTA",
+                "BLOCKER_ID": "NONE",
+                "EVIDENCE": "task_update=claim",
+            }
+        }
+        with mock.patch.object(module, "_roles_from_crontab", lambda: ("planner", "admin")), mock.patch.object(
+            module, "_roles_from_topology", lambda: ("planner", "admin")
+        ), mock.patch.object(module, "contract", lambda role: contracts.get(role, {})), mock.patch.object(
+            module, "tick_age", lambda role: 1
+        ), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []):
+            payload = module.status()
+
+        self.assertEqual(payload.get("roles"), ["planner"])
+        self.assertNotIn("admin", payload.get("agents", {}))
 
     def test_status_reports_paused_runtime_state_explicitly(self) -> None:
         cfg_dir = self.root / "platform" / "config" / "runner"

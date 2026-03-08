@@ -16,6 +16,9 @@ CORE_ROLES = ("planner", "dev", "admin")
 def _load_server_module(workspace: Path):
     os.environ["FC_MONITOR_ROOT"] = str(workspace)
     os.environ["FC_MONITOR_STATE_DIR"] = str(workspace / "state")
+    os.environ.pop("FC_PLANNER_ORCHESTRATOR_ENABLED", None)
+    os.environ.pop("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", None)
+    os.environ.pop("FC_EXPERIMENTAL_PLANNER_ONLY", None)
     spec = importlib.util.spec_from_file_location(f"fc_monitor_server_never_null_{id(workspace)}", SERVER_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -32,6 +35,12 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 0, "cron_planner_only": 0}}}),
+            encoding="utf-8",
+        )
         orch = self.root / "docs" / "operations" / "orchestrator"
         orch.mkdir(parents=True, exist_ok=True)
         (orch / "priority-queue.json").write_text(json.dumps({"items": []}), encoding="utf-8")
@@ -93,6 +102,10 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
             self.assertIn(field, payload["agent_messages"])
         self.assertIn("open_by_role", payload["agent_messages"])
         self.assertIn("latest_action_status_by_role", payload["agent_messages"])
+        self.assertIn("delivery_control", payload)
+        self.assertIsInstance(payload["delivery_control"], dict)
+        for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
+            self.assertIn(field, payload["delivery_control"])
 
         agents = payload["agents"]
         for role in CORE_ROLES:

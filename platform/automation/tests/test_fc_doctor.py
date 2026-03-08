@@ -111,7 +111,7 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("status", payload)
         self.assertIn("checks", payload)
         self.assertIn("meta", payload)
-        for key in ("workspace_root", "runtime_state", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity", "planner_dispatch"):
+        for key in ("workspace_root", "runtime_state", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity", "delivery_future_integrity", "browser_proof_pipeline", "suspicious_completions", "qa_review_pipeline", "planner_dispatch"):
             self.assertIn(key, payload["checks"])
         queue_workboard = payload["checks"].get("queue_workboard", {})
         self.assertIsInstance(queue_workboard, dict)
@@ -130,12 +130,16 @@ class FCDoctorTests(unittest.TestCase):
                                 with patch.object(fc_doctor, "check_providers", return_value=ok):
                                     with patch.object(fc_doctor, "check_product_value", return_value=ok):
                                         with patch.object(fc_doctor, "check_delivery_integrity", return_value=ok):
-                                            with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
-                                                payload, code = fc_doctor.build_payload(
-                                                    root=ROOT,
-                                                    api_base="http://127.0.0.1:8050",
-                                                    monitor_base="http://127.0.0.1:7779",
-                                                )
+                                            with patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok):
+                                                with patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok):
+                                                    with patch.object(fc_doctor, "check_suspicious_completions", return_value=ok):
+                                                        with patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok):
+                                                            with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
+                                                                payload, code = fc_doctor.build_payload(
+                                                                    root=ROOT,
+                                                                    api_base="http://127.0.0.1:8050",
+                                                                    monitor_base="http://127.0.0.1:7779",
+                                                                )
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "degraded")

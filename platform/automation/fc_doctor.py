@@ -763,6 +763,57 @@ def check_delivery_integrity(root: Path) -> CheckResult:
     return CheckResult(status=status, detail=metrics)
 
 
+def check_delivery_future_integrity(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    status = "ok" if str(metrics.get("future_status", "unknown")) == "ok" else "degraded"
+    return CheckResult(status=status, detail=metrics.get("future_delivery_integrity", metrics))
+
+
+def check_browser_proof_pipeline(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("browser_proof_pipeline", {}) if isinstance(metrics, dict) else {}
+    status = "ok" if str(detail.get("status", "unknown")) == "ok" else "degraded"
+    return CheckResult(status=status, detail=detail)
+
+
+def check_suspicious_completions(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("suspicious_completions", {}) if isinstance(metrics, dict) else {}
+    status = "ok" if int(detail.get("count", 0) or 0) == 0 else "degraded"
+    return CheckResult(status=status, detail=detail)
+
+
+def check_qa_review_pipeline(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("qa_review_pipeline", {}) if isinstance(metrics, dict) else {}
+    status = "ok" if str(detail.get("status", "unknown")) == "ok" else "degraded"
+    return CheckResult(status=status, detail=detail)
+
+
 def check_planner_dispatch(root: Path) -> CheckResult:
     module = _load_planner_dispatch_metrics(root)
     if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
@@ -789,10 +840,14 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
         "product_value": check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
+        "delivery_future_integrity": check_delivery_future_integrity(root),
+        "browser_proof_pipeline": check_browser_proof_pipeline(root),
+        "suspicious_completions": check_suspicious_completions(root),
+        "qa_review_pipeline": check_qa_review_pipeline(root),
         "planner_dispatch": check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
-    advisory_checks = {"planner_dispatch"}
+    advisory_checks = {"planner_dispatch", "delivery_integrity"}
     effective_checks = {
         name: check
         for name, check in checks.items()
