@@ -197,6 +197,16 @@ def _semantic_result_gate(payload: dict[str, Any]) -> tuple[bool, str]:
     return True, "none"
 
 
+def _subprocess_timeout_value(timeout_seconds: int) -> int | None:
+    try:
+        token = int(timeout_seconds)
+    except Exception:
+        token = 0
+    if token <= 0:
+        return None
+    return max(30, token)
+
+
 def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -244,17 +254,20 @@ def _openclaw_available() -> bool:
 def _openclaw_agent_ids() -> set[str]:
     if not _openclaw_available():
         return set()
-    proc = subprocess.run(
-        ["openclaw", "agents", "list", "--json"],
-        text=True,
-        capture_output=True,
-        check=False,
-        env=_openclaw_env(),
-    )
-    if proc.returncode != 0:
+    try:
+        proc = subprocess.run(
+            ["openclaw", "agents", "list", "--json"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=_openclaw_env(),
+        )
+    except Exception:
+        return set()
+    if int(getattr(proc, "returncode", 1) or 1) != 0:
         return set()
     try:
-        payload = json.loads(proc.stdout or "[]")
+        payload = json.loads(getattr(proc, "stdout", "") or "[]")
     except Exception:
         return set()
     agent_ids: set[str] = set()
@@ -1002,6 +1015,7 @@ def _run_codex_exec_subagent(
             cmd.extend(["--sandbox", str(plan["sandbox"])])
         if sandbox_token == "workspace-write":
             cmd.append("--full-auto")
+        timeout_value = _subprocess_timeout_value(timeout_seconds)
         try:
             proc = subprocess.run(
                 cmd + [prompt],
@@ -1009,7 +1023,7 @@ def _run_codex_exec_subagent(
                 capture_output=True,
                 check=False,
                 cwd=str(config.root),
-                timeout=max(30, timeout_seconds),
+                timeout=timeout_value,
             )
             rc = proc.returncode
             stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
@@ -1017,7 +1031,8 @@ def _run_codex_exec_subagent(
         except subprocess.TimeoutExpired as exc:
             rc = 124
             stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else str(exc.stdout or "")
-            stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{max(30, timeout_seconds)}s"
+            timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
+            stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{timeout_label}s"
     return rc, stdout, stderr, f"codex_exec:{subagent_id}"
 
 
@@ -1174,25 +1189,27 @@ def run_subagent(
             chosen_backend = "codex_exec"
         else:
             try:
+                timeout_value = _subprocess_timeout_value(timeout_seconds)
+                agent_cmd = [
+                    "openclaw",
+                    "agent",
+                    "--agent",
+                    subagent_id,
+                    "--json",
+                    "--thinking",
+                    str(plan["thinking"]),
+                    "--message",
+                    prompt,
+                ]
+                if isinstance(timeout_value, int):
+                    agent_cmd.extend(["--timeout", str(timeout_value)])
                 proc = subprocess.run(
-                    [
-                        "openclaw",
-                        "agent",
-                        "--agent",
-                        subagent_id,
-                        "--json",
-                        "--thinking",
-                        str(plan["thinking"]),
-                        "--timeout",
-                        str(max(30, timeout_seconds)),
-                        "--message",
-                        prompt,
-                    ],
+                    agent_cmd,
                     text=True,
                     capture_output=True,
                     check=False,
                     env=_openclaw_env(),
-                    timeout=max(30, timeout_seconds + 15),
+                    timeout=(timeout_value + 15) if isinstance(timeout_value, int) else None,
                 )
                 rc = proc.returncode
                 stdout = proc.stdout or ""
@@ -1214,7 +1231,8 @@ def run_subagent(
             except subprocess.TimeoutExpired as exc:
                 rc = 124
                 stdout = str(exc.stdout or "")
-                stderr = str(exc.stderr or "") or f"openclaw_timeout_after_{max(30, timeout_seconds + 15)}s"
+                timeout_label = (timeout_value + 15) if isinstance(timeout_value, int) else "unbounded"
+                stderr = str(exc.stderr or "") or f"openclaw_timeout_after_{timeout_label}s"
     elif chosen_backend == "codex_exec":
         rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
             config,

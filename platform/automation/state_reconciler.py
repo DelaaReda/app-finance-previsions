@@ -185,6 +185,35 @@ def _task_effectively_done(task: dict) -> bool:
     return bool(str(task.get("completed_at", "")).strip())
 
 
+def _clear_terminal_execution_flags(task: dict, now: str) -> bool:
+    changed = False
+    terminal_resets = {
+        "blocked_reason": "",
+        "stalled_reason": "",
+        "planner_takeover_required": False,
+        "planner_takeover_reason": "",
+        "admin_recovery_required": False,
+        "admin_recovery_reason": "",
+        "dev_recovery_required": False,
+        "dev_recovery_reason": "",
+        "dev_execution_state": "",
+        "dev_no_progress_streak": 0,
+        "dev_orphaned_streak": 0,
+        "dev_invalid_result_streak": 0,
+    }
+    for key, value in terminal_resets.items():
+        if task.get(key) != value:
+            task[key] = value
+            changed = True
+    if str(task.get("last_capability_failure_mode", "")).strip():
+        task["last_capability_failure_mode"] = ""
+        changed = True
+    if changed:
+        task["reconciled_at"] = now
+        task["updated_at"] = now
+    return changed
+
+
 def _parse_contract(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
@@ -305,13 +334,12 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
                 continue
             if _task_effectively_done(task) and str(task.get("state", "")).strip().upper() not in DONE_STATES:
                 task["state"] = "DONE"
-                task["blocked_reason"] = ""
-                task["stalled_reason"] = ""
-                task["planner_takeover_required"] = False
-                task["planner_takeover_reason"] = ""
-                task["reconciled_at"] = now
-                task["updated_at"] = now
+                _clear_terminal_execution_flags(task, now)
                 report["completed_state_repaired"] = int(report["completed_state_repaired"]) + 1
+                continue
+            if _task_effectively_done(task):
+                if _clear_terminal_execution_flags(task, now):
+                    report["completed_state_repaired"] = int(report["completed_state_repaired"]) + 1
                 continue
             if not task.get("parked_by_rebuild"):
                 continue

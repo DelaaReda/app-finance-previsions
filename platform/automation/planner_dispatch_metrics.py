@@ -12,6 +12,7 @@ from orchestrator_paths import resolve_orchestrator_read_path
 ACTIVE_STATUSES = {"spawned", "running"}
 SUCCESS_STATUSES = {"completed", "merged", "done", "pass", "ok", "success"}
 BLOCKED_STATUSES = {"blocked"}
+DONE_STATES = {"done", "closed"}
 FALLBACK_MARKERS = ("falling back to embedded", "failovererror", "gateway agent failed")
 INVALID_RESULT_MARKERS = (
     "invalid_subagent_result",
@@ -172,7 +173,6 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         ).strip()
         latest_owner_task_id = str(latest.get("owner_task_id", "")).strip()
     status = "ok"
-    recovering = bool(active) and (failed_count > 0 or fallback_like_count > 0 or invalid_result_count > 0 or timeout_like_count > 0)
     if active:
         status = "ok"
     elif recent_total and (
@@ -184,16 +184,45 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
     stalled_capability_count = 0
     takeover_required_count = 0
     recovery_required_count = 0
+    long_running_dev_count = 0
+    dev_no_progress_count = 0
+    dev_orphaned_count = 0
+    dev_invalid_result_count = 0
     if isinstance(workboard, dict):
         for task in workboard.get("tasks", []):
             if not isinstance(task, dict):
                 continue
+            task_state = str(task.get("state", "")).strip().lower()
+            if task_state in DONE_STATES:
+                continue
+            role = str(task.get("role", "")).strip().lower()
+            execution_state = str(task.get("dev_execution_state", "")).strip().lower()
+            if role == "dev":
+                if execution_state == "long_running":
+                    long_running_dev_count += 1
+                if execution_state == "no_progress" or int(task.get("dev_no_progress_streak", 0) or 0) > 0:
+                    dev_no_progress_count += 1
+                if execution_state == "orphaned" or int(task.get("dev_orphaned_streak", 0) or 0) > 0:
+                    dev_orphaned_count += 1
+                if int(task.get("dev_invalid_result_streak", 0) or 0) > 0:
+                    dev_invalid_result_count += 1
             if str(task.get("stalled_capability_reason", "")).strip():
                 stalled_capability_count += 1
             if bool(task.get("planner_takeover_required")):
                 takeover_required_count += 1
             if bool(task.get("admin_recovery_required") or task.get("dev_recovery_required")):
                 recovery_required_count += 1
+    recovering = bool(active) and (
+        failed_count > 0
+        or fallback_like_count > 0
+        or invalid_result_count > 0
+        or timeout_like_count > 0
+        or dev_no_progress_count > 0
+        or dev_orphaned_count > 0
+        or stalled_capability_count > 0
+        or takeover_required_count > 0
+        or recovery_required_count > 0
+    )
     return {
         "registry_path": str(registry_path),
         "active_count": len(active),
@@ -217,5 +246,9 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         "stalled_capability_count": stalled_capability_count,
         "takeover_required_count": takeover_required_count,
         "recovery_required_count": recovery_required_count,
+        "long_running_dev_count": long_running_dev_count,
+        "dev_no_progress_count": dev_no_progress_count,
+        "dev_orphaned_count": dev_orphaned_count,
+        "dev_invalid_result_count": dev_invalid_result_count,
         "status": status,
     }

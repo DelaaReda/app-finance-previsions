@@ -829,6 +829,8 @@ def check_capability_stall_recovery(root: Path) -> CheckResult:
         and not bool(item.get("takeover_required"))
         and not bool(item.get("recovery_required"))
         and int(item.get("timeout_streak", 0) or 0) <= 1
+        and int(item.get("dev_no_progress_streak", 0) or 0) <= 1
+        and int(item.get("dev_orphaned_streak", 0) or 0) == 0
         and int(item.get("invalid_result_streak", 0) or 0) == 0
         for item in items
     )
@@ -843,7 +845,7 @@ def check_capability_stall_recovery(root: Path) -> CheckResult:
         detail["recovery_mode"] = (
             "planner_takeover_or_capability_recovery_active"
             if recovering
-            else "transient_timeout_requeue_active"
+            else "transient_capability_requeue_active"
         )
     return CheckResult(status=status, detail=detail)
 
@@ -886,16 +888,75 @@ def check_capability_result_integrity(root: Path) -> CheckResult:
         return CheckResult(status="error", detail={"error": str(exc)})
     invalid_count = int(metrics.get("recent_invalid_result_count", 0) or 0)
     timeout_count = int(metrics.get("recent_timeout_like_count", 0) or 0)
+    no_progress_count = int(metrics.get("dev_no_progress_count", 0) or 0)
+    orphaned_count = int(metrics.get("dev_orphaned_count", 0) or 0)
     recovering = bool(metrics.get("recovering"))
     status = "ok"
-    if invalid_count > 0 and not recovering:
+    if (invalid_count > 0 or orphaned_count > 0) and not recovering:
         status = "degraded"
     detail = {
         "recent_invalid_result_count": invalid_count,
         "recent_timeout_like_count": timeout_count,
+        "dev_no_progress_count": no_progress_count,
+        "dev_orphaned_count": orphaned_count,
         "recovering": recovering,
         "latest_failure_mode": metrics.get("latest_failure_mode", "unknown"),
     }
+    return CheckResult(status=status, detail=detail)
+
+
+def check_dev_execution_model(root: Path) -> CheckResult:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
+    try:
+        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = {
+        "long_running_dev_count": int(metrics.get("long_running_dev_count", 0) or 0),
+        "dev_no_progress_count": int(metrics.get("dev_no_progress_count", 0) or 0),
+        "dev_orphaned_count": int(metrics.get("dev_orphaned_count", 0) or 0),
+        "dev_invalid_result_count": int(metrics.get("dev_invalid_result_count", 0) or 0),
+    }
+    status = "ok" if detail["dev_orphaned_count"] == 0 else "degraded"
+    return CheckResult(status=status, detail=detail)
+
+
+def check_dev_progress_integrity(root: Path) -> CheckResult:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
+    try:
+        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    no_progress_count = int(metrics.get("dev_no_progress_count", 0) or 0)
+    recovering = bool(metrics.get("recovering"))
+    detail = {
+        "dev_no_progress_count": no_progress_count,
+        "long_running_dev_count": int(metrics.get("long_running_dev_count", 0) or 0),
+        "recovering": recovering,
+    }
+    status = "ok" if no_progress_count == 0 or recovering else "degraded"
+    return CheckResult(status=status, detail=detail)
+
+
+def check_dev_orphan_recovery(root: Path) -> CheckResult:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
+    try:
+        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    orphaned_count = int(metrics.get("dev_orphaned_count", 0) or 0)
+    recovering = bool(metrics.get("recovering"))
+    detail = {
+        "dev_orphaned_count": orphaned_count,
+        "recovering": recovering,
+    }
+    status = "ok" if orphaned_count == 0 or recovering else "degraded"
     return CheckResult(status=status, detail=detail)
 
 
@@ -918,6 +979,8 @@ def check_planner_takeover_recovery(root: Path) -> CheckResult:
         and not bool(item.get("takeover_required"))
         and not bool(item.get("recovery_required"))
         and int(item.get("timeout_streak", 0) or 0) <= 1
+        and int(item.get("dev_no_progress_streak", 0) or 0) <= 1
+        and int(item.get("dev_orphaned_streak", 0) or 0) == 0
         and int(item.get("invalid_result_streak", 0) or 0) == 0
         for item in items
     )
@@ -926,7 +989,7 @@ def check_planner_takeover_recovery(root: Path) -> CheckResult:
         detail = dict(detail)
         detail["takeover_or_recovery_items"] = len(takeover_items)
         if transient:
-            detail["recovery_mode"] = "transient_timeout_requeue_active"
+            detail["recovery_mode"] = "transient_capability_requeue_active"
     return CheckResult(status=status, detail=detail)
 
 
@@ -948,6 +1011,9 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "browser_proof_pipeline": check_browser_proof_pipeline(root),
         "suspicious_completions": check_suspicious_completions(root),
         "qa_review_pipeline": check_qa_review_pipeline(root),
+        "dev_execution_model": check_dev_execution_model(root),
+        "dev_progress_integrity": check_dev_progress_integrity(root),
+        "dev_orphan_recovery": check_dev_orphan_recovery(root),
         "capability_stall_recovery": check_capability_stall_recovery(root),
         "capability_result_integrity": check_capability_result_integrity(root),
         "planner_takeover_recovery": check_planner_takeover_recovery(root),

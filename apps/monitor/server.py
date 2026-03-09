@@ -303,7 +303,7 @@ DOCTOR_SCRIPT_FILE = Path(
     )
 ).expanduser()
 DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "120")))
-DOCTOR_RUN_TIMEOUT_SECONDS = max(4, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "8")))
+DOCTOR_RUN_TIMEOUT_SECONDS = max(8, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "20")))
 _DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 _DOCTOR_RUNNING = False
 
@@ -552,6 +552,10 @@ def _planner_dispatch_snapshot(
     stalled_capability_count = int(planner_subagents.get("stalled_capability_count", 0) or 0)
     takeover_required_count = int(planner_subagents.get("takeover_required_count", 0) or 0)
     recovery_required_count = int(planner_subagents.get("recovery_required_count", 0) or 0)
+    long_running_dev_count = int(planner_subagents.get("long_running_dev_count", 0) or 0)
+    dev_no_progress_count = int(planner_subagents.get("dev_no_progress_count", 0) or 0)
+    dev_orphaned_count = int(planner_subagents.get("dev_orphaned_count", 0) or 0)
+    dev_invalid_result_count = int(planner_subagents.get("dev_invalid_result_count", 0) or 0)
     tasks_progressed_last_1h = int(activity_summary.get("tasks_progressed_last_1h", 0) or 0)
     current_bottleneck = str(activity_summary.get("current_bottleneck", "none") or "none").strip() or "none"
     recommended_next_action = str(system_summary.get("recommended_next_action", "monitor") or "monitor").strip() or "monitor"
@@ -593,6 +597,10 @@ def _planner_dispatch_snapshot(
         "stalled_capability_count": stalled_capability_count,
         "takeover_required_count": takeover_required_count,
         "recovery_required_count": recovery_required_count,
+        "long_running_dev_count": long_running_dev_count,
+        "dev_no_progress_count": dev_no_progress_count,
+        "dev_orphaned_count": dev_orphaned_count,
+        "dev_invalid_result_count": dev_invalid_result_count,
         "ready_dev_count": ready_dev_count,
         "ready_planner_count": ready_planner_count,
         "in_progress_count": in_progress_count,
@@ -655,6 +663,14 @@ def _agent_activity_snapshot(
     planner_subagents: dict,
     dynamic_workers: dict,
 ) -> dict[str, object]:
+    one_line_fn = globals().get("one_line")
+    if not callable(one_line_fn):
+        def one_line_fn(value: str, limit: int = 320) -> str:
+            text = re.sub(r"\s+", " ", str(value or "")).strip()
+            if len(text) > limit:
+                return text[:limit]
+            return text
+
     issue_roles = _latest_iteration_roles_snapshot()
     role_rows: dict[str, dict[str, object]] = {}
     active_tasks_by_role: dict[str, list[dict]] = defaultdict(list)
@@ -691,7 +707,7 @@ def _agent_activity_snapshot(
         current_task_id = str(current_task.get("id", "") or issue.get("task_id", "") or "").strip()
         current_stream_id = str(current_task.get("stream_id", "") or issue.get("stream_id", "") or "").strip()
         current_task_state = str(current_task.get("state", "")).strip()
-        current_task_title = one_line(str(current_task.get("title", "") or ""), 120)
+        current_task_title = one_line_fn(str(current_task.get("title", "") or ""), 120)
         helper_rows: list[dict[str, str]] = []
         for item in subagents_active:
             if not isinstance(item, dict):
@@ -706,7 +722,7 @@ def _agent_activity_snapshot(
                     "id": str(item.get("subagent_id", "")).strip(),
                     "status": str(item.get("status", "")).strip(),
                     "owner_task_id": str(item.get("owner_task_id", "")).strip(),
-                    "summary": one_line(str(item.get("summary", "") or ""), 120),
+                    "summary": one_line_fn(str(item.get("summary", "") or ""), 120),
                 }
             )
         for item in workers_active:
@@ -721,11 +737,11 @@ def _agent_activity_snapshot(
                     "id": str(item.get("worker_id", "")).strip(),
                     "status": str(item.get("status", "")).strip(),
                     "owner_task_id": str(item.get("owner_task_id", "")).strip(),
-                    "summary": one_line(str(item.get("summary", "") or ""), 120),
+                    "summary": one_line_fn(str(item.get("summary", "") or ""), 120),
                 }
             )
         total_helpers += len(helper_rows)
-        action_summary = one_line(
+        action_summary = one_line_fn(
             str(
                 issue.get("action_summary")
                 or issue.get("exec_report")
@@ -745,16 +761,16 @@ def _agent_activity_snapshot(
             "current_task_state": current_task_state,
             "current_task_title": current_task_title,
             "action_summary": action_summary,
-            "next_action": one_line(str(agent.get("next", issue.get("next_action", "")) or ""), 220),
+            "next_action": one_line_fn(str(agent.get("next", issue.get("next_action", "")) or ""), 220),
             "task_update": str(issue.get("task_update", agent.get("task_update", "none")) or "none"),
-            "exec_report": one_line(str(issue.get("exec_report", "none") or "none"), 220),
-            "tool_request": one_line(str(issue.get("tool_request", "none") or "none"), 180),
-            "skill_request": one_line(str(issue.get("skill_request", "none") or "none"), 180),
-            "tools_used": one_line(str(issue.get("tools_used", "none") or "none"), 220),
-            "run_note": one_line(str(issue.get("run_note", "none") or "none"), 220),
-            "root_cause": one_line(str(issue.get("root_cause", "none") or "none"), 180),
-            "fix_applied": one_line(str(issue.get("fix_applied", "none") or "none"), 180),
-            "verify": one_line(str(issue.get("verify", "none") or "none"), 180),
+            "exec_report": one_line_fn(str(issue.get("exec_report", "none") or "none"), 220),
+            "tool_request": one_line_fn(str(issue.get("tool_request", "none") or "none"), 180),
+            "skill_request": one_line_fn(str(issue.get("skill_request", "none") or "none"), 180),
+            "tools_used": one_line_fn(str(issue.get("tools_used", "none") or "none"), 220),
+            "run_note": one_line_fn(str(issue.get("run_note", "none") or "none"), 220),
+            "root_cause": one_line_fn(str(issue.get("root_cause", "none") or "none"), 180),
+            "fix_applied": one_line_fn(str(issue.get("fix_applied", "none") or "none"), 180),
+            "verify": one_line_fn(str(issue.get("verify", "none") or "none"), 180),
             "issue_codes": issue.get("issue_codes", []) if isinstance(issue.get("issue_codes", []), list) else [],
             "issue_count": int(issue.get("issue_count", 0) or 0),
             "last_update_at": str(issue.get("ts_utc", "") or ""),
@@ -1054,13 +1070,25 @@ def _activity_summary_from_bundle(bundle: dict) -> dict:
     return summary
 
 
-def doctor_snapshot(force_refresh: bool = False) -> dict:
+def doctor_snapshot(force_refresh: bool = False, allow_refresh: bool = True) -> dict:
     global _DOCTOR_RUNNING
     now = time.time()
     cached_payload = _DOCTOR_CACHE.get("payload")
     cached_ts = float(_DOCTOR_CACHE.get("ts") or 0.0)
     if not force_refresh and isinstance(cached_payload, dict) and (now - cached_ts) <= DOCTOR_CACHE_TTL_SECONDS:
         return cached_payload
+    if not allow_refresh:
+        if isinstance(cached_payload, dict) and cached_payload:
+            return cached_payload
+        return {
+            "status": "unknown",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checks": {},
+            "meta": {
+                "schema_version": "doctor.v1",
+                "note": "doctor_refresh_deferred",
+            },
+        }
 
     # Prevent recursive refresh loops:
     # /api/status -> doctor_snapshot -> fc_doctor.sh -> /api/status.
@@ -2942,9 +2970,10 @@ def _unknown_agent_payload(role: str, source: str = "unknown") -> dict:
     }
 
 @app.get("/api/status")
-def status():
+def status(lite: int = 0):
     now=datetime.now(timezone.utc); m=now.minute
     now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    lite_mode = bool(lite)
     runtime_state = _runtime_state_snapshot()
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
@@ -2982,7 +3011,7 @@ def status():
     admin_dispatch = admin_dispatch_snapshot()
     agent_messages = _message_bus_snapshot(now_iso)
     po_scrum_master = _po_scrum_master_snapshot(agent_messages)
-    doctor = doctor_snapshot(force_refresh=False)
+    doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
     planner_contract_health = parse_contract_fields("planner")
     planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
 
@@ -3568,7 +3597,8 @@ def status():
         "orchestrator_source": orchestrator_source,
         "dev_force_claim_events_60m": dev_force_claim_events_60m,
     }
-    activity_bundle = _activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, min(ACTIVITY_FEED_MAX_EVENTS, 220))
+    activity_limit = min(ACTIVITY_FEED_MAX_EVENTS, 80 if lite_mode else 220)
+    activity_bundle = _activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, activity_limit)
     activity_summary = _activity_summary_from_bundle(activity_bundle)
     system_summary = activity_bundle.get("system_summary", {}) if isinstance(activity_bundle, dict) else {}
     if not isinstance(system_summary, dict):
@@ -3674,7 +3704,7 @@ def status():
     try:
         from apps.monitor.services.status_service import build_status_snapshot
 
-        payload = build_status_snapshot(ROOT, lambda: payload)
+        payload = build_status_snapshot(ROOT, lambda: payload, include_layers=not bool(lite))
     except Exception:
         pass
     return payload
@@ -3972,9 +4002,9 @@ def iteration_issues(role: str = "", severity: str = "", recent_minutes: int = 1
 # Doctor routes are mounted via layered router in apps/monitor/src/api/doctor_router.py
 
 @app.get("/api/runtime-diagnostics")
-def runtime_diagnostics():
+def runtime_diagnostics(lite: int = 0):
     try:
-        status_snapshot = status()
+        status_snapshot = status(lite=lite)
     except Exception:
         status_snapshot = {
             "health": "DEGRADED",
@@ -4497,7 +4527,7 @@ def runtime_diagnostics():
     try:
         from apps.monitor.services.runtime_diagnostics_service import build_runtime_diagnostics
 
-        payload = build_runtime_diagnostics(ROOT, lambda: payload)
+        payload = build_runtime_diagnostics(ROOT, lambda: payload, include_layers=not bool(lite))
     except Exception:
         pass
     return payload
@@ -4505,7 +4535,7 @@ def runtime_diagnostics():
 
 @app.get("/api/agents/activity")
 def agents_activity():
-    snapshot = status()
+    snapshot = status(lite=1)
     payload = snapshot.get("agent_activity", {}) if isinstance(snapshot, dict) else {}
     if not isinstance(payload, dict):
         payload = {}
@@ -4762,6 +4792,82 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .agent-issue-chip.warn{border-color:rgba(255,179,64,.45);background:rgba(255,179,64,.12);color:var(--amber)}
 .agent-issue-chip.error,.agent-issue-chip.critical{border-color:rgba(255,77,106,.45);background:rgba(255,77,106,.12);color:var(--coral)}
 .agent-issue-chip.info{border-color:var(--edge2);background:rgba(125,150,170,.08);color:var(--ghost)}
+.agent-activity-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+.agent-activity-stat{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:9px 10px}
+.agent-activity-stat strong{display:block;font-family:var(--sans);font-size:16px;line-height:1;color:#fff;margin-bottom:4px}
+.agent-activity-stat span{font-size:10px;color:var(--ghost);letter-spacing:.05em;text-transform:uppercase}
+.agent-activity-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
+.agent-activity-card{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:12px}
+.agent-activity-card.ok{border-left:3px solid var(--emerald)}
+.agent-activity-card.info{border-left:3px solid var(--aqua)}
+.agent-activity-card.warn{border-left:3px solid var(--amber)}
+.agent-activity-card.error{border-left:3px solid var(--coral)}
+.agent-activity-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.agent-activity-role{font-family:var(--sans);font-weight:700;font-size:14px;color:#fff}
+.agent-activity-status{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.agent-activity-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid}
+.agent-activity-badge.ok{color:var(--emerald);border-color:rgba(0,232,122,.35);background:rgba(0,232,122,.08)}
+.agent-activity-badge.info{color:var(--aqua);border-color:rgba(0,212,255,.35);background:rgba(0,212,255,.08)}
+.agent-activity-badge.warn{color:var(--amber);border-color:rgba(255,179,64,.35);background:rgba(255,179,64,.08)}
+.agent-activity-badge.error{color:var(--coral);border-color:rgba(255,77,106,.35);background:rgba(255,77,106,.08)}
+.agent-activity-task{background:var(--ink);border:1px solid var(--edge);border-radius:var(--r);padding:9px 10px;margin-bottom:8px}
+.agent-activity-taskid{font-size:10px;color:var(--aqua);font-family:var(--mono);margin-bottom:4px}
+.agent-activity-title{font-size:12px;color:#fff;line-height:1.5}
+.agent-activity-line{font-size:11px;line-height:1.55;color:var(--ink-text);margin-bottom:6px}
+.agent-activity-line strong{color:var(--ghost);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+.agent-activity-kpis{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.agent-activity-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--edge);font-size:10px;color:var(--ghost)}
+.agent-activity-details{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px}
+.agent-activity-details summary{cursor:pointer;list-style:none;font-size:10px;color:var(--aqua);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.agent-activity-details summary::-webkit-details-marker{display:none}
+.agent-activity-details summary::before{content:'+';display:inline-block;margin-right:6px;color:var(--aqua)}
+.agent-activity-details[open] summary::before{content:'−'}
+.agent-activity-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+@media(max-width:760px){.agent-activity-detail-grid{grid-template-columns:1fr}}
+.agent-activity-detail-box{background:rgba(5,8,13,.55);border:1px solid var(--edge);border-radius:var(--r);padding:8px}
+.agent-activity-detail-box strong{display:block;font-size:9px;color:var(--ghost);letter-spacing:.05em;text-transform:uppercase;margin-bottom:3px}
+.agent-activity-detail-box div{font-size:10px;line-height:1.5;color:var(--ink-text);word-break:break-word}
+.agent-activity-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.agent-activity-list-item{background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:var(--r);padding:7px 8px}
+.agent-activity-list-item div{font-size:10px;line-height:1.45;color:var(--ink-text)}
+.agent-activity-list-item .meta{color:var(--ghost)}
+.agent-activity-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.work-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+.work-summary-stat{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:9px 10px}
+.work-summary-stat.ok{border-left:3px solid var(--emerald)}
+.work-summary-stat.warn{border-left:3px solid var(--amber)}
+.work-summary-stat.error{border-left:3px solid var(--coral)}
+.work-summary-stat.info{border-left:3px solid var(--aqua)}
+.work-summary-stat strong{display:block;font-family:var(--sans);font-size:16px;line-height:1;color:#fff;margin-bottom:4px}
+.work-summary-stat span{font-size:10px;color:var(--ghost);letter-spacing:.05em;text-transform:uppercase}
+.work-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}
+.work-card{background:var(--lift);border:1px solid var(--edge);border-radius:var(--r);padding:10px}
+.work-card.ok{border-left:3px solid var(--emerald)}
+.work-card.warn{border-left:3px solid var(--amber)}
+.work-card.error{border-left:3px solid var(--coral)}
+.work-card.info{border-left:3px solid var(--aqua)}
+.work-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
+.work-card-title{font-family:var(--sans);font-size:13px;font-weight:700;color:#fff}
+.work-card-badges{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.work-card-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid}
+.work-card-badge.ok{color:var(--emerald);border-color:rgba(0,232,122,.35);background:rgba(0,232,122,.08)}
+.work-card-badge.warn{color:var(--amber);border-color:rgba(255,179,64,.35);background:rgba(255,179,64,.08)}
+.work-card-badge.error{color:var(--coral);border-color:rgba(255,77,106,.35);background:rgba(255,77,106,.08)}
+.work-card-badge.info{color:var(--aqua);border-color:rgba(0,212,255,.35);background:rgba(0,212,255,.08)}
+.work-card-meta{font-size:10px;color:var(--ghost);line-height:1.5;margin-top:3px}
+.work-card-text{font-size:11px;color:var(--ink-text);line-height:1.55;margin-top:6px;word-break:break-word}
+.work-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.work-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--edge);font-size:10px;color:var(--ghost)}
+.work-card-details{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px}
+.work-card-details summary{cursor:pointer;list-style:none;font-size:10px;color:var(--aqua);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.work-card-details summary::-webkit-details-marker{display:none}
+.work-card-details summary::before{content:'+';display:inline-block;margin-right:6px;color:var(--aqua)}
+.work-card-details[open] summary::before{content:'−'}
+.work-card-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.work-card-list-item{background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:var(--r);padding:7px 8px}
+.work-card-list-item div{font-size:10px;line-height:1.45;color:var(--ink-text)}
+.work-card-list-item .meta{color:var(--ghost)}
+.work-card-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
 .insight-issue-report{font-size:10px;line-height:1.45;margin-top:4px}
 .insight-issue-report.bad{color:var(--coral)}
 .insight-issue-report.good{color:var(--emerald)}
@@ -4799,8 +4905,19 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
   </div>
 </div>
 <script>
-let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,R=null,IS=null,G=null,P=null,A=null,TA=null,DM=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner';
-async function fetchJson(url, fallback={}, timeoutMs=6000){
+let D=null,T=null,E=null,L=null,LC=null,I=null,X=null,F=null,R=null,IS=null,G=null,P=null,A=null,TA=null,DM=null,API_ERRORS=[],cdr=12,iv=null,tickRole='planner',contractRole='planner',execRole='planner',logRole='planner',logKind='runner',loadPromise=null;
+const DASHBOARD_TIMEOUT_DEFAULT=9000;
+const DASHBOARD_TIMEOUTS=[
+  ['/api/status',15000],
+  ['/api/runtime-diagnostics',12000],
+  ['/api/agent-activity',12000],
+  ['/api/tasks/active',12000],
+  ['/api/dependencies/map',12000],
+  ['/api/ticks/all',10000],
+  ['/api/execution/all',10000],
+  ['/api/log-view',10000]
+];
+async function fetchJson(url, fallback={}, timeoutMs=DASHBOARD_TIMEOUT_DEFAULT){
   const ctrl=new AbortController();
   const tid=setTimeout(()=>ctrl.abort(), timeoutMs);
   try{
@@ -4814,26 +4931,11 @@ async function fetchJson(url, fallback={}, timeoutMs=6000){
     clearTimeout(tid);
   }
 }
-async function load(){
-  const[s,t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm]=await Promise.all([
-    fetchJson('/api/status',{}),
-    fetchJson('/api/ticks/all?n=20',{}),
-    fetchJson('/api/execution/all?tick_n=40&runner_n=90',{}),
-    fetchJson(`/api/log-view?role=${encodeURIComponent(logRole)}&kind=${encodeURIComponent(logKind)}&n=220`,{}),
-    fetchJson('/api/log-catalog',{}),
-    fetchJson('/api/agent-insights',{}),
-    fetchJson('/api/execution-insights/all',{}),
-    fetchJson('/api/error-feed?n=140',{}),
-    fetchJson('/api/issues/feed?n=160&window_min=240',{}),
-    fetchJson('/api/issues/summary?window_min=60',{}),
-    fetchJson('/api/dev-parent',{}),
-    fetchJson('/api/runtime-diagnostics',{}),
-    fetchJson('/api/agent-activity?window=6&limit=300',{}),
-    fetchJson('/api/tasks/active?window=6&limit=120',{}),
-    fetchJson('/api/dependencies/map?limit=300',{})
-  ]);
-  API_ERRORS=[s,t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
-
+function fetchDashboardJson(url, fallback={}){
+  const matched=DASHBOARD_TIMEOUTS.find(([prefix])=>url.startsWith(prefix));
+  return fetchJson(url, fallback, matched?matched[1]:DASHBOARD_TIMEOUT_DEFAULT);
+}
+function applyStatusPayload(s){
   const statusOk = !!(s.ok && s.data && s.data.queue && s.data.workboard && s.data.agents);
   if(statusOk){
     D=s.data;
@@ -4843,6 +4945,33 @@ async function load(){
   }else{
     D.__status_unavailable=true;
   }
+}
+async function load(){
+  if(loadPromise)return loadPromise;
+  loadPromise=(async()=>{
+    const s=await fetchDashboardJson('/api/status?lite=1',{});
+    API_ERRORS=s.ok?[]:[`${s.url}:${s.error}`];
+    applyStatusPayload(s);
+    if(typeof render==='function')render();
+
+    const[t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm]=await Promise.all([
+      fetchDashboardJson('/api/ticks/all?n=16',{}),
+      fetchDashboardJson('/api/execution/all?tick_n=32&runner_n=70',{}),
+      fetchDashboardJson(`/api/log-view?role=${encodeURIComponent(logRole)}&kind=${encodeURIComponent(logKind)}&n=160`,{}),
+      fetchDashboardJson('/api/log-catalog',{}),
+      fetchDashboardJson('/api/agent-insights',{}),
+      fetchDashboardJson('/api/execution-insights/all',{}),
+      fetchDashboardJson('/api/error-feed?n=100',{}),
+      fetchDashboardJson('/api/issues/feed?n=120&window_min=240',{}),
+      fetchDashboardJson('/api/issues/summary?window_min=60',{}),
+      fetchDashboardJson('/api/dev-parent',{}),
+      fetchDashboardJson('/api/runtime-diagnostics?lite=1',{}),
+      fetchDashboardJson('/api/agent-activity?window=6&limit=180',{}),
+      fetchDashboardJson('/api/tasks/active?window=6&limit=80',{}),
+      fetchDashboardJson('/api/dependencies/map?limit=200',{})
+    ]);
+    API_ERRORS=[s,t,e,l,lc,i,x,f,r,is,p,g,a,ta,dm].filter(r=>!r.ok).map(r=>`${r.url}:${r.error}`);
+
   if(t.ok)T=t.data;
   if(e.ok)E=e.data;
   if(l.ok)L=l.data;
@@ -4857,6 +4986,12 @@ async function load(){
   A=a.ok ? a.data : {};
   TA=ta.ok ? ta.data : {};
   DM=dm.ok ? dm.data : {};
+  })();
+  try{
+    return await loadPromise;
+  }finally{
+    loadPromise=null;
+  }
 }
 function esc(v){return String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}
 function shortPath(v, max=92){
@@ -5153,48 +5288,128 @@ function insightsHtml(){
     }).join('')
   }</div>`;
 }
+function workTone(token){
+  const s=String(token||'').toLowerCase();
+  if(/critical|error|blocked|fail|timeout|missing|stalled/.test(s))return 'error';
+  if(/warn|wait|progress|degraded|recover|pending|pressure/.test(s))return 'warn';
+  if(/ok|done|complete|healthy|success|pass|fresh|running/.test(s))return 'ok';
+  return 'info';
+}
+function workSummaryStatHtml(value,label,tone='info'){
+  return `<div class="work-summary-stat ${tone}"><strong>${esc(String(value))}</strong><span>${esc(label)}</span></div>`;
+}
+function workBadgeHtml(text,tone='info'){
+  return `<span class="work-card-badge ${tone}">${esc(String(text||'—'))}</span>`;
+}
+function workChipHtml(text){
+  return `<span class="work-chip">${esc(String(text||'—'))}</span>`;
+}
 function activityFeedHtml(){
   const timeline=((A&&A.timeline)||[]).slice(0,24);
   if(!timeline.length){
     return '<div class="log-empty">Aucune activité récente consolidée</div>';
   }
-  return `<div class="iter-issues">${
-    timeline.map(ev=>{
-      const role=String(ev.role||'unknown');
-      const action=String(ev.action||'NOOP');
-      const task=String(ev.task_id||ev.batch_id||'');
-      const reason=String(ev.reason_code||'');
-      const ts=String(ev.ts||'');
-      const artifact=(Array.isArray(ev.artifact_refs)&&ev.artifact_refs.length)?String(ev.artifact_refs[0]||''):'';
-      const sev=(action==='BLOCKED')?'error':(action==='NOOP'?'info':'warn');
-      return `<div class="issue-row ${sev}">
-        <div class="issue-head"><span class="issue-role">${esc(role)} → ${esc(action)}</span><span class="issue-sev ${sev}">${esc(ts.slice(11,19)||'--:--:--')}</span></div>
-        <div class="issue-meta">${esc(task||'task: none')} ${reason?`· ${esc(reason)}`:''}</div>
-        ${artifact?`<div class="issue-text">artifact: ${esc(artifact)}</div>`:''}
-      </div>`;
-    }).join('')
-  }</div>`;
+  const blocked=timeline.filter(ev=>String(ev.action||'').toUpperCase()==='BLOCKED').length;
+  const artifacts=timeline.filter(ev=>Array.isArray(ev.artifact_refs)&&ev.artifact_refs.length).length;
+  const uniqueRoles=new Set(timeline.map(ev=>String(ev.role||'unknown'))).size;
+  return `
+    <div class="work-summary-grid">
+      ${workSummaryStatHtml(timeline.length,'events visibles','info')}
+      ${workSummaryStatHtml(uniqueRoles,'roles actifs','ok')}
+      ${workSummaryStatHtml(blocked,'events blocked',blocked>0?'error':'ok')}
+      ${workSummaryStatHtml(artifacts,'events avec artefacts',artifacts>0?'ok':'warn')}
+    </div>
+    <div class="work-grid">${
+      timeline.map(ev=>{
+        const role=String(ev.role||'unknown');
+        const action=String(ev.action||'NOOP');
+        const task=String(ev.task_id||ev.batch_id||'task: none');
+        const reason=String(ev.reason_code||'none');
+        const ts=String(ev.ts||'');
+        const summary=String(ev.summary||'');
+        const artifactRefs=Array.isArray(ev.artifact_refs)?ev.artifact_refs:[];
+        const evidenceRefs=Array.isArray(ev.evidence_refs)?ev.evidence_refs:[];
+        const tone=workTone(action);
+        return `<div class="work-card ${tone}">
+          <div class="work-card-head">
+            <div class="work-card-title">${esc(role)} → ${esc(action)}</div>
+            <div class="work-card-badges">
+              ${workBadgeHtml(ts.slice(11,19)||'--:--:--', tone)}
+            </div>
+          </div>
+          <div class="work-card-meta">${esc(task)}${reason && reason!=='none'?` · ${esc(reason)}`:''}</div>
+          ${summary?`<div class="work-card-text">${esc(summary)}</div>`:''}
+          <div class="work-chip-row">
+            ${workChipHtml(`role=${role}`)}
+            ${workChipHtml(`action=${action}`)}
+            ${workChipHtml(`reason=${reason||'none'}`)}
+          </div>
+          <details class="work-card-details">
+            <summary>Voir contexte événement</summary>
+            <div class="work-card-list">
+              <div class="work-card-list-item"><div>tick=${esc(String(ev.tick_id||'none'))}</div><div class="meta">source=${esc(String(ev.source_kind||'unknown'))}</div></div>
+              ${artifactRefs.length?artifactRefs.slice(0,3).map(ref=>`<div class="work-card-list-item"><div>${esc(String(ref||''))}</div><div class="meta">artifact</div></div>`).join(''):''}
+              ${evidenceRefs.length?evidenceRefs.slice(0,3).map(ref=>`<div class="work-card-list-item"><div>${esc(String(ref||''))}</div><div class="meta">evidence</div></div>`).join(''):''}
+            </div>
+          </details>
+        </div>`;
+      }).join('')
+    }</div>
+  `;
 }
 function taskInspectorHtml(){
   const items=((TA&&TA.items)||[]).slice(0,18);
   if(!items.length){
     return '<div class="log-empty">Aucune tâche active détaillée</div>';
   }
-  return `<div class="iter-issues">${
-    items.map(t=>{
-      const state=String(t.state||'UNKNOWN');
-      const sev=state==='IN_PROGRESS'?'warn':(state==='WAITING_DEP'?'error':'info');
-      const stalled=Boolean(t.stalled);
-      const progress=Math.max(0,Math.min(100,Number(t.progress_pct||0)));
-      return `<div class="issue-row ${sev}">
-        <div class="issue-head"><span class="issue-role">${esc(t.task_id||'')}</span><span class="issue-sev ${sev}">${esc(state)}</span></div>
-        <div class="issue-meta">owner=${esc(t.owner||'?')} · progress=${progress}% · step=${esc(t.current_step||'—')}</div>
-        <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${progress}%"></div></div>
-        ${t.artifact_output?`<div class="issue-text">artifact: ${esc(t.artifact_output)}</div>`:''}
-        ${stalled?`<div class="issue-text" style="color:var(--coral)">stalled: ${esc(t.stalled_reason||'unknown')}</div>`:''}
-      </div>`;
-    }).join('')
-  }</div>`;
+  const stalledCount=items.filter(t=>Boolean(t.stalled)).length;
+  const inProgressCount=items.filter(t=>String(t.state||'').toUpperCase()==='IN_PROGRESS').length;
+  const waitingCount=items.filter(t=>String(t.state||'').toUpperCase()==='WAITING_DEP').length;
+  return `
+    <div class="work-summary-grid">
+      ${workSummaryStatHtml(items.length,'tâches visibles','info')}
+      ${workSummaryStatHtml(inProgressCount,'in progress','warn')}
+      ${workSummaryStatHtml(waitingCount,'waiting dep',waitingCount>0?'error':'ok')}
+      ${workSummaryStatHtml(stalledCount,'stalled',stalledCount>0?'error':'ok')}
+    </div>
+    <div class="work-grid">${
+      items.map(t=>{
+        const state=String(t.state||'UNKNOWN');
+        const tone=workTone(Boolean(t.stalled)?'stalled':state);
+        const stalled=Boolean(t.stalled);
+        const progress=Math.max(0,Math.min(100,Number(t.progress_pct||0)));
+        const title=String(t.title||t.task_id||'task');
+        const taskId=String(t.task_id||'unknown');
+        const lastUpdate=String(t.last_update||t.last_update_at||'');
+        return `<div class="work-card ${tone}">
+          <div class="work-card-head">
+            <div class="work-card-title">${esc(taskId)}</div>
+            <div class="work-card-badges">
+              ${workBadgeHtml(state, tone)}
+              ${workBadgeHtml(`${progress}%`, progress>=100?'ok':(progress>0?'warn':'info'))}
+            </div>
+          </div>
+          <div class="work-card-meta">${esc(title)}</div>
+          <div class="work-card-text">owner=${esc(String(t.owner||'?'))} · step=${esc(String(t.current_step||'—'))}${lastUpdate?` · last_update=${esc(lastUpdate)}`:''}</div>
+          <div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${progress}%"></div></div>
+          <div class="work-chip-row">
+            ${workChipHtml(`owner=${String(t.owner||'?')}`)}
+            ${workChipHtml(`progress=${progress}%`)}
+            ${workChipHtml(`stalled=${stalled?'yes':'no'}`)}
+          </div>
+          <details class="work-card-details">
+            <summary>Voir détails tâche</summary>
+            <div class="work-card-list">
+              <div class="work-card-list-item"><div>${esc(String(t.current_step||'—'))}</div><div class="meta">current_step</div></div>
+              ${t.artifact_output?`<div class="work-card-list-item"><div>${esc(String(t.artifact_output||''))}</div><div class="meta">artifact_output</div></div>`:''}
+              ${stalled?`<div class="work-card-list-item"><div>${esc(String(t.stalled_reason||'unknown'))}</div><div class="meta">stalled_reason</div></div>`:''}
+              ${t.started_at?`<div class="work-card-list-item"><div>${esc(String(t.started_at||''))}</div><div class="meta">started_at</div></div>`:''}
+            </div>
+          </details>
+        </div>`;
+      }).join('')
+    }</div>
+  `;
 }
 function dependencyMapHtml(){
   const summary=(DM&&DM.summary)||{};
@@ -5204,13 +5419,33 @@ function dependencyMapHtml(){
     return `<div class="queue-sync ok"><strong>dependency graph</strong> · nodes=${summary.nodes||0} · edges=${summary.edges||0} · bottlenecks=0</div>`;
   }
   return `<div>
-    <div class="queue-sync warn" style="margin-bottom:8px"><strong>dependency graph</strong> · nodes=${summary.nodes||0} · edges=${summary.edges||0} · waiting_dep=${summary.waiting_dep_tasks||0}</div>
-    <div class="iter-issues">${
-      bottlenecks.map((b,idx)=>`<div class="issue-row warn">
-        <div class="issue-head"><span class="issue-role">${idx+1}. ${esc(b.task_id||'unknown')}</span><span class="issue-sev warn">${esc(String(b.blocked_count||0))} blocked</span></div>
-        <div class="issue-meta">oldest_wait=${esc(String(b.oldest_blocked_minutes??'-1'))} min</div>
-        <div class="issue-text">${esc(explanations[idx]||'')}</div>
-      </div>`).join('')
+    <div class="work-summary-grid">
+      ${workSummaryStatHtml(summary.nodes||0,'nodes','info')}
+      ${workSummaryStatHtml(summary.edges||0,'edges','info')}
+      ${workSummaryStatHtml(summary.waiting_dep_tasks||0,'waiting dep','warn')}
+      ${workSummaryStatHtml(bottlenecks.length,'bottlenecks',bottlenecks.length>0?'error':'ok')}
+    </div>
+    <div class="work-grid">${
+      bottlenecks.map((b,idx)=>{
+        const oldest=String(b.oldest_blocked_minutes??'-1');
+        const blockedCount=String(b.blocked_count||0);
+        const expl=String(explanations[idx]||'');
+        return `<div class="work-card warn">
+          <div class="work-card-head">
+            <div class="work-card-title">${esc(String(b.task_id||'unknown'))}</div>
+            <div class="work-card-badges">
+              ${workBadgeHtml(`${blockedCount} blocked`,'error')}
+              ${workBadgeHtml(`${oldest} min`,'warn')}
+            </div>
+          </div>
+          <div class="work-card-text">${esc(expl||'No explanation available')}</div>
+          <div class="work-chip-row">
+            ${workChipHtml(`rank=${idx+1}`)}
+            ${workChipHtml(`blocked=${blockedCount}`)}
+            ${workChipHtml(`oldest_wait=${oldest}m`)}
+          </div>
+        </div>`;
+      }).join('')
     }</div>
   </div>`;
 }
@@ -5226,19 +5461,25 @@ function plannerDispatchRowsHtml(items, mode){
   if(!rows.length){
     return `<div class="log-empty">${mode==='active'?'Aucun subagent actif':'Aucune exécution récente'}</div>`;
   }
-  return `<div class="iter-issues">${
+  return `<div class="work-grid">${
     rows.slice(0,8).map(item=>{
       const status=String(item.status||'unknown');
-      const sev=mode==='active'?'warn':(String(status).toLowerCase().match(/completed|merged|done|pass|ok|success/)?'info':'warn');
+      const sev=mode==='active'?'warn':workTone(status);
       const role=String(item.target_role||item.parent_role||'unknown');
       const task=String(item.owner_task_id||'task: none');
       const backend=String(item.backend||item.backend_ref||'');
       const updated=String(item.last_update_at||item.created_at||'');
-      const summary=String(item.summary||item.artifact||'');
-      return `<div class="issue-row ${sev}">
-        <div class="issue-head"><span class="issue-role">${esc(role)} · ${esc(status)}</span><span class="issue-sev ${sev}">${esc(updated.slice(11,19)||'--:--:--')}</span></div>
-        <div class="issue-meta">${esc(task)}${backend?` · ${esc(backend)}`:''}</div>
-        ${summary?`<div class="issue-text">${esc(summary).slice(0,180)}</div>`:''}
+      const summary=String(item.summary||item.artifact||item.blocking_issue||'');
+      return `<div class="work-card ${sev}">
+        <div class="work-card-head">
+          <div class="work-card-title">${esc(role)} · ${esc(task)}</div>
+          <div class="work-card-badges">
+            ${workBadgeHtml(status, sev)}
+            ${workBadgeHtml(updated.slice(11,19)||'--:--:--', 'info')}
+          </div>
+        </div>
+        <div class="work-card-meta">${backend?`backend=${esc(backend)}`:'backend=unknown'}</div>
+        ${summary?`<div class="work-card-text">${esc(summary).slice(0,220)}</div>`:''}
       </div>`;
     }).join('')
   }</div>`;
@@ -5248,17 +5489,25 @@ function plannerDispatchRoleHtml(byRole){
   if(!entries.length){
     return '<div class="log-empty">Aucune métrique capability récente</div>';
   }
-  return `<div class="iter-issues">${
+  return `<div class="work-grid">${
     entries.sort((a,b)=>String(a[0]).localeCompare(String(b[0]))).map(([role,stats])=>{
       const total=Number(stats&&stats.total||0);
       const success=Number(stats&&stats.success||0);
       const failed=Number(stats&&stats.failed||0);
       const blocked=Number(stats&&stats.blocked||0);
       const fallback=Number(stats&&stats.fallback_like||0);
-      const sev=(failed>0||fallback>0)?'warn':(success>0?'info':'warn');
-      return `<div class="issue-row ${sev}">
-        <div class="issue-head"><span class="issue-role">${esc(role)}</span><span class="issue-sev ${sev}">total=${total}</span></div>
-        <div class="issue-meta">success=${success} · failed=${failed} · blocked=${blocked} · fallback=${fallback}</div>
+      const sev=(failed>0||fallback>0)?'warn':(success>0?'ok':'info');
+      return `<div class="work-card ${sev}">
+        <div class="work-card-head">
+          <div class="work-card-title">${esc(role)}</div>
+          <div class="work-card-badges">${workBadgeHtml(`total=${total}`, sev)}</div>
+        </div>
+        <div class="work-chip-row">
+          ${workChipHtml(`success=${success}`)}
+          ${workChipHtml(`failed=${failed}`)}
+          ${workChipHtml(`blocked=${blocked}`)}
+          ${workChipHtml(`fallback=${fallback}`)}
+        </div>
       </div>`;
     }).join('')
   }</div>`;
@@ -5303,9 +5552,16 @@ function plannerDispatchHtml(){
   const byRoleRows=plannerDispatchRoleHtml(pd.recent_by_role&&Object.keys(pd.recent_by_role).length?pd.recent_by_role:ps.recent_by_role);
   return `
     <div class="queue-sync ${cls}"><strong>Planner dispatch</strong> · status=${esc(status)} · lifecycle=${esc(lifecycle)} · next=${esc(nextAction)}</div>
-    <div class="queue-sync ${activeCount>0?'ok':'warn'}" style="margin-top:8px"><strong>Queue pressure</strong> · READY_DEV=${readyDev} · READY_PLANNER=${readyPlanner} · IN_PROGRESS=${inProgress} · active_subagents=${activeCount} · progressed_1h=${progressed1h}</div>
-    <div class="queue-sync ${recentFailed===0&&recentFallback===0&&invalidResults===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · success_rate=${esc((recentRate*100).toFixed(0))}% · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · invalid=${invalidResults} · timeout_like=${timeoutLike} · bottleneck=${esc(bottleneck)}</div>
-    <div class="queue-sync ${(stalledCapabilities===0&&takeoverRequired===0&&recoveryRequired===0)?'ok':'warn'}" style="margin-top:8px"><strong>Recovery</strong> · stalled=${stalledCapabilities} · takeover_required=${takeoverRequired} · recovery_required=${recoveryRequired}</div>
+    <div class="work-summary-grid" style="margin-top:8px">
+      ${workSummaryStatHtml(`${readyDev}/${readyPlanner}`,'ready dev/planner',readyDev+readyPlanner>0?'warn':'ok')}
+      ${workSummaryStatHtml(activeCount,'subagents actifs',activeCount>0?'warn':'info')}
+      ${workSummaryStatHtml(progressed1h,'tasks progressed 1h',progressed1h>0?'ok':'warn')}
+      ${workSummaryStatHtml(`${Math.round(recentRate*100)}%`,'success rate',recentFailed===0&&recentFallback===0?'ok':'warn')}
+      ${workSummaryStatHtml(timeoutLike,'timeouts récents',timeoutLike>0?'error':'ok')}
+      ${workSummaryStatHtml(stalledCapabilities,'capabilities stalled',stalledCapabilities>0?'error':'ok')}
+    </div>
+    <div class="queue-sync ${recentFailed===0&&recentFallback===0&&invalidResults===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · invalid=${invalidResults} · timeout_like=${timeoutLike} · bottleneck=${esc(bottleneck)}</div>
+    <div class="queue-sync ${(takeoverRequired===0&&recoveryRequired===0)?'ok':'warn'}" style="margin-top:8px"><strong>Recovery</strong> · takeover_required=${takeoverRequired} · recovery_required=${recoveryRequired} · in_progress=${inProgress}</div>
     ${flagsHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
       <div class="log-box"><div class="log-head">Active subagents</div><div class="log-scroll">${activeRows}</div></div>
@@ -5325,44 +5581,132 @@ function agentActivityHtml(){
   const aa=(D&&D.agent_activity)||{};
   const roles=aa.roles||{};
   const order=(D&&D.roles)||Object.keys(roles||{});
-  const rows=order.map(role=>{
-    const item=roles[role];
-    if(!item)return '';
+  const entries=order.map(role=>[role, roles[role]]).filter(([,item])=>!!item);
+  if(!entries.length)return `<div class="log-empty">Aucune activite agent disponible</div>`;
+  let blockedCount=0;
+  let issueCount=0;
+  let activeTaskCount=0;
+  let helperCount=0;
+  function toneFor(item){
+    const status=String(item.status||'unknown').toLowerCase();
+    const verdict=String(item.verdict||'unknown').toLowerCase();
+    const issues=Number(item.issue_count||0);
+    if(issues>0 || status.includes('blocked') || verdict.includes('blocked'))return 'error';
+    if(status.includes('progress') || verdict.includes('caution') || verdict.includes('wait'))return 'warn';
+    if(status.includes('done') || verdict.includes('pass') || verdict.includes('go'))return 'ok';
+    return 'info';
+  }
+  const cards=entries.map(([role,item])=>{
     const taskId=String(item.current_task_id||'none');
+    const taskTitle=String(item.current_task_title||'none');
+    const streamId=String(item.current_stream_id||'none');
     const taskState=String(item.current_task_state||'none');
+    const verdict=String(item.verdict||'unknown');
+    const status=String(item.status||'unknown');
     const action=String(item.action_summary||item.next_action||'none');
+    const nextAction=String(item.next_action||'none');
+    const execReport=String(item.exec_report||'none');
+    const taskUpdate=String(item.task_update||'none');
+    const runNote=String(item.run_note||'none');
+    const rootCause=String(item.root_cause||'none');
+    const fixApplied=String(item.fix_applied||'none');
+    const verify=String(item.verify||'none');
     const tools=String(item.tools_used||'none');
     const toolReq=String(item.tool_request||'none');
     const skillReq=String(item.skill_request||'none');
     const issues=Array.isArray(item.issue_codes)&&item.issue_codes.length?item.issue_codes.join(', '):'none';
+    const tone=toneFor(item);
     const helpers=Array.isArray(item.active_helpers)?item.active_helpers:[];
-    const helperTxt=helpers.length?helpers.map(h=>`${h.kind}:${h.id||'unknown'}:${h.status||'unknown'}`).join(' · '):'none';
     const recentEvents=Array.isArray(item.recent_events)?item.recent_events:[];
-    const eventsTxt=recentEvents.length?recentEvents.map(e=>`${e.event}${e.detail?` (${e.detail})`:''}`).join(' · '):'none';
-    return `<div class="issue-row ${issues!=='none'?'warn':'info'}">
-      <div class="issue-head"><span class="issue-role">${esc(role)}</span><span class="issue-sev ${issues!=='none'?'warn':'info'}">${esc(String(item.status||'unknown'))}</span></div>
-      <div class="issue-meta">task=${esc(taskId)} · state=${esc(taskState)} · action=${esc(action)}</div>
-      <div class="issue-meta">helpers=${esc(helperTxt)}</div>
-      <div class="issue-meta">tools_used=${esc(tools)} · tool_request=${esc(toolReq)} · skill_request=${esc(skillReq)}</div>
-      <div class="issue-meta">issues=${esc(issues)} · recent=${esc(eventsTxt)}</div>
+    const updated=String(item.last_update_at||'').replace('T',' ').replace('Z',' UTC');
+    const helperList=helpers.length
+      ? `<div class="agent-activity-list">${helpers.map(h=>`<div class="agent-activity-list-item"><div>${esc(String(h.kind||'helper'))} · ${esc(String(h.id||'unknown'))}</div><div class="meta">status=${esc(String(h.status||'unknown'))} · owner=${esc(String(h.owner_task_id||'none'))}</div>${h.summary?`<div>${esc(String(h.summary||''))}</div>`:''}</div>`).join('')}</div>`
+      : '<div class="log-empty">Aucun helper actif</div>';
+    const eventList=recentEvents.length
+      ? `<div class="agent-activity-list">${recentEvents.map(e=>`<div class="agent-activity-list-item"><div>${esc(String(e.event||'event'))}</div><div class="meta">${esc(String(e.ts||'').replace('T',' ').replace('Z',' UTC')||'—')}</div>${e.detail?`<div>${esc(String(e.detail||''))}</div>`:''}</div>`).join('')}</div>`
+      : '<div class="log-empty">Aucun événement runner récent</div>';
+    if(tone==='error')blockedCount+=1;
+    if(Number(item.issue_count||0)>0)issueCount+=1;
+    if(taskId!=='none')activeTaskCount+=1;
+    helperCount+=helpers.length;
+    return `<div class="agent-activity-card ${tone}">
+      <div class="agent-activity-head">
+        <div>
+          <div class="agent-activity-role">${esc(role)}</div>
+          <div class="issue-meta">last_update=${esc(updated||'—')}</div>
+        </div>
+        <div class="agent-activity-status">
+          <span class="agent-activity-badge ${tone}">${esc(status)}</span>
+          <span class="agent-activity-badge ${tone==='error'?'warn':'info'}">${esc(verdict)}</span>
+        </div>
+      </div>
+      <div class="agent-activity-task">
+        <div class="agent-activity-taskid">${esc(streamId!=='none'?`${streamId} · ${taskId}`:taskId)}</div>
+        <div class="agent-activity-title">${esc(taskTitle)}</div>
+      </div>
+      <div class="agent-activity-line"><strong>Travail en cours</strong><br>${esc(action)}</div>
+      <div class="agent-activity-line"><strong>Prochaine action</strong><br>${esc(nextAction)}</div>
+      <div class="agent-activity-kpis">
+        <span class="agent-activity-chip">state=${esc(taskState)}</span>
+        <span class="agent-activity-chip">issues=${esc(String(item.issue_count||0))}</span>
+        <span class="agent-activity-chip">helpers=${esc(String(helpers.length))}</span>
+        <span class="agent-activity-chip">tools=${esc(tools==='none'?'0':'used')}</span>
+      </div>
+      <details class="agent-activity-details">
+        <summary>Voir détails opérationnels</summary>
+        <div class="agent-activity-detail-grid">
+          <div class="agent-activity-detail-box"><strong>Task update</strong><div>${esc(taskUpdate)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Exec report</strong><div>${esc(execReport)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Root cause</strong><div>${esc(rootCause)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Fix applied</strong><div>${esc(fixApplied)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Verify</strong><div>${esc(verify)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Run note</strong><div>${esc(runNote)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Tool request</strong><div>${esc(toolReq)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Skill request</strong><div>${esc(skillReq)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Tools used</strong><div>${esc(tools)}</div></div>
+          <div class="agent-activity-detail-box"><strong>Issues</strong><div>${esc(issues)}</div></div>
+        </div>
+        <div class="agent-activity-line" style="margin-top:8px"><strong>Helpers actifs</strong></div>
+        ${helperList}
+        <div class="agent-activity-line" style="margin-top:8px"><strong>Événements récents</strong></div>
+        ${eventList}
+      </details>
+      <div class="agent-activity-links">
+        <a class="ext-link" href="/api/execution/${encodeURIComponent(role)}" target="_blank">⬡ execution</a>
+        <a class="ext-link" href="/api/contract/${encodeURIComponent(role)}" target="_blank">⬡ contract</a>
+        <a class="ext-link" href="/api/logs/${encodeURIComponent(role)}" target="_blank">⬡ logs</a>
+        <a class="ext-link" href="/api/logs/${encodeURIComponent(role)}/events" target="_blank">⬡ events</a>
+        <a class="ext-link" href="/api/ticks/${encodeURIComponent(role)}" target="_blank">⬡ ticks</a>
+      </div>
     </div>`;
-  }).filter(Boolean).join('');
-  if(!rows)return `<div class="log-empty">Aucune activite agent disponible</div>`;
-  return `<div class="iter-issues">${rows}</div>`;
+  }).join('');
+  return `
+    <div class="agent-activity-summary">
+      <div class="agent-activity-stat"><strong>${entries.length}</strong><span>roles visibles</span></div>
+      <div class="agent-activity-stat"><strong>${activeTaskCount}</strong><span>tâches suivies</span></div>
+      <div class="agent-activity-stat"><strong>${helperCount}</strong><span>helpers actifs</span></div>
+      <div class="agent-activity-stat"><strong>${issueCount}</strong><span>rôles avec issues</span></div>
+      <div class="agent-activity-stat"><strong>${blockedCount}</strong><span>rôles bloqués</span></div>
+    </div>
+    <div class="agent-activity-grid">${cards}</div>
+  `;
 }
 function deliveryControlRows(items, emptyLabel){
   const rows=Array.isArray(items)?items:[];
   if(!rows.length)return `<div class="log-empty">${esc(emptyLabel)}</div>`;
-  return `<div class="iter-issues">${
+  return `<div class="work-grid">${
     rows.slice(0,8).map(item=>{
       const task=String(item.task_id||'unknown');
       const role=String(item.role||'unknown');
       const reason=String(item.reason||'none');
       const phase=String(item.phase||'');
-      const sev=reason.includes('suspicious')?'warn':'info';
-      return `<div class="issue-row ${sev}">
-        <div class="issue-head"><span class="issue-role">${esc(task)}</span><span class="issue-sev ${sev}">${esc(role)}</span></div>
-        <div class="issue-meta">${phase?`phase=${esc(phase)} · `:''}${esc(reason)}</div>
+      const sev=workTone(reason.includes('suspicious')?'warn':reason);
+      return `<div class="work-card ${sev}">
+        <div class="work-card-head">
+          <div class="work-card-title">${esc(task)}</div>
+          <div class="work-card-badges">${workBadgeHtml(role, sev)}</div>
+        </div>
+        <div class="work-card-meta">${phase?`phase=${esc(phase)} · `:''}${esc(reason)}</div>
       </div>`;
     }).join('')
   }</div>`;
@@ -5386,9 +5730,16 @@ function deliveryControlHtml(){
   const stallSummary=dc.capability_stall_summary||{};
   return `
     <div class="queue-sync ${cls}"><strong>Delivery control</strong> · status=${esc(status)} · future=${esc(futureStatus)} · integrity=${esc(integrityStatus)}</div>
-    <div class="queue-sync ${Number(suspicious.count||0)===0?'ok':'warn'}" style="margin-top:8px"><strong>Coverage</strong> · proof=${esc(String(Math.round(Number(coverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(coverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(coverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(coverage.browser_proof||0)*100)))}%</div>
-    <div class="queue-sync ${(String(browserPipeline.status||'unknown')==='ok' && String(qaPipeline.status||'unknown')==='ok')?'ok':'warn'}" style="margin-top:8px"><strong>Future pipeline</strong> · recent=${counts.future_recent_completions||0} · qa_pending=${counts.qa_review_pending_count||0} · qa_done=${counts.qa_review_completed_count||0} · browser_pending=${counts.browser_validation_pending_count||0} · ready_to_close=${counts.delivery_ready_to_close_count||0}</div>
-    <div class="queue-sync ${(Number(stallSummary.count||0)===0 && Number(historicalDebt.count||0)===0)?'ok':'warn'}" style="margin-top:8px"><strong>Debt & stalls</strong> · historical=${historicalDebt.count||0} · browser_backfill=${browserBackfill.count||0} · capability_stalls=${stallSummary.count||0}</div>
+    <div class="work-summary-grid" style="margin-top:8px">
+      ${workSummaryStatHtml(`${Math.round(Number(coverage.proof_manifest||0)*100)}%`,'proof coverage',Number(coverage.proof_manifest||0)>=1?'ok':'warn')}
+      ${workSummaryStatHtml(`${Math.round(Number(coverage.tests_evidence||0)*100)}%`,'tests coverage',Number(coverage.tests_evidence||0)>=1?'ok':'warn')}
+      ${workSummaryStatHtml(`${counts.qa_review_pending_count||0}/${counts.qa_review_completed_count||0}`,'qa pending/done',String(qaPipeline.status||'unknown')==='ok'?'ok':'warn')}
+      ${workSummaryStatHtml(browserBackfill.count||0,'browser backfill',Number(browserBackfill.count||0)===0?'ok':'warn')}
+      ${workSummaryStatHtml(stallSummary.count||0,'capability stalls',Number(stallSummary.count||0)===0?'ok':'warn')}
+      ${workSummaryStatHtml(historicalDebt.count||0,'historical debt',Number(historicalDebt.count||0)===0?'ok':'warn')}
+    </div>
+    <div class="queue-sync ${(String(browserPipeline.status||'unknown')==='ok' && String(qaPipeline.status||'unknown')==='ok')?'ok':'warn'}" style="margin-top:8px"><strong>Future pipeline</strong> · recent=${counts.future_recent_completions||0} · browser_pending=${counts.browser_validation_pending_count||0} · ready_to_close=${counts.delivery_ready_to_close_count||0}</div>
+    <div class="queue-sync ${Number(suspicious.count||0)===0?'ok':'warn'}" style="margin-top:8px"><strong>Coverage</strong> · commit=${esc(String(Math.round(Number(coverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(coverage.browser_proof||0)*100)))}% · suspicious=${suspicious.count||0}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
       <div class="log-box"><div class="log-head">Healthy deliveries (${healthy.count||0})</div><div class="log-scroll">${deliveryControlRows(healthy.items,'Aucune livraison saine récente')}</div></div>
       <div class="log-box"><div class="log-head">Needs proof backfill (${backfill.count||0})</div><div class="log-scroll">${deliveryControlRows(backfill.items,'Aucune dette de preuve')}</div></div>
@@ -5818,7 +6169,7 @@ function render(bundle,status){
 async function load(){
   const [bundle,status]=await Promise.all([
     fetch('/api/planner/log-bundle?n=120').then(r=>r.json()),
-    fetch('/api/status').then(r=>r.json())
+    fetch('/api/status?lite=1').then(r=>r.json())
   ]);
   render(bundle,status);
 }
@@ -5860,6 +6211,18 @@ def planner_debug_page():
         },
     )
 
+def _monitor_start_urls() -> list[str]:
+    urls = ["http://localhost:7779"]
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            host = str(sock.getsockname()[0] or "").strip()
+        if host and host not in {"0.0.0.0", "127.0.0.1"}:
+            urls.append(f"http://{host}:7779")
+    except Exception:
+        pass
+    return urls
+
 if __name__=="__main__":
-    print("\u2705  Monitor : http://localhost:7779")
+    print("\u2705  Monitor : " + " | ".join(_monitor_start_urls()))
     uvicorn.run(app, host="0.0.0.0", port=7779, log_level="warning")

@@ -40,7 +40,7 @@ class FCDoctorTests(unittest.TestCase):
         with patch.object(fc_doctor, "_load_product_priority_guard", return_value=module):
             result = fc_doctor.check_capability_stall_recovery(ROOT)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.detail.get("recovery_mode"), "transient_timeout_requeue_active")
+        self.assertEqual(result.detail.get("recovery_mode"), "transient_capability_requeue_active")
 
     def test_planner_takeover_recovery_treats_single_transient_timeout_as_ok(self) -> None:
         metrics = {
@@ -62,7 +62,7 @@ class FCDoctorTests(unittest.TestCase):
         with patch.object(fc_doctor, "_load_product_priority_guard", return_value=module):
             result = fc_doctor.check_planner_takeover_recovery(ROOT)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.detail.get("recovery_mode"), "transient_timeout_requeue_active")
+        self.assertEqual(result.detail.get("recovery_mode"), "transient_capability_requeue_active")
 
     def test_state_equivalence_planned_waiting_dep(self) -> None:
         self.assertTrue(fc_doctor._states_equivalent("PLANNED", "WAITING_DEP"))
@@ -155,7 +155,7 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("status", payload)
         self.assertIn("checks", payload)
         self.assertIn("meta", payload)
-        for key in ("workspace_root", "runtime_state", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity", "delivery_future_integrity", "browser_proof_pipeline", "suspicious_completions", "qa_review_pipeline", "capability_result_integrity", "planner_takeover_recovery", "planner_dispatch"):
+        for key in ("workspace_root", "runtime_state", "scheduler_authority", "sessions", "locks", "queue_workboard", "providers", "product_value", "delivery_integrity", "delivery_future_integrity", "browser_proof_pipeline", "suspicious_completions", "qa_review_pipeline", "dev_execution_model", "dev_progress_integrity", "dev_orphan_recovery", "capability_result_integrity", "planner_takeover_recovery", "planner_dispatch"):
             self.assertIn(key, payload["checks"])
         queue_workboard = payload["checks"].get("queue_workboard", {})
         self.assertIsInstance(queue_workboard, dict)
@@ -178,14 +178,17 @@ class FCDoctorTests(unittest.TestCase):
                                                 with patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok):
                                                     with patch.object(fc_doctor, "check_suspicious_completions", return_value=ok):
                                                         with patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok):
-                                                            with patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok):
-                                                                with patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok):
-                                                                    with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
-                                                                        payload, code = fc_doctor.build_payload(
-                                                                            root=ROOT,
-                                                                            api_base="http://127.0.0.1:8050",
-                                                                            monitor_base="http://127.0.0.1:7779",
-                                                                        )
+                                                            with patch.object(fc_doctor, "check_dev_execution_model", return_value=ok):
+                                                                with patch.object(fc_doctor, "check_dev_progress_integrity", return_value=ok):
+                                                                    with patch.object(fc_doctor, "check_dev_orphan_recovery", return_value=ok):
+                                                                        with patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok):
+                                                                            with patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok):
+                                                                                with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
+                                                                                    payload, code = fc_doctor.build_payload(
+                                                                                        root=ROOT,
+                                                                                        api_base="http://127.0.0.1:8050",
+                                                                                        monitor_base="http://127.0.0.1:7779",
+                                                                                    )
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "degraded")

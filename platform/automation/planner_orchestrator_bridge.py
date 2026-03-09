@@ -37,6 +37,7 @@ from browser_smoke import run_browser_smoke
 from planner_subagent_manager import (
     ACTIVE_STATUSES,
     _load_config as load_subagent_config,
+    _openclaw_agent_ids,
     collect_subagent,
     run_subagent,
 )
@@ -55,10 +56,12 @@ CONTRACT_KEYS = (
     "NEXT_ACTION_UNIQUE",
 )
 SUCCESS_SUBAGENT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
-DEV_CAPABILITY_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "900")))
+DEV_CAPABILITY_TIMEOUT_SECONDS = max(0, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "0")))
 ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "900")))
 STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_GRACE_SECONDS", "30")))
 EMPTY_LAUNCHER_STALE_SECONDS = max(30, int(os.environ.get("FC_PLANNER_EMPTY_LAUNCHER_STALE_SECONDS", "90")))
+DEV_LONG_RUNNING_AFTER_SECONDS = max(300, int(os.environ.get("FC_PLANNER_DEV_LONG_RUNNING_AFTER_SECONDS", "1800")))
+DEV_NO_PROGRESS_WINDOW_SECONDS = max(900, int(os.environ.get("FC_PLANNER_DEV_NO_PROGRESS_WINDOW_SECONDS", "3600")))
 QA_REVIEW_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_QA_WORKER_TIMEOUT_SECONDS", "900")))
 ADMIN_TIMEOUT_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_ADMIN_TIMEOUT_STREAK_THRESHOLD", "3")))
 DEV_STALLED_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_DEV_STALLED_STREAK_THRESHOLD", "2")))
@@ -83,6 +86,22 @@ INVALID_RESULT_MARKERS = (
     "transport channel",
     "worker quit with fatal",
     "delivery_evidence_incomplete",
+)
+DEV_PROGRESS_MARKERS = (
+    "openai codex v",
+    "research preview",
+    "approval: never",
+    "sandbox:",
+    "reasoning effort:",
+    "session id:",
+    "provider: openai",
+    "missing bearer or basic authentication",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "transport channel",
+    "worker quit with fatal",
+    "failed to refresh available models",
+    "reconnecting...",
 )
 
 
@@ -394,10 +413,12 @@ def _clear_role_recovery(task: dict[str, Any], target_role: str) -> None:
     task[f"{role_token}_recovery_reason"] = ""
     task[f"{role_token}_invalid_result_streak"] = 0
     task[f"{role_token}_timeout_streak"] = 0
+    task[f"{role_token}_no_progress_streak"] = 0
+    task[f"{role_token}_orphaned_streak"] = 0
     if str(task.get("stalled_capability_role", "")).strip().lower() == role_token:
         task["stalled_capability_reason"] = ""
         task["stalled_capability_role"] = ""
-    if str(task.get("last_capability_failure_mode", "")).strip().lower() in {"timeout", "invalid_result"}:
+    if str(task.get("last_capability_failure_mode", "")).strip().lower() in {"timeout", "invalid_result", "no_progress", "orphaned"}:
         task["last_capability_failure_mode"] = ""
 
 
@@ -458,6 +479,8 @@ def _apply_task_metadata(task: dict[str, Any], evidence: dict[str, str], extra: 
         token = str(value or "").strip()
         if token:
             task[key] = token
+    task["last_meaningful_progress_at"] = now_iso()
+    task["last_progress_kind"] = "delivery_evidence"
     task["last_progress_at"] = now_iso()
     task["updated_at"] = now_iso()
 
@@ -832,6 +855,56 @@ def _recoverable_failure_kind(reason: str) -> str:
     if _timeout_like_issue(token):
         return "timeout"
     return "other"
+
+
+def _read_text_if_exists(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _file_mtime_utc(path: Path) -> datetime | None:
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except Exception:
+        return None
+
+
+def _meaningful_subagent_text(text: str) -> bool:
+    token = " ".join(str(text or "").strip().lower().split())
+    if not token:
+        return False
+    return not any(marker in token for marker in DEV_PROGRESS_MARKERS)
+
+
+def _task_progress_baseline(task: dict[str, Any], row: dict[str, Any], progress_at: datetime | None) -> datetime | None:
+    return (
+        progress_at
+        or _parse_iso_utc(str(task.get("last_meaningful_progress_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_progress_at", "")).strip())
+        or _parse_iso_utc(str(task.get("updated_at", "")).strip())
+        or _parse_iso_utc(str(row.get("last_update_at", "")).strip())
+        or _parse_iso_utc(str(row.get("created_at", "")).strip())
+    )
+
+
+def _clear_dev_progress_flags(task: dict[str, Any]) -> None:
+    task["dev_no_progress_streak"] = 0
+    task["dev_orphaned_streak"] = 0
+    if str(task.get("last_capability_failure_mode", "")).strip().lower() in {"no_progress", "orphaned"}:
+        task["last_capability_failure_mode"] = ""
+
+
+def _record_dev_progress(task: dict[str, Any], progress_at: datetime | None, progress_kind: str, *, execution_state: str) -> None:
+    timestamp = _iso(progress_at) if isinstance(progress_at, datetime) else now_iso()
+    task["last_meaningful_progress_at"] = timestamp
+    task["last_progress_kind"] = str(progress_kind or "runtime_activity").strip() or "runtime_activity"
+    task["dev_execution_state"] = execution_state
+    task["updated_at"] = now_iso()
+    task["last_progress_at"] = timestamp
+    _clear_dev_progress_flags(task)
+    _clear_role_recovery(task, "dev")
 
 
 def _record_dev_failure(
@@ -1433,6 +1506,10 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
                 "planner_orchestrator_resume_in_progress",
                 {"task_id": task_id_value, "source": source, "reason": "no_active_dev_capability"},
             )
+        _clear_role_recovery(candidate, "dev")
+        _clear_dev_progress_flags(candidate)
+        candidate["dev_execution_state"] = "running"
+        candidate["last_progress_at"] = now_iso()
         _claim_task(board_path=board_path, role="dev", task_id_value=task_id_value, source=source, board=board)
 
     message = _build_dev_dispatch_message(candidate)
@@ -1842,10 +1919,11 @@ def _task_effectively_done(task: dict[str, Any] | None) -> bool:
 def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
     config, rows = _planner_registry_rows(root)
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
-    threshold_seconds = DEV_CAPABILITY_TIMEOUT_SECONDS + STALE_SUBAGENT_GRACE_SECONDS
     now_text = now_iso()
+    now_dt = datetime.now(timezone.utc)
     changed = False
     actions: list[str] = []
+    active_openclaw_ids = _openclaw_agent_ids()
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
             continue
@@ -1868,52 +1946,128 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                     changed = _prune_planner_subagent_row(config, rows, subagent_id) or changed
                     actions.append(f"dev_drop_done:{task_id_value}")
                     continue
-        if result_path.exists() or raw_path.exists():
-            continue
         created_raw = str(row.get("created_at", "")).strip() or str(row.get("last_update_at", "")).strip()
         created_at = _parse_iso_utc(created_raw)
         if created_at is None:
             continue
-        age_seconds = max(0, int((datetime.now(timezone.utc) - created_at).total_seconds()))
+        age_seconds = max(0, int((now_dt - created_at).total_seconds()))
+        backend_token = str(row.get("backend", "")).strip().lower()
+        live_session = True
+        if backend_token == "openclaw":
+            live_session = subagent_id in active_openclaw_ids
         empty_launcher = launcher_log.exists() and launcher_log.stat().st_size == 0
-        if age_seconds < threshold_seconds and not (empty_launcher and age_seconds >= EMPTY_LAUNCHER_STALE_SECONDS):
-            continue
+        progress_at = _file_mtime_utc(result_path) if result_path.exists() else None
+        progress_kind = "result_payload" if progress_at is not None else ""
+        if progress_at is None and raw_path.exists():
+            raw_text = _read_text_if_exists(raw_path)
+            if _meaningful_subagent_text(raw_text):
+                progress_at = _file_mtime_utc(raw_path)
+                progress_kind = "raw_output"
+        if progress_at is None and launcher_log.exists() and not empty_launcher:
+            launcher_text = _read_text_if_exists(launcher_log)
+            if _meaningful_subagent_text(launcher_text):
+                progress_at = _file_mtime_utc(launcher_log)
+                progress_kind = "launcher_output"
         if task_id_value:
             with board_lock(board_path):
                 board = load_board(board_path)
                 task = task_index(board).get(task_id_value)
                 if isinstance(task, dict):
-                    streak = _task_failure_streak(task, "dev", "timeout") + 1
-                    reason = f"dev_timeout_streak:{streak}"
-                    task["state"] = STATE_READY_DEV
-                    task["blocked_reason"] = ""
-                    task["stalled_reason"] = reason
+                    if progress_at is not None:
+                        execution_state = "long_running" if age_seconds >= DEV_LONG_RUNNING_AFTER_SECONDS else "running"
+                        if str(task.get("state", "")).strip().upper() == STATE_READY_DEV:
+                            task["state"] = STATE_IN_PROGRESS
+                        task["blocked_reason"] = ""
+                        task["stalled_reason"] = ""
+                        _record_dev_progress(task, progress_at, progress_kind, execution_state=execution_state)
+                        reconcile_state(board, board_path.parent / "priority-queue.json")
+                        save_board(board_path, board)
+                        continue
+
+                    if not live_session:
+                        streak = _task_failure_streak(task, "dev", "orphaned") + 1
+                        reason = f"dev_orphaned_streak:{streak}"
+                        task["state"] = STATE_READY_DEV
+                        task["blocked_reason"] = ""
+                        task["stalled_reason"] = reason
+                        task["dev_execution_state"] = "orphaned"
+                        task["updated_at"] = now_text
+                        task["last_progress_at"] = now_text
+                        _set_failure_streak(task, "dev", "orphaned", streak, reason)
+                        _mark_role_recovery_required(task, "dev", reason)
+                        append_event(
+                            board,
+                            "planner_orchestrator_dev_orphaned_requeue",
+                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "orphaned_streak": streak},
+                        )
+                        actions.append(f"dev_orphaned_reset:{task_id_value}")
+                        reconcile_state(board, board_path.parent / "priority-queue.json")
+                        save_board(board_path, board)
+                        row["status"] = "failed"
+                        row["failed_at"] = now_text
+                        row["summary"] = "planner dev capability lost liveness and was requeued"
+                        row["blocking_issue"] = "dev_orphaned"
+                        row["last_update_at"] = now_text
+                        changed = True
+                        continue
+
+                    baseline = _task_progress_baseline(task, row, progress_at)
+                    baseline_age_seconds = max(0, int((now_dt - baseline).total_seconds())) if baseline is not None else age_seconds
+                    if baseline_age_seconds < DEV_NO_PROGRESS_WINDOW_SECONDS and not (empty_launcher and age_seconds >= EMPTY_LAUNCHER_STALE_SECONDS):
+                        task["dev_execution_state"] = "long_running" if age_seconds >= DEV_LONG_RUNNING_AFTER_SECONDS else "running"
+                        task["updated_at"] = now_text
+                        reconcile_state(board, board_path.parent / "priority-queue.json")
+                        save_board(board_path, board)
+                        continue
+
+                    streak = _task_failure_streak(task, "dev", "no_progress") + 1
+                    reason = f"dev_no_progress_streak:{streak}"
+                    task["dev_execution_state"] = "no_progress"
                     task["updated_at"] = now_text
-                    task["last_progress_at"] = now_text
-                    _set_failure_streak(task, "dev", "timeout", streak, reason)
-                    if streak >= DEV_FAILURE_STREAK_THRESHOLD:
+                    _set_failure_streak(task, "dev", "no_progress", streak, reason)
+                    if streak >= DEV_STALLED_STREAK_THRESHOLD:
+                        task["state"] = STATE_READY_DEV
+                        task["blocked_reason"] = ""
+                        task["stalled_reason"] = reason
+                        task["last_progress_at"] = now_text
                         _mark_role_recovery_required(task, "dev", reason)
                         append_event(
                             board,
                             "planner_orchestrator_dev_recovery_required",
-                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "failure_kind": "timeout", "streak": streak},
+                            {
+                                "task_id": task_id_value,
+                                "source": source,
+                                "subagent_id": subagent_id,
+                                "age_s": age_seconds,
+                                "failure_kind": "no_progress",
+                                "streak": streak,
+                                "baseline_age_s": baseline_age_seconds,
+                            },
                         )
                         actions.append(f"dev_recovery_required:{task_id_value}")
+                        row["status"] = "failed"
+                        row["failed_at"] = now_text
+                        row["summary"] = "planner dev capability made no meaningful progress and was requeued"
+                        row["blocking_issue"] = "dev_no_progress"
+                        row["last_update_at"] = now_text
+                        changed = True
                     else:
+                        task["stalled_reason"] = reason
                         append_event(
                             board,
-                            "planner_orchestrator_dev_dispatch_stale",
-                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "timeout_streak": streak},
+                            "planner_orchestrator_dev_no_progress",
+                            {
+                                "task_id": task_id_value,
+                                "source": source,
+                                "subagent_id": subagent_id,
+                                "age_s": age_seconds,
+                                "baseline_age_s": baseline_age_seconds,
+                                "no_progress_streak": streak,
+                            },
                         )
-                        actions.append(f"dev_stale_reset:{task_id_value}")
+                        actions.append(f"dev_no_progress:{task_id_value}")
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
-        row["status"] = "failed"
-        row["failed_at"] = now_text
-        row["summary"] = "stale planner capability with no result requeued"
-        row["blocking_issue"] = "stale_no_result"
-        row["last_update_at"] = now_text
-        changed = True
     if changed:
         _write_planner_registry_rows(config, rows)
     return actions

@@ -170,6 +170,41 @@ class StateReconcilerTests(unittest.TestCase):
         self.assertEqual(board["tasks"][0]["state"], "DONE")
         self.assertEqual(board["tasks"][0]["blocked_reason"], "")
 
+    def test_completed_task_clears_runtime_execution_flags(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "version": "x",
+            "tasks": [{
+                "id": "BATCH-12-DEV-03",
+                "stream_id": "BATCH-12",
+                "role": "dev",
+                "state": "DONE",
+                "completed_at": "2026-03-09T11:19:02Z",
+                "stalled_reason": "dev_orphaned_streak:2",
+                "dev_execution_state": "orphaned",
+                "dev_no_progress_streak": 0,
+                "dev_orphaned_streak": 2,
+                "dev_invalid_result_streak": 1,
+                "dev_recovery_required": True,
+                "last_capability_failure_mode": "orphaned",
+                "updated_at": "2026-03-09T11:19:02Z",
+            }],
+            "streams": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-09T11:19:02Z"}],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({"items": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-09T11:19:02Z"}]}), encoding="utf-8")
+
+        report = run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1773033600)
+        board = json.loads(self.board_path.read_text())
+        task = board["tasks"][0]
+
+        self.assertGreaterEqual(report["completed_state_repaired"], 1)
+        self.assertEqual(task["dev_execution_state"], "")
+        self.assertEqual(task["stalled_reason"], "")
+        self.assertEqual(task["dev_orphaned_streak"], 0)
+        self.assertEqual(task["dev_invalid_result_streak"], 0)
+        self.assertFalse(task["dev_recovery_required"])
+        self.assertEqual(task["last_capability_failure_mode"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

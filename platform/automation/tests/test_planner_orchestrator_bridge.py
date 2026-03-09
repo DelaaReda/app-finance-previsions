@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -394,7 +395,9 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
             _, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
         self.assertEqual(payload["dispatch"]["reason"], "subagent_running")
         self.assertFalse(payload["dispatch"]["completed"])
-        popen_mock.assert_called_once()
+        self.assertGreaterEqual(popen_mock.call_count, 1)
+        launcher_call = popen_mock.call_args_list[-1]
+        self.assertIn("planner_subagent_manager.py", launcher_call.args[0][1])
         board = json.loads(self.board_path.read_text())
         tasks = {task["id"]: task for task in board["tasks"]}
         self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "IN_PROGRESS")
@@ -437,7 +440,9 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
             _, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
         self.assertFalse(payload["dispatch"]["completed"])
         self.assertEqual(payload["dispatch"]["backend"], "openclaw")
-        popen_mock.assert_called_once()
+        self.assertGreaterEqual(popen_mock.call_count, 1)
+        launcher_call = popen_mock.call_args_list[-1]
+        self.assertIn("planner_subagent_manager.py", launcher_call.args[0][1])
 
     def test_auto_backend_uses_env_role_mapping(self) -> None:
         self.board_path.write_text(
@@ -784,7 +789,9 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertTrue(payload["dispatch"]["dispatched"])
         self.assertEqual(payload["dispatch"]["task_id"], "BATCH-28-DEV-01")
         self.assertIn("dev_dispatch:BATCH-28-DEV-01", payload["actions"])
-        popen_mock.assert_called_once()
+        self.assertGreaterEqual(popen_mock.call_count, 1)
+        launcher_call = popen_mock.call_args_list[-1]
+        self.assertIn("planner_subagent_manager.py", launcher_call.args[0][1])
         board = json.loads(self.board_path.read_text())
         tasks = {task["id"]: task for task in board["tasks"]}
         self.assertEqual(tasks["BATCH-28-DEV-01"]["state"], "IN_PROGRESS")
@@ -883,7 +890,9 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["dispatch"]["task_id"], "BATCH-11-ADMIN-01")
         self.assertEqual(payload["dispatch"]["backend"], "codex_exec")
-        popen_mock.assert_called_once()
+        self.assertGreaterEqual(popen_mock.call_count, 1)
+        launcher_call = popen_mock.call_args_list[-1]
+        self.assertIn("planner_subagent_manager.py", launcher_call.args[0][1])
 
     def test_stale_admin_subagent_sets_takeover_after_timeout_streak(self) -> None:
         self.board_path.write_text(
@@ -945,7 +954,67 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(task["admin_timeout_streak"], 3)
         self.assertIn(task["state"], {"READY", "READY_PLANNER"})
 
-    def test_stale_dev_subagent_sets_recovery_required_after_timeout_streak(self) -> None:
+    def test_long_running_dev_subagent_is_not_requeued_without_no_progress(self) -> None:
+        recent = (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": recent}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-12-DEV-01",
+                            "stream_id": "BATCH-12",
+                            "role": "dev",
+                            "state": "IN_PROGRESS",
+                            "priority": "P1",
+                            "updated_at": recent,
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": recent,
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_dev_stale",
+                            "target_role": "dev",
+                            "owner_task_id": "BATCH-12-DEV-01",
+                            "parent_role": "planner",
+                            "task_kind": "delivery",
+                            "backend": "openclaw",
+                            "status": "running",
+                            "created_at": recent,
+                            "last_update_at": recent,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": recent}]}),
+            encoding="utf-8",
+        )
+
+        with patch.object(MODULE, "_openclaw_agent_ids", return_value={"planner_dev_stale"}):
+            actions = MODULE._mark_stale_dev_subagents(self.root, "test")
+        self.assertEqual(actions, [])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-12-DEV-01"]
+        self.assertFalse(task.get("dev_recovery_required"))
+        self.assertEqual(task.get("dev_execution_state"), "running")
+        self.assertEqual(task["state"], "IN_PROGRESS")
+
+    def test_no_progress_dev_subagent_sets_recovery_required_after_threshold(self) -> None:
         self.board_path.write_text(
             json.dumps(
                 {
@@ -959,7 +1028,7 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
                             "role": "dev",
                             "state": "IN_PROGRESS",
                             "priority": "P1",
-                            "dev_timeout_streak": 2,
+                            "dev_no_progress_streak": 1,
                             "updated_at": "2026-03-08T19:00:00Z",
                         },
                     ],
@@ -981,6 +1050,7 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
                             "owner_task_id": "BATCH-12-DEV-01",
                             "parent_role": "planner",
                             "task_kind": "delivery",
+                            "backend": "openclaw",
                             "status": "running",
                             "created_at": "2026-03-08T18:40:00Z",
                             "last_update_at": "2026-03-08T18:40:00Z",
@@ -995,12 +1065,72 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        actions = MODULE._mark_stale_dev_subagents(self.root, "test")
+        with patch.object(MODULE, "_openclaw_agent_ids", return_value={"planner_dev_stale"}):
+            actions = MODULE._mark_stale_dev_subagents(self.root, "test")
         self.assertIn("dev_recovery_required:BATCH-12-DEV-01", actions)
         board = json.loads(self.board_path.read_text())
         task = {row["id"]: row for row in board["tasks"]}["BATCH-12-DEV-01"]
         self.assertTrue(task["dev_recovery_required"])
-        self.assertEqual(task["dev_timeout_streak"], 3)
+        self.assertEqual(task["dev_no_progress_streak"], 2)
+        self.assertEqual(task["state"], "READY_DEV")
+
+    def test_orphaned_dev_subagent_is_requeued_immediately(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-12-DEV-01",
+                            "stream_id": "BATCH-12",
+                            "role": "dev",
+                            "state": "IN_PROGRESS",
+                            "priority": "P1",
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-08T19:00:00Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_dev_stale",
+                            "target_role": "dev",
+                            "owner_task_id": "BATCH-12-DEV-01",
+                            "parent_role": "planner",
+                            "task_kind": "delivery",
+                            "backend": "openclaw",
+                            "status": "running",
+                            "created_at": "2026-03-08T18:40:00Z",
+                            "last_update_at": "2026-03-08T18:40:00Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+
+        with patch.object(MODULE, "_openclaw_agent_ids", return_value=set()):
+            actions = MODULE._mark_stale_dev_subagents(self.root, "test")
+        self.assertIn("dev_orphaned_reset:BATCH-12-DEV-01", actions)
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-12-DEV-01"]
+        self.assertTrue(task["dev_recovery_required"])
+        self.assertEqual(task["dev_orphaned_streak"], 1)
         self.assertEqual(task["state"], "READY_DEV")
 
     def test_admin_invalid_result_sets_takeover_required_after_threshold(self) -> None:

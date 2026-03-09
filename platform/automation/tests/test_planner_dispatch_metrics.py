@@ -194,6 +194,88 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["latest_failure_mode"], "invalid_result")
             self.assertEqual(metrics["status"], "ok")
 
+    def test_metrics_surface_long_running_and_no_progress_dev_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            results = orch / "planner-subagents-results"
+            results.mkdir(parents=True, exist_ok=True)
+            registry = {
+                "subagents": [
+                    {
+                        "subagent_id": "planner_dev_active",
+                        "target_role": "dev",
+                        "parent_role": "planner",
+                        "owner_task_id": "BATCH-12-DEV-03",
+                        "status": "running",
+                        "summary": "",
+                        "artifact": "",
+                        "last_update_at": "2026-03-07T06:05:00Z",
+                        "created_at": "2026-03-07T06:05:00Z",
+                    },
+                ]
+            }
+            workboard = {
+                "tasks": [
+                    {
+                        "id": "BATCH-12-DEV-03",
+                        "role": "dev",
+                        "state": "IN_PROGRESS",
+                        "dev_execution_state": "long_running",
+                    },
+                    {
+                        "id": "BATCH-61-DEV-01",
+                        "role": "dev",
+                        "state": "IN_PROGRESS",
+                        "dev_execution_state": "no_progress",
+                        "dev_no_progress_streak": 1,
+                        "dev_recovery_required": True,
+                        "stalled_capability_reason": "dev_no_progress_streak:1",
+                    },
+                ]
+            }
+            (orch / "planner-subagents-registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            (orch / "parallel-workstreams.json").write_text(json.dumps(workboard), encoding="utf-8")
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertEqual(metrics["long_running_dev_count"], 1)
+            self.assertEqual(metrics["dev_no_progress_count"], 1)
+            self.assertEqual(metrics["recovery_required_count"], 1)
+            self.assertTrue(metrics["recovering"])
+
+    def test_metrics_ignore_done_dev_runtime_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            orch.mkdir(parents=True, exist_ok=True)
+            registry = {"subagents": []}
+            workboard = {
+                "tasks": [
+                    {
+                        "id": "BATCH-12-DEV-03",
+                        "role": "dev",
+                        "state": "DONE",
+                        "dev_execution_state": "orphaned",
+                        "dev_orphaned_streak": 3,
+                    },
+                    {
+                        "id": "BATCH-61-DEV-02",
+                        "role": "dev",
+                        "state": "IN_PROGRESS",
+                        "dev_execution_state": "running",
+                    },
+                ]
+            }
+            (orch / "planner-subagents-registry.json").write_text(json.dumps(registry), encoding="utf-8")
+            (orch / "parallel-workstreams.json").write_text(json.dumps(workboard), encoding="utf-8")
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertEqual(metrics["dev_orphaned_count"], 0)
+            self.assertEqual(metrics["long_running_dev_count"], 0)
+            self.assertEqual(metrics["dev_no_progress_count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
