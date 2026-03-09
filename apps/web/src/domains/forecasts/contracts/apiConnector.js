@@ -1115,6 +1115,7 @@ window.FinanceAPI = {
   getPortfolios,
   getPortfolioRiskProfile,
   getPortfolioHealth,
+  transformPortfolioRiskProfileToHealth: transformPortfolioHealth,
   askCopilot,
   searchUniverse,
   startAutoRefresh,
@@ -1139,6 +1140,7 @@ window.getLiveDashboardData = () => ({
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
     portfolioRiskProfile: window.livePortfolioRiskProfile || null,
+    portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
     portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null
   },

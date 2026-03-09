@@ -332,3 +332,64 @@ test('getPortfolioHealth maps portfolio state and risk profile into widget data'
   assert.equal(health.confidence, 65);
   assert.equal(health.status, 'ok');
 });
+
+test('transformPortfolioRiskProfileToHealth maps raw risk profile payloads for UI fallback', () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {};
+    },
+  }));
+
+  const health = sandbox.window.FinanceAPI.transformPortfolioRiskProfileToHealth({
+    freshness: '2026-03-09T06:30:00Z',
+    data: {
+      portfolio: {
+        id: 'portfolio-123',
+        name: 'Core',
+        state: {
+          horizon: '1y',
+          conviction: 'high',
+          risk_tolerance: 'moderate',
+        },
+      },
+      benchmark: 'SPY',
+      risk_profile: 'balanced',
+      risk: { level: 'medium' },
+      why: ['Portfolio spans 2 tickers under equal-weight assumptions.'],
+      stats: {
+        largest_position_ticker: 'MSFT',
+        largest_position_weight: 0.7,
+      },
+    },
+  });
+
+  assert.equal(health.portfolioId, 'portfolio-123');
+  assert.equal(health.portfolioName, 'Core');
+  assert.equal(health.overall, 68);
+  assert.equal(health.stateSummary, '1Y horizon | High conviction | Moderate risk');
+  assert.equal(health.allocationLabel, 'Largest saved weight: MSFT 70%');
+  assert.equal(health.suggestion, 'Portfolio spans 2 tickers under equal-weight assumptions.');
+  assert.equal(health.updatedAt, '2026-03-09T06:30:00Z');
+});
+
+test('getLiveDashboardData preserves portfolio risk profile freshness for downstream UI mapping', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {};
+    },
+  }));
+
+  sandbox.window.livePortfolioRiskProfile = {
+    portfolio: { id: 'portfolio-123', name: 'Core' },
+    risk: { level: 'medium' },
+  };
+  sandbox.window.livePortfolioRiskProfileFreshness = '2026-03-09T06:30:00Z';
+
+  const payload = sandbox.window.getLiveDashboardData();
+
+  assert.deepEqual(payload.data.portfolioRiskProfile, {
+    portfolio: { id: 'portfolio-123', name: 'Core' },
+    risk: { level: 'medium' },
+  });
+  assert.equal(payload.data.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
+});

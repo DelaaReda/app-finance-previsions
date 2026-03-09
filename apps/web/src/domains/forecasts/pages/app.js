@@ -2597,6 +2597,15 @@ function applyLiveDashboardData(payload = {}) {
   }
 
   const data = payload.data || payload;
+  const derivedPortfolioHealth = !isObject(data.portfolioHealth)
+    && isObject(data.portfolioRiskProfile)
+    && isObject(window.FinanceAPI)
+    && typeof window.FinanceAPI.transformPortfolioRiskProfileToHealth === 'function'
+    ? window.FinanceAPI.transformPortfolioRiskProfileToHealth({
+      data: data.portfolioRiskProfile,
+      freshness: data.portfolioRiskProfileFreshness || null
+    })
+    : null;
   const payloadMeta = payload.meta || {};
   liveDataMeta = {
     generatedAt: payload.generatedAt || data.generatedAt || payload.generated_at || new Date().toISOString(),
@@ -2641,6 +2650,7 @@ function applyLiveDashboardData(payload = {}) {
   
   appData = normalizeAppData({
     ...data,
+    ...(derivedPortfolioHealth ? { portfolioHealth: derivedPortfolioHealth } : {}),
     hero: {
       ...(isObject(data.hero) ? data.hero : {}),
       ...kpiSource,
