@@ -446,8 +446,9 @@ async function getMarketDriversSnapshot() {
 
 async function getJudgeAnalysis(limit) {
   if (!limit) limit = 5;
-  const data = await fetchWithCache('/judge?limit=' + limit, 'judge');
-  return (data && data.data) || { verdicts: [] };
+  const payload = await fetchWithCache('/judge?limit=' + limit, `judge:${limit}`);
+  if (!payload) return {};
+  return payload.data && typeof payload.data === 'object' ? payload.data : payload;
 }
 
 async function askCopilot(question, tickers) {
@@ -1090,6 +1091,15 @@ async function populateWindowGlobals() {
       }
     }
 
+    // Judge decision journal for outcome feedback loop visibility
+    const judgeAnalysis = await getJudgeAnalysis(5);
+    const normalizedJudgeDecisionJournal = isObject(judgeAnalysis) || Array.isArray(judgeAnalysis)
+      ? (judgeAnalysis.decision_journal || judgeAnalysis)
+      : null;
+    window.judgeDecisionJournal = isObject(normalizedJudgeDecisionJournal) || Array.isArray(normalizedJudgeDecisionJournal)
+      ? normalizedJudgeDecisionJournal
+      : null;
+
     // Portfolio KPIs
     const kpiPayload = await getDashboardKPIs();
     if (kpiPayload) {
@@ -1201,6 +1211,7 @@ async function populateWindowGlobals() {
           marketCalendar: window.marketCalendar || null,
           marketDrivers: window.marketDrivers || [],
           llmJudgeData: window.llmJudgeData || null,
+          judgeDecisionJournal: window.judgeDecisionJournal || null,
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
           portfolioRiskProfile: window.livePortfolioRiskProfile || null,
@@ -1212,8 +1223,7 @@ async function populateWindowGlobals() {
         },
         generatedAt: new Date().toISOString(),
         sources: ['api-connector'],
-        modelVersions: ['live']
-        ,
+        modelVersions: ['live'],
         warnings: contractWarnings,
         freshness: liveFreshnessContract.freshness,
         cache: liveFreshnessContract.freshness,
@@ -1298,7 +1308,8 @@ window.getLiveDashboardData = () => ({
     portfolioRiskProfileStatus: window.livePortfolioRiskProfileStatus || null,
     portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
     portfolioHealth: window.livePortfolioHealth || null,
-    llmJudgeData: window.llmJudgeData || null
+    llmJudgeData: window.llmJudgeData || null,
+    judgeDecisionJournal: window.judgeDecisionJournal || null
   },
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
   sources: ['api-connector'],

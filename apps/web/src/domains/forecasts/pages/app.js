@@ -1460,6 +1460,7 @@ let marketCalendar = sanitizeMarketCalendar(window.marketCalendar || FALLBACK_MA
 let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
 let liveAlerts = [];
 let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
+let judgeDecisionJournal = sanitizeJudgeDecisionJournal(window.judgeDecisionJournal || []);
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
 let liveForecastRows = [];
 let liveTopMovers = [];
@@ -2075,6 +2076,43 @@ function sanitizeMarketDrivers(items) {
   }));
 }
 
+function sanitizeJudgeDecisionJournal(entries) {
+  const rows = extractArray(entries, ['entries', 'journal', 'decisions', 'history', 'verdicts']);
+  return rows
+    .map((entry) => {
+      if (!isObject(entry)) return null;
+
+      const symbol = toString(entry.symbol || entry.ticker || entry.asset || entry.market, 'Décision');
+      const decision = toString(entry.decision || entry.verdict || entry.label || entry.outcome, 'N/A');
+      const note = toString(entry.note || entry.outcome || entry.result || entry.status || entry.rationale || '', '');
+      const rationale = toString(entry.rationale || entry.reason || entry.summary || entry.explanation || '', '');
+      const confidence = toFiniteNumber(
+        entry.confidence ?? entry.confidence_score ?? entry.score ?? entry.probability,
+        null
+      );
+      const timeText = toString(
+        entry.timestamp ||
+          entry.time ||
+          entry.generatedAt ||
+          entry.createdAt ||
+          entry.created_at ||
+          '',
+        ''
+      ).trim();
+
+      return {
+        symbol,
+        decision,
+        note,
+        rationale,
+        confidence,
+        timestamp: timeText || null
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
 function sanitizeSectorPerformance(items, fallback = []) {
   const rows = toArray(items, fallback);
   return rows
@@ -2482,6 +2520,7 @@ function renderLiveDashboardWidgets() {
   renderMarketDrivers();
   renderHeroCopilotBrief(appData.copilotStart);
   renderAlertTimeline();
+  renderJudgeDecisionJournal();
   syncDashboardCards();
   updateLiveProvenance(liveDataMeta);
   renderForecastScenarioWidget();
@@ -2611,6 +2650,41 @@ function renderTopMoversWidget(stocks = liveTopMovers) {
   }
 }
 
+function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
+  const container = document.getElementById('judgeDecisionJournal');
+  if (!container) return;
+
+  const rows = sanitizeJudgeDecisionJournal(entries);
+  if (!rows.length) {
+    container.innerHTML = '<p style="color: #94A3B8; margin: 0;">Aucun élément de journal de décision pour le moment.</p>';
+    return;
+  }
+
+  container.innerHTML = rows.map((entry) => {
+    const confidence = Number.isFinite(entry.confidence)
+      ? `${Math.max(0, Math.min(100, Math.round(entry.confidence * 100)))}%`
+      : null;
+
+    const note = entry.note ? `<div class="alert-subtitle">${entry.note}</div>` : '';
+    const rationale = entry.rationale ? `<p style="margin-top: 8px; color: #94A3B8;">${entry.rationale}</p>` : '';
+    const meta = [entry.timestamp, confidence ? `Confiance: ${confidence}` : null]
+      .filter(Boolean)
+      .join(' • ');
+    const metaMarkup = meta ? `<div class="alert-meta">${meta}</div>` : '';
+
+    return `
+      <div class="alert-item">
+        <div class="alert-content">
+          <div class="alert-title">${toString(entry.symbol, 'Décision')} • ${toString(entry.decision, 'N/A')}</div>
+          ${note}
+          ${rationale}
+          ${metaMarkup}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function applyLiveDashboardData(payload = {}) {
   if (!payload || typeof payload !== 'object') {
     return;
@@ -2713,6 +2787,9 @@ function applyLiveDashboardData(payload = {}) {
       ...data.llmJudgeData
     };
   }
+  judgeDecisionJournal = sanitizeJudgeDecisionJournal(
+    data.judgeDecisionJournal || window.judgeDecisionJournal || []
+  );
 
   renderLiveDashboardWidgets();
   if (copilotStartState) {
