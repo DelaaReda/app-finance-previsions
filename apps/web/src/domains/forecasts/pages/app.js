@@ -3248,9 +3248,21 @@ function normalizeCopilotStartOpen(value) {
     .map((item, index) => ({
       id: toString(item.id, `copilot_open_${index}`),
       label: toString(item.label, 'Open'),
-      target: toString(item.target, '').trim().toLowerCase()
+      target: normalizeCopilotStartOpenTarget(item.target, item.id)
     }))
     .filter((item) => item.target);
+}
+
+function normalizeCopilotStartOpenTarget(target, id = '') {
+  const normalizedTarget = toString(target, '').trim().toLowerCase();
+  const normalizedId = toString(id, '').trim().toLowerCase();
+  if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
+    return 'market';
+  }
+  if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot' || normalizedTarget === '/copilot/ask') {
+    return 'copilot';
+  }
+  return normalizedTarget.replace(/^\/+/, '');
 }
 
 function normalizeCopilotStartList(value) {
@@ -3351,7 +3363,7 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 }
 
 function runCopilotStartOpen(target) {
-  const normalizedTarget = toString(target, '').trim().toLowerCase();
+  const normalizedTarget = normalizeCopilotStartOpenTarget(target);
   if (!normalizedTarget || normalizedTarget === 'copilot') {
     focusCopilotInput();
     return;

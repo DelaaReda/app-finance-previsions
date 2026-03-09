@@ -6,6 +6,37 @@ import vm from 'node:vm';
 const repoRoot = process.cwd();
 const connectorPath = path.join(repoRoot, 'apps/web/src/domains/forecasts/contracts/apiConnector.js');
 const connectorSource = fs.readFileSync(connectorPath, 'utf8');
+const appPath = path.join(repoRoot, 'apps/web/src/domains/forecasts/pages/app.js');
+const appSource = fs.readFileSync(appPath, 'utf8');
+
+function extractBalancedBlock(source, startIndex) {
+  let depth = 0;
+  let started = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+      started = true;
+    } else if (char === '}') {
+      depth -= 1;
+      if (started && depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  throw new Error(`Unterminated block starting at ${startIndex}`);
+}
+
+function extractFunctionSource(source, name) {
+  const marker = `function ${name}(`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `missing function ${name}`);
+  const bodyStart = source.indexOf('{', start);
+  assert.notEqual(bodyStart, -1, `missing body for function ${name}`);
+  return source.slice(start, bodyStart) + extractBalancedBlock(source, bodyStart);
+}
 
 function createNode(tagName) {
   return {
@@ -131,6 +162,77 @@ function createConnectorContext() {
   return context;
 }
 
+function createClassList() {
+  return {
+    removed: [],
+    remove(value) {
+      this.removed.push(value);
+    }
+  };
+}
+
+function createPageContext() {
+  const overlay = {
+    classList: createClassList(),
+    style: {}
+  };
+  const input = {
+    focusCount: 0,
+    focus() {
+      this.focusCount += 1;
+    }
+  };
+  const nodes = new Map([
+    ['aiCopilotOverlay', overlay],
+    ['aiOverlayInput', input],
+    ['tab-market', { id: 'tab-market' }]
+  ]);
+  const tabButtons = {
+    market: { dataset: { tab: 'market' } },
+    copilot: { dataset: { tab: 'copilot' } }
+  };
+  const switchCalls = [];
+  const toastCalls = [];
+  const document = {
+    getElementById(id) {
+      return nodes.get(id) || null;
+    },
+    querySelector(selector) {
+      if (selector === '.tab-btn[data-tab="market"]') return tabButtons.market;
+      if (selector === '.tab-btn[data-tab="copilot"]') return tabButtons.copilot;
+      return null;
+    }
+  };
+
+  const context = vm.createContext({
+    console,
+    document,
+    setTimeout(fn) {
+      fn();
+      return 1;
+    },
+    clearTimeout() {},
+    safeSwitchTab(button, tabName) {
+      switchCalls.push({ button, tabName });
+    },
+    showToast(message, type) {
+      toastCalls.push({ message, type });
+    }
+  });
+
+  vm.runInContext(`
+    ${extractFunctionSource(appSource, 'toString')}
+    ${extractFunctionSource(appSource, 'normalizeCopilotStartOpenTarget')}
+    function focusCopilotInput() {
+      document.getElementById('aiOverlayInput')?.focus();
+    }
+    ${extractFunctionSource(appSource, 'runCopilotStartOpen')}
+    globalThis.runCopilotStartOpen = runCopilotStartOpen;
+  `, context, { filename: appPath });
+
+  return { context, overlay, input, switchCalls, toastCalls, tabButtons };
+}
+
 const context = createConnectorContext();
 vm.runInContext(connectorSource, context, { filename: connectorPath });
 
@@ -152,5 +254,18 @@ assert.deepEqual(
   [{ id: 'brief_of_day', target: 'market' }],
   'brief open action must map to the existing market tab target'
 );
+
+const page = createPageContext();
+vm.runInContext(`runCopilotStartOpen('/brief/daily')`, page.context);
+assert.equal(page.switchCalls.length, 1, 'raw brief route should switch tabs');
+assert.equal(page.switchCalls[0].tabName, 'market');
+assert.equal(page.switchCalls[0].button, page.tabButtons.market);
+assert.equal(page.overlay.style.display, 'none');
+assert.deepEqual(page.overlay.classList.removed, ['active']);
+
+vm.runInContext(`runCopilotStartOpen('/copilot/ask')`, page.context);
+assert.equal(page.input.focusCount, 1, 'copilot route should focus the overlay input');
+assert.equal(page.switchCalls.length, 1, 'copilot route should not switch away from the overlay');
+assert.equal(page.toastCalls.length, 0, 'normalized routes should not emit open errors');
 
 console.log('PASS batch_60_dev_03_copilot_context_check');
