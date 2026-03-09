@@ -403,6 +403,92 @@ def _judge_go_no_go(
     }
 
 
+def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
+    """Project a Judge verdict into a minimal strategy playbook payload."""
+    ticker = normalize_ticker(str(verdict.get("ticker") or "").strip()) or "UNKNOWN"
+
+    def _coerce_float(value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except Exception:
+            return default
+
+    def _coerce_text_list(value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return [str(value).strip()] if str(value).strip() else []
+        values: List[str] = []
+        seen = set()
+        for item in value:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(text)
+        return values
+
+    go_no_go = verdict.get("go_no_go") or {}
+    decision = str(go_no_go.get("decision") or "").strip().lower() if isinstance(go_no_go, dict) else ""
+    if decision in {"go", "buy", "long"}:
+        decision = "go"
+    elif decision in {"no_go", "sell", "short", "no-go"}:
+        decision = "no_go"
+    elif not decision:
+        confidence = _coerce_float(verdict.get("confidence"), 0.0)
+        expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
+        if confidence >= 0.6 and expected_return >= 0:
+            decision = "go"
+        elif confidence <= 0.4 and expected_return <= 0:
+            decision = "no_go"
+        else:
+            decision = "hold"
+
+    summary = verdict.get("summary") or verdict.get("reasoning") or []
+    if isinstance(summary, str):
+        summary = [summary]
+    if not isinstance(summary, list):
+        summary = []
+
+    expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
+    confidence = _coerce_float(verdict.get("confidence"), 0.0)
+    risk_level = str(verdict.get("risk_level") or "medium").strip().lower()
+    if risk_level not in {"low", "medium", "high", "critical"}:
+        risk_level = "medium"
+    horizon = str(verdict.get("horizon") or "1w").strip() or "1w"
+    playbook_id = f"{ticker}:{horizon}:{decision}:{profile}"
+    reasons = _coerce_text_list((go_no_go or {}).get("reasons", [])) if isinstance(go_no_go, dict) else []
+
+    conflicts: List[str] = []
+    if decision == "go" and risk_level in {"high", "critical"}:
+        conflicts.append("risk_profile_too_aggressive")
+    if decision == "no_go" and expected_return > 0.03:
+        conflicts.append("positive_signal_overridden_by_filters")
+
+    return {
+        "playbook_id": playbook_id,
+        "ticker": ticker,
+        "horizon": horizon,
+        "profile": profile,
+        "decision": decision,
+        "confidence": round(confidence, 4),
+        "expected_return": round(expected_return, 6),
+        "risk_level": risk_level,
+        "summary": _coerce_text_list(summary)[:2],
+        "recommended_actions": _coerce_text_list(verdict.get("actions") or []),
+        "data_needed": _coerce_text_list(verdict.get("data_needed") or []),
+        "evidence": {
+            "scenario_count": len(verdict.get("scenarios") or []),
+            "risk_count": len(verdict.get("risks") or []),
+            "impact_keys": sorted((verdict.get("impacts") or {}).keys()),
+        },
+        "reasons": reasons,
+        "conflicts": conflicts,
+        "decision_id": verdict.get("decision_id"),
+    }
+
+
 async def _compute_singleflight(
     cache_key: str,
     compute_fn: Callable[[], Awaitable[Dict[str, Any]]],
@@ -3588,6 +3674,116 @@ async def get_judge_verdicts(
         debug_full=debug_full,
         x_debug_token=x_debug_token,
         compute_verdicts_fn=_legacy_get_judge_verdicts,
+    )
+
+
+@router.get(
+    "/strategy-playbooks",
+)
+async def get_judge_strategy_playbooks(
+    limit: int = Query(20, ge=1, le=100, description="Max playbooks returned (1-100)"),
+    min_confidence: float = Query(
+        0.3, ge=0.0, le=1.0, description="Confidence minimum for inclusion (0.0-1.0)"
+    ),
+    ticker: Optional[List[str]] = Query(
+        None, description="Filter by ticker before playbook synthesis"
+    ),
+    sort_by: JudgeSortBy = Query(
+        "confidence",
+        description="Sort by: confidence, expected_return, score, risk_level, timestamp",
+    ),
+    sort_order: JudgeSortOrder = Query("desc", description="Sort order: asc, desc"),
+    profile: str = Query("equity_1w", description="Judge profile used for underlying verdicts"),
+    debug: bool = Query(False, description="Expose debug pipeline in source payload"),
+    debug_full: bool = Query(
+        False,
+        description="Include full debug payloads (admin-gated in upstream verdict path).",
+    ),
+    x_debug_token: Optional[str] = Header(
+        default=None,
+        alias="X-Debug-Token",
+        description="Token admin requis pour debug_full si JUDGE_DEBUG_ADMIN_TOKEN est configure.",
+    ),
+):
+    """Build strategy playbooks from Judge verdicts using the existing LLM+cache stack."""
+    from services.judge_endpoint_service import get_judge_verdicts_payload
+
+    verdict_payload = await get_judge_verdicts_payload(
+        limit=limit,
+        min_confidence=min_confidence,
+        ticker=ticker,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        profile=profile,
+        debug=debug,
+        debug_full=debug_full,
+        x_debug_token=x_debug_token,
+        compute_verdicts_fn=_legacy_get_judge_verdicts,
+    )
+
+    if not isinstance(verdict_payload, dict):
+        return verdict_payload
+
+    data = verdict_payload.get("data") if isinstance(verdict_payload, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+
+    verdicts = data.get("verdicts") if isinstance(data, dict) else []
+    if not isinstance(verdicts, list):
+        verdicts = []
+
+    playbooks = []
+    for verdict in verdicts:
+        if not isinstance(verdict, dict):
+            continue
+        playbooks.append(
+            _build_strategy_playbook(verdict, profile=profile),
+        )
+
+    if not playbooks:
+        playbooks = []
+
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    response_data = {
+        "playbooks": playbooks,
+        "count": len(playbooks),
+        "generated_at": now_iso,
+        "source": ["judge_route", "strategy_playbooks"],
+        "filters_applied": {
+            "min_confidence": min_confidence,
+            "tickers": ticker,
+            "sort_by": str(sort_by),
+            "sort_order": str(sort_order),
+            "limit": limit,
+            "profile": profile,
+        },
+        "stats": {
+            "go_count": len([p for p in playbooks if p.get("decision") == "go"]),
+            "no_go_count": len([p for p in playbooks if p.get("decision") == "no_go"]),
+            "avg_confidence": (
+                sum(p.get("confidence", 0.0) for p in playbooks) / len(playbooks)
+                if playbooks
+                else 0.0
+            ),
+        },
+    }
+
+    if debug:
+        response_data["judge_source"] = {
+            "data_count": len(verdicts),
+            "source": data.get("source"),
+            "status": verdict_payload.get("status"),
+            "error": verdict_payload.get("error"),
+        }
+
+    return service_response_with_metadata(
+        response_data,
+        default_source="judge_strategy_playbook_route",
+        freshness=verdict_payload.get("freshness")
+        or data.get("generated_at")
+        or now_iso,
+        status=verdict_payload.get("status"),
+        error=verdict_payload.get("error"),
     )
 
 

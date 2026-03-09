@@ -88,6 +88,92 @@ def test_judge_route_delegates_to_service(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
+    captured = {}
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "horizon": "1w",
+                        "expected_return": 0.018,
+                        "risk_level": "high",
+                        "confidence": 0.71,
+                        "summary": ["Bullish setup", "Momentum positive"],
+                        "scenarios": [
+                            {
+                                "name": "risk_off",
+                                "p": 0.28,
+                                "description": "Market reprices risk",
+                            },
+                        ],
+                        "risks": ["inflation", "macro shock"],
+                        "impacts": {"equity": ["sector rotation"], "rates": []},
+                        "actions": ["reduce position", "hedge"],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "go_no_go": {
+                            "decision": "go",
+                            "reasons": ["high confidence", "strong momentum"],
+                        },
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 1,
+                    "avg_confidence": 0.71,
+                    "generated_at": now_iso,
+                },
+                "filters_applied": {
+                    "min_confidence": 0.3,
+                    "tickers": ["AAPL"],
+                    "sort_by": "confidence",
+                    "sort_order": "desc",
+                    "limit": 1,
+                    "profile": "equity_1w",
+                },
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=AAPL&profile=equity_1w")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["count"] == 1
+    assert payload["data"]["playbooks"][0]["playbook_id"] == "AAPL:1w:go:equity_1w"
+    assert payload["data"]["playbooks"][0]["decision"] == "go"
+    assert payload["data"]["playbooks"][0]["risk_level"] == "high"
+    assert payload["data"]["playbooks"][0]["conflicts"] == ["risk_profile_too_aggressive"]
+    assert payload["data"]["stats"]["go_count"] == 1
+
+    assert captured["limit"] == 1
+    assert captured["ticker"] == ["AAPL"]
+    assert captured["profile"] == "equity_1w"
+    assert callable(captured["compute_verdicts_fn"])
+
+
 def test_judge_route_preserves_canonical_status_metadata(monkeypatch):
     now_iso = "2026-03-08T00:00:00Z"
 
