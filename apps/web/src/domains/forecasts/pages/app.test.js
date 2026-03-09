@@ -965,6 +965,17 @@ test('buildRobustnessGoNoGoDecision handles case-insensitive degraded states', (
   assert.equal(result.state, 'degraded');
 });
 
+test('buildRobustnessGoNoGoDecision treats warning as NO-GO', () => {
+  const { sandbox } = loadRobustnessGoNoGoDecision({
+    state: 'warning',
+    reason: 'critical quality warning detected',
+  });
+  const result = sandbox.buildRobustnessGoNoGoDecision();
+
+  assert.equal(result.decision, 'NO-GO');
+  assert.equal(result.state, 'warning');
+});
+
 test('buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states', () => {
   const { sandbox } = loadRobustnessGoNoGoDecision({
     state: 'degraded',

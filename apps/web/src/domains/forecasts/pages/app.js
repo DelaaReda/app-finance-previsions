@@ -3108,10 +3108,11 @@ function buildRobustnessGoNoGoDecision() {
     ? toString(status.reason, '')
     : buildCriticalWidgetHealthDetail(status || { state: 'ok' });
   const detail = reason || 'Data quality is within tolerance.';
+  const normalizedState = state === 'warn' ? 'warning' : state;
 
-  if (['error', 'degraded', 'stale', 'loading', 'unknown'].includes(state)) {
+  if (['error', 'degraded', 'stale', 'loading', 'warning', 'unknown'].includes(normalizedState)) {
     return {
-      state,
+      state: normalizedState,
       decision: 'NO-GO',
       detail,
     };
