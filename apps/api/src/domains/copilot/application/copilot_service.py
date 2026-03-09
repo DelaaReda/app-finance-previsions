@@ -126,6 +126,17 @@ def _resolve_payload_confidence(
     return resolved_confidence
 
 
+def _model_dump_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(exclude_none=True)
+        if isinstance(dumped, dict):
+            return dumped
+    return {}
+
+
 def _collect_fallback_context(scope: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Build local context fallback payload from snapshot files when market service fails."""
     normalized_tickers = _normalize_tickers(scope.get("tickers") if isinstance(scope, dict) else [])
@@ -237,6 +248,158 @@ def _normalize_source_list(value: Any, fallback: str) -> List[str]:
     if item:
         return [item]
     return [fallback]
+
+
+def _extract_saved_portfolio_state(
+    portfolio_payload: Dict[str, Any],
+    risk_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    risk_portfolio = risk_payload.get("portfolio") if isinstance(risk_payload.get("portfolio"), dict) else {}
+    state = risk_portfolio.get("state") if isinstance(risk_portfolio.get("state"), dict) else {}
+    if state:
+        return {
+            field_name: state[field_name]
+            for field_name in ("horizon", "conviction", "risk_tolerance")
+            if state.get(field_name) is not None
+        }
+
+    metadata = portfolio_payload.get("metadata") if isinstance(portfolio_payload.get("metadata"), dict) else {}
+    return {
+        field_name: metadata[field_name]
+        for field_name in ("horizon", "conviction", "risk_tolerance")
+        if metadata.get(field_name) is not None
+    }
+
+
+def _resolve_saved_portfolio_context(scope: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    resolved_scope = dict(scope or {}) if isinstance(scope, dict) else {}
+    requested_portfolio_id = _safe_text(
+        resolved_scope.get("portfolio_id") or resolved_scope.get("portfolioId"),
+        "",
+    )
+
+    portfolio_module = None
+    for module_path in (
+        "domains.market_data.application.portfolio_service",
+        "services.portfolio_service",
+    ):
+        try:
+            portfolio_module = import_module(module_path)
+            break
+        except Exception:
+            continue
+    if portfolio_module is None:
+        return None
+
+    get_portfolio_service = getattr(portfolio_module, "get_portfolio_service", None)
+    if not callable(get_portfolio_service):
+        return None
+
+    try:
+        service = get_portfolio_service()
+    except Exception:
+        return None
+
+    try:
+        portfolio = None
+        if requested_portfolio_id and callable(getattr(service, "get_portfolio", None)):
+            portfolio = service.get_portfolio(requested_portfolio_id)
+        if portfolio is None and callable(getattr(service, "list_portfolios", None)):
+            portfolios = service.list_portfolios() or []
+            portfolio = portfolios[0] if portfolios else None
+    except Exception:
+        return None
+
+    portfolio_payload = _model_dump_dict(portfolio)
+    tickers = _normalize_tickers(portfolio_payload.get("tickers"))
+    portfolio_id = _safe_text(portfolio_payload.get("id"), requested_portfolio_id)
+    if not portfolio_id or not tickers:
+        return None
+
+    risk_payload: Dict[str, Any] = {}
+    get_risk_profile = getattr(service, "get_risk_profile", None)
+    if callable(get_risk_profile):
+        try:
+            risk_payload = _model_dump_dict(get_risk_profile(portfolio_id))
+        except Exception:
+            risk_payload = {}
+
+    portfolio_context = {
+        "portfolio": {
+            "id": portfolio_id,
+            "name": _safe_text(portfolio_payload.get("name"), "Saved portfolio"),
+            "tickers": tickers,
+            "tickers_count": len(tickers),
+            "state": _extract_saved_portfolio_state(portfolio_payload, risk_payload),
+        },
+        "risk_profile": _safe_text(risk_payload.get("risk_profile"), ""),
+        "risk_level": _safe_text(
+            risk_payload.get("risk_level")
+            or (risk_payload.get("risk") or {}).get("level"),
+            "",
+        ),
+        "benchmark": _safe_text(risk_payload.get("benchmark"), ""),
+        "why": risk_payload.get("why") if isinstance(risk_payload.get("why"), list) else [],
+        "warnings": (
+            risk_payload.get("warnings")
+            if isinstance(risk_payload.get("warnings"), list)
+            else []
+        ),
+        "weights": risk_payload.get("weights") if isinstance(risk_payload.get("weights"), dict) else {},
+        "confidence": risk_payload.get("confidence"),
+        "freshness": _safe_text(risk_payload.get("generated_at"), ""),
+        "source": _normalize_source_list(
+            risk_payload.get("source"),
+            "copilot_saved_portfolio",
+        ),
+    }
+    if "copilot_saved_portfolio" not in portfolio_context["source"]:
+        portfolio_context["source"].append("copilot_saved_portfolio")
+    return portfolio_context
+
+
+def _format_saved_portfolio_prompt(portfolio_context: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(portfolio_context, dict):
+        return ""
+
+    portfolio = portfolio_context.get("portfolio") if isinstance(portfolio_context.get("portfolio"), dict) else {}
+    tickers = _normalize_tickers(portfolio.get("tickers"))
+    if not tickers:
+        return ""
+
+    state = portfolio.get("state") if isinstance(portfolio.get("state"), dict) else {}
+    lines = [
+        "=== Contexte portefeuille sauvegarde ===",
+        f"Portefeuille: {_safe_text(portfolio.get('name'), 'Saved portfolio')}",
+        f"Tickers suivis: {', '.join(tickers)}",
+    ]
+    if state:
+        horizon = _safe_text(state.get("horizon"), "")
+        conviction = _safe_text(state.get("conviction"), "")
+        risk_tolerance = _safe_text(state.get("risk_tolerance"), "")
+        if horizon:
+            lines.append(f"Horizon: {horizon}")
+        if conviction:
+            lines.append(f"Conviction: {conviction}")
+        if risk_tolerance:
+            lines.append(f"Tolerance au risque: {risk_tolerance}")
+
+    risk_profile = _safe_text(portfolio_context.get("risk_profile"), "")
+    risk_level = _safe_text(portfolio_context.get("risk_level"), "")
+    if risk_profile:
+        lines.append(f"Profil de risque: {risk_profile}")
+    if risk_level:
+        lines.append(f"Niveau de risque: {risk_level}")
+
+    why = portfolio_context.get("why") if isinstance(portfolio_context.get("why"), list) else []
+    if why:
+        lines.append("Signaux clefs: " + " | ".join(_safe_text(item) for item in why[:3] if _safe_text(item)))
+
+    warnings = portfolio_context.get("warnings") if isinstance(portfolio_context.get("warnings"), list) else []
+    if warnings:
+        lines.append("Avertissements: " + " | ".join(_safe_text(item) for item in warnings[:2] if _safe_text(item)))
+
+    return "\n".join(lines)
 
 
 def _brief_signal_label(item: Any, fallback: str) -> str:
@@ -872,6 +1035,21 @@ async def build_ask_payload(
         rag_store = rag_store_cls()
         resolved_scope = dict(scope or {})
         normalized_tickers = _normalize_tickers(tickers)
+        requested_portfolio_id = _safe_text(
+            resolved_scope.get("portfolio_id") or resolved_scope.get("portfolioId"),
+            "",
+        )
+        saved_portfolio_context = (
+            _resolve_saved_portfolio_context(resolved_scope)
+            if (requested_portfolio_id or not normalized_tickers)
+            else None
+        )
+        if not normalized_tickers and saved_portfolio_context:
+            saved_portfolio_tickers = _normalize_tickers(
+                (saved_portfolio_context.get("portfolio") or {}).get("tickers")
+            )
+            if saved_portfolio_tickers:
+                resolved_scope["tickers"] = saved_portfolio_tickers
         if normalized_tickers:
             resolved_scope["tickers"] = normalized_tickers
         if context_years is not None:
@@ -913,7 +1091,8 @@ async def build_ask_payload(
         # Injecter le contexte marché live (forecasts + brief + news)
         live_ctx = _fetch_live_market_context()
         context_prompt = _format_market_context_prompt(market_context_payload)
-        combined_context = "\n\n".join(filter(None, [live_ctx, context_prompt]))
+        portfolio_prompt = _format_saved_portfolio_prompt(saved_portfolio_context)
+        combined_context = "\n\n".join(filter(None, [live_ctx, context_prompt, portfolio_prompt]))
 
         if combined_context:
             question_for_llm = (
@@ -967,7 +1146,7 @@ async def build_ask_payload(
             confidence=confidence,
         )
 
-        return _finalize_ask_payload({
+        response_payload = {
             "question": question,
             "answer": final_answer,
             "action": action,
@@ -988,7 +1167,10 @@ async def build_ask_payload(
                 "min_sources_2": has_min_sources,
                 "quality_threshold": has_quality_model,
             },
-        })
+        }
+        if saved_portfolio_context:
+            response_payload["portfolio_context"] = saved_portfolio_context
+        return _finalize_ask_payload(response_payload)
     except Exception as exc:
         return _finalize_ask_payload({
             "answer": f"Désolé, une erreur s'est produite lors du traitement: {exc}",

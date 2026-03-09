@@ -238,6 +238,115 @@ def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     assert "Sources insuffisantes" in response["risk_caveat"]
 
 
+def test_ask_payload_uses_saved_portfolio_context_when_request_has_no_tickers(monkeypatch):
+    captured_scope: Dict[str, Any] = {}
+
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            captured_scope["scope"] = dict(scope or {})
+            return []
+
+    monkeypatch.setattr(
+        copilot_service,
+        "_resolve_saved_portfolio_context",
+        lambda _scope=None: {
+            "portfolio": {
+                "id": "portfolio-123",
+                "name": "Core",
+                "tickers": ["AAPL", "MSFT"],
+                "tickers_count": 2,
+                "state": {
+                    "horizon": "1y",
+                    "conviction": "high",
+                    "risk_tolerance": "moderate",
+                },
+            },
+            "risk_profile": "balanced",
+            "risk_level": "medium",
+            "why": [
+                "Weights remain close to the saved allocation target.",
+            ],
+            "warnings": [],
+            "source": ["portfolio_service", "copilot_saved_portfolio"],
+        },
+    )
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert "Portefeuille: Core" in question
+        assert "Tickers suivis: AAPL, MSFT" in question
+        assert "Horizon: 1y" in question
+        assert "Conviction: high" in question
+        assert "Tolerance au risque: moderate" in question
+        assert "Profil de risque: balanced" in question
+        assert "Niveau de risque: medium" in question
+        return {
+            "model": "test-llm",
+            "answer": json.dumps(
+                {
+                    "action": "buy",
+                    "reasoning": ["Le portefeuille reste solide."],
+                }
+            ),
+            "citations": [],
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="What should I do with my portfolio today?",
+            max_sources=2,
+            rag_store_cls=_EmptyRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert captured_scope["scope"]["tickers"] == ["AAPL", "MSFT"]
+    assert response["action"] == "buy"
+    assert response["portfolio_context"]["portfolio"]["id"] == "portfolio-123"
+    assert response["portfolio_context"]["portfolio"]["state"] == {
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+
+
+def test_ask_payload_keeps_explicit_tickers_without_saved_portfolio_default(monkeypatch):
+    captured_scope: Dict[str, Any] = {}
+
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            captured_scope["scope"] = dict(scope or {})
+            return []
+
+    def fail_saved_portfolio_resolution(_scope=None):
+        raise AssertionError("saved portfolio default should not run for explicit ticker asks")
+
+    monkeypatch.setattr(
+        copilot_service,
+        "_resolve_saved_portfolio_context",
+        fail_saved_portfolio_resolution,
+    )
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert "Portefeuille:" not in question
+        return {"model": "test-llm", "answer": "HOLD NVDA pour le moment.", "citations": []}
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Que faire sur NVDA aujourd'hui ?",
+            tickers=["NVDA"],
+            max_sources=2,
+            rag_store_cls=_EmptyRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert captured_scope["scope"]["tickers"] == ["NVDA"]
+    assert response["action"] == "hold"
+    assert "portfolio_context" not in response
+
+
 def test_ask_payload_defaults_to_judge_stack_llm(monkeypatch):
     class _EmptyRAGStore(_FakeRAGStore):
         def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):

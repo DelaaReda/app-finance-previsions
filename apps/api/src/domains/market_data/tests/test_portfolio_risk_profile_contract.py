@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -266,14 +267,17 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert any("unknown tickers" in warning.lower() for warning in data["warnings"])
 
 
-def test_portfolio_performance_uses_saved_metadata_weights(monkeypatch, tmp_path):
+@pytest.mark.parametrize("weight_field", ["weights", "position_weights"])
+def test_portfolio_performance_uses_saved_metadata_weights(
+    monkeypatch, tmp_path, weight_field
+):
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
     )
     portfolio = service.create_portfolio(
         name="Weighted",
         tickers=["MSFT", "AAPL"],
-        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+        metadata={weight_field: {"MSFT": 70, "AAPL": 30}},
     )
     captured = {}
 
@@ -328,8 +332,9 @@ def test_portfolio_performance_uses_saved_metadata_weights(monkeypatch, tmp_path
     }
 
 
+@pytest.mark.parametrize("weight_field", ["weights", "position_weights"])
 def test_portfolio_performance_timeseries_uses_saved_metadata_weights(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, weight_field
 ):
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
@@ -337,7 +342,7 @@ def test_portfolio_performance_timeseries_uses_saved_metadata_weights(
     portfolio = service.create_portfolio(
         name="Weighted",
         tickers=["MSFT", "AAPL"],
-        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+        metadata={weight_field: {"MSFT": 70, "AAPL": 30}},
     )
     captured = []
 
