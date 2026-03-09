@@ -213,6 +213,8 @@ def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
     )
 
     outcome_feedback = payload["data"]["decision_journal"]["entries"][0]["outcome_feedback"]
+    journal_entry = payload["data"]["decision_journal"]["entries"][0]
+    assert journal_entry["decision_id"] == judge_decision_id
     assert outcome_feedback["status"] == "in_progress"
     assert outcome_feedback["latest_feedback_at"] == "2026-03-08T09:00:00Z"
     assert outcome_feedback["next_checkpoint"]["horizon"] == "1d"

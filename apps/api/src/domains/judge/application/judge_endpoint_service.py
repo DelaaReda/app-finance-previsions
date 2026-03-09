@@ -734,16 +734,20 @@ def _build_journal_entry(
         phase_scores = verdict.get("phase_scores")
         if isinstance(phase_scores, dict):
             score = _safe_float(phase_scores.get("fusion"))
-    decision_basis = "|".join(
-        [
-            ticker,
-            horizon,
-            action,
-            captured_at,
-            str(profile or "").strip().lower() or "default",
-        ]
-    )
-    decision_id = f"judge_{sha1(decision_basis.encode('utf-8')).hexdigest()[:16]}"
+    explicit_decision_id = str(verdict.get("decision_id") or "").strip()
+    if explicit_decision_id:
+        decision_id = explicit_decision_id
+    else:
+        decision_basis = "|".join(
+            [
+                ticker,
+                horizon,
+                action,
+                captured_at,
+                str(profile or "").strip().lower() or "default",
+            ]
+        )
+        decision_id = f"judge_{sha1(decision_basis.encode('utf-8')).hexdigest()[:16]}"
 
     return {
         "decision_id": decision_id,
