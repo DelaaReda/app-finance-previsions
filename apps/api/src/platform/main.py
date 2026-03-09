@@ -4401,6 +4401,7 @@ def register_routes(app: FastAPI):
     async def copilot_context_alias(
         tickers: Optional[List[str]] = Query(default=None, description="Starter scope tickers"),
     ):
+        # Parse tickers - FastAPI handles multiple ?tickers=A&tickers=B as a list
         scope_tickers = []
         for item in (tickers or []):
             normalized = str(item or "").strip().upper()
