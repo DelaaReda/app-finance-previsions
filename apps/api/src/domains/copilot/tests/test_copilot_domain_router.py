@@ -238,6 +238,45 @@ def test_copilot_start_route_reuses_context_payload(monkeypatch):
     assert "copilot_start_route" in (data.get("source") or [])
 
 
+def test_copilot_start_route_uses_service_resolved_scope_metadata(monkeypatch):
+    async def _fake_build_context_payload(*_args, **_kwargs):
+        return {
+            "scope_tickers": ["AAPL", "MSFT"],
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Portfolio-scoped brief.",
+                    "generated_at": "2026-03-09T10:00:00Z",
+                    "freshness": "2026-03-09T10:00:00Z",
+                    "source": ["copilot_start_test"],
+                },
+                "ask": [
+                    {
+                        "id": "portfolio_today",
+                        "target": "/copilot/ask",
+                        "prefill": {"tickers": ["AAPL", "MSFT"]},
+                    },
+                ],
+                "open": [
+                    {"id": "open_copilot", "target": "/copilot"},
+                ],
+            },
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response = client.get("/api/copilot/start")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    data = payload.get("data") or {}
+    assert data.get("filters_applied") == {"tickers": ["AAPL", "MSFT"]}
+    assert data.get("scope_tickers") == ["AAPL", "MSFT"]
+    assert data.get("ask", [])[0].get("prefill", {}).get("tickers") == ["AAPL", "MSFT"]
+
+
 def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     async def _raise_context_error(*_args, **_kwargs):
         raise RuntimeError("copilot context unavailable")

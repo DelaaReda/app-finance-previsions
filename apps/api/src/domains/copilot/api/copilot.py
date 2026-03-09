@@ -101,6 +101,18 @@ def _build_start_response(
     return payload
 
 
+def _resolve_effective_scope(
+    requested_scope: Optional[Dict[str, List[str]]],
+    payload: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, List[str]]]:
+    payload_scope = (
+        _normalize_scope(payload.get("scope_tickers"))
+        if isinstance(payload, dict)
+        else None
+    )
+    return payload_scope or requested_scope
+
+
 class CopilotAskRequest(BaseModel):
     question: str
     context_years: Optional[int] = 5
@@ -176,6 +188,7 @@ async def copilot_start(
             context_service_cls=ContextService,
             scope=scope,
         )
+        effective_scope = _resolve_effective_scope(scope, payload)
         note = None
         if isinstance(payload, dict) and payload.get("regime") == "fallback":
             note = "Market context service temporarily unavailable."
@@ -185,9 +198,16 @@ async def copilot_start(
             start_payload = copilot_service._build_copilot_start_payload(
                 daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
                 entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
-                scope=scope,
+                scope=effective_scope,
             )
-        return {"ok": True, "data": _build_start_response(start_payload, scope=scope, note=note)}
+        return {
+            "ok": True,
+            "data": _build_start_response(
+                start_payload,
+                scope=effective_scope,
+                note=note,
+            ),
+        }
     except Exception:
         daily_brief = copilot_service._load_daily_brief_payload()
         entry_points = copilot_service._build_copilot_entry_points(scope)
