@@ -26,6 +26,9 @@ INVALID_RESULT_MARKERS = (
     "transport channel",
     "worker quit with fatal",
     "failed to refresh available models",
+    "openai codex v0.",
+    "research preview",
+    "session id:",
 )
 TIMEOUT_LIKE_MARKERS = ("timeout", "timed out", "stale_no_result", "deadline", "no result")
 
@@ -86,6 +89,25 @@ def _failure_mode(item: dict[str, Any]) -> str:
     return "other" if token else "unknown"
 
 
+def _delivery_delta(item: dict[str, Any]) -> str:
+    artifact = str(item.get("artifact", "")).strip().lower()
+    if artifact and artifact not in {"none", "n/a", "na"}:
+        return "artifact_delta"
+    files_touched = str(item.get("files_touched", "")).strip().lower()
+    if files_touched and files_touched not in {"none", "n/a", "na"}:
+        return "code_delta"
+    tests_run = str(item.get("tests_run", "")).strip().lower()
+    if tests_run and tests_run not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
+        return "test_delta"
+    verify = str(item.get("verify", "")).strip().lower()
+    if verify and verify not in {"none", "n/a", "na"}:
+        return "verify_delta"
+    summary = str(item.get("summary", "")).strip().lower()
+    if "contract_snapshot" in summary:
+        return "contract_snapshot"
+    return "none"
+
+
 def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dict[str, Any]:
     registry_path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
     payload = _read_json(registry_path) if registry_path.exists() else {}
@@ -111,6 +133,8 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
             "backend": str(item.get("backend", "")),
             "backend_ref": str(item.get("backend_ref", "")),
             "blocking_issue": str(item.get("blocking_issue", "")),
+            "last_heartbeat": str(item.get("last_update_at", "") or item.get("created_at", "")),
+            "last_delivery_delta": _delivery_delta(item),
         }
         status = normalized["status"].strip().lower()
         if status in ACTIVE_STATUSES:

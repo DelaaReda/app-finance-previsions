@@ -14,10 +14,10 @@
   },
   "roles": {
     "planner": {
-      "model": "gpt-5.3-codex-spark",
-      "thinking": "high",
+      "model": "gpt-5.4",
+      "thinking": "xhigh",
       "resume": 1,
-      "rate_limit_precheck": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 420
@@ -26,7 +26,7 @@
       "model": "gpt-5.3-codex-spark",
       "thinking": "medium",
       "resume": 1,
-      "rate_limit_precheck": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 540
@@ -35,7 +35,7 @@
       "model": "gpt-5.3-codex-spark",
       "thinking": "medium",
       "resume": 1,
-      "rate_limit_precheck": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 360,
       "retry_timeout_seconds": 150,
       "tick_timeout_seconds": 540
@@ -44,7 +44,7 @@
       "model": "gpt-5.3-codex-spark",
       "thinking": "medium",
       "resume": 1,
-      "rate_limit_precheck": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 420,

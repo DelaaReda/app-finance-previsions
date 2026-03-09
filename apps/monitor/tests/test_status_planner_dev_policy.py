@@ -133,6 +133,78 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         dev = payload.get("agents", {}).get("dev", {})
         self.assertEqual(dev.get("dev_wait_reason"), "no_dev_ready_task")
 
+
+    def test_status_prefers_live_planner_capability_truth(self) -> None:
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "BATCH-13-DEV-02",
+                            "stream_id": "BATCH-13",
+                            "state": "BLOCKED",
+                            "assignee": "dev",
+                            "role": "dev",
+                            "current_step": "progress:contract_snapshot",
+                            "updated_at": "2026-03-09T12:38:29Z",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        contracts = {
+            "planner": {"STATUS": "IN_PROGRESS", "VERDICT": "GO_WITH_CAUTION", "DELTA": "PLANNER_DISPATCH_ACTIVE", "BLOCKER_ID": "NONE", "NEXT": "owner=planner; action=stale legacy", "EVIDENCE": "task_update=none"},
+            "dev": {},
+            "admin": {},
+        }
+        with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(self.module, "tick_age", lambda role: 3900), mock.patch.object(
+            self.module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(self.module, "rate_limits", lambda: []), mock.patch.object(
+            self.module, "_planner_subagents_snapshot",
+            lambda: {
+                "enabled": True,
+                "cron_planner_only": True,
+                "active_count": 1,
+                "active": [{"target_role": "dev", "owner_task_id": "BATCH-13-DEV-02", "status": "running", "last_update_at": "2026-03-09T12:38:32Z"}],
+                "recent": [],
+                "recent_total": 0,
+                "recent_success_count": 0,
+                "recent_failed_count": 0,
+                "recent_blocked_count": 0,
+                "recent_fallback_like_count": 0,
+                "recent_invalid_result_count": 0,
+                "recent_timeout_like_count": 0,
+                "recent_success_rate": 1.0,
+                "recent_by_role": {},
+                "latest_status": "running",
+                "latest_fallback_like": False,
+                "latest_failure_mode": "none",
+                "latest_owner_task_id": "BATCH-13-DEV-02",
+                "latest_update_at": "2026-03-09T12:38:32Z",
+                "recovering": False,
+                "stalled_capability_count": 0,
+                "takeover_required_count": 0,
+                "recovery_required_count": 0,
+                "long_running_dev_count": 0,
+                "dev_no_progress_count": 0,
+                "dev_orphaned_count": 0,
+                "dev_invalid_result_count": 0,
+                "status": "ok",
+                "registry_path": "planner-subagents-registry.json",
+            },
+        ):
+            payload = self.module.status()
+
+        planner = payload.get("agents", {}).get("planner", {})
+        self.assertEqual(planner.get("source"), "planner_capability")
+        self.assertEqual(planner.get("next"), "owner=dev; action=continue BATCH-13-DEV-02 via capability dispatch")
+        self.assertEqual(planner.get("tick_age_min"), -1)
+        self.assertEqual(planner.get("schedule"), "planner-owned")
+
     def test_runtime_diagnostics_emits_policy_findings(self) -> None:
         status_snapshot = {
             "health": "OK",

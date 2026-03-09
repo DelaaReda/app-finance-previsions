@@ -308,6 +308,75 @@ def _rewrite_contract_for_live_dispatch(contract: dict[str, str], dispatch: dict
     return contract
 
 
+def _delivery_delta_from_payload(payload: dict[str, Any]) -> str:
+    if not isinstance(payload, dict):
+        return "none"
+    artifact = str(payload.get("artifact", "")).strip().lower()
+    if artifact and artifact not in {"none", "n/a", "na"}:
+        return "artifact_delta"
+    commit_sha = str(payload.get("commit_sha", "")).strip().lower()
+    if commit_sha and commit_sha not in {"none", "n/a", "na"}:
+        return "code_delta"
+    tests_run = str(payload.get("tests_run", "")).strip().lower()
+    if tests_run and tests_run not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
+        return "test_delta"
+    verify = str(payload.get("verify", "")).strip().lower()
+    if verify and verify not in {"none", "n/a", "na"}:
+        return "verify_delta"
+    summary = str(payload.get("summary", "")).strip().lower()
+    if "contract_snapshot" in summary:
+        return "contract_snapshot"
+    return "none"
+
+
+def _delivery_delta_from_task(task: dict[str, Any] | None) -> str:
+    if not isinstance(task, dict):
+        return "none"
+    for key, label in (
+        ("artifact", "artifact_delta"),
+        ("commit_sha", "code_delta"),
+        ("tests_run", "test_delta"),
+        ("verify", "verify_delta"),
+    ):
+        token = str(task.get(key, "")).strip().lower()
+        if token and token not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
+            return label
+    current_step = str(task.get("current_step", "")).strip().lower()
+    if current_step:
+        return current_step
+    return "none"
+
+
+def _enrich_dispatch_payload(
+    dispatch: dict[str, Any],
+    *,
+    capability_id: str = "",
+    task: dict[str, Any] | None = None,
+    payload: dict[str, Any] | None = None,
+    error: str = "",
+) -> dict[str, Any]:
+    data = dict(dispatch or {})
+    if capability_id:
+        data["capability_id"] = capability_id
+    if not str(data.get("status", "")).strip():
+        data["status"] = "completed" if data.get("completed") else ("running" if data.get("dispatched") else "idle")
+    data["error"] = str(error or data.get("error") or "none").strip() or "none"
+    heartbeat = ""
+    if isinstance(task, dict):
+        heartbeat = str(
+            task.get("last_meaningful_progress_at")
+            or task.get("last_progress_at")
+            or task.get("updated_at")
+            or ""
+        ).strip()
+    data["last_heartbeat"] = heartbeat or now_iso()
+    delta = _delivery_delta_from_payload(payload or {})
+    if delta == "none":
+        delta = _delivery_delta_from_task(task)
+    data["last_delivery_delta"] = delta or "none"
+    return data
+
+
 def _task_stream_id(task_id_value: str) -> str:
     parts = str(task_id_value or "").strip().split("-")
     if len(parts) >= 2:
@@ -1559,16 +1628,32 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
                 append_event(board, "planner_orchestrator_dev_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
                 reconcile_state(board, board_path.parent / "priority-queue.json")
                 save_board(board_path, board)
-            return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "dispatch_spawn_failed", "subagent_id": subagent_id, "backend": chosen_backend}
-        return {
-            "dispatched": True,
-            "completed": False,
-            "task_id": task_id_value,
-            "reason": "subagent_running",
-            "subagent_id": subagent_id,
-            "backend": chosen_backend,
-            "launcher_log": str(launcher_log.relative_to(root)),
-        }
+            return _enrich_dispatch_payload(
+                {
+                    "dispatched": True,
+                    "completed": False,
+                    "task_id": task_id_value,
+                    "reason": "dispatch_spawn_failed",
+                    "subagent_id": subagent_id,
+                    "backend": chosen_backend,
+                },
+                capability_id=subagent_id,
+                task=candidate,
+                error=f"dispatch_spawn_failed:{exc}",
+            )
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_running",
+                "subagent_id": subagent_id,
+                "backend": chosen_backend,
+                "launcher_log": str(launcher_log.relative_to(root)),
+            },
+            capability_id=subagent_id,
+            task=candidate,
+        )
     rc, payload = run_subagent(
         config,
         role="planner",
@@ -1596,7 +1681,20 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_failed", "subagent_id": subagent_id, "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_failed",
+                "subagent_id": subagent_id,
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error=str(payload.get("blocking_issue") or payload.get("stderr") or "subagent_failed"),
+        )
 
     status_token = _payload_status(payload)
     if status_token not in SUCCESS_SUBAGENT_STATUSES:
@@ -1615,7 +1713,20 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_blocked", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_blocked",
+                "subagent_id": subagent_id or "none",
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error=blocking_issue,
+        )
 
     evidence = {
         "root_cause": str(payload.get("root_cause", "none")),
@@ -1645,7 +1756,20 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "delivery_evidence_incomplete", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "delivery_evidence_incomplete",
+                "subagent_id": subagent_id or "none",
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error="delivery_evidence_incomplete",
+        )
 
     with board_lock(board_path):
         board = load_board(board_path)
@@ -1687,7 +1811,19 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
             browser_validation = "completed" if browser_ok else "failed"
     else:
         browser_validation = "not_completed"
-    return {"dispatched": True, "completed": completed, "task_id": task_id_value, "subagent_id": subagent_id or "none", "backend": chosen_backend, "browser_validation": browser_validation}
+    return _enrich_dispatch_payload(
+        {
+            "dispatched": True,
+            "completed": completed,
+            "task_id": task_id_value,
+            "subagent_id": subagent_id or "none",
+            "backend": chosen_backend,
+            "browser_validation": browser_validation,
+        },
+        capability_id=subagent_id or "none",
+        task=candidate,
+        payload=payload,
+    )
 
 
 def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[str, Any]:
@@ -1772,16 +1908,32 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
                 append_event(board, "planner_orchestrator_admin_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
                 reconcile_state(board, board_path.parent / "priority-queue.json")
                 save_board(board_path, board)
-            return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "dispatch_spawn_failed", "subagent_id": subagent_id, "backend": chosen_backend}
-        return {
-            "dispatched": True,
-            "completed": False,
-            "task_id": task_id_value,
-            "reason": "subagent_running",
-            "subagent_id": subagent_id,
-            "backend": chosen_backend,
-            "launcher_log": str(launcher_log.relative_to(root)),
-        }
+            return _enrich_dispatch_payload(
+                {
+                    "dispatched": True,
+                    "completed": False,
+                    "task_id": task_id_value,
+                    "reason": "dispatch_spawn_failed",
+                    "subagent_id": subagent_id,
+                    "backend": chosen_backend,
+                },
+                capability_id=subagent_id,
+                task=candidate,
+                error=f"dispatch_spawn_failed:{exc}",
+            )
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_running",
+                "subagent_id": subagent_id,
+                "backend": chosen_backend,
+                "launcher_log": str(launcher_log.relative_to(root)),
+            },
+            capability_id=subagent_id,
+            task=candidate,
+        )
     rc, payload = run_subagent(
         config,
         role="planner",
@@ -1809,7 +1961,20 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_failed", "subagent_id": subagent_id, "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_failed",
+                "subagent_id": subagent_id,
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error=str(payload.get("blocking_issue") or payload.get("stderr") or "subagent_failed"),
+        )
 
     status_token = _payload_status(payload)
     if status_token not in SUCCESS_SUBAGENT_STATUSES:
@@ -1828,7 +1993,20 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "subagent_blocked", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "subagent_blocked",
+                "subagent_id": subagent_id or "none",
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error=blocking_issue,
+        )
 
     evidence = _build_admin_evidence(payload, task_id_value)
     if not _payload_has_delivery_evidence(payload, target_role="admin"):
@@ -1846,7 +2024,20 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
             save_board(board_path, board)
         if subagent_id:
             collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        return {"dispatched": True, "completed": False, "task_id": task_id_value, "reason": "delivery_evidence_incomplete", "subagent_id": subagent_id or "none", "backend": chosen_backend}
+        return _enrich_dispatch_payload(
+            {
+                "dispatched": True,
+                "completed": False,
+                "task_id": task_id_value,
+                "reason": "delivery_evidence_incomplete",
+                "subagent_id": subagent_id or "none",
+                "backend": chosen_backend,
+            },
+            capability_id=subagent_id or "none",
+            task=candidate,
+            payload=payload,
+            error="delivery_evidence_incomplete",
+        )
 
     with board_lock(board_path):
         board = load_board(board_path)
@@ -1876,7 +2067,18 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
             save_board(board_path, board)
     if subagent_id:
         collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-    return {"dispatched": True, "completed": completed, "task_id": task_id_value, "subagent_id": subagent_id or "none", "backend": chosen_backend}
+    return _enrich_dispatch_payload(
+        {
+            "dispatched": True,
+            "completed": completed,
+            "task_id": task_id_value,
+            "subagent_id": subagent_id or "none",
+            "backend": chosen_backend,
+        },
+        capability_id=subagent_id or "none",
+        task=candidate,
+        payload=payload,
+    )
 
 
 def _planner_registry_rows(root: Path) -> tuple[Any, list[dict[str, Any]]]:

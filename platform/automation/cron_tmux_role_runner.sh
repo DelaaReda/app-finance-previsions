@@ -3068,6 +3068,11 @@ apply_planner_orchestrator_bridge_safe() {
   local source="${1:-unknown}"
   local tmp=""
   local bridge_rc=0
+  local bridge_stdout=""
+  local bridge_stderr=""
+  local bridge_json=""
+  local bridge_trace=""
+  local bridge_error=""
   tmp="$(mktemp)"
   cat > "$tmp"
 
@@ -3084,17 +3089,86 @@ apply_planner_orchestrator_bridge_safe() {
   fi
 
   set +e
+  bridge_stdout="$(mktemp)"
+  bridge_stderr="$(mktemp)"
   python3 "$PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT" \
     --root "$ROOT" \
     --role "$ROLE" \
     --source "$source" \
     --backend "${FC_PLANNER_ORCHESTRATOR_BACKEND:-auto}" \
-    --contract-file "$tmp" >/dev/null
+    --contract-file "$tmp" >"$bridge_stdout" 2>"$bridge_stderr"
   bridge_rc=$?
   set -e
-  if [[ "$bridge_rc" -ne 0 ]]; then
-    trace_event "planner_orchestrator_bridge_failed source=${source} rc=${bridge_rc}; fallback=raw_payload"
+  bridge_json="$(cat "$bridge_stdout" 2>/dev/null || true)"
+  bridge_error="$(tr '\n' ' ' < "$bridge_stderr" 2>/dev/null | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//' | cut -c1-320)"
+  if [[ -n "$bridge_json" ]]; then
+    bridge_trace="$(python3 - "$bridge_json" <<'PY'
+import json
+import sys
+
+raw = sys.argv[1]
+try:
+    payload = json.loads(raw)
+except Exception:
+    print("")
+    raise SystemExit(0)
+dispatch = payload.get("dispatch", {}) if isinstance(payload, dict) else {}
+parts = []
+for key in ("capability_id", "task_id", "backend", "status", "last_heartbeat", "last_delivery_delta", "error"):
+    value = dispatch.get(key, "") if isinstance(dispatch, dict) else ""
+    token = str(value or "").strip()
+    if token:
+        parts.append(f"{key}={token}")
+if parts:
+    print("; ".join(parts))
+PY
+)"
   fi
+  if [[ "$bridge_rc" -ne 0 ]]; then
+    trace_event "planner_orchestrator_bridge_failed source=${source} rc=${bridge_rc}; error=${bridge_error:-none}${bridge_trace:+; ${bridge_trace}}"
+    python3 - "$tmp" "$source" "$bridge_rc" "$bridge_error" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = sys.argv[2]
+rc = sys.argv[3]
+error = sys.argv[4].strip() or "none"
+keys = [
+    "STATUS",
+    "DELTA",
+    "EVIDENCE",
+    "RISKS",
+    "NEXT",
+    "VERDICT",
+    "BLOCKER_ID",
+    "NEXT_ACTION_UNIQUE",
+]
+payload = {k: "" for k in keys}
+for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+    if ":" not in line:
+        continue
+    key, _, value = line.partition(":")
+    key = key.strip().upper()
+    if key in payload and not payload[key]:
+        payload[key] = value.strip()
+payload["STATUS"] = "BLOCKED"
+payload["DELTA"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
+payload["EVIDENCE"] = (
+    f"task_update=blocked; root_cause=planner_orchestrator_bridge_failed; "
+    f"fix_applied=inspect_bridge_stdout_and_stderr; verify=source={source}; rc={rc}; error={error}"
+)
+payload["RISKS"] = "planner capability dispatch unavailable until bridge failure is resolved"
+payload["NEXT"] = "owner=planner; action=repair planner capability bridge now"
+payload["VERDICT"] = "BLOCKED"
+payload["BLOCKER_ID"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
+payload["NEXT_ACTION_UNIQUE"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
+path.write_text("\n".join(f"{k}: {payload.get(k, '').strip()}" for k in keys) + "\n", encoding="utf-8")
+PY
+  elif [[ -n "$bridge_trace" ]]; then
+    trace_event "planner_orchestrator_bridge_result source=${source}; ${bridge_trace}"
+  fi
+  rm -f "$bridge_stdout" "$bridge_stderr"
   cat "$tmp"
   rm -f "$tmp"
 }
@@ -4342,7 +4416,9 @@ Budget strict:
 - commandes autorisées:
   - python3 platform/automation/parallel_workstream.py context --role planner --limit 5
   - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
+  - python3 platform/automation/parallel_workstream.py planner-autobatch --queue docs/operations/orchestrator/priority-queue.json --reason <reason> --cooldown-s <seconds>
   - python3 platform/automation/parallel_workstream.py claim --role planner
+  - python3 platform/automation/parallel_workstream.py complete --role planner --task <task_id> --artifact "<path>" --note "<note>" --exec-cmd "SKIP(reason)" --tests-run "SKIP(reason)" --review-ref "<ref>" --review-verdict <GO_WITH_CAUTION|PASS|BLOCKED> --change-plan "<steps>" --architecture-checks "<checks>" --idempotency-key <key>
   - python3 platform/automation/planner_subagent_manager.py plan --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <delivery|implementation|verification|targeted_fix|runtime|reconcile|takeover|repair|flow|coordination|unblock|starvation>
   - python3 platform/automation/planner_subagent_manager.py run --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <...> --message "<brief>"
   - python3 platform/automation/planner_subagent_manager.py collect --role planner --subagent-id <subagent_id> --mark-merged
@@ -4352,7 +4428,7 @@ Budget strict:
   - python3 platform/automation/worker_manager.py collect --role planner --worker-id <worker_id> --mark-merged
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
 Lis uniquement les sources canoniques: docs/product/PRODUCT_VISION.md, docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md, docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md, docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md, docs/operations/orchestrator/parallel-workstreams.json.
-Source unique: parallel-workstreams.json contient l'état des batches (streams[]) ET les tâches — priority-queue.json est obsolète.
+Source de vérité runtime: parallel-workstreams.json. priority-queue.json reste utilisé uniquement pour sync-priority et planner-autobatch; n'utilise jamais son next_action comme vérité finale si le workboard dit autre chose.
 Tu es le chef d'équipe autonome du projet. Si la livraison bloque à cause d'une config, d'un prompt, d'un script runtime, d'une spec, d'un contrat, d'un guard, d'un backend, d'un bridge ou d'un bug backend/produit, tu dois corriger le problème directement quand c'est le plus court chemin.
 Préserve le thème frontend existant: ne refonds pas apps/web, ne touche pas aux design tokens ni à la structure visuelle sauf micro-ajustement strictement nécessaire. En revanche tu peux modifier orchestration/runtime/config/specs/docs/backend/API/tests et le code hors thème frontend pour débloquer la livraison.
 Quand planner_orchestrator_enabled=1, tu es la seule lane schedulée: dev/admin/scrum_master n'attendent plus leur propre cron, ils doivent être lancés comme subagents planner-owned.

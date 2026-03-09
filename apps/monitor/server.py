@@ -1525,8 +1525,6 @@ def _capability_state_is_stale_for_planner_mode(target_role: str, since_ts: str,
     role_token = str(target_role or "").strip().lower()
     if role_token in {"", "planner"}:
         return False
-    if role_token in set(_active_planner_subagent_roles()):
-        return False
     ts_epoch = _parse_ts_epoch(since_ts)
     if ts_epoch is None:
         return False
@@ -3056,7 +3054,8 @@ def status(lite: int = 0):
     # the monitor must still expose planner-owned capability truth for
     # dev/admin/scrum_master when Atlas or operators inspect live execution.
     roles = monitor_roles()
-    planner_only_runtime = str(runtime_state.get("execution_mode", "") or "").strip() == "planner_experimental"
+    effective_execution_mode = str(runtime_state.get("execution_mode", "") or _execution_mode(ROOT)).strip()
+    planner_only_runtime = effective_execution_mode == "planner_experimental"
     agent_roles = list(roles)
     if planner_only_runtime:
         for capability_role in ("dev", "admin", "scrum_master"):
@@ -3234,7 +3233,10 @@ def status(lite: int = 0):
     planner_policy_enforced = bool(planner_autonomy.get("wait_forbidden", True))
     planner_autonomy_last_action = str(planner_autonomy.get("last_action", "idle") or "idle").strip() or "idle"
     planner_autonomy_last_outcome = str(planner_autonomy.get("last_outcome", "none") or "none").strip() or "none"
-
+    planner_subagents = _planner_subagents_snapshot()
+    planner_live_subagents = planner_subagents.get("active", []) if isinstance(planner_subagents.get("active", []), list) else []
+    planner_live_subagent = planner_live_subagents[0] if planner_live_subagents else {}
+    planner_live_cron_only = _parse_bool_token(planner_subagents.get("cron_planner_only"))
     agents={}
     for role in agent_roles:
         c=contract(role)
@@ -3262,11 +3264,21 @@ def status(lite: int = 0):
             delta_value = "NO_DATA"
         if str(blocker_value).strip().upper() in {"", "?", "N/A", "NULL"}:
             blocker_value = "NONE"
+        next_value = c.get("NEXT") or snap.get("next", "")
         planner_action_required = ""
         dev_wait_reason = "none"
         soft_blocker = False
         tshape_active = False
         tshape_target_role = ""
+        if role == "planner" and (planner_only_runtime or planner_live_cron_only) and planner_live_subagent:
+            live_target_role = str(planner_live_subagent.get("target_role", "dev")).strip() or "dev"
+            live_task_id = str(planner_live_subagent.get("owner_task_id", "active_task")).strip() or "active_task"
+            status_value = "IN_PROGRESS"
+            verdict = "GO_WITH_CAUTION"
+            delta_value = "PLANNER_DISPATCH_ACTIVE"
+            blocker_value = "NONE"
+            source = "planner_capability"
+            next_value = f"owner={live_target_role}; action=continue {live_task_id} via capability dispatch"
         if role == "planner":
             planner_action_required = str(ev.get("planner_action_required", "")).strip().lower()
             soft_blocker = planner_action_required in {"claim_ready", "create_or_claim", "create_or_claim_now", "dependency_regroup"}
@@ -3402,7 +3414,7 @@ def status(lite: int = 0):
                     "RUNTIME_RECOVERED_SOFT",
                 }:
                     delta_value = "RUNTIME_VERIFIED_OK"
-        if planner_only_runtime and role != "planner":
+        if (planner_only_runtime or planner_live_cron_only) and role != "planner":
             role_tasks = [
                 t for t in tasks
                 if isinstance(t, dict)
@@ -3465,7 +3477,7 @@ def status(lite: int = 0):
                 source = "planner_capability"
                 next_value = f"owner=planner; action=dispatch {role} when task exists"
         else:
-            next_value = c.get("NEXT") or snap.get("next", "")
+            next_value = next_value or c.get("NEXT") or snap.get("next", "")
         if is_rate_limit_marker(verdict, status_value, delta_value, blocker_value):
             if (verdict or "").upper() == "BLOCKED":
                 verdict = "WAIT"
@@ -3490,11 +3502,20 @@ def status(lite: int = 0):
         )
         if last_message_action_status not in {"none", "done", "deferred", "blocked"}:
             last_message_action_status = "none"
+        effective_age = age
+        effective_wait = wait
+        effective_next_tick = (f":{nm:02d}" if nm is not None else "--")
+        effective_schedule = (f":{','.join(str(x) for x in mins)}" if mins else "manual")
+        if (planner_only_runtime or planner_live_cron_only) and source == "planner_capability":
+            effective_age = -1
+            effective_wait = -1
+            effective_next_tick = "planner-owned"
+            effective_schedule = "planner-owned"
         agents[role]={"verdict":verdict,"status":status_value,"delta":delta_value,
                       "blocker":blocker_value,"next":next_value,
-                      "schedule":(f":{','.join(str(x) for x in mins)}" if mins else "manual"),
-                      "tick_age_min":age,"next_tick_min":wait,
-                      "next_tick_at":(f":{nm:02d}" if nm is not None else "--"),
+                      "schedule":effective_schedule,
+                      "tick_age_min":effective_age,"next_tick_min":effective_wait,
+                      "next_tick_at":effective_next_tick,
                       "planner_action_required": planner_action_required,
                       "planner_policy_enforced": planner_policy_enforced if role == "planner" else False,
                       "dev_wait_reason": dev_wait_reason if role == "dev" else "none",
@@ -3753,7 +3774,6 @@ def status(lite: int = 0):
     if not isinstance(system_summary, dict):
         system_summary = {}
     dynamic_workers = _dynamic_workers_snapshot()
-    planner_subagents = _planner_subagents_snapshot()
     agent_activity = _agent_activity_snapshot(
         roles=tuple(agent_roles),
         agents=agents,
