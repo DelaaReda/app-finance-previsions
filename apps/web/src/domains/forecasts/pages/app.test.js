@@ -29,6 +29,8 @@ function loadApplyLiveDashboardData() {
             updatedAt: input.freshness || null,
             status: input.status || null,
             suggestion: 'Derived from raw risk profile',
+            riskProfile: 'balanced',
+            stateSummary: '1Y horizon | High conviction | Moderate risk',
           };
         },
       },
@@ -224,13 +226,15 @@ test('applyLiveDashboardData derives portfolio health from raw risk profile payl
     updatedAt: '2026-03-09T06:30:00Z',
     status: 'degraded',
     suggestion: 'Derived from raw risk profile',
+    riskProfile: 'balanced',
+    stateSummary: '1Y horizon | High conviction | Moderate risk',
   });
   assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.liveDataMeta.generatedAt, '2026-03-09T07:00:00Z');
   assert.equal(sandbox.rendered, true);
 });
 
-test('applyLiveDashboardData preserves explicit portfolio health payloads', () => {
+test('applyLiveDashboardData backfills portfolio health core fields from the raw risk profile payload', () => {
   const { sandbox, transformCalls } = loadApplyLiveDashboardData();
   const explicitPortfolioHealth = {
     portfolioId: 'portfolio-123',
@@ -250,8 +254,25 @@ test('applyLiveDashboardData preserves explicit portfolio health payloads', () =
     },
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(transformCalls)), []);
-  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth)), explicitPortfolioHealth);
+  assert.deepEqual(JSON.parse(JSON.stringify(transformCalls)), [
+    {
+      data: {
+        portfolio: { id: 'portfolio-123', name: 'Core' },
+        risk: { level: 'medium' },
+      },
+      freshness: '2026-03-09T06:30:00Z',
+      status: null,
+    },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth)), {
+    portfolioId: 'portfolio-123',
+    updatedAt: '2026-03-09T06:30:00Z',
+    status: null,
+    suggestion: 'Provided by API',
+    riskProfile: 'balanced',
+    stateSummary: '1Y horizon | High conviction | Moderate risk',
+    overall: 91,
+  });
   assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.rendered, true);
 });

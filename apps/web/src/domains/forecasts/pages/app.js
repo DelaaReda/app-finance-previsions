@@ -2605,8 +2605,9 @@ function applyLiveDashboardData(payload = {}) {
   }
 
   const data = payload.data || payload;
-  const derivedPortfolioHealth = !isObject(data.portfolioHealth)
-    && isObject(data.portfolioRiskProfile)
+  // Backfill core portfolio-state fields from the raw risk-profile contract
+  // so partial health payloads do not regress to static fallback copy.
+  const derivedPortfolioHealth = isObject(data.portfolioRiskProfile)
     && isObject(window.FinanceAPI)
     && typeof window.FinanceAPI.transformPortfolioRiskProfileToHealth === 'function'
     ? window.FinanceAPI.transformPortfolioRiskProfileToHealth({
@@ -2614,6 +2615,12 @@ function applyLiveDashboardData(payload = {}) {
       freshness: data.portfolioRiskProfileFreshness || null,
       status: data.portfolioRiskProfileStatus || null
     })
+    : null;
+  const mergedPortfolioHealth = derivedPortfolioHealth || isObject(data.portfolioHealth)
+    ? {
+      ...(derivedPortfolioHealth || {}),
+      ...(isObject(data.portfolioHealth) ? data.portfolioHealth : {})
+    }
     : null;
   const payloadMeta = payload.meta || {};
   liveDataMeta = {
@@ -2659,7 +2666,7 @@ function applyLiveDashboardData(payload = {}) {
   
   appData = normalizeAppData({
     ...data,
-    ...(derivedPortfolioHealth ? { portfolioHealth: derivedPortfolioHealth } : {}),
+    ...(mergedPortfolioHealth ? { portfolioHealth: mergedPortfolioHealth } : {}),
     hero: {
       ...(isObject(data.hero) ? data.hero : {}),
       ...kpiSource,
