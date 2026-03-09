@@ -25,12 +25,16 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
     )
-    portfolio = service.create_portfolio(name="Core", tickers=["MSFT", "AAPL"])
+    portfolio = service.create_portfolio(
+        name="Core",
+        tickers=["MSFT", "AAPL"],
+        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+    )
 
     class FakePerformanceService:
         def calculate_performance(self, *, tickers, weights, start_date, end_date, benchmark):
             assert set(tickers) == {"AAPL", "MSFT"}
-            assert weights is None
+            assert weights == {"AAPL": 0.3, "MSFT": 0.7}
             assert benchmark == "SPY"
             return (
                 perf_app.PortfolioMetrics(
@@ -73,12 +77,17 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     assert data["risk_level"] == "medium"
     assert data["risk"]["level"] == "medium"
     assert data["stats"]["has_live_metrics"] is True
+    assert data["stats"]["equal_weight_assumption"] is False
+    assert data["stats"]["weights_source"] == "portfolio_metadata"
     assert data["stats"]["non_null_metrics"] >= 6
-    assert set(data["weights"]) == {"AAPL", "MSFT"}
+    assert data["stats"]["largest_position_ticker"] == "MSFT"
+    assert data["stats"]["largest_position_weight"] == 0.7
+    assert data["weights"] == {"AAPL": 0.3, "MSFT": 0.7}
     assert sum(data["weights"].values()) == 1.0
     assert data["filters_applied"]["benchmark"] == "SPY"
     assert data["verdict"] == "hold"
     assert data["source"][0] == "portfolio_service"
+    assert any("normalized" in warning.lower() for warning in data["warnings"])
 
 
 def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
@@ -87,7 +96,11 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
     )
-    portfolio = service.create_portfolio(name="Focused", tickers=["NVDA"])
+    portfolio = service.create_portfolio(
+        name="Focused",
+        tickers=["NVDA"],
+        metadata={"weights": {"MSFT": 1.0}},
+    )
 
     class BrokenPerformanceService:
         def calculate_performance(self, *, tickers, weights, start_date, end_date, benchmark):
@@ -109,10 +122,14 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert payload["ok"] is True
     assert data["portfolio"]["id"] == portfolio.id
     assert data["filters_applied"]["benchmark"] == "QQQ"
+    assert data["stats"]["equal_weight_assumption"] is True
     assert data["stats"]["has_live_metrics"] is False
+    assert data["stats"]["weights_source"] == "equal_weight_fallback"
     assert data["error"] == "performance backend unavailable"
     assert "fallback" in " ".join(data["source"])
+    assert data["weights"] == {"NVDA": 1.0}
     assert data["metrics"] == {}
     assert data["risk"]["level"] == "medium"
     assert data["risk_profile"] == "balanced"
     assert any("fallback" in warning.lower() for warning in data["warnings"])
+    assert any("unknown tickers" in warning.lower() for warning in data["warnings"])

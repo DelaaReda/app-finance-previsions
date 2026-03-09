@@ -39,6 +39,78 @@ def _equal_weights(tickers: List[str]) -> Dict[str, float]:
     return {ticker: weight for ticker in sorted(tickers)}
 
 
+def _resolve_portfolio_weights(
+    tickers: List[str],
+    metadata: Optional[Dict[str, Any]],
+) -> Tuple[Dict[str, float], str, List[str]]:
+    normalized_tickers = sorted(str(ticker or "").strip().upper() for ticker in tickers if str(ticker or "").strip())
+    if not normalized_tickers:
+        return {}, "empty_portfolio", []
+
+    fallback_weights = _equal_weights(normalized_tickers)
+    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    raw_weights = metadata_dict.get("weights")
+    if raw_weights is None:
+        raw_weights = metadata_dict.get("position_weights")
+    if not isinstance(raw_weights, dict) or not raw_weights:
+        return fallback_weights, "equal_weight", []
+
+    warnings: List[str] = []
+    filtered_weights: Dict[str, float] = {}
+    invalid_tickers: List[str] = []
+    unknown_tickers: List[str] = []
+
+    for raw_ticker, raw_weight in raw_weights.items():
+        ticker = str(raw_ticker or "").strip().upper()
+        if not ticker:
+            continue
+        if ticker not in normalized_tickers:
+            unknown_tickers.append(ticker)
+            continue
+        try:
+            parsed_weight = float(raw_weight)
+        except (TypeError, ValueError):
+            invalid_tickers.append(ticker)
+            continue
+        if parsed_weight <= 0:
+            invalid_tickers.append(ticker)
+            continue
+        filtered_weights[ticker] = parsed_weight
+
+    if invalid_tickers:
+        warnings.append(
+            f"Ignored invalid saved weights for {', '.join(sorted(set(invalid_tickers)))}."
+        )
+    if unknown_tickers:
+        warnings.append(
+            f"Ignored saved weights for unknown tickers {', '.join(sorted(set(unknown_tickers)))}."
+        )
+
+    missing_tickers = [ticker for ticker in normalized_tickers if ticker not in filtered_weights]
+    total_weight = sum(filtered_weights.values())
+    if missing_tickers or total_weight <= 0:
+        warnings.append(
+            "Saved weights were incomplete, so the endpoint fell back to equal weights."
+        )
+        return fallback_weights, "equal_weight_fallback", warnings
+
+    normalized_weights: Dict[str, float] = {}
+    for ticker in normalized_tickers:
+        normalized_weights[ticker] = round(filtered_weights[ticker] / total_weight, 4)
+
+    drift = round(1.0 - sum(normalized_weights.values()), 4)
+    if normalized_tickers and drift:
+        last_ticker = normalized_tickers[-1]
+        normalized_weights[last_ticker] = round(
+            normalized_weights[last_ticker] + drift, 4
+        )
+
+    if abs(total_weight - 1.0) > 0.001:
+        warnings.append("Saved weights were normalized to sum to 1.0.")
+
+    return normalized_weights, "portfolio_metadata", warnings
+
+
 def _classify_risk_profile(
     tickers: List[str],
     *,
@@ -470,6 +542,10 @@ class PortfolioService:
             return None
 
         tickers = sorted(portfolio.tickers)
+        weights, weights_source, weight_warnings = _resolve_portfolio_weights(
+            tickers,
+            portfolio.metadata,
+        )
         payload = PortfolioRiskProfile(
             portfolio={
                 "id": portfolio.id,
@@ -480,7 +556,7 @@ class PortfolioService:
                 "updated_at": portfolio.updated_at,
             },
             benchmark=benchmark,
-            weights=_equal_weights(tickers),
+            weights=weights,
             filters_applied={
                 "portfolio_id": portfolio.id,
                 "benchmark": benchmark,
@@ -489,7 +565,8 @@ class PortfolioService:
             },
             stats={
                 "tickers_count": len(tickers),
-                "equal_weight_assumption": True,
+                "equal_weight_assumption": weights_source != "portfolio_metadata",
+                "weights_source": weights_source,
                 "has_live_metrics": False,
                 "non_null_metrics": 0,
             },
@@ -515,7 +592,7 @@ class PortfolioService:
             perf_service = _get_performance_service()
             metrics, comparison, _ = perf_service.calculate_performance(
                 tickers=tickers,
-                weights=None,
+                weights=weights,
                 start_date=start_date,
                 end_date=end_date,
                 benchmark=benchmark,
@@ -550,19 +627,27 @@ class PortfolioService:
                 "caveat": (
                     warnings[0]
                     if warnings
-                    else "Profile derived from equal-weight performance metrics."
+                    else "Profile derived from saved portfolio weights and benchmark comparison."
                 ),
             }
             payload.why = why or [
-                "Risk profile derived from equal-weight performance metrics and benchmark comparison."
+                "Risk profile derived from stored portfolio weights and benchmark comparison."
             ]
-            payload.warnings = warnings
+            payload.warnings = warnings + weight_warnings
             payload.stats = {
                 "tickers_count": len(tickers),
-                "equal_weight_assumption": True,
+                "equal_weight_assumption": weights_source != "portfolio_metadata",
+                "weights_source": weights_source,
                 "has_live_metrics": non_null_metrics > 0,
                 "non_null_metrics": non_null_metrics,
-                "largest_position_weight": payload.weights.get(tickers[0]) if tickers else None,
+                "largest_position_ticker": (
+                    max(payload.weights, key=payload.weights.get)
+                    if payload.weights
+                    else None
+                ),
+                "largest_position_weight": (
+                    max(payload.weights.values()) if payload.weights else None
+                ),
             }
             payload.confidence = round(min(0.85, 0.35 + (0.05 * non_null_metrics)), 2)
             payload.generated_at = _now_iso()
@@ -585,7 +670,7 @@ class PortfolioService:
             payload.why = why or [
                 "Performance metrics were unavailable, so the profile falls back to holdings concentration only."
             ]
-            payload.warnings = warnings + [
+            payload.warnings = warnings + weight_warnings + [
                 "Performance metrics unavailable; returned a composition-only fallback profile."
             ]
             payload.error = str(e)
