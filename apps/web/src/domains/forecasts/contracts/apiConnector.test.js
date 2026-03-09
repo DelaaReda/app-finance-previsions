@@ -94,3 +94,66 @@ test('getStatus falls back to /health when /status is unavailable', async () => 
   assert.equal(payload.status, 'degraded');
   assert.deepEqual(payload.source, ['api_health']);
 });
+
+test('getCopilotContext normalizes brief-first entry points into ask/open starters', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            daily_brief: {
+              title: 'Brief of the day',
+              summary: 'Rates stay range-bound while mega-cap earnings keep leadership narrow.',
+              sentiment: 'mixed',
+              generated_at: '2026-03-09T05:30:00.000Z',
+            },
+            scope_tickers: ['NVDA'],
+            entry_points: [
+              {
+                id: 'brief_of_day',
+                kind: 'open',
+                label: 'Open the live brief',
+                target: '/brief/daily',
+              },
+              {
+                id: 'ask_copilot',
+                kind: 'ask',
+                label: 'Ask about NVDA',
+                target: '/copilot/ask',
+                prefill: {
+                  question: 'Give me a 1-week investment memo on NVDA.',
+                  tickers: ['NVDA'],
+                },
+              },
+            ],
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/context']);
+  assert.equal(
+    copilotStart.brief_of_day.summary,
+    'Rates stay range-bound while mega-cap earnings keep leadership narrow.'
+  );
+  assert.deepEqual(
+    copilotStart.ask.map((item) => item.id),
+    ['ask_copilot']
+  );
+  assert.equal(
+    copilotStart.ask[0].prefill.question,
+    'Give me a 1-week investment memo on NVDA.'
+  );
+  assert.deepEqual(copilotStart.ask[0].prefill.tickers, ['NVDA']);
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [{ id: 'brief_of_day', target: 'market' }]
+  );
+});
