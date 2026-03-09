@@ -136,6 +136,7 @@ test('applyLiveDashboardData derives portfolio health from raw risk profile payl
     updatedAt: '2026-03-09T06:30:00Z',
     suggestion: 'Derived from raw risk profile',
   });
+  assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.liveDataMeta.generatedAt, '2026-03-09T07:00:00Z');
   assert.equal(sandbox.rendered, true);
 });
@@ -162,5 +163,6 @@ test('applyLiveDashboardData preserves explicit portfolio health payloads', () =
 
   assert.deepEqual(JSON.parse(JSON.stringify(transformCalls)), []);
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth)), explicitPortfolioHealth);
+  assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.rendered, true);
 });

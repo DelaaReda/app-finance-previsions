@@ -379,7 +379,7 @@ class PortfolioPerformance(BaseModel):
     avg_return: Optional[float] = None
     volatility: Optional[float] = None
     sharpe_ratio: Optional[float] = None
-    vs_benchmark: Optional[Dict[str, float]] = None
+    vs_benchmark: Optional[Dict[str, Any]] = None
     calculated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -665,8 +665,10 @@ class PortfolioService:
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return None
-        
-        if not portfolio.tickers:
+
+        tickers = sorted(portfolio.tickers)
+
+        if not tickers:
             # Empty portfolio
             return PortfolioPerformance(
                 portfolio_id=portfolio.id,
@@ -681,13 +683,14 @@ class PortfolioService:
                     "outperformance": None
                 }
             )
-        
+
         # Use performance service for real calculations
         try:
+            weights, _, _ = _resolve_portfolio_weights(tickers, portfolio.metadata)
             perf_service = _get_performance_service()
             metrics, comparison, _ = perf_service.calculate_performance(
-                tickers=portfolio.tickers,
-                weights=None,  # Equal-weighted for now
+                tickers=tickers,
+                weights=weights,
                 start_date=start_date,
                 end_date=end_date,
                 benchmark=benchmark
@@ -697,7 +700,7 @@ class PortfolioService:
             performance = PortfolioPerformance(
                 portfolio_id=portfolio.id,
                 portfolio_name=portfolio.name,
-                tickers_count=len(portfolio.tickers),
+                tickers_count=len(tickers),
                 total_return=metrics.total_return,
                 avg_return=metrics.annualized_return,
                 volatility=metrics.volatility,
@@ -717,7 +720,7 @@ class PortfolioService:
             return PortfolioPerformance(
                 portfolio_id=portfolio.id,
                 portfolio_name=portfolio.name,
-                tickers_count=len(portfolio.tickers),
+                tickers_count=len(tickers),
                 total_return=None,
                 avg_return=None,
                 volatility=None,

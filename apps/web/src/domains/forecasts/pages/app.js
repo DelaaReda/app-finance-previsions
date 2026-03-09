@@ -1423,6 +1423,8 @@ const FALLBACK_APP_DATA = {
     benchmark: 'SPY',
     updatedAt: null
   },
+  portfolioRiskProfile: null,
+  portfolioRiskProfileFreshness: null,
   sectorPerformance: [
     { sector: 'Technology', change: 8.5, holdings: true, weight: 45 },
     { sector: 'Finance', change: 3.1, holdings: true, weight: 15 },
@@ -2103,6 +2105,7 @@ function normalizeAppData(data = {}) {
   const base = FALLBACK_APP_DATA;
   const source = isObject(data) ? data : {};
   const sourceCorrelations = isObject(source.correlations) ? source.correlations : {};
+  const portfolioRiskProfileFreshness = toString(source.portfolioRiskProfileFreshness, '').trim();
   const labels = toArray(sourceCorrelations.labels, base.correlations.labels);
   const size = labels.length;
   const matrix = sanitizeCorrelationMatrix(sourceCorrelations.data, base.correlations.data).slice(0, size);
@@ -2129,6 +2132,8 @@ function normalizeAppData(data = {}) {
       ...base.portfolioHealth,
       ...(isObject(source.portfolioHealth) ? source.portfolioHealth : {})
     },
+    portfolioRiskProfile: isObject(source.portfolioRiskProfile) ? source.portfolioRiskProfile : base.portfolioRiskProfile,
+    portfolioRiskProfileFreshness: portfolioRiskProfileFreshness || base.portfolioRiskProfileFreshness,
     backtestResults: {
       ...base.backtestResults,
       ...(isObject(source.backtestResults) ? {

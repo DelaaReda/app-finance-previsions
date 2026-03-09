@@ -48,6 +48,7 @@ Portfolio = _portfolio_module.Portfolio
 PortfolioMetadataInput = _portfolio_module.PortfolioMetadataInput
 PortfolioPerformance = _portfolio_module.PortfolioPerformance
 PortfolioRiskProfile = _portfolio_module.PortfolioRiskProfile
+resolve_portfolio_weights = _portfolio_module._resolve_portfolio_weights
 
 logger = logging.getLogger(__name__)
 
@@ -452,10 +453,12 @@ def get_portfolio_performance_timeseries(
                 detail="Portfolio has no tickers to evaluate",
             )
 
+        tickers = sorted(portfolio.tickers)
+        weights, _, _ = resolve_portfolio_weights(tickers, portfolio.metadata)
         perf_service = _get_performance_service()
         metrics, comparison, portfolio_timeseries = perf_service.calculate_performance(
-            tickers=portfolio.tickers,
-            weights=None,
+            tickers=tickers,
+            weights=weights,
             start_date=start_date,
             end_date=end_date,
             benchmark=benchmark,

@@ -266,6 +266,140 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert any("unknown tickers" in warning.lower() for warning in data["warnings"])
 
 
+def test_portfolio_performance_uses_saved_metadata_weights(monkeypatch, tmp_path):
+    service = portfolio_app.PortfolioService(
+        storage_path=str(tmp_path / "user_portfolios.json")
+    )
+    portfolio = service.create_portfolio(
+        name="Weighted",
+        tickers=["MSFT", "AAPL"],
+        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+    )
+    captured = {}
+
+    class FakePerformanceService:
+        def calculate_performance(
+            self, *, tickers, weights, start_date, end_date, benchmark
+        ):
+            captured.update(
+                {
+                    "tickers": tickers,
+                    "weights": weights,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "benchmark": benchmark,
+                }
+            )
+            return (
+                perf_app.PortfolioMetrics(
+                    total_return=0.12,
+                    annualized_return=0.10,
+                    volatility=0.18,
+                    sharpe_ratio=1.15,
+                ),
+                perf_app.BenchmarkComparison(
+                    benchmark_ticker="SPY",
+                    portfolio_return=0.12,
+                    benchmark_return=0.09,
+                    outperformance=0.03,
+                ),
+                perf_app.PerformanceTimeSeries(),
+            )
+
+    monkeypatch.setattr(
+        portfolio_app, "_get_performance_service", lambda: FakePerformanceService()
+    )
+
+    performance = service.get_performance(portfolio.id, benchmark="SPY")
+
+    assert performance is not None
+    assert captured == {
+        "tickers": ["AAPL", "MSFT"],
+        "weights": {"AAPL": 0.3, "MSFT": 0.7},
+        "start_date": None,
+        "end_date": None,
+        "benchmark": "SPY",
+    }
+    assert performance.total_return == 0.12
+    assert performance.avg_return == 0.10
+    assert performance.vs_benchmark == {
+        "benchmark": "SPY",
+        "outperformance": 0.03,
+    }
+
+
+def test_portfolio_performance_timeseries_uses_saved_metadata_weights(
+    monkeypatch, tmp_path
+):
+    service = portfolio_app.PortfolioService(
+        storage_path=str(tmp_path / "user_portfolios.json")
+    )
+    portfolio = service.create_portfolio(
+        name="Weighted",
+        tickers=["MSFT", "AAPL"],
+        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+    )
+    captured = []
+
+    class FakePerformanceService:
+        def calculate_performance(
+            self, *, tickers, weights, start_date, end_date, benchmark
+        ):
+            captured.append(
+                {
+                    "tickers": tickers,
+                    "weights": weights,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "benchmark": benchmark,
+                }
+            )
+            return (
+                perf_app.PortfolioMetrics(total_return=0.12),
+                perf_app.BenchmarkComparison(
+                    benchmark_ticker=benchmark,
+                    portfolio_return=0.12,
+                    benchmark_return=0.09,
+                    outperformance=0.03,
+                ),
+                perf_app.PerformanceTimeSeries(
+                    dates=["2026-03-09"],
+                    equity_curve=[1.0],
+                    drawdown=[0.0],
+                    returns=[0.0],
+                ),
+            )
+
+    monkeypatch.setattr(portfolios_route, "get_portfolio_service", lambda: service)
+    monkeypatch.setattr(
+        portfolios_route, "_get_performance_service", lambda: FakePerformanceService()
+    )
+
+    response = _client().get(f"/api/portfolios/{portfolio.id}/performance/timeseries")
+
+    assert response.status_code == 200
+    assert captured == [
+        {
+            "tickers": ["AAPL", "MSFT"],
+            "weights": {"AAPL": 0.3, "MSFT": 0.7},
+            "start_date": None,
+            "end_date": None,
+            "benchmark": "SPY",
+        },
+        {
+            "tickers": ["SPY"],
+            "weights": None,
+            "start_date": None,
+            "end_date": None,
+            "benchmark": "SPY",
+        },
+    ]
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["portfolio"]["equity_curve"] == [1.0]
+    assert payload["data"]["comparison"]["benchmark_ticker"] == "SPY"
+
+
 def test_portfolio_service_reload_normalizes_legacy_tickers_and_metadata(tmp_path):
     storage_path = tmp_path / "user_portfolios.json"
     storage_path.write_text(
