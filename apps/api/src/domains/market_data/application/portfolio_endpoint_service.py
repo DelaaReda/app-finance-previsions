@@ -100,6 +100,7 @@ def _fallback_payload(
         },
         "confidence": 0.35,
         "generated_at": now_iso,
+        "last_update": now_iso,
         "source": [
             "portfolio_risk_profile_service",
             "portfolio_risk_profile_service_fallback",
@@ -159,6 +160,10 @@ def get_portfolio_risk_profile_payload(
         payload.setdefault("stats", {})
         payload.setdefault("warnings", [])
         payload.setdefault("generated_at", utc_now_iso())
+        payload.setdefault(
+            "last_update",
+            payload.get("freshness") or payload.get("generated_at"),
+        )
 
         append_source_tag(
             payload,

@@ -183,6 +183,7 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     assert payload["status"] == "ok"
     assert payload["error"] is None
     assert payload["freshness"] == data["freshness"]
+    assert data["last_update"] == data["freshness"]
     assert data["portfolio"]["id"] == portfolio.id
     assert data["portfolio"]["tickers_count"] == 2
     assert data["portfolio"]["state"] == {
@@ -244,6 +245,7 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert payload["status"] == "degraded"
     assert payload["error"] == "performance backend unavailable"
     assert payload["freshness"] == data["freshness"]
+    assert data["last_update"] == data["freshness"]
     assert data["portfolio"]["id"] == portfolio.id
     assert data["filters_applied"]["benchmark"] == "QQQ"
     assert data["stats"]["equal_weight_assumption"] is True
