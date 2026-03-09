@@ -527,6 +527,187 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(tasks["BATCH-27-DEV-02"]["state"], "DONE")
         self.assertIn("dev_collect:BATCH-27-DEV-02", updated)
 
+    def test_collect_only_merges_targeted_dev_result(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-60-DEV-01", "stream_id": "BATCH-60", "role": "dev", "state": "IN_PROGRESS", "priority": "P1", "updated_at": "2026-03-09T01:54:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}]}),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-09T01:57:43Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_dev_collect_only",
+                            "target_role": "dev",
+                            "owner_task_id": "BATCH-60-DEV-01",
+                            "parent_role": "planner",
+                            "task_kind": "delivery",
+                            "status": "completed",
+                            "created_at": "2026-03-09T01:47:18Z",
+                            "expires_at": "2026-03-09T02:32:18Z",
+                            "ttl_min": 45,
+                            "backend": "openclaw",
+                            "last_update_at": "2026-03-09T01:57:43Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (results_dir / "planner_dev_collect_only.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_collect_only",
+                    "owner_task_id": "BATCH-60-DEV-01",
+                    "status": "completed",
+                    "artifact": "commit=abc123",
+                    "verify": "before=a; after=b; test=c",
+                    "tests_run": "pytest -q",
+                    "commit_sha": "abc123",
+                    "files_touched": "apps/api/src/example.py",
+                    "root_cause": "x",
+                    "fix_applied": "y",
+                    "architecture_check": "layer=api; imports_ok=yes; path_target=apps/api/src/example.py",
+                    "vision_alignment": "batch=BATCH-60; target=delivery; impact=advance",
+                }
+            ),
+            encoding="utf-8",
+        )
+        payload = MODULE.collect_pending_results(self.root, "test", owner_task_id="BATCH-60-DEV-01", target_role="dev")
+        self.assertTrue(payload["ok"])
+        self.assertIn("dev_collect:BATCH-60-DEV-01", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-60-DEV-01"]
+        self.assertEqual(task["state"], "DONE")
+
+    def test_collect_only_merges_orphan_dev_result_without_registry_row(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-60-DEV-01", "stream_id": "BATCH-60", "role": "dev", "state": "IN_PROGRESS", "priority": "P1", "updated_at": "2026-03-09T01:54:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}]}),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(json.dumps({"updated_at": "2026-03-09T01:57:43Z", "subagents": []}), encoding="utf-8")
+        (results_dir / "planner_dev_orphan.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_orphan",
+                    "owner_task_id": "BATCH-60-DEV-01",
+                    "status": "completed",
+                    "artifact": "commit=abc123",
+                    "verify": "before=a; after=b; test=c",
+                    "tests_run": "pytest -q",
+                    "commit_sha": "abc123",
+                    "files_touched": "apps/api/src/example.py",
+                    "root_cause": "x",
+                    "fix_applied": "y",
+                    "architecture_check": "layer=api; imports_ok=yes; path_target=apps/api/src/example.py",
+                    "vision_alignment": "batch=BATCH-60; target=delivery; impact=advance",
+                }
+            ),
+            encoding="utf-8",
+        )
+        payload = MODULE.collect_pending_results(self.root, "test", owner_task_id="BATCH-60-DEV-01", target_role="dev")
+        self.assertTrue(payload["ok"])
+        self.assertIn("orphan_dev_complete:BATCH-60-DEV-01", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-60-DEV-01"]
+        self.assertEqual(task["state"], "DONE")
+
+    def test_collect_only_unblocks_blocked_task_before_orphan_completion(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-60-DEV-01",
+                            "stream_id": "BATCH-60",
+                            "role": "dev",
+                            "state": "BLOCKED",
+                            "blocked_reason": "planner_dev_capability_failed:complete_merge_failed",
+                            "priority": "P1",
+                            "updated_at": "2026-03-09T01:54:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T01:54:00Z"}]}),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(json.dumps({"updated_at": "2026-03-09T01:57:43Z", "subagents": []}), encoding="utf-8")
+        (results_dir / "planner_dev_blocked.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_blocked",
+                    "owner_task_id": "BATCH-60-DEV-01",
+                    "status": "completed",
+                    "artifact": "commit=abc123",
+                    "verify": "before=a; after=b; test=c",
+                    "tests_run": "pytest -q",
+                    "commit_sha": "abc123",
+                    "files_touched": "apps/api/src/example.py",
+                    "root_cause": "x",
+                    "fix_applied": "y",
+                    "architecture_check": "layer=api; imports_ok=yes; path_target=apps/api/src/example.py",
+                    "vision_alignment": "batch=BATCH-60; target=delivery; impact=advance",
+                }
+            ),
+            encoding="utf-8",
+        )
+        payload = MODULE.collect_pending_results(self.root, "test", owner_task_id="BATCH-60-DEV-01", target_role="dev")
+        self.assertTrue(payload["ok"])
+        self.assertIn("orphan_dev_complete:BATCH-60-DEV-01", payload["actions"])
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-60-DEV-01"]
+        self.assertEqual(task["state"], "DONE")
+        self.assertEqual(task.get("blocked_reason", ""), "")
+
     def test_dispatch_restarts_in_progress_dev_when_no_active_subagent(self) -> None:
         self.board_path.write_text(
             json.dumps(
@@ -570,6 +751,101 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(tasks["BATCH-28-DEV-01"]["state"], "IN_PROGRESS")
         self.assertIn("dev_dispatch:BATCH-28-DEV-01", updated)
 
+    def test_active_admin_with_result_file_does_not_block_next_admin_dispatch(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [
+                        {"id": "BATCH-11", "state": "READY_PLANNER", "updated_at": "2026-03-09T01:54:00Z"},
+                    ],
+                    "tasks": [
+                        {"id": "BATCH-11-DEV-03", "stream_id": "BATCH-11", "role": "dev", "state": "DONE", "updated_at": "2026-03-09T01:40:00Z"},
+                        {
+                            "id": "BATCH-11-ADMIN-01",
+                            "stream_id": "BATCH-11",
+                            "role": "admin",
+                            "state": "READY",
+                            "priority": "P1",
+                            "depends_on": ["BATCH-11-DEV-03"],
+                            "updated_at": "2026-03-09T01:54:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-11", "state": "READY_PLANNER", "updated_at": "2026-03-09T01:54:00Z"}]}),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        results_dir = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-09T01:54:48Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_admin_old",
+                            "target_role": "admin",
+                            "owner_task_id": "BATCH-27-ADMIN-01",
+                            "parent_role": "planner",
+                            "task_kind": "runtime",
+                            "status": "running",
+                            "created_at": "2026-03-09T01:46:54Z",
+                            "expires_at": "2026-03-09T02:31:54Z",
+                            "ttl_min": 45,
+                            "backend": "codex_exec",
+                            "last_update_at": "2026-03-09T01:46:54Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (results_dir / "planner_admin_old.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_admin_old",
+                    "owner_task_id": "BATCH-27-ADMIN-01",
+                    "status": "completed",
+                    "artifact": "logs/runtime-proof.json",
+                    "verify": "before=drift; after=ok; test=doctor",
+                    "tests_run": "bash scripts/fc_doctor.sh",
+                    "commit_sha": "none",
+                    "files_touched": "none",
+                    "root_cause": "drift",
+                    "fix_applied": "repair",
+                    "architecture_check": "layer=runtime; imports_ok=yes; path_target=logs/runtime-proof.json",
+                    "vision_alignment": "batch=BATCH-27; target=runtime; impact=healthy",
+                }
+            ),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                "EVIDENCE: task_update=analysis_only; run_note=ignore collectible active admin and move next; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=dispatch admin",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: DISPATCH_ADMIN_B11",
+            ]
+        )
+        with patch.object(MODULE.subprocess, "Popen") as popen_mock:
+            _, payload = apply_bridge(self.root, "planner", contract, "test", backend="auto")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["dispatch"]["task_id"], "BATCH-11-ADMIN-01")
+        self.assertEqual(payload["dispatch"]["backend"], "codex_exec")
+        popen_mock.assert_called_once()
+
     def test_stale_admin_subagent_sets_takeover_after_timeout_streak(self) -> None:
         self.board_path.write_text(
             json.dumps(
@@ -584,7 +860,7 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
                             "role": "admin",
                             "state": "IN_PROGRESS",
                             "priority": "P1",
-                            "admin_timeout_streak": 1,
+                            "admin_timeout_streak": 2,
                             "updated_at": "2026-03-08T19:00:00Z",
                         },
                     ],
@@ -627,8 +903,150 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         board = json.loads(self.board_path.read_text())
         task = {row["id"]: row for row in board["tasks"]}["BATCH-27-ADMIN-01"]
         self.assertTrue(task["planner_takeover_required"])
-        self.assertEqual(task["admin_timeout_streak"], 2)
+        self.assertEqual(task["admin_timeout_streak"], 3)
         self.assertIn(task["state"], {"READY", "READY_PLANNER"})
+
+    def test_planner_takeover_admin_task_completes_after_repeated_timeouts(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-27-DEV-03",
+                            "stream_id": "BATCH-27",
+                            "role": "dev",
+                            "state": "DONE",
+                            "updated_at": "2026-03-08T18:00:00Z",
+                        },
+                        {
+                            "id": "BATCH-27-ADMIN-01",
+                            "stream_id": "BATCH-27",
+                            "code": "ADMIN-01",
+                            "title": "Reliability SRE Pack + Chaos Drills [ADMIN-01]",
+                            "role": "admin",
+                            "state": "READY",
+                            "priority": "P1",
+                            "depends_on": ["BATCH-27-DEV-03"],
+                            "planner_takeover_required": True,
+                            "admin_timeout_streak": 3,
+                            "artifact": "apps/monitor/server.py",
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                "EVIDENCE: task_update=analysis_only; run_note=take over stalled admin task; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=take over admin",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: TAKEOVER_ADMIN_B27",
+            ]
+        )
+        with (
+            patch.object(
+                MODULE,
+                "_fetch_local_json",
+                side_effect=[
+                    (True, {"health": "OK"}, "ok"),
+                    (True, {"status": "ok"}, "ok"),
+                ],
+            ),
+            patch.object(MODULE, "_run_browser_validation", return_value=(True, "proofs/browser.json")),
+        ):
+            updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["dispatch"]["reason"], "planner_takeover_completed")
+        self.assertIn("admin_dispatch:BATCH-27-ADMIN-01", payload["actions"])
+        self.assertIn("admin_complete:BATCH-27-ADMIN-01", payload["actions"])
+        self.assertIn("DELTA: PLANNER_RECOVERY_PROGRESS", updated)
+        self.assertIn("NEXT_ACTION_UNIQUE: PLANNER_RESUME_AFTER_BATCH-27-ADMIN-01", updated)
+        self.assertNotIn("PLANNER_DISPATCH_ACTIVE_BATCH-27-ADMIN-01", updated)
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-27-ADMIN-01"]
+        self.assertEqual(task["state"], "DONE")
+        self.assertFalse(task["planner_takeover_required"])
+        self.assertEqual(task["completion_mode"], "runtime_no_code")
+        self.assertIn("admin_complete:BATCH-27-ADMIN-01", updated)
+
+    def test_planner_takeover_admin_task_allows_doctor_degraded_when_critical_checks_are_ok(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-11", "state": "IN_PROGRESS", "updated_at": "2026-03-09T04:40:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-11-DEV-03", "stream_id": "BATCH-11", "role": "dev", "state": "DONE", "updated_at": "2026-03-09T04:30:00Z"},
+                        {
+                            "id": "BATCH-11-ADMIN-01",
+                            "stream_id": "BATCH-11",
+                            "role": "admin",
+                            "state": "READY",
+                            "priority": "P1",
+                            "depends_on": ["BATCH-11-DEV-03"],
+                            "planner_takeover_required": True,
+                            "admin_timeout_streak": 3,
+                            "updated_at": "2026-03-09T04:40:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(json.dumps({"items": [{"id": "BATCH-11", "state": "IN_PROGRESS", "updated_at": "2026-03-09T04:40:00Z"}]}), encoding="utf-8")
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                "EVIDENCE: task_update=analysis_only; run_note=take over admin under doctor degraded but critical checks ok; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=take over admin",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: TAKEOVER_ADMIN_B11",
+            ]
+        )
+        degraded_doctor = {
+            "status": "degraded",
+            "checks": {
+                "runtime_state": {"status": "ok"},
+                "sessions": {"status": "ok"},
+                "locks": {"status": "ok"},
+                "queue_workboard": {"status": "ok"},
+                "providers": {"status": "ok"},
+                "product_value": {"status": "ok"},
+                "qa_review_pipeline": {"status": "degraded"},
+            },
+        }
+        with (
+            patch.object(MODULE, "_fetch_local_json", side_effect=[(True, {"health": "OK"}, "ok"), (True, degraded_doctor, "ok")]),
+            patch.object(MODULE, "_run_browser_validation", return_value=(False, "browser_not_required")),
+        ):
+            updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="auto")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["dispatch"]["reason"], "planner_takeover_completed")
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-11-ADMIN-01"]
+        self.assertEqual(task["state"], "DONE")
+        self.assertIn("admin_complete:BATCH-11-ADMIN-01", updated)
 
     def test_collect_finished_admin_subagent_backfills_runtime_no_code_metadata(self) -> None:
         self.board_path.write_text(
@@ -772,7 +1190,15 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         board = json.loads(self.board_path.read_text())
         task = {row["id"]: row for row in board["tasks"]}["BATCH-91-DEV-01"]
         self.assertEqual(task["browser_proof_status"], "completed")
-        self.assertIn("browser_backfill:BATCH-91-DEV-01:ok", updated)
+
+    def test_requires_browser_proof_does_not_treat_build_word_as_ui(self) -> None:
+        task = {
+            "title": "Build a personal finance copilot that starts with a brief of the day",
+            "artifact": "",
+            "files_touched": "",
+            "code": "ADMIN-01",
+        }
+        self.assertFalse(MODULE._requires_browser_proof(task))
 
     def test_apply_bridge_auto_completes_planner_gov_review_when_deps_done(self) -> None:
         self.board_path.write_text(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -234,6 +235,14 @@ def _rewrite_contract_for_live_dispatch(contract: dict[str, str], dispatch: dict
     if not isinstance(dispatch, dict) or not dispatch.get("dispatched"):
         return contract
     task_id_value = str(dispatch.get("task_id", "")).strip() or "unknown"
+    if bool(dispatch.get("completed")):
+        contract["STATUS"] = "IN_PROGRESS"
+        contract["VERDICT"] = "GO_WITH_CAUTION"
+        contract["DELTA"] = "PLANNER_RECOVERY_PROGRESS"
+        contract["BLOCKER_ID"] = "NONE"
+        contract["NEXT"] = f"owner=planner; action=select next work item after completing {task_id_value}"
+        contract["NEXT_ACTION_UNIQUE"] = f"PLANNER_RESUME_AFTER_{task_id_value}"
+        return contract
     target_role = "admin" if any(item.startswith("admin_dispatch:") for item in actions) else "dev"
     contract["STATUS"] = "IN_PROGRESS"
     contract["VERDICT"] = "GO_WITH_CAUTION"
@@ -268,7 +277,9 @@ def _requires_browser_proof(task: dict[str, Any]) -> bool:
             str(task.get("code", "")),
         ]
     ).lower()
-    return any(token in joined for token in ("apps/web/", "apps/monitor/", "frontend", "dashboard", "monitor", "ui"))
+    if any(token in joined for token in ("apps/web/", "apps/monitor/", "frontend", "dashboard", "monitor")):
+        return True
+    return re.search(r"(?<![a-z0-9_])ui(?![a-z0-9_])", joined) is not None
 
 
 def _browser_validation_done(task: dict[str, Any]) -> bool:

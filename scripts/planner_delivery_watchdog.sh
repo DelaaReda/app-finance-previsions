@@ -102,6 +102,30 @@ PY
   log "forecast_refresh_done"
 }
 
+refresh_news_if_needed() {
+  local tmp_doctor="/tmp/planner-watchdog-doctor-news.json"
+  curl -fsS "http://127.0.0.1:7779/api/doctor?refresh=1" >"$tmp_doctor" || return 0
+  local needs_refresh
+  needs_refresh="$(python3 - <<'PY' "$tmp_doctor"
+import json, pathlib, sys
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
+product = ((payload.get("checks") or {}).get("product_value") or {})
+blocked = set(product.get("blocked_reasons") or [])
+metrics = product.get("metrics") or {}
+news = ((metrics.get("data_freshness") or {}).get("news") or {})
+state = str(news.get("state") or "").strip().lower()
+print("1" if ("news_stale" in blocked or state == "stale") else "0")
+PY
+)"
+  if [ "$needs_refresh" != "1" ]; then
+    return 0
+  fi
+  log "news_refresh_start"
+  PYTHONPATH="$ROOT/apps/api/src" python3 "$ROOT/apps/api/src/platform/legacy/jobs/news_ingest.py" >>"$LOG_FILE" 2>&1 || true
+  curl -fsS "http://127.0.0.1:8050/api/news/feed?limit=5" >/dev/null || true
+  log "news_refresh_done"
+}
+
 trigger_planner_if_needed() {
   local tmp_status="/tmp/planner-watchdog-status.json"
   local tmp_doctor="/tmp/planner-watchdog-doctor.json"
@@ -135,7 +159,10 @@ pd = status.get("planner_dispatch") or {}
 active = int(pd.get("active_subagents") or 0)
 pd_status = str(pd.get("status") or "").lower()
 needs_dispatch = bool(pd.get("needs_dispatch"))
-print("1" if active == 0 and (needs_dispatch or pd_status in {"dispatch_needed", "degraded"}) else "0")
+delivery = status.get("delivery_control") or {}
+stall_summary = ((delivery.get("capability_stall_summary") or {}).get("items") or [])
+takeover_required = any(bool(item.get("takeover_required")) for item in stall_summary if isinstance(item, dict))
+print("1" if active == 0 and (needs_dispatch or pd_status in {"dispatch_needed", "degraded"} or takeover_required) else "0")
 PY
 )"
   if [ "$should_force" != "1" ]; then
@@ -164,6 +191,7 @@ log "watchdog_start interval=${INTERVAL_SECONDS}s duration=${DURATION_SECONDS}s 
 while [ "$end_ts" -eq 0 ] || [ "$(date +%s)" -lt "$end_ts" ]; do
   cleanup_result="$(cleanup_orphan_capabilities 2>>"$LOG_FILE" || true)"
   [ -n "$cleanup_result" ] && log "$cleanup_result"
+  refresh_news_if_needed
   refresh_forecasts_if_needed
   mapfile -t planner_probe < <(trigger_planner_if_needed)
   should_tick="${planner_probe[0]:-0}"
