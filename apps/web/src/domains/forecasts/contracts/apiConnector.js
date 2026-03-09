@@ -212,6 +212,18 @@ async function getCopilotStart(tickers) {
     return normalized;
   }
 
+  // Fallback: load daily brief directly if copilot start is empty
+  try {
+    const dailyBrief = await getDailyBrief();
+    if (dailyBrief && Object.keys(dailyBrief).length > 0) {
+      normalized.brief_of_day = dailyBrief;
+      normalized.brief = dailyBrief;
+      return normalized;
+    }
+  } catch (error) {
+    console.warn('[Copilot] getDailyBrief fallback failed:', error?.message || error);
+  }
+
   return loadCopilotContext(tickers);
 }
 
@@ -1277,6 +1289,7 @@ window.FinanceAPI = {
   getJudgeAnalysis,
   getCopilotStart,
   getCopilotContext,
+  getDailyBrief,
   getPortfolios,
   getPortfolioRiskProfile,
   getPortfolioHealth,
