@@ -978,6 +978,31 @@ test('buildRobustnessGoNoGoDecision treats unknown state as NO-GO', () => {
   assert.equal(result.detail, 'health check inconclusive');
 });
 
+test('openRobustnessDrill opens readiness modal with GO payload', () => {
+  const { sandbox, modal, title, body } = loadRobustnessDrillOpenFlow(null);
+  const payload = sandbox.openRobustnessDrill();
+
+  assert.equal(modal.style.display, 'flex');
+  assert.equal(title.textContent, 'Robustness Drill: GO / NO-GO');
+  assert.equal(payload.content.includes('GO'), true);
+  assert.match(body.innerHTML, /All critical signals are in tolerance/);
+  assert.match(body.innerHTML, /context-badge positive/);
+});
+
+test('openRobustnessDrill opens readiness modal with NO-GO payload when degraded', () => {
+  const { sandbox, modal, title, body } = loadRobustnessDrillOpenFlow({
+    state: 'degraded',
+    reason: 'partial signals',
+  });
+  const payload = sandbox.openRobustnessDrill();
+
+  assert.equal(modal.style.display, 'flex');
+  assert.equal(title.textContent, 'Robustness Drill: GO / NO-GO');
+  assert.equal(payload.content.includes('NO-GO'), true);
+  assert.match(body.innerHTML, /Critical quality warning detected/);
+  assert.match(body.innerHTML, /context-badge warning/);
+});
+
 test('applyLiveDashboardData derives portfolio health from raw risk profile payloads', () => {
   const { sandbox, transformCalls } = loadApplyLiveDashboardData();
   const rawRiskProfile = {
