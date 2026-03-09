@@ -183,7 +183,7 @@ function buildCopilotScopedEndpoint(basePath, tickers) {
   };
 }
 
-async function getCopilotContext(tickers) {
+async function loadCopilotContext(tickers) {
   const { endpoint, query } = buildCopilotScopedEndpoint('/copilot/context', tickers);
   const payload = getResponseData(await fetchWithCache(endpoint, `copilot_context:${query || 'default'}`));
   const normalized = payload && typeof payload === 'object' ? { ...payload } : {};
@@ -192,6 +192,10 @@ async function getCopilotContext(tickers) {
     normalized.copilot_start = copilotStart;
   }
   return normalized;
+}
+
+async function getCopilotContext(tickers) {
+  return getCopilotStart(tickers);
 }
 
 async function getCopilotStart(tickers) {
@@ -208,7 +212,7 @@ async function getCopilotStart(tickers) {
     return normalized;
   }
 
-  return getCopilotContext(tickers);
+  return loadCopilotContext(tickers);
 }
 
 async function getDailyBrief() {

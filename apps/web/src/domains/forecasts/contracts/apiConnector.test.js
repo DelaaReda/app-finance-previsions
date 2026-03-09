@@ -190,7 +190,7 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   const payload = await sandbox.window.FinanceAPI.getCopilotContext();
   const copilotStart = payload.copilot_start || {};
 
-  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/context']);
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/start']);
   assert.equal(
     copilotStart.brief_of_day.summary,
     'Rates stay range-bound while mega-cap earnings keep leadership narrow.'
@@ -303,7 +303,7 @@ test('getCopilotContext forwards scoped tickers to the backend starter endpoint'
 
   const payload = await sandbox.window.FinanceAPI.getCopilotContext(['nvda', 'MSFT', 'nvda']);
 
-  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/context?tickers=NVDA&tickers=MSFT']);
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/start?tickers=NVDA&tickers=MSFT']);
   assert.deepEqual(payload.scope_tickers, ['NVDA', 'MSFT']);
   assert.deepEqual(payload.copilot_start.ask[0].prefill.tickers, ['NVDA', 'MSFT']);
 });
