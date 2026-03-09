@@ -3423,7 +3423,13 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 
 function runCopilotStartOpen(target) {
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
+  const overlay = document.getElementById('aiCopilotOverlay');
   if (!normalizedTarget || normalizedTarget === 'copilot') {
+    const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
+    if (overlayClosed) {
+      toggleAICopilot();
+      return;
+    }
     focusCopilotInput();
     return;
   }
@@ -3434,7 +3440,6 @@ function runCopilotStartOpen(target) {
     return;
   }
 
-  const overlay = document.getElementById('aiCopilotOverlay');
   if (overlay) {
     overlay.classList.remove('active');
     setTimeout(() => {
@@ -3624,6 +3629,7 @@ async function hydrateCopilotOverlayStart() {
     contextValue.textContent = 'Loading brief of the day...';
   }
 
+  // Prefer the starter contract so the landing hero and copilot overlay share the same brief/ask/open payload.
   copilotContextRequest = Promise.resolve(
     typeof window.FinanceAPI?.getCopilotStart === 'function'
       ? window.FinanceAPI.getCopilotStart()

@@ -429,6 +429,79 @@ function loadRunCopilotStartPrompt() {
   return { sandbox, overlay, input, calls };
 }
 
+function loadRunCopilotStartOpen() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'runCopilotStartOpen', '\n\nfunction resolveCopilotStartState(');
+  const overlay = {
+    style: { display: '' },
+    classList: {
+      remove() {},
+    },
+  };
+  const calls = {
+    focused: 0,
+    toggled: 0,
+    switched: [],
+    toasts: [],
+  };
+  const sandbox = {
+    console,
+    setTimeout(fn) {
+      fn();
+      return 0;
+    },
+    document: {
+      getElementById(id) {
+        if (id === 'aiCopilotOverlay') return overlay;
+        if (id === 'tab-market') return { id: 'tab-market' };
+        return null;
+      },
+      querySelector(selector) {
+        if (selector === '.tab-btn[data-tab="market"]') {
+          return { id: 'tab-btn-market' };
+        }
+        return null;
+      },
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotStartOpenTarget(target, id = '') {
+      const normalizedTarget = String(target || '').trim().toLowerCase();
+      const normalizedId = String(id || '').trim().toLowerCase();
+      if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
+        return 'market';
+      }
+      if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot' || normalizedTarget === '/copilot/ask') {
+        return 'copilot';
+      }
+      return normalizedTarget.replace(/^\/+/, '');
+    },
+    focusCopilotInput() {
+      calls.focused += 1;
+    },
+    toggleAICopilot() {
+      calls.toggled += 1;
+      overlay.style.display = 'block';
+      sandbox.focusCopilotInput();
+    },
+    safeSwitchTab(_button, target) {
+      calls.switched.push(target);
+    },
+    showToast(message) {
+      calls.toasts.push(message);
+    },
+  };
+
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.runCopilotStartOpen = runCopilotStartOpen;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, overlay, calls };
+}
+
 function loadRenderHeroCopilotBrief() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractSection(
@@ -746,6 +819,18 @@ test('runCopilotStartPrompt opens the overlay before sending a hero starter prom
   assert.equal(input.dataset.copilotTickers, JSON.stringify(['NVDA', 'MSFT']));
 });
 
+test('runCopilotStartOpen opens the overlay when the hero starter targets copilot', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/copilot');
+
+  assert.equal(calls.toggled, 1);
+  assert.equal(calls.focused, 1);
+  assert.equal(overlay.style.display, 'block');
+  assert.deepEqual(calls.switched, []);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('renderHeroCopilotBrief swaps the static hero copy for live brief and actions', () => {
   const { sandbox, summaryEl, timestampEl, actionsRoot, promptCalls, openCalls } = loadRenderHeroCopilotBrief();
 
@@ -891,6 +976,26 @@ test('sanitizeCopilotStart preserves starter tickers and normalizes brief open t
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
   assert.equal(result.open[0].target, 'market');
+});
+
+test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    ask: [
+      {
+        id: 'ask_today',
+        label: 'Ask about today',
+        prompt: 'What matters most today?',
+        tickers: ['nvda', ' msft ', 'NVDA'],
+        prefill: {
+          tickers: ['spy'],
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
 });
 
 test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions', () => {
