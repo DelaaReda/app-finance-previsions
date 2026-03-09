@@ -251,6 +251,138 @@ def test_judge_route_keeps_decision_journal_contract_fields(monkeypatch):
     assert journal["entries"][0]["decision_id"] == verdict["decision_id"]
 
 
+def test_judge_route_preserves_decision_feedback_loop_payload(monkeypatch):
+    now_iso = "2026-03-08T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "decision_id": "judge_demo_aapl",
+                        "horizon": "1w",
+                        "expected_return": 0.01,
+                        "risk_level": "medium",
+                        "confidence": 0.61,
+                        "summary": ["Synthetic verdict"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 0,
+                    "avg_confidence": 0.61,
+                    "generated_at": now_iso,
+                },
+                "filters_applied": {
+                    "min_confidence": 0.3,
+                    "tickers": ["AAPL"],
+                    "sort_by": "confidence",
+                    "sort_order": "desc",
+                    "limit": 1,
+                },
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+                "decision_journal": {
+                    "schema_version": "decision_journal_v1",
+                    "generated_at": now_iso,
+                    "count": 1,
+                    "append_only": True,
+                    "link_field": "decision_id",
+                    "outcomes_update_mode": "separate_records",
+                    "feedback_horizons": ["1d", "1w", "1m"],
+                    "feedback_loop": {
+                        "schema_version": "decision_outcome_feedback_v1",
+                        "update_mode": "separate_records",
+                        "tracked_horizons": ["1d", "1w", "1m"],
+                        "pending_entries": 1,
+                        "pending_feedback_records": 3,
+                    },
+                    "store": {
+                        "status": "persisted",
+                        "storage_key": "decision_journal",
+                        "schema_version": "decision_journal_v1",
+                        "persisted_count": 1,
+                        "total_entries": 1,
+                        "path": "runtime/data/decision_journal.json",
+                    },
+                    "entries": [
+                        {
+                            "decision_id": "judge_demo_aapl",
+                            "date": "2026-03-08",
+                            "captured_at": now_iso,
+                            "ticker": "AAPL",
+                            "action": "buy",
+                            "confidence": 0.61,
+                            "horizon": "1w",
+                            "why": ["Synthetic verdict"],
+                            "risk": {"level": "medium", "caveat": ""},
+                            "prediction": {
+                                "expected_return": 0.01,
+                                "score": 0.71,
+                            },
+                            "outcome_feedback": {
+                                "schema_version": "decision_outcome_feedback_v1",
+                                "status": "pending",
+                                "update_mode": "separate_records",
+                                "latest_feedback_at": None,
+                                "next_checkpoint": {
+                                    "horizon": "1d",
+                                    "status": "pending",
+                                    "due_at": "2026-03-09T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                                "checkpoints": [
+                                    {
+                                        "horizon": "1d",
+                                        "status": "pending",
+                                        "due_at": "2026-03-09T00:00:00Z",
+                                        "record_mode": "separate_record",
+                                    }
+                                ],
+                            },
+                            "sources": ["judge_route", "tests"],
+                            "profile": "balanced",
+                        }
+                    ],
+                },
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge?limit=1&ticker=AAPL")
+    assert resp.status_code == 200
+    payload = resp.json()
+    journal = payload["data"]["decision_journal"]
+    entry = journal["entries"][0]
+
+    assert journal["feedback_loop"]["pending_feedback_records"] == 3
+    assert journal["store"]["storage_key"] == "decision_journal"
+    assert entry["prediction"] == {"expected_return": 0.01, "score": 0.71}
+    assert entry["outcome_feedback"]["status"] == "pending"
+    assert entry["outcome_feedback"]["next_checkpoint"]["horizon"] == "1d"
+
+
 def test_judge_quality_route_delegates_to_service(monkeypatch):
     async def fake_quality(**kwargs):
         return {

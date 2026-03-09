@@ -181,6 +181,58 @@ class DecisionJournalRisk(BaseModel):
     caveat: Optional[str] = None
 
 
+class DecisionJournalPrediction(BaseModel):
+    """Prediction payload persisted alongside one journal entry."""
+
+    expected_return: Optional[float] = None
+    score: Optional[float] = None
+
+
+class DecisionJournalOutcomeCheckpoint(BaseModel):
+    """One horizon checkpoint in the append-only outcome feedback loop."""
+
+    horizon: str
+    status: str
+    due_at: Optional[datetime] = None
+    record_mode: Optional[str] = None
+    outcome: Optional[str] = None
+    actual_return: Optional[float] = None
+    notes: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+
+
+class DecisionJournalOutcomeFeedback(BaseModel):
+    """Projected feedback state computed from separate outcome records."""
+
+    schema_version: str
+    status: str
+    update_mode: str
+    latest_feedback_at: Optional[datetime] = None
+    next_checkpoint: Optional[DecisionJournalOutcomeCheckpoint] = None
+    checkpoints: List[DecisionJournalOutcomeCheckpoint] = Field(default_factory=list)
+
+
+class DecisionJournalFeedbackLoop(BaseModel):
+    """Journal-level outcome loop metadata."""
+
+    schema_version: str
+    update_mode: str
+    tracked_horizons: List[str] = Field(default_factory=list)
+    pending_entries: Optional[int] = None
+    pending_feedback_records: int = 0
+
+
+class DecisionJournalStore(BaseModel):
+    """Persistence metadata exposed by the journal projection."""
+
+    status: str
+    storage_key: str
+    schema_version: Optional[str] = None
+    persisted_count: Optional[int] = None
+    total_entries: Optional[int] = None
+    path: Optional[str] = None
+
+
 class DecisionJournalEntry(BaseModel):
     """Immutable journal snapshot linked to one judge verdict."""
 
@@ -193,6 +245,8 @@ class DecisionJournalEntry(BaseModel):
     horizon: str
     why: List[str] = Field(default_factory=list)
     risk: DecisionJournalRisk = Field(default_factory=DecisionJournalRisk)
+    prediction: Optional[DecisionJournalPrediction] = None
+    outcome_feedback: Optional[DecisionJournalOutcomeFeedback] = None
     sources: List[str] = Field(default_factory=list)
     profile: Optional[str] = None
 
@@ -207,7 +261,9 @@ class DecisionJournal(BaseModel):
     link_field: str
     outcomes_update_mode: str
     feedback_horizons: List[str] = Field(default_factory=list)
+    feedback_loop: Optional[DecisionJournalFeedbackLoop] = None
     entries: List[DecisionJournalEntry] = Field(default_factory=list)
+    store: Optional[DecisionJournalStore] = None
 
 
 # ---------- Verdict principal ----------
