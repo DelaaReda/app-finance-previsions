@@ -74,6 +74,37 @@ test('GET /api/brief/daily summary is market-relevant', async () => {
   console.log('✓ Daily brief contains market-relevant content');
 });
 
+test('GET /api/copilot/start includes brief of the day and starter actions', async () => {
+  const response = await fetchJson(`${API_BASE}/api/copilot/start`);
+  assert.strictEqual(response.ok, true, 'copilot/start response must have ok=true');
+  assert.ok(response.data, 'copilot/start must return data');
+
+  const data = response.data;
+  assert.ok(
+    data.brief_of_day && typeof data.brief_of_day.summary === 'string' && data.brief_of_day.summary.length > 0,
+    'copilot_start must include a non-empty brief_of_day summary',
+  );
+  assert.ok(Array.isArray(data.open), 'copilot_start must include open actions array');
+  assert.ok(Array.isArray(data.ask), 'copilot_start must include ask actions array');
+  assert.ok(data.open.some((action) => ['market', 'copilot'].includes(action.target)), 'open actions must include usable targets');
+  assert.ok(data.ask.length > 0, 'ask actions must be non-empty');
+
+  const askAction = data.ask.find((action) => action.target === '/copilot/ask');
+  if (askAction?.prefill?.question) {
+    assert.ok(
+      typeof askAction.prefill.question === 'string' && askAction.prefill.question.length > 0,
+      'ask action with /copilot/ask target must include a prefilled question',
+    );
+  } else {
+    assert.ok(
+      data.ask.every((action) => action.prefill && typeof action.prefill.question === 'string' && action.prefill.question.length > 0),
+      'ask actions must include a non-empty prefilled question',
+    );
+  }
+
+  console.log('✓ Copilot start includes brief and starter actions');
+});
+
 test('GET /api/brief/daily freshness is reasonable', async () => {
   const response = await fetchJson(`${API_BASE}/api/brief/daily`);
   const data = response.data;
