@@ -199,6 +199,149 @@ async function getPortfolioSummary() {
   };
 }
 
+async function getPortfolios() {
+  const payload = getResponseData(await fetchWithCache('/portfolios', 'portfolios'));
+  return extractArray(payload, ['portfolios', 'items', 'data']);
+}
+
+async function getPortfolioRiskProfile(portfolioId, options = {}) {
+  const safeOptions = options && typeof options === 'object' ? options : {};
+  let resolvedPortfolioId = String(portfolioId || safeOptions.portfolioId || '').trim();
+  if (!resolvedPortfolioId) {
+    const portfolios = await getPortfolios();
+    resolvedPortfolioId = portfolios[0] && portfolios[0].id ? String(portfolios[0].id).trim() : '';
+  }
+  if (!resolvedPortfolioId) {
+    return null;
+  }
+
+  const benchmark = String(safeOptions.benchmark || 'SPY').trim().toUpperCase() || 'SPY';
+  const startDate = String(safeOptions.startDate || safeOptions.start_date || '').trim();
+  const endDate = String(safeOptions.endDate || safeOptions.end_date || '').trim();
+  const params = new URLSearchParams({ benchmark });
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+
+  const endpoint = `/portfolios/${encodeURIComponent(resolvedPortfolioId)}/risk-profile?${params.toString()}`;
+  const cacheKey = `portfolio-risk-profile-${resolvedPortfolioId}-${benchmark}-${startDate || 'auto'}-${endDate || 'auto'}`;
+  const payload = await fetchWithCache(endpoint, cacheKey);
+  if (!payload) return null;
+  const data = getResponseData(payload);
+  if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+    return null;
+  }
+
+  return {
+    ok: payload.ok ?? true,
+    status: payload.status || data.status || 'ok',
+    data,
+    freshness: payload.freshness || data.freshness || data.generated_at || new Date().toISOString(),
+    source: data.source || payload.source || ['portfolio-risk-profile'],
+    error: payload.error || data.error || null,
+    portfolioId: resolvedPortfolioId
+  };
+}
+
+function titleCaseLabel(value, fallback = 'Unknown') {
+  const normalized = String(value || '').trim().replace(/[_-]+/g, ' ');
+  if (!normalized) return fallback;
+  return normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildPortfolioStateSummary(state) {
+  const safeState = state && typeof state === 'object' ? state : {};
+  const parts = [];
+  const horizon = String(safeState.horizon || '').trim();
+  const conviction = String(safeState.conviction || '').trim();
+  const riskTolerance = String(safeState.risk_tolerance || safeState.riskTolerance || '').trim();
+
+  if (horizon) {
+    parts.push(`${horizon.toUpperCase()} horizon`);
+  }
+  if (conviction) {
+    parts.push(`${titleCaseLabel(conviction)} conviction`);
+  }
+  if (riskTolerance) {
+    parts.push(`${titleCaseLabel(riskTolerance)} risk`);
+  }
+
+  return parts.join(' | ');
+}
+
+function mapPortfolioHealthScore(riskLevel, status) {
+  const normalizedRisk = String(riskLevel || '').trim().toLowerCase();
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  let score = 68;
+  if (normalizedRisk === 'low') {
+    score = 84;
+  } else if (normalizedRisk === 'high') {
+    score = 52;
+  }
+  if (normalizedStatus === 'degraded') {
+    score -= 8;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function transformPortfolioHealth(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+
+  const data = getResponseData(payload);
+  const portfolio = extractObject(data, ['portfolio']);
+  const risk = extractObject(data, ['risk']);
+  const stats = extractObject(data, ['stats']);
+  const state = extractObject(portfolio, ['state']);
+  const warnings = extractArray(data, ['warnings']);
+  const why = extractArray(data, ['why']);
+  const riskLevel = String(risk.level || data.risk_level || 'medium').trim().toLowerCase() || 'medium';
+  const largestWeight = normalizeNumber(stats.largest_position_weight, 0);
+  const largestWeightPct = Math.max(0, Math.min(100, Math.round(largestWeight * 100)));
+  const largestTicker = String(stats.largest_position_ticker || '').trim().toUpperCase();
+  const stateSummary = buildPortfolioStateSummary(state);
+  const status = String(payload.status || data.status || 'ok').trim().toLowerCase() || 'ok';
+  const suggestion = String(
+    warnings[0]
+      || why[0]
+      || (stateSummary ? `Saved state synced: ${stateSummary}.` : 'Portfolio risk profile synced.'),
+  ).trim();
+
+  let allocationLabel = 'Largest saved weight unavailable';
+  if (largestTicker && largestWeightPct > 0) {
+    allocationLabel = `Largest saved weight: ${largestTicker} ${largestWeightPct}%`;
+  } else if (stats.weights_source === 'equal_weight_fallback') {
+    allocationLabel = 'Equal-weight fallback in use';
+  }
+
+  return {
+    portfolioId: String(portfolio.id || payload.portfolioId || '').trim() || null,
+    portfolioName: String(portfolio.name || '').trim() || 'Portfolio',
+    overall: mapPortfolioHealthScore(riskLevel, status),
+    suggestion,
+    riskLabel: titleCaseLabel(riskLevel, 'Medium'),
+    riskTone: riskLevel === 'low' ? 'positive' : riskLevel === 'high' ? 'warning' : 'neutral',
+    stateSummary: stateSummary || 'Saved portfolio state unavailable',
+    allocationLabel,
+    allocationProgress: largestWeightPct,
+    benchmark: String(data.benchmark || 'SPY').trim().toUpperCase() || 'SPY',
+    updatedAt: payload.freshness || data.freshness || data.generated_at || new Date().toISOString(),
+    status,
+    riskProfile: String(data.risk_profile || 'balanced').trim().toLowerCase() || 'balanced',
+    confidence: Math.max(0, Math.min(100, Math.round(normalizeNumber(data.confidence, 0.45) * 100))),
+    warnings,
+    why,
+    source: Array.isArray(data.source) ? data.source : (Array.isArray(payload.source) ? payload.source : ['portfolio-risk-profile'])
+  };
+}
+
+async function getPortfolioHealth(portfolioId, options = {}) {
+  const payload = await getPortfolioRiskProfile(portfolioId, options);
+  return payload ? transformPortfolioHealth(payload) : null;
+}
+
 async function getMarketDriversSnapshot() {
   const payload = await fetchWithCache('/dashboard/market-drivers', 'market-drivers');
   if (!payload) return null;
@@ -831,6 +974,19 @@ async function populateWindowGlobals() {
       window.livePortfolioSummaryFreshness = portfolioSummary.freshness;
     }
 
+    window.livePortfolioRiskProfile = null;
+    window.livePortfolioRiskProfileFreshness = null;
+    window.livePortfolioHealth = null;
+    const portfolioRiskProfile = await getPortfolioRiskProfile();
+    if (portfolioRiskProfile && portfolioRiskProfile.data) {
+      window.livePortfolioRiskProfile = portfolioRiskProfile.data;
+      window.livePortfolioRiskProfileFreshness = portfolioRiskProfile.freshness;
+      window.livePortfolioHealth = transformPortfolioHealth(portfolioRiskProfile);
+      if (portfolioRiskProfile.status === 'degraded') {
+        contractWarnings.push('portfolio-risk-profile-degraded');
+      }
+    }
+
     const ingestionHealth = await getIngestionHealth();
     if (ingestionHealth) {
       window.ingestionHealth = ingestionHealth;
@@ -892,7 +1048,10 @@ async function populateWindowGlobals() {
           llmJudgeData: window.llmJudgeData || null,
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
+          portfolioRiskProfile: window.livePortfolioRiskProfile || null,
+          portfolioHealth: window.livePortfolioHealth || null,
           stockSummaryFreshness: window.livePortfolioSummaryFreshness || null,
+          portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
           kpiFreshness: window.liveKpisFreshness || null
         },
         generatedAt: new Date().toISOString(),
@@ -929,6 +1088,14 @@ function startAutoRefresh(intervalMs) {
     delete cache.data.dashboard_allocation;
     delete cache.data.movers;
     delete cache.data.copilot_context;
+    delete cache.data.portfolios;
+    delete cache.timestamps.portfolios;
+    Object.keys(cache.data)
+      .filter((key) => key.startsWith('portfolio-risk-profile-'))
+      .forEach((key) => {
+        delete cache.data[key];
+        delete cache.timestamps[key];
+      });
     await populateWindowGlobals();
   }, intervalMs);
 }
@@ -945,6 +1112,9 @@ window.FinanceAPI = {
   getHealth,
   getJudgeAnalysis,
   getCopilotContext,
+  getPortfolios,
+  getPortfolioRiskProfile,
+  getPortfolioHealth,
   askCopilot,
   searchUniverse,
   startAutoRefresh,
@@ -968,6 +1138,8 @@ window.getLiveDashboardData = () => ({
     marketDrivers: window.marketDrivers || [],
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
+    portfolioRiskProfile: window.livePortfolioRiskProfile || null,
+    portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null
   },
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),

@@ -1412,7 +1412,13 @@ const FALLBACK_APP_DATA = {
   },
   portfolioHealth: {
     overall: 83,
-    suggestion: 'Diversifier Tech → Santé'
+    suggestion: 'Diversifier Tech → Santé',
+    riskLabel: 'Medium',
+    riskTone: 'neutral',
+    stateSummary: '1Y horizon | High conviction | Moderate risk',
+    allocationLabel: 'Largest saved weight: NVDA 45%',
+    allocationProgress: 75,
+    updatedAt: null
   },
   sectorPerformance: [
     { sector: 'Technology', change: 8.5, holdings: true, weight: 45 },
@@ -2460,6 +2466,8 @@ function renderLiveDashboardWidgets() {
   updateLiveProvenance(liveDataMeta);
   renderForecastScenarioWidget();
   renderTopMoversWidget();
+  drawHealthGaugeCompact();
+  drawHealthGauge();
   drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));
   drawWinRateCircle();
   scheduleCriticalWidgetHealthRender();
@@ -4170,30 +4178,80 @@ function toggleComparison(button) {
   }
 }
 
+function mapPortfolioHealthTone(value) {
+  const tone = toString(value, '').toLowerCase();
+  if (tone === 'positive' || tone === 'warning' || tone === 'neutral') {
+    return tone;
+  }
+  return 'neutral';
+}
+
 // ============ HEALTH GAUGE COMPACT ============
 function drawHealthGaugeCompact() {
+  const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
+  const overall = Math.max(0, Math.min(100, Math.round(toFiniteNumber(health.overall, FALLBACK_APP_DATA.portfolioHealth.overall))));
   const canvas = document.getElementById('healthGaugeCompact');
-  if (!canvas) return;
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    const centerX = 75;
+    const centerY = 75;
+    const radius = 55;
 
-  const ctx = canvas.getContext('2d');
-  const centerX = 75;
-  const centerY = 75;
-  const radius = 55;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Background arc
-  ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
-  ctx.lineWidth = 10;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 2.25 * Math.PI);
-  ctx.stroke();
+    // Background arc
+    ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 2.25 * Math.PI);
+    ctx.stroke();
 
-  // Value arc
-  const percent = appData.portfolioHealth.overall / 100;
-  ctx.strokeStyle = '#1F40AF';
-  ctx.lineWidth = 10;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
-  ctx.stroke();
+    // Value arc
+    const percent = overall / 100;
+    ctx.strokeStyle = '#1F40AF';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.75 * Math.PI + (1.5 * Math.PI * percent));
+    ctx.stroke();
+  }
+
+  const valueEl = document.getElementById('healthValueCompact');
+  if (valueEl) {
+    valueEl.textContent = `${overall}%`;
+  }
+
+  const riskBadge = document.getElementById('portfolioHealthRiskBadge');
+  if (riskBadge) {
+    const tone = mapPortfolioHealthTone(health.riskTone || FALLBACK_APP_DATA.portfolioHealth.riskTone);
+    riskBadge.className = `context-badge ${tone}`;
+    riskBadge.textContent = toString(health.riskLabel, FALLBACK_APP_DATA.portfolioHealth.riskLabel);
+  }
+
+  const stateSummary = document.getElementById('portfolioHealthStateSummary');
+  if (stateSummary) {
+    stateSummary.textContent = toString(health.stateSummary, FALLBACK_APP_DATA.portfolioHealth.stateSummary);
+  }
+
+  const suggestionEl = document.getElementById('portfolioHealthSuggestion');
+  if (suggestionEl) {
+    suggestionEl.textContent = `Suggestion: ${toString(health.suggestion, FALLBACK_APP_DATA.portfolioHealth.suggestion)}`;
+  }
+
+  const allocationLabel = document.getElementById('portfolioHealthAllocationLabel');
+  if (allocationLabel) {
+    allocationLabel.textContent = toString(health.allocationLabel, FALLBACK_APP_DATA.portfolioHealth.allocationLabel);
+  }
+
+  const allocationFill = document.getElementById('portfolioHealthAllocationFill');
+  if (allocationFill) {
+    const allocationProgress = Math.max(0, Math.min(100, Math.round(toFiniteNumber(health.allocationProgress, FALLBACK_APP_DATA.portfolioHealth.allocationProgress))));
+    allocationFill.style.width = `${allocationProgress}%`;
+  }
+
+  const timestampEl = document.getElementById('portfolioHealthTimestamp');
+  if (timestampEl) {
+    timestampEl.textContent = `Updated ${formatRelativeTime(toString(health.updatedAt, liveDataMeta.generatedAt))}`;
+  }
 }
 
 // ============ CHART DRAWING FUNCTIONS ============
@@ -4577,6 +4635,8 @@ function toggleCollapse(button) {
 }
 
 function drawHealthGauge() {
+  const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
+  const overall = Math.max(0, Math.min(100, Math.round(toFiniteNumber(health.overall, FALLBACK_APP_DATA.portfolioHealth.overall))));
   const canvas = document.getElementById('healthGauge');
   if (!canvas) return;
 
@@ -4584,6 +4644,8 @@ function drawHealthGauge() {
   const centerX = 100;
   const centerY = 100;
   const radius = 70;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Background arc
   ctx.strokeStyle = 'rgba(31, 64, 175, 0.2)';
@@ -4593,7 +4655,7 @@ function drawHealthGauge() {
   ctx.stroke();
 
   // Value arc with animation
-  const percent = appData.portfolioHealth.overall / 100;
+  const percent = overall / 100;
   ctx.strokeStyle = '#1F40AF';
   ctx.lineWidth = 12;
   ctx.beginPath();
@@ -4602,7 +4664,12 @@ function drawHealthGauge() {
 
   const valueEl = document.getElementById('healthValue');
   if (valueEl) {
-    valueEl.textContent = appData.portfolioHealth.overall + '%';
+    valueEl.textContent = `${overall}%`;
+  }
+
+  const footerEl = document.querySelector('.portfolio-health-full .widget-footer .widget-timestamp');
+  if (footerEl) {
+    footerEl.textContent = `Updated ${formatRelativeTime(toString(health.updatedAt, liveDataMeta.generatedAt))}`;
   }
 }
 

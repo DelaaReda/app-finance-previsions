@@ -17,19 +17,20 @@
         <div class="health-context">
             <div class="health-metric">
                 <span class="health-label">Risk Concentration:</span>
-                <span class="context-badge warning">Medium</span>
+                <span class="context-badge neutral" id="portfolioHealthRiskBadge">Medium</span>
             </div>
-            <div class="health-suggestion-compact">Suggestion: Diversify Tech → Healthcare</div>
+            <div class="context-label" id="portfolioHealthStateSummary">1Y horizon | High conviction | Moderate risk</div>
+            <div class="health-suggestion-compact" id="portfolioHealthSuggestion">Suggestion: Diversify Tech → Healthcare</div>
             <div class="health-progress">
-                <div class="progress-label">Current vs. Target Allocation</div>
+                <div class="progress-label" id="portfolioHealthAllocationLabel">Current vs. Target Allocation</div>
                 <div class="progress-bar-mini">
-                    <div class="progress-fill-mini" style="width: 75%"></div>
+                    <div class="progress-fill-mini" id="portfolioHealthAllocationFill" style="width: 75%"></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="widget-footer">
-        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <span class="widget-timestamp" id="portfolioHealthTimestamp">Updated 5 minutes ago</span>
         <button class="widget-action-btn"
             onclick="switchTab(document.querySelector('[data-tab=performance]'), 'performance')">View Full
             Analysis</button>
