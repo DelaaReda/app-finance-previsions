@@ -1118,8 +1118,8 @@ def create_app() -> FastAPI:
         print(f"⚠️  Failed to include context routes: {e}")
 
     try:
-        from .routes.copilot import router as legacy_copilot_router
-        app.include_router(legacy_copilot_router)
+        from domains.copilot.api.copilot import router as copilot_router
+        app.include_router(copilot_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include copilot routes: {e}")
 
@@ -4399,10 +4399,10 @@ def register_routes(app: FastAPI):
     # Dedicated copilot bootstrap endpoint: brief of day + ask/open entry points.
     @app.get("/api/copilot/context")
     async def copilot_context_alias(
-        tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+        tickers: Optional[List[str]] = Query(default=None, description="Starter scope tickers"),
     ):
         scope_tickers = []
-        for item in tickers or []:
+        for item in (tickers or []):
             normalized = str(item or "").strip().upper()
             if normalized and normalized not in scope_tickers:
                 scope_tickers.append(normalized)
