@@ -174,6 +174,75 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_strategy_playbooks_preserves_upstream_contract_fields(monkeypatch):
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "horizon": "1w",
+                        "expected_return": 0.02,
+                        "risk_level": "medium",
+                        "confidence": 0.9,
+                        "summary": ["Synthetic verdict"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "go_no_go": {
+                            "decision": "go",
+                            "reasons": ["freshness_gate"],
+                        },
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {"total_verdicts": 1},
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+                "cache": {
+                    "hit": True,
+                    "age_seconds": 12.34,
+                    "ttl_seconds": 120,
+                },
+                "warnings": ["partial_data_provider_timeout"],
+            },
+            "freshness": now_iso,
+            "status": "degraded",
+            "error": "provider timeout",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=AAPL")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["status"] == "degraded"
+    assert payload["error"] == "provider timeout"
+    assert payload["data"]["cache"]["hit"] is True
+    assert payload["data"]["warnings"] == ["partial_data_provider_timeout"]
+    assert "judge_strategy_playbook_route" in payload["data"]["source"]
+    assert "judge_route" in payload["data"]["source"]
+    assert payload["data"]["playbooks"]
+
+
 def test_judge_route_preserves_canonical_status_metadata(monkeypatch):
     now_iso = "2026-03-08T00:00:00Z"
 

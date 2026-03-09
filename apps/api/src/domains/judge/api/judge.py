@@ -3740,15 +3740,15 @@ async def get_judge_strategy_playbooks(
             _build_strategy_playbook(verdict, profile=profile),
         )
 
-    if not playbooks:
-        playbooks = []
-
+    response_base = deepcopy(data)
+    response_base.pop("verdicts", None)
     now_iso = datetime.utcnow().isoformat() + "Z"
     response_data = {
+        **response_base,
         "playbooks": playbooks,
         "count": len(playbooks),
-        "generated_at": now_iso,
-        "source": ["judge_route", "strategy_playbooks"],
+        "generated_at": response_base.get("generated_at") or now_iso,
+        "source": response_base.get("source") or ["judge_strategy_playbook_route"],
         "filters_applied": {
             "min_confidence": min_confidence,
             "tickers": ticker,
@@ -3775,6 +3775,12 @@ async def get_judge_strategy_playbooks(
             "status": verdict_payload.get("status"),
             "error": verdict_payload.get("error"),
         }
+        if isinstance(data.get("debug_pipeline"), list):
+            response_data["debug_pipeline"] = data.get("debug_pipeline")
+        if isinstance(data.get("verdicts_raw"), list):
+            response_data["verdicts_raw"] = data.get("verdicts_raw")
+    response_data.setdefault("source", ["judge_strategy_playbook_route"])
+    _append_source_tag(response_data, "judge_strategy_playbook_route")
 
     return service_response_with_metadata(
         response_data,
