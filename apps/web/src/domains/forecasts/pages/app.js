@@ -1415,9 +1415,12 @@ const FALLBACK_APP_DATA = {
     suggestion: 'Diversifier Tech → Santé',
     riskLabel: 'Medium',
     riskTone: 'neutral',
+    riskProfile: 'balanced',
+    confidence: 82,
     stateSummary: '1Y horizon | High conviction | Moderate risk',
     allocationLabel: 'Largest saved weight: NVDA 45%',
     allocationProgress: 75,
+    benchmark: 'SPY',
     updatedAt: null
   },
   sectorPerformance: [
@@ -4196,6 +4199,21 @@ function mapPortfolioHealthTone(value) {
   return 'neutral';
 }
 
+function formatPortfolioHealthProfile(value) {
+  const normalized = toString(value, FALLBACK_APP_DATA.portfolioHealth.riskProfile)
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  if (!normalized) {
+    return 'Balanced';
+  }
+
+  return normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 // ============ HEALTH GAUGE COMPACT ============
 function drawHealthGaugeCompact() {
   const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
@@ -4235,6 +4253,23 @@ function drawHealthGaugeCompact() {
     const tone = mapPortfolioHealthTone(health.riskTone || FALLBACK_APP_DATA.portfolioHealth.riskTone);
     riskBadge.className = `context-badge ${tone}`;
     riskBadge.textContent = toString(health.riskLabel, FALLBACK_APP_DATA.portfolioHealth.riskLabel);
+  }
+
+  const profileBadge = document.getElementById('portfolioHealthProfileBadge');
+  if (profileBadge) {
+    const tone = mapPortfolioHealthTone(health.riskTone || FALLBACK_APP_DATA.portfolioHealth.riskTone);
+    profileBadge.className = `context-badge ${tone}`;
+    profileBadge.textContent = formatPortfolioHealthProfile(health.riskProfile);
+  }
+
+  const profileConfidence = document.getElementById('portfolioHealthProfileConfidence');
+  if (profileConfidence) {
+    const confidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(
+      health.confidence,
+      FALLBACK_APP_DATA.portfolioHealth.confidence,
+    ))));
+    const benchmark = toString(health.benchmark, FALLBACK_APP_DATA.portfolioHealth.benchmark);
+    profileConfidence.textContent = `${confidence}% confidence vs ${benchmark}`;
   }
 
   const stateSummary = document.getElementById('portfolioHealthStateSummary');

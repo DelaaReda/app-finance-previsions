@@ -325,10 +325,12 @@ test('getPortfolioHealth maps portfolio state and risk profile into widget data'
   assert.equal(health.overall, 68);
   assert.equal(health.riskLabel, 'Medium');
   assert.equal(health.riskTone, 'neutral');
+  assert.equal(health.riskProfile, 'balanced');
   assert.equal(health.stateSummary, '1Y horizon | High conviction | Moderate risk');
   assert.equal(health.allocationLabel, 'Largest saved weight: MSFT 70%');
   assert.equal(health.allocationProgress, 70);
   assert.equal(health.suggestion, 'Saved weights were normalized to sum to 1.0.');
+  assert.equal(health.benchmark, 'SPY');
   assert.equal(health.confidence, 65);
   assert.equal(health.status, 'ok');
 });
