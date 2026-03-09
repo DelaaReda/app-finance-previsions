@@ -173,6 +173,58 @@ run_safe_capture() {
   printf '%s\n%s\n' "$rc" "$out"
 }
 
+bridge_dispatch_capture() {
+  local contract_file payload
+  contract_file="$(mktemp)"
+  cat >"$contract_file" <<'EOF'
+STATUS: IN_PROGRESS
+DELTA: PLANNER_AUTONOMY_BRIDGE_DISPATCH
+EVIDENCE: task_update=blocked; root_cause=planner_ready_bridge_missing; fix_applied=planner_autonomy_bridge_dispatch; verify=before=queue_ready_without_planner_slot
+RISKS: none
+NEXT: owner=planner; action=dispatch planner-owned capability work now
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: PLANNER_AUTONOMY_BRIDGE_DISPATCH
+EOF
+  payload="$(run_safe_capture "bridge_dispatch" "python3 platform/automation/planner_orchestrator_bridge.py --root \"$ROOT\" --source planner_autonomy_tick --backend auto --contract-file \"$contract_file\"")"
+  rm -f "$contract_file"
+  printf '%s' "$payload"
+}
+
+parse_bridge_dispatch_field() {
+  local payload="$1"
+  local field="$2"
+  python3 -c '
+import json
+import sys
+
+field = sys.argv[1]
+raw = sys.stdin.read().strip()
+if not raw:
+    print("")
+    raise SystemExit(0)
+try:
+    data = json.loads(raw)
+except Exception:
+    print("")
+    raise SystemExit(0)
+
+value = data
+for token in field.split("."):
+    if not isinstance(value, dict):
+        value = ""
+        break
+    value = value.get(token, "")
+
+if isinstance(value, bool):
+    print("true" if value else "false")
+elif value is None:
+    print("")
+else:
+    print(str(value))
+' "$field" <<<"$payload"
+}
+
 planner_counts() {
   python3 - "$BOARD_FILE" <<'PY'
 import json
@@ -367,6 +419,17 @@ if [[ "$AUTO_CREATE_ON_EMPTY" != "1" ]]; then
 fi
 
 if [[ "$runway_task_count" =~ ^[0-9]+$ ]] && (( runway_task_count > 0 )) || [[ "$runway_stream_count" =~ ^[0-9]+$ ]] && (( runway_stream_count > 0 )); then
+  bridge_payload="$(bridge_dispatch_capture)"
+  bridge_rc="$(printf '%s' "$bridge_payload" | head -n1)"
+  bridge_out="$(printf '%s' "$bridge_payload" | tail -n +2)"
+  bridge_dispatched="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.dispatched")"
+  bridge_task_id="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.task_id")"
+  bridge_reason="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.reason")"
+  if [[ "$bridge_rc" == "0" && "$bridge_dispatched" == "true" ]]; then
+    write_state 1 "repair_bridge_dispatch" "resolved" "planner_bridge_dispatch_active" "${bridge_task_id:-none}" "none" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};runway_tasks=${runway_task_count};runway_streams=${runway_stream_count};bridge_reason=${bridge_reason:-none}"
+    echo "PLANNER_AUTONOMY status=ok action=repair_bridge_dispatch outcome=resolved task_id=${bridge_task_id:-none} bridge_reason=${bridge_reason:-none} planner_ready=0 runway_tasks=${runway_task_count} runway_streams=${runway_stream_count} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+    exit 0
+  fi
   write_state 1 "repair_only" "deferred" "planner_runway_not_empty" "none" "planner_ready_bridge_missing" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};runway_tasks=${runway_task_count};runway_streams=${runway_stream_count}"
   echo "PLANNER_AUTONOMY status=warn action=repair_only outcome=deferred issue=planner_ready_bridge_missing planner_ready=0 runway_tasks=${runway_task_count} runway_streams=${runway_stream_count} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
   exit 0
@@ -391,6 +454,17 @@ if [[ "$create_out" == AUTOBATCH_SKIP* ]]; then
     create_issue="autobatch_duplicate_nonfatal"
     create_state_reason="autobatch_duplicate_nonfatal"
   elif [[ "$create_reason" == "runway_not_empty" ]]; then
+    bridge_payload="$(bridge_dispatch_capture)"
+    bridge_rc="$(printf '%s' "$bridge_payload" | head -n1)"
+    bridge_out="$(printf '%s' "$bridge_payload" | tail -n +2)"
+    bridge_dispatched="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.dispatched")"
+    bridge_task_id="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.task_id")"
+    bridge_reason="$(parse_bridge_dispatch_field "$bridge_out" "dispatch.reason")"
+    if [[ "$bridge_rc" == "0" && "$bridge_dispatched" == "true" ]]; then
+      write_state 1 "autobatch_bridge_dispatch" "resolved" "planner_bridge_dispatch_active" "${bridge_task_id:-none}" "none" "create_rc=${create_rc};create_reason=${create_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN};bridge_reason=${bridge_reason:-none}"
+      echo "PLANNER_AUTONOMY status=ok action=autobatch_bridge_dispatch outcome=resolved task_id=${bridge_task_id:-none} bridge_reason=${bridge_reason:-none} create_reason=${create_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+    fi
     create_issue="planner_ready_bridge_missing"
     create_state_reason="planner_runway_not_empty"
   fi

@@ -155,7 +155,13 @@ def _setup_workspace() -> Path:
         """#!/usr/bin/env python3
 from __future__ import annotations
 import json
-print(json.dumps({"ok": True, "actions": []}))
+from pathlib import Path
+
+ROOT = Path.cwd()
+if (ROOT / "force_bridge_dispatch").exists():
+    print(json.dumps({"ok": True, "actions": ["dev_dispatch:BATCH-10-DEV-01"], "dispatch": {"dispatched": True, "task_id": "BATCH-10-DEV-01", "reason": "ready_dev_dispatched"}}))
+else:
+    print(json.dumps({"ok": True, "actions": [], "dispatch": {"dispatched": False, "reason": "not_needed"}}))
 """,
         encoding="utf-8",
     )
@@ -275,6 +281,33 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state.get("last_action"), "repair_only")
         self.assertEqual(state.get("issue_code"), "planner_ready_bridge_missing")
+
+    def test_repair_only_dispatches_bridge_when_runway_not_empty(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+
+        board_path = ws / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+        board_path.write_text(
+            json.dumps(
+                {
+                    "tasks": [{"id": "BATCH-10-DEV-01", "role": "dev", "state": "READY_DEV"}],
+                    "streams": [{"id": "BATCH-10", "state": "READY_DEV"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (ws / "force_bridge_dispatch").write_text("1\n", encoding="utf-8")
+
+        cp = _run_script(ws)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=repair_bridge_dispatch", cp.stdout)
+        self.assertIn("outcome=resolved", cp.stdout)
+        self.assertIn("task_id=BATCH-10-DEV-01", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_action"), "repair_bridge_dispatch")
+        self.assertEqual(state.get("last_outcome"), "resolved")
+        self.assertEqual(state.get("target_task"), "BATCH-10-DEV-01")
 
     def test_duplicate_autobatch_skip_is_nonfatal(self) -> None:
         ws = _setup_workspace()
