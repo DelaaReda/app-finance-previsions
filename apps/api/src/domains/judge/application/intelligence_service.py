@@ -24,6 +24,40 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 CACHE_FILE_INTEL = DATA_DIR / "intelligence_snapshot.json"
 CACHE_FILE_CONTEXT = DATA_DIR / "market_context_snapshot.json"
 CACHE_MAX_AGE_MINUTES = 30
+COPILOT_STARTER_ASK = (
+    {
+        "id": "portfolio_today",
+        "label": "Portfolio today?",
+        "prompt": "What should I do with my portfolio today?",
+    },
+    {
+        "id": "market_theme",
+        "label": "Best theme now?",
+        "prompt": "Which market theme deserves a deep dive right now?",
+    },
+    {
+        "id": "nvda_memo",
+        "label": "NVDA 1-week memo",
+        "prompt": "Give me a 1-week investment memo on NVDA.",
+    },
+)
+COPILOT_STARTER_OPEN = (
+    {
+        "id": "market",
+        "label": "Open market view",
+        "target": "market",
+    },
+    {
+        "id": "opportunities",
+        "label": "Open opportunities",
+        "target": "opportunities",
+    },
+    {
+        "id": "copilot",
+        "label": "Open copilot",
+        "target": "copilot",
+    },
+)
 
 def _read_cache(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
@@ -98,6 +132,10 @@ def _normalize_market_context(payload: Dict[str, Any]) -> Dict[str, Any]:
     metadata["source_health"] = source_health
     normalized["metadata"] = metadata
     normalized.setdefault("timestamp", timestamp.isoformat())
+    normalized["copilot_start"] = _build_copilot_start_payload(
+        _load_brief(),
+        context_timestamp=metadata.get("generated_at"),
+    )
     return normalized
 
 def _now() -> datetime:
@@ -152,6 +190,89 @@ def _safe_rows(payload: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if isinstance(data, dict) and "rows" in data and isinstance(data["rows"], list):
             return data["rows"]
     return []
+
+
+def _safe_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _safe_source_list(value: Any, *, fallback: List[str]) -> List[str]:
+    if isinstance(value, list):
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        if cleaned:
+            return cleaned
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return list(fallback)
+
+
+def _trim_summary(text: Any, *, fallback: str, max_words: int = 200) -> str:
+    summary = str(text or "").strip()
+    if not summary:
+        return fallback
+    words = summary.split()
+    if len(words) > max_words:
+        return " ".join(words[:max_words])
+    return summary
+
+
+def _normalize_sector_rotation(value: Any) -> Dict[str, List[Any]]:
+    if isinstance(value, dict):
+        return {
+            "top": _safe_list(value.get("top")),
+            "bottom": _safe_list(value.get("bottom")),
+        }
+    return {"top": [], "bottom": []}
+
+
+def _coerce_daily_brief(value: Any) -> Dict[str, Any]:
+    brief = value if isinstance(value, dict) else {}
+    nested_daily = brief.get("daily")
+    if isinstance(nested_daily, dict) and not brief.get("summary"):
+        return nested_daily
+    return brief
+
+
+def _build_brief_of_day(brief: Dict[str, Any], *, context_timestamp: Optional[str] = None) -> Dict[str, Any]:
+    resolved = _coerce_daily_brief(brief)
+    has_brief = bool(resolved)
+    generated_at = (
+        resolved.get("generated_at")
+        or resolved.get("last_update")
+        or context_timestamp
+        or _now().isoformat()
+    )
+    fallback_summary = "No daily brief available yet."
+    return {
+        "title": str(resolved.get("title") or "Brief of the day"),
+        "summary": _trim_summary(
+            resolved.get("summary"),
+            fallback=fallback_summary,
+        ),
+        "market_sentiment": str(
+            resolved.get("market_sentiment")
+            or resolved.get("sentiment")
+            or "UNKNOWN"
+        ),
+        "top_signals": _safe_list(resolved.get("top_signals"))[:3],
+        "top_risks": _safe_list(resolved.get("top_risks"))[:3],
+        "macro_signals": _safe_list(resolved.get("macro_signals") or resolved.get("macro")),
+        "sector_rotation": _normalize_sector_rotation(resolved.get("sector_rotation")),
+        "generated_at": generated_at,
+        "freshness": str(resolved.get("freshness") or generated_at),
+        "source": _safe_source_list(
+            resolved.get("source"),
+            fallback=["brief_daily_snapshot"] if has_brief else ["brief_daily_fallback"],
+        ),
+    }
+
+
+def _build_copilot_start_payload(brief: Dict[str, Any], *, context_timestamp: Optional[str] = None) -> Dict[str, Any]:
+    return {
+        "brief_of_day": _build_brief_of_day(brief, context_timestamp=context_timestamp),
+        "ask": [dict(item) for item in COPILOT_STARTER_ASK],
+        "open": [dict(item) for item in COPILOT_STARTER_OPEN],
+    }
 
 # ---------- loading sources ----------
 
@@ -592,6 +713,8 @@ def get_market_context_snapshot(use_cache: bool = True, persist: bool = True) ->
     elif regime_metrics.regime in ("BEAR_MARKET", "RISK_OFF"):
         risk_level = "high"
 
+    generated_at = _now().isoformat()
+
     layout: Dict[str, Any] = {
         "primary_widgets": ["intelligence", "forecasts", "news"],
     }
@@ -616,8 +739,12 @@ def get_market_context_snapshot(use_cache: bool = True, persist: bool = True) ->
         "key_drivers": drivers,
         "characteristics": characteristics,
         "recommended_layout": layout,
+        "copilot_start": _build_copilot_start_payload(
+            brief,
+            context_timestamp=generated_at,
+        ),
         "metadata": {
-            "generated_at": _now().isoformat(),
+            "generated_at": generated_at,
             "sources": [
                 "intelligence",
                 "forecasts",
@@ -629,7 +756,7 @@ def get_market_context_snapshot(use_cache: bool = True, persist: bool = True) ->
                 "brief": bool(brief),
             },
         },
-        "timestamp": _now().isoformat(),
+        "timestamp": generated_at,
     }
 
     context = _normalize_market_context(context)

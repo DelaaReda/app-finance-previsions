@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,68 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
             self.assertIsInstance(metadata, dict)
             self.assertTrue(metadata.get("generated_at"))
             self.assertEqual(metadata.get("sources"), ["intelligence", "forecasts", "news"])
+            copilot_start = payload.get("copilot_start") or {}
+            self.assertIsInstance(copilot_start.get("brief_of_day"), dict)
+            self.assertEqual(copilot_start.get("ask", [])[0]["id"], "portfolio_today")
+
+    def test_market_context_cache_backfills_copilot_start_for_fresh_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            cache_file = tmp / "market_context_snapshot.json"
+            cache_file.write_text(
+                json.dumps(
+                    {
+                        "regime": "NORMAL",
+                        "confidence": 0.41,
+                        "key_drivers": [],
+                        "characteristics": {"volatility": "medium"},
+                        "recommended_layout": {"primary_widgets": ["intelligence"]},
+                        "timestamp": MODULE._now().isoformat(),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            brief = {
+                "title": "Brief quotidien",
+                "summary": "mot " * 250,
+                "market_sentiment": "MIXED",
+                "top_signals": [{"ticker": "AAPL"}],
+                "top_risks": [{"ticker": "TSLA"}],
+                "macro_signals": [{"topic": "Rates"}],
+                "sector_rotation": {"top": ["Technology"], "bottom": ["Energy"]},
+                "generated_at": "2026-03-01T10:00:00Z",
+                "source": ["brief_daily_snapshot"],
+            }
+
+            with mock.patch.object(MODULE, "CACHE_FILE_CONTEXT", cache_file), mock.patch.object(
+                MODULE, "_load_forecasts", return_value=[]
+            ), mock.patch.object(MODULE, "_load_news", return_value=[]), mock.patch.object(
+                MODULE, "_load_brief", return_value=brief
+            ):
+                payload = MODULE.get_market_context_snapshot(use_cache=True, persist=True)
+
+            copilot_start = payload.get("copilot_start") or {}
+            brief_of_day = copilot_start.get("brief_of_day") or {}
+            self.assertEqual(brief_of_day.get("market_sentiment"), "MIXED")
+            self.assertEqual(brief_of_day.get("source"), ["brief_daily_snapshot"])
+            self.assertEqual([item.get("target") for item in copilot_start.get("open", [])], ["market", "opportunities", "copilot"])
+            self.assertLessEqual(len(str(brief_of_day.get("summary", "")).split()), 200)
+
+            persisted = json.loads(cache_file.read_text(encoding="utf-8"))
+            self.assertIn("copilot_start", persisted)
+
+    def test_market_context_start_payload_remains_never_empty_without_brief(self) -> None:
+        with mock.patch.object(MODULE, "_load_forecasts", return_value=[]), mock.patch.object(
+            MODULE, "_load_news", return_value=[]
+        ), mock.patch.object(MODULE, "_load_brief", return_value={}):
+            payload = MODULE.get_market_context_snapshot(use_cache=False, persist=False)
+
+        copilot_start = payload.get("copilot_start") or {}
+        brief_of_day = copilot_start.get("brief_of_day") or {}
+        self.assertEqual(brief_of_day.get("summary"), "No daily brief available yet.")
+        self.assertEqual(brief_of_day.get("source"), ["brief_daily_fallback"])
+        self.assertEqual(copilot_start.get("ask", [])[0]["prompt"], "What should I do with my portfolio today?")
+        self.assertEqual(copilot_start.get("open", [])[0]["target"], "market")
 
 
 if __name__ == "__main__":
