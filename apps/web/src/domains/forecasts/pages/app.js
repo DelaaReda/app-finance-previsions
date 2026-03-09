@@ -2673,13 +2673,8 @@ function applyLiveDashboardData(payload = {}) {
     }
     : rawCopilotStart;
   const copilotStart = sanitizeCopilotStart(copilotStartPayload);
-  const copilotStartState = rawCopilotStart
-    ? buildCopilotStartState({
-      data: {
-        copilot_start: copilotStart,
-        scope_tickers: copilotScopeTickers
-      }
-    })
+  const copilotStartState = isObject(copilotStartPayload)
+    ? buildCopilotStartState(copilotStart)
     : null;
   window.copilotStart = copilotStart;
   
@@ -3350,11 +3345,25 @@ function buildCopilotStartState(raw) {
   const fallback = buildDefaultCopilotStartState();
   const payload = isObject(raw) ? raw : {};
   const data = isObject(payload.data) ? payload.data : payload;
-  const copilotStart = isObject(data.copilot_start) ? data.copilot_start : {};
+  const copilotStart = isObject(data.copilot_start)
+    ? data.copilot_start
+    : (
+      isObject(data.brief_of_day)
+      || isObject(data.briefOfDay)
+      || Array.isArray(data.ask)
+      || Array.isArray(data.open)
+        ? data
+        : {}
+    );
+  const scopeTickers = Array.isArray(copilotStart.scope_tickers) && copilotStart.scope_tickers.length
+    ? copilotStart.scope_tickers
+    : data.scope_tickers;
   const briefSource = isObject(copilotStart.brief_of_day)
     ? copilotStart.brief_of_day
-    : (isObject(data.daily_brief) ? data.daily_brief : {});
-  const ask = normalizeCopilotStartAsk(copilotStart.ask, data.scope_tickers);
+    : (isObject(copilotStart.briefOfDay)
+      ? copilotStart.briefOfDay
+      : (isObject(data.daily_brief) ? data.daily_brief : {}));
+  const ask = normalizeCopilotStartAsk(copilotStart.ask, scopeTickers);
   const open = normalizeCopilotStartOpen(copilotStart.open);
 
   return {
