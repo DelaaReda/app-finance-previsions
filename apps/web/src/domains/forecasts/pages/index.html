@@ -1127,6 +1127,10 @@
 
         console.log(`✅ Loaded ${successCount}/${components.length} components successfully!`);
 
+        if (typeof window.renderHeroCopilotBrief === 'function') {
+          window.renderHeroCopilotBrief(window.copilotStart || null);
+        }
+
         if (successCount === components.length) {
           console.log('🎉 All modals loaded! Modular architecture working perfectly!');
           if (typeof window.syncForecastProfileUI === 'function') {
