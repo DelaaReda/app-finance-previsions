@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -263,3 +264,58 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert "metadata_contract_v1" in data["source"]
     assert any("fallback" in warning.lower() for warning in data["warnings"])
     assert any("unknown tickers" in warning.lower() for warning in data["warnings"])
+
+
+def test_portfolio_service_reload_normalizes_legacy_tickers_and_metadata(tmp_path):
+    storage_path = tmp_path / "user_portfolios.json"
+    storage_path.write_text(
+        json.dumps(
+            {
+                "portfolio-123": {
+                    "id": "portfolio-123",
+                    "name": "Legacy",
+                    "description": "",
+                    "tickers": ["msft", " aapl ", "MSFT"],
+                    "created_at": "2026-03-09T00:00:00+00:00",
+                    "updated_at": "2026-03-09T00:00:00+00:00",
+                    "metadata": {
+                        "weights": {"msft": 70, "aapl": 30},
+                        "horizon": "1Y",
+                        "conviction": "HIGH",
+                        "risk_tolerance": "balanced",
+                        "unknown_flag": True,
+                    },
+                }
+            }
+        )
+    )
+
+    service = portfolio_app.PortfolioService(storage_path=str(storage_path))
+
+    portfolio = service.get_portfolio("portfolio-123")
+    assert portfolio is not None
+    assert portfolio.tickers == ["AAPL", "MSFT"]
+    assert portfolio.metadata.model_dump(exclude_none=True) == {
+        "weights": {"MSFT": 70.0, "AAPL": 30.0},
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+
+    risk_profile = service.get_risk_profile("portfolio-123")
+    assert risk_profile is not None
+    assert risk_profile.portfolio["tickers"] == ["AAPL", "MSFT"]
+    assert risk_profile.portfolio["state"] == {
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+
+    persisted = json.loads(storage_path.read_text())
+    assert persisted["portfolio-123"]["tickers"] == ["AAPL", "MSFT"]
+    assert persisted["portfolio-123"]["metadata"] == {
+        "weights": {"MSFT": 70.0, "AAPL": 30.0},
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }

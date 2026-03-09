@@ -39,6 +39,18 @@ def _equal_weights(tickers: List[str]) -> Dict[str, float]:
     return {ticker: weight for ticker in sorted(tickers)}
 
 
+def _normalize_tickers(tickers: Optional[List[Any]]) -> List[str]:
+    if not tickers:
+        return []
+
+    normalized = {
+        str(ticker or "").strip().upper()
+        for ticker in tickers
+        if str(ticker or "").strip()
+    }
+    return sorted(normalized)
+
+
 _ALLOWED_PORTFOLIO_HORIZONS = {
     "1w",
     "1m",
@@ -408,20 +420,32 @@ class PortfolioService:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                     self.portfolios = {}
+                    normalized_storage = dict(data)
+                    changed = False
                     for portfolio_id, portfolio_data in data.items():
                         try:
                             payload = dict(portfolio_data)
+                            payload["tickers"] = _normalize_tickers(payload.get("tickers"))
                             payload["metadata"] = _coerce_portfolio_metadata(
                                 payload.get("metadata"),
                                 strict=False,
                             )
-                            self.portfolios[portfolio_id] = Portfolio(**payload)
+                            portfolio = Portfolio(**payload)
+                            self.portfolios[portfolio_id] = portfolio
+
+                            normalized_payload = portfolio.model_dump(exclude_none=True)
+                            if normalized_payload != portfolio_data:
+                                normalized_storage[portfolio_id] = normalized_payload
+                                changed = True
                         except Exception as exc:
                             logger.warning(
                                 "Skipping invalid stored portfolio %s: %s",
                                 portfolio_id,
                                 exc,
                             )
+                    if changed:
+                        with open(self.storage_path, 'w') as f:
+                            json.dump(normalized_storage, f, indent=2)
                 logger.info(f"Loaded {len(self.portfolios)} portfolios from storage")
             except Exception as e:
                 logger.error(f"Error loading portfolios: {str(e)}")
@@ -463,10 +487,7 @@ class PortfolioService:
             Created portfolio
         """
         # Normalize tickers (uppercase, deduplicate)
-        if tickers:
-            tickers = list(set(t.upper() for t in tickers))
-        else:
-            tickers = []
+        tickers = _normalize_tickers(tickers)
         
         portfolio = Portfolio(
             name=name,
@@ -528,7 +549,7 @@ class PortfolioService:
             portfolio.description = description
         if tickers is not None:
             # Normalize tickers
-            portfolio.tickers = list(set(t.upper() for t in tickers))
+            portfolio.tickers = _normalize_tickers(tickers)
         if metadata is not None:
             portfolio.metadata = _coerce_portfolio_metadata(metadata, strict=True)
         
@@ -576,7 +597,7 @@ class PortfolioService:
             return None
         
         # Normalize and deduplicate
-        new_tickers = set(t.upper() for t in tickers)
+        new_tickers = set(_normalize_tickers(tickers))
         current_tickers = set(portfolio.tickers)
         
         # Add new tickers
@@ -609,7 +630,7 @@ class PortfolioService:
             return None
         
         # Normalize
-        tickers_to_remove = set(t.upper() for t in tickers)
+        tickers_to_remove = set(_normalize_tickers(tickers))
         current_tickers = set(portfolio.tickers)
         
         # Remove tickers
