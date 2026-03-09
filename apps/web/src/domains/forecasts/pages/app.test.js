@@ -1401,6 +1401,14 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['brief', 'opportunities']);
 });
 
+test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+  assert.match(source, /window\.runCopilotStartOpen = runCopilotStartOpen;/);
+  assert.match(html, /onclick="runCopilotStartOpen\('brief'\)"/);
+});
+
 test('index.html exposes the hero brief slots required by the copilot starter', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
