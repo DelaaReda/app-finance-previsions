@@ -1857,7 +1857,10 @@ function sanitizeCopilotStart(payload) {
       return {
         id: toString(item && item.id, base.id),
         label: toString(item && item.label, base.label),
-        prompt: toString(item && item.prompt, base.prompt),
+        prompt: toString(
+          item && item.prompt,
+          toString(item && item.question, toString(prefill.question, base.prompt))
+        ),
         tickers: normalizeCopilotStarterTickers(
           Array.isArray(item && item.tickers)
             ? item.tickers
@@ -3323,11 +3326,18 @@ function normalizeCopilotStartOpen(value) {
 }
 
 function normalizeCopilotStartOpenTarget(target, id = '') {
-  const normalizedTarget = toString(target, '').trim().toLowerCase();
+  const normalizedTarget = toString(target, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
   const normalizedId = toString(id, '').trim().toLowerCase();
   if (
     normalizedId === 'brief_of_day'
     || normalizedTarget === '/brief/daily'
+    || normalizedTarget === '/brief'
+    || normalizedTarget === 'brief'
+    || normalizedTarget === 'brief/daily'
     || normalizedTarget === 'brief_of_day'
     || normalizedTarget === 'brief'
     || normalizedTarget === 'live_brief'
@@ -3340,9 +3350,8 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedId === 'open_copilot'
     || normalizedId === 'copilot'
     || normalizedTarget === '/copilot'
-    || normalizedTarget === '/copilot/'
     || normalizedTarget === '/copilot/ask'
-    || normalizedTarget === 'copilot/'
+    || normalizedTarget === 'copilot/ask'
     || normalizedTarget === 'copilot'
   ) {
     return 'copilot';
@@ -3757,8 +3766,12 @@ async function hydrateCopilotOverlayStart() {
         : (isObject(payloadData.copilotStart)
           ? payloadData.copilotStart
           : raw);
-      window.copilotStart = sanitizeCopilotStart(rawCopilotStart);
-      const state = buildCopilotStartState(raw);
+      const sanitizedStart = sanitizeCopilotStart(rawCopilotStart);
+      window.copilotStart = sanitizedStart;
+      const state = buildCopilotStartState({
+        ...payloadData,
+        copilot_start: sanitizedStart,
+      });
       updateCopilotContextLabel(state);
       renderCopilotStartMessage(state);
       renderCopilotStartActions(state);

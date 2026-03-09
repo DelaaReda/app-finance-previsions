@@ -231,11 +231,17 @@ function loadSanitizeCopilotStart() {
         });
     },
     normalizeCopilotStartOpenTarget(target, id = '') {
-      const normalizedTarget = String(target || '').trim().toLowerCase();
+      const normalizedTarget = String(target || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[?#].*$/, '')
+        .replace(/\/+$/, '');
       const normalizedId = String(id || '').trim().toLowerCase();
       if (
         normalizedId === 'brief_of_day'
         || normalizedTarget === '/brief/daily'
+        || normalizedTarget === '/brief'
+        || normalizedTarget === 'brief/daily'
         || normalizedTarget === 'brief_of_day'
         || normalizedTarget === 'brief'
         || normalizedTarget === 'live_brief'
@@ -249,6 +255,7 @@ function loadSanitizeCopilotStart() {
         || normalizedId === 'copilot'
         || normalizedTarget === '/copilot'
         || normalizedTarget === '/copilot/ask'
+        || normalizedTarget === 'copilot/ask'
         || normalizedTarget === 'copilot'
       ) {
         return 'copilot';
@@ -1135,6 +1142,107 @@ test('hydrateCopilotOverlayStart falls back to getCopilotContext and persists th
   assert.match(calls.warnings[0], /falling back to getCopilotContext/);
 });
 
+test('hydrateCopilotOverlayStart builds overlay state from sanitized starter payload', async () => {
+  const starterPayload = {
+    brief_of_day: {
+      summary: 'Momentum remains constructive on mega-cap tech.',
+      freshness: '2026-03-09T08:10:00Z',
+    },
+    ask: [
+      {
+        id: 'ask_today',
+        target: '/copilot/ask',
+      },
+    ],
+    open: [
+      {
+        id: 'open_copilot',
+        target: '/copilot',
+      },
+    ],
+    scope_tickers: ['NVDA', 'MSFT'],
+  };
+  const sanitizedStart = {
+    brief_of_day: {
+      title: 'Brief of the day',
+      summary: 'Momentum remains constructive on mega-cap tech.',
+      market_sentiment: 'BULLISH',
+      top_signals: ['AI strength', 'Breadth expanding'],
+      top_risks: ['Rate uncertainty'],
+      macro_signals: ['Inflation stable'],
+      sector_rotation: {
+        top: ['Mega-cap AI'],
+        bottom: ['Energy'],
+      },
+      generated_at: '2026-03-09T08:05:00Z',
+      freshness: '2026-03-09T08:10:00Z',
+      source: ['copilot_start_test'],
+    },
+    ask: [
+      {
+        id: 'ask_today',
+        label: 'Ask about today',
+        prompt: 'What should I do with my portfolio today?',
+        tickers: ['NVDA', 'MSFT'],
+      },
+    ],
+    open: [
+      {
+        id: 'open_copilot',
+        label: 'Open copilot',
+        target: 'copilot',
+      },
+    ],
+    scope_tickers: ['NVDA', 'MSFT'],
+  };
+  const builtState = {
+    brief: {
+      title: 'Brief of the day',
+      summary: 'Momentum remains constructive on mega-cap tech.',
+      marketSentiment: 'BULLISH',
+      topSignals: ['AI strength', 'Breadth expanding'],
+      topRisks: ['Rate uncertainty'],
+      freshness: '2026-03-09T08:10:00Z',
+    },
+    ask: [
+      {
+        id: 'ask_today',
+        label: 'Ask about today',
+        prompt: 'What should I do with my portfolio today?',
+        tickers: ['NVDA', 'MSFT'],
+      },
+    ],
+    open: [
+      {
+        id: 'open_copilot',
+        label: 'Open copilot',
+        target: 'copilot',
+      },
+    ],
+  };
+
+  const { sandbox, contextValue, calls } = loadHydrateCopilotOverlayStart({
+    getCopilotStart: async () => starterPayload,
+    sanitizedStart,
+    builtState,
+  });
+
+  const result = await sandbox.hydrateCopilotOverlayStart();
+
+  assert.equal(contextValue.textContent, 'Loading brief of the day...');
+  assert.equal(calls.starter, 1);
+  assert.equal(calls.context, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.sanitized[0])), starterPayload);
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), sanitizedStart);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.labels[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.messages[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.actions[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.hero[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.builtFrom.copilot_start)), sanitizedStart);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.builtFrom.scope_tickers || [])), ['NVDA', 'MSFT']);
+});
+
 test('renderHeroCopilotBrief swaps the static hero copy for live brief and actions', () => {
   const { sandbox, summaryEl, timestampEl, actionsRoot, promptCalls, openCalls } = loadRenderHeroCopilotBrief();
 
@@ -1317,6 +1425,24 @@ test('sanitizeCopilotStart maps trailing-slash copilot open action to copilot', 
   assert.equal(result.open[0].target, 'copilot');
 });
 
+test('sanitizeCopilotStart maps trimmed brief open target variants to brief', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    open: [
+      {
+        id: 'daily_brief',
+        label: 'Open live brief',
+        target: '/brief/daily/?source=hero',
+      },
+    ],
+  });
+
+  assert.equal(result.open.length, 1);
+  assert.equal(result.open[0].id, 'daily_brief');
+  assert.equal(result.open[0].target, 'brief');
+});
+
 test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () => {
   const sandbox = loadSanitizeCopilotStart();
 
@@ -1335,6 +1461,45 @@ test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () 
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
+});
+
+test('sanitizeCopilotStart uses ask.question then prefill.question when prompt is missing', () => {
+  const sandbox = loadSanitizeCopilotStart();
+  sandbox.FALLBACK_COPILOT_START.ask = [
+    { id: 'portfolio_today', label: 'Portfolio today?', prompt: 'What should I do with my portfolio today?' },
+    { id: 'market_theme', label: 'Best theme now?', prompt: 'Which market theme deserves a deep dive right now?' },
+    { id: 'nvda_memo', label: 'NVDA 1-week memo', prompt: 'Give me a 1-week investment memo on NVDA.' },
+  ];
+
+  const result = sandbox.sanitizeCopilotStart({
+    ask: [
+      {
+        id: 'ask_question',
+        label: 'Open AI view',
+        question: 'What should I watch in tech?',
+      },
+      {
+        id: 'ask_prefill',
+        label: 'Open NVDA memo',
+        prefill: {
+          question: 'Give me NVDA-specific risks.',
+        },
+      },
+      {
+        id: 'ask_prompt',
+        label: 'Explicit prompt',
+        prefill: {
+          question: 'Should ignore this.',
+        },
+        prompt: 'What is the macro backdrop?',
+      },
+    ],
+  });
+
+  assert.equal(result.ask[0].id, 'ask_question');
+  assert.equal(result.ask[0].prompt, 'What should I watch in tech?');
+  assert.equal(result.ask[1].prompt, 'Give me NVDA-specific risks.');
+  assert.equal(result.ask[2].prompt, 'What is the macro backdrop?');
 });
 
 test('sanitizeCopilotStart preserves scoped tickers for downstream hero prompts', () => {
