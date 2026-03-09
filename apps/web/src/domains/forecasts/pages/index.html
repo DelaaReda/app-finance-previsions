@@ -907,14 +907,14 @@
           <span class="context-value" id="aiContextValue">Portfolio Overview</span>
         </div>
         <div class="ai-messages-panel" id="aiMessagesPanel">
-          <div class="ai-message">
+          <div class="ai-message" data-copilot-welcome="true">
             <div class="ai-avatar">🤖</div>
             <div class="ai-message-content">
               <p>Ask about today, a ticker, a theme, or your portfolio. I will turn the latest backend context into a short investment memo.</p>
             </div>
           </div>
         </div>
-        <div class="ai-quick-actions">
+        <div class="ai-quick-actions" id="aiQuickActions">
           <button class="quick-action-btn" onclick="quickAsk('explain')">Explain what matters now</button>
           <button class="quick-action-btn" onclick="quickAsk('whatdo')">Portfolio today?</button>
           <button class="quick-action-btn" onclick="quickAsk('simulate')">NVDA 1-week memo</button>

@@ -114,6 +114,16 @@ async function getDashboardPerformance() {
   return payload || {};
 }
 
+async function getCopilotContext() {
+  const payload = getResponseData(await fetchWithCache('/copilot/context', 'copilot_context'));
+  const normalized = payload && typeof payload === 'object' ? { ...payload } : {};
+  const copilotStart = transformCopilotStart(normalized.copilot_start || normalized.copilotStart, normalized);
+  if (Object.keys(copilotStart.brief_of_day).length || copilotStart.ask.length || copilotStart.open.length) {
+    normalized.copilot_start = copilotStart;
+  }
+  return normalized;
+}
+
 async function getDailyBrief() {
   const payload = getResponseData(await fetchWithCache('/brief/daily', 'brief_daily'));
   return payload || {};
@@ -445,6 +455,56 @@ function transformBrief(payload) {
   };
 }
 
+function transformCopilotStart(payload, fallbackPayload = null) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const fallbackSource = fallbackPayload && typeof fallbackPayload === 'object' ? fallbackPayload : {};
+  const entryPoints = extractArray(fallbackSource, ['entry_points', 'entryPoints']);
+  const briefOfDay = extractObject(source, ['brief_of_day', 'briefOfDay']);
+  const fallbackBrief = extractObject(fallbackSource, ['daily_brief', 'dailyBrief']);
+  const askItems = extractArray(source, ['ask']);
+  const openItems = extractArray(source, ['open']);
+  const normalizedAsk = askItems.length
+    ? askItems
+    : entryPoints.filter((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const kind = String(item.kind || '').toLowerCase();
+      const target = String(item.target || '').toLowerCase();
+      return kind === 'ask' || target === '/copilot/ask';
+    });
+  const normalizedOpen = openItems.length
+    ? openItems
+    : entryPoints
+      .filter((item) => {
+        if (!item || typeof item !== 'object') return false;
+        const kind = String(item.kind || '').toLowerCase();
+        const target = String(item.target || '').toLowerCase();
+        return kind === 'open' || (target && target !== '/copilot/ask');
+      })
+      .map((item) => ({
+        ...item,
+        target: normalizeCopilotOpenTarget(item.target, item.id)
+      }))
+      .filter((item) => item.target);
+
+  return {
+    brief_of_day: Object.keys(briefOfDay).length ? briefOfDay : fallbackBrief,
+    ask: normalizedAsk,
+    open: normalizedOpen
+  };
+}
+
+function normalizeCopilotOpenTarget(target, id) {
+  const normalizedTarget = String(target || '').trim().toLowerCase();
+  const normalizedId = String(id || '').trim().toLowerCase();
+  if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
+    return 'market';
+  }
+  if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot/ask' || normalizedTarget === '/copilot') {
+    return 'copilot';
+  }
+  return normalizedTarget.replace(/^\/+/, '');
+}
+
 function buildTradeIdeasFromForecasts(rows) {
   if (!Array.isArray(rows) || !rows.length) return [];
   return rows.slice(0, 6).map((row) => {
@@ -697,12 +757,25 @@ async function populateWindowGlobals() {
       }
     }
 
-    // Daily brief -> Story panel
-    const brief = await getDailyBrief();
-    if (brief && typeof brief === 'object') {
+    // Copilot bootstrap context -> story panel + starter prompts
+    let brief = null;
+    window.copilotStart = null;
+    const copilotContext = await getCopilotContext();
+    const copilotStart = transformCopilotStart(copilotContext.copilot_start || copilotContext.copilotStart);
+    if (copilotStart.brief_of_day || copilotStart.ask.length || copilotStart.open.length) {
+      window.copilotStart = copilotStart;
+    }
+
+    if (window.copilotStart && window.copilotStart.brief_of_day) {
+      brief = window.copilotStart.brief_of_day;
       window.storyData = transformBrief(brief);
     } else {
-      contractWarnings.push('story-unavailable');
+      brief = await getDailyBrief();
+      if (brief && typeof brief === 'object') {
+        window.storyData = transformBrief(brief);
+      } else {
+        contractWarnings.push('story-unavailable');
+      }
     }
 
     // Sector performance -> Sector widget
@@ -803,6 +876,7 @@ async function populateWindowGlobals() {
           stocks: window.liveStocks || {},
           topStocks: window.topStocks || [],
           opportunities: window.liveOpportunities || [],
+          copilotStart: window.copilotStart || null,
           sectorPerformance: window.sectorPerformance || [],
           story: window.storyData || null,
           marketCalendar: window.marketCalendar || null,
@@ -842,9 +916,11 @@ function startAutoRefresh(intervalMs) {
     delete cache.data.stocks;
     delete cache.data.dashboard_performance;
     delete cache.data.alerts;
+    delete cache.data.copilot_context;
     delete cache.data.brief_daily;
     delete cache.data.dashboard_allocation;
     delete cache.data.movers;
+    delete cache.data.copilot_context;
     await populateWindowGlobals();
   }, intervalMs);
 }
@@ -860,6 +936,7 @@ window.FinanceAPI = {
   getStatus,
   getHealth,
   getJudgeAnalysis,
+  getCopilotContext,
   askCopilot,
   searchUniverse,
   startAutoRefresh,
@@ -876,6 +953,7 @@ window.getLiveDashboardData = () => ({
     stocks: window.liveStocks || {},
     topStocks: window.topStocks || [],
     opportunities: window.liveOpportunities || [],
+    copilotStart: window.copilotStart || null,
     sectorPerformance: window.sectorPerformance || [],
     story: window.storyData || null,
     marketCalendar: window.marketCalendar || null,

@@ -1316,6 +1316,58 @@ const FALLBACK_LLM_JUDGE_DATA = {
   ]
 };
 
+const FALLBACK_COPILOT_START = {
+  brief_of_day: {
+    title: 'Brief of the day',
+    summary: 'No daily brief available yet.',
+    market_sentiment: 'UNKNOWN',
+    top_signals: [],
+    top_risks: [],
+    macro_signals: [],
+    sector_rotation: {
+      top: [],
+      bottom: []
+    },
+    generated_at: '',
+    freshness: '',
+    source: ['brief_daily_fallback']
+  },
+  ask: [
+    {
+      id: 'portfolio_today',
+      label: 'Portfolio today?',
+      prompt: 'What should I do with my portfolio today?'
+    },
+    {
+      id: 'market_theme',
+      label: 'Best theme now?',
+      prompt: 'Which market theme deserves a deep dive right now?'
+    },
+    {
+      id: 'nvda_memo',
+      label: 'NVDA 1-week memo',
+      prompt: 'Give me a 1-week investment memo on NVDA.'
+    }
+  ],
+  open: [
+    {
+      id: 'market',
+      label: 'Open market view',
+      target: 'market'
+    },
+    {
+      id: 'opportunities',
+      label: 'Open opportunities',
+      target: 'opportunities'
+    },
+    {
+      id: 'copilot',
+      label: 'Open copilot',
+      target: 'copilot'
+    }
+  ]
+};
+
 const FALLBACK_MARKET_DRIVERS = [
   { factor: 'Technical', contribution: 40, color: '#1F40AF' },
   { factor: 'Sentiment', contribution: 35, color: '#8B5CF6' },
@@ -1347,6 +1399,7 @@ const FALLBACK_APP_DATA = {
     sentiment: 'bullish',
     timestamp: 'Updated 5 minutes ago'
   },
+  copilotStart: FALLBACK_COPILOT_START,
   correlations: {
     labels: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META'],
     data: [
@@ -1746,8 +1799,8 @@ function inferTopStocksFromMovers(rows, fallbackRows = []) {
   }));
 }
 
-function sanitizeTopStockRows(rows) {
-  const fallback = toArray(fallbackRows, []);
+function sanitizeTopStockRows(rows, fallbackRows = []) {
+  const fallback = toArray(fallbackRows, FALLBACK_APP_DATA.topStocks);
   const items = toArray(rows, fallback);
   return items.map((item) => {
     const forecast = toString(item.forecast, '');
@@ -1773,6 +1826,68 @@ function sanitizeNewsItems(items) {
     tickers: toArray(item.tickers, []),
     sentiment: toString(item.sentiment, '')
   }));
+}
+
+function sanitizeCopilotStart(payload) {
+  const source = isObject(payload) ? payload : {};
+  const fallback = FALLBACK_COPILOT_START;
+  const briefSource = isObject(source.brief_of_day)
+    ? source.brief_of_day
+    : (isObject(source.briefOfDay) ? source.briefOfDay : {});
+  const sectorRotation = isObject(briefSource.sector_rotation)
+    ? briefSource.sector_rotation
+    : (isObject(briefSource.sectorRotation) ? briefSource.sectorRotation : {});
+  const askItems = toArray(source.ask, fallback.ask)
+    .slice(0, fallback.ask.length)
+    .map((item, index) => {
+      const base = fallback.ask[index] || fallback.ask[0];
+      return {
+        id: toString(item && item.id, base.id),
+        label: toString(item && item.label, base.label),
+        prompt: toString(item && item.prompt, base.prompt)
+      };
+    });
+  const openItems = toArray(source.open, fallback.open)
+    .slice(0, fallback.open.length)
+    .map((item, index) => {
+      const base = fallback.open[index] || fallback.open[0];
+      return {
+        id: toString(item && item.id, base.id),
+        label: toString(item && item.label, base.label),
+        target: toString(item && item.target, base.target)
+      };
+    });
+
+  return {
+    brief_of_day: {
+      ...fallback.brief_of_day,
+      ...briefSource,
+      title: toString(briefSource.title, fallback.brief_of_day.title),
+      summary: toString(briefSource.summary, fallback.brief_of_day.summary),
+      market_sentiment: toString(
+        briefSource.market_sentiment || briefSource.sentiment,
+        fallback.brief_of_day.market_sentiment
+      ).toUpperCase(),
+      top_signals: toArray(briefSource.top_signals, fallback.brief_of_day.top_signals),
+      top_risks: toArray(briefSource.top_risks, fallback.brief_of_day.top_risks),
+      macro_signals: toArray(briefSource.macro_signals, fallback.brief_of_day.macro_signals),
+      sector_rotation: {
+        top: toArray(sectorRotation.top, fallback.brief_of_day.sector_rotation.top),
+        bottom: toArray(sectorRotation.bottom, fallback.brief_of_day.sector_rotation.bottom)
+      },
+      generated_at: toString(
+        briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
+        fallback.brief_of_day.generated_at
+      ),
+      freshness: toString(
+        briefSource.freshness || briefSource.generated_at || briefSource.generatedAt,
+        fallback.brief_of_day.freshness
+      ),
+      source: toArray(briefSource.source, fallback.brief_of_day.source)
+    },
+    ask: askItems.length ? askItems : fallback.ask,
+    open: openItems.length ? openItems : fallback.open
+  };
 }
 
 const ALERT_SEVERITY_ORDER = {
@@ -2505,6 +2620,7 @@ function applyLiveDashboardData(payload = {}) {
 
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
+  const copilotStart = sanitizeCopilotStart(data.copilotStart || data.copilot_start || window.copilotStart || null);
   
   // Map story data from API (window.storyData set by apiConnector.js)
   const storyData = data.story || window.storyData || null;
@@ -2522,6 +2638,7 @@ function applyLiveDashboardData(payload = {}) {
       ...kpiSource,
       ...summarySource
     },
+    copilotStart,
     topStocks: sanitizeTopStockRows(toArray(fallbackTopStocks, [])),
     ...(storyOverride ? { story: storyOverride } : {})
   });
@@ -2974,7 +3091,8 @@ function toggleAICopilot() {
   if (overlay.style.display === 'none' || !overlay.style.display) {
     overlay.style.display = 'block';
     setTimeout(() => overlay.classList.add('active'), 10);
-    document.getElementById('aiOverlayInput')?.focus();
+    hydrateCopilotOverlayStart();
+    focusCopilotInput();
   } else {
     overlay.classList.remove('active');
     setTimeout(() => overlay.style.display = 'none', 400);
@@ -3043,6 +3161,290 @@ function buildCopilotChatResponseHtml(payload) {
   `;
 }
 
+let copilotContextRequest = null;
+
+function normalizeCopilotStarterTickers(value) {
+  const seen = new Set();
+  return toArray(value, [])
+    .map((ticker) => toString(ticker, '').trim().toUpperCase())
+    .filter((ticker) => {
+      if (!ticker || seen.has(ticker)) return false;
+      seen.add(ticker);
+      return true;
+    });
+}
+
+function readCopilotInputTickers(input) {
+  const raw = toString(input?.dataset?.copilotTickers, '');
+  if (!raw) return [];
+  try {
+    return normalizeCopilotStarterTickers(JSON.parse(raw));
+  } catch (error) {
+    return [];
+  }
+}
+
+function buildDefaultCopilotStartState() {
+  return {
+    brief: {
+      title: 'Brief of the day',
+      summary: 'No daily brief available yet.',
+      marketSentiment: 'UNKNOWN',
+      topSignals: [],
+      topRisks: [],
+      freshness: new Date().toISOString()
+    },
+    ask: [
+      {
+        id: 'portfolio_today',
+        label: 'Portfolio today?',
+        prompt: 'What should I do with my portfolio today?',
+        tickers: []
+      },
+      {
+        id: 'market_theme',
+        label: 'Best theme now?',
+        prompt: 'Which market theme deserves a deep dive right now?',
+        tickers: []
+      },
+      {
+        id: 'nvda_memo',
+        label: 'NVDA 1-week memo',
+        prompt: 'Give me a 1-week investment memo on NVDA.',
+        tickers: ['NVDA']
+      }
+    ],
+    open: [
+      { id: 'market', label: 'Open market view', target: 'market' },
+      { id: 'opportunities', label: 'Open opportunities', target: 'opportunities' },
+      { id: 'copilot', label: 'Ask a custom question', target: 'copilot' }
+    ]
+  };
+}
+
+function normalizeCopilotStartAsk(value, fallbackTickers = []) {
+  const scopeTickers = normalizeCopilotStarterTickers(fallbackTickers);
+  return toArray(value, [])
+    .filter(isObject)
+    .map((item, index) => {
+      const prefill = isObject(item.prefill) ? item.prefill : {};
+      const prompt = toString(item.prompt || item.question || prefill.question, '');
+      const prefillTickers = Array.isArray(prefill.tickers) && prefill.tickers.length
+        ? prefill.tickers
+        : scopeTickers;
+      return {
+        id: toString(item.id, `copilot_ask_${index}`),
+        label: toString(item.label, prompt || 'Ask copilot'),
+        prompt,
+        tickers: normalizeCopilotStarterTickers(prefillTickers)
+      };
+    })
+    .filter((item) => item.prompt);
+}
+
+function normalizeCopilotStartOpen(value) {
+  return toArray(value, [])
+    .filter(isObject)
+    .map((item, index) => ({
+      id: toString(item.id, `copilot_open_${index}`),
+      label: toString(item.label, 'Open'),
+      target: toString(item.target, '').trim().toLowerCase()
+    }))
+    .filter((item) => item.target);
+}
+
+function normalizeCopilotStartList(value) {
+  return toArray(value, [])
+    .map((item) => toString(isObject(item) ? (item.label || item.title || item.name || item.sector) : item, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function buildCopilotStartState(raw) {
+  const fallback = buildDefaultCopilotStartState();
+  const payload = isObject(raw) ? raw : {};
+  const data = isObject(payload.data) ? payload.data : payload;
+  const copilotStart = isObject(data.copilot_start) ? data.copilot_start : {};
+  const briefSource = isObject(copilotStart.brief_of_day)
+    ? copilotStart.brief_of_day
+    : (isObject(data.daily_brief) ? data.daily_brief : {});
+  const ask = normalizeCopilotStartAsk(copilotStart.ask, data.scope_tickers);
+  const open = normalizeCopilotStartOpen(copilotStart.open);
+
+  return {
+    brief: {
+      title: toString(briefSource.title, fallback.brief.title),
+      summary: toString(briefSource.summary, fallback.brief.summary),
+      marketSentiment: toString(
+        briefSource.market_sentiment || briefSource.sentiment,
+        fallback.brief.marketSentiment
+      ).toUpperCase(),
+      topSignals: normalizeCopilotStartList(briefSource.top_signals || briefSource.signals),
+      topRisks: normalizeCopilotStartList(briefSource.top_risks || briefSource.risks),
+      freshness: toString(
+        briefSource.freshness || briefSource.generated_at,
+        fallback.brief.freshness
+      )
+    },
+    ask: ask.length ? ask : fallback.ask,
+    open: open.length ? open : fallback.open
+  };
+}
+
+function buildCopilotStartHtml(state) {
+  const brief = state && isObject(state.brief) ? state.brief : buildDefaultCopilotStartState().brief;
+  const title = escapeHtml(toString(brief.title, 'Brief of the day'));
+  const sentiment = escapeHtml(toString(brief.marketSentiment, 'UNKNOWN').replace(/_/g, ' '));
+  const summary = escapeHtml(toString(brief.summary, 'No daily brief available yet.')).replace(/\n/g, '<br/>');
+  const updated = escapeHtml(brief.freshness ? formatRelativeTime(brief.freshness) : 'just now');
+  const signals = brief.topSignals.length
+    ? `<p style="margin-top: 8px;"><strong>Signals:</strong> ${brief.topSignals.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
+  const risks = brief.topRisks.length
+    ? `<p style="margin-top: 8px;"><strong>Risks:</strong> ${brief.topRisks.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
+
+  return `
+    <p><strong>${title}</strong> • ${sentiment} • Updated ${updated}</p>
+    <p style="margin-top: 8px;">${summary}</p>
+    ${signals}
+    ${risks}
+  `;
+}
+
+function focusCopilotInput() {
+  document.getElementById('aiOverlayInput')?.focus();
+}
+
+function renderCopilotStartMessage(state) {
+  const panel = document.getElementById('aiMessagesPanel');
+  if (!panel) return;
+
+  panel.querySelector('[data-copilot-welcome="true"]')?.remove();
+  panel.querySelectorAll('[data-copilot-start="true"]').forEach((node) => node.remove());
+
+  const startMessage = appendCopilotChatMessage('aiMessagesPanel', buildCopilotStartHtml(state), 'ai', { html: true });
+  if (!startMessage) return;
+
+  startMessage.dataset.copilotStart = 'true';
+  panel.insertBefore(startMessage, panel.firstChild);
+  panel.scrollTop = 0;
+}
+
+function runCopilotStartPrompt(prompt, tickers = []) {
+  const input = document.getElementById('aiOverlayInput');
+  if (!input) return;
+
+  const normalizedPrompt = toString(prompt, '').trim();
+  if (!normalizedPrompt) return;
+
+  const normalizedTickers = normalizeCopilotStarterTickers(tickers);
+  if (normalizedTickers.length) {
+    input.dataset.copilotTickers = JSON.stringify(normalizedTickers);
+  } else {
+    delete input.dataset.copilotTickers;
+  }
+
+  input.value = normalizedPrompt;
+  focusCopilotInput();
+  sendOverlayMessage();
+}
+
+function runCopilotStartOpen(target) {
+  const normalizedTarget = toString(target, '').trim().toLowerCase();
+  if (!normalizedTarget || normalizedTarget === 'copilot') {
+    focusCopilotInput();
+    return;
+  }
+
+  const targetPanel = document.getElementById(`tab-${normalizedTarget}`);
+  if (!targetPanel) {
+    showToast(`Open ${normalizedTarget} is unavailable`, 'error');
+    return;
+  }
+
+  const overlay = document.getElementById('aiCopilotOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 400);
+  }
+
+  setTimeout(() => {
+    safeSwitchTab(document.querySelector(`.tab-btn[data-tab="${normalizedTarget}"]`), normalizedTarget);
+  }, 30);
+}
+
+function renderCopilotStartActions(state) {
+  const actionsRoot = document.getElementById('aiQuickActions');
+  if (!actionsRoot) return;
+
+  actionsRoot.innerHTML = '';
+  state.ask.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quick-action-btn';
+    button.textContent = toString(item.label, 'Ask copilot');
+    button.addEventListener('click', () => runCopilotStartPrompt(item.prompt, item.tickers));
+    actionsRoot.appendChild(button);
+  });
+
+  state.open.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quick-action-btn';
+    button.textContent = toString(item.label, 'Open');
+    button.addEventListener('click', () => runCopilotStartOpen(item.target));
+    actionsRoot.appendChild(button);
+  });
+}
+
+function updateCopilotContextLabel(state) {
+  const contextValue = document.getElementById('aiContextValue');
+  if (!contextValue) return;
+
+  const sentiment = toString(state?.brief?.marketSentiment, 'UNKNOWN').replace(/_/g, ' ');
+  contextValue.textContent = sentiment === 'UNKNOWN'
+    ? 'Brief of the day'
+    : `Brief of the day • ${sentiment}`;
+}
+
+async function hydrateCopilotOverlayStart() {
+  if (copilotContextRequest) return copilotContextRequest;
+
+  const contextValue = document.getElementById('aiContextValue');
+  if (contextValue) {
+    contextValue.textContent = 'Loading brief of the day...';
+  }
+
+  copilotContextRequest = Promise.resolve(
+    typeof window.FinanceAPI?.getCopilotContext === 'function'
+      ? window.FinanceAPI.getCopilotContext()
+      : null
+  )
+    .then((raw) => {
+      const state = buildCopilotStartState(raw);
+      updateCopilotContextLabel(state);
+      renderCopilotStartMessage(state);
+      renderCopilotStartActions(state);
+      return state;
+    })
+    .catch((error) => {
+      console.warn('[Copilot] failed to load start context:', error?.message || error);
+      const state = buildCopilotStartState(null);
+      updateCopilotContextLabel(state);
+      renderCopilotStartMessage(state);
+      renderCopilotStartActions(state);
+      return state;
+    })
+    .finally(() => {
+      copilotContextRequest = null;
+    });
+
+  return copilotContextRequest;
+}
+
 async function submitCopilotChat(inputId, containerId) {
   const input = document.getElementById(inputId);
   if (!input || !input.value.trim()) return;
@@ -3051,6 +3453,7 @@ async function submitCopilotChat(inputId, containerId) {
     ? input.parentElement.querySelector('.ai-send-btn')
     : null;
   const question = input.value.trim();
+  const promptTickers = readCopilotInputTickers(input);
   input.value = '';
 
   appendCopilotChatMessage(containerId, question, 'user');
@@ -3066,7 +3469,7 @@ async function submitCopilotChat(inputId, containerId) {
 
   try {
     const rawResponse = await (typeof window.FinanceAPI?.askCopilot === 'function'
-      ? window.FinanceAPI.askCopilot(question, [])
+      ? window.FinanceAPI.askCopilot(question, promptTickers)
       : Promise.resolve({
         data: {
           answer: 'Copilot API service unavailable.',
@@ -3101,6 +3504,7 @@ async function submitCopilotChat(inputId, containerId) {
     );
     showToast('Copilot temporarily unavailable', 'error');
   } finally {
+    delete input.dataset.copilotTickers;
     input.disabled = false;
     if (sendButton) sendButton.disabled = false;
     input.focus();
@@ -3128,6 +3532,7 @@ function quickAsk(action) {
 
   const input = document.getElementById('aiOverlayInput');
   if (input && questions[action]) {
+    delete input.dataset.copilotTickers;
     input.value = questions[action];
     sendOverlayMessage();
   }
@@ -4012,7 +4417,10 @@ function drawClusterMap() {
     'Finance': '#4A6BD9'
   };
 
-  appData.clusterMap.forEach((point, i) => {
+  const clusterPoints = toArray(appData.clusterMap, []);
+  if (!clusterPoints.length) return;
+
+  clusterPoints.forEach((point, i) => {
     setTimeout(() => {
       const x = padding + ((point.risk / maxRisk) * (width - padding * 2));
       const y = height - padding - ((point.return + 5) / (maxReturn + 5) * (height - padding * 2));
