@@ -747,7 +747,7 @@ function normalizeCopilotOpenTarget(target, id) {
     || normalizedTarget === 'live_brief'
     || normalizedTarget === 'daily_brief'
   ) {
-    return 'brief';
+    return 'market';
   }
   if (
     normalizedId === 'ask_copilot'

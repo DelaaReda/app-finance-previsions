@@ -3444,7 +3444,13 @@ async def _legacy_get_judge_options():
 class JudgeDecisionOutcomeFeedbackRequest(BaseModel):
     decision_id: str = Field(..., description="Judge decision id used in decision journal.")
     horizon: str = Field(..., description="Feedback horizon: 1d, 1w, or 1m.")
-    status: Optional[str] = Field(default="recorded", description="Outcome status.")
+    status: Optional[str] = Field(
+        default=None,
+        description=(
+            "Outcome status: pending, in_progress, or resolved. "
+            "Defaults to resolved when an outcome or actual_return is provided, otherwise in_progress."
+        ),
+    )
     outcome: Optional[str] = Field(default=None, description="Outcome label.")
     actual_return: Optional[float] = Field(default=None, description="Observed return.")
     notes: Optional[str] = Field(default=None, description="Optional outcome notes.")

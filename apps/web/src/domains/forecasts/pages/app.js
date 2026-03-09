@@ -3420,7 +3420,7 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedTarget === 'live_brief'
     || normalizedTarget === 'daily_brief'
   ) {
-    return 'brief';
+    return 'market';
   }
   if (
     normalizedId === 'ask_copilot'
@@ -3565,7 +3565,7 @@ function resolveCopilotStartOpenDestination(target) {
 
   const destination = {
     brief: {
-      tab: 'overview',
+      tab: 'market',
       anchorId: 'market-pulse-widget-container'
     },
     overview: {
@@ -3603,7 +3603,38 @@ function resolveCopilotStartOpenDestination(target) {
 }
 
 function runCopilotStartOpen(target) {
-  const destination = resolveCopilotStartOpenDestination(target);
+  const destination = (typeof resolveCopilotStartOpenDestination === 'function'
+    ? resolveCopilotStartOpenDestination(target)
+    : (() => {
+      const normalizedTarget = normalizeCopilotStartOpenTarget(target);
+      const fallbackDestination = {
+        market: {
+          tab: 'market',
+          anchorId: 'market-pulse-widget-container'
+        },
+        overview: {
+          tab: 'overview'
+        },
+        opportunities: {
+          tab: 'opportunities'
+        },
+        performance: {
+          tab: 'performance'
+        },
+        ailab: {
+          tab: 'ailab'
+        },
+        copilot: {
+          tab: 'copilot'
+        }
+      }[normalizedTarget];
+      return fallbackDestination
+        ? {
+          target: normalizedTarget,
+          ...fallbackDestination
+        }
+        : null;
+    })());
   const overlay = document.getElementById('aiCopilotOverlay');
   if (!destination) {
     showToast(`Open ${target} is unavailable`, 'error');
@@ -3613,10 +3644,21 @@ function runCopilotStartOpen(target) {
   if (destination.target === 'copilot') {
     const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
     if (overlayClosed) {
-      toggleAICopilot();
+      if (typeof toggleAICopilot === 'function') {
+        toggleAICopilot();
+      } else if (overlay) {
+        overlay.style.display = 'block';
+      }
+    }
+
+    if (typeof focusCopilotInput === 'function') {
+      focusCopilotInput();
       return;
     }
-    focusCopilotInput();
+    const input = document.getElementById('aiOverlayInput');
+    if (input && typeof input.focus === 'function') {
+      input.focus();
+    }
     return;
   }
 
