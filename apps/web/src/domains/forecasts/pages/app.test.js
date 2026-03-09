@@ -837,6 +837,12 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
       },
     ],
   });
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), {
+    brief_of_day: {
+      summary: 'Breadth is narrow but stable.',
+      freshness: '2026-03-09T06:55:00Z',
+    },
+  });
 });
 
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {

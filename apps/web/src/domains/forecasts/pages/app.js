@@ -1842,6 +1842,7 @@ function sanitizeNewsItems(items) {
 function sanitizeCopilotStart(payload) {
   const source = isObject(payload) ? payload : {};
   const fallback = FALLBACK_COPILOT_START;
+  const scopeTickers = normalizeCopilotStarterTickers(source.scope_tickers);
   const briefSource = isObject(source.brief_of_day)
     ? source.brief_of_day
     : (isObject(source.briefOfDay) ? source.briefOfDay : {});
@@ -1903,7 +1904,8 @@ function sanitizeCopilotStart(payload) {
       source: toArray(briefSource.source, fallback.brief_of_day.source)
     },
     ask: askItems.length ? askItems : fallback.ask,
-    open: openItems.length ? openItems : fallback.open
+    open: openItems.length ? openItems : fallback.open,
+    scope_tickers: scopeTickers
   };
 }
 
@@ -2661,7 +2663,16 @@ function applyLiveDashboardData(payload = {}) {
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
   const rawCopilotStart = data.copilotStart || data.copilot_start || window.copilotStart || null;
-  const copilotStart = sanitizeCopilotStart(rawCopilotStart);
+  const copilotStartPayload = isObject(rawCopilotStart)
+    ? {
+      ...rawCopilotStart,
+      scope_tickers: Array.isArray(rawCopilotStart.scope_tickers)
+        ? rawCopilotStart.scope_tickers
+        : data.scope_tickers
+    }
+    : rawCopilotStart;
+  const copilotStart = sanitizeCopilotStart(copilotStartPayload);
+  window.copilotStart = copilotStart;
   
   // Map story data from API (window.storyData set by apiConnector.js)
   const storyData = data.story || window.storyData || null;
@@ -2693,7 +2704,7 @@ function applyLiveDashboardData(payload = {}) {
 
   renderLiveDashboardWidgets();
   if (rawCopilotStart) {
-    renderHeroCopilotBrief(buildCopilotStartState({ copilot_start: rawCopilotStart }));
+    renderHeroCopilotBrief(copilotStart);
   }
 }
 
@@ -3428,40 +3439,45 @@ function runCopilotStartPrompt(prompt, tickers = []) {
   submitPrompt();
 }
 
-function runCopilotStartOpen(target) {
+function resolveCopilotStartOpenDestination(target) {
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
-  const route = normalizedTarget
-    ? {
-      brief: {
-        tab: 'overview',
-        anchorId: 'market-pulse-widget-container'
-      },
-      overview: {
-        tab: 'overview'
-      },
-      market: {
-        tab: 'market'
-      },
-      opportunities: {
-        tab: 'opportunities'
-      },
-      performance: {
-        tab: 'performance'
-      },
-      ailab: {
-        tab: 'ailab'
-      },
-      copilot: {
-        tab: 'copilot'
-      }
-    }[normalizedTarget]
-    : null;
-  const destination = route
+  if (!normalizedTarget) return null;
+
+  const destination = {
+    brief: {
+      tab: 'overview',
+      anchorId: 'market-pulse-widget-container'
+    },
+    overview: {
+      tab: 'overview'
+    },
+    market: {
+      tab: 'market'
+    },
+    opportunities: {
+      tab: 'opportunities'
+    },
+    performance: {
+      tab: 'performance'
+    },
+    ailab: {
+      tab: 'ailab'
+    },
+    copilot: {
+      tab: 'copilot'
+    }
+  }[normalizedTarget];
+
+  return destination
     ? {
       target: normalizedTarget,
-      ...route
+      ...destination
     }
     : null;
+}
+
+function runCopilotStartOpen(target) {
+  const destination = resolveCopilotStartOpenDestination(target);
   const overlay = document.getElementById('aiCopilotOverlay');
   if (!destination || destination.target === 'copilot') {
     const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
@@ -3470,6 +3486,11 @@ function runCopilotStartOpen(target) {
       return;
     }
     focusCopilotInput();
+    return;
+  }
+
+  if (!destination) {
+    showToast(`Open ${target} is unavailable`, 'error');
     return;
   }
 
@@ -3676,12 +3697,27 @@ async function hydrateCopilotOverlayStart() {
   // Prefer the starter contract so the landing hero and copilot overlay share the same brief/ask/open payload.
   copilotContextRequest = Promise.resolve(
     typeof window.FinanceAPI?.getCopilotStart === 'function'
-      ? window.FinanceAPI.getCopilotStart()
+      ? Promise.resolve(window.FinanceAPI.getCopilotStart()).catch((error) => {
+        if (typeof window.FinanceAPI?.getCopilotContext !== 'function') {
+          throw error;
+        }
+        console.warn('[Copilot] getCopilotStart failed, falling back to getCopilotContext:', error?.message || error);
+        return window.FinanceAPI.getCopilotContext();
+      })
       : (typeof window.FinanceAPI?.getCopilotContext === 'function'
         ? window.FinanceAPI.getCopilotContext()
         : null)
   )
     .then((raw) => {
+      const payloadData = isObject(raw?.data)
+        ? raw.data
+        : (isObject(raw) ? raw : {});
+      const rawCopilotStart = isObject(payloadData.copilot_start)
+        ? payloadData.copilot_start
+        : (isObject(payloadData.copilotStart)
+          ? payloadData.copilotStart
+          : raw);
+      window.copilotStart = sanitizeCopilotStart(rawCopilotStart);
       const state = buildCopilotStartState(raw);
       updateCopilotContextLabel(state);
       renderCopilotStartMessage(state);
@@ -3691,6 +3727,7 @@ async function hydrateCopilotOverlayStart() {
     })
     .catch((error) => {
       console.warn('[Copilot] failed to load start context:', error?.message || error);
+      window.copilotStart = sanitizeCopilotStart(null);
       const state = buildCopilotStartState(null);
       updateCopilotContextLabel(state);
       renderCopilotStartMessage(state);
