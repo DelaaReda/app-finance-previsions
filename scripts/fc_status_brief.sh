@@ -3,16 +3,17 @@
 set -euo pipefail
 
 BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
-TIMEOUT_S="${FC_STATUS_BRIEF_TIMEOUT_S:-4}"
+TIMEOUT_S="${FC_STATUS_BRIEF_TIMEOUT_S:-8}"
 STATUS_FILE="$(mktemp)"
+STATUS_ENDPOINT="${FC_STATUS_BRIEF_ENDPOINT:-/api/status?lite=1}"
 
 cleanup() {
   rm -f "$STATUS_FILE"
 }
 trap cleanup EXIT
 
-curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}/api/status" -o "$STATUS_FILE" || {
-  echo "Santé: monitor_unreachable (${BASE_URL%/}/api/status)"
+curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}${STATUS_ENDPOINT}" -o "$STATUS_FILE" || {
+  echo "Santé: monitor_unreachable (${BASE_URL%/}${STATUS_ENDPOINT})"
   echo "Batches: unknown"
   echo "Agents: unknown"
   echo "Blocages: monitor_unreachable"
