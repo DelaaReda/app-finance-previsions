@@ -1022,6 +1022,19 @@ test('runCopilotStartOpen routes the landing brief to overview and scrolls the l
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen reports unsupported landing actions instead of opening copilot', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/not-a-real-target');
+
+  assert.equal(overlay.style.display, '');
+  assert.equal(calls.toggled, 0);
+  assert.equal(calls.focused, 0);
+  assert.deepEqual(calls.switched, []);
+  assert.equal(calls.scrolled, 0);
+  assert.deepEqual(calls.toasts, ['Open /not-a-real-target is unavailable']);
+});
+
 test('hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload', async () => {
   const legacyPayload = {
     data: {

@@ -3504,18 +3504,18 @@ function resolveCopilotStartOpenDestination(target) {
 function runCopilotStartOpen(target) {
   const destination = resolveCopilotStartOpenDestination(target);
   const overlay = document.getElementById('aiCopilotOverlay');
-  if (!destination || destination.target === 'copilot') {
+  if (!destination) {
+    showToast(`Open ${target} is unavailable`, 'error');
+    return;
+  }
+
+  if (destination.target === 'copilot') {
     const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
     if (overlayClosed) {
       toggleAICopilot();
       return;
     }
     focusCopilotInput();
-    return;
-  }
-
-  if (!destination) {
-    showToast(`Open ${target} is unavailable`, 'error');
     return;
   }
 
