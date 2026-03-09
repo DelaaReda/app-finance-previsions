@@ -50,6 +50,15 @@ PortfolioRiskProfile = _portfolio_module.PortfolioRiskProfile
 
 logger = logging.getLogger(__name__)
 
+try:
+    from domains.market_data.application.portfolio_endpoint_service import (
+        get_portfolio_risk_profile_payload,
+    )
+except Exception:  # pragma: no cover
+    from ..application.portfolio_endpoint_service import (  # type: ignore
+        get_portfolio_risk_profile_payload,
+    )
+
 
 def _now_iso() -> str:
     if callable(utc_now_iso):
@@ -381,22 +390,19 @@ def get_portfolio_risk_profile(
     ),
 ):
     try:
-        service = get_portfolio_service()
-        risk_profile = service.get_risk_profile(
-            portfolio_id,
+        payload = get_portfolio_risk_profile_payload(
+            portfolio_id=portfolio_id,
             benchmark=benchmark,
             start_date=start_date,
             end_date=end_date,
+            get_portfolio_service_fn=get_portfolio_service,
         )
-        if not risk_profile:
+        if not payload:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Portfolio {portfolio_id} not found",
             )
-        return _ok(
-            _serialize_risk_profile(risk_profile),
-            source="portfolio_risk_profile",
-        )
+        return payload
     except HTTPException:
         raise
     except Exception as exc:

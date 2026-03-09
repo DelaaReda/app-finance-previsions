@@ -21,6 +21,73 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+def test_portfolio_risk_profile_route_delegates_to_endpoint_service(monkeypatch):
+    captured = {}
+    now_iso = "2026-03-09T06:30:00Z"
+
+    def fake_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "portfolio": {
+                    "id": "portfolio-123",
+                    "name": "Core",
+                    "description": "",
+                    "tickers": ["AAPL"],
+                    "tickers_count": 1,
+                    "updated_at": now_iso,
+                },
+                "benchmark": "SPY",
+                "weights": {"AAPL": 1.0},
+                "metrics": {},
+                "risk_profile": "balanced",
+                "risk_level": "medium",
+                "risk": {"level": "medium", "caveat": ""},
+                "why": ["Synthetic response."],
+                "warnings": [],
+                "filters_applied": {
+                    "portfolio_id": "portfolio-123",
+                    "benchmark": "SPY",
+                    "start_date": None,
+                    "end_date": None,
+                },
+                "stats": {
+                    "tickers_count": 1,
+                    "equal_weight_assumption": False,
+                    "weights_source": "portfolio_metadata",
+                    "has_live_metrics": False,
+                    "non_null_metrics": 0,
+                },
+                "confidence": 0.45,
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "status": "ok",
+                "error": None,
+                "source": ["portfolio_risk_profile_service"],
+                "verdict": "hold",
+            },
+            "freshness": now_iso,
+            "status": "ok",
+            "error": None,
+        }
+
+    monkeypatch.setattr(portfolios_route, "get_portfolio_risk_profile_payload", fake_payload)
+
+    response = _client().get("/api/portfolios/portfolio-123/risk-profile?benchmark=SPY")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["status"] == "ok"
+    assert payload["freshness"] == now_iso
+    assert captured["portfolio_id"] == "portfolio-123"
+    assert captured["benchmark"] == "SPY"
+    assert captured["start_date"] is None
+    assert captured["end_date"] is None
+    assert callable(captured["get_portfolio_service_fn"])
+
+
 def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tmp_path):
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
@@ -71,6 +138,9 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     data = payload["data"]
 
     assert payload["ok"] is True
+    assert payload["status"] == "ok"
+    assert payload["error"] is None
+    assert payload["freshness"] == data["freshness"]
     assert data["portfolio"]["id"] == portfolio.id
     assert data["portfolio"]["tickers_count"] == 2
     assert data["risk_profile"] == "balanced"
@@ -87,6 +157,10 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     assert data["filters_applied"]["benchmark"] == "SPY"
     assert data["verdict"] == "hold"
     assert data["source"][0] == "portfolio_service"
+    assert "portfolio_risk_profile_service" in data["source"]
+    assert "metadata_contract_v1" in data["source"]
+    assert data["status"] == "ok"
+    assert data["error"] is None
     assert any("normalized" in warning.lower() for warning in data["warnings"])
 
 
@@ -120,6 +194,9 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     data = payload["data"]
 
     assert payload["ok"] is True
+    assert payload["status"] == "degraded"
+    assert payload["error"] == "performance backend unavailable"
+    assert payload["freshness"] == data["freshness"]
     assert data["portfolio"]["id"] == portfolio.id
     assert data["filters_applied"]["benchmark"] == "QQQ"
     assert data["stats"]["equal_weight_assumption"] is True
@@ -131,5 +208,9 @@ def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     assert data["metrics"] == {}
     assert data["risk"]["level"] == "medium"
     assert data["risk_profile"] == "balanced"
+    assert data["status"] == "degraded"
+    assert data["error"] == "performance backend unavailable"
+    assert "portfolio_risk_profile_service" in data["source"]
+    assert "metadata_contract_v1" in data["source"]
     assert any("fallback" in warning.lower() for warning in data["warnings"])
     assert any("unknown tickers" in warning.lower() for warning in data["warnings"])
