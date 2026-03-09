@@ -214,6 +214,72 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     assert any("normalized" in warning.lower() for warning in data["warnings"])
 
 
+def test_portfolio_risk_profile_surfaces_saved_state_guardrails(
+    monkeypatch, tmp_path
+):
+    service = portfolio_app.PortfolioService(
+        storage_path=str(tmp_path / "user_portfolios.json")
+    )
+    portfolio = service.create_portfolio(
+        name="Concentrated Growth",
+        tickers=["NVDA", "TSLA"],
+        metadata={
+            "weights": {"NVDA": 80, "TSLA": 20},
+            "horizon": "1m",
+            "conviction": "high",
+            "risk_tolerance": "conservative",
+        },
+    )
+
+    class FakePerformanceService:
+        def calculate_performance(self, *, tickers, weights, start_date, end_date, benchmark):
+            assert tickers == ["NVDA", "TSLA"]
+            assert weights == {"NVDA": 0.8, "TSLA": 0.2}
+            assert benchmark == "QQQ"
+            return (
+                perf_app.PortfolioMetrics(
+                    total_return=0.22,
+                    annualized_return=0.20,
+                    volatility=0.36,
+                    sharpe_ratio=0.70,
+                    max_drawdown=-0.28,
+                    win_rate=0.55,
+                ),
+                perf_app.BenchmarkComparison(
+                    benchmark_ticker="QQQ",
+                    portfolio_return=0.22,
+                    benchmark_return=0.12,
+                    outperformance=0.10,
+                    correlation=0.88,
+                    beta=1.24,
+                    alpha=0.05,
+                ),
+                perf_app.PerformanceTimeSeries(),
+            )
+
+    monkeypatch.setattr(portfolios_route, "get_portfolio_service", lambda: service)
+    monkeypatch.setattr(
+        portfolio_app, "_get_performance_service", lambda: FakePerformanceService()
+    )
+
+    response = _client().get(f"/api/portfolios/{portfolio.id}/risk-profile?benchmark=QQQ")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["risk_profile"] == "high_beta"
+    assert data["risk_level"] == "high"
+    assert any("saved horizon is 1m" in reason.lower() for reason in data["why"])
+    assert any(
+        "saved conviction is high" in warning.lower() for warning in data["warnings"]
+    )
+    assert any(
+        "saved risk tolerance is conservative" in warning.lower()
+        and "computed profile is high" in warning.lower()
+        for warning in data["warnings"]
+    )
+
+
 def test_portfolio_risk_profile_endpoint_falls_back_without_live_metrics(
     monkeypatch, tmp_path
 ):

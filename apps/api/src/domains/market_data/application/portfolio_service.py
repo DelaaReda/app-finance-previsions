@@ -70,6 +70,10 @@ _RISK_TOLERANCE_ALIASES = {
     "high_beta": "aggressive",
 }
 _ALLOWED_PORTFOLIO_RISK_TOLERANCES = {"conservative", "moderate", "aggressive"}
+_SHORT_PORTFOLIO_HORIZONS = {"1w", "1m", "3m", "short"}
+_LONG_PORTFOLIO_HORIZONS = {"3y", "5y", "long"}
+_RISK_LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
+_RISK_TOLERANCE_ORDER = {"conservative": 0, "moderate": 1, "aggressive": 2}
 
 
 def _normalize_portfolio_choice(
@@ -354,6 +358,54 @@ def _classify_risk_profile(
     if score <= 2:
         return "balanced", "medium", why[:3], warnings
     return "high_beta", "high", why[:3], warnings
+
+
+def _portfolio_state_risk_messages(
+    state: Dict[str, Any],
+    *,
+    tickers_count: int,
+    risk_level: str,
+) -> Tuple[List[str], List[str]]:
+    if not state:
+        return [], []
+
+    why: List[str] = []
+    warnings: List[str] = []
+
+    horizon = str(state.get("horizon") or "").strip().lower()
+    if horizon in _SHORT_PORTFOLIO_HORIZONS:
+        why.append(
+            f"Saved horizon is {horizon}, so the profile should be monitored on a shorter rebalance window."
+        )
+    elif horizon in _LONG_PORTFOLIO_HORIZONS:
+        why.append(
+            f"Saved horizon is {horizon}, which supports evaluating the profile over a longer holding period."
+        )
+
+    conviction = str(state.get("conviction") or "").strip().lower()
+    if conviction in {"high", "exploratory"} and tickers_count <= 3:
+        warnings.append(
+            f"Saved conviction is {conviction} on a concentrated portfolio, which can amplify position-level risk."
+        )
+
+    risk_tolerance = str(state.get("risk_tolerance") or "").strip().lower()
+    risk_rank = _RISK_LEVEL_ORDER.get(risk_level)
+    tolerance_rank = _RISK_TOLERANCE_ORDER.get(risk_tolerance)
+    if risk_rank is not None and tolerance_rank is not None:
+        if risk_rank > tolerance_rank:
+            warnings.append(
+                f"Saved risk tolerance is {risk_tolerance}, but the computed profile is {risk_level}."
+            )
+        elif risk_rank < tolerance_rank:
+            why.append(
+                f"Saved risk tolerance is {risk_tolerance}, which is more aggressive than the computed {risk_level} profile."
+            )
+        else:
+            why.append(
+                f"Saved risk tolerance aligns with the computed {risk_level} profile."
+            )
+
+    return why[:2], warnings[:2]
 
 
 class Portfolio(BaseModel):
@@ -744,6 +796,7 @@ class PortfolioService:
             return None
 
         tickers = sorted(portfolio.tickers)
+        portfolio_state = _extract_portfolio_state(portfolio.metadata)
         weights, weights_source, weight_warnings = _resolve_portfolio_weights(
             tickers,
             portfolio.metadata,
@@ -756,7 +809,7 @@ class PortfolioService:
                 "tickers": tickers,
                 "tickers_count": len(tickers),
                 "updated_at": portfolio.updated_at,
-                "state": _extract_portfolio_state(portfolio.metadata),
+                "state": portfolio_state,
             },
             benchmark=benchmark,
             weights=weights,
@@ -782,11 +835,18 @@ class PortfolioService:
                 "level": "low",
                 "caveat": "Portfolio has no holdings yet, so the profile is low-information.",
             }
+            state_why, state_warnings = _portfolio_state_risk_messages(
+                portfolio_state,
+                tickers_count=0,
+                risk_level=payload.risk_level,
+            )
             payload.why = [
-                "No holdings are stored yet, so the endpoint returns an empty-state risk view."
+                "No holdings are stored yet, so the endpoint returns an empty-state risk view.",
+                *state_why,
             ]
             payload.warnings = [
-                "Add at least one ticker to compute realized portfolio risk metrics."
+                "Add at least one ticker to compute realized portfolio risk metrics.",
+                *state_warnings,
             ]
             payload.confidence = 0.3
             return payload
@@ -821,6 +881,11 @@ class PortfolioService:
                 beta=comparison.beta,
                 sharpe_ratio=metrics.sharpe_ratio,
             )
+            state_why, state_warnings = _portfolio_state_risk_messages(
+                portfolio_state,
+                tickers_count=len(tickers),
+                risk_level=risk_level,
+            )
 
             payload.metrics = raw_metrics
             payload.risk_profile = risk_profile
@@ -833,10 +898,10 @@ class PortfolioService:
                     else "Profile derived from saved portfolio weights and benchmark comparison."
                 ),
             }
-            payload.why = why or [
+            payload.why = (why + state_why)[:4] or [
                 "Risk profile derived from stored portfolio weights and benchmark comparison."
             ]
-            payload.warnings = warnings + weight_warnings
+            payload.warnings = warnings + state_warnings + weight_warnings
             payload.stats = {
                 "tickers_count": len(tickers),
                 "equal_weight_assumption": weights_source != "portfolio_metadata",
@@ -864,16 +929,21 @@ class PortfolioService:
                 beta=None,
                 sharpe_ratio=None,
             )
+            state_why, state_warnings = _portfolio_state_risk_messages(
+                portfolio_state,
+                tickers_count=len(tickers),
+                risk_level=risk_level,
+            )
             payload.risk_profile = risk_profile
             payload.risk_level = risk_level
             payload.risk = {
                 "level": risk_level,
                 "caveat": "Performance metrics unavailable; profile uses composition-only fallback.",
             }
-            payload.why = why or [
+            payload.why = (why + state_why)[:4] or [
                 "Performance metrics were unavailable, so the profile falls back to holdings concentration only."
             ]
-            payload.warnings = warnings + weight_warnings + [
+            payload.warnings = warnings + state_warnings + weight_warnings + [
                 "Performance metrics unavailable; returned a composition-only fallback profile."
             ]
             payload.error = str(e)
