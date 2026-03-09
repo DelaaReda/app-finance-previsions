@@ -538,11 +538,11 @@ function loadHydrateCopilotOverlayStart({
   sanitizedStart,
 } = {}) {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-  const functionSource = extractSection(
+  const functionSource = `let copilotContextRequest = null;\n${extractFunction(
     source,
-    'let copilotContextRequest = null;',
+    'hydrateCopilotOverlayStart',
     '\n\nasync function submitCopilotChat('
-  );
+  )}`;
   const contextValue = createElementStub();
   const calls = {
     starter: 0,
@@ -573,6 +573,12 @@ function loadHydrateCopilotOverlayStart({
     },
     isObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
     },
     sanitizeCopilotStart(value) {
       calls.sanitized.push(value);
@@ -988,6 +994,76 @@ test('runCopilotStartOpen routes the landing brief to overview and scrolls the l
   assert.deepEqual(calls.switched, ['overview']);
   assert.equal(calls.scrolled, 1);
   assert.deepEqual(calls.toasts, []);
+});
+
+test('hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload', async () => {
+  const legacyPayload = {
+    data: {
+      copilot_start: {
+        brief_of_day: {
+          summary: 'Leadership is narrowing while rates stay calm.',
+          freshness: '2026-03-09T07:05:00Z',
+        },
+        ask: [
+          {
+            id: 'ask_today',
+            label: 'Ask about today',
+            prompt: 'What matters most today?',
+          },
+        ],
+        open: [
+          {
+            id: 'brief_of_day',
+            label: 'Open live brief',
+            target: 'brief',
+          },
+        ],
+      },
+    },
+  };
+  const builtState = {
+    brief: {
+      summary: 'Leadership is narrowing while rates stay calm.',
+      freshness: '2026-03-09T07:05:00Z',
+    },
+    ask: [
+      {
+        id: 'ask_today',
+        label: 'Ask about today',
+        prompt: 'What matters most today?',
+      },
+    ],
+    open: [
+      {
+        id: 'brief_of_day',
+        label: 'Open live brief',
+        target: 'brief',
+      },
+    ],
+  };
+  const sanitizedStart = legacyPayload.data.copilot_start;
+  const { sandbox, contextValue, calls } = loadHydrateCopilotOverlayStart({
+    getCopilotStart: async () => {
+      throw new Error('starter unavailable');
+    },
+    getCopilotContext: async () => legacyPayload,
+    builtState,
+    sanitizedStart,
+  });
+
+  const result = await sandbox.hydrateCopilotOverlayStart();
+
+  assert.equal(contextValue.textContent, 'Loading brief of the day...');
+  assert.equal(calls.starter, 1);
+  assert.equal(calls.context, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.sanitized[0])), sanitizedStart);
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), sanitizedStart);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.labels[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.messages[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.actions[0])), builtState);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.hero[0])), builtState);
+  assert.match(calls.warnings[0], /falling back to getCopilotContext/);
 });
 
 test('renderHeroCopilotBrief swaps the static hero copy for live brief and actions', () => {
