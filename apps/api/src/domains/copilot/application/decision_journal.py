@@ -132,6 +132,24 @@ def _save_outcome_feedback_records(records: List[Dict[str, Any]], freshness: str
     )
 
 
+def _index_feedback_by_decision(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Build feedback lookup index by decision_id."""
+    index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        decision_id = str(record.get("decision_id") or "").strip()
+        if not decision_id:
+            continue
+        index[decision_id].append(record)
+
+    for decision_feedback in index.values():
+        decision_feedback.sort(
+            key=lambda r: str(r.get("recorded_at", "")),
+            reverse=True,
+        )
+
+    return index
+
+
 def log_copilot_decision(
     *,
     question: str,
@@ -307,6 +325,8 @@ def get_decision_journal(
     """
     now_iso = utc_now_iso()
     entries_dir = _decision_entries_dir()
+    feedback_records = _load_outcome_feedback_records()
+    feedback_by_decision = _index_feedback_by_decision(feedback_records)
     
     if not entries_dir.exists():
         return {
@@ -343,13 +363,23 @@ def get_decision_journal(
         key=lambda e: str(e.get("recorded_at", "")),
         reverse=True,
     )
-    
+
+    limit_entries = sorted_entries[:limit]
+    enriched_entries = []
+    for entry in limit_entries:
+        decision_id = str(entry.get("decision_id") or "").strip()
+        entry_feedback = feedback_by_decision.get(decision_id, [])
+        if entry_feedback:
+            entry = dict(entry)
+            entry["outcome_feedback"] = entry_feedback
+        enriched_entries.append(entry)
+
     return {
         "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
         "count": len(all_entries),
         "filtered_count": len(filtered),
-        "returned_count": len(sorted_entries[:limit]),
-        "entries": sorted_entries[:limit],
+        "returned_count": len(limit_entries),
+        "entries": enriched_entries,
         "source": ["copilot_decision_journal_service"],
         "freshness": now_iso,
     }

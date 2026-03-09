@@ -202,6 +202,50 @@ class TestGetDecisionJournal:
             result_tsla = get_decision_journal(limit=50, tickers=["TSLA"])
             assert result_tsla["filtered_count"] == 1
 
+    @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
+    def test_get_journal_attaches_feedback(self, mock_load, tmp_path):
+        entries_dir = tmp_path / "entries"
+        entries_dir.mkdir(parents=True, exist_ok=True)
+
+        entry = {
+            "decision_id": "d1",
+            "recorded_at": "2026-03-09T00:00:00Z",
+            "verdict": "buy",
+            "horizon": "1d",
+            "tickers": ["AAPL"],
+        }
+
+        with open(entries_dir / "d1.json", "w") as f:
+            json.dump(entry, f)
+
+        mock_load.return_value = [
+            {
+                "record_id": "fb1",
+                "decision_id": "d1",
+                "horizon": "1d",
+                "status": "resolved",
+                "actual_return": 0.04,
+                "predicted_return": 0.05,
+            },
+            {
+                "record_id": "fb2",
+                "decision_id": "d1",
+                "horizon": "1w",
+                "status": "pending",
+            },
+        ]
+
+        with patch('domains.copilot.application.decision_journal._decision_entries_dir') as mock_dir:
+            mock_dir.return_value = entries_dir
+
+            result = get_decision_journal(limit=50)
+
+            assert result["count"] == 1
+            assert result["filtered_count"] == 1
+            assert "outcome_feedback" in result["entries"][0]
+            assert len(result["entries"][0]["outcome_feedback"]) == 2
+            assert result["entries"][0]["outcome_feedback"][0]["record_id"] == "fb1"
+
 
 class TestGetOutcomeFeedback:
     @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
