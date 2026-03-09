@@ -3100,13 +3100,13 @@ function prevStoryPoint() {
 // Drill-Down
 function buildRobustnessGoNoGoDecision() {
   const status = getCriticalWidgetHealthStatus();
-  const state = toString(status && status.state, '');
+  const state = toString(status && status.state, 'ok');
   const reason = status && status.reason
     ? toString(status.reason, '')
     : buildCriticalWidgetHealthDetail(status || { state: 'ok' });
   const detail = reason || 'Data quality is within tolerance.';
 
-  if (state === 'error' || state === 'degraded' || state === 'stale' || state === 'loading') {
+  if (['error', 'degraded', 'stale', 'loading', 'unknown'].includes(state)) {
     return {
       state,
       decision: 'NO-GO',
@@ -3114,14 +3114,10 @@ function buildRobustnessGoNoGoDecision() {
     };
   }
 
-  return {
-    state: state || 'ok',
-    decision: 'GO',
-    detail,
-  };
+  return { state, decision: 'GO', detail };
 }
 
-function openRobustnessDrill() {
+function buildRobustnessDrillPayload() {
   const decision = buildRobustnessGoNoGoDecision();
   const sourceMeta = toArray(liveDataMeta.sources, [LIVE_FALLBACK_TAG]).join(', ');
   const modelMeta = toArray(liveDataMeta.modelVersions, ['unknown']).join(', ');
@@ -3171,7 +3167,13 @@ function openRobustnessDrill() {
   };
 }
 
-function openDrillDown(metric) {
+function openRobustnessDrill() {
+  const payload = buildRobustnessDrillPayload();
+  openDrillDown('readiness', payload);
+  return payload;
+}
+
+function openDrillDown(metric, readinessPayload = null) {
   const modal = document.getElementById('drillDownModal');
   const title = document.getElementById('drillDownTitle');
   const body = document.getElementById('drillDownBody');
@@ -3179,7 +3181,7 @@ function openDrillDown(metric) {
   if (!modal || !title || !body) return;
 
   const drillData = {
-    readiness: openRobustnessDrill(),
+    readiness: readinessPayload || buildRobustnessDrillPayload(),
     portfolio: {
       title: 'Portfolio Change: +1.88%',
       content: `

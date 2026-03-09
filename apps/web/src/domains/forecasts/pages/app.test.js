@@ -401,6 +401,71 @@ function loadRobustnessGoNoGoDecision(statusOverride = null) {
   return { sandbox };
 }
 
+function loadRobustnessDrillOpenFlow(statusOverride = null) {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const marker = '\n\nfunction openDrillDown(';
+  const decisionSource = extractFunction(source, 'buildRobustnessGoNoGoDecision', marker);
+  const openRobustnessSource = extractFunction(source, 'openRobustnessDrill', marker);
+  const openDrillDownSource = extractFunction(source, 'openDrillDown', '\n\nfunction closeDrillDown(');
+
+  const modal = createElementStub();
+  const title = createElementStub();
+  const body = createElementStub();
+  const calls = {
+    display: 0,
+  };
+  const sandbox = {
+    console,
+    document: {
+      getElementById(id) {
+        if (id === 'drillDownModal') return modal;
+        if (id === 'drillDownTitle') return title;
+        if (id === 'drillDownBody') return body;
+        return null;
+      },
+    },
+    LIVE_FALLBACK_TAG: 'live-fallback',
+    liveDataMeta: {
+      generatedAt: '2026-03-09T08:00:00Z',
+      sources: ['test-feed'],
+      modelVersions: ['v-test'],
+      warnings: ['volatility'],
+    },
+    getCriticalWidgetHealthStatus() {
+      return statusOverride;
+    },
+    buildCriticalWidgetHealthDetail() {
+      return 'Generated fallback detail';
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+    showToast() {
+      calls.display += 1;
+    },
+  };
+
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${decisionSource}\n\n${openRobustnessSource}\n\n${openDrillDownSource}\n\nthis.openRobustnessDrill = openRobustnessDrill;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return {
+    sandbox,
+    modal,
+    title,
+    body,
+    calls,
+  };
+}
+
 function createActionsRootStub() {
   const root = {
     children: [],
@@ -899,6 +964,18 @@ test('buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states', () => {
   assert.equal(result.decision, 'NO-GO');
   assert.equal(result.state, 'degraded');
   assert.equal(result.detail, 'partial signals');
+});
+
+test('buildRobustnessGoNoGoDecision treats unknown state as NO-GO', () => {
+  const { sandbox } = loadRobustnessGoNoGoDecision({
+    state: 'unknown',
+    reason: 'health check inconclusive',
+  });
+  const result = sandbox.buildRobustnessGoNoGoDecision();
+
+  assert.equal(result.decision, 'NO-GO');
+  assert.equal(result.state, 'unknown');
+  assert.equal(result.detail, 'health check inconclusive');
 });
 
 test('applyLiveDashboardData derives portfolio health from raw risk profile payloads', () => {
