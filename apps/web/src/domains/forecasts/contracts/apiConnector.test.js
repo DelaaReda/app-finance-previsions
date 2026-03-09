@@ -4,20 +4,31 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function loadConnector(fetchImpl) {
+function loadConnector(fetchImpl, windowOverrides = {}, runtimeOverrides = {}) {
   const source = fs.readFileSync(path.join(__dirname, 'apiConnector.js'), 'utf8');
   const sandbox = {
     console,
     fetch: fetchImpl,
-    window: {},
+    window: {
+      ...windowOverrides,
+    },
     document: {
       readyState: 'loading',
       addEventListener() {},
+      createElement() {
+        return {
+          style: {},
+          appendChild() {},
+        };
+      },
+      body: {
+        appendChild() {},
+      },
     },
-    setInterval() {
+    setInterval: runtimeOverrides.setIntervalImpl || function setInterval() {
       return 1;
     },
-    clearInterval() {},
+    clearInterval: runtimeOverrides.clearIntervalImpl || function clearInterval() {},
     CustomEvent: function CustomEvent(type, init = {}) {
       this.type = type;
       this.detail = init.detail;
@@ -28,6 +39,8 @@ function loadConnector(fetchImpl) {
 
   sandbox.window.window = sandbox.window;
   sandbox.window.document = sandbox.document;
+  sandbox.window.addEventListener = sandbox.window.addEventListener || function addEventListener() {};
+  sandbox.window.dispatchEvent = sandbox.window.dispatchEvent || function dispatchEvent() {};
 
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox, { filename: 'apiConnector.js' });
@@ -94,6 +107,38 @@ test('getStatus falls back to /health when /status is unavailable', async () => 
   ]);
   assert.equal(payload.status, 'degraded');
   assert.deepEqual(payload.source, ['api_health']);
+});
+
+test('getStatus prefers same-origin api base when window.location.origin is available', async () => {
+  const calls = [];
+  const sandbox = loadConnector(
+    async (url) => {
+      calls.push(url);
+      return {
+        async json() {
+          return {
+            ok: true,
+            data: {
+              status: 'ok',
+              source: ['api_status'],
+              last_updates: {},
+            },
+          };
+        },
+      };
+    },
+    {
+      location: {
+        origin: 'https://finance.example.com',
+      },
+    },
+  );
+
+  const payload = await sandbox.window.FinanceAPI.getStatus();
+
+  assert.deepEqual(calls, ['https://finance.example.com/api/status']);
+  assert.equal(payload.status, 'ok');
+  assert.deepEqual(payload.source, ['api_status']);
 });
 
 test('getCopilotContext normalizes brief-first entry points into ask/open starters', async () => {
@@ -261,6 +306,220 @@ test('getCopilotContext forwards scoped tickers to the backend starter endpoint'
   assert.deepEqual(calls, ['http://localhost:8050/api/copilot/context?tickers=NVDA&tickers=MSFT']);
   assert.deepEqual(payload.scope_tickers, ['NVDA', 'MSFT']);
   assert.deepEqual(payload.copilot_start.ask[0].prefill.tickers, ['NVDA', 'MSFT']);
+});
+
+test('startAutoRefresh clears scoped copilot starter cache entries before reloading the brief', async () => {
+  const copilotStartCalls = [];
+  let scheduledRefresh = null;
+  const sandbox = loadConnector(
+    async (url) => {
+      if (url.includes('/api/copilot/start')) {
+        copilotStartCalls.push(url);
+        return {
+          async json() {
+            return {
+              ok: true,
+              data: {
+                brief_of_day: {
+                  title: 'Brief of the day',
+                  summary: `Starter refresh #${copilotStartCalls.length}`,
+                  sentiment: 'mixed',
+                  generated_at: '2026-03-09T05:30:00.000Z',
+                },
+                ask: [
+                  {
+                    id: 'ask_copilot',
+                    label: 'Ask about NVDA',
+                    prefill: {
+                      question: 'Give me a 1-week investment memo on NVDA.',
+                      tickers: ['NVDA'],
+                    },
+                  },
+                ],
+                open: [
+                  {
+                    id: 'brief_of_day',
+                    label: 'Open the live brief',
+                    target: '/brief/daily',
+                  },
+                ],
+              },
+            };
+          },
+        };
+      }
+
+      if (url.includes('/api/llm/judge/run')) {
+        return {
+          ok: false,
+          async json() {
+            return {};
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: {} };
+        },
+      };
+    },
+    {},
+    {
+      setIntervalImpl(fn) {
+        scheduledRefresh = fn;
+        return 1;
+      },
+    },
+  );
+
+  const firstPayload = await sandbox.window.FinanceAPI.getCopilotStart(['nvda']);
+  const cachedPayload = await sandbox.window.FinanceAPI.getCopilotStart(['nvda']);
+
+  assert.equal(firstPayload.copilot_start.brief_of_day.summary, 'Starter refresh #1');
+  assert.equal(cachedPayload.copilot_start.brief_of_day.summary, 'Starter refresh #1');
+  assert.deepEqual(copilotStartCalls, ['http://localhost:8050/api/copilot/start?tickers=NVDA']);
+
+  sandbox.window.FinanceAPI.startAutoRefresh(10);
+  await scheduledRefresh();
+
+  assert.deepEqual(copilotStartCalls, [
+    'http://localhost:8050/api/copilot/start?tickers=NVDA',
+    'http://localhost:8050/api/copilot/start',
+  ]);
+});
+
+test('getCopilotStart unwraps the dedicated starter contract and normalizes open targets', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            brief_of_day: {
+              title: 'Brief of the day',
+              summary: 'Breadth is improving while rates stay range-bound.',
+              sentiment: 'mixed',
+              generated_at: '2026-03-09T05:30:00.000Z',
+              source: ['copilot_start_test'],
+            },
+            ask: [
+              {
+                id: 'ask_copilot',
+                label: 'Ask about NVDA',
+                target: '/copilot/ask',
+                prefill: {
+                  question: 'What matters most for NVDA today?',
+                  tickers: ['NVDA'],
+                },
+              },
+            ],
+            open: [
+              {
+                id: 'brief_of_day',
+                label: 'Open the live brief',
+                target: '/brief/daily',
+              },
+              {
+                id: 'open_copilot',
+                label: 'Open copilot',
+                target: '/copilot',
+              },
+            ],
+            scope_tickers: ['NVDA'],
+            stats: {
+              ask_count: 1,
+              open_count: 2,
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart(['nvda']);
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/start?tickers=NVDA']);
+  assert.equal(copilotStart.brief_of_day.summary, 'Breadth is improving while rates stay range-bound.');
+  assert.deepEqual(
+    copilotStart.ask.map((item) => item.id),
+    ['ask_copilot']
+  );
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'brief_of_day', target: 'market' },
+      { id: 'open_copilot', target: 'copilot' },
+    ]
+  );
+  assert.deepEqual(payload.scope_tickers, ['NVDA']);
+  assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
+});
+
+test('getCopilotStart falls back to copilot context when the starter route is unavailable', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    if (url === 'http://localhost:8050/api/copilot/start') {
+      throw new Error('starter route unavailable');
+    }
+
+    assert.equal(url, 'http://localhost:8050/api/copilot/context');
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            daily_brief: {
+              title: 'Brief of the day',
+              summary: 'Fallback context still has the brief ready.',
+              sentiment: 'mixed',
+              generated_at: '2026-03-09T05:30:00.000Z',
+            },
+            entry_points: [
+              {
+                id: 'brief_of_day',
+                kind: 'open',
+                label: 'Open the live brief',
+                target: '/brief/daily',
+              },
+              {
+                id: 'ask_copilot',
+                kind: 'ask',
+                label: 'Ask about NVDA',
+                target: '/copilot/ask',
+                prefill: {
+                  question: 'What matters most for NVDA today?',
+                  tickers: ['NVDA'],
+                },
+              },
+            ],
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(calls, [
+    'http://localhost:8050/api/copilot/start',
+    'http://localhost:8050/api/copilot/context',
+  ]);
+  assert.equal(copilotStart.brief_of_day.summary, 'Fallback context still has the brief ready.');
+  assert.deepEqual(
+    copilotStart.ask.map((item) => item.id),
+    ['ask_copilot']
+  );
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [{ id: 'brief_of_day', target: 'market' }]
+  );
 });
 
 test('getPortfolioRiskProfile resolves the default saved portfolio and unwraps the risk profile envelope', async () => {

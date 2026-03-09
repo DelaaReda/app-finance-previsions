@@ -4,7 +4,33 @@
  * Auto-refresh every 2 minutes
  */
 
-const API_BASE = 'http://localhost:8050/api';
+function normalizeApiBase(value) {
+  return typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
+}
+
+function resolveApiBase(win = typeof window !== 'undefined' ? window : null) {
+  const configuredBase = normalizeApiBase(
+    win && typeof win === 'object'
+      ? (win.FINANCECOPILOT_API_BASE || win.__FINANCECOPILOT_API_BASE || '')
+      : '',
+  );
+  if (configuredBase) {
+    return configuredBase;
+  }
+
+  const origin = normalizeApiBase(
+    win && win.location && typeof win.location.origin === 'string'
+      ? win.location.origin
+      : '',
+  );
+  if (origin) {
+    return `${origin}/api`;
+  }
+
+  return 'http://localhost:8050/api';
+}
+
+const API_BASE = resolveApiBase();
 
 // Cache with TTL
 const cache = {
@@ -12,6 +38,17 @@ const cache = {
   timestamps: {},
   TTL: 120000 // 2 minutes
 };
+
+function clearCacheEntry(key) {
+  delete cache.data[key];
+  delete cache.timestamps[key];
+}
+
+function clearCacheEntriesWithPrefix(prefix) {
+  Object.keys(cache.data)
+    .filter((key) => key === prefix || key.startsWith(prefix))
+    .forEach((key) => clearCacheEntry(key));
+}
 
 function getResponseData(payload) {
   if (!payload) return {};
@@ -136,19 +173,42 @@ function normalizeCopilotContextTickers(value) {
   return normalized;
 }
 
+function buildCopilotScopedEndpoint(basePath, tickers) {
+  const query = normalizeCopilotContextTickers(tickers)
+    .map((ticker) => `tickers=${encodeURIComponent(ticker)}`)
+    .join('&');
+  return {
+    endpoint: query ? `${basePath}?${query}` : basePath,
+    query,
+  };
+}
+
 async function getCopilotContext(tickers) {
-  const params = new URLSearchParams();
-  normalizeCopilotContextTickers(tickers).forEach((ticker) => params.append('tickers', ticker));
-  const endpoint = params.toString()
-    ? `/copilot/context?${params.toString()}`
-    : '/copilot/context';
-  const payload = getResponseData(await fetchWithCache(endpoint, `copilot_context:${params.toString() || 'default'}`));
+  const { endpoint, query } = buildCopilotScopedEndpoint('/copilot/context', tickers);
+  const payload = getResponseData(await fetchWithCache(endpoint, `copilot_context:${query || 'default'}`));
   const normalized = payload && typeof payload === 'object' ? { ...payload } : {};
   const copilotStart = transformCopilotStart(normalized.copilot_start || normalized.copilotStart, normalized);
   if (Object.keys(copilotStart.brief_of_day).length || copilotStart.ask.length || copilotStart.open.length) {
     normalized.copilot_start = copilotStart;
   }
   return normalized;
+}
+
+async function getCopilotStart(tickers) {
+  const { endpoint, query } = buildCopilotScopedEndpoint('/copilot/start', tickers);
+  const payload = getResponseData(await fetchWithCache(endpoint, `copilot_start:${query || 'default'}`));
+  const normalized = payload && typeof payload === 'object' ? { ...payload } : {};
+  const copilotStart = transformCopilotStart(
+    normalized.copilot_start || normalized.copilotStart || normalized,
+    normalized
+  );
+
+  if (Object.keys(copilotStart.brief_of_day).length || copilotStart.ask.length || copilotStart.open.length) {
+    normalized.copilot_start = copilotStart;
+    return normalized;
+  }
+
+  return getCopilotContext(tickers);
 }
 
 async function getDailyBrief() {
@@ -958,8 +1018,11 @@ async function populateWindowGlobals() {
     // Copilot bootstrap context -> story panel + starter prompts
     let brief = null;
     window.copilotStart = null;
-    const copilotContext = await getCopilotContext();
-    const copilotStart = transformCopilotStart(copilotContext.copilot_start || copilotContext.copilotStart);
+    const copilotStartPayload = await getCopilotStart();
+    const copilotStart = transformCopilotStart(
+      copilotStartPayload.copilot_start || copilotStartPayload.copilotStart || copilotStartPayload,
+      copilotStartPayload
+    );
     if (copilotStart.brief_of_day || copilotStart.ask.length || copilotStart.open.length) {
       window.copilotStart = copilotStart;
     }
@@ -1151,24 +1214,22 @@ function startAutoRefresh(intervalMs) {
   if (!intervalMs) intervalMs = 120000;
   setInterval(async () => {
     // Clear cache keys to force refresh
-    delete cache.data.news;
-    delete cache.data.forecasts;
-    delete cache.data.stocks;
-    delete cache.data.dashboard_performance;
-    delete cache.data.alerts;
-    delete cache.data.copilot_context;
-    delete cache.data.brief_daily;
-    delete cache.data.dashboard_allocation;
-    delete cache.data.movers;
-    delete cache.data.copilot_context;
-    delete cache.data.portfolios;
-    delete cache.timestamps.portfolios;
-    Object.keys(cache.data)
-      .filter((key) => key.startsWith('portfolio-risk-profile-'))
-      .forEach((key) => {
-        delete cache.data[key];
-        delete cache.timestamps[key];
-      });
+    [
+      'news',
+      'forecasts',
+      'stocks',
+      'dashboard_performance',
+      'alerts',
+      'copilot_context',
+      'copilot_start',
+      'brief_daily',
+      'dashboard_allocation',
+      'movers',
+      'portfolios',
+    ].forEach((key) => clearCacheEntry(key));
+    clearCacheEntriesWithPrefix('copilot_context:');
+    clearCacheEntriesWithPrefix('copilot_start:');
+    clearCacheEntriesWithPrefix('portfolio-risk-profile-');
     await populateWindowGlobals();
   }, intervalMs);
 }
@@ -1184,6 +1245,7 @@ window.FinanceAPI = {
   getStatus,
   getHealth,
   getJudgeAnalysis,
+  getCopilotStart,
   getCopilotContext,
   getPortfolios,
   getPortfolioRiskProfile,
