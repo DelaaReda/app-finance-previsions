@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import re
@@ -533,7 +532,7 @@ def _build_copilot_start_payload(
         "services.intelligence_service",
     ):
         try:
-            module = importlib.import_module(module_path)
+            module = import_module(module_path)
             build_fn = getattr(module, "_build_copilot_start_payload", None)
             if callable(build_fn):
                 payload = build_fn(resolved_brief, context_timestamp=context_timestamp)
