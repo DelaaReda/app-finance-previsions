@@ -3336,6 +3336,20 @@ async def _legacy_get_judge_verdicts(
             }
             _prune_judge_cache()
 
+        if cache_key and isinstance(verdicts_data, dict):
+            cache_meta = verdicts_data.get("cache")
+            if not isinstance(cache_meta, dict):
+                cache_meta = {}
+            cache_meta.update(
+                {
+                    "hit": False,
+                    "age_seconds": 0.0,
+                    "ttl_seconds": JUDGE_CACHE_TTL_SECONDS,
+                    "singleflight_waiter": bool(singleflight_waiter),
+                }
+            )
+            verdicts_data["cache"] = cache_meta
+
         if singleflight_waiter and isinstance(verdicts_data, dict):
             verdicts_data = deepcopy(verdicts_data)
             _append_source_tag(verdicts_data, "judge_singleflight_wait")
@@ -3347,6 +3361,7 @@ async def _legacy_get_judge_verdicts(
                     "hit": False,
                     "singleflight_waiter": True,
                     "ttl_seconds": JUDGE_CACHE_TTL_SECONDS,
+                    "age_seconds": 0.0,
                 }
             )
             verdicts_data["cache"] = cache_meta
