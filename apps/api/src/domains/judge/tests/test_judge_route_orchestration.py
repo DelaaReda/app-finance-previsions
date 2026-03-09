@@ -243,6 +243,66 @@ def test_judge_strategy_playbooks_preserves_upstream_contract_fields(monkeypatch
     assert payload["data"]["playbooks"]
 
 
+def test_judge_strategy_playbooks_debug_exposes_debug_artifacts(monkeypatch):
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "horizon": "1w",
+                        "expected_return": 0.02,
+                        "risk_level": "medium",
+                        "confidence": 0.82,
+                        "summary": ["Synthetic verdict"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "go_no_go": {
+                            "decision": "go",
+                            "reasons": ["freshness_gate"],
+                        },
+                        "debug_payload": {"question_excerpt": "sanitized payload"},
+                        "debug_llm_res": {"provider": "gpt-test"},
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {"total_verdicts": 1},
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+                "debug_pipeline": [{"event": "compute", "stage": "row_done"}],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=AAPL&debug=true")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["debug_payload"] == [{"question_excerpt": "sanitized payload"}]
+    assert payload["data"]["debug_llm_res"] == [{"provider": "gpt-test"}]
+    assert payload["data"]["debug_pipeline"] == [{"event": "compute", "stage": "row_done"}]
+
+
 def test_judge_route_preserves_canonical_status_metadata(monkeypatch):
     now_iso = "2026-03-08T00:00:00Z"
 

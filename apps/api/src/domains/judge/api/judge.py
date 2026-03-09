@@ -3779,6 +3779,19 @@ async def get_judge_strategy_playbooks(
             response_data["debug_pipeline"] = data.get("debug_pipeline")
         if isinstance(data.get("verdicts_raw"), list):
             response_data["verdicts_raw"] = data.get("verdicts_raw")
+        debug_payload = []
+        debug_llm_res = []
+        for verdict_entry in verdicts:
+            if not isinstance(verdict_entry, dict):
+                continue
+            verdict_debug_payload = verdict_entry.get("debug_payload")
+            verdict_debug_llm_res = verdict_entry.get("debug_llm_res")
+            if isinstance(verdict_debug_payload, (dict, list)):
+                debug_payload.append(verdict_debug_payload)
+            if isinstance(verdict_debug_llm_res, (dict, list)):
+                debug_llm_res.append(verdict_debug_llm_res)
+        response_data["debug_payload"] = debug_payload
+        response_data["debug_llm_res"] = debug_llm_res
     response_data.setdefault("source", ["judge_strategy_playbook_route"])
     _append_source_tag(response_data, "judge_strategy_playbook_route")
 
