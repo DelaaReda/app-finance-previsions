@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
 import tempfile
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+import yaml
 
 from worker_manager import _ensure_agent as _ensure_openclaw_agent
 from worker_manager import _openclaw_env
@@ -20,8 +23,26 @@ from worker_manager import shutil_which
 ACTIVE_STATUSES = {"spawned", "running"}
 FINISHED_STATUSES = {"completed", "failed", "merged"}
 SUCCESS_RESULT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
+SUCCESS_OUTPUT_STATUSES = {"completed", "done", "pass", "ok", "success"}
 ALLOWED_PARENT_ROLES = {"planner"}
 DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
+CODEX_STARTUP_NOISE_MARKERS = (
+    "openai codex v",
+    "research preview",
+    "approval: never",
+    "sandbox: danger-full-access",
+    "sandbox: workspace-write",
+    "reasoning effort:",
+    "session id:",
+    "provider: openai",
+    "failed to refresh available models",
+    "missing bearer or basic authentication",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "transport channel",
+    "worker quit with fatal",
+    "reconnecting...",
+)
 ROLE_MODELS = {
     "dev": ("codex-full/gpt-5.4", "high", "danger-full-access"),
     "admin": ("codex-full/gpt-5.4", "xhigh", "danger-full-access"),
@@ -32,6 +53,19 @@ ROLE_TASK_KINDS = {
     "admin": {"runtime", "reconcile", "takeover", "repair"},
     "scrum_master": {"flow", "coordination", "unblock", "starvation"},
 }
+STATUS_RANK = {
+    "spawned": 1,
+    "running": 2,
+    "blocked": 3,
+    "failed": 3,
+    "completed": 3,
+    "done": 3,
+    "pass": 3,
+    "ok": 3,
+    "success": 3,
+    "merged": 4,
+}
+EMPTY_FIELD_TOKENS = {"", "none", "n/a", "na", "null", "unknown"}
 RESULT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -126,11 +160,62 @@ def _compact(text: Any, limit: int = 180) -> str:
     return value[:limit]
 
 
+def _value_present(value: Any) -> bool:
+    token = str(value or "").strip().lower()
+    return bool(token and token not in {"none", "n/a", "na", "null", "unknown"})
+
+
+def _looks_like_startup_noise(text: Any) -> bool:
+    token = " ".join(str(text or "").strip().lower().split())
+    if not token:
+        return True
+    return any(marker in token for marker in CODEX_STARTUP_NOISE_MARKERS)
+
+
+def _semantic_result_gate(payload: dict[str, Any]) -> tuple[bool, str]:
+    status = str(payload.get("status", "")).strip().lower()
+    summary = str(payload.get("summary", "")).strip()
+    blocking_issue = str(payload.get("blocking_issue", "")).strip().lower()
+    if status not in SUCCESS_OUTPUT_STATUSES:
+        return False, blocking_issue or f"subagent_status_{status or 'unknown'}"
+
+    proof_fields = (
+        payload.get("artifact"),
+        payload.get("verify"),
+        payload.get("files_touched"),
+        payload.get("recommended_next"),
+        payload.get("root_cause"),
+        payload.get("fix_applied"),
+        payload.get("tests_run"),
+        payload.get("commit_sha"),
+    )
+    has_structured_signal = any(_value_present(value) for value in proof_fields)
+    if not has_structured_signal and _looks_like_startup_noise(summary):
+        return False, "invalid_subagent_result:start_banner_only"
+    if not has_structured_signal and not _value_present(summary):
+        return False, "invalid_subagent_result:empty_payload"
+    return True, "none"
+
+
 def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
     try:
         return json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return default
+
+
+def _read_structured(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    suffix = path.suffix.lower()
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if suffix in {".yaml", ".yml"}:
+            payload = yaml.safe_load(text)
+            return payload if payload is not None else default
+        return json.loads(text)
     except Exception:
         return default
 
@@ -269,6 +354,7 @@ class PlannerSubagentConfig:
     default_ttl_min: int
     retry_max: int
     backend: str
+    backend_by_role: dict[str, str]
     managed_roles: set[str]
 
 
@@ -421,7 +507,7 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
     cfg_path = root / "platform" / "config" / "runner" / "runner.v1.yaml"
     if not cfg_path.exists():
         cfg_path = root / "platform" / "config" / "runner" / "runner_config.v1.yaml"
-    cfg = _read_json(cfg_path, {})
+    cfg = _read_structured(cfg_path, {})
     features = cfg.get("features", {}) if isinstance(cfg, dict) else {}
     orchestrator = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
     enabled = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED", orchestrator.get("enabled", 0))).strip() not in {"0", "false", "False", ""}
@@ -430,6 +516,25 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
     default_ttl_min = int(os.environ.get("FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN", orchestrator.get("default_ttl_min", 45)) or 45)
     retry_max = int(os.environ.get("FC_PLANNER_ORCHESTRATOR_RETRY_MAX", orchestrator.get("retry_max", 2)) or 2)
     backend = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND", orchestrator.get("backend", "codex_exec")) or "codex_exec").strip().lower()
+    backend_by_role: dict[str, str] = {}
+    raw_backend_by_role = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE", "") or "").strip()
+    if not raw_backend_by_role:
+        cfg_backend_by_role = orchestrator.get("backend_by_role", {})
+        if isinstance(cfg_backend_by_role, dict):
+            raw_backend_by_role = ",".join(
+                f"{str(key).strip()}={str(value).strip()}"
+                for key, value in cfg_backend_by_role.items()
+                if str(key).strip() and str(value).strip()
+            )
+    for chunk in raw_backend_by_role.split(","):
+        token = str(chunk or "").strip()
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        key_token = str(key or "").strip().lower()
+        value_token = str(value or "").strip().lower()
+        if key_token and value_token:
+            backend_by_role[key_token] = value_token
     raw_roles = os.environ.get("FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES", "")
     if raw_roles.strip():
         managed_roles = {canonical_role(tok) for tok in raw_roles.split(",") if tok.strip()}
@@ -450,8 +555,29 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
         default_ttl_min=max(5, default_ttl_min),
         retry_max=max(0, retry_max),
         backend=backend or "codex_exec",
+        backend_by_role=backend_by_role,
         managed_roles=managed_roles or set(DEFAULT_MANAGED_ROLES),
     )
+
+
+def _resolve_backend(config: PlannerSubagentConfig, target_role: str, task_kind: str, backend_override: str = "") -> str:
+    token = str(backend_override or "").strip().lower()
+    if token and token != "auto":
+        return token
+    task_kind_token = str(task_kind or "").strip().lower()
+    if task_kind_token and config.backend_by_role.get(task_kind_token):
+        return config.backend_by_role[task_kind_token]
+    target_token = canonical_role(target_role)
+    if config.backend_by_role.get(target_token):
+        return config.backend_by_role[target_token]
+    token = str(config.backend or "codex_exec").strip().lower()
+    if token == "auto":
+        if target_token == "admin":
+            return "codex_exec"
+        if target_token == "dev":
+            return "openclaw"
+        return "codex_exec"
+    return token or "codex_exec"
 
 
 def _load_registry(path: Path) -> dict[str, Any]:
@@ -473,8 +599,143 @@ def _records_from_registry(payload: dict[str, Any]) -> list[PlannerSubagentRecor
     return out
 
 
+def _registry_lock_path(path: Path) -> Path:
+    return path.with_name(f"{path.name}.lock")
+
+
+@contextmanager
+def _registry_lock(path: Path):
+    lock_path = _registry_lock_path(path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _record_result_paths(path: Path, subagent_id: str) -> tuple[Path, Path]:
+    results_dir = path.parent / "planner-subagents-results"
+    return results_dir / f"{subagent_id}.result.json", results_dir / f"{subagent_id}.raw.txt"
+
+
+def _record_has_collectible_result(path: Path, record: PlannerSubagentRecord) -> bool:
+    if not str(record.subagent_id or "").strip():
+        return False
+    result_path, raw_path = _record_result_paths(path, record.subagent_id)
+    return result_path.exists() or raw_path.exists()
+
+
+def _status_rank(status: str) -> int:
+    return STATUS_RANK.get(str(status or "").strip().lower(), 0)
+
+
+def _meaningful_text(value: Any) -> bool:
+    token = str(value or "").strip()
+    return bool(token and token.lower() not in EMPTY_FIELD_TOKENS)
+
+
+def _coalesce_text(primary: Any, secondary: Any, *, fallback: str = "") -> str:
+    if _meaningful_text(primary):
+        return str(primary).strip()
+    if _meaningful_text(secondary):
+        return str(secondary).strip()
+    return fallback
+
+
+def _choose_iso(first: str, second: str, *, prefer_latest: bool) -> str:
+    first_dt = _parse_iso(first)
+    second_dt = _parse_iso(second)
+    if first_dt and second_dt:
+        chosen = max(first_dt, second_dt) if prefer_latest else min(first_dt, second_dt)
+        return _iso(chosen)
+    return str(first or second or "").strip()
+
+
+def _record_sort_stamp(record: PlannerSubagentRecord) -> datetime:
+    return (
+        _parse_iso(record.merged_at)
+        or _parse_iso(record.last_update_at)
+        or _parse_iso(record.created_at)
+        or datetime.fromtimestamp(0, timezone.utc)
+    )
+
+
+def _merge_record(existing: PlannerSubagentRecord, incoming: PlannerSubagentRecord) -> PlannerSubagentRecord:
+    existing_rank = _status_rank(existing.status)
+    incoming_rank = _status_rank(incoming.status)
+    if incoming_rank > existing_rank:
+        preferred, fallback = incoming, existing
+    elif existing_rank > incoming_rank:
+        preferred, fallback = existing, incoming
+    elif str(existing.status).strip().lower() != str(incoming.status).strip().lower():
+        if str(existing.status).strip().lower() in ACTIVE_STATUSES and str(incoming.status).strip().lower() not in ACTIVE_STATUSES:
+            preferred, fallback = incoming, existing
+        elif str(incoming.status).strip().lower() in ACTIVE_STATUSES and str(existing.status).strip().lower() not in ACTIVE_STATUSES:
+            preferred, fallback = existing, incoming
+        else:
+            preferred, fallback = incoming, existing
+    elif _record_sort_stamp(incoming) >= _record_sort_stamp(existing):
+        preferred, fallback = incoming, existing
+    else:
+        preferred, fallback = existing, incoming
+
+    status = preferred.status or fallback.status
+    if existing_rank == incoming_rank == _status_rank("merged") and not str(preferred.merged_at or "").strip():
+        status = "merged"
+
+    return PlannerSubagentRecord(
+        subagent_id=preferred.subagent_id or fallback.subagent_id,
+        target_role=preferred.target_role or fallback.target_role,
+        owner_task_id=preferred.owner_task_id or fallback.owner_task_id,
+        parent_role=preferred.parent_role or fallback.parent_role,
+        task_kind=preferred.task_kind or fallback.task_kind,
+        status=status,
+        created_at=_choose_iso(existing.created_at, incoming.created_at, prefer_latest=False),
+        expires_at=_choose_iso(existing.expires_at, incoming.expires_at, prefer_latest=True),
+        ttl_min=max(int(existing.ttl_min or 0), int(incoming.ttl_min or 0)),
+        backend=_coalesce_text(preferred.backend, fallback.backend, fallback="codex_exec"),
+        backend_ref=_coalesce_text(preferred.backend_ref, fallback.backend_ref),
+        last_update_at=_choose_iso(existing.last_update_at, incoming.last_update_at, prefer_latest=True),
+        summary=_coalesce_text(preferred.summary, fallback.summary),
+        root_cause=_coalesce_text(preferred.root_cause, fallback.root_cause),
+        fix_applied=_coalesce_text(preferred.fix_applied, fallback.fix_applied),
+        artifact=_coalesce_text(preferred.artifact, fallback.artifact),
+        verify=_coalesce_text(preferred.verify, fallback.verify),
+        files_touched=_coalesce_text(preferred.files_touched, fallback.files_touched, fallback="none"),
+        tests_run=_coalesce_text(preferred.tests_run, fallback.tests_run, fallback="SKIP(no_tests)"),
+        commit_sha=_coalesce_text(preferred.commit_sha, fallback.commit_sha, fallback="none"),
+        architecture_check=_coalesce_text(preferred.architecture_check, fallback.architecture_check, fallback="none"),
+        vision_alignment=_coalesce_text(preferred.vision_alignment, fallback.vision_alignment, fallback="none"),
+        recommended_next=_coalesce_text(preferred.recommended_next, fallback.recommended_next, fallback="none"),
+        blocking_issue=_coalesce_text(preferred.blocking_issue, fallback.blocking_issue, fallback="none"),
+        metadata={**fallback.metadata, **preferred.metadata},
+        merged_at=_choose_iso(existing.merged_at, incoming.merged_at, prefer_latest=True),
+    )
+
+
 def _save_registry(path: Path, records: list[PlannerSubagentRecord]) -> None:
-    _write_json(path, {"updated_at": _iso(), "subagents": [record.as_dict() for record in records]})
+    with _registry_lock(path):
+        existing_rows = _records_from_registry(_load_registry(path))
+        existing_by_id = {row.subagent_id: row for row in existing_rows if str(row.subagent_id or "").strip()}
+        merged_rows: list[PlannerSubagentRecord] = []
+        seen_ids: set[str] = set()
+        for record in records:
+            token = str(record.subagent_id or "").strip()
+            if token and token in existing_by_id:
+                merged = _merge_record(existing_by_id[token], record)
+                existing_by_id[token] = merged
+                if token in seen_ids:
+                    merged_rows = [row for row in merged_rows if str(row.subagent_id or "").strip() != token]
+                merged_rows.append(merged)
+                seen_ids.add(token)
+            else:
+                if token:
+                    existing_by_id[token] = record
+                    seen_ids.add(token)
+                merged_rows.append(record)
+        _write_json(path, {"updated_at": _iso(), "subagents": [record.as_dict() for record in merged_rows]})
 
 
 def _emit_event(config: PlannerSubagentConfig, event: str, record: PlannerSubagentRecord, extra: dict[str, Any] | None = None) -> None:
@@ -494,8 +755,8 @@ def _emit_event(config: PlannerSubagentConfig, event: str, record: PlannerSubage
     _append_jsonl(config.events_path, payload)
 
 
-def _active_count(records: list[PlannerSubagentRecord]) -> int:
-    return sum(1 for record in records if record.status in ACTIVE_STATUSES)
+def _active_count(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord]) -> int:
+    return sum(1 for record in records if _record_effectively_active(config, record))
 
 
 def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord], now: datetime | None = None) -> tuple[list[PlannerSubagentRecord], list[str]]:
@@ -546,9 +807,21 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
     return kept, removed
 
 
-def _find_duplicate(records: list[PlannerSubagentRecord], target_role: str, owner_task_id: str) -> PlannerSubagentRecord | None:
+def _record_effectively_active(config: PlannerSubagentConfig, record: PlannerSubagentRecord) -> bool:
+    if record.status not in ACTIVE_STATUSES:
+        return False
+    if _record_has_collectible_result(config.registry_path, record):
+        return False
+    return True
+
+
+def _find_duplicate(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord], target_role: str, owner_task_id: str) -> PlannerSubagentRecord | None:
     for record in records:
-        if record.target_role == target_role and record.owner_task_id == owner_task_id and record.status in ACTIVE_STATUSES:
+        if (
+            record.target_role == target_role
+            and record.owner_task_id == owner_task_id
+            and _record_effectively_active(config, record)
+        ):
             return record
     return None
 
@@ -687,6 +960,67 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
     )
 
 
+def _run_codex_exec_subagent(
+    config: PlannerSubagentConfig,
+    plan: dict[str, Any],
+    prompt: str,
+    timeout_seconds: int,
+    subagent_id: str,
+) -> tuple[int, str, str, str]:
+    with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
+        tmpdir = Path(td)
+        schema_path = tmpdir / "schema.json"
+        out_path = tmpdir / "last_message.json"
+        schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
+        sandbox_token = str(plan["sandbox"]).strip().lower()
+        cmd = [
+            "codex",
+            "exec",
+            "--enable",
+            "multi_agent",
+            "--enable",
+            "apps",
+            "--enable",
+            "js_repl",
+            "-C",
+            str(config.root),
+            "--skip-git-repo-check",
+            "--color",
+            "never",
+            "--output-schema",
+            str(schema_path),
+            "-o",
+            str(out_path),
+            "-m",
+            str(plan["model"]),
+            "-c",
+            f'model_reasoning_effort="{plan["thinking"]}"',
+        ]
+        if sandbox_token in {"off", "danger-full-access"}:
+            cmd.append("--dangerously-bypass-approvals-and-sandbox")
+        else:
+            cmd.extend(["--sandbox", str(plan["sandbox"])])
+        if sandbox_token == "workspace-write":
+            cmd.append("--full-auto")
+        try:
+            proc = subprocess.run(
+                cmd + [prompt],
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=str(config.root),
+                timeout=max(30, timeout_seconds),
+            )
+            rc = proc.returncode
+            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
+            stderr = proc.stderr or ""
+        except subprocess.TimeoutExpired as exc:
+            rc = 124
+            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else str(exc.stdout or "")
+            stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{max(30, timeout_seconds)}s"
+    return rc, stdout, stderr, f"codex_exec:{subagent_id}"
+
+
 def plan_subagent(
     config: PlannerSubagentConfig,
     role: str,
@@ -697,13 +1031,11 @@ def plan_subagent(
 ) -> dict[str, Any]:
     parent_role = canonical_role(role)
     target = canonical_role(target_role)
-    chosen_backend = str(backend_override or config.backend or "codex_exec").strip().lower()
-    if chosen_backend == "auto":
-        chosen_backend = config.backend
+    chosen_backend = _resolve_backend(config, target, task_kind, backend_override)
     records = _records_from_registry(_load_registry(config.registry_path))
     records, _ = _cleanup_records(config, records)
-    duplicate = _find_duplicate(records, target, owner_task_id)
-    active_count = _active_count(records)
+    duplicate = _find_duplicate(config, records, target, owner_task_id)
+    active_count = _active_count(config, records)
     allowed = True
     reason = "allowed"
     if parent_role not in ALLOWED_PARENT_ROLES:
@@ -784,7 +1116,7 @@ def run_subagent(
         created_at=_iso(now),
         expires_at=_iso(now + timedelta(minutes=ttl)),
         ttl_min=ttl,
-        backend=backend,
+        backend=plan["backend"],
         metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"]},
     )
     records.append(record)
@@ -832,9 +1164,14 @@ def run_subagent(
             thinking=plan["thinking"],
         )
         if not ok:
-            rc = 5
-            stderr = backend_ref or "openclaw_agent_create_failed"
-            backend_ref = subagent_id
+            rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
+                config,
+                plan,
+                prompt,
+                timeout_seconds,
+                subagent_id,
+            )
+            chosen_backend = "codex_exec"
         else:
             try:
                 proc = subprocess.run(
@@ -860,63 +1197,32 @@ def run_subagent(
                 rc = proc.returncode
                 stdout = proc.stdout or ""
                 stderr = proc.stderr or ""
+                openclaw_failure_blob = f"{stdout}\n{stderr}".strip()
+                if rc != 0 and (
+                    "Unknown agent id" in openclaw_failure_blob
+                    or "Gateway agent failed" in openclaw_failure_blob
+                    or "openclaw_agent_not_visible_after_add" in openclaw_failure_blob
+                ):
+                    rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
+                        config,
+                        plan,
+                        prompt,
+                        timeout_seconds,
+                        subagent_id,
+                    )
+                    chosen_backend = "codex_exec"
             except subprocess.TimeoutExpired as exc:
                 rc = 124
                 stdout = str(exc.stdout or "")
                 stderr = str(exc.stderr or "") or f"openclaw_timeout_after_{max(30, timeout_seconds + 15)}s"
     elif chosen_backend == "codex_exec":
-        with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
-            tmpdir = Path(td)
-            schema_path = tmpdir / "schema.json"
-            out_path = tmpdir / "last_message.json"
-            schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
-            sandbox_token = str(plan["sandbox"]).strip().lower()
-            cmd = [
-                "codex",
-                "exec",
-                "--enable",
-                "multi_agent",
-                "--enable",
-                "apps",
-                "--enable",
-                "js_repl",
-                "-C",
-                str(config.root),
-                "--skip-git-repo-check",
-                "--color",
-                "never",
-                "--output-schema",
-                str(schema_path),
-                "-o",
-                str(out_path),
-                "-m",
-                str(plan["model"]),
-                "-c",
-                f'model_reasoning_effort="{plan["thinking"]}"',
-            ]
-            if sandbox_token in {"off", "danger-full-access"}:
-                cmd.append("--dangerously-bypass-approvals-and-sandbox")
-            else:
-                cmd.extend(["--sandbox", str(plan["sandbox"])])
-            if sandbox_token == "workspace-write":
-                cmd.append("--full-auto")
-            try:
-                proc = subprocess.run(
-                    cmd + [prompt],
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                    cwd=str(config.root),
-                    timeout=max(30, timeout_seconds),
-                )
-                rc = proc.returncode
-                stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
-                stderr = proc.stderr or ""
-            except subprocess.TimeoutExpired as exc:
-                rc = 124
-                stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else str(exc.stdout or "")
-                stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{max(30, timeout_seconds)}s"
-            backend_ref = f"codex_exec:{subagent_id}"
+        rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
+            config,
+            plan,
+            prompt,
+            timeout_seconds,
+            subagent_id,
+        )
     else:
         rc = 5
         stderr = f"unsupported_backend:{chosen_backend}"
@@ -949,6 +1255,33 @@ def run_subagent(
             result.blocking_issue = _compact(stderr or f"{chosen_backend}_rc_{rc}", 160)
         if result.summary == "none":
             result.summary = _compact(stderr or f"{chosen_backend}_failed", 220)
+    else:
+        status_token = str(result.status).strip().lower()
+        if status_token == "blocked":
+            blocked_has_signal = any(
+                _value_present(value)
+                for value in (
+                    result.summary,
+                    result.recommended_next,
+                    result.blocking_issue,
+                    result.verify,
+                    result.artifact,
+                )
+            )
+            if not blocked_has_signal or (_looks_like_startup_noise(result.summary) and result.blocking_issue == "none"):
+                result.status = "failed"
+                if result.blocking_issue == "none":
+                    result.blocking_issue = "invalid_subagent_result:blocked_without_signal"
+                if result.summary == "none" or _looks_like_startup_noise(result.summary):
+                    result.summary = _compact(result.blocking_issue, 220)
+        else:
+            mergeable, invalid_reason = _semantic_result_gate(result.as_dict())
+            if not mergeable:
+                result.status = "failed"
+                if result.blocking_issue == "none":
+                    result.blocking_issue = invalid_reason
+                if result.summary == "none" or _looks_like_startup_noise(result.summary):
+                    result.summary = _compact(invalid_reason, 220)
     result_path = config.results_dir / f"{subagent_id}.result.json"
     result_path.write_text(json.dumps(result.as_dict(), indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
@@ -974,6 +1307,8 @@ def run_subagent(
     _save_registry(config.registry_path, records)
     emitted = next((row for row in records if row.subagent_id == subagent_id), record)
     _emit_event(config, "planner_subagent_result", emitted, {"rc": rc, "result_path": str(result_path.relative_to(config.root))})
+    if plan["parent_role"] == "planner" and plan["target_role"] in config.managed_roles:
+        _trigger_bridge_collect(config, owner_task_id=owner_task_id, target_role=plan["target_role"])
     payload = result.as_dict()
     payload["ok"] = rc == 0 and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES
     payload["rc"] = rc
@@ -1001,16 +1336,35 @@ def collect_subagent(config: PlannerSubagentConfig, role: str, subagent_id: str,
     payload = _read_json(result_path, {})
     if not isinstance(payload, dict):
         payload = {}
+    if not payload:
+        payload = {
+            "status": "failed",
+            "summary": "invalid_subagent_result:missing_result_payload",
+            "blocking_issue": "invalid_subagent_result:missing_result_payload",
+        }
+    status_token = str(payload.get("status", "")).strip().lower()
+    mergeable, invalid_reason = _semantic_result_gate(payload)
     if mark_merged:
         for record in records:
             if record.subagent_id == target.subagent_id:
-                record.status = "merged"
-                record.merged_at = _iso()
-                _emit_event(config, "planner_subagent_merge", record, {"merged_by": canonical_role(role)})
+                record.last_update_at = _iso()
+                record.summary = str(payload.get("summary", record.summary)).strip()
+                record.blocking_issue = str(payload.get("blocking_issue", record.blocking_issue)).strip() or record.blocking_issue
+                if mergeable and status_token in SUCCESS_OUTPUT_STATUSES:
+                    record.status = "merged"
+                    record.merged_at = _iso()
+                    _emit_event(config, "planner_subagent_merge", record, {"merged_by": canonical_role(role)})
+                else:
+                    record.status = "failed" if status_token != "blocked" else "blocked"
+                    record.blocking_issue = invalid_reason if invalid_reason != "none" else (record.blocking_issue or f"subagent_status_{status_token or 'unknown'}")
+                    _emit_event(config, "planner_subagent_rejected", record, {"merged_by": canonical_role(role), "reason": record.blocking_issue})
                 break
         _save_registry(config.registry_path, records)
-    payload["ok"] = True
-    return 0, payload
+    payload["mergeable"] = mergeable
+    payload["ok"] = bool(mergeable and status_token in SUCCESS_OUTPUT_STATUSES)
+    if invalid_reason != "none" and not str(payload.get("blocking_issue", "")).strip():
+        payload["blocking_issue"] = invalid_reason
+    return (0 if payload["ok"] else 6), payload
 
 
 def cleanup_subagents(config: PlannerSubagentConfig) -> dict[str, Any]:
@@ -1027,7 +1381,7 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         _save_registry(config.registry_path, records)
     role_token = canonical_role(role) if role else ""
     filtered = [record for record in records if not role_token or record.parent_role == role_token]
-    active = [record.as_dict() for record in filtered if record.status in ACTIVE_STATUSES]
+    active = [record.as_dict() for record in filtered if _record_effectively_active(config, record)]
     recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES][-8:]
     return {
         "ok": True,
@@ -1059,6 +1413,40 @@ def prompt_context(config: PlannerSubagentConfig, role: str) -> str:
         f"planner_subagent_active={'; '.join(active_bits) if active_bits else 'none'} | "
         f"planner_subagent_recent={'; '.join(recent_bits) if recent_bits else 'none'}"
     )
+
+
+def _trigger_bridge_collect(config: PlannerSubagentConfig, owner_task_id: str, target_role: str) -> None:
+    bridge_path = config.root / "platform" / "automation" / "planner_orchestrator_bridge.py"
+    if not bridge_path.exists():
+        return
+    cmd = [
+        os.environ.get("PYTHON", "python3"),
+        str(bridge_path),
+        "--root",
+        str(config.root),
+        "--role",
+        "planner",
+        "--source",
+        "planner_subagent_manager",
+        "--backend",
+        "auto",
+        "--collect-only",
+        "--owner-task-id",
+        str(owner_task_id or "").strip(),
+        "--target-role",
+        canonical_role(target_role),
+    ]
+    try:
+        subprocess.run(
+            cmd,
+            cwd=str(config.root),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except Exception:
+        return
 
 
 def build_parser() -> argparse.ArgumentParser:

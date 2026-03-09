@@ -53,6 +53,35 @@ log_line() {
   printf '%s %s\n' "$(ts_utc)" "$*" >> "$LOG_FILE"
 }
 
+planner_change_plan() {
+  cat <<'EOF'
+scope planner autonomy batch
+dependency impact on downstream tasks
+risk containment before claim
+verification via targeted sync
+rollback path if claim fails
+EOF
+}
+
+planner_architecture_checks() {
+  cat <<'EOF'
+planner autonomy queue boundaries
+imports and data flow remain stable
+claim stays inside intended task path
+EOF
+}
+
+build_claim_cmd() {
+  local task_id="${1:-}"
+  local cmd="python3 platform/automation/parallel_workstream.py claim --role planner"
+  if [[ -n "$task_id" ]]; then
+    cmd+=" --task \"$task_id\""
+  fi
+  cmd+=" --change-plan \"$(planner_change_plan | tr '\n' ';' | sed 's/;*$//')\""
+  cmd+=" --architecture-checks \"$(planner_architecture_checks | tr '\n' ';' | sed 's/;*$//')\""
+  printf '%s' "$cmd"
+}
+
 write_state() {
   local active="$1"
   local action="$2"
@@ -201,13 +230,85 @@ parse_autobatch_id() {
   printf '%s' "$batch_id"
 }
 
+parse_autobatch_reason() {
+  local text="$1"
+  local reason="unknown"
+  if [[ "$text" =~ AUTOBATCH_SKIP[[:space:]]+reason=([a-zA-Z0-9_-]+) ]]; then
+    reason="${BASH_REMATCH[1]}"
+  fi
+  printf '%s' "$reason"
+}
+
+planner_runway_snapshot() {
+  python3 - "$BOARD_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    print("0|0|none|0|0")
+    raise SystemExit(0)
+try:
+    board = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print("0|0|none|0|0")
+    raise SystemExit(0)
+
+def canon(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if token in {"planner", "analyst", "architect", "po", "scrum_master", "vision_architect_tasks_planner", "vision-architect-tasks-planner"}:
+        return "planner"
+    if token in {"dev", "backend_engineer", "frontend_engineer", "data_analyst", "integrator", "tester", "qa"}:
+        return "dev"
+    if token in {"admin", "clawsentinel", "infra"}:
+        return "admin"
+    return token
+
+planner_in_progress = 0
+planner_ready = 0
+planner_ready_task = "none"
+blocking_task_states = {"WAITING_DEP", "READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "REVIEW", "BLOCKED"}
+blocking_stream_states = {"WAITING_DEP", "READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "REVIEW", "BLOCKED"}
+runway_tasks = 0
+runway_streams = 0
+for task in board.get("tasks", []):
+    if not isinstance(task, dict):
+        continue
+    task_role = canon(task.get("role", ""))
+    assignee = canon(task.get("assignee", ""))
+    state = str(task.get("state", "")).upper()
+    if state in blocking_task_states:
+        runway_tasks += 1
+    if "planner" in {task_role, assignee}:
+        if state == "IN_PROGRESS":
+            planner_in_progress += 1
+        if state in {"READY", "READY_PLANNER"}:
+            planner_ready += 1
+            if planner_ready_task == "none":
+                planner_ready_task = str(task.get("id", "")).strip() or "none"
+for stream in board.get("streams", []):
+    if not isinstance(stream, dict):
+        continue
+    state = str(stream.get("state", "")).upper()
+    if state in blocking_stream_states:
+        runway_streams += 1
+
+print(f"{planner_in_progress}|{planner_ready}|{planner_ready_task}|{runway_tasks}|{runway_streams}")
+PY
+}
+
 with_lock
 
-counts="$(planner_counts)"
-planner_in_progress="${counts%%|*}"
-rest="${counts#*|}"
+snapshot="$(planner_runway_snapshot)"
+planner_in_progress="${snapshot%%|*}"
+rest="${snapshot#*|}"
 planner_ready="${rest%%|*}"
-planner_ready_task="${rest##*|}"
+rest="${rest#*|}"
+planner_ready_task="${rest%%|*}"
+rest="${rest#*|}"
+runway_task_count="${rest%%|*}"
+runway_stream_count="${rest##*|}"
 
 if [[ "$planner_in_progress" =~ ^[0-9]+$ ]] && (( planner_in_progress > 0 )); then
   write_state 1 "resume_in_progress" "no_create" "planner_in_progress_exists" "${planner_ready_task:-none}" "none" "planner_in_progress=${planner_in_progress}"
@@ -221,28 +322,53 @@ sanitize_rc="$(printf '%s' "$sanitize_payload" | head -n1)"
 sync_payload="$(run_safe_capture "sync_priority" "python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json")"
 sync_rc="$(printf '%s' "$sync_payload" | head -n1)"
 
-counts="$(planner_counts)"
-planner_in_progress="${counts%%|*}"
-rest="${counts#*|}"
+collect_payload="$(run_safe_capture "collect_pending_results" "python3 platform/automation/planner_orchestrator_bridge.py --root \"$ROOT\" --source planner_autonomy_tick --collect-only")"
+collect_rc="$(printf '%s' "$collect_payload" | head -n1)"
+
+reconcile_payload="$(run_safe_capture "reconcile_state" "python3 platform/automation/parallel_workstream.py reconcile-state --queue docs/operations/orchestrator/priority-queue.json")"
+reconcile_rc="$(printf '%s' "$reconcile_payload" | head -n1)"
+
+snapshot="$(planner_runway_snapshot)"
+planner_in_progress="${snapshot%%|*}"
+rest="${snapshot#*|}"
 planner_ready="${rest%%|*}"
-planner_ready_task="${rest##*|}"
+rest="${rest#*|}"
+planner_ready_task="${rest%%|*}"
+rest="${rest#*|}"
+runway_task_count="${rest%%|*}"
+runway_stream_count="${rest##*|}"
 
 if [[ "$planner_ready" =~ ^[0-9]+$ ]] && (( planner_ready > 0 )); then
-  claim_payload="$(run_safe_capture "claim_ready" "python3 platform/automation/parallel_workstream.py claim --role planner")"
+  claim_payload="$(run_safe_capture "claim_ready" "$(build_claim_cmd "")")"
   claim_rc="$(printf '%s' "$claim_payload" | head -n1)"
   if [[ "$claim_rc" == "0" ]]; then
-    write_state 1 "claim_ready" "resolved" "planner_ready_found" "${planner_ready_task:-none}" "none" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc}"
-    echo "PLANNER_AUTONOMY status=ok action=claim_ready outcome=resolved planner_ready=${planner_ready} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc}"
+    write_state 1 "claim_ready" "resolved" "planner_ready_found" "${planner_ready_task:-none}" "none" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+    echo "PLANNER_AUTONOMY status=ok action=claim_ready outcome=resolved planner_ready=${planner_ready} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
     exit 0
   fi
-  write_state 1 "claim_ready" "deferred" "planner_claim_ready_failed" "${planner_ready_task:-none}" "planner_claim_ready_failed" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};claim_rc=${claim_rc}"
-  echo "PLANNER_AUTONOMY status=warn action=claim_ready outcome=deferred issue=planner_claim_ready_failed planner_ready=${planner_ready} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} claim_rc=${claim_rc}"
+  if [[ -n "${planner_ready_task:-}" && "${planner_ready_task:-none}" != "none" ]]; then
+    direct_ready_claim_payload="$(run_safe_capture "claim_ready_direct" "$(build_claim_cmd "$planner_ready_task")")"
+    direct_ready_claim_rc="$(printf '%s' "$direct_ready_claim_payload" | head -n1)"
+    if [[ "$direct_ready_claim_rc" == "0" ]]; then
+      write_state 1 "claim_ready" "resolved" "planner_ready_direct_claim" "${planner_ready_task:-none}" "none" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};claim_rc=${claim_rc};direct_claim_rc=${direct_ready_claim_rc}"
+      echo "PLANNER_AUTONOMY status=ok action=claim_ready outcome=resolved direct_task=${planner_ready_task:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc} claim_rc=${claim_rc} direct_claim_rc=${direct_ready_claim_rc}"
+      exit 0
+    fi
+  fi
+  write_state 1 "claim_ready" "failed" "planner_claim_ready_failed" "${planner_ready_task:-none}" "planner_claim_ready_failed_hard" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};claim_rc=${claim_rc}"
+  echo "PLANNER_AUTONOMY status=error action=claim_ready outcome=failed issue=planner_claim_ready_failed_hard planner_ready=${planner_ready} planner_ready_task=${planner_ready_task:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc} claim_rc=${claim_rc}"
   exit 0
 fi
 
 if [[ "$AUTO_CREATE_ON_EMPTY" != "1" ]]; then
-  write_state 1 "no_create" "deferred" "planner_autocreate_disabled" "none" "planner_autocreate_disabled" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc}"
-  echo "PLANNER_AUTONOMY status=warn action=no_create outcome=deferred issue=planner_autocreate_disabled planner_ready=0 sanitize_rc=${sanitize_rc} sync_rc=${sync_rc}"
+  write_state 1 "no_create" "deferred" "planner_autocreate_disabled" "none" "planner_autocreate_disabled" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+  echo "PLANNER_AUTONOMY status=warn action=no_create outcome=deferred issue=planner_autocreate_disabled planner_ready=0 sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
+
+if [[ "$runway_task_count" =~ ^[0-9]+$ ]] && (( runway_task_count > 0 )) || [[ "$runway_stream_count" =~ ^[0-9]+$ ]] && (( runway_stream_count > 0 )); then
+  write_state 1 "repair_only" "deferred" "planner_runway_not_empty" "none" "planner_ready_bridge_missing" "sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};runway_tasks=${runway_task_count};runway_streams=${runway_stream_count}"
+  echo "PLANNER_AUTONOMY status=warn action=repair_only outcome=deferred issue=planner_ready_bridge_missing planner_ready=0 runway_tasks=${runway_task_count} runway_streams=${runway_stream_count} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
   exit 0
 fi
 
@@ -250,19 +376,56 @@ create_payload="$(run_safe_capture "create_top_level" "python3 platform/automati
 create_rc="$(printf '%s' "$create_payload" | head -n1)"
 create_out="$(printf '%s' "$create_payload" | tail -n +2)"
 created_batch_id="$(parse_autobatch_id "$create_out")"
+create_reason="$(parse_autobatch_reason "$create_out")"
+
+if [[ "$create_rc" != "0" ]]; then
+  write_state 1 "autobatch" "deferred" "planner_autobatch_failed" "none" "planner_autobatch_failed" "create_rc=${create_rc};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+  echo "PLANNER_AUTONOMY status=warn action=autobatch outcome=deferred issue=planner_autobatch_failed create_rc=${create_rc} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
+
+if [[ "$create_out" == AUTOBATCH_SKIP* ]]; then
+  create_issue="planner_autobatch_skip"
+  create_state_reason="planner_autobatch_skipped"
+  if [[ "$create_reason" == "duplicate_title" ]]; then
+    create_issue="autobatch_duplicate_nonfatal"
+    create_state_reason="autobatch_duplicate_nonfatal"
+  elif [[ "$create_reason" == "runway_not_empty" ]]; then
+    create_issue="planner_ready_bridge_missing"
+    create_state_reason="planner_runway_not_empty"
+  fi
+  write_state 1 "autobatch_skip" "deferred" "${create_state_reason}" "${created_batch_id}" "${create_issue}" "create_rc=${create_rc};create_reason=${create_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+  echo "PLANNER_AUTONOMY status=warn action=autobatch_skip outcome=deferred issue=${create_issue} batch_id=${created_batch_id} create_reason=${create_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
 
 sync_after_create_payload="$(run_safe_capture "sync_priority_after_create" "python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json")"
 sync_after_create_rc="$(printf '%s' "$sync_after_create_payload" | head -n1)"
 
-claim_after_create_payload="$(run_safe_capture "claim_after_create" "python3 platform/automation/parallel_workstream.py claim --role planner")"
+claim_after_create_payload="$(run_safe_capture "claim_after_create" "$(build_claim_cmd "")")"
 claim_after_create_rc="$(printf '%s' "$claim_after_create_payload" | head -n1)"
 
 if [[ "$claim_after_create_rc" == "0" ]]; then
-  write_state 1 "create_and_claim" "resolved" "planner_created_and_claimed" "${created_batch_id}" "none" "create_rc=${create_rc};sync_rc=${sync_rc};sync_after_create_rc=${sync_after_create_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+  write_state 1 "create_and_claim" "resolved" "planner_created_and_claimed" "${created_batch_id}" "none" "create_rc=${create_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};sync_after_create_rc=${sync_after_create_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
   echo "PLANNER_AUTONOMY status=ok action=create_and_claim outcome=resolved batch_id=${created_batch_id} create_rc=${create_rc} sync_after_create_rc=${sync_after_create_rc} claim_rc=${claim_after_create_rc}"
   exit 0
 fi
 
-write_state 1 "create_and_claim" "deferred" "planner_claim_after_create_failed" "${created_batch_id}" "planner_claim_after_create_failed" "create_rc=${create_rc};sync_rc=${sync_rc};sync_after_create_rc=${sync_after_create_rc};claim_rc=${claim_after_create_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
-echo "PLANNER_AUTONOMY status=warn action=create_and_claim outcome=deferred issue=planner_claim_after_create_failed batch_id=${created_batch_id} create_rc=${create_rc} sync_after_create_rc=${sync_after_create_rc} claim_rc=${claim_after_create_rc}"
+direct_claim_task="none"
+for candidate in "${created_batch_id}-ANALYSIS" "${created_batch_id}-PLAN"; do
+  if [[ -z "$created_batch_id" || "$created_batch_id" == "none" ]]; then
+    break
+  fi
+  direct_claim_task="$candidate"
+  direct_claim_payload="$(run_safe_capture "claim_created_task" "$(build_claim_cmd "$candidate")")"
+  direct_claim_rc="$(printf '%s' "$direct_claim_payload" | head -n1)"
+  if [[ "$direct_claim_rc" == "0" ]]; then
+    write_state 1 "create_and_claim" "resolved" "planner_created_and_claimed_direct" "$candidate" "none" "create_rc=${create_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};sync_after_create_rc=${sync_after_create_rc};claim_rc=${claim_after_create_rc};direct_claim_rc=${direct_claim_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+    echo "PLANNER_AUTONOMY status=ok action=create_and_claim outcome=resolved batch_id=${created_batch_id} direct_task=${candidate} create_rc=${create_rc} sync_after_create_rc=${sync_after_create_rc} claim_rc=${claim_after_create_rc} direct_claim_rc=${direct_claim_rc}"
+    exit 0
+  fi
+done
+
+write_state 1 "create_and_claim" "failed" "planner_claim_after_create_failed" "${direct_claim_task}" "planner_claim_after_create_failed_hard" "create_rc=${create_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};sync_after_create_rc=${sync_after_create_rc};claim_rc=${claim_after_create_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+echo "PLANNER_AUTONOMY status=error action=create_and_claim outcome=failed issue=planner_claim_after_create_failed_hard batch_id=${created_batch_id} direct_task=${direct_claim_task} create_rc=${create_rc} sync_after_create_rc=${sync_after_create_rc} claim_rc=${claim_after_create_rc}"
 exit 0

@@ -95,6 +95,13 @@ def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
     except Exception:
         return False
 
+
+def one_line(value: str, limit: int = 320) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) > limit:
+        return text[:limit]
+    return text
+
 def _orchestrator_root_for_workspace(p: Path) -> Path | None:
     queue_file = resolve_orchestrator_read_path(p, "priority-queue.json")
     workboard_file = resolve_orchestrator_read_path(p, "parallel-workstreams.json")
@@ -534,10 +541,17 @@ def _planner_dispatch_snapshot(
     recent_failed_count = int(planner_subagents.get("recent_failed_count", 0) or 0)
     recent_blocked_count = int(planner_subagents.get("recent_blocked_count", 0) or 0)
     recent_fallback_like_count = int(planner_subagents.get("recent_fallback_like_count", 0) or 0)
+    recent_invalid_result_count = int(planner_subagents.get("recent_invalid_result_count", 0) or 0)
+    recent_timeout_like_count = int(planner_subagents.get("recent_timeout_like_count", 0) or 0)
     latest_status = str(planner_subagents.get("latest_status", "") or "").strip().lower()
     latest_fallback_like = bool(planner_subagents.get("latest_fallback_like"))
+    latest_failure_mode = str(planner_subagents.get("latest_failure_mode", "") or "").strip().lower()
     latest_owner_task_id = str(planner_subagents.get("latest_owner_task_id", "") or "").strip()
     latest_update_at = str(planner_subagents.get("latest_update_at", "") or "").strip()
+    recovering = bool(planner_subagents.get("recovering"))
+    stalled_capability_count = int(planner_subagents.get("stalled_capability_count", 0) or 0)
+    takeover_required_count = int(planner_subagents.get("takeover_required_count", 0) or 0)
+    recovery_required_count = int(planner_subagents.get("recovery_required_count", 0) or 0)
     tasks_progressed_last_1h = int(activity_summary.get("tasks_progressed_last_1h", 0) or 0)
     current_bottleneck = str(activity_summary.get("current_bottleneck", "none") or "none").strip() or "none"
     recommended_next_action = str(system_summary.get("recommended_next_action", "monitor") or "monitor").strip() or "monitor"
@@ -549,7 +563,7 @@ def _planner_dispatch_snapshot(
     if lifecycle != "running":
         status = lifecycle
     elif active_count > 0:
-        status = "active"
+        status = "recovering" if recovering else "active"
     elif (recent_failed_count > 0 and latest_status not in {"", "completed", "merged", "done", "pass", "ok", "success"}) or latest_fallback_like:
         status = "degraded"
     elif needs_dispatch:
@@ -567,11 +581,18 @@ def _planner_dispatch_snapshot(
         "recent_failed_count": recent_failed_count,
         "recent_blocked_count": recent_blocked_count,
         "recent_fallback_like_count": recent_fallback_like_count,
+        "recent_invalid_result_count": recent_invalid_result_count,
+        "recent_timeout_like_count": recent_timeout_like_count,
         "recent_by_role": planner_subagents.get("recent_by_role", {}) if isinstance(planner_subagents.get("recent_by_role", {}), dict) else {},
         "latest_status": latest_status,
         "latest_fallback_like": latest_fallback_like,
+        "latest_failure_mode": latest_failure_mode,
         "latest_owner_task_id": latest_owner_task_id,
         "latest_update_at": latest_update_at,
+        "recovering": recovering,
+        "stalled_capability_count": stalled_capability_count,
+        "takeover_required_count": takeover_required_count,
+        "recovery_required_count": recovery_required_count,
         "ready_dev_count": ready_dev_count,
         "ready_planner_count": ready_planner_count,
         "in_progress_count": in_progress_count,
@@ -581,6 +602,169 @@ def _planner_dispatch_snapshot(
         "needs_dispatch": needs_dispatch,
         "stalled_ready_dev": stalled_ready_dev,
         "registry_path": str(planner_subagents.get("registry_path", "") or ""),
+    }
+
+
+def _latest_iteration_roles_snapshot() -> dict[str, dict]:
+    payload = _load_json_file(ITERATION_ISSUES_LATEST_FILE) if ITERATION_ISSUES_LATEST_FILE.exists() else {}
+    roles = payload.get("roles", {}) if isinstance(payload, dict) else {}
+    if not isinstance(roles, dict):
+        return {}
+    normalized: dict[str, dict] = {}
+    for role, item in roles.items():
+        role_token = canonical_role(role)
+        if not role_token or not isinstance(item, dict):
+            continue
+        normalized[role_token] = item
+    return normalized
+
+
+def _recent_runner_events(role: str, limit: int = 3) -> list[dict[str, str]]:
+    path = ROOT / f"logs-codex-runs/role-runner/{role}.events.log"
+    rows: list[dict[str, str]] = []
+    if not path.exists():
+        return rows
+    for raw in reversed(_tail_lines(path, 120)):
+        line = str(raw or "").strip()
+        if not line:
+            continue
+        ts_match = re.match(r"^(\S+)", line)
+        event_match = re.search(r"\bevent=([a-zA-Z0-9_.:-]+)", line)
+        detail_match = re.search(r"\bdetail=(.*)$", line)
+        event_name = str(event_match.group(1) if event_match else "").strip()
+        if not event_name:
+            continue
+        rows.append(
+            {
+                "ts": str(ts_match.group(1) if ts_match else "").strip(),
+                "event": event_name,
+                "detail": one_line(detail_match.group(1) if detail_match else "", 220),
+            }
+        )
+        if len(rows) >= max(1, limit):
+            break
+    rows.reverse()
+    return rows
+
+
+def _agent_activity_snapshot(
+    *,
+    roles: tuple[str, ...],
+    agents: dict[str, dict],
+    tasks: list[dict],
+    planner_subagents: dict,
+    dynamic_workers: dict,
+) -> dict[str, object]:
+    issue_roles = _latest_iteration_roles_snapshot()
+    role_rows: dict[str, dict[str, object]] = {}
+    active_tasks_by_role: dict[str, list[dict]] = defaultdict(list)
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        state = str(task.get("state", "")).upper()
+        if state not in {"IN_PROGRESS", "READY", "READY_PLANNER", "READY_DEV", "REVIEW"}:
+            continue
+        role_token = canonical_role(task.get("assignee") or task.get("role", ""))
+        if not role_token:
+            continue
+        active_tasks_by_role[role_token].append(task)
+
+    subagents_active = planner_subagents.get("active", []) if isinstance(planner_subagents.get("active", []), list) else []
+    workers_active = dynamic_workers.get("active", []) if isinstance(dynamic_workers.get("active", []), list) else []
+    total_helpers = 0
+
+    for role in roles:
+        agent = agents.get(role, {}) if isinstance(agents, dict) else {}
+        if not isinstance(agent, dict):
+            agent = {}
+        issue = issue_roles.get(role, {})
+        if not isinstance(issue, dict):
+            issue = {}
+        role_tasks = active_tasks_by_role.get(role, [])
+        role_tasks.sort(
+            key=lambda item: (
+                0 if str(item.get("state", "")).upper() == "IN_PROGRESS" else 1,
+                str(item.get("updated_at", "") or ""),
+            )
+        )
+        current_task = role_tasks[0] if role_tasks else {}
+        current_task_id = str(current_task.get("id", "") or issue.get("task_id", "") or "").strip()
+        current_stream_id = str(current_task.get("stream_id", "") or issue.get("stream_id", "") or "").strip()
+        current_task_state = str(current_task.get("state", "")).strip()
+        current_task_title = one_line(str(current_task.get("title", "") or ""), 120)
+        helper_rows: list[dict[str, str]] = []
+        for item in subagents_active:
+            if not isinstance(item, dict):
+                continue
+            target_role = canonical_role(item.get("target_role", ""))
+            parent_role = canonical_role(item.get("parent_role", ""))
+            if role not in {target_role, parent_role}:
+                continue
+            helper_rows.append(
+                {
+                    "kind": "planner_subagent",
+                    "id": str(item.get("subagent_id", "")).strip(),
+                    "status": str(item.get("status", "")).strip(),
+                    "owner_task_id": str(item.get("owner_task_id", "")).strip(),
+                    "summary": one_line(str(item.get("summary", "") or ""), 120),
+                }
+            )
+        for item in workers_active:
+            if not isinstance(item, dict):
+                continue
+            parent_role = canonical_role(item.get("parent_role", ""))
+            if role != parent_role:
+                continue
+            helper_rows.append(
+                {
+                    "kind": "dynamic_worker",
+                    "id": str(item.get("worker_id", "")).strip(),
+                    "status": str(item.get("status", "")).strip(),
+                    "owner_task_id": str(item.get("owner_task_id", "")).strip(),
+                    "summary": one_line(str(item.get("summary", "") or ""), 120),
+                }
+            )
+        total_helpers += len(helper_rows)
+        action_summary = one_line(
+            str(
+                issue.get("action_summary")
+                or issue.get("exec_report")
+                or issue.get("run_note")
+                or agent.get("next")
+                or current_task_title
+                or "none"
+            ),
+            220,
+        )
+        role_rows[role] = {
+            "role": role,
+            "status": str(agent.get("status", issue.get("status", "UNKNOWN")) or "UNKNOWN"),
+            "verdict": str(agent.get("verdict", issue.get("verdict", "UNKNOWN")) or "UNKNOWN"),
+            "current_task_id": current_task_id,
+            "current_stream_id": current_stream_id,
+            "current_task_state": current_task_state,
+            "current_task_title": current_task_title,
+            "action_summary": action_summary,
+            "next_action": one_line(str(agent.get("next", issue.get("next_action", "")) or ""), 220),
+            "task_update": str(issue.get("task_update", agent.get("task_update", "none")) or "none"),
+            "exec_report": one_line(str(issue.get("exec_report", "none") or "none"), 220),
+            "tool_request": one_line(str(issue.get("tool_request", "none") or "none"), 180),
+            "skill_request": one_line(str(issue.get("skill_request", "none") or "none"), 180),
+            "tools_used": one_line(str(issue.get("tools_used", "none") or "none"), 220),
+            "run_note": one_line(str(issue.get("run_note", "none") or "none"), 220),
+            "root_cause": one_line(str(issue.get("root_cause", "none") or "none"), 180),
+            "fix_applied": one_line(str(issue.get("fix_applied", "none") or "none"), 180),
+            "verify": one_line(str(issue.get("verify", "none") or "none"), 180),
+            "issue_codes": issue.get("issue_codes", []) if isinstance(issue.get("issue_codes", []), list) else [],
+            "issue_count": int(issue.get("issue_count", 0) or 0),
+            "last_update_at": str(issue.get("ts_utc", "") or ""),
+            "recent_events": _recent_runner_events(role, limit=3),
+            "active_helpers": helper_rows[:6],
+        }
+    return {
+        "roles": role_rows,
+        "active_helper_count": total_helpers,
+        "source": str(ITERATION_ISSUES_LATEST_FILE),
     }
 
 
@@ -3391,6 +3575,13 @@ def status():
         system_summary = {}
     dynamic_workers = _dynamic_workers_snapshot()
     planner_subagents = _planner_subagents_snapshot()
+    agent_activity = _agent_activity_snapshot(
+        roles=tuple(roles),
+        agents=agents,
+        tasks=tasks,
+        planner_subagents=planner_subagents,
+        dynamic_workers=dynamic_workers,
+    )
     planner_dispatch = _planner_dispatch_snapshot(
         runtime_state=runtime_state,
         queue_snapshot={
@@ -3452,6 +3643,7 @@ def status():
             "queue_workboard_integrity": queue_workboard_integrity,
             "dynamic_workers": dynamic_workers,
             "planner_subagents": planner_subagents,
+            "agent_activity": agent_activity,
             "planner_dispatch": planner_dispatch,
             "delivery_integrity": delivery_integrity,
             "delivery_control": delivery_control,
@@ -4310,6 +4502,15 @@ def runtime_diagnostics():
         pass
     return payload
 
+
+@app.get("/api/agents/activity")
+def agents_activity():
+    snapshot = status()
+    payload = snapshot.get("agent_activity", {}) if isinstance(snapshot, dict) else {}
+    if not isinstance(payload, dict):
+        payload = {}
+    return payload
+
 @app.get("/api/workboard")
 def workboard():
     wb = jload(orchestrator_file("parallel-workstreams.json"))
@@ -5016,6 +5217,7 @@ function dependencyMapHtml(){
 function plannerDispatchStatusClass(status){
   const s=String(status||'unknown').toLowerCase();
   if(['ok','active','running'].includes(s))return'ok';
+  if(['recovering'].includes(s))return'warn';
   if(['paused','dispatch_needed','degraded'].includes(s))return'warn';
   return'err';
 }
@@ -5079,11 +5281,19 @@ function plannerDispatchHtml(){
   const recentFailed=Number(pd.recent_failed_count ?? (ps.recent_failed_count||0));
   const recentBlocked=Number(pd.recent_blocked_count ?? (ps.recent_blocked_count||0));
   const recentFallback=Number(pd.recent_fallback_like_count ?? (ps.recent_fallback_like_count||0));
+  const invalidResults=Number(pd.recent_invalid_result_count ?? 0);
+  const timeoutLike=Number(pd.recent_timeout_like_count ?? 0);
+  const stalledCapabilities=Number(pd.stalled_capability_count ?? 0);
+  const takeoverRequired=Number(pd.takeover_required_count ?? 0);
+  const recoveryRequired=Number(pd.recovery_required_count ?? 0);
   const nextAction=String(pd.recommended_next_action || systemSummary.recommended_next_action || 'monitor');
   const bottleneck=String(pd.current_bottleneck || activitySummary.current_bottleneck || 'none');
   const dispatchFlags=[];
   if(pd.needs_dispatch)dispatchFlags.push('dispatch required');
   if(pd.stalled_ready_dev)dispatchFlags.push('READY_DEV stalled');
+  if(pd.recovering)dispatchFlags.push('recovering');
+  if(takeoverRequired>0)dispatchFlags.push(`takeover required=${takeoverRequired}`);
+  if(recoveryRequired>0)dispatchFlags.push(`recovery required=${recoveryRequired}`);
   const flagsHtml=dispatchFlags.length
     ? `<div class="queue-sync warn" style="margin-top:8px"><strong>Dispatch pressure</strong> · ${esc(dispatchFlags.join(' · '))}</div>`
     : '';
@@ -5094,7 +5304,8 @@ function plannerDispatchHtml(){
   return `
     <div class="queue-sync ${cls}"><strong>Planner dispatch</strong> · status=${esc(status)} · lifecycle=${esc(lifecycle)} · next=${esc(nextAction)}</div>
     <div class="queue-sync ${activeCount>0?'ok':'warn'}" style="margin-top:8px"><strong>Queue pressure</strong> · READY_DEV=${readyDev} · READY_PLANNER=${readyPlanner} · IN_PROGRESS=${inProgress} · active_subagents=${activeCount} · progressed_1h=${progressed1h}</div>
-    <div class="queue-sync ${recentFailed===0&&recentFallback===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · success_rate=${esc((recentRate*100).toFixed(0))}% · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · bottleneck=${esc(bottleneck)}</div>
+    <div class="queue-sync ${recentFailed===0&&recentFallback===0&&invalidResults===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · success_rate=${esc((recentRate*100).toFixed(0))}% · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · invalid=${invalidResults} · timeout_like=${timeoutLike} · bottleneck=${esc(bottleneck)}</div>
+    <div class="queue-sync ${(stalledCapabilities===0&&takeoverRequired===0&&recoveryRequired===0)?'ok':'warn'}" style="margin-top:8px"><strong>Recovery</strong> · stalled=${stalledCapabilities} · takeover_required=${takeoverRequired} · recovery_required=${recoveryRequired}</div>
     ${flagsHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
       <div class="log-box"><div class="log-head">Active subagents</div><div class="log-scroll">${activeRows}</div></div>
@@ -5109,6 +5320,35 @@ function plannerDispatchHtml(){
     </div>
     <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>registry:</strong> ${esc(shortPath(registryPath||'—'))}</div>
   `;
+}
+function agentActivityHtml(){
+  const aa=(D&&D.agent_activity)||{};
+  const roles=aa.roles||{};
+  const order=(D&&D.roles)||Object.keys(roles||{});
+  const rows=order.map(role=>{
+    const item=roles[role];
+    if(!item)return '';
+    const taskId=String(item.current_task_id||'none');
+    const taskState=String(item.current_task_state||'none');
+    const action=String(item.action_summary||item.next_action||'none');
+    const tools=String(item.tools_used||'none');
+    const toolReq=String(item.tool_request||'none');
+    const skillReq=String(item.skill_request||'none');
+    const issues=Array.isArray(item.issue_codes)&&item.issue_codes.length?item.issue_codes.join(', '):'none';
+    const helpers=Array.isArray(item.active_helpers)?item.active_helpers:[];
+    const helperTxt=helpers.length?helpers.map(h=>`${h.kind}:${h.id||'unknown'}:${h.status||'unknown'}`).join(' · '):'none';
+    const recentEvents=Array.isArray(item.recent_events)?item.recent_events:[];
+    const eventsTxt=recentEvents.length?recentEvents.map(e=>`${e.event}${e.detail?` (${e.detail})`:''}`).join(' · '):'none';
+    return `<div class="issue-row ${issues!=='none'?'warn':'info'}">
+      <div class="issue-head"><span class="issue-role">${esc(role)}</span><span class="issue-sev ${issues!=='none'?'warn':'info'}">${esc(String(item.status||'unknown'))}</span></div>
+      <div class="issue-meta">task=${esc(taskId)} · state=${esc(taskState)} · action=${esc(action)}</div>
+      <div class="issue-meta">helpers=${esc(helperTxt)}</div>
+      <div class="issue-meta">tools_used=${esc(tools)} · tool_request=${esc(toolReq)} · skill_request=${esc(skillReq)}</div>
+      <div class="issue-meta">issues=${esc(issues)} · recent=${esc(eventsTxt)}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  if(!rows)return `<div class="log-empty">Aucune activite agent disponible</div>`;
+  return `<div class="iter-issues">${rows}</div>`;
 }
 function deliveryControlRows(items, emptyLabel){
   const rows=Array.isArray(items)?items:[];
@@ -5442,6 +5682,7 @@ function render(){
 	    <div class="col-right">
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Planner Dispatch</span><span style="font-size:10px;color:var(--ghost)">mode=${esc((D&&D.execution_mode)||'unknown')} · subagents=${((D&&D.planner_dispatch&&D.planner_dispatch.active_subagents) ?? (D&&D.planner_subagents&&D.planner_subagents.active_count) ?? 0)}</span></div><div class="panel-body">${plannerDispatchHtml()}</div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Activite Agents</span><span style="font-size:10px;color:var(--ghost)">helpers=${esc(String((((D&&D.agent_activity)||{}).active_helper_count)||0))}</span></div><div class="panel-body">${agentActivityHtml()}<div class="link-row"><a class="ext-link" href="/api/agents/activity" target="_blank">⬡ Agents activity JSON</a><a class="ext-link" href="/api/agent-insights" target="_blank">⬡ Agent insights JSON</a></div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Delivery Control</span><span style="font-size:10px;color:var(--ghost)">future=${esc(String(((D&&D.delivery_control)||{}).future_status||'unknown'))} · integrity=${esc(String(((D&&D.delivery_control)||{}).integrity_status||'unknown'))}</span></div><div class="panel-body">${deliveryControlHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>

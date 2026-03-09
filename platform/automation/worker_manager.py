@@ -35,6 +35,12 @@ STARTUP_ONLY_MARKERS = (
     "Reasoning effort:",
     "failed to refresh available models",
     "invalid type: integer `1`, expected struct AgentRoleToml in `agents`",
+    "missing bearer or basic authentication",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "transport channel",
+    "worker quit with fatal",
+    "reconnecting...",
 )
 
 

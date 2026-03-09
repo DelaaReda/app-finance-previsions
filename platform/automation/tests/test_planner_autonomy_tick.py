@@ -86,23 +86,45 @@ if sub == "sync-priority":
     print("SYNC_OK")
     raise SystemExit(0)
 
+if sub == "reconcile-state":
+    print("RECONCILE_OK queue_synced=0 waiting_dep_reclassified=0")
+    raise SystemExit(0)
+
 if sub == "planner-autobatch":
+    if (ROOT / "force_autobatch_duplicate").exists():
+        print("AUTOBATCH_SKIP reason=duplicate_title batch_id=none")
+        raise SystemExit(0)
     batch_id = "BATCH-99"
     if not any(str(it.get("id", "")) == batch_id for it in queue["items"]):
         queue["items"].append({"id": batch_id, "state": "READY", "next_action": "OPEN_PLAN"})
-    if not any(str(t.get("id", "")) == f"{batch_id}-PLAN" for t in board["tasks"]):
-        board["tasks"].append({"id": f"{batch_id}-PLAN", "role": "planner", "state": "READY", "title": "Plan batch"})
+    if not any(str(t.get("id", "")) == f"{batch_id}-ANALYSIS" for t in board["tasks"]):
+        board["tasks"].append({"id": f"{batch_id}-ANALYSIS", "role": "planner", "state": "READY", "title": "Analyze batch"})
     dump(queue_path, queue)
     dump(board_path, board)
     print(f"AUTOBATCH_OK batch_id={batch_id}")
     raise SystemExit(0)
 
 if sub == "claim":
-    if force_claim_fail.exists():
+    task_id = ""
+    change_plan = ""
+    architecture_checks = ""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--task" and idx + 1 < len(sys.argv):
+            task_id = sys.argv[idx + 1]
+        if arg == "--change-plan" and idx + 1 < len(sys.argv):
+            change_plan = sys.argv[idx + 1]
+        if arg == "--architecture-checks" and idx + 1 < len(sys.argv):
+            architecture_checks = sys.argv[idx + 1]
+    if not change_plan or not architecture_checks:
+        print("PRECHANGE_PLAN_INVALID", file=sys.stderr)
+        raise SystemExit(8)
+    if force_claim_fail.exists() and not task_id:
         print("CLAIM_FAIL forced", file=sys.stderr)
         raise SystemExit(9)
     for task in board["tasks"]:
         if str(task.get("role", "")).strip().lower() == "planner" and str(task.get("state", "")).upper() == "READY":
+            if task_id and str(task.get("id", "")) != task_id:
+                continue
             task["state"] = "IN_PROGRESS"
             dump(board_path, board)
             print(f"CLAIM_OK task_id={task.get('id', 'unknown')}")
@@ -129,6 +151,14 @@ def _setup_workspace() -> Path:
 
     _write_exec_safe(td / "platform" / "policies" / "exec_safe.sh")
     _write_parallel_workstream_stub(td / "platform" / "automation" / "parallel_workstream.py")
+    (td / "platform" / "automation" / "planner_orchestrator_bridge.py").write_text(
+        """#!/usr/bin/env python3
+from __future__ import annotations
+import json
+print(json.dumps({"ok": True, "actions": []}))
+""",
+        encoding="utf-8",
+    )
 
     (td / "docs" / "operations" / "orchestrator" / "priority-queue.json").write_text(
         json.dumps({"items": []}), encoding="utf-8"
@@ -183,18 +213,83 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         self.assertIn("action=resume_in_progress", cp.stdout)
         self.assertIn("outcome=no_create", cp.stdout)
 
-    def test_issue_when_claim_fails_after_create(self) -> None:
+    def test_direct_claim_recovers_after_generic_claim_failure(self) -> None:
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
         (ws / "force_claim_fail").write_text("1\n", encoding="utf-8")
 
         cp = _run_script(ws)
         self.assertEqual(cp.returncode, 0, msg=cp.stderr)
-        self.assertIn("issue=planner_claim_after_create_failed", cp.stdout)
-        self.assertIn("outcome=deferred", cp.stdout)
+        self.assertIn("action=create_and_claim", cp.stdout)
+        self.assertIn("outcome=resolved", cp.stdout)
+        self.assertIn("direct_task=BATCH-99-ANALYSIS", cp.stdout)
 
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
-        self.assertEqual(state.get("issue_code"), "planner_claim_after_create_failed")
+        self.assertEqual(state.get("last_outcome"), "resolved")
+        self.assertEqual(state.get("target_task"), "BATCH-99-ANALYSIS")
+
+    def test_create_and_claim_hard_fails_when_all_claim_paths_fail(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+        stub = ws / "platform" / "automation" / "parallel_workstream.py"
+        original = stub.read_text(encoding="utf-8")
+        stub.write_text(
+            original.replace(
+                'if force_claim_fail.exists() and not task_id:\n        print("CLAIM_FAIL forced", file=sys.stderr)\n        raise SystemExit(9)\n',
+                'if force_claim_fail.exists():\n        print("CLAIM_FAIL forced", file=sys.stderr)\n        raise SystemExit(9)\n',
+            ),
+            encoding="utf-8",
+        )
+        (ws / "force_claim_fail").write_text("1\n", encoding="utf-8")
+
+        cp = _run_script(ws)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=create_and_claim", cp.stdout)
+        self.assertIn("outcome=failed", cp.stdout)
+        self.assertIn("planner_claim_after_create_failed_hard", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_outcome"), "failed")
+        self.assertEqual(state.get("issue_code"), "planner_claim_after_create_failed_hard")
+
+    def test_repair_only_when_runway_not_empty_and_no_ready(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+
+        board_path = ws / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+        board_path.write_text(
+            json.dumps(
+                {
+                    "tasks": [{"id": "BATCH-10-ADMIN-01", "role": "admin", "state": "BLOCKED"}],
+                    "streams": [{"id": "BATCH-10", "state": "BLOCKED"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cp = _run_script(ws)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=repair_only", cp.stdout)
+        self.assertIn("issue=planner_ready_bridge_missing", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_action"), "repair_only")
+        self.assertEqual(state.get("issue_code"), "planner_ready_bridge_missing")
+
+    def test_duplicate_autobatch_skip_is_nonfatal(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+        (ws / "force_autobatch_duplicate").write_text("1\n", encoding="utf-8")
+
+        cp = _run_script(ws)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=autobatch_skip", cp.stdout)
+        self.assertIn("issue=autobatch_duplicate_nonfatal", cp.stdout)
+        self.assertNotIn("planner_claim_after_create_failed", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_action"), "autobatch_skip")
+        self.assertEqual(state.get("issue_code"), "autobatch_duplicate_nonfatal")
 
 
 if __name__ == "__main__":

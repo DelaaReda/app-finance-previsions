@@ -67,14 +67,14 @@ ORCHESTRATION_KEYWORDS = (
     "lock cleanup",
     "state truth",
 )
-BROWSER_PROOF_KEYWORDS = (
-    "apps/web/",
-    "apps/monitor/",
-    "frontend",
-    "ui",
-    "dashboard",
-    "browser",
-    "monitor",
+BROWSER_PROOF_PATTERNS = (
+    re.compile(r"apps/web/", re.IGNORECASE),
+    re.compile(r"apps/monitor/", re.IGNORECASE),
+    re.compile(r"\bfrontend\b", re.IGNORECASE),
+    re.compile(r"\bui\b", re.IGNORECASE),
+    re.compile(r"\bdashboard\b", re.IGNORECASE),
+    re.compile(r"\bbrowser\b", re.IGNORECASE),
+    re.compile(r"\bmonitor\b", re.IGNORECASE),
 )
 BROWSER_PROOF_MARKERS = (
     "browser_proof=",
@@ -147,7 +147,7 @@ def _state_from_age(age_s: int, threshold_s: int) -> str:
 
 
 def _snapshot_timestamp(payload: dict[str, Any]) -> str:
-    for key in ("last_update", "generated_at", "freshness", "saved_at"):
+    for key in ("updated_at", "last_update", "generated_at", "freshness", "saved_at"):
         token = str(payload.get(key, "")).strip()
         if token:
             return token
@@ -460,9 +460,12 @@ def _is_doc_only_completion(task: dict[str, Any], manifest_text: str, artifact: 
     commit_sha = str(task.get("commit_sha", "")).strip().lower()
     tests_run = str(task.get("tests_run", "")).strip().lower()
     artifact_token = str(artifact or task.get("artifact", "")).strip().lower()
+    manifest_lower = manifest_text.lower()
     if role != "planner":
         return False
-    if "planner_doc_only" in manifest_text.lower():
+    if "planner_doc_only" in manifest_lower:
+        return True
+    if "planner_workboard_only" in manifest_lower:
         return True
     if commit_sha in {"none(doc_only)", "none", "skip(doc_only)"} and tests_run.startswith("skip("):
         return True
@@ -480,7 +483,7 @@ def _task_requires_browser_proof(task: dict[str, Any], manifest_text: str, artif
             manifest_text[:600],
         ]
     ).lower()
-    return any(token in joined for token in BROWSER_PROOF_KEYWORDS)
+    return any(pattern.search(joined) for pattern in BROWSER_PROOF_PATTERNS)
 
 
 def _has_browser_proof(manifest_text: str, artifact: str, task: dict[str, Any] | None = None) -> bool:
@@ -751,8 +754,19 @@ def build_delivery_control_metrics(
                     "task_id": task_id,
                     "role": str(task.get("role", "unknown")).strip() or "unknown",
                     "reason": stalled_reason,
-                    "timeout_streak": int(task.get("admin_timeout_streak", 0) or 0),
+                    "timeout_streak": max(
+                        int(task.get("admin_timeout_streak", 0) or 0),
+                        int(task.get("dev_timeout_streak", 0) or 0),
+                    ),
+                    "invalid_result_streak": max(
+                        int(task.get("admin_invalid_result_streak", 0) or 0),
+                        int(task.get("dev_invalid_result_streak", 0) or 0),
+                    ),
+                    "dev_timeout_streak": int(task.get("dev_timeout_streak", 0) or 0),
                     "takeover_required": bool(task.get("planner_takeover_required")),
+                    "recovery_required": bool(task.get("admin_recovery_required") or task.get("dev_recovery_required")),
+                    "recovery_reason": str(task.get("admin_recovery_reason") or task.get("dev_recovery_reason") or "").strip(),
+                    "last_failure_mode": str(task.get("last_capability_failure_mode", "")).strip(),
                 }
             )
 

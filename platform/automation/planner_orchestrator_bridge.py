@@ -61,6 +61,8 @@ STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_S
 EMPTY_LAUNCHER_STALE_SECONDS = max(30, int(os.environ.get("FC_PLANNER_EMPTY_LAUNCHER_STALE_SECONDS", "90")))
 QA_REVIEW_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_QA_WORKER_TIMEOUT_SECONDS", "900")))
 ADMIN_TIMEOUT_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_ADMIN_TIMEOUT_STREAK_THRESHOLD", "3")))
+DEV_STALLED_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_DEV_STALLED_STREAK_THRESHOLD", "2")))
+DEV_FAILURE_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_DEV_FAILURE_STREAK_THRESHOLD", "3")))
 ADMIN_TAKEOVER_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_ADMIN_TAKEOVER_TIMEOUT_SECONDS", "900")))
 BROWSER_VALIDATION_TIMEOUT_SECONDS = max(10, int(os.environ.get("FC_PLANNER_BROWSER_VALIDATION_TIMEOUT_SECONDS", "45")))
 BROWSER_BACKFILL_MAX_PER_TICK = max(1, int(os.environ.get("FC_PLANNER_BROWSER_BACKFILL_MAX_PER_TICK", "1")))
@@ -69,6 +71,19 @@ QA_AUTODISPATCH_ROLLOUT_AT_RAW = str(os.environ.get("FC_PLANNER_QA_AUTODISPATCH_
 DEFAULT_BROWSER_FRONTEND_URL = str(os.environ.get("FC_FRONTEND_BASE_URL", "http://127.0.0.1:5173")).strip() or "http://127.0.0.1:5173"
 DEFAULT_BROWSER_MONITOR_URL = str(os.environ.get("FC_MONITOR_BASE_URL", "http://127.0.0.1:7779")).strip() or "http://127.0.0.1:7779"
 NO_CODE_COMPLETION_MODES = {"runtime_no_code", "no_code_runtime_fix", "runtime_repair_no_code"}
+INVALID_RESULT_MARKERS = (
+    "invalid_subagent_result",
+    "subagent_invalid_result",
+    "start_banner_only",
+    "empty_payload",
+    "failed to refresh available models",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "missing bearer or basic authentication",
+    "transport channel",
+    "worker quit with fatal",
+    "delivery_evidence_incomplete",
+)
 
 
 def _parse_iso_utc(raw: str) -> datetime | None:
@@ -123,11 +138,32 @@ def _subagent_has_collectible_result(root: Path, row: dict[str, Any]) -> bool:
     return result_path.exists() or raw_path.exists()
 
 
-def _resolve_dispatch_backend(target_role: str, requested_backend: str) -> str:
+def _planner_backend_by_role() -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    raw = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE", "") or "").strip()
+    for chunk in raw.split(","):
+        token = str(chunk or "").strip()
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        key_token = str(key or "").strip().lower()
+        value_token = str(value or "").strip().lower()
+        if key_token and value_token:
+            mapping[key_token] = value_token
+    return mapping
+
+
+def _resolve_dispatch_backend(target_role: str, requested_backend: str, task_kind: str = "") -> str:
     token = str(requested_backend or "auto").strip().lower() or "auto"
     if token != "auto":
         return token
+    mapping = _planner_backend_by_role()
+    task_kind_token = str(task_kind or "").strip().lower()
+    if task_kind_token and mapping.get(task_kind_token):
+        return mapping[task_kind_token]
     role_token = str(target_role or "").strip().lower()
+    if mapping.get(role_token):
+        return mapping[role_token]
     if role_token == "admin":
         return "codex_exec"
     if role_token == "dev":
@@ -306,6 +342,14 @@ def _task_timeout_streak(task: dict[str, Any], target_role: str) -> int:
     return int(task.get(key, 0) or 0)
 
 
+def _task_failure_streak(task: dict[str, Any], target_role: str, failure_kind: str) -> int:
+    role_token = str(target_role or "").strip().lower()
+    kind_token = str(failure_kind or "").strip().lower()
+    if not role_token or not kind_token:
+        return 0
+    return int(task.get(f"{role_token}_{kind_token}_streak", 0) or 0)
+
+
 def _set_timeout_streak(task: dict[str, Any], target_role: str, value: int, reason: str = "") -> None:
     role_token = str(target_role or "").strip().lower()
     task[f"{role_token}_timeout_streak"] = max(0, int(value))
@@ -317,15 +361,58 @@ def _set_timeout_streak(task: dict[str, Any], target_role: str, value: int, reas
         task["stalled_capability_role"] = ""
 
 
+def _set_failure_streak(task: dict[str, Any], target_role: str, failure_kind: str, value: int, reason: str = "") -> None:
+    role_token = str(target_role or "").strip().lower()
+    kind_token = str(failure_kind or "").strip().lower()
+    if not role_token or not kind_token:
+        return
+    task[f"{role_token}_{kind_token}_streak"] = max(0, int(value))
+    task["last_capability_failure_mode"] = kind_token if value else ""
+    if reason:
+        task["stalled_capability_reason"] = reason
+        task["stalled_capability_role"] = role_token
+    elif str(task.get("stalled_capability_role", "")).strip().lower() == role_token:
+        task["stalled_capability_reason"] = ""
+        task["stalled_capability_role"] = ""
+
+
+def _mark_role_recovery_required(task: dict[str, Any], target_role: str, reason: str) -> None:
+    role_token = str(target_role or "").strip().lower()
+    if not role_token:
+        return
+    task[f"{role_token}_recovery_required"] = True
+    task[f"{role_token}_recovery_reason"] = reason
+    task["stalled_capability_reason"] = reason
+    task["stalled_capability_role"] = role_token
+
+
+def _clear_role_recovery(task: dict[str, Any], target_role: str) -> None:
+    role_token = str(target_role or "").strip().lower()
+    if not role_token:
+        return
+    task[f"{role_token}_recovery_required"] = False
+    task[f"{role_token}_recovery_reason"] = ""
+    task[f"{role_token}_invalid_result_streak"] = 0
+    task[f"{role_token}_timeout_streak"] = 0
+    if str(task.get("stalled_capability_role", "")).strip().lower() == role_token:
+        task["stalled_capability_reason"] = ""
+        task["stalled_capability_role"] = ""
+    if str(task.get("last_capability_failure_mode", "")).strip().lower() in {"timeout", "invalid_result"}:
+        task["last_capability_failure_mode"] = ""
+
+
 def _mark_admin_takeover_required(task: dict[str, Any], reason: str) -> None:
     task["planner_takeover_required"] = True
     task["planner_takeover_reason"] = reason
+    _mark_role_recovery_required(task, "admin", reason)
     _set_timeout_streak(task, "admin", _task_timeout_streak(task, "admin"), reason)
 
 
 def _clear_admin_takeover(task: dict[str, Any]) -> None:
     task["planner_takeover_required"] = False
     task["planner_takeover_reason"] = ""
+    _clear_role_recovery(task, "admin")
+    _set_failure_streak(task, "admin", "invalid_result", 0)
     _set_timeout_streak(task, "admin", 0)
 
 
@@ -603,6 +690,7 @@ def _payload_has_delivery_evidence(payload: dict[str, Any], target_role: str = "
 
 def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
     index = task_index(board)
+    recovery_candidates: list[tuple[int, int, dict[str, Any]]] = []
     candidates: list[tuple[int, int, dict[str, Any]]] = []
     retry_candidates: list[tuple[int, int, dict[str, Any]]] = []
     in_progress_candidates: list[tuple[int, int, dict[str, Any]]] = []
@@ -618,6 +706,9 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
         if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
+        if bool(task.get("dev_recovery_required")):
+            recovery_candidates.append(row)
+            continue
         if state in {STATE_READY, STATE_READY_DEV, "READY"}:
             candidates.append(row)
             continue
@@ -629,6 +720,9 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
         blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
         if state == STATE_BLOCKED and blocked_reason.startswith("planner_dev_capability_failed:"):
             retry_candidates.append(row)
+    if recovery_candidates:
+        recovery_candidates.sort(key=lambda row: (row[0], row[1]))
+        return recovery_candidates[0][2]
     if retry_candidates:
         retry_candidates.sort(key=lambda row: (row[0], row[1]))
         return retry_candidates[0][2]
@@ -727,10 +821,68 @@ def _timeout_like_issue(reason: str) -> bool:
             "stale_no_result",
             "deadline",
             "no result",
-            "invalid_subagent_result",
-            "subagent_invalid_result",
         )
     )
+
+
+def _recoverable_failure_kind(reason: str) -> str:
+    token = str(reason or "").strip().lower()
+    if any(marker in token for marker in INVALID_RESULT_MARKERS):
+        return "invalid_result"
+    if _timeout_like_issue(token):
+        return "timeout"
+    return "other"
+
+
+def _record_dev_failure(
+    board: dict[str, Any],
+    *,
+    task_id_value: str,
+    source: str,
+    subagent_id: str,
+    blocking_issue: str,
+    event_kind: str,
+) -> str:
+    issue = str(blocking_issue or "subagent_not_ready").strip() or "subagent_not_ready"
+    task = task_index(board).get(task_id_value)
+    if not isinstance(task, dict):
+        append_event(board, event_kind, {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
+        return issue
+    if _task_effectively_done(task):
+        _clear_role_recovery(task, "dev")
+        append_event(
+            board,
+            "planner_orchestrator_dev_failure_ignored_done_task",
+            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
+        )
+        return "owner_task_already_done"
+    failure_kind = _recoverable_failure_kind(issue)
+    if failure_kind in {"timeout", "invalid_result"}:
+        streak = _task_failure_streak(task, "dev", failure_kind) + 1
+        reason = f"dev_{failure_kind}_streak:{streak}"
+        _set_failure_streak(task, "dev", failure_kind, streak, reason)
+        task["state"] = STATE_READY_DEV
+        task["blocked_reason"] = ""
+        task["updated_at"] = now_iso()
+        task["last_progress_at"] = now_iso()
+        if streak >= DEV_FAILURE_STREAK_THRESHOLD:
+            _mark_role_recovery_required(task, "dev", reason)
+            append_event(
+                board,
+                "planner_orchestrator_dev_recovery_required",
+                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "failure_kind": failure_kind, "streak": streak},
+            )
+            return "dev_recovery_required"
+        event_name = "planner_orchestrator_dev_invalid_result_requeue" if failure_kind == "invalid_result" else "planner_orchestrator_dev_timeout_requeue"
+        append_event(
+            board,
+            event_name,
+            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "failure_kind": failure_kind, "streak": streak},
+        )
+        return f"dev_{failure_kind}_requeued"
+    set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{issue}", blocked=True)
+    append_event(board, event_kind, {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
+    return issue
 
 
 def _has_real_commit(value: str) -> bool:
@@ -910,10 +1062,16 @@ def _record_admin_failure(
             {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
         )
         return "owner_task_already_done"
-    if _timeout_like_issue(issue):
-        streak = _task_timeout_streak(task, "admin") + 1
-        reason = f"admin_timeout_streak:{streak}"
-        _set_timeout_streak(task, "admin", streak, reason)
+    failure_kind = _recoverable_failure_kind(issue)
+    if failure_kind in {"timeout", "invalid_result"}:
+        if failure_kind == "timeout":
+            streak = _task_timeout_streak(task, "admin") + 1
+            reason = f"admin_timeout_streak:{streak}"
+            _set_timeout_streak(task, "admin", streak, reason)
+        else:
+            streak = _task_failure_streak(task, "admin", "invalid_result") + 1
+            reason = f"admin_invalid_result_streak:{streak}"
+            _set_failure_streak(task, "admin", "invalid_result", streak, reason)
         task["state"] = STATE_READY
         task["blocked_reason"] = ""
         task["updated_at"] = now_iso()
@@ -923,15 +1081,15 @@ def _record_admin_failure(
             append_event(
                 board,
                 "planner_orchestrator_admin_takeover_required",
-                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "timeout_streak": streak},
+                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "failure_kind": failure_kind, "streak": streak},
             )
             return "planner_takeover_required"
         append_event(
             board,
-            "planner_orchestrator_admin_timeout_requeue",
-            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "timeout_streak": streak},
+            "planner_orchestrator_admin_timeout_requeue" if failure_kind == "timeout" else "planner_orchestrator_admin_invalid_result_requeue",
+            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "failure_kind": failure_kind, "streak": streak},
         )
-        return "admin_timeout_requeued"
+        return f"admin_{failure_kind}_requeued"
     set_block_state(board, task_id_value=task_id_value, reason=f"planner_admin_capability_failed:{issue}", blocked=True)
     append_event(board, event_kind, {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
     return issue
@@ -1278,7 +1436,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         _claim_task(board_path=board_path, role="dev", task_id_value=task_id_value, source=source, board=board)
 
     message = _build_dev_dispatch_message(candidate)
-    chosen_backend = _resolve_dispatch_backend("dev", backend)
+    chosen_backend = _resolve_dispatch_backend("dev", backend, "delivery")
     if chosen_backend in {"openclaw", "auto"}:
         subagent_id = f"planner_dev_{os.urandom(5).hex()}"
         launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
@@ -1349,8 +1507,14 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
     if rc != 0 or not payload.get("ok"):
         with board_lock(board_path):
             board = load_board(board_path)
-            set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{payload.get('blocking_issue') or payload.get('stderr') or 'unknown'}", blocked=True)
-            append_event(board, "planner_orchestrator_dev_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
+            _record_dev_failure(
+                board,
+                task_id_value=task_id_value,
+                source=source,
+                subagent_id=subagent_id or "none",
+                blocking_issue=str(payload.get("blocking_issue") or payload.get("stderr") or "unknown"),
+                event_kind="planner_orchestrator_dev_dispatch_failed",
+            )
             reconcile_state(board, board_path.parent / "priority-queue.json")
             save_board(board_path, board)
         if subagent_id:
@@ -1362,11 +1526,13 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
         with board_lock(board_path):
             board = load_board(board_path)
-            set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{blocking_issue}", blocked=True)
-            append_event(
+            _record_dev_failure(
                 board,
-                "planner_orchestrator_dev_dispatch_blocked",
-                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "status": status_token or "unknown"},
+                task_id_value=task_id_value,
+                source=source,
+                subagent_id=subagent_id or "none",
+                blocking_issue=blocking_issue,
+                event_kind="planner_orchestrator_dev_dispatch_blocked",
             )
             reconcile_state(board, board_path.parent / "priority-queue.json")
             save_board(board_path, board)
@@ -1390,11 +1556,13 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
     if not _payload_has_delivery_evidence(payload, target_role="dev"):
         with board_lock(board_path):
             board = load_board(board_path)
-            set_block_state(board, task_id_value=task_id_value, reason="planner_dev_capability_failed:delivery_evidence_incomplete", blocked=True)
-            append_event(
+            _record_dev_failure(
                 board,
-                "planner_orchestrator_dev_dispatch_incomplete",
-                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
+                task_id_value=task_id_value,
+                source=source,
+                subagent_id=subagent_id or "none",
+                blocking_issue="delivery_evidence_incomplete",
+                event_kind="planner_orchestrator_dev_dispatch_incomplete",
             )
             reconcile_state(board, board_path.parent / "priority-queue.json")
             save_board(board_path, board)
@@ -1479,7 +1647,7 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
         _claim_task(board_path=board_path, role="admin", task_id_value=task_id_value, source=source, board=board)
     if planner_takeover:
         return _planner_takeover_admin_task(root, candidate, source)
-    chosen_backend = _resolve_dispatch_backend("admin", backend)
+    chosen_backend = _resolve_dispatch_backend("admin", backend, "runtime")
     message = _build_admin_dispatch_message(candidate)
     timeout_seconds = ADMIN_CAPABILITY_TIMEOUT_SECONDS
     if chosen_backend in {"openclaw", "codex_exec", "auto"}:
@@ -1715,19 +1883,31 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                 board = load_board(board_path)
                 task = task_index(board).get(task_id_value)
                 if isinstance(task, dict):
+                    streak = _task_failure_streak(task, "dev", "timeout") + 1
+                    reason = f"dev_timeout_streak:{streak}"
                     task["state"] = STATE_READY_DEV
                     task["blocked_reason"] = ""
-                    task["stalled_reason"] = "planner_capability_stale_no_result"
+                    task["stalled_reason"] = reason
                     task["updated_at"] = now_text
                     task["last_progress_at"] = now_text
-                    append_event(
-                        board,
-                        "planner_orchestrator_dev_dispatch_stale",
-                        {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds},
-                    )
+                    _set_failure_streak(task, "dev", "timeout", streak, reason)
+                    if streak >= DEV_FAILURE_STREAK_THRESHOLD:
+                        _mark_role_recovery_required(task, "dev", reason)
+                        append_event(
+                            board,
+                            "planner_orchestrator_dev_recovery_required",
+                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "failure_kind": "timeout", "streak": streak},
+                        )
+                        actions.append(f"dev_recovery_required:{task_id_value}")
+                    else:
+                        append_event(
+                            board,
+                            "planner_orchestrator_dev_dispatch_stale",
+                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "timeout_streak": streak},
+                        )
+                        actions.append(f"dev_stale_reset:{task_id_value}")
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
-                    actions.append(f"dev_stale_reset:{task_id_value}")
         row["status"] = "failed"
         row["failed_at"] = now_text
         row["summary"] = "stale planner capability with no result requeued"
@@ -1787,7 +1967,7 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
                     task["blocked_reason"] = ""
                     streak = _task_timeout_streak(task, "admin") + 1
                     reason = f"admin_timeout_streak:{streak}"
-                    task["stalled_reason"] = "planner_capability_stale_no_result"
+                    task["stalled_reason"] = reason
                     task["updated_at"] = now_text
                     task["last_progress_at"] = now_text
                     _set_timeout_streak(task, "admin", streak, reason)
@@ -1911,6 +2091,9 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
                     board=board,
                 )
                 if completed:
+                    live_task = task_index(board).get(task_id_value)
+                    if isinstance(live_task, dict):
+                        _clear_role_recovery(live_task, "dev")
                     actions.append(f"dev_complete:{task_id_value}")
                     task = task_index(board).get(task_id_value, {})
                     qa_dispatch = _launch_qa_review_worker(
@@ -1946,11 +2129,17 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
             if not isinstance(task_index(board).get(task_id_value), dict):
                 actions.append(f"dev_orphan_collect:{task_id_value}")
                 continue
-            set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{blocking_issue}", blocked=True)
-            append_event(board, "planner_orchestrator_dev_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
+            outcome = _record_dev_failure(
+                board,
+                task_id_value=task_id_value,
+                source=source,
+                subagent_id=subagent_id,
+                blocking_issue=blocking_issue,
+                event_kind="planner_orchestrator_dev_dispatch_failed",
+            )
             reconcile_state(board, board_path.parent / "priority-queue.json")
             save_board(board_path, board)
-        actions.append(f"dev_block:{task_id_value}")
+        actions.append(f"dev_block:{task_id_value}:{outcome}")
     return actions
 
 

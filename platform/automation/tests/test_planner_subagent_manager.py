@@ -97,6 +97,17 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["sandbox"], "danger-full-access")
 
+    def test_backend_by_role_mapping_overrides_auto_backend(self) -> None:
+        self.config.backend = "auto"
+        self.config.backend_by_role = {"admin": "codex_exec", "dev": "openclaw"}
+        with patch.object(MODULE, "_codex_available", return_value=True), patch.object(
+            MODULE, "_openclaw_available", return_value=True
+        ):
+            admin_result = plan_subagent(self.config, "planner", "admin", "BATCH-61-ADMIN-01", "runtime")
+            dev_result = plan_subagent(self.config, "planner", "dev", "BATCH-61-DEV-01", "delivery")
+        self.assertEqual(admin_result["backend"], "codex_exec")
+        self.assertEqual(dev_result["backend"], "openclaw")
+
     def test_duplicate_guard_blocks_same_target_and_task(self) -> None:
         record = PlannerSubagentRecord(
             subagent_id="planner_dev_dup",
@@ -115,6 +126,29 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         result = plan_subagent(self.config, "planner", "dev", "BATCH-61-DEV-01", "delivery")
         self.assertFalse(result["allowed"])
         self.assertIn("duplicate_active", result["reason"])
+
+    def test_duplicate_guard_ignores_running_record_with_collectible_result(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_collectible",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-03",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="openclaw",
+            last_update_at="2099-03-06T12:00:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "planner_dev_collectible.result.json").write_text(
+            json.dumps({"status": "completed", "artifact": "mock://artifact", "verify": "before=a; after=b; test=c"}),
+            encoding="utf-8",
+        )
+        result = plan_subagent(self.config, "planner", "dev", "BATCH-61-DEV-03", "delivery")
+        self.assertTrue(result["allowed"])
 
     def test_run_collect_and_merge_mock_subagent(self) -> None:
         rc, payload = run_subagent(
@@ -139,6 +173,122 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         snapshot = status_snapshot(self.config, "planner")
         self.assertEqual(snapshot["active_count"], 0)
         self.assertTrue(any(item["subagent_id"] == subagent_id for item in snapshot["recent"]))
+
+    def test_save_registry_does_not_regress_merged_to_running(self) -> None:
+        merged = PlannerSubagentRecord(
+            subagent_id="planner_admin_merged",
+            target_role="admin",
+            owner_task_id="BATCH-61-ADMIN-03",
+            parent_role="planner",
+            task_kind="runtime",
+            status="merged",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="codex_exec",
+            last_update_at="2099-03-06T12:10:00Z",
+            summary="merged summary",
+            artifact="proof.json",
+            verify="before=a; after=b; test=c",
+            merged_at="2099-03-06T12:11:00Z",
+        )
+        stale_running = PlannerSubagentRecord(
+            subagent_id="planner_admin_merged",
+            target_role="admin",
+            owner_task_id="BATCH-61-ADMIN-03",
+            parent_role="planner",
+            task_kind="runtime",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="codex_exec",
+            last_update_at="2099-03-06T12:05:00Z",
+        )
+        _save_registry(self.config.registry_path, [merged])
+        _save_registry(self.config.registry_path, [stale_running])
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_admin_merged")
+        self.assertEqual(recent["status"], "merged")
+        self.assertEqual(recent["artifact"], "proof.json")
+
+    def test_run_subagent_triggers_bridge_collect(self) -> None:
+        with patch.object(MODULE, "_trigger_bridge_collect") as collect_mock:
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="admin",
+                owner_task_id="BATCH-61-ADMIN-04",
+                task_kind="runtime",
+                message="Repair blocker.",
+                ttl_min=15,
+                backend="mock",
+                timeout_seconds=120,
+            )
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        collect_mock.assert_called_once()
+
+    def test_collect_rejects_startup_banner_only_result(self) -> None:
+        registry_path = self.config.registry_path
+        results_dir = self.config.results_dir
+        results_dir.mkdir(parents=True, exist_ok=True)
+        record = PlannerSubagentRecord(
+            subagent_id="planner_admin_banner",
+            target_role="admin",
+            owner_task_id="BATCH-61-ADMIN-02",
+            parent_role="planner",
+            task_kind="runtime",
+            status="completed",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="openclaw",
+            last_update_at="2099-03-06T12:05:00Z",
+        )
+        _save_registry(registry_path, [record])
+        (results_dir / "planner_admin_banner.raw.txt").write_text(
+            "OpenAI Codex v0.0\nReasoning effort: high\nfailed to refresh available models\n",
+            encoding="utf-8",
+        )
+        rc_collect, collected = collect_subagent(self.config, "planner", "planner_admin_banner", "", mark_merged=True)
+        self.assertNotEqual(rc_collect, 0)
+        self.assertFalse(collected["ok"])
+        self.assertFalse(collected["mergeable"])
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_admin_banner")
+        self.assertEqual(recent["status"], "failed")
+
+    def test_collect_rejects_auth_or_transport_noise(self) -> None:
+        registry_path = self.config.registry_path
+        results_dir = self.config.results_dir
+        results_dir.mkdir(parents=True, exist_ok=True)
+        record = PlannerSubagentRecord(
+            subagent_id="planner_admin_auth",
+            target_role="admin",
+            owner_task_id="BATCH-61-ADMIN-05",
+            parent_role="planner",
+            task_kind="runtime",
+            status="completed",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="openclaw",
+            last_update_at="2099-03-06T12:05:00Z",
+        )
+        _save_registry(registry_path, [record])
+        (results_dir / "planner_admin_auth.raw.txt").write_text(
+            "worker quit with fatal: Transport channel closed\nunexpected status 401 Unauthorized\n",
+            encoding="utf-8",
+        )
+        rc_collect, collected = collect_subagent(self.config, "planner", "planner_admin_auth", "", mark_merged=True)
+        self.assertNotEqual(rc_collect, 0)
+        self.assertFalse(collected["ok"])
+        self.assertFalse(collected["mergeable"])
+        self.assertIn("invalid_subagent_result", str(collected.get("blocking_issue", "")))
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_admin_auth")
+        self.assertIn("invalid_subagent_result", recent["blocking_issue"])
 
     def test_cleanup_removes_expired_subagent(self) -> None:
         record = PlannerSubagentRecord(

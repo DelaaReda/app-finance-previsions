@@ -13,6 +13,20 @@ ACTIVE_STATUSES = {"spawned", "running"}
 SUCCESS_STATUSES = {"completed", "merged", "done", "pass", "ok", "success"}
 BLOCKED_STATUSES = {"blocked"}
 FALLBACK_MARKERS = ("falling back to embedded", "failovererror", "gateway agent failed")
+INVALID_RESULT_MARKERS = (
+    "invalid_subagent_result",
+    "subagent_invalid_result",
+    "start_banner_only",
+    "empty_payload",
+    "delivery_evidence_incomplete",
+    "missing bearer or basic authentication",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "transport channel",
+    "worker quit with fatal",
+    "failed to refresh available models",
+)
+TIMEOUT_LIKE_MARKERS = ("timeout", "timed out", "stale_no_result", "deadline", "no result")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -57,6 +71,20 @@ def _is_fallback_like(root: Path, subagent_id: str) -> bool:
     return any(marker in raw_text for marker in FALLBACK_MARKERS)
 
 
+def _failure_mode(item: dict[str, Any]) -> str:
+    token = " | ".join(
+        [
+            str(item.get("blocking_issue", "")),
+            str(item.get("summary", "")),
+        ]
+    ).strip().lower()
+    if any(marker in token for marker in INVALID_RESULT_MARKERS):
+        return "invalid_result"
+    if any(marker in token for marker in TIMEOUT_LIKE_MARKERS):
+        return "timeout"
+    return "other" if token else "unknown"
+
+
 def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dict[str, Any]:
     registry_path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
     payload = _read_json(registry_path) if registry_path.exists() else {}
@@ -81,6 +109,7 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
             "created_at": str(item.get("created_at", "")),
             "backend": str(item.get("backend", "")),
             "backend_ref": str(item.get("backend_ref", "")),
+            "blocking_issue": str(item.get("blocking_issue", "")),
         }
         status = normalized["status"].strip().lower()
         if status in ACTIVE_STATUSES:
@@ -93,10 +122,12 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
     failed_count = 0
     blocked_count = 0
     fallback_like_count = 0
+    invalid_result_count = 0
+    timeout_like_count = 0
     by_role: dict[str, dict[str, int]] = {}
     for item in recent_rows:
         role = item["target_role"] or "unknown"
-        bucket = by_role.setdefault(role, {"total": 0, "success": 0, "failed": 0, "blocked": 0, "fallback_like": 0})
+        bucket = by_role.setdefault(role, {"total": 0, "success": 0, "failed": 0, "blocked": 0, "fallback_like": 0, "invalid_result": 0, "timeout": 0})
         bucket["total"] += 1
         status = item["status"].strip().lower()
         if status in SUCCESS_STATUSES:
@@ -111,6 +142,13 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         if _is_fallback_like(root, item["subagent_id"]):
             fallback_like_count += 1
             bucket["fallback_like"] += 1
+        failure_mode = _failure_mode(item)
+        if failure_mode == "invalid_result":
+            invalid_result_count += 1
+            bucket["invalid_result"] += 1
+        elif failure_mode == "timeout":
+            timeout_like_count += 1
+            bucket["timeout"] += 1
 
     recent_total = len(recent_rows)
     success_rate = round(success_count / recent_total, 3) if recent_total else 1.0
@@ -119,10 +157,12 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
     latest_fallback_like = False
     latest_update_at = ""
     latest_owner_task_id = ""
+    latest_failure_mode = "unknown"
     if recent_rows:
         latest = dict(recent_rows[-1])
         latest_status = str(latest.get("status", "")).strip().lower()
         latest_fallback_like = _is_fallback_like(root, str(latest.get("subagent_id", "")))
+        latest_failure_mode = _failure_mode(latest)
         latest_update_at = str(
             latest.get("last_update_at")
             or latest.get("merged_at")
@@ -132,6 +172,7 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         ).strip()
         latest_owner_task_id = str(latest.get("owner_task_id", "")).strip()
     status = "ok"
+    recovering = bool(active) and (failed_count > 0 or fallback_like_count > 0 or invalid_result_count > 0 or timeout_like_count > 0)
     if active:
         status = "ok"
     elif recent_total and (
@@ -139,6 +180,20 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         or latest_fallback_like
     ):
         status = "degraded"
+    workboard = _read_json(resolve_orchestrator_read_path(root, "parallel-workstreams.json"))
+    stalled_capability_count = 0
+    takeover_required_count = 0
+    recovery_required_count = 0
+    if isinstance(workboard, dict):
+        for task in workboard.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            if str(task.get("stalled_capability_reason", "")).strip():
+                stalled_capability_count += 1
+            if bool(task.get("planner_takeover_required")):
+                takeover_required_count += 1
+            if bool(task.get("admin_recovery_required") or task.get("dev_recovery_required")):
+                recovery_required_count += 1
     return {
         "registry_path": str(registry_path),
         "active_count": len(active),
@@ -149,11 +204,18 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
         "recent_failed_count": failed_count,
         "recent_blocked_count": blocked_count,
         "recent_fallback_like_count": fallback_like_count,
+        "recent_invalid_result_count": invalid_result_count,
+        "recent_timeout_like_count": timeout_like_count,
         "recent_success_rate": success_rate,
         "recent_by_role": by_role,
         "latest_status": latest_status,
         "latest_fallback_like": latest_fallback_like,
+        "latest_failure_mode": latest_failure_mode,
         "latest_owner_task_id": latest_owner_task_id,
         "latest_update_at": latest_update_at,
+        "recovering": recovering,
+        "stalled_capability_count": stalled_capability_count,
+        "takeover_required_count": takeover_required_count,
+        "recovery_required_count": recovery_required_count,
         "status": status,
     }

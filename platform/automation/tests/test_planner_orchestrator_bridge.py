@@ -439,6 +439,45 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(payload["dispatch"]["backend"], "openclaw")
         popen_mock.assert_called_once()
 
+    def test_auto_backend_uses_env_role_mapping(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "READY_DEV", "updated_at": "2026-03-07T00:00:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-27-DEV-01", "stream_id": "BATCH-27", "role": "dev", "state": "DONE", "updated_at": "2026-03-06T00:00:00Z"},
+                        {"id": "BATCH-27-DEV-02", "stream_id": "BATCH-27", "role": "dev", "state": "READY_DEV", "priority": "P1", "depends_on": ["BATCH-27-DEV-01"], "updated_at": "2026-03-07T00:00:00Z"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "READY_DEV", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: DISPATCH_DEV",
+                "EVIDENCE: task_update=analysis_only; run_note=dispatch dev capability now; issues=none; issue_count=0; issue_severity=none",
+                "RISKS: none",
+                "NEXT: owner=planner; action=dispatch dev",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: DISPATCH_DEV_B27",
+            ]
+        )
+        with patch.dict(MODULE.os.environ, {"FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE": "dev=mock,admin=codex_exec"}, clear=False):
+            updated, payload = apply_bridge(self.root, "planner", contract, "test", backend="auto")
+        self.assertIn("dev_dispatch:BATCH-27-DEV-02", payload["actions"])
+        self.assertEqual(payload["dispatch"]["backend"], "mock")
+        self.assertIn("bridge_actions=dev_dispatch:BATCH-27-DEV-02", updated)
+
     def test_collect_finished_dev_subagent_merges_result(self) -> None:
         self.board_path.write_text(
             json.dumps(
@@ -905,6 +944,92 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertTrue(task["planner_takeover_required"])
         self.assertEqual(task["admin_timeout_streak"], 3)
         self.assertIn(task["state"], {"READY", "READY_PLANNER"})
+
+    def test_stale_dev_subagent_sets_recovery_required_after_timeout_streak(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}],
+                    "tasks": [
+                        {
+                            "id": "BATCH-12-DEV-01",
+                            "stream_id": "BATCH-12",
+                            "role": "dev",
+                            "state": "IN_PROGRESS",
+                            "priority": "P1",
+                            "dev_timeout_streak": 2,
+                            "updated_at": "2026-03-08T19:00:00Z",
+                        },
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        registry_path = self.root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-03-08T19:00:00Z",
+                    "subagents": [
+                        {
+                            "subagent_id": "planner_dev_stale",
+                            "target_role": "dev",
+                            "owner_task_id": "BATCH-12-DEV-01",
+                            "parent_role": "planner",
+                            "task_kind": "delivery",
+                            "status": "running",
+                            "created_at": "2026-03-08T18:40:00Z",
+                            "last_update_at": "2026-03-08T18:40:00Z",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-12", "state": "IN_PROGRESS", "updated_at": "2026-03-08T19:00:00Z"}]}),
+            encoding="utf-8",
+        )
+
+        actions = MODULE._mark_stale_dev_subagents(self.root, "test")
+        self.assertIn("dev_recovery_required:BATCH-12-DEV-01", actions)
+        board = json.loads(self.board_path.read_text())
+        task = {row["id"]: row for row in board["tasks"]}["BATCH-12-DEV-01"]
+        self.assertTrue(task["dev_recovery_required"])
+        self.assertEqual(task["dev_timeout_streak"], 3)
+        self.assertEqual(task["state"], "READY_DEV")
+
+    def test_admin_invalid_result_sets_takeover_required_after_threshold(self) -> None:
+        board = {
+            "tasks": [
+                {
+                    "id": "BATCH-60-ADMIN-01",
+                    "role": "admin",
+                    "state": "IN_PROGRESS",
+                    "priority": "P1",
+                    "admin_invalid_result_streak": 2,
+                }
+            ],
+            "events": [],
+            "streams": [],
+            "handoffs": [],
+        }
+        outcome = MODULE._record_admin_failure(
+            board,
+            task_id_value="BATCH-60-ADMIN-01",
+            source="test",
+            subagent_id="planner_admin_invalid",
+            blocking_issue="invalid_subagent_result:start_banner_only",
+            event_kind="planner_orchestrator_admin_dispatch_failed",
+        )
+        self.assertEqual(outcome, "planner_takeover_required")
+        task = board["tasks"][0]
+        self.assertTrue(task["planner_takeover_required"])
+        self.assertEqual(task["admin_invalid_result_streak"], 3)
 
     def test_planner_takeover_admin_task_completes_after_repeated_timeouts(self) -> None:
         self.board_path.write_text(

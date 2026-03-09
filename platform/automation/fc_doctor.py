@@ -824,11 +824,27 @@ def check_capability_stall_recovery(root: Path) -> CheckResult:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("capability_stall_summary", {}) if isinstance(metrics, dict) else {}
     items = detail.get("items", []) if isinstance(detail, dict) else []
-    recovering = bool(items) and all(bool(item.get("takeover_required")) for item in items if isinstance(item, dict))
-    status = "ok" if int(detail.get("count", 0) or 0) == 0 or recovering else "degraded"
-    if isinstance(detail, dict) and recovering:
+    transient = bool(items) and all(
+        isinstance(item, dict)
+        and not bool(item.get("takeover_required"))
+        and not bool(item.get("recovery_required"))
+        and int(item.get("timeout_streak", 0) or 0) <= 1
+        and int(item.get("invalid_result_streak", 0) or 0) == 0
+        for item in items
+    )
+    recovering = bool(items) and all(
+        bool(item.get("takeover_required")) or bool(item.get("recovery_required"))
+        for item in items
+        if isinstance(item, dict)
+    )
+    status = "ok" if int(detail.get("count", 0) or 0) == 0 or recovering or transient else "degraded"
+    if isinstance(detail, dict) and (recovering or transient):
         detail = dict(detail)
-        detail["recovery_mode"] = "planner_takeover_active"
+        detail["recovery_mode"] = (
+            "planner_takeover_or_capability_recovery_active"
+            if recovering
+            else "transient_timeout_requeue_active"
+        )
     return CheckResult(status=status, detail=detail)
 
 
@@ -860,6 +876,60 @@ def check_planner_dispatch(root: Path) -> CheckResult:
     return CheckResult(status=status, detail=metrics)
 
 
+def check_capability_result_integrity(root: Path) -> CheckResult:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
+    try:
+        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    invalid_count = int(metrics.get("recent_invalid_result_count", 0) or 0)
+    timeout_count = int(metrics.get("recent_timeout_like_count", 0) or 0)
+    recovering = bool(metrics.get("recovering"))
+    status = "ok"
+    if invalid_count > 0 and not recovering:
+        status = "degraded"
+    detail = {
+        "recent_invalid_result_count": invalid_count,
+        "recent_timeout_like_count": timeout_count,
+        "recovering": recovering,
+        "latest_failure_mode": metrics.get("latest_failure_mode", "unknown"),
+    }
+    return CheckResult(status=status, detail=detail)
+
+
+def check_planner_takeover_recovery(root: Path) -> CheckResult:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
+    try:
+        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+    except Exception as exc:
+        return CheckResult(status="error", detail={"error": str(exc)})
+    detail = metrics.get("capability_stall_summary", {}) if isinstance(metrics, dict) else {}
+    items = detail.get("items", []) if isinstance(detail, dict) else []
+    takeover_items = [
+        item for item in items
+        if isinstance(item, dict) and (bool(item.get("takeover_required")) or bool(item.get("recovery_required")))
+    ]
+    transient = bool(items) and all(
+        isinstance(item, dict)
+        and not bool(item.get("takeover_required"))
+        and not bool(item.get("recovery_required"))
+        and int(item.get("timeout_streak", 0) or 0) <= 1
+        and int(item.get("invalid_result_streak", 0) or 0) == 0
+        for item in items
+    )
+    status = "ok" if not items or len(takeover_items) == len(items) or transient else "degraded"
+    if isinstance(detail, dict):
+        detail = dict(detail)
+        detail["takeover_or_recovery_items"] = len(takeover_items)
+        if transient:
+            detail["recovery_mode"] = "transient_timeout_requeue_active"
+    return CheckResult(status=status, detail=detail)
+
+
 def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[str, Any], int]:
     start = time.time()
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
@@ -879,6 +949,8 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "suspicious_completions": check_suspicious_completions(root),
         "qa_review_pipeline": check_qa_review_pipeline(root),
         "capability_stall_recovery": check_capability_stall_recovery(root),
+        "capability_result_integrity": check_capability_result_integrity(root),
+        "planner_takeover_recovery": check_planner_takeover_recovery(root),
         "historical_delivery_debt": check_historical_delivery_debt(root),
         "planner_dispatch": check_planner_dispatch(root),
     }

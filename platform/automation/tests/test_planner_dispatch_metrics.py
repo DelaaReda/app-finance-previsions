@@ -152,6 +152,48 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["recent_fallback_like_count"], 1)
             self.assertEqual(metrics["status"], "ok")
 
+    def test_metrics_surface_recovering_invalid_results(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            results = orch / "planner-subagents-results"
+            results.mkdir(parents=True, exist_ok=True)
+            registry = {
+                "subagents": [
+                    {
+                        "subagent_id": "planner_admin_invalid",
+                        "target_role": "admin",
+                        "parent_role": "planner",
+                        "owner_task_id": "BATCH-9-ADMIN-01",
+                        "status": "failed",
+                        "summary": "worker quit with fatal: Transport channel closed",
+                        "artifact": "",
+                        "blocking_issue": "subagent_invalid_result:start_banner_only",
+                        "last_update_at": "2026-03-07T06:00:00Z",
+                    },
+                    {
+                        "subagent_id": "planner_dev_active",
+                        "target_role": "dev",
+                        "parent_role": "planner",
+                        "owner_task_id": "BATCH-10-DEV-01",
+                        "status": "running",
+                        "summary": "",
+                        "artifact": "",
+                        "last_update_at": "2026-03-07T06:05:00Z",
+                        "created_at": "2026-03-07T06:05:00Z",
+                    },
+                ]
+            }
+            (orch / "planner-subagents-registry.json").write_text(json.dumps(registry), encoding="utf-8")
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertEqual(metrics["active_count"], 1)
+            self.assertEqual(metrics["recent_invalid_result_count"], 1)
+            self.assertTrue(metrics["recovering"])
+            self.assertEqual(metrics["latest_failure_mode"], "invalid_result")
+            self.assertEqual(metrics["status"], "ok")
+
 
 if __name__ == "__main__":
     unittest.main()
