@@ -446,6 +446,34 @@ def _build_copilot_entry_points(scope: Optional[Dict[str, Any]] = None) -> List[
     ]
 
 
+def _build_copilot_start_payload(
+    *,
+    daily_brief: Optional[Dict[str, Any]] = None,
+    entry_points: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    resolved_brief = dict(daily_brief) if isinstance(daily_brief, dict) else {}
+    ask: List[Dict[str, Any]] = []
+    open_items: List[Dict[str, Any]] = []
+
+    for item in entry_points or []:
+        if not isinstance(item, dict):
+            continue
+        normalized = dict(item)
+        target = _safe_text(normalized.get("target")).lower()
+        kind = _safe_text(normalized.get("kind")).lower()
+        if kind == "ask" or target == "/copilot/ask":
+            ask.append(normalized)
+            continue
+        if kind == "open" or target:
+            open_items.append(normalized)
+
+    return {
+        "brief_of_day": resolved_brief,
+        "ask": ask,
+        "open": open_items,
+    }
+
+
 def _extract_bullets(text: str) -> List[str]:
     cleaned = []
     for line in _safe_text(text).splitlines():
@@ -938,6 +966,10 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
         payload["scope_tickers"] = _normalize_tickers(scope.get("tickers"))
     payload["daily_brief"] = _load_daily_brief_payload()
     payload["entry_points"] = _build_copilot_entry_points(scope)
+    payload["copilot_start"] = _build_copilot_start_payload(
+        daily_brief=payload.get("daily_brief"),
+        entry_points=payload.get("entry_points"),
+    )
     return payload
 
 
