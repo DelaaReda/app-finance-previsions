@@ -179,6 +179,20 @@ def _append_bridge_actions(contract: dict[str, str], actions: list[str]) -> dict
     return contract
 
 
+def _rewrite_contract_for_live_dispatch(contract: dict[str, str], dispatch: dict[str, Any], actions: list[str]) -> dict[str, str]:
+    if not isinstance(dispatch, dict) or not dispatch.get("dispatched"):
+        return contract
+    task_id_value = str(dispatch.get("task_id", "")).strip() or "unknown"
+    target_role = "admin" if any(item.startswith("admin_dispatch:") for item in actions) else "dev"
+    contract["STATUS"] = "IN_PROGRESS"
+    contract["VERDICT"] = "GO_WITH_CAUTION"
+    contract["DELTA"] = "PLANNER_DISPATCH_ACTIVE"
+    contract["BLOCKER_ID"] = "NONE"
+    contract["NEXT"] = f"owner={target_role}; action=continue {task_id_value} via capability dispatch"
+    contract["NEXT_ACTION_UNIQUE"] = f"PLANNER_DISPATCH_ACTIVE_{task_id_value}"
+    return contract
+
+
 def _task_stream_id(task_id_value: str) -> str:
     parts = str(task_id_value or "").strip().split("-")
     if len(parts) >= 2:
@@ -1783,6 +1797,7 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
             if dispatch.get("completed"):
                 actions.append(f"admin_complete:{dispatch.get('task_id', 'unknown')}")
     contract = _append_bridge_actions(contract, actions)
+    contract = _rewrite_contract_for_live_dispatch(contract, dispatch, actions)
     return _render_contract(contract), {"ok": True, "actions": actions, "dispatch": dispatch}
 
 
@@ -1796,9 +1811,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _canonical_runtime_root(root: Path) -> Path:
+    canonical = Path("/home/venom/analyse-financiere")
+    try:
+        if canonical.exists() and (canonical / "platform").is_dir() and (canonical / "scripts").is_dir():
+            if str(root).startswith("/home/venom/shared/analyse-financiere"):
+                return canonical
+    except Exception:
+        pass
+    return root
+
+
 def main() -> int:
     args = build_parser().parse_args()
-    root = Path(args.root).expanduser().resolve()
+    root = _canonical_runtime_root(Path(args.root).expanduser().resolve())
     contract_path = Path(args.contract_file).expanduser().resolve()
     text = contract_path.read_text(encoding="utf-8", errors="ignore")
     updated, payload = apply_bridge(root=root, role=args.role, contract_text=text, source=args.source, backend=args.backend)

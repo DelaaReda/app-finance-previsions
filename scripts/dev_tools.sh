@@ -112,21 +112,49 @@ test_api() {
 
 refresh_data() {
   echo "=== Triggering data refresh ==="
-  python3 -c "
-import sys, subprocess
-sys.path.insert(0, 'apps/api/src')
-os_env = {'PYTHONPATH': 'apps/api/src'}
+  local api_src="$ROOT/apps/api/src"
+  local py_bin="python3"
+  if [[ -x "$api_src/.venv/bin/python3" ]]; then
+    py_bin="$api_src/.venv/bin/python3"
+  fi
+
+  PYTHONPATH="$api_src" "$py_bin" - <<PY || echo "Refresh attempted (some jobs may not be directly runnable)"
 import os
-env = {**os.environ, **os_env}
+import subprocess
+
+root = ${ROOT@Q}
+api_src = os.path.join(root, "apps/api/src")
+py_bin = ${py_bin@Q}
+env = {**os.environ, "PYTHONPATH": api_src}
 
 print('Running forecasts job...')
-r = subprocess.run(['python3', '-m', 'platform.legacy.jobs.forecasts_simple'], capture_output=True, text=True, cwd='apps/api/src', env=env, timeout=60)
-print('forecasts:', 'OK' if r.returncode == 0 else f'FAIL: {r.stderr[:200]}')
+try:
+    r = subprocess.run(
+        [py_bin, '-m', 'platform.legacy.jobs.forecasts_simple'],
+        capture_output=True,
+        text=True,
+        cwd=api_src,
+        env=env,
+        timeout=60,
+    )
+    print('forecasts:', 'OK' if r.returncode == 0 else f'FAIL: {(r.stderr or r.stdout)[:200]}')
+except subprocess.TimeoutExpired:
+    print('forecasts: TIMEOUT(after=60s)')
 
 print('Running news ingestion...')
-r = subprocess.run(['python3', '-m', 'scheduler.app', '--run-once', 'news'], capture_output=True, text=True, cwd='apps/api/src', env=env, timeout=60)
-print('news:', 'OK' if r.returncode == 0 else f'N/A (expected)')
-" 2>&1 || echo "Refresh attempted (some jobs may not be directly runnable)"
+try:
+    r = subprocess.run(
+        [py_bin, 'platform/legacy/jobs/news_ingest.py'],
+        capture_output=True,
+        text=True,
+        cwd=api_src,
+        env=env,
+        timeout=120,
+    )
+    print('news:', 'OK' if r.returncode == 0 else f'FAIL: {(r.stderr or r.stdout)[:200]}')
+except subprocess.TimeoutExpired:
+    print('news: TIMEOUT(after=120s)')
+PY
 }
 
 frontend_status() {

@@ -32,6 +32,7 @@ collect_subagent = MODULE.collect_subagent
 cleanup_subagents = MODULE.cleanup_subagents
 status_snapshot = MODULE.status_snapshot
 _save_registry = MODULE._save_registry
+_canonical_runtime_root = MODULE._canonical_runtime_root
 
 
 class PlannerSubagentManagerTests(unittest.TestCase):
@@ -94,7 +95,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
     def test_admin_runtime_uses_full_backend_sandbox(self) -> None:
         result = plan_subagent(self.config, "planner", "admin", "BATCH-61-ADMIN-01", "runtime")
         self.assertTrue(result["allowed"])
-        self.assertEqual(result["sandbox"], "off")
+        self.assertEqual(result["sandbox"], "danger-full-access")
 
     def test_duplicate_guard_blocks_same_target_and_task(self) -> None:
         record = PlannerSubagentRecord(
@@ -404,6 +405,61 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "failed")
         self.assertIn("timeout", payload["blocking_issue"])
+
+    def test_run_codex_exec_full_access_uses_bypass_flag_instead_of_invalid_sandbox_value(self) -> None:
+        captured: dict[str, object] = {}
+
+        def _fake_run(cmd, **kwargs):
+            captured["cmd"] = list(cmd)
+            out_path = Path(cmd[cmd.index("-o") + 1])
+            out_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "summary": "ok",
+                        "artifact": "artifact.txt",
+                        "verify": "proof=codex_exec",
+                        "files_touched": "none",
+                        "tests_run": "SKIP(no_tests)",
+                        "commit_sha": "none",
+                        "architecture_check": "layer=runtime",
+                        "vision_alignment": "batch=BATCH-61",
+                        "recommended_next": "planner_merge",
+                        "blocking_issue": "none",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return type("CompletedProcess", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with (
+            patch.object(MODULE, "_openclaw_agent_ids", return_value=set()),
+            patch.object(MODULE.subprocess, "run", side_effect=_fake_run),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="admin",
+                owner_task_id="BATCH-61-ADMIN-10",
+                task_kind="runtime",
+                message="Repair runtime truth.",
+                ttl_min=15,
+                backend="codex_exec",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        cmd = captured["cmd"]
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", cmd)
+        self.assertNotIn("--sandbox", cmd)
+
+    def test_shared_root_is_canonicalized_to_vm_workspace(self) -> None:
+        canonical = Path("/home/venom/analyse-financiere")
+        shared = Path("/home/venom/shared/analyse-financiere")
+        if not canonical.exists() or not shared.exists():
+            self.skipTest("canonical/shared VM workspaces unavailable")
+        self.assertEqual(_canonical_runtime_root(shared.resolve()), canonical)
 
 
 if __name__ == "__main__":

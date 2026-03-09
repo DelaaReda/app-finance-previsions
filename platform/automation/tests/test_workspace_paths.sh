@@ -40,7 +40,11 @@ resolved_from_env="$(FC_WORKSPACE_ROOT="$ROOT" fc_resolve_workspace_root "/tmp")
 assert_eq "$resolved_from_env" "$ROOT" "env_precedence"
 
 resolved_from_scripts="$(fc_resolve_workspace_root "${ROOT}/scripts")"
-assert_eq "$resolved_from_scripts" "$ROOT" "scripts_parent"
+if [[ "$ROOT" == "/home/venom/shared/analyse-financiere" ]]; then
+  assert_eq "$resolved_from_scripts" "/home/venom/analyse-financiere" "scripts_parent_prefers_vm_canonical"
+else
+  assert_eq "$resolved_from_scripts" "$ROOT" "scripts_parent"
+fi
 
 tmp_ws="$(mktemp -d)"
 trap 'rm -rf "$tmp_ws"' EXIT

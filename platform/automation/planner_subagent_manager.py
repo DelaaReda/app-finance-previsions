@@ -23,8 +23,8 @@ SUCCESS_RESULT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged
 ALLOWED_PARENT_ROLES = {"planner"}
 DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
 ROLE_MODELS = {
-    "dev": ("codex-full/gpt-5.4", "high", "off"),
-    "admin": ("codex-full/gpt-5.4", "xhigh", "off"),
+    "dev": ("codex-full/gpt-5.4", "high", "danger-full-access"),
+    "admin": ("codex-full/gpt-5.4", "xhigh", "danger-full-access"),
     "scrum_master": ("gpt-5.3-codex-spark", "low", "read-only"),
 }
 ROLE_TASK_KINDS = {
@@ -81,9 +81,10 @@ def _openclaw_runtime_model(model: str, sandbox: str) -> str:
     token = str(model or "").strip() or "gpt-5.4"
     if "/" in token:
         return token
-    if str(sandbox or "").strip().lower() == "off":
+    sandbox_token = str(sandbox or "").strip().lower()
+    if sandbox_token in {"off", "danger-full-access"}:
         return f"codex-full/{token}"
-    if str(sandbox or "").strip().lower() == "workspace-write":
+    if sandbox_token == "workspace-write":
         return f"codex-cli-write/{token}"
     return f"codex-cli/{token}"
 
@@ -570,7 +571,7 @@ def _effective_task_sandbox(target_role: str, task_kind: str, sandbox: str) -> s
     role = canonical_role(target_role)
     current = str(sandbox or "").strip().lower() or "workspace-write"
     if role in {"dev", "admin"}:
-        return "off"
+        return "danger-full-access"
     return current
 
 
@@ -869,6 +870,7 @@ def run_subagent(
             schema_path = tmpdir / "schema.json"
             out_path = tmpdir / "last_message.json"
             schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
+            sandbox_token = str(plan["sandbox"]).strip().lower()
             cmd = [
                 "codex",
                 "exec",
@@ -887,14 +889,16 @@ def run_subagent(
                 str(schema_path),
                 "-o",
                 str(out_path),
-                "--sandbox",
-                str(plan["sandbox"]),
                 "-m",
                 str(plan["model"]),
                 "-c",
                 f'model_reasoning_effort="{plan["thinking"]}"',
             ]
-            if plan["sandbox"] == "workspace-write":
+            if sandbox_token in {"off", "danger-full-access"}:
+                cmd.append("--dangerously-bypass-approvals-and-sandbox")
+            else:
+                cmd.extend(["--sandbox", str(plan["sandbox"])])
+            if sandbox_token == "workspace-write":
                 cmd.append("--full-auto")
             try:
                 proc = subprocess.run(
@@ -1095,9 +1099,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _canonical_runtime_root(root: Path) -> Path:
+    canonical = Path("/home/venom/analyse-financiere")
+    try:
+        if canonical.exists() and (canonical / "platform").is_dir() and (canonical / "scripts").is_dir():
+            if str(root).startswith("/home/venom/shared/analyse-financiere"):
+                return canonical
+    except Exception:
+        pass
+    return root
+
+
 def main() -> int:
     args = build_parser().parse_args()
-    root = Path(args.root).expanduser().resolve()
+    root = _canonical_runtime_root(Path(args.root).expanduser().resolve())
     config = _load_config(root)
 
     if args.cmd == "plan":

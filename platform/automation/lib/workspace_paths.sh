@@ -68,6 +68,15 @@ fc_prefer_writable_workspace() {
     return 0
   fi
 
+  # When launched from the shared mount, prefer the VM canonical workspace if it is writable.
+  # This avoids split runtime state between /home/venom/analyse-financiere and /home/venom/shared/analyse-financiere.
+  if [[ "${PWD:-}" == "/home/venom/shared/analyse-financiere"* ]] \
+    && fc_workspace_has_layout "/home/venom/analyse-financiere" \
+    && fc_workspace_writable "/home/venom/analyse-financiere"; then
+    printf '%s\n' "/home/venom/analyse-financiere"
+    return 0
+  fi
+
   # Prefer current working directory when it already is a valid writable workspace.
   if [[ -n "${PWD:-}" ]] \
     && fc_workspace_has_layout "$PWD" \
