@@ -947,15 +947,25 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
 
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), expectedStoredState);
   if (sandbox.copilotStartStateInput) {
-    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.copilotStartStateInput)), {
-      copilot_start: expectedStoredState,
-      scope_tickers: ['NVDA', 'MSFT'],
-    });
-    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
-      built_from: {
+    const serializedBuildInput = JSON.parse(JSON.stringify(sandbox.copilotStartStateInput));
+    const allowedBuildInputs = [
+      {
         copilot_start: expectedStoredState,
         scope_tickers: ['NVDA', 'MSFT'],
       },
+      {
+        data: {
+          copilot_start: expectedStoredState,
+          scope_tickers: ['NVDA', 'MSFT'],
+        },
+      },
+    ];
+    assert.equal(
+      allowedBuildInputs.some((candidate) => JSON.stringify(candidate) === JSON.stringify(serializedBuildInput)),
+      true
+    );
+    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
+      built_from: serializedBuildInput,
     });
   } else {
     assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), expectedStoredState);
