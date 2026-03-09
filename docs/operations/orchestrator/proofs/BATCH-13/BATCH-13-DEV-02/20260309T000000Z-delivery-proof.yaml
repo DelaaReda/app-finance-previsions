@@ -1,0 +1,132 @@
+task_id: BATCH-13-DEV-02
+task_kind: delivery
+stream: BATCH-13
+priority: P1
+title: "Decision Journal + Outcome Feedback Loop"
+status: completed
+completed_at: 2026-03-09T00:00:00Z
+
+# Deliverable Summary
+
+Implemented minimal vertical slice for B13-T1 (Decision journal store).
+
+## Files Changed
+
+1. `apps/api/src/domains/copilot/application/decision_journal.py` (new, 467 lines)
+   - Immutable decision logging service
+   - Outcome feedback recording
+   - Hit rate and calibration metrics computation
+
+2. `apps/api/src/domains/copilot/api/copilot.py` (modified, +106 lines)
+   - POST /api/copilot/decision-journal/log
+   - POST /api/copilot/decision-journal/outcomes
+   - GET /api/copilot/decision-journal
+   - GET /api/copilot/decision-journal/outcomes
+   - GET /api/copilot/decision-journal/metrics
+
+3. `apps/api/src/domains/copilot/tests/test_decision_journal.py` (new, 285 lines)
+   - 17 tests covering all service functions
+   - All tests passing
+
+## API Endpoints
+
+### Log Decision
+```
+POST /api/copilot/decision-journal/log
+{
+  "question": "Should I buy AAPL?",
+  "answer": "Yes, strong earnings expected",
+  "verdict": "buy",
+  "confidence": 0.85,
+  "tickers": ["AAPL"],
+  "horizon": "1d",
+  "reasoning": "Strong Q1 expected",
+  "risk_level": "medium",
+  "model": "gpt-4"
+}
+```
+
+### Record Outcome Feedback
+```
+POST /api/copilot/decision-journal/outcomes
+{
+  "decision_id": "abc123",
+  "horizon": "1d",
+  "status": "resolved",
+  "actual_return": 0.05,
+  "predicted_return": 0.03,
+  "notes": "Beat expectations"
+}
+```
+
+### Get Decision Journal
+```
+GET /api/copilot/decision-journal?limit=50&tickers=AAPL&horizon=1d&verdict=buy
+```
+
+### Get Outcome Feedback
+```
+GET /api/copilot/decision-journal/outcomes?decision_id=abc123&status=resolved
+```
+
+### Get Metrics
+```
+GET /api/copilot/decision-journal/metrics
+# Returns hit_rate, calibration_error per horizon (1d/1w/1m)
+```
+
+## Storage
+
+- Decisions: `runtime/data/copilot_decision_journal/entries/{decision_id}.json` (immutable)
+- Outcomes: `judge_decision_outcome_feedback_records` (append-only JSON store)
+
+## Schema
+
+Decision entry:
+```json
+{
+  "decision_id": "sha1 hash",
+  "recorded_at": "ISO timestamp",
+  "question": "...",
+  "answer": "...",
+  "verdict": "buy|sell|hold",
+  "confidence": 0.0-1.0,
+  "horizon": "1d|1w|1m",
+  "tickers": ["AAPL"],
+  "reasoning": "...",
+  "risk_level": "low|medium|high|critical",
+  "sources": [...],
+  "model": "...",
+  "outcome": {
+    "status": "pending|in_progress|resolved",
+    "checkpoints": {"1d": null, "1w": null, "1m": null}
+  }
+}
+```
+
+## Tests
+
+```
+17 passed in 0.08s
+```
+
+## Commit
+
+```
+commit: 6f4c7ddda22eda38c4c8df82347141e92081c211
+message: feat(copilot): Add decision journal + outcome feedback loop (BATCH-13-DEV-02)
+```
+
+## Gate Evidence: DECISION_LOG_PROOF
+
+- Storage: Immutable JSON files per decision
+- Schema: copilot_decision_journal_v1
+- Coverage: 100% of copilot responses can be journalized via new endpoint
+- Tests: 17/17 passing
+
+## Next Steps (B13-T2..T5)
+
+- B13-T2: Outcome evaluator (data_analyst) - compute hit rate on historical data
+- B13-T3: UI historique 7 jours (frontend_engineer) - decision history view
+- B13-T4: Vérification cohérence (qa) - integration tests
+- B13-T5: Boucle backlog hebdo (planner) - weekly review automation
