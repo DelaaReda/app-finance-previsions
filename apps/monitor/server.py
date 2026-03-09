@@ -4214,7 +4214,7 @@ def iteration_issues(role: str = "", severity: str = "", recent_minutes: int = 1
 def runtime_diagnostics(lite: int = 0):
     try:
         try:
-            status_snapshot = status(lite=lite)
+            status_snapshot = status(lite=1)
         except TypeError:
             status_snapshot = status()
     except Exception:
