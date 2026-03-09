@@ -17,6 +17,7 @@ Read these first. Ignore historical reports unless you are debugging a past inci
 - Workspace and path rules: [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
 - Target runtime architecture: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
 - Execution order: [PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md](/home/venom/analyse-financiere/docs/product/planning/PLANNER_ORCHESTRATOR_EXECUTION_BATCHES.md)
+- Multi-agent policy: planner/runtime is `worker-first`; interactive `explorer` use is exception-only and not a substitute for delivery execution.
 - Monitor/runtime behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
 - Dev activation gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
 - Forecast/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)

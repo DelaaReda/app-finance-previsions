@@ -75,6 +75,8 @@
       "max_active": 3,
       "default_ttl_min": 45,
       "retry_max": 2,
+      "allow_runtime_explorer": 0,
+      "default_helper_mode": "worker_first",
       "backend": "openclaw",
       "managed_roles": ["dev", "admin", "scrum_master"]
     },

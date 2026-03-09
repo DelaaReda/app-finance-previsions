@@ -89,8 +89,13 @@ class PlannerSubagentManagerTests(unittest.TestCase):
 
     def test_prompt_mentions_native_codex_multi_agent_helpers(self) -> None:
         prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
-        self.assertIn("Codex native multi-agent helpers", prompt)
+        self.assertIn("worker-first mode", prompt)
+        self.assertIn("`explorer` is exception-only", prompt)
         self.assertIn("`monitor`", prompt)
+
+    def test_config_defaults_to_worker_first_runtime_policy(self) -> None:
+        self.assertFalse(self.config.allow_runtime_explorer)
+        self.assertEqual(self.config.default_helper_mode, "worker_first")
 
     def test_admin_runtime_uses_full_backend_sandbox(self) -> None:
         result = plan_subagent(self.config, "planner", "admin", "BATCH-61-ADMIN-01", "runtime")
@@ -555,6 +560,132 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "failed")
         self.assertIn("timeout", payload["blocking_issue"])
+
+    def test_run_codex_exec_rate_limit_falls_back_to_qwen(self) -> None:
+        def _fake_run(cmd, **kwargs):
+            out_path = Path(cmd[cmd.index("-o") + 1])
+            out_path.write_text("", encoding="utf-8")
+            return type(
+                "CompletedProcess",
+                (),
+                {"returncode": 1, "stdout": "", "stderr": "status 429 insufficient_quota"},
+            )()
+
+        with (
+            patch.object(MODULE, "_openclaw_agent_ids", return_value=set()),
+            patch.object(MODULE.subprocess, "run", side_effect=_fake_run),
+            patch.object(
+                MODULE,
+                "_run_qwen_subagent",
+                return_value=(0, json.dumps({"status": "completed", "summary": "qwen ok", "artifact": "artifact.txt", "verify": "proof=qwen", "files_touched": "x.py", "tests_run": "pytest -q", "commit_sha": "abc1234", "architecture_check": "layer=runtime", "vision_alignment": "batch=BATCH-61", "recommended_next": "planner_merge", "blocking_issue": "none"}), "", "qwen:planner_dev_qwen"),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-07",
+                task_kind="delivery",
+                message="Rate limit fallback path",
+                ttl_min=15,
+                backend="codex_exec",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["backend"], "qwen")
+        self.assertEqual(payload["backend_ref"], "qwen:planner_dev_qwen")
+        self.assertEqual(payload["model"], "qwen")
+
+    def test_run_openclaw_rate_limit_falls_back_to_qwen(self) -> None:
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_ensure_openclaw_agent", return_value=(True, "planner_dev_openclaw")),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 1, "stdout": "", "stderr": "api-rate-limit-reached http 429 quota exhausted"},
+                )(),
+            ),
+            patch.object(
+                MODULE,
+                "_run_qwen_subagent",
+                return_value=(0, json.dumps({"status": "completed", "summary": "qwen rescue", "artifact": "artifact.txt", "verify": "proof=qwen", "files_touched": "src/app.py", "tests_run": "pytest -q", "commit_sha": "abc1234", "architecture_check": "layer=api", "vision_alignment": "batch=BATCH-61", "recommended_next": "planner_merge", "blocking_issue": "none"}), "", "qwen:planner_dev_openclaw"),
+            ),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-08",
+                task_kind="delivery",
+                message="OpenClaw quota fallback path",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["backend"], "qwen")
+        self.assertEqual(payload["backend_ref"], "qwen:planner_dev_openclaw")
+        self.assertEqual(payload["model"], "qwen")
+
+    def test_qwen_fallback_ignores_interactive_oauth_prompt(self) -> None:
+        with (
+            patch.object(MODULE, "_planner_qwen_fallback_enabled", return_value=True),
+            patch.object(MODULE, "_active_rate_limit_reason", return_value=""),
+            patch.object(
+                MODULE,
+                "_run_qwen_subagent",
+                return_value=(
+                    0,
+                    "Qwen OAuth Authentication\nPlease visit this URL to authorize\nWaiting for authorization.\n",
+                    "",
+                    "qwen:planner_dev_oauth",
+                ),
+            ),
+        ):
+            result = MODULE._maybe_run_qwen_fallback(
+                self.config,
+                prompt="Reply with OK only.",
+                timeout_seconds=30,
+                subagent_id="planner_dev_oauth",
+                reason="forced_codex_quota_test",
+                source="cache",
+            )
+
+        self.assertIsNone(result)
+
+    def test_qwen_fallback_ignores_missing_auth_type_probe_output(self) -> None:
+        with (
+            patch.object(MODULE, "_planner_qwen_fallback_enabled", return_value=True),
+            patch.object(MODULE, "_active_rate_limit_reason", return_value=""),
+            patch.object(
+                MODULE,
+                "_run_qwen_subagent",
+                return_value=(
+                    1,
+                    "",
+                    "No auth type is selected. Please configure an auth type before running in non-interactive mode.",
+                    "qwen:planner_dev_noauth",
+                ),
+            ),
+        ):
+            result = MODULE._maybe_run_qwen_fallback(
+                self.config,
+                prompt="Reply with OK only.",
+                timeout_seconds=30,
+                subagent_id="planner_dev_noauth",
+                reason="forced_codex_quota_test",
+                source="cache",
+            )
+
+        self.assertIsNone(result)
 
     def test_run_codex_exec_full_access_uses_bypass_flag_instead_of_invalid_sandbox_value(self) -> None:
         captured: dict[str, object] = {}

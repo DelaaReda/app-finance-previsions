@@ -266,6 +266,36 @@ def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
     return enabled, cron_planner_only
 
 
+def _multi_agent_policy_snapshot(root: Path) -> dict:
+    config = _load_json_file(_runner_config_path(root))
+    features = config.get("features", {}) if isinstance(config, dict) else {}
+    planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+    allow_runtime_explorer = _bool_token(
+        os.environ.get("FC_PLANNER_ORCHESTRATOR_ALLOW_RUNTIME_EXPLORER"),
+        _bool_token(planner.get("allow_runtime_explorer"), False),
+    )
+    default_helper_mode = (
+        str(
+            os.environ.get(
+                "FC_PLANNER_ORCHESTRATOR_DEFAULT_HELPER_MODE",
+                planner.get("default_helper_mode", "worker_first"),
+            )
+            or "worker_first"
+        ).strip().lower()
+        or "worker_first"
+    )
+    return {
+        "runtime_mode": default_helper_mode,
+        "allow_runtime_explorer": allow_runtime_explorer,
+        "runtime_explorer_default": "allowed" if allow_runtime_explorer else "disabled",
+        "interactive_recent_explorer_sessions": "not_tracked_in_runtime_monitor",
+        "interactive_recent_explorer_agents": [],
+        "note": (
+            "Runtime planner is worker-first; explorers are interactive diagnostics only and are not tracked as live delivery agents here."
+        ),
+    }
+
+
 def _execution_mode(root: Path) -> str:
     enabled, cron_planner_only = _planner_orchestrator_flags(root)
     if enabled and cron_planner_only:
@@ -3796,6 +3826,7 @@ def status(lite: int = 0):
     delivery_control = _delivery_control_snapshot()
     product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
+    multi_agent_policy = _multi_agent_policy_snapshot(ROOT)
     monitor_access = _monitor_access_snapshot(ROOT)
 
     payload = {"ts_utc":now.isoformat(),"health":health,
@@ -3805,6 +3836,7 @@ def status(lite: int = 0):
             "monitor_access": monitor_access,
             "runtime_state": runtime_state,
             "execution_mode": execution_mode,
+            "multi_agent_policy": multi_agent_policy,
             "core_roles": list(CORE_ROLES),
             "roles":list(CORE_ROLES),
             "done": workboard_done,

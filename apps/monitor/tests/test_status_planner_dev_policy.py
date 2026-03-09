@@ -107,7 +107,18 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
             self.module, "contract", lambda role: contracts.get(role, {})
         ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
             self.module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
-        ), mock.patch.object(self.module, "rate_limits", lambda: []):
+        ), mock.patch.object(self.module, "rate_limits", lambda: []), mock.patch.object(
+            self.module,
+            "_multi_agent_policy_snapshot",
+            lambda root: {
+                "runtime_mode": "worker_first",
+                "allow_runtime_explorer": False,
+                "runtime_explorer_default": "disabled",
+                "interactive_recent_explorer_sessions": 2,
+                "interactive_recent_explorer_agents": [{"nickname": "Averroes"}],
+                "note": "Runtime planner is worker-first.",
+            },
+        ):
             payload = self.module.status()
 
         self.assertEqual(payload.get("execution_mode"), "parallel_roles")
@@ -116,8 +127,11 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertIn("delivery_integrity", payload)
         self.assertIn("delivery_control", payload)
         self.assertIn("product_value_metrics", payload)
+        self.assertIn("multi_agent_policy", payload)
         self.assertIn("planner_subagents", payload)
         self.assertIn("planner_dispatch", payload)
+        self.assertEqual(payload.get("multi_agent_policy", {}).get("runtime_mode"), "worker_first")
+        self.assertEqual(payload.get("multi_agent_policy", {}).get("runtime_explorer_default"), "disabled")
         self.assertIn("recent_success_rate", payload.get("planner_subagents", {}))
         self.assertEqual(payload.get("planner_dispatch", {}).get("ready_dev_count"), 0)
         self.assertEqual(payload.get("planner_dispatch", {}).get("status"), "dispatch_needed")
