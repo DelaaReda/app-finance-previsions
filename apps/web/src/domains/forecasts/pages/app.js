@@ -2665,11 +2665,11 @@ function applyLiveDashboardData(payload = {}) {
   const rawCopilotStart = data.copilotStart || data.copilot_start || window.copilotStart || null;
   const copilotScopeTickers = Array.isArray(rawCopilotStart?.scope_tickers)
     ? rawCopilotStart.scope_tickers
-    : toArray(data.scope_tickers, []);
+    : (Array.isArray(data.scope_tickers) ? data.scope_tickers : null);
   const copilotStartPayload = isObject(rawCopilotStart)
     ? {
       ...rawCopilotStart,
-      scope_tickers: copilotScopeTickers
+      ...(copilotScopeTickers ? { scope_tickers: copilotScopeTickers } : {})
     }
     : rawCopilotStart;
   const copilotStart = sanitizeCopilotStart(copilotStartPayload);
