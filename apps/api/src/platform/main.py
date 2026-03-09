@@ -4421,14 +4421,26 @@ def register_routes(app: FastAPI):
                     fallback["scope_tickers"] = scope_tickers
                 build_start_payload = getattr(
                     copilot_service_module,
-                    "_legacy_copilot_start_payload",
+                    "_build_copilot_start_payload",
                     None,
-                ) or getattr(copilot_service_module, "_build_copilot_start_payload", None)
+                )
                 if callable(build_start_payload):
                     fallback["copilot_start"] = build_start_payload(
                         daily_brief=daily_brief,
                         entry_points=entry_points,
+                        scope=scope,
                     )
+                else:
+                    legacy_build_start_payload = getattr(
+                        copilot_service_module,
+                        "_legacy_copilot_start_payload",
+                        None,
+                    )
+                    if callable(legacy_build_start_payload):
+                        fallback["copilot_start"] = legacy_build_start_payload(
+                            daily_brief=daily_brief,
+                            entry_points=entry_points,
+                        )
             except Exception:
                 pass
             return _ok(fallback)

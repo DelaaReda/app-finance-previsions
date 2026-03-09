@@ -13,7 +13,10 @@ from storage import io as storage_io
 
 
 def _client() -> TestClient:
-    return TestClient(create_app())
+    app = create_app()
+    app.router.on_startup.clear()
+    app.router.on_shutdown.clear()
+    return TestClient(app)
 
 
 def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch):
@@ -71,8 +74,16 @@ def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch
 
     copilot_start = data.get("copilot_start") or {}
     assert copilot_start.get("brief_of_day", {}).get("summary") == "No daily brief available yet."
-    assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
-    assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == [
+        "portfolio_today",
+        "market_theme",
+        "nvda_memo",
+    ]
+    assert [item.get("id") for item in copilot_start.get("open", [])] == [
+        "market",
+        "opportunities",
+        "copilot",
+    ]
 
 
 def test_copilot_context_route_passes_scope_tickers_to_service(monkeypatch):
@@ -100,3 +111,46 @@ def test_copilot_context_route_passes_scope_tickers_to_service(monkeypatch):
     assert payload.get("ok") is True
     assert captured.get("scope") == {"tickers": ["NVDA", "MSFT"]}
     assert payload.get("data", {}).get("scope_tickers") == ["NVDA", "MSFT"]
+
+
+def test_copilot_context_route_fallback_keeps_scope_tickers_in_copilot_start(monkeypatch):
+    async def _raise_context_error(*_args, **_kwargs):
+        raise RuntimeError("copilot context unavailable")
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _raise_context_error)
+    monkeypatch.setattr(
+        copilot_service,
+        "_load_daily_brief_payload",
+        lambda: {
+            "summary": "Fallback daily brief.",
+            "market_sentiment": "MIXED",
+            "top_signals": [],
+            "top_risks": [],
+            "macro_signals": [],
+            "sector_rotation": {"top": [], "bottom": []},
+            "generated_at": "2026-03-09T06:00:00Z",
+            "freshness": "2026-03-09T06:00:00Z",
+            "source": ["copilot_daily_brief_fallback"],
+        },
+    )
+    monkeypatch.setattr(storage_io, "load_json", lambda _key: None)
+
+    client = _client()
+    response = client.get("/api/copilot/context?tickers=nvda&tickers=msft")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    data = payload.get("data") or {}
+    assert data.get("scope_tickers") == ["NVDA", "MSFT"]
+    assert data.get("note") == "Market context service temporarily unavailable."
+
+    copilot_start = data.get("copilot_start") or {}
+    assert copilot_start.get("brief_of_day", {}).get("summary") == "Fallback daily brief."
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == [
+        "portfolio_today",
+        "market_theme",
+        "nvda_memo",
+    ]
+    assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["MSFT", "NVDA"]
