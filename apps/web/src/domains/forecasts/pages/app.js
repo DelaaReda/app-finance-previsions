@@ -2100,13 +2100,48 @@ function sanitizeJudgeDecisionJournal(entries) {
         ''
       ).trim();
 
+      // V17: Preserve outcome_feedback for DecisionJournalOutcomeFeedback rendering
+      const outcomeFeedback = isObject(entry.outcome_feedback)
+        ? {
+            schema_version: toString(entry.outcome_feedback.schema_version, 'v1'),
+            status: toString(entry.outcome_feedback.status, 'pending'),
+            update_mode: toString(entry.outcome_feedback.update_mode, 'append_only'),
+            latest_feedback_at: entry.outcome_feedback.latest_feedback_at || null,
+            next_checkpoint: isObject(entry.outcome_feedback.next_checkpoint)
+              ? {
+                  horizon: toString(entry.outcome_feedback.next_checkpoint.horizon, ''),
+                  status: toString(entry.outcome_feedback.next_checkpoint.status, ''),
+                  due_at: entry.outcome_feedback.next_checkpoint.due_at || null,
+                  record_mode: entry.outcome_feedback.next_checkpoint.record_mode || null,
+                  outcome: entry.outcome_feedback.next_checkpoint.outcome || null,
+                  actual_return: entry.outcome_feedback.next_checkpoint.actual_return || null,
+                  notes: entry.outcome_feedback.next_checkpoint.notes || null,
+                  recorded_at: entry.outcome_feedback.next_checkpoint.recorded_at || null
+                }
+              : null,
+            checkpoints: Array.isArray(entry.outcome_feedback.checkpoints)
+              ? entry.outcome_feedback.checkpoints.map((cp) => ({
+                  horizon: toString(cp.horizon, ''),
+                  status: toString(cp.status, ''),
+                  due_at: cp.due_at || null,
+                  record_mode: cp.record_mode || null,
+                  outcome: cp.outcome || null,
+                  actual_return: cp.actual_return || null,
+                  notes: cp.notes || null,
+                  recorded_at: cp.recorded_at || null
+                }))
+              : []
+          }
+        : null;
+
       return {
         symbol,
         decision,
         note,
         rationale,
         confidence,
-        timestamp: timeText || null
+        timestamp: timeText || null,
+        outcome_feedback: outcomeFeedback
       };
     })
     .filter(Boolean)
@@ -2672,6 +2707,49 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
       .join(' • ');
     const metaMarkup = meta ? `<div class="alert-meta">${meta}</div>` : '';
 
+    // V17: Outcome feedback loop display (DecisionJournalOutcomeFeedback)
+    const outcomeFeedback = entry.outcome_feedback;
+    let outcomeMarkup = '';
+    if (outcomeFeedback && typeof outcomeFeedback === 'object') {
+      const checkpoints = Array.isArray(outcomeFeedback.checkpoints) ? outcomeFeedback.checkpoints : [];
+      const nextCheckpoint = outcomeFeedback.next_checkpoint || null;
+      const statusBadge = outcomeFeedback.status
+        ? `<span class="outcome-status-badge outcome-status-${outcomeFeedback.status}">${outcomeFeedback.status}</span>`
+        : '';
+
+      const nextCheckpointHtml = nextCheckpoint
+        ? `<div class="outcome-next-checkpoint">
+            <strong>Prochéchéance:</strong> ${nextCheckpoint.horizon || 'N/A'} • ${nextCheckpoint.status || 'En attente'}
+            ${nextCheckpoint.due_at ? `• Échéance: ${new Date(nextCheckpoint.due_at).toLocaleDateString()}` : ''}
+            ${nextCheckpoint.actual_return != null ? `• Rendement: ${nextCheckpoint.actual_return}%` : ''}
+          </div>`
+        : '';
+
+      const checkpointsHtml = checkpoints.length
+        ? `<div class="outcome-checkpoints">
+            <strong>Historique:</strong>
+            <ul style="margin: 6px 0 0 16px; font-size: 12px; color: #94A3B8;">
+              ${checkpoints.map((cp) => `
+                <li>
+                  ${cp.horizon || 'N/A'}: ${cp.status || 'inconnu'}
+                  ${cp.actual_return != null ? `(${cp.actual_return}%)` : ''}
+                  ${cp.recorded_at ? `• ${new Date(cp.recorded_at).toLocaleDateString()}` : ''}
+                </li>
+              `).join('')}
+            </ul>
+          </div>`
+        : '';
+
+      outcomeMarkup = `<div class="outcome-feedback-section" style="margin-top: 10px; padding: 8px; background: rgba(30, 41, 59, 0.5); border-radius: 6px; border-left: 3px solid #3B82F6;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="font-size: 14px; font-weight: 600;">📊 Suivi des résultats</span>
+          ${statusBadge}
+        </div>
+        ${nextCheckpointHtml}
+        ${checkpointsHtml}
+      </div>`;
+    }
+
     return `
       <div class="alert-item">
         <div class="alert-content">
@@ -2679,6 +2757,7 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
           ${note}
           ${rationale}
           ${metaMarkup}
+          ${outcomeMarkup}
         </div>
       </div>
     `;

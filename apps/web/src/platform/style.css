@@ -7698,6 +7698,64 @@ input[type="checkbox"]:checked+.toggle-switch::after {
   .grid-2-desktop {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ============ V17: DECISION JOURNAL OUTCOME FEEDBACK STYLES ============ */
+.outcome-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.outcome-status-pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+}
+
+.outcome-status-tracked {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3B82F6;
+}
+
+.outcome-status-realized {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22C55E;
+}
+
+.outcome-status-missed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+.outcome-next-checkpoint {
+  font-size: 12px;
+  color: #CBD5E1;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 6px;
+}
+
+.outcome-checkpoints {
+  font-size: 12px;
+  color: #94A3B8;
+}
+
+.outcome-checkpoints ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.outcome-checkpoints li {
+  padding: 2px 0;
+}
+
+@media (min-width: 1280px) {
+  .grid-2-desktop {
     gap: var(--space-xl);
     align-items: stretch;
   }
