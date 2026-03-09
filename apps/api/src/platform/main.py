@@ -853,6 +853,13 @@ def _run_weekly_brief_job() -> None:
     run_weekly_brief_job()
 
 
+def _run_daily_brief_job() -> None:
+    """Trigger the daily brief job to refresh cached market brief."""
+    from jobs.market_brief import run_market_brief_job
+
+    run_market_brief_job()
+
+
 def _format_points(df: pd.DataFrame, column: str, limit: int, start: Optional[pd.Timestamp], end: Optional[pd.Timestamp]) -> List[Dict[str, Any]]:
     if column not in df.columns or df.empty:
         return []
@@ -3977,6 +3984,7 @@ def register_routes(app: FastAPI):
         try:
             snap = ensure_snapshot(
                 "brief_daily",
+                job_runner=_run_daily_brief_job,
                 aliases=["brief_daily.json"],
             )
 
