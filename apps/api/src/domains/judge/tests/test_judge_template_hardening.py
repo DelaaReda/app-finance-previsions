@@ -7,13 +7,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from services.judge_builder import build_judge_verdict
+SRC_PATH = Path(__file__).resolve().parents[3]
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
-ROUTES_PATH = Path(__file__).resolve().parents[1] / "api" / "routes"
-if str(ROUTES_PATH) not in sys.path:
-    sys.path.insert(0, str(ROUTES_PATH))
-
-import judge as judge_route  # type: ignore  # noqa: E402
+from domains.judge.api import judge as judge_route  # noqa: E402
+from services.judge_builder import build_judge_verdict  # noqa: E402
 
 
 def _client() -> TestClient:

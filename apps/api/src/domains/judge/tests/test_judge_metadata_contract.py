@@ -142,6 +142,91 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     assert saved["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
 
 
+def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
+    now_iso = "2026-03-07T16:54:00Z"
+    judge_decision_id = "judge_c28e370c4d647688"
+    saved = {}
+
+    async def fake_compute_verdicts_fn(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "verdict": "buy",
+                        "confidence": 0.81,
+                        "expected_return": 0.05,
+                        "score": 0.72,
+                        "horizon": "1w",
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    def fake_load_json(key):
+        if key == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY:
+            return {
+                "records": [
+                    {
+                        "record_id": "rec-1",
+                        "decision_id": judge_decision_id,
+                        "horizon": "1w",
+                        "status": "resolved",
+                        "outcome": "hit",
+                        "actual_return": 0.041,
+                        "recorded_at": "2026-03-08T09:00:00Z",
+                    },
+                ]
+            }
+
+        return {
+            "schema_version": "decision_journal_v1",
+            "entries": [],
+        }
+
+    def fake_save_json(key, payload, source=None, version="v1"):
+        saved["key"] = key
+        saved["payload"] = payload
+        return Path("runtime/data/decision_journal.json")
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["AAPL"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+
+    outcome_feedback = payload["data"]["decision_journal"]["entries"][0]["outcome_feedback"]
+    assert outcome_feedback["status"] == "in_progress"
+    assert outcome_feedback["latest_feedback_at"] == "2026-03-08T09:00:00Z"
+    assert outcome_feedback["next_checkpoint"]["horizon"] == "1d"
+    checkpoints = {
+        str(c["horizon"]): c
+        for c in outcome_feedback.get("checkpoints", [])
+        if isinstance(c, dict)
+    }
+    assert checkpoints["1w"]["status"] == "resolved"
+    assert checkpoints["1w"]["outcome"] == "hit"
+    assert checkpoints["1w"]["actual_return"] == 0.041
+    assert payload["data"]["decision_journal"]["feedback_loop"]["pending_feedback_records"] == 2
+
+
 def test_judge_options_fallback_exposes_degraded_metadata():
     def fail_risk_levels():
         raise RuntimeError("judge options exploded")

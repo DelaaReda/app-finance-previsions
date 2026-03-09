@@ -53,6 +53,9 @@ __all__ = [
     "NewsAttachment",
     "MLPrior",
     "VerdictMeta",
+    "DecisionJournalRisk",
+    "DecisionJournalEntry",
+    "DecisionJournal",
     "JudgeVerdict",
     "JudgeStats",
     "JudgeFiltersApplied",
@@ -171,6 +174,42 @@ class VerdictMeta(BaseModel):
     backtest_calibration: Optional[Dict[str, Any]] = None
 
 
+class DecisionJournalRisk(BaseModel):
+    """Structured risk payload attached to immutable journal entries."""
+
+    level: Literal["low", "medium", "high", "critical"] = "medium"
+    caveat: Optional[str] = None
+
+
+class DecisionJournalEntry(BaseModel):
+    """Immutable journal snapshot linked to one judge verdict."""
+
+    decision_id: str
+    date: str
+    captured_at: datetime
+    ticker: str
+    action: Literal["buy", "sell", "hold"]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    horizon: str
+    why: List[str] = Field(default_factory=list)
+    risk: DecisionJournalRisk = Field(default_factory=DecisionJournalRisk)
+    sources: List[str] = Field(default_factory=list)
+    profile: Optional[str] = None
+
+
+class DecisionJournal(BaseModel):
+    """Decision journal projection exposed by the judge endpoint."""
+
+    schema_version: str
+    generated_at: datetime
+    count: int
+    append_only: bool
+    link_field: str
+    outcomes_update_mode: str
+    feedback_horizons: List[str] = Field(default_factory=list)
+    entries: List[DecisionJournalEntry] = Field(default_factory=list)
+
+
 # ---------- Verdict principal ----------
 
 
@@ -183,6 +222,10 @@ class JudgeVerdict(BaseModel):
 
     # Contexte général
     ticker: str
+    decision_id: Optional[str] = Field(
+        default=None,
+        description="Stable immutable identifier reused by the decision journal.",
+    )
     horizon: str = Field(..., description="Ex: '1w', '1m', '3m'")
     direction: Optional[Literal["up", "down", "flat"]] = Field(
         default=None, description="Direction implicite du move, si calculée"
@@ -315,6 +358,7 @@ class JudgeData(BaseModel):
     stats: JudgeStats
     filters_applied: JudgeFiltersApplied
     generated_at: datetime
+    decision_journal: Optional[DecisionJournal] = None
     source: Optional[List[str]] = None
     freshness: Optional[str] = None
     status: Optional[Literal["ok", "degraded", "error"]] = None

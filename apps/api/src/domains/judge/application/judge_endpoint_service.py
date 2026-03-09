@@ -5,8 +5,12 @@ Routes stay orchestration-only and delegate payload creation to this module.
 
 from __future__ import annotations
 
+import os
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from hashlib import sha1
+from pathlib import Path
+import sys
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from storage.io import load_json, save_json
@@ -41,6 +45,23 @@ except Exception:  # pragma: no cover
         safe_int,
         service_response_with_metadata,
         utc_now_iso,
+    )
+
+try:
+    from platform.legacy.research.versioned_notes import VersionedNotesStore  # type: ignore
+except Exception:  # pragma: no cover
+    VersionedNotesStore = None  # type: ignore
+
+# Keep legacy imports and flattened imports in sync for test monkeypatching and callers.
+if __name__ == "domains.judge.application.judge_endpoint_service":
+    sys.modules.setdefault(
+        "services.judge_endpoint_service",
+        sys.modules[__name__],
+    )
+elif __name__ == "services.judge_endpoint_service":
+    sys.modules.setdefault(
+        "domains.judge.application.judge_endpoint_service",
+        sys.modules[__name__],
     )
 
 
@@ -79,6 +100,8 @@ def _decision_journal_dir() -> Path:
 
 
 def _decision_journal_store() -> VersionedNotesStore:
+    if VersionedNotesStore is None:
+        raise RuntimeError("VersionedNotesStore unavailable")
     return VersionedNotesStore(storage_dir=str(_decision_journal_dir()))
 
 
@@ -258,6 +281,114 @@ def _build_outcome_feedback_store_payload(
         "updated_at": freshness,
         "records": records,
     }
+
+
+def _build_feedback_records_by_decision(
+    records: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Index feedback records by decision id + horizon with latest timestamp."""
+
+    indexed: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        decision_id = str(record.get("decision_id") or "").strip()
+        horizon = _coerce_feedback_horizon(record.get("horizon"))
+        if not decision_id or not horizon:
+            continue
+
+        recorded_at = str(record.get("recorded_at") or "").strip()
+        if not recorded_at:
+            continue
+
+        current = indexed[decision_id].get(horizon)
+        if not isinstance(current, dict):
+            indexed[decision_id][horizon] = dict(record)
+            continue
+
+        current_recorded_at = str(current.get("recorded_at") or "").strip()
+        if not current_recorded_at:
+            indexed[decision_id][horizon] = dict(record)
+            continue
+
+        if _parse_utc_datetime(recorded_at) <= _parse_utc_datetime(current_recorded_at):
+            continue
+        indexed[decision_id][horizon] = dict(record)
+
+    return indexed
+
+
+def _attach_feedback_records_to_journal_entry(
+    entry: Dict[str, Any],
+    feedback_by_decision: Dict[str, Dict[str, Dict[str, Any]]],
+) -> int:
+    """Apply latest feedback records to one journal entry.
+
+    Returns remaining pending checkpoints.
+    """
+    if not isinstance(entry, dict):
+        return 0
+
+    feedback = entry.get("outcome_feedback")
+    if not isinstance(feedback, dict):
+        return 0
+
+    decision_id = str(entry.get("decision_id") or "").strip()
+    if not decision_id:
+        return 0
+
+    checkpoints = feedback.get("checkpoints")
+    if not isinstance(checkpoints, list):
+        return 0
+
+    by_horizon = feedback_by_decision.get(decision_id, {})
+    latest_feedback_at: Optional[datetime] = None
+    next_checkpoint = None
+    pending_count = 0
+
+    for checkpoint in checkpoints:
+        if not isinstance(checkpoint, dict):
+            continue
+
+        horizon = str(checkpoint.get("horizon") or "").strip()
+        record = by_horizon.get(horizon)
+        if isinstance(record, dict):
+            checkpoint["status"] = _coerce_feedback_status(record.get("status"))
+            if record.get("outcome") is not None:
+                checkpoint["outcome"] = str(record.get("outcome")).strip()
+            if record.get("actual_return") is not None:
+                checkpoint["actual_return"] = _safe_float(record.get("actual_return"))
+            if record.get("notes") is not None:
+                checkpoint["notes"] = str(record.get("notes")).strip()
+
+            recorded_at = str(record.get("recorded_at") or "").strip()
+            checkpoint["recorded_at"] = recorded_at
+            parsed_recorded_at = _parse_utc_datetime(recorded_at)
+            if latest_feedback_at is None or parsed_recorded_at > latest_feedback_at:
+                latest_feedback_at = parsed_recorded_at
+
+        if str(checkpoint.get("status") or "").strip().lower() == "pending":
+            pending_count += 1
+            if next_checkpoint is None:
+                next_checkpoint = checkpoint
+
+    if latest_feedback_at is not None:
+        feedback["latest_feedback_at"] = _utc_datetime_iso(latest_feedback_at)
+
+    feedback["next_checkpoint"] = next_checkpoint
+    total_checkpoints = len([c for c in checkpoints if isinstance(c, dict)])
+    if latest_feedback_at is None:
+        # Keep original pending default when there is no historical feedback.
+        if not feedback.get("status"):
+            feedback["status"] = "pending"
+    elif pending_count == 0:
+        feedback["status"] = "resolved"
+    else:
+        feedback["status"] = "in_progress"
+    if (feedback.get("status") or "") == "pending" and total_checkpoints == pending_count and latest_feedback_at is None:
+        feedback["next_checkpoint"] = feedback.get("next_checkpoint")
+    return pending_count
 
 
 async def append_judge_decision_outcome_feedback(
@@ -593,6 +724,13 @@ def _attach_decision_journal_projection(
         default_source="judge_endpoint_service",
     )
     entries: List[Dict[str, Any]] = []
+    try:
+        feedback_by_decision = _build_feedback_records_by_decision(
+            list(_load_outcome_feedback_records())
+        )
+    except Exception:
+        feedback_by_decision = {}
+
     for verdict in verdicts:
         entry = _build_journal_entry(
             verdict,
@@ -603,10 +741,21 @@ def _attach_decision_journal_projection(
         if entry is None:
             continue
         verdict.setdefault("decision_id", entry["decision_id"])
+        _attach_feedback_records_to_journal_entry(
+            entry,
+            feedback_by_decision=feedback_by_decision,
+        )
         entries.append(entry)
 
     pending_feedback_records = sum(
-        len((entry.get("outcome_feedback") or {}).get("checkpoints") or [])
+        len(
+            [
+                checkpoint
+                for checkpoint in (entry.get("outcome_feedback") or {}).get("checkpoints", [])
+                if str((checkpoint or {}).get("status") or "").strip().lower()
+                == "pending"
+            ]
+        )
         for entry in entries
         if isinstance(entry, dict)
     )

@@ -6,15 +6,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-ROUTES_PATH = Path(__file__).resolve().parents[1] / "src" / "api" / "routes"
-SRC_PATH = Path(__file__).resolve().parents[1] / "src"
-if str(ROUTES_PATH) not in sys.path:
-    sys.path.insert(0, str(ROUTES_PATH))
+SRC_PATH = Path(__file__).resolve().parents[3]
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-import judge as judge_route  # type: ignore  # noqa: E402
-from services import judge_endpoint_service  # type: ignore  # noqa: E402
+from domains.judge.api import judge as judge_route  # noqa: E402
+from services import judge_endpoint_service  # noqa: E402
 
 
 def _client() -> TestClient:
@@ -162,6 +159,98 @@ def test_judge_route_preserves_canonical_status_metadata(monkeypatch):
     assert payload["data"]["warnings"] == ["partial_data_provider_timeout"]
 
 
+def test_judge_route_keeps_decision_journal_contract_fields(monkeypatch):
+    now_iso = "2026-03-08T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "decision_id": "judge_demo_aapl",
+                        "horizon": "1w",
+                        "expected_return": 0.01,
+                        "risk_level": "medium",
+                        "confidence": 0.61,
+                        "summary": ["Synthetic verdict"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 0,
+                    "avg_confidence": 0.61,
+                    "generated_at": now_iso,
+                },
+                "filters_applied": {
+                    "min_confidence": 0.3,
+                    "tickers": ["AAPL"],
+                    "sort_by": "confidence",
+                    "sort_order": "desc",
+                    "limit": 1,
+                },
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+                "decision_journal": {
+                    "schema_version": "decision_journal_v1",
+                    "generated_at": now_iso,
+                    "count": 1,
+                    "append_only": True,
+                    "link_field": "decision_id",
+                    "outcomes_update_mode": "separate_records",
+                    "feedback_horizons": ["1d", "1w", "1m"],
+                    "entries": [
+                        {
+                            "decision_id": "judge_demo_aapl",
+                            "date": "2026-03-08",
+                            "captured_at": now_iso,
+                            "ticker": "AAPL",
+                            "action": "buy",
+                            "confidence": 0.61,
+                            "horizon": "1w",
+                            "why": ["Synthetic verdict"],
+                            "risk": {"level": "medium", "caveat": ""},
+                            "sources": ["judge_route", "tests"],
+                            "profile": "balanced",
+                        }
+                    ],
+                },
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge?limit=1&ticker=AAPL")
+    assert resp.status_code == 200
+    payload = resp.json()
+    verdict = payload["data"]["verdicts"][0]
+    journal = payload["data"]["decision_journal"]
+
+    assert verdict["decision_id"] == "judge_demo_aapl"
+    assert journal["schema_version"] == "decision_journal_v1"
+    assert journal["link_field"] == "decision_id"
+    assert journal["entries"][0]["decision_id"] == verdict["decision_id"]
+
+
 def test_judge_quality_route_delegates_to_service(monkeypatch):
     async def fake_quality(**kwargs):
         return {
@@ -200,3 +289,5 @@ def test_judge_options_route_delegates_to_service(monkeypatch):
     payload = resp.json()
     assert payload["ok"] is True
     assert payload["data"]["risk_levels"] == ["low", "medium", "high", "critical"]
+
+
