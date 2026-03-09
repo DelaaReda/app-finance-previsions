@@ -97,6 +97,18 @@ function loadApplyLiveDashboardData() {
     normalizeAppData(value) {
       return value;
     },
+    sanitizeJudgeDecisionJournal(value) {
+      const rows = Array.isArray(value) ? value : [];
+      return rows.slice(0, 8).map((entry) => ({
+        symbol: entry.symbol || 'Décision',
+        decision: entry.decision || 'N/A',
+        note: entry.note || '',
+        rationale: entry.rationale || '',
+        confidence: entry.confidence || null,
+        timestamp: entry.timestamp || null,
+        outcome_feedback: entry.outcome_feedback || null
+      }));
+    },
     FALLBACK_LLM_JUDGE_DATA: {},
     renderLiveDashboardWidgets() {
       sandbox.rendered = true;
