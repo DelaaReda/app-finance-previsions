@@ -5941,6 +5941,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // Expose functions globally
 window.changeBlueprint = changeBlueprint;
 window.toggleAICopilot = toggleAICopilot;
+window.renderHeroCopilotBrief = renderHeroCopilotBrief;
 window.sendOverlayMessage = sendOverlayMessage;
 window.handleOverlayEnter = handleOverlayEnter;
 window.quickAsk = quickAsk;
