@@ -531,6 +531,108 @@ function loadRunCopilotStartOpen() {
   return { sandbox, overlay, calls };
 }
 
+function loadHydrateCopilotOverlayStart({
+  getCopilotStart,
+  getCopilotContext,
+  builtState,
+  sanitizedStart,
+} = {}) {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'let copilotContextRequest = null;',
+    '\n\nasync function submitCopilotChat('
+  );
+  const contextValue = createElementStub();
+  const calls = {
+    starter: 0,
+    context: 0,
+    warnings: [],
+    labels: [],
+    messages: [],
+    actions: [],
+    hero: [],
+    sanitized: [],
+  };
+  const sandbox = {
+    console: {
+      ...console,
+      warn(...args) {
+        calls.warnings.push(args.map((value) => String(value)).join(' '));
+      },
+    },
+    document: {
+      getElementById(id) {
+        if (id === 'aiContextValue') return contextValue;
+        return null;
+      },
+    },
+    window: {
+      FinanceAPI: {},
+      copilotStart: null,
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    sanitizeCopilotStart(value) {
+      calls.sanitized.push(value);
+      return sanitizedStart || {
+        brief_of_day: {
+          summary: 'Fallback brief',
+          freshness: '2026-03-09T07:00:00Z',
+        },
+        ask: [],
+        open: [],
+      };
+    },
+    buildCopilotStartState(value) {
+      calls.builtFrom = value;
+      return builtState || {
+        brief: {
+          summary: 'Fallback brief',
+          freshness: '2026-03-09T07:00:00Z',
+        },
+        ask: [],
+        open: [],
+      };
+    },
+    updateCopilotContextLabel(state) {
+      calls.labels.push(state);
+    },
+    renderCopilotStartMessage(state) {
+      calls.messages.push(state);
+    },
+    renderCopilotStartActions(state) {
+      calls.actions.push(state);
+    },
+    renderHeroCopilotBrief(state) {
+      calls.hero.push(state);
+    },
+  };
+
+  if (typeof getCopilotStart === 'function') {
+    sandbox.window.FinanceAPI.getCopilotStart = async () => {
+      calls.starter += 1;
+      return getCopilotStart();
+    };
+  }
+
+  if (typeof getCopilotContext === 'function') {
+    sandbox.window.FinanceAPI.getCopilotContext = async () => {
+      calls.context += 1;
+      return getCopilotContext();
+    };
+  }
+
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.hydrateCopilotOverlayStart = hydrateCopilotOverlayStart;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, contextValue, calls };
+}
+
 function loadRenderHeroCopilotBrief() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractSection(
@@ -786,40 +888,33 @@ test('applyLiveDashboardData backfills portfolio health core fields from the raw
 test('applyLiveDashboardData hydrates the hero brief from live copilot_start data', () => {
   const { sandbox } = loadApplyLiveDashboardData();
 
-  sandbox.buildCopilotStartState = (value) => ({
-    brief: {
-      summary: value.copilot_start.brief_of_day.summary,
-      freshness: value.copilot_start.brief_of_day.freshness,
-    },
-    ask: [
-      {
-        label: 'Ask about today',
-        prompt: 'What matters today?',
-        tickers: ['NVDA'],
-      },
-    ],
-    open: [
-      {
-        label: 'Open live brief',
-        target: 'brief',
-      },
-    ],
-  });
-
   sandbox.applyLiveDashboardData({
     generatedAt: '2026-03-09T07:00:00Z',
     data: {
+      scope_tickers: ['NVDA', 'MSFT'],
       copilot_start: {
         brief_of_day: {
           summary: 'Breadth is narrow but stable.',
           freshness: '2026-03-09T06:55:00Z',
         },
+        ask: [
+          {
+            label: 'Ask about today',
+            prompt: 'What matters today?',
+          },
+        ],
+        open: [
+          {
+            label: 'Open live brief',
+            target: 'brief',
+          },
+        ],
       },
     },
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
-    brief: {
+    brief_of_day: {
       summary: 'Breadth is narrow but stable.',
       freshness: '2026-03-09T06:55:00Z',
     },
@@ -827,7 +922,6 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
       {
         label: 'Ask about today',
         prompt: 'What matters today?',
-        tickers: ['NVDA'],
       },
     ],
     open: [
@@ -836,13 +930,28 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
         target: 'brief',
       },
     ],
+    scope_tickers: ['NVDA', 'MSFT'],
   });
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), {
     brief_of_day: {
       summary: 'Breadth is narrow but stable.',
       freshness: '2026-03-09T06:55:00Z',
     },
+    ask: [
+      {
+        label: 'Ask about today',
+        prompt: 'What matters today?',
+      },
+    ],
+    open: [
+      {
+        label: 'Open live brief',
+        target: 'brief',
+      },
+    ],
+    scope_tickers: ['NVDA', 'MSFT'],
   });
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.copilotStart.scope_tickers)), ['NVDA', 'MSFT']);
 });
 
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {
@@ -1046,6 +1155,23 @@ test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () 
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
+});
+
+test('sanitizeCopilotStart preserves scoped tickers for downstream hero prompts', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    scope_tickers: ['nvda', ' msft ', 'NVDA'],
+    ask: [
+      {
+        id: 'ask_today',
+        label: 'Ask about today',
+        prompt: 'What matters most today?',
+      },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(result.scope_tickers)), ['NVDA', 'MSFT']);
 });
 
 test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions', () => {
