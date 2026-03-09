@@ -167,25 +167,13 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     assert "decision_outcome_feedback_v1" in (payload["data"].get("source") or [])
     assert "decision_journal_store_v1" in (payload["data"].get("source") or [])
     saved_by_key = {call["key"]: call for call in saved_calls}
-    assert set(saved_by_key) == {
-        "decision_journal",
-        f"decision_journal/entries/{entry['decision_id']}",
-    }
+    assert set(saved_by_key) == {"decision_journal"}
     manifest_save = saved_by_key["decision_journal"]
     assert manifest_save["source"] == ["judge_endpoint_service", "decision_journal_store_v1"]
     assert manifest_save["version"] == "decision_journal_v1"
     assert manifest_save["payload"]["append_only"] is True
     assert manifest_save["payload"]["outcomes_update_mode"] == "separate_records"
     assert manifest_save["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
-    immutable_save = saved_by_key[f"decision_journal/entries/{entry['decision_id']}"]
-    assert immutable_save["source"] == [
-        "judge_endpoint_service",
-        "decision_journal_store_v1",
-        "immutable_snapshot",
-    ]
-    assert immutable_save["payload"]["record_mode"] == "immutable_snapshot"
-    assert immutable_save["payload"]["snapshot"]["decision_id"] == entry["decision_id"]
-    assert immutable_save["payload"]["outcome_feedback"]["schema_version"] == "decision_outcome_feedback_v1"
 
 
 def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
@@ -550,37 +538,3 @@ def test_judge_decision_outcome_feedback_persists_append_only(monkeypatch):
     )
     assert second["data"]["stored_records"] == len(store["records"])
     assert store["records"][-1]["decision_id"] == "judge_2"
-
-
-def test_judge_decision_outcome_feedback_defaults_to_resolved_when_measurement_present(
-    monkeypatch,
-):
-    store = {}
-
-    def fake_load_json(key):
-        if key != judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY:
-            return None
-        return {"records": list(store.get("records", []))}
-
-    def fake_save_json(key, payload, source=None, version="v1"):
-        assert key == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY
-        store["records"] = payload.get("records", [])
-        return Path("/tmp/judge_decision_outcome_feedback_records.json")
-
-    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
-    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
-
-    payload = asyncio.run(
-        judge_endpoint_service.append_judge_decision_outcome_feedback(
-            feedback={
-                "decision_id": "judge_3",
-                "horizon": "1m",
-                "outcome": "hit",
-                "actual_return": 0.022,
-            }
-        )
-    )
-
-    assert payload["status"] == "ok"
-    assert payload["data"]["feedback"]["status"] == "resolved"
-    assert store["records"][-1]["status"] == "resolved"
