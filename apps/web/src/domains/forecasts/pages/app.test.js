@@ -49,45 +49,6 @@ function loadApplyLiveDashboardData() {
     toArray(value, fallback = []) {
       return Array.isArray(value) ? value : fallback;
     },
-    resolveCopilotStartState(value) {
-      if (value && typeof value === 'object' && !Array.isArray(value) && value.brief) {
-        return value;
-      }
-
-      const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-      const brief = raw.brief_of_day && typeof raw.brief_of_day === 'object' ? raw.brief_of_day : {};
-      const scopeTickers = Array.isArray(raw.scope_tickers)
-        ? raw.scope_tickers
-          .map((ticker) => String(ticker || '').trim().toUpperCase())
-          .filter((ticker, index, list) => ticker && list.indexOf(ticker) === index)
-        : [];
-
-      return {
-        brief: {
-          summary: typeof brief.summary === 'string' ? brief.summary : 'No daily brief available yet.',
-          freshness: typeof brief.freshness === 'string' ? brief.freshness : '',
-        },
-        ask: Array.isArray(raw.ask)
-          ? raw.ask.map((item, index) => ({
-            id: typeof item?.id === 'string' ? item.id : `ask-${index}`,
-            label: typeof item?.label === 'string' ? item.label : 'Ask copilot',
-            prompt: typeof item?.prompt === 'string' ? item.prompt : '',
-            tickers: Array.isArray(item?.tickers) && item.tickers.length
-              ? item.tickers
-              : scopeTickers,
-          }))
-          : [],
-        open: Array.isArray(raw.open)
-          ? raw.open.map((item, index) => ({
-            id: typeof item?.id === 'string' ? item.id : `open-${index}`,
-            label: typeof item?.label === 'string' ? item.label : 'Open',
-            target: typeof item?.target === 'string' && item.target.trim().toLowerCase() === '/brief/daily'
-              ? 'market'
-              : (typeof item?.target === 'string' ? item.target.replace(/^\/+/, '') : ''),
-          }))
-          : [],
-      };
-    },
     toString(value, fallback = '') {
       return typeof value === 'string' ? value : fallback;
     },
