@@ -132,13 +132,13 @@ def test_news_feed_contract_and_cache_hit(monkeypatch):
 
 def test_copilot_context_fallback_keeps_copilot_start_contract(monkeypatch):
     platform_main = importlib.import_module("platform.main")
+    copilot_service = importlib.import_module("domains.copilot.application.copilot_service")
 
-    def fake_market_context_snapshot():
-        raise RuntimeError("context unavailable")
-
-    def fake_copilot_start_payload(*, context_timestamp=None):
+    async def fake_build_context_payload(*_args, **_kwargs):
         return {
-            "brief_of_day": {
+            "regime": "fallback",
+            "confidence": 0.35,
+            "daily_brief": {
                 "title": "Brief of the day",
                 "summary": "No daily brief available yet.",
                 "market_sentiment": "UNKNOWN",
@@ -146,28 +146,59 @@ def test_copilot_context_fallback_keeps_copilot_start_contract(monkeypatch):
                 "top_risks": [],
                 "macro_signals": [],
                 "sector_rotation": {"top": [], "bottom": []},
-                "generated_at": context_timestamp,
-                "freshness": context_timestamp,
+                "generated_at": "2026-03-09T06:00:00Z",
+                "freshness": "2026-03-09T06:00:00Z",
                 "source": ["brief_daily_fallback"],
             },
-            "ask": [
+            "entry_points": [
                 {
-                    "id": "portfolio_today",
-                    "label": "Portfolio today?",
-                    "prompt": "What should I do with my portfolio today?",
-                }
-            ],
-            "open": [
+                    "id": "brief_of_day",
+                    "kind": "open",
+                    "label": "Brief du jour",
+                    "target": "/brief/daily",
+                },
                 {
-                    "id": "market",
-                    "label": "Open market view",
-                    "target": "market",
-                }
+                    "id": "ask_copilot",
+                    "kind": "ask",
+                    "label": "Poser une question",
+                    "target": "/copilot/ask",
+                    "prefill": {
+                        "question": "Que dois-je surveiller aujourd'hui ?",
+                        "tickers": [],
+                    },
+                },
             ],
+            "copilot_start": {
+                "brief_of_day": {
+                    "title": "Brief of the day",
+                    "summary": "No daily brief available yet.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": "2026-03-09T06:00:00Z",
+                    "freshness": "2026-03-09T06:00:00Z",
+                    "source": ["brief_daily_fallback"],
+                },
+                "ask": [
+                    {
+                        "id": "ask_copilot",
+                        "label": "Poser une question",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "brief_of_day",
+                        "label": "Brief du jour",
+                        "target": "/brief/daily",
+                    }
+                ],
+            },
         }
 
-    monkeypatch.setattr(platform_main, "get_market_context_snapshot", fake_market_context_snapshot)
-    monkeypatch.setattr(platform_main, "build_copilot_start_payload", fake_copilot_start_payload)
+    monkeypatch.setattr(copilot_service, "build_context_payload", fake_build_context_payload)
 
     endpoint = _route_endpoint("/api/copilot/context")
     payload = asyncio.run(endpoint())
@@ -180,5 +211,7 @@ def test_copilot_context_fallback_keeps_copilot_start_contract(monkeypatch):
     assert data.get("note") == "Market context service temporarily unavailable."
     assert brief_of_day.get("summary") == "No daily brief available yet."
     assert brief_of_day.get("source") == ["brief_daily_fallback"]
-    assert copilot_start.get("ask", [])[0]["id"] == "portfolio_today"
-    assert copilot_start.get("open", [])[0]["target"] == "market"
+    assert data.get("daily_brief", {}).get("summary") == "No daily brief available yet."
+    assert [item.get("id") for item in data.get("entry_points", [])] == ["brief_of_day", "ask_copilot"]
+    assert copilot_start.get("ask", [])[0]["id"] == "ask_copilot"
+    assert copilot_start.get("open", [])[0]["target"] == "/brief/daily"

@@ -346,6 +346,10 @@ def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch
     assert entry_points[0].get("target") == "/brief/daily"
     assert entry_points[1].get("target") == "/copilot/ask"
     assert entry_points[1].get("prefill", {}).get("tickers") == ["NVDA"]
+    copilot_start = response.get("copilot_start") or {}
+    assert copilot_start.get("brief_of_day", {}).get("summary", "").startswith("Ouverture calme")
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
+    assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
 
     copilot_start = response.get("copilot_start") or {}
     brief_of_day = copilot_start.get("brief_of_day") or {}
@@ -375,6 +379,10 @@ def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
 
     entry_points = response.get("entry_points") or []
     assert [item.get("id") for item in entry_points] == ["brief_of_day", "ask_copilot"]
+    copilot_start = response.get("copilot_start") or {}
+    assert copilot_start.get("brief_of_day", {}).get("summary") == "No daily brief available yet."
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
+    assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
 
     copilot_start = response.get("copilot_start") or {}
     brief_of_day = copilot_start.get("brief_of_day") or {}

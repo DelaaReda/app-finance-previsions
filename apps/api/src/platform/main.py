@@ -4388,10 +4388,20 @@ def register_routes(app: FastAPI):
             logger.exception("market_context.snapshot_failed", exc_info=exc)
             return _ok(_fallback_market_context("Market context service temporarily unavailable."))
 
-    # Alias for compatibility with some UI hooks
+    # Dedicated copilot bootstrap endpoint: brief of day + ask/open entry points.
     @app.get("/api/copilot/context")
     async def copilot_context_alias():
-        return await market_context_current()
+        try:
+            from domains.copilot.application.copilot_service import build_context_payload
+
+            payload = await build_context_payload()
+            if payload.get("regime") == "fallback":
+                payload.setdefault("note", "Market context service temporarily unavailable.")
+            return _ok(payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("copilot_context.bootstrap_failed", exc_info=exc)
+            fallback = _fallback_market_context("Market context service temporarily unavailable.")
+            return _ok(fallback)
 
     @app.get("/api/dashboard/kpis")
     async def dashboard_kpis(
