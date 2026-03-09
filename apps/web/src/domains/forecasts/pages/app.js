@@ -3100,7 +3100,10 @@ function prevStoryPoint() {
 // Drill-Down
 function buildRobustnessGoNoGoDecision() {
   const status = getCriticalWidgetHealthStatus();
-  const state = toString(status && status.state, 'ok');
+  const rawState = status && status.state;
+  const state = rawState
+    ? String(rawState).trim().toLowerCase()
+    : (status && status.reason ? 'unknown' : 'ok');
   const reason = status && status.reason
     ? toString(status.reason, '')
     : buildCriticalWidgetHealthDetail(status || { state: 'ok' });

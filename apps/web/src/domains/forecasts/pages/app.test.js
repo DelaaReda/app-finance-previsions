@@ -954,6 +954,17 @@ test('buildRobustnessGoNoGoDecision returns GO for healthy state', () => {
   assert.equal(result.detail, 'Generated fallback detail');
 });
 
+test('buildRobustnessGoNoGoDecision handles case-insensitive degraded states', () => {
+  const { sandbox } = loadRobustnessGoNoGoDecision({
+    state: 'DEGRADED',
+    reason: 'partial signals',
+  });
+  const result = sandbox.buildRobustnessGoNoGoDecision();
+
+  assert.equal(result.decision, 'NO-GO');
+  assert.equal(result.state, 'degraded');
+});
+
 test('buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states', () => {
   const { sandbox } = loadRobustnessGoNoGoDecision({
     state: 'degraded',
