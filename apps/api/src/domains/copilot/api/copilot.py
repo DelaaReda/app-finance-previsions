@@ -255,3 +255,109 @@ async def copilot_reports(req: CopilotReportRequest):
             filters=req.filters,
         ),
     }
+
+
+# Decision Journal Routes (BATCH-13-DEV-02)
+
+
+class CopilotDecisionLogRequest(BaseModel):
+    question: str
+    answer: str
+    verdict: str
+    confidence: float
+    tickers: Optional[List[str]] = None
+    horizon: Optional[str] = "1d"
+    reasoning: Optional[str] = None
+    risk_level: Optional[str] = "medium"
+    model: Optional[str] = None
+
+
+@router.post("/copilot/decision-journal/log")
+async def copilot_decision_journal_log(req: CopilotDecisionLogRequest):
+    """Log one copilot decision to immutable journal."""
+    from domains.copilot.application.decision_journal import log_copilot_decision
+
+    result = log_copilot_decision(
+        question=req.question,
+        answer=req.answer,
+        verdict=req.verdict,
+        confidence=req.confidence,
+        tickers=req.tickers,
+        horizon=req.horizon or "1d",
+        reasoning=req.reasoning,
+        risk_level=req.risk_level or "medium",
+        model=req.model or "unknown",
+    )
+    return {"ok": result.get("status") == "recorded", "data": result}
+
+
+class CopilotOutcomeFeedbackRequest(BaseModel):
+    decision_id: str
+    horizon: str
+    status: str
+    actual_return: Optional[float] = None
+    predicted_return: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@router.post("/copilot/decision-journal/outcomes")
+async def copilot_decision_outcome_feedback(req: CopilotOutcomeFeedbackRequest):
+    """Record outcome feedback for a decision."""
+    from domains.copilot.application.decision_journal import record_outcome_feedback
+
+    result = record_outcome_feedback(
+        decision_id=req.decision_id,
+        horizon=req.horizon,
+        status=req.status,
+        actual_return=req.actual_return,
+        predicted_return=req.predicted_return,
+        notes=req.notes,
+    )
+    return {"ok": result.get("status") == "recorded", "data": result}
+
+
+@router.get("/copilot/decision-journal")
+async def copilot_decision_journal_get(
+    limit: int = Query(default=50, ge=1, le=500),
+    tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
+    horizon: Optional[str] = Query(None, description="Filter by horizon (1d/1w/1m)"),
+    verdict: Optional[str] = Query(None, description="Filter by verdict (buy/sell/hold)"),
+):
+    """Retrieve decision journal entries."""
+    from domains.copilot.application.decision_journal import get_decision_journal
+
+    result = get_decision_journal(
+        limit=limit,
+        tickers=tickers,
+        horizon=horizon,
+        verdict=verdict,
+    )
+    return {"ok": True, "data": result}
+
+
+@router.get("/copilot/decision-journal/outcomes")
+async def copilot_outcome_feedback_get(
+    decision_id: Optional[str] = Query(None, description="Filter by decision_id"),
+    horizon: Optional[str] = Query(None, description="Filter by horizon"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(default=200, ge=1, le=5000),
+):
+    """Retrieve outcome feedback records."""
+    from domains.copilot.application.decision_journal import get_outcome_feedback
+
+    result = get_outcome_feedback(
+        decision_id=decision_id,
+        horizon=horizon,
+        status=status,
+        limit=limit,
+    )
+    return {"ok": True, "data": result}
+
+
+@router.get("/copilot/decision-journal/metrics")
+async def copilot_decision_journal_metrics():
+    """Compute hit rate and calibration metrics."""
+    from domains.copilot.application.decision_journal import compute_metrics
+
+    result = compute_metrics()
+    return {"ok": True, "data": result}
