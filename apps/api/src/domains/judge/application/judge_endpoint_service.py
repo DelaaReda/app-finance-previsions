@@ -5,6 +5,7 @@ Routes stay orchestration-only and delegate payload creation to this module.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -44,6 +45,12 @@ except Exception:  # pragma: no cover
 
 
 JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
+DECISION_JOURNAL_FEEDBACK_HORIZONS = ("1d", "1w", "1m")
+_DECISION_JOURNAL_FEEDBACK_DELTAS = {
+    "1d": timedelta(days=1),
+    "1w": timedelta(weeks=1),
+    "1m": timedelta(days=30),
+}
 
 
 def _default_risk_levels() -> List[str]:
@@ -92,6 +99,60 @@ def _fallback_horizon(*, profile: str, verdict: Dict[str, Any]) -> str:
     return "1w"
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_utc_datetime(value: Any) -> datetime:
+    text = str(value or "").strip()
+    if text:
+        normalized = text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
+def _utc_datetime_iso(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _build_outcome_feedback(captured_at: str) -> Dict[str, Any]:
+    captured_at_dt = _parse_utc_datetime(captured_at)
+    checkpoints: List[Dict[str, Any]] = []
+    for horizon in DECISION_JOURNAL_FEEDBACK_HORIZONS:
+        due_at = _utc_datetime_iso(
+            captured_at_dt + _DECISION_JOURNAL_FEEDBACK_DELTAS[horizon]
+        )
+        checkpoints.append(
+            {
+                "horizon": horizon,
+                "status": "pending",
+                "due_at": due_at,
+                "record_mode": "separate_record",
+            }
+        )
+
+    next_checkpoint = checkpoints[0] if checkpoints else None
+    return {
+        "schema_version": "decision_outcome_feedback_v1",
+        "status": "pending",
+        "update_mode": "separate_records",
+        "latest_feedback_at": None,
+        "next_checkpoint": next_checkpoint,
+        "checkpoints": checkpoints,
+    }
+
+
 def _build_journal_entry(
     verdict: Dict[str, Any],
     *,
@@ -136,6 +197,16 @@ def _build_journal_entry(
         default_source="judge_endpoint_service",
     )
     horizon = _fallback_horizon(profile=profile, verdict=verdict)
+    expected_return = _safe_float(verdict.get("expected_return"))
+    if expected_return is None:
+        ml_prior = verdict.get("ml_prior")
+        if isinstance(ml_prior, dict):
+            expected_return = _safe_float(ml_prior.get("pred_return"))
+    score = _safe_float(verdict.get("score"))
+    if score is None:
+        phase_scores = verdict.get("phase_scores")
+        if isinstance(phase_scores, dict):
+            score = _safe_float(phase_scores.get("fusion"))
     decision_basis = "|".join(
         [
             ticker,
@@ -160,6 +231,11 @@ def _build_journal_entry(
             "level": risk_level,
             "caveat": risk_caveat,
         },
+        "prediction": {
+            "expected_return": expected_return,
+            "score": score,
+        },
+        "outcome_feedback": _build_outcome_feedback(captured_at),
         "sources": sources,
         "profile": str(profile or "").strip() or "default",
     }
@@ -197,6 +273,11 @@ def _attach_decision_journal_projection(
         verdict.setdefault("decision_id", entry["decision_id"])
         entries.append(entry)
 
+    pending_feedback_records = sum(
+        len((entry.get("outcome_feedback") or {}).get("checkpoints") or [])
+        for entry in entries
+        if isinstance(entry, dict)
+    )
     data["decision_journal"] = {
         "schema_version": "decision_journal_v1",
         "generated_at": generated_at,
@@ -204,12 +285,24 @@ def _attach_decision_journal_projection(
         "append_only": True,
         "link_field": "decision_id",
         "outcomes_update_mode": "separate_records",
-        "feedback_horizons": ["1d", "1w", "1m"],
+        "feedback_horizons": list(DECISION_JOURNAL_FEEDBACK_HORIZONS),
+        "feedback_loop": {
+            "schema_version": "decision_outcome_feedback_v1",
+            "update_mode": "separate_records",
+            "tracked_horizons": list(DECISION_JOURNAL_FEEDBACK_HORIZONS),
+            "pending_entries": len(entries),
+            "pending_feedback_records": pending_feedback_records,
+        },
         "entries": entries,
     }
     append_source_tag(
         data,
         "decision_journal_projection_v1",
+        default_source="judge_endpoint_service",
+    )
+    append_source_tag(
+        data,
+        "decision_outcome_feedback_v1",
         default_source="judge_endpoint_service",
     )
     return data
