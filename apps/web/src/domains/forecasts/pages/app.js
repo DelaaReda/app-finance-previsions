@@ -2673,6 +2673,14 @@ function applyLiveDashboardData(payload = {}) {
     }
     : rawCopilotStart;
   const copilotStart = sanitizeCopilotStart(copilotStartPayload);
+  const copilotStartState = isObject(copilotStartPayload)
+    ? buildCopilotStartState({
+      data: {
+        copilot_start: copilotStart,
+        scope_tickers: copilotScopeTickers
+      }
+    })
+    : null;
   window.copilotStart = copilotStart;
   
   // Map story data from API (window.storyData set by apiConnector.js)
@@ -2704,7 +2712,9 @@ function applyLiveDashboardData(payload = {}) {
   }
 
   renderLiveDashboardWidgets();
-  if (rawCopilotStart) {
+  if (copilotStartState) {
+    renderHeroCopilotBrief(copilotStartState);
+  } else if (rawCopilotStart) {
     renderHeroCopilotBrief(copilotStart);
   }
 }

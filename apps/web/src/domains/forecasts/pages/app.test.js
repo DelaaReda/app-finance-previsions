@@ -913,6 +913,13 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
     scope_tickers: ['NVDA', 'MSFT'],
   };
 
+  sandbox.buildCopilotStartState = (value) => {
+    sandbox.copilotStartStateInput = value;
+    return {
+      built_from: value,
+    };
+  };
+
   sandbox.applyLiveDashboardData({
     generatedAt: '2026-03-09T07:00:00Z',
     data: {
@@ -939,20 +946,43 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), expectedStoredState);
-  const serializedHeroState = JSON.parse(JSON.stringify(sandbox.heroBriefState));
-  const allowedHeroStates = [
-    expectedStoredState,
-    {
-      data: {
+  if (sandbox.copilotStartStateInput) {
+    const serializedBuildInput = JSON.parse(JSON.stringify(sandbox.copilotStartStateInput));
+    const allowedBuildInputs = [
+      {
         copilot_start: expectedStoredState,
         scope_tickers: ['NVDA', 'MSFT'],
       },
-    },
-  ];
-  assert.equal(
-    allowedHeroStates.some((candidate) => JSON.stringify(candidate) === JSON.stringify(serializedHeroState)),
-    true
-  );
+      {
+        data: {
+          copilot_start: expectedStoredState,
+          scope_tickers: ['NVDA', 'MSFT'],
+        },
+      },
+    ];
+    assert.equal(
+      allowedBuildInputs.some((candidate) => JSON.stringify(candidate) === JSON.stringify(serializedBuildInput)),
+      true
+    );
+    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
+      built_from: serializedBuildInput,
+    });
+  } else {
+    const serializedHeroState = JSON.parse(JSON.stringify(sandbox.heroBriefState));
+    const allowedHeroStates = [
+      expectedStoredState,
+      {
+        data: {
+          copilot_start: expectedStoredState,
+          scope_tickers: ['NVDA', 'MSFT'],
+        },
+      },
+    ];
+    assert.equal(
+      allowedHeroStates.some((candidate) => JSON.stringify(candidate) === JSON.stringify(serializedHeroState)),
+      true
+    );
+  }
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.copilotStart.scope_tickers)), ['NVDA', 'MSFT']);
 });
 

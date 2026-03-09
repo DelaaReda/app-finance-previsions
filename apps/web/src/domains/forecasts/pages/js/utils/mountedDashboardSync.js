@@ -40,12 +40,13 @@
         : (payloadData.copilotStart && typeof payloadData.copilotStart === 'object'
           ? payloadData.copilotStart
           : payloadData);
+      const scopeTickers = Array.isArray(rawCopilotStart && rawCopilotStart.scope_tickers)
+        ? rawCopilotStart.scope_tickers
+        : (Array.isArray(payloadData.scope_tickers) ? payloadData.scope_tickers : null);
       const copilotStart = rawCopilotStart && typeof rawCopilotStart === 'object'
         ? {
           ...rawCopilotStart,
-          scope_tickers: Array.isArray(rawCopilotStart.scope_tickers)
-            ? rawCopilotStart.scope_tickers
-            : payloadData.scope_tickers
+          ...(scopeTickers ? { scope_tickers: scopeTickers } : {})
         }
         : rawCopilotStart;
       win.renderHeroCopilotBrief(copilotStart);
