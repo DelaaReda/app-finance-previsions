@@ -69,12 +69,26 @@ JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
 DECISION_JOURNAL_STORAGE_KEY = "decision_journal"
 DECISION_JOURNAL_SCHEMA_VERSION = "decision_journal_v1"
 DECISION_JOURNAL_FEEDBACK_HORIZONS = ("1d", "1w", "1m")
+DECISION_JOURNAL_IMMUTABLE_ENTRY_KEY_PREFIX = f"{DECISION_JOURNAL_STORAGE_KEY}/entries"
+DECISION_JOURNAL_IMMUTABLE_ENTRY_PATH_PREFIX = "runtime/data/decision_journal/entries"
 DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY = "judge_decision_outcome_feedback_records"
 DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION = "decision_outcome_feedback_records_v1"
 _DECISION_JOURNAL_FEEDBACK_DELTAS = {
     "1d": timedelta(days=1),
     "1w": timedelta(weeks=1),
     "1m": timedelta(days=30),
+}
+_FEEDBACK_STATUS_ALIASES = {
+    "pending": "pending",
+    "open": "in_progress",
+    "recorded": "in_progress",
+    "in_progress": "in_progress",
+    "in-progress": "in_progress",
+    "resolved": "resolved",
+    "done": "resolved",
+    "complete": "resolved",
+    "completed": "resolved",
+    "closed": "resolved",
 }
 
 
@@ -103,6 +117,16 @@ def _decision_journal_store() -> VersionedNotesStore:
     if VersionedNotesStore is None:
         raise RuntimeError("VersionedNotesStore unavailable")
     return VersionedNotesStore(storage_dir=str(_decision_journal_dir()))
+
+
+def _decision_journal_entries_dir() -> Path:
+    path = _decision_journal_dir() / "entries"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _decision_journal_entry_path(decision_id: str) -> Path:
+    return _decision_journal_entries_dir() / f"{decision_id}.json"
 
 
 def _coerce_text_list(*values: Any) -> List[str]:
@@ -201,9 +225,18 @@ def _build_outcome_feedback(captured_at: str) -> Dict[str, Any]:
     }
 
 
-def _coerce_feedback_status(raw_status: Any) -> str:
+def _normalize_feedback_status(raw_status: Any) -> Optional[str]:
     text = str(raw_status or "").strip().lower()
-    return text or "recorded"
+    if not text:
+        return None
+    return _FEEDBACK_STATUS_ALIASES.get(text, text)
+
+
+def _coerce_feedback_status(raw_status: Any, *, has_measurement: bool = False) -> str:
+    normalized = _normalize_feedback_status(raw_status)
+    if normalized in {"pending", "in_progress", "resolved"}:
+        return normalized
+    return "resolved" if has_measurement else "in_progress"
 
 
 def _coerce_feedback_horizon(raw_horizon: Any) -> str:
@@ -239,6 +272,8 @@ def _coerce_outcome_feedback_payload(payload: Dict[str, Any], *, now_iso: str) -
     recorded_at = _utc_datetime_iso(_parse_utc_datetime(recorded_at_raw))
 
     notes = str(payload.get("notes") or "").strip() or None
+    actual_return = _safe_float(payload.get("actual_return"))
+    has_measurement = outcome_text is not None or actual_return is not None
     record = {
         "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
         "record_id": sha1(
@@ -246,12 +281,14 @@ def _coerce_outcome_feedback_payload(payload: Dict[str, Any], *, now_iso: str) -
         ).hexdigest()[:16],
         "decision_id": decision_id,
         "horizon": horizon,
-        "status": _coerce_feedback_status(payload.get("status")),
+        "status": _coerce_feedback_status(
+            payload.get("status"),
+            has_measurement=has_measurement,
+        ),
         "outcome": outcome_text,
         "recorded_at": recorded_at,
     }
 
-    actual_return = _safe_float(payload.get("actual_return"))
     if actual_return is not None:
         record["actual_return"] = actual_return
     if notes is not None:
@@ -467,7 +504,7 @@ async def get_judge_decision_outcome_feedback(
         normalized_horizon = _coerce_feedback_horizon(horizon) if horizon else ""
         if horizon and not normalized_horizon:
             raise ValueError("horizon must be one of 1d, 1w, 1m")
-        normalized_status = str(status_filter or "").strip().lower() or None
+        normalized_status = _normalize_feedback_status(status_filter)
 
         filtered_records = records
         if normalized_decision_id:
@@ -486,7 +523,7 @@ async def get_judge_decision_outcome_feedback(
             filtered_records = [
                 item
                 for item in filtered_records
-                if str(item.get("status") or "").strip().lower() == normalized_status
+                if _coerce_feedback_status(item.get("status")) == normalized_status
             ]
 
         try:
@@ -561,7 +598,7 @@ async def get_judge_decision_journal_payload(
 
         normalized_decision_id = str(decision_id or "").strip()
         normalized_profile = str(profile or "").strip().lower()
-        normalized_status = str(status_filter or "").strip().lower() or None
+        normalized_status = _normalize_feedback_status(status_filter)
 
         try:
             max_items = max(1, int(limit))
@@ -928,12 +965,17 @@ def _attach_decision_journal_projection(
         "decision_outcome_feedback_v1",
         default_source="judge_endpoint_service",
     )
+    store_status = str(store.get("status") or "").strip().lower()
     append_source_tag(
         data,
-        "decision_journal_store_v1" if store.get("status") == "persisted" else "decision_journal_store_degraded",
+        (
+            "decision_journal_store_v1"
+            if store_status in {"persisted", "skipped"}
+            else "decision_journal_store_degraded"
+        ),
         default_source="judge_endpoint_service",
     )
-    if store.get("status") != "persisted":
+    if store_status not in {"persisted", "skipped"}:
         warnings = data.get("warnings")
         if not isinstance(warnings, list):
             warnings = [] if warnings in (None, "") else [str(warnings)]
@@ -949,6 +991,10 @@ def _persist_decision_journal_entries(
     *,
     generated_at: str,
 ) -> Dict[str, Any]:
+    immutable_store = _persist_immutable_decision_journal_entries(
+        entries,
+        generated_at=generated_at,
+    )
     if not entries:
         return {
             "status": "skipped",
@@ -957,6 +1003,7 @@ def _persist_decision_journal_entries(
             "persisted_count": 0,
             "total_entries": 0,
             "path": None,
+            "immutable_store": immutable_store,
         }
 
     try:
@@ -1004,14 +1051,20 @@ def _persist_decision_journal_entries(
                 "persisted_count": 0,
                 "total_entries": len(merged_entries),
                 "path": None,
+                "immutable_store": immutable_store,
             }
         return {
-            "status": "persisted",
+            "status": (
+                "persisted"
+                if immutable_store.get("status") != "degraded"
+                else "degraded"
+            ),
             "storage_key": DECISION_JOURNAL_STORAGE_KEY,
             "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
             "persisted_count": len(new_entries),
             "total_entries": len(merged_entries),
             "path": str(saved_path),
+            "immutable_store": immutable_store,
         }
     except Exception:
         return {
@@ -1021,7 +1074,104 @@ def _persist_decision_journal_entries(
             "persisted_count": 0,
             "total_entries": 0,
             "path": None,
+            "immutable_store": immutable_store,
         }
+
+
+def _persist_immutable_decision_journal_entries(
+    entries: List[Dict[str, Any]],
+    *,
+    generated_at: str,
+) -> Dict[str, Any]:
+    if not entries:
+        return {
+            "status": "skipped",
+            "storage_key_prefix": DECISION_JOURNAL_IMMUTABLE_ENTRY_KEY_PREFIX,
+            "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+            "path_prefix": DECISION_JOURNAL_IMMUTABLE_ENTRY_PATH_PREFIX,
+            "persisted_count": 0,
+            "existing_count": 0,
+            "failed_count": 0,
+        }
+
+    persisted_count = 0
+    existing_count = 0
+    failed_count = 0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+
+        decision_id = str(entry.get("decision_id") or "").strip()
+        if not decision_id:
+            failed_count += 1
+            continue
+
+        if _decision_journal_entry_path(decision_id).exists():
+            existing_count += 1
+            continue
+
+        save_result = save_json(
+            f"{DECISION_JOURNAL_IMMUTABLE_ENTRY_KEY_PREFIX}/{decision_id}",
+            {
+                "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+                "record_mode": "immutable_snapshot",
+                "append_only": True,
+                "decision_id": decision_id,
+                "generated_at": generated_at,
+                "captured_at": str(entry.get("captured_at") or generated_at).strip()
+                or generated_at,
+                "ticker": str(entry.get("ticker") or "UNKNOWN").strip().upper()
+                or "UNKNOWN",
+                "action": coerce_verdict(entry.get("action"), default="hold"),
+                "confidence": coerce_confidence(entry.get("confidence"), default=0.5),
+                "horizon": str(entry.get("horizon") or "1w").strip() or "1w",
+                "profile": str(entry.get("profile") or "default").strip() or "default",
+                "prediction": (
+                    dict(entry.get("prediction"))
+                    if isinstance(entry.get("prediction"), dict)
+                    else {}
+                ),
+                "risk": (
+                    dict(entry.get("risk"))
+                    if isinstance(entry.get("risk"), dict)
+                    else {}
+                ),
+                "outcome_feedback": (
+                    dict(entry.get("outcome_feedback"))
+                    if isinstance(entry.get("outcome_feedback"), dict)
+                    else {}
+                ),
+                "snapshot": dict(entry),
+            },
+            source=[
+                "judge_endpoint_service",
+                "decision_journal_store_v1",
+                "immutable_snapshot",
+            ],
+            version=DECISION_JOURNAL_SCHEMA_VERSION,
+        )
+        if not save_result:
+            failed_count += 1
+            continue
+        persisted_count += 1
+
+    status = "persisted"
+    if failed_count > 0:
+        status = "degraded"
+    elif persisted_count == 0 and existing_count > 0:
+        status = "already_persisted"
+    elif persisted_count == 0:
+        status = "skipped"
+
+    return {
+        "status": status,
+        "storage_key_prefix": DECISION_JOURNAL_IMMUTABLE_ENTRY_KEY_PREFIX,
+        "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+        "path_prefix": DECISION_JOURNAL_IMMUTABLE_ENTRY_PATH_PREFIX,
+        "persisted_count": persisted_count,
+        "existing_count": existing_count,
+        "failed_count": failed_count,
+    }
 
 
 async def get_judge_verdicts_payload(

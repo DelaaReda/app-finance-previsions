@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from domains.judge.application import judge_endpoint_service
 
 def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     now_iso = "2026-03-07T16:54:00Z"
-    saved = {}
+    saved_calls = []
 
     async def fake_compute_verdicts_fn(**_kwargs):
         return {
@@ -41,14 +42,36 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
         }
 
     def fake_save_json(key, payload, source=None, version="v1"):
-        saved["key"] = key
-        saved["payload"] = payload
-        saved["source"] = source
-        saved["version"] = version
-        return Path("runtime/data/decision_journal.json")
+        saved_calls.append(
+            {
+                "key": key,
+                "payload": payload,
+                "source": source,
+                "version": version,
+            }
+        )
+        return Path("runtime/data") / f"{key}.json"
 
     monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
     monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_decision_journal_dir",
+        lambda: Path("runtime/data/decision_journal"),
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_persist_immutable_decision_journal_entries",
+        lambda entries, generated_at: {
+            "status": "persisted",
+            "storage_key_prefix": "decision_journal/entries",
+            "schema_version": "decision_journal_v1",
+            "path_prefix": "runtime/data/decision_journal/entries",
+            "persisted_count": len(entries),
+            "existing_count": 0,
+            "failed_count": 0,
+        },
+    )
 
     payload = asyncio.run(
         judge_endpoint_service.get_judge_verdicts_payload(
@@ -90,6 +113,15 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
         "persisted_count": 1,
         "total_entries": 1,
         "path": "runtime/data/decision_journal.json",
+        "immutable_store": {
+            "status": "persisted",
+            "storage_key_prefix": "decision_journal/entries",
+            "schema_version": "decision_journal_v1",
+            "path_prefix": "runtime/data/decision_journal/entries",
+            "persisted_count": 1,
+            "existing_count": 0,
+            "failed_count": 0,
+        },
     }
     assert payload["data"]["decision_journal"]["count"] == 1
     entry = payload["data"]["decision_journal"]["entries"][0]
@@ -134,12 +166,26 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     assert "decision_journal_projection_v1" in (payload["data"].get("source") or [])
     assert "decision_outcome_feedback_v1" in (payload["data"].get("source") or [])
     assert "decision_journal_store_v1" in (payload["data"].get("source") or [])
-    assert saved["key"] == "decision_journal"
-    assert saved["source"] == ["judge_endpoint_service", "decision_journal_store_v1"]
-    assert saved["version"] == "decision_journal_v1"
-    assert saved["payload"]["append_only"] is True
-    assert saved["payload"]["outcomes_update_mode"] == "separate_records"
-    assert saved["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
+    saved_by_key = {call["key"]: call for call in saved_calls}
+    assert set(saved_by_key) == {
+        "decision_journal",
+        f"decision_journal/entries/{entry['decision_id']}",
+    }
+    manifest_save = saved_by_key["decision_journal"]
+    assert manifest_save["source"] == ["judge_endpoint_service", "decision_journal_store_v1"]
+    assert manifest_save["version"] == "decision_journal_v1"
+    assert manifest_save["payload"]["append_only"] is True
+    assert manifest_save["payload"]["outcomes_update_mode"] == "separate_records"
+    assert manifest_save["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
+    immutable_save = saved_by_key[f"decision_journal/entries/{entry['decision_id']}"]
+    assert immutable_save["source"] == [
+        "judge_endpoint_service",
+        "decision_journal_store_v1",
+        "immutable_snapshot",
+    ]
+    assert immutable_save["payload"]["record_mode"] == "immutable_snapshot"
+    assert immutable_save["payload"]["snapshot"]["decision_id"] == entry["decision_id"]
+    assert immutable_save["payload"]["outcome_feedback"]["schema_version"] == "decision_outcome_feedback_v1"
 
 
 def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
@@ -227,6 +273,109 @@ def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
     assert checkpoints["1w"]["outcome"] == "hit"
     assert checkpoints["1w"]["actual_return"] == 0.041
     assert payload["data"]["decision_journal"]["feedback_loop"]["pending_feedback_records"] == 2
+
+
+def test_judge_verdicts_payload_does_not_rewrite_existing_immutable_snapshot(monkeypatch, tmp_path):
+    now_iso = "2026-03-07T16:54:00Z"
+    journal_state = {
+        "schema_version": "decision_journal_v1",
+        "entries": [],
+    }
+    immutable_writes = []
+
+    async def fake_compute_verdicts_fn(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "AAPL",
+                        "verdict": "buy",
+                        "confidence": 0.61,
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+            },
+            "freshness": now_iso,
+        }
+
+    def fake_load_json(key):
+        if key == judge_endpoint_service.DECISION_JOURNAL_STORAGE_KEY:
+            return dict(journal_state)
+        return {"records": []}
+
+    def fake_save_json(key, payload, source=None, version="v1"):
+        if key == judge_endpoint_service.DECISION_JOURNAL_STORAGE_KEY:
+            journal_state["entries"] = list(payload.get("entries") or [])
+            return Path("runtime/data/decision_journal.json")
+
+        decision_id = key.rsplit("/", 1)[-1]
+        path = tmp_path / "decision_journal" / "entries" / f"{decision_id}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    **payload,
+                    "source": source or [],
+                    "version": version,
+                }
+            ),
+            encoding="utf-8",
+        )
+        immutable_writes.append(key)
+        return path
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_decision_journal_entry_path",
+        lambda decision_id: tmp_path / "decision_journal" / "entries" / f"{decision_id}.json",
+    )
+
+    first_payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["AAPL"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+    decision_id = first_payload["data"]["decision_journal"]["entries"][0]["decision_id"]
+    assert first_payload["data"]["decision_journal"]["store"]["immutable_store"]["persisted_count"] == 1
+
+    second_payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["AAPL"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+
+    assert immutable_writes == [f"decision_journal/entries/{decision_id}"]
+    assert second_payload["data"]["decision_journal"]["store"]["immutable_store"] == {
+        "status": "already_persisted",
+        "storage_key_prefix": "decision_journal/entries",
+        "schema_version": "decision_journal_v1",
+        "path_prefix": "runtime/data/decision_journal/entries",
+        "persisted_count": 0,
+        "existing_count": 1,
+        "failed_count": 0,
+    }
 
 
 def test_judge_decision_journal_payload_filters_and_applies_feedback(monkeypatch):
@@ -401,3 +550,37 @@ def test_judge_decision_outcome_feedback_persists_append_only(monkeypatch):
     )
     assert second["data"]["stored_records"] == len(store["records"])
     assert store["records"][-1]["decision_id"] == "judge_2"
+
+
+def test_judge_decision_outcome_feedback_defaults_to_resolved_when_measurement_present(
+    monkeypatch,
+):
+    store = {}
+
+    def fake_load_json(key):
+        if key != judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY:
+            return None
+        return {"records": list(store.get("records", []))}
+
+    def fake_save_json(key, payload, source=None, version="v1"):
+        assert key == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY
+        store["records"] = payload.get("records", [])
+        return Path("/tmp/judge_decision_outcome_feedback_records.json")
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
+
+    payload = asyncio.run(
+        judge_endpoint_service.append_judge_decision_outcome_feedback(
+            feedback={
+                "decision_id": "judge_3",
+                "horizon": "1m",
+                "outcome": "hit",
+                "actual_return": 0.022,
+            }
+        )
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["data"]["feedback"]["status"] == "resolved"
+    assert store["records"][-1]["status"] == "resolved"
