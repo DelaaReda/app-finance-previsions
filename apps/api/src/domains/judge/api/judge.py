@@ -370,6 +370,39 @@ def _sanitize_verdict_for_public(
     return public_row
 
 
+def _judge_go_no_go(
+    *,
+    llm_ok: bool,
+    parsed_error: bool,
+    confidence: float,
+    data_quality_score: float,
+    news_count: int,
+    data_needed: Optional[List[str]],
+) -> Dict[str, Any]:
+    reasons: List[str] = []
+    if not llm_ok:
+        reasons.append("llm_provider_not_healthy")
+    if parsed_error:
+        reasons.append("llm_payload_validation_failed")
+    if confidence < 0.50:
+        reasons.append("low_confidence")
+    if data_quality_score < 0.40:
+        reasons.append("insufficient_data_quality")
+    if news_count < max(5, JUDGE_NEWS_ITEMS_PER_TICKER // 2):
+        reasons.append("insufficient_news")
+    if isinstance(data_needed, list) and len(data_needed) >= 3:
+        reasons.append("multiple_data_gaps")
+
+    decision = "go" if not reasons else "no_go"
+    return {
+        "decision": decision,
+        "eligible": decision == "go",
+        "reasons": reasons,
+        "confidence": round(max(0.0, min(1.0, float(confidence))), 4),
+        "data_quality": round(max(0.0, min(1.0, float(data_quality_score))), 4),
+    }
+
+
 async def _compute_singleflight(
     cache_key: str,
     compute_fn: Callable[[], Awaitable[Dict[str, Any]]],
@@ -3023,6 +3056,18 @@ async def _legacy_get_judge_verdicts(
                             "final_confidence": round(float(conf_final), 4),
                         }
 
+                    go_no_go = _judge_go_no_go(
+                        llm_ok=isinstance(res, dict) and res.get("ok") is True,
+                        parsed_error=bool(
+                            isinstance(parsed, dict)
+                            and parsed.get("error")
+                        ),
+                        confidence=conf_final,
+                        data_quality_score=data_quality_score,
+                        news_count=news_count,
+                        data_needed=parsed.get("data_needed") if isinstance(parsed, dict) else None,
+                    )
+
                     return {
                         "ticker": sym,
                         "verdict": verdict_text,
@@ -3041,6 +3086,7 @@ async def _legacy_get_judge_verdicts(
                         else {"summary": [verdict_text]},
                         "phases": phase_blocks or None,
                         "phase_scores_raw": raw_phase_scores,
+                        "go_no_go": go_no_go,
                         "phase_scores": norm_phase_scores or None,
                         "ml_prior": ml_prior,
                         "raw_answer": full_answer or verdict_text,
@@ -3236,6 +3282,27 @@ async def _legacy_get_judge_verdicts(
                 for v in limited_verdicts
             ]
 
+            decision_readiness = {
+                "go_count": len(
+                    [
+                        v
+                        for v in public_limited_verdicts
+                        if isinstance(v.get("go_no_go"), dict)
+                        and v["go_no_go"].get("decision") == "go"
+                    ]
+                ),
+                "no_go_count": len(
+                    [
+                        v
+                        for v in public_limited_verdicts
+                        if not isinstance(v.get("go_no_go"), dict)
+                        or v["go_no_go"].get("decision") != "go"
+                    ]
+                ),
+                "min_confidence": 0.5,
+                "min_quality": 0.4,
+            }
+
             response_obj = {
                 "verdicts": public_limited_verdicts,
                 "count": len(public_limited_verdicts),
@@ -3245,6 +3312,7 @@ async def _legacy_get_judge_verdicts(
                     "avg_confidence": avg_confidence,
                     "generated_at": now_iso,
                 },
+                "decision_readiness": decision_readiness,
                 "filters_applied": {
                     "min_confidence": min_confidence,
                     "tickers": ticker,

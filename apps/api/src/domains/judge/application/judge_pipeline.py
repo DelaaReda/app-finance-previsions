@@ -552,8 +552,39 @@ def get_fundamental_minimal(ticker: str) -> Dict[str, Any]:
 
 
 def parse_llm_answer(answer: str) -> Dict[str, Any]:
+    required_keys = {"summary", "scenarios", "risks", "impacts", "actions", "confidence"}
+
+    def _extract_json_blocks(text: str) -> list:
+        if not text:
+            return []
+        blocks: list = []
+        start = None
+        depth = 0
+        for idx, ch in enumerate(text):
+            if ch == "{":
+                if depth == 0:
+                    start = idx
+                depth += 1
+            elif ch == "}" and start is not None and depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    blocks.append(text[start : idx + 1])
+        return blocks
+
+    def _parse_json_block(block: str) -> Optional[Dict[str, Any]]:
+        try:
+            parsed = json.loads(block)
+        except Exception:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        if required_keys <= set(parsed.keys()):
+            return parsed
+        return None
+
     if not answer:
         return {"error": "empty_answer"}
+
     tail = answer.strip().splitlines()
     for line in reversed(tail):
         line = line.strip()
@@ -561,19 +592,26 @@ def parse_llm_answer(answer: str) -> Dict[str, Any]:
             continue
         try:
             obj = json.loads(line)
-            if isinstance(obj, dict) and {"summary", "scenarios", "risks", "impacts", "actions", "confidence"} <= set(obj.keys()):
+            if isinstance(obj, dict) and required_keys <= set(obj.keys()):
                 return obj
         except Exception:
             continue
+
     try:
         start = answer.rfind("{")
         if start != -1:
             snippet = answer[start:]
-            obj = json.loads(snippet)
-            if isinstance(obj, dict):
-                return obj
+            parsed = _parse_json_block(snippet)
+            if parsed:
+                return parsed
     except Exception:
         pass
+
+    for block in reversed(_extract_json_blocks(answer)):
+        parsed = _parse_json_block(block)
+        if parsed:
+            return parsed
+
     return {
         "error": "json_parse_failed",
         "summary": [answer],
