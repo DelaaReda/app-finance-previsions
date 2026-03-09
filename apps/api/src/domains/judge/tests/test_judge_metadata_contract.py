@@ -53,7 +53,20 @@ def test_judge_verdicts_payload_exposes_stable_metadata():
     assert payload["data"]["freshness"] == now_iso
     assert payload["data"]["status"] == "ok"
     assert payload["data"]["error"] is None
+    assert payload["data"]["decision_journal"]["schema_version"] == "decision_journal_v1"
+    assert payload["data"]["decision_journal"]["append_only"] is True
+    assert payload["data"]["decision_journal"]["outcomes_update_mode"] == "separate_records"
+    assert payload["data"]["decision_journal"]["feedback_horizons"] == ["1d", "1w", "1m"]
+    assert payload["data"]["decision_journal"]["count"] == 1
+    entry = payload["data"]["decision_journal"]["entries"][0]
+    assert entry["ticker"] == "AAPL"
+    assert entry["action"] == "buy"
+    assert entry["confidence"] == 0.61
+    assert entry["horizon"] == "1w"
+    assert entry["decision_id"].startswith("judge_")
+    assert payload["data"]["verdicts"][0]["decision_id"] == entry["decision_id"]
     assert "metadata_contract_v1" in (payload["data"].get("source") or [])
+    assert "decision_journal_projection_v1" in (payload["data"].get("source") or [])
 
 
 def test_judge_options_fallback_exposes_degraded_metadata():

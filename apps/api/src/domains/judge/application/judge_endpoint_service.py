@@ -5,6 +5,7 @@ Routes stay orchestration-only and delegate payload creation to this module.
 
 from __future__ import annotations
 
+from hashlib import sha1
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from storage.io import load_json
@@ -16,16 +17,26 @@ except Exception:  # pragma: no cover
 
 try:
     from services.service_standard import (
+        append_source_tag,
+        coerce_confidence,
+        coerce_verdict,
         ensure_endpoint_metadata,
+        ensure_source_list,
         ensure_decision_contract,
+        normalize_risk_level,
         safe_int,
         service_response_with_metadata,
         utc_now_iso,
     )
 except Exception:  # pragma: no cover
     from src.services.service_standard import (  # type: ignore
+        append_source_tag,
+        coerce_confidence,
+        coerce_verdict,
         ensure_endpoint_metadata,
+        ensure_source_list,
         ensure_decision_contract,
+        normalize_risk_level,
         safe_int,
         service_response_with_metadata,
         utc_now_iso,
@@ -37,6 +48,171 @@ JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
 
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
+
+
+def _coerce_text_list(*values: Any) -> List[str]:
+    items: List[str] = []
+    seen = set()
+    for value in values:
+        if isinstance(value, list):
+            for raw_item in value:
+                text = str(raw_item or "").strip()
+                if not text:
+                    continue
+                key = text.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                items.append(text)
+            continue
+        text = str(value or "").strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(text)
+    return items
+
+
+def _fallback_horizon(*, profile: str, verdict: Dict[str, Any]) -> str:
+    raw_horizon = str(
+        verdict.get("horizon")
+        or (verdict.get("ml_prior") or {}).get("horizon")
+        or ""
+    ).strip()
+    if raw_horizon:
+        return raw_horizon
+
+    profile_text = str(profile or "").strip().lower()
+    for candidate in ("1d", "1w", "1m", "3m", "6m", "1y"):
+        if candidate in profile_text:
+            return candidate
+    return "1w"
+
+
+def _build_journal_entry(
+    verdict: Dict[str, Any],
+    *,
+    profile: str,
+    fallback_generated_at: str,
+    default_sources: List[str],
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(verdict, dict):
+        return None
+
+    captured_at = str(
+        verdict.get("generated_at")
+        or (verdict.get("meta") or {}).get("generated_at")
+        or fallback_generated_at
+        or utc_now_iso()
+    ).strip() or utc_now_iso()
+    ticker = str(verdict.get("ticker") or "UNKNOWN").strip().upper() or "UNKNOWN"
+    action = coerce_verdict(
+        verdict.get("verdict") or verdict.get("action") or verdict.get("direction"),
+        default="hold",
+    )
+    confidence = coerce_confidence(verdict.get("confidence"), default=0.5)
+    why = _coerce_text_list(
+        verdict.get("why"),
+        verdict.get("summary"),
+        verdict.get("reasoning"),
+    ) or ["Decision generated from judge verdict payload."]
+
+    risk_payload = verdict.get("risk") if isinstance(verdict.get("risk"), dict) else {}
+    risk_level = normalize_risk_level(
+        verdict.get("risk_level") or risk_payload.get("level"),
+        default="medium",
+    )
+    risk_caveat = str(
+        risk_payload.get("caveat")
+        or verdict.get("risk_caveat")
+        or verdict.get("risk_reason")
+        or ""
+    ).strip()
+    sources = ensure_source_list(
+        verdict.get("source") or (verdict.get("meta") or {}).get("source") or default_sources,
+        default_source="judge_endpoint_service",
+    )
+    horizon = _fallback_horizon(profile=profile, verdict=verdict)
+    decision_basis = "|".join(
+        [
+            ticker,
+            horizon,
+            action,
+            captured_at,
+            str(profile or "").strip().lower() or "default",
+        ]
+    )
+    decision_id = f"judge_{sha1(decision_basis.encode('utf-8')).hexdigest()[:16]}"
+
+    return {
+        "decision_id": decision_id,
+        "date": captured_at[:10],
+        "captured_at": captured_at,
+        "ticker": ticker,
+        "action": action,
+        "confidence": confidence,
+        "horizon": horizon,
+        "why": why,
+        "risk": {
+            "level": risk_level,
+            "caveat": risk_caveat,
+        },
+        "sources": sources,
+        "profile": str(profile or "").strip() or "default",
+    }
+
+
+def _attach_decision_journal_projection(
+    data: Dict[str, Any],
+    *,
+    profile: str,
+    freshness: Optional[str],
+) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+
+    verdicts = data.get("verdicts")
+    if not isinstance(verdicts, list):
+        verdicts = []
+        data["verdicts"] = verdicts
+
+    generated_at = str(freshness or data.get("generated_at") or utc_now_iso()).strip() or utc_now_iso()
+    default_sources = ensure_source_list(
+        data.get("source"),
+        default_source="judge_endpoint_service",
+    )
+    entries: List[Dict[str, Any]] = []
+    for verdict in verdicts:
+        entry = _build_journal_entry(
+            verdict,
+            profile=profile,
+            fallback_generated_at=generated_at,
+            default_sources=default_sources,
+        )
+        if entry is None:
+            continue
+        verdict.setdefault("decision_id", entry["decision_id"])
+        entries.append(entry)
+
+    data["decision_journal"] = {
+        "schema_version": "decision_journal_v1",
+        "generated_at": generated_at,
+        "count": len(entries),
+        "append_only": True,
+        "link_field": "decision_id",
+        "outcomes_update_mode": "separate_records",
+        "feedback_horizons": ["1d", "1w", "1m"],
+        "entries": entries,
+    }
+    append_source_tag(
+        data,
+        "decision_journal_projection_v1",
+        default_source="judge_endpoint_service",
+    )
+    return data
 
 
 async def get_judge_verdicts_payload(
@@ -81,6 +257,11 @@ async def get_judge_verdicts_payload(
         why=head.get("why") or head.get("reasoning"),
         risk_level=head.get("risk_level") or head.get("risk"),
         risk_caveat=head.get("risk_caveat") or head.get("risk_reason"),
+        freshness=response.get("freshness") or data.get("generated_at"),
+    )
+    _attach_decision_journal_projection(
+        data,
+        profile=profile,
         freshness=response.get("freshness") or data.get("generated_at"),
     )
     ensure_endpoint_metadata(
