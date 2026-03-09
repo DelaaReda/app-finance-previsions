@@ -227,6 +227,110 @@ def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
     assert payload["data"]["decision_journal"]["feedback_loop"]["pending_feedback_records"] == 2
 
 
+def test_judge_decision_journal_payload_filters_and_applies_feedback(monkeypatch):
+    def fake_load_json(key):
+        if key == judge_endpoint_service.DECISION_JOURNAL_STORAGE_KEY:
+            return {
+                "schema_version": "decision_journal_v1",
+                "entries": [
+                    {
+                        "decision_id": "judge_demo_aapl",
+                        "captured_at": "2026-03-08T00:00:00Z",
+                        "profile": "balanced",
+                        "outcome_feedback": {
+                            "schema_version": "decision_outcome_feedback_v1",
+                            "status": "pending",
+                            "checkpoints": [
+                                {
+                                    "horizon": "1d",
+                                    "status": "pending",
+                                    "due_at": "2026-03-09T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                                {
+                                    "horizon": "1w",
+                                    "status": "pending",
+                                    "due_at": "2026-03-15T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                                {
+                                    "horizon": "1m",
+                                    "status": "pending",
+                                    "due_at": "2026-04-07T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        "decision_id": "judge_demo_msft",
+                        "captured_at": "2026-03-07T00:00:00Z",
+                        "profile": "balanced",
+                        "outcome_feedback": {
+                            "schema_version": "decision_outcome_feedback_v1",
+                            "status": "pending",
+                            "checkpoints": [
+                                {
+                                    "horizon": "1d",
+                                    "status": "pending",
+                                    "due_at": "2026-03-08T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                                {
+                                    "horizon": "1w",
+                                    "status": "pending",
+                                    "due_at": "2026-03-14T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                                {
+                                    "horizon": "1m",
+                                    "status": "pending",
+                                    "due_at": "2026-04-06T00:00:00Z",
+                                    "record_mode": "separate_record",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
+        if key == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY:
+            return {
+                "records": [
+                    {
+                        "decision_id": "judge_demo_aapl",
+                        "horizon": "1w",
+                        "status": "resolved",
+                        "outcome": "miss",
+                        "actual_return": -0.021,
+                        "recorded_at": "2026-03-09T06:00:00Z",
+                    }
+                ]
+            }
+        return {}
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_decision_journal_payload(
+            decision_id="judge_demo_aapl",
+            status_filter="in_progress",
+            limit=10,
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["status"] == "ok"
+    assert payload["data"]["schema_version"] == "decision_journal_v1"
+    assert payload["data"]["count"] == 2
+    assert payload["data"]["filtered_count"] == 1
+    assert payload["data"]["returned_count"] == 1
+    entry = payload["data"]["entries"][0]
+    assert entry["decision_id"] == "judge_demo_aapl"
+    assert entry["outcome_feedback"]["status"] == "in_progress"
+    assert entry["outcome_feedback"]["checkpoints"][1]["status"] == "resolved"
+    assert entry["outcome_feedback"]["checkpoints"][1]["actual_return"] == -0.021
+
+
 def test_judge_options_fallback_exposes_degraded_metadata():
     def fail_risk_levels():
         raise RuntimeError("judge options exploded")

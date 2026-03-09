@@ -544,6 +544,142 @@ async def get_judge_decision_outcome_feedback(
         )
 
 
+async def get_judge_decision_journal_payload(
+    *,
+    decision_id: Optional[str] = None,
+    profile: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    """Return stored decision journal entries with latest outcome feedback projection."""
+    now_iso = utc_now_iso()
+    try:
+        raw_payload = load_json(DECISION_JOURNAL_STORAGE_KEY) or {}
+        raw_entries = raw_payload.get("entries")
+        if not isinstance(raw_entries, list):
+            raw_entries = []
+
+        normalized_decision_id = str(decision_id or "").strip()
+        normalized_profile = str(profile or "").strip().lower()
+        normalized_status = str(status_filter or "").strip().lower() or None
+
+        try:
+            max_items = max(1, int(limit))
+        except Exception:
+            max_items = 200
+
+        feedback_by_decision = {}
+        try:
+            feedback_by_decision = _build_feedback_records_by_decision(
+                list(_load_outcome_feedback_records())
+            )
+        except Exception:
+            feedback_by_decision = {}
+
+        entries: List[Dict[str, Any]] = []
+        for entry in raw_entries:
+            if not isinstance(entry, dict):
+                continue
+            journal_entry = dict(entry)
+            _attach_feedback_records_to_journal_entry(
+                journal_entry,
+                feedback_by_decision=feedback_by_decision,
+            )
+            entries.append(journal_entry)
+
+        if normalized_decision_id:
+            entries = [
+                entry
+                for entry in entries
+                if str(entry.get("decision_id") or "").strip() == normalized_decision_id
+            ]
+        if normalized_profile:
+            entries = [
+                entry
+                for entry in entries
+                if str(entry.get("profile") or "").strip().lower() == normalized_profile
+            ]
+        if normalized_status:
+            entries = [
+                entry
+                for entry in entries
+                if str(((entry.get("outcome_feedback") or {}).get("status") or "")).strip().lower()
+                == normalized_status
+            ]
+
+        entries.sort(
+            key=lambda entry: str(entry.get("recorded_at") or entry.get("captured_at") or ""),
+            reverse=True,
+        )
+        returned_entries = entries[:max_items]
+        pending_feedback_records = sum(
+            len(
+                [
+                    checkpoint
+                    for checkpoint in (entry.get("outcome_feedback") or {}).get("checkpoints", [])
+                    if str((checkpoint or {}).get("status") or "").strip().lower()
+                    == "pending"
+                ]
+            )
+            for entry in returned_entries
+            if isinstance(entry, dict)
+        )
+
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+                "record_mode": "append_only",
+                "filters": {
+                    "decision_id": normalized_decision_id or None,
+                    "profile": normalized_profile or None,
+                    "status": normalized_status or None,
+                },
+                "count": len(raw_entries),
+                "filtered_count": len(entries),
+                "returned_count": len(returned_entries),
+                "feedback_loop": {
+                    "schema_version": "decision_outcome_feedback_v1",
+                    "tracked_horizons": list(DECISION_JOURNAL_FEEDBACK_HORIZONS),
+                    "update_mode": "separate_records",
+                    "pending_feedback_records": pending_feedback_records,
+                },
+                "entries": returned_entries,
+            },
+            default_source="judge_decision_journal_service",
+            freshness=now_iso,
+            status="ok",
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+                "record_mode": "append_only",
+                "filters": {
+                    "decision_id": str(decision_id or "").strip() or None,
+                    "profile": str(profile or "").strip() or None,
+                    "status": str(status_filter or "").strip() or None,
+                },
+                "count": 0,
+                "filtered_count": 0,
+                "returned_count": 0,
+                "entries": [],
+                "feedback_loop": {
+                    "schema_version": "decision_outcome_feedback_v1",
+                    "tracked_horizons": list(DECISION_JOURNAL_FEEDBACK_HORIZONS),
+                    "update_mode": "separate_records",
+                    "pending_feedback_records": 0,
+                },
+                "source": ["judge_decision_journal_service", "fallback"],
+                "message": "Unable to read judge decision journal.",
+                "error": str(exc),
+            },
+            default_source="judge_decision_journal_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 def _build_journal_entry(
     verdict: Dict[str, Any],
     *,
@@ -1126,6 +1262,7 @@ __all__ = [
     "get_judge_quality_payload",
     "get_judge_quality_history_payload",
     "get_judge_options_payload",
+    "get_judge_decision_journal_payload",
     "append_judge_decision_outcome_feedback",
     "get_judge_decision_outcome_feedback",
 ]

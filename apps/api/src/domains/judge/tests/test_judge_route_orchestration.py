@@ -291,3 +291,47 @@ def test_judge_options_route_delegates_to_service(monkeypatch):
     assert payload["data"]["risk_levels"] == ["low", "medium", "high", "critical"]
 
 
+def test_judge_decision_journal_route_delegates_to_service(monkeypatch):
+    captured = {}
+
+    async def fake_decision_journal_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "schema_version": "decision_journal_v1",
+                "record_mode": "append_only",
+                "filters": {
+                    "decision_id": "judge_demo_aapl",
+                    "profile": None,
+                    "status": "in_progress",
+                },
+                "count": 1,
+                "filtered_count": 1,
+                "returned_count": 1,
+                "entries": [
+                    {
+                        "decision_id": "judge_demo_aapl",
+                        "captured_at": "2026-03-08T00:00:00Z",
+                        "ticker": "AAPL",
+                    }
+                ],
+            },
+            "freshness": "2026-03-08T00:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_decision_journal_payload",
+        fake_decision_journal_payload,
+    )
+    client = _client()
+    resp = client.get(
+        "/api/judge/decision-journal?decision_id=judge_demo_aapl&status=in_progress&limit=10"
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["data"]["count"] == 1
+    assert captured["decision_id"] == "judge_demo_aapl"
+    assert captured["status_filter"] == "in_progress"

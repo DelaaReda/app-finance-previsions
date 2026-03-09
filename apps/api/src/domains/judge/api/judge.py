@@ -3548,6 +3548,30 @@ async def get_judge_options():
     return await get_judge_options_payload(risk_levels_fn=_judge_risk_levels)
 
 
+@router.get("/decision-journal")
+async def get_judge_decision_journal(
+    decision_id: Optional[str] = Query(default=None, description="Filter by decision id"),
+    profile: Optional[str] = Query(
+        default=None,
+        description="Filter by profile (default, balanced, sector_regime, ...)",
+    ),
+    status: Optional[str] = Query(
+        default=None,
+        description="Filter by latest outcome status (pending/in_progress/resolved)",
+    ),
+    limit: int = Query(default=200, ge=1, le=5000, description="Max records returned"),
+):
+    """Decision journal endpoint orchestrator."""
+    from services.judge_endpoint_service import get_judge_decision_journal_payload
+
+    return await get_judge_decision_journal_payload(
+        decision_id=decision_id,
+        profile=profile,
+        status_filter=status,
+        limit=limit,
+    )
+
+
 @router.post("/decision-journal/outcomes")
 async def post_judge_decision_outcome_feedback(
     payload: JudgeDecisionOutcomeFeedbackRequest,
