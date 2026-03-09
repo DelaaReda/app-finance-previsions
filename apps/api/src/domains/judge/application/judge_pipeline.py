@@ -567,20 +567,20 @@ def parse_llm_answer(answer: str) -> Dict[str, Any]:
                 depth += 1
             elif ch == "}" and start is not None and depth > 0:
                 depth -= 1
-                if depth == 0 and start is not None:
+                if depth == 0:
                     blocks.append(text[start : idx + 1])
         return blocks
 
-    def _parse_json_block(block: str) -> Optional[Dict[str, Any]]:
+    def _parse_dict_if_valid(block: str) -> Optional[Dict[str, Any]]:
         try:
             parsed = json.loads(block)
+            if not isinstance(parsed, dict):
+                return None
+            if not required_keys <= set(parsed.keys()):
+                return None
+            return parsed
         except Exception:
             return None
-        if not isinstance(parsed, dict):
-            return None
-        if required_keys <= set(parsed.keys()):
-            return parsed
-        return None
 
     if not answer:
         return {"error": "empty_answer"}
@@ -590,26 +590,13 @@ def parse_llm_answer(answer: str) -> Dict[str, Any]:
         line = line.strip()
         if not line:
             continue
-        try:
-            obj = json.loads(line)
-            if isinstance(obj, dict) and required_keys <= set(obj.keys()):
-                return obj
-        except Exception:
-            continue
-
-    try:
-        start = answer.rfind("{")
-        if start != -1:
-            snippet = answer[start:]
-            parsed = _parse_json_block(snippet)
-            if parsed:
-                return parsed
-    except Exception:
-        pass
+        parsed = _parse_dict_if_valid(line)
+        if parsed is not None:
+            return parsed
 
     for block in reversed(_extract_json_blocks(answer)):
-        parsed = _parse_json_block(block)
-        if parsed:
+        parsed = _parse_dict_if_valid(block)
+        if parsed is not None:
             return parsed
 
     return {
