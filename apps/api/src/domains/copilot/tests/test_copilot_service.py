@@ -350,12 +350,7 @@ def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch
     assert copilot_start.get("brief_of_day", {}).get("summary", "").startswith("Ouverture calme")
     assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
     assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
-
-    copilot_start = response.get("copilot_start") or {}
-    brief_of_day = copilot_start.get("brief_of_day") or {}
-    assert brief_of_day.get("summary", "").startswith("Ouverture calme")
-    assert [item.get("id") for item in copilot_start.get("ask") or []] == ["ask_copilot"]
-    assert [item.get("id") for item in copilot_start.get("open") or []] == ["brief_of_day"]
+    assert copilot_start.get("open", [])[0].get("target") == "/brief/daily"
     assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["NVDA"]
 
 
@@ -375,7 +370,7 @@ def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
     brief = response.get("daily_brief") or {}
     assert brief.get("summary") == "No daily brief available yet."
     assert brief.get("market_sentiment") == "UNKNOWN"
-    assert brief.get("source") == ["copilot_daily_brief_fallback"]
+    assert brief.get("source") == ["brief_daily_fallback"]
 
     entry_points = response.get("entry_points") or []
     assert [item.get("id") for item in entry_points] == ["brief_of_day", "ask_copilot"]
@@ -383,12 +378,7 @@ def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
     assert copilot_start.get("brief_of_day", {}).get("summary") == "No daily brief available yet."
     assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
     assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
-
-    copilot_start = response.get("copilot_start") or {}
-    brief_of_day = copilot_start.get("brief_of_day") or {}
-    assert brief_of_day.get("summary") == "No daily brief available yet."
-    assert [item.get("id") for item in copilot_start.get("ask") or []] == ["ask_copilot"]
-    assert [item.get("id") for item in copilot_start.get("open") or []] == ["brief_of_day"]
+    assert copilot_start.get("open", [])[0].get("target") == "/brief/daily"
 
 
 def test_ask_payload_includes_local_daily_brief_when_brief_route_is_unavailable(monkeypatch):

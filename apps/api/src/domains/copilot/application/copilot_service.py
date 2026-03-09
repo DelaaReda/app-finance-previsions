@@ -378,7 +378,7 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
         "sector_rotation": {"top": [], "bottom": []},
         "generated_at": generated_at,
         "freshness": generated_at,
-        "source": ["copilot_daily_brief_fallback"],
+        "source": ["brief_daily_fallback"],
     }
 
     try:
@@ -419,7 +419,7 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
     )
     normalized["source"] = _normalize_source_list(
         normalized.get("source") or normalized.get("sources"),
-        "copilot_daily_brief_snapshot",
+        "brief_daily_snapshot",
     )
     return normalized
 
@@ -446,7 +446,38 @@ def _build_copilot_entry_points(scope: Optional[Dict[str, Any]] = None) -> List[
     ]
 
 
-def _build_copilot_start_payload(
+def _with_scope_tickers(
+    copilot_start: Dict[str, Any],
+    *,
+    scope: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    scope_tickers = _normalize_tickers(scope.get("tickers") if isinstance(scope, dict) else [])
+    if not scope_tickers:
+        return copilot_start
+
+    normalized = dict(copilot_start)
+    ask_items = normalized.get("ask")
+    if not isinstance(ask_items, list):
+        return normalized
+
+    enriched_items: List[Dict[str, Any]] = []
+    for item in ask_items:
+        if not isinstance(item, dict):
+            continue
+        enriched = dict(item)
+        prefill = enriched.get("prefill") if isinstance(enriched.get("prefill"), dict) else {}
+        prompt = _safe_text(prefill.get("question") or enriched.get("prompt") or enriched.get("question"))
+        prefill.setdefault("tickers", scope_tickers)
+        if prompt:
+            prefill.setdefault("question", prompt)
+        enriched["prefill"] = prefill
+        enriched_items.append(enriched)
+
+    normalized["ask"] = enriched_items
+    return normalized
+
+
+def _legacy_copilot_start_payload(
     *,
     daily_brief: Optional[Dict[str, Any]] = None,
     entry_points: Optional[List[Dict[str, Any]]] = None,
@@ -472,6 +503,42 @@ def _build_copilot_start_payload(
         "ask": ask,
         "open": open_items,
     }
+
+
+def _build_copilot_start_payload(
+    *,
+    daily_brief: Optional[Dict[str, Any]] = None,
+    entry_points: Optional[List[Dict[str, Any]]] = None,
+    scope: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    resolved_brief = dict(daily_brief) if isinstance(daily_brief, dict) else {}
+    legacy_payload = _legacy_copilot_start_payload(
+        daily_brief=resolved_brief,
+        entry_points=entry_points,
+    )
+    context_timestamp = _safe_text(
+        resolved_brief.get("freshness") or resolved_brief.get("generated_at"),
+        utc_now_iso(),
+    )
+
+    for module_path in (
+        "domains.judge.application.intelligence_service",
+        "services.intelligence_service",
+    ):
+        try:
+            module = import_module(module_path)
+            build_fn = getattr(module, "_build_copilot_start_payload", None)
+            if callable(build_fn):
+                payload = build_fn(resolved_brief, context_timestamp=context_timestamp)
+                if isinstance(payload, dict) and payload:
+                    normalized = dict(payload)
+                    if isinstance(legacy_payload.get("brief_of_day"), dict) and not normalized.get("brief_of_day"):
+                        normalized["brief_of_day"] = dict(legacy_payload.get("brief_of_day") or {})
+                    return _with_scope_tickers(normalized, scope=scope)
+        except Exception:
+            continue
+
+    return _with_scope_tickers(legacy_payload, scope=scope)
 
 
 def _extract_bullets(text: str) -> List[str]:
@@ -969,6 +1036,7 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
     payload["copilot_start"] = _build_copilot_start_payload(
         daily_brief=payload.get("daily_brief"),
         entry_points=payload.get("entry_points"),
+        scope=scope,
     )
     return payload
 
