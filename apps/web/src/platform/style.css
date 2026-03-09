@@ -1500,6 +1500,24 @@ body {
   margin-top: var(--space-lg);
 }
 
+.hero-daily-brief {
+  margin: 0 auto var(--space-2xl);
+  max-width: 920px;
+  text-align: left;
+}
+
+.hero-brief-lead {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.hero-brief-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
 .ai-suggestions-hero {
   margin-top: var(--space-3xl);
   padding: var(--space-2xl);
@@ -5289,6 +5307,16 @@ input[type="checkbox"]:checked+.toggle-switch::after {
   background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 100%);
   transform: scale(1.05);
   box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+}
+
+.ai-action-btn.secondary {
+  background: rgba(15, 23, 42, 0.24);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+}
+
+.ai-action-btn.secondary:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(139, 92, 246, 0.48);
 }
 
 .user-info {
