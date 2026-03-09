@@ -26,6 +26,23 @@
       }
     }
 
+    if (
+      payload
+      && typeof payload === 'object'
+      && Object.keys(payload).length > 0
+      && typeof win.renderHeroCopilotBrief === 'function'
+    ) {
+      const payloadData = payload.data && typeof payload.data === 'object'
+        ? payload.data
+        : payload;
+      const copilotStart = payloadData.copilot_start && typeof payloadData.copilot_start === 'object'
+        ? payloadData.copilot_start
+        : (payloadData.copilotStart && typeof payloadData.copilotStart === 'object'
+          ? payloadData.copilotStart
+          : payloadData);
+      win.renderHeroCopilotBrief(copilotStart);
+    }
+
     return {
       eventName,
       payload

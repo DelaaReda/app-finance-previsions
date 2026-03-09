@@ -738,8 +738,15 @@ function transformCopilotStart(payload, fallbackPayload = null) {
 function normalizeCopilotOpenTarget(target, id) {
   const normalizedTarget = String(target || '').trim().toLowerCase();
   const normalizedId = String(id || '').trim().toLowerCase();
-  if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
-    return 'market';
+  if (
+    normalizedId === 'brief_of_day'
+    || normalizedTarget === '/brief/daily'
+    || normalizedTarget === 'brief_of_day'
+    || normalizedTarget === 'brief'
+    || normalizedTarget === 'live_brief'
+    || normalizedTarget === 'daily_brief'
+  ) {
+    return 'brief';
   }
   if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot/ask' || normalizedTarget === '/copilot') {
     return 'copilot';

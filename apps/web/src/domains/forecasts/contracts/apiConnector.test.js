@@ -207,7 +207,7 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'brief' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -260,7 +260,7 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'brief' },
       { id: 'copilot', target: 'copilot' },
     ]
   );
@@ -452,7 +452,7 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'brief' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -518,139 +518,7 @@ test('getCopilotStart falls back to copilot context when the starter route is un
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'market' }]
-  );
-});
-
-test('getCopilotStart unwraps the dedicated starter contract and normalizes open targets', async () => {
-  const calls = [];
-  const sandbox = loadConnector(async (url) => {
-    calls.push(url);
-    return {
-      async json() {
-        return {
-          ok: true,
-          data: {
-            brief_of_day: {
-              title: 'Brief of the day',
-              summary: 'Breadth is improving while rates stay range-bound.',
-              sentiment: 'mixed',
-              generated_at: '2026-03-09T05:30:00.000Z',
-              source: ['copilot_start_test'],
-            },
-            ask: [
-              {
-                id: 'ask_copilot',
-                label: 'Ask about NVDA',
-                target: '/copilot/ask',
-                prefill: {
-                  question: 'What matters most for NVDA today?',
-                  tickers: ['NVDA'],
-                },
-              },
-            ],
-            open: [
-              {
-                id: 'brief_of_day',
-                label: 'Open the live brief',
-                target: '/brief/daily',
-              },
-              {
-                id: 'open_copilot',
-                label: 'Open copilot',
-                target: '/copilot',
-              },
-            ],
-            scope_tickers: ['NVDA'],
-            stats: {
-              ask_count: 1,
-              open_count: 2,
-            },
-          },
-        };
-      },
-    };
-  });
-
-  const payload = await sandbox.window.FinanceAPI.getCopilotStart(['nvda']);
-  const copilotStart = payload.copilot_start || {};
-
-  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/start?tickers=NVDA']);
-  assert.equal(copilotStart.brief_of_day.summary, 'Breadth is improving while rates stay range-bound.');
-  assert.deepEqual(
-    copilotStart.ask.map((item) => item.id),
-    ['ask_copilot']
-  );
-  assert.deepEqual(
-    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [
-      { id: 'brief_of_day', target: 'market' },
-      { id: 'open_copilot', target: 'copilot' },
-    ]
-  );
-  assert.deepEqual(payload.scope_tickers, ['NVDA']);
-  assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
-});
-
-test('getCopilotStart falls back to copilot context when the starter route is unavailable', async () => {
-  const calls = [];
-  const sandbox = loadConnector(async (url) => {
-    calls.push(url);
-    if (url === 'http://localhost:8050/api/copilot/start') {
-      throw new Error('starter route unavailable');
-    }
-
-    assert.equal(url, 'http://localhost:8050/api/copilot/context');
-    return {
-      async json() {
-        return {
-          ok: true,
-          data: {
-            daily_brief: {
-              title: 'Brief of the day',
-              summary: 'Fallback context still has the brief ready.',
-              sentiment: 'mixed',
-              generated_at: '2026-03-09T05:30:00.000Z',
-            },
-            entry_points: [
-              {
-                id: 'brief_of_day',
-                kind: 'open',
-                label: 'Open the live brief',
-                target: '/brief/daily',
-              },
-              {
-                id: 'ask_copilot',
-                kind: 'ask',
-                label: 'Ask about NVDA',
-                target: '/copilot/ask',
-                prefill: {
-                  question: 'What matters most for NVDA today?',
-                  tickers: ['NVDA'],
-                },
-              },
-            ],
-          },
-        };
-      },
-    };
-  });
-
-  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
-  const copilotStart = payload.copilot_start || {};
-
-  assert.deepEqual(calls, [
-    'http://localhost:8050/api/copilot/start',
-    'http://localhost:8050/api/copilot/context',
-  ]);
-  assert.equal(copilotStart.brief_of_day.summary, 'Fallback context still has the brief ready.');
-  assert.deepEqual(
-    copilotStart.ask.map((item) => item.id),
-    ['ask_copilot']
-  );
-  assert.deepEqual(
-    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'market' }]
+    [{ id: 'brief_of_day', target: 'brief' }]
   );
 });
 
