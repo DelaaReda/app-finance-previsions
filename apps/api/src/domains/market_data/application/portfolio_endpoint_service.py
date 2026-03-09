@@ -68,6 +68,7 @@ def _fallback_payload(
             "tickers": [],
             "tickers_count": 0,
             "updated_at": None,
+            "state": {},
         },
         "benchmark": benchmark,
         "weights": {},

@@ -5,7 +5,7 @@ Task: API-PORTFOLIO-001 - Portfolio/Watchlist management
 """
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 import uuid
 import logging
 from pathlib import Path
@@ -39,16 +39,180 @@ def _equal_weights(tickers: List[str]) -> Dict[str, float]:
     return {ticker: weight for ticker in sorted(tickers)}
 
 
+_ALLOWED_PORTFOLIO_HORIZONS = {
+    "1w",
+    "1m",
+    "3m",
+    "6m",
+    "1y",
+    "3y",
+    "5y",
+    "short",
+    "medium",
+    "long",
+}
+_ALLOWED_PORTFOLIO_CONVICTIONS = {"low", "medium", "high", "exploratory"}
+_RISK_TOLERANCE_ALIASES = {
+    "defensive": "conservative",
+    "balanced": "moderate",
+    "high_beta": "aggressive",
+}
+_ALLOWED_PORTFOLIO_RISK_TOLERANCES = {"conservative", "moderate", "aggressive"}
+
+
+def _normalize_portfolio_choice(
+    value: Any,
+    *,
+    allowed: set[str],
+    field_name: str,
+    aliases: Optional[Dict[str, str]] = None,
+) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip().lower().replace("-", "_")
+    if not text:
+        return None
+    normalized = (aliases or {}).get(text, text)
+    if normalized not in allowed:
+        allowed_values = ", ".join(sorted(allowed))
+        raise ValueError(f"{field_name} must be one of: {allowed_values}.")
+    return normalized
+
+
+def _normalize_weight_map(value: Any, *, field_name: str) -> Optional[Dict[str, float]]:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or not value:
+        raise ValueError(f"{field_name} must be a non-empty object keyed by ticker.")
+
+    normalized: Dict[str, float] = {}
+    for raw_ticker, raw_weight in value.items():
+        ticker = str(raw_ticker or "").strip().upper()
+        if not ticker:
+            raise ValueError(f"{field_name} contains an empty ticker symbol.")
+        if ticker in normalized:
+            raise ValueError(f"{field_name} contains duplicate ticker {ticker}.")
+        try:
+            weight = float(raw_weight)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{field_name}.{ticker} must be numeric."
+            ) from exc
+        if weight <= 0:
+            raise ValueError(f"{field_name}.{ticker} must be greater than 0.")
+        normalized[ticker] = float(weight)
+    return normalized
+
+
+class PortfolioMetadata(BaseModel):
+    """Stable persisted portfolio-state metadata."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    weights: Optional[Dict[str, float]] = None
+    position_weights: Optional[Dict[str, float]] = None
+    horizon: Optional[str] = None
+    conviction: Optional[str] = None
+    risk_tolerance: Optional[str] = None
+
+    @field_validator("weights", "position_weights", mode="before")
+    @classmethod
+    def _validate_weights(cls, value: Any, info) -> Optional[Dict[str, float]]:
+        return _normalize_weight_map(value, field_name=info.field_name)
+
+    @field_validator("horizon", mode="before")
+    @classmethod
+    def _validate_horizon(cls, value: Any) -> Optional[str]:
+        return _normalize_portfolio_choice(
+            value,
+            allowed=_ALLOWED_PORTFOLIO_HORIZONS,
+            field_name="horizon",
+        )
+
+    @field_validator("conviction", mode="before")
+    @classmethod
+    def _validate_conviction(cls, value: Any) -> Optional[str]:
+        return _normalize_portfolio_choice(
+            value,
+            allowed=_ALLOWED_PORTFOLIO_CONVICTIONS,
+            field_name="conviction",
+        )
+
+    @field_validator("risk_tolerance", mode="before")
+    @classmethod
+    def _validate_risk_tolerance(cls, value: Any) -> Optional[str]:
+        return _normalize_portfolio_choice(
+            value,
+            allowed=_ALLOWED_PORTFOLIO_RISK_TOLERANCES,
+            field_name="risk_tolerance",
+            aliases=_RISK_TOLERANCE_ALIASES,
+        )
+
+    @model_validator(mode="after")
+    def _validate_weight_aliases(self) -> "PortfolioMetadata":
+        if self.weights and self.position_weights:
+            raise ValueError("Provide either weights or position_weights, not both.")
+        return self
+
+
+class PortfolioMetadataInput(PortfolioMetadata):
+    """Strict API input contract for persisted portfolio-state metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _coerce_portfolio_metadata(
+    metadata: Any,
+    *,
+    strict: bool,
+) -> PortfolioMetadata:
+    if metadata is None:
+        return PortfolioMetadata()
+
+    if isinstance(metadata, BaseModel):
+        raw_metadata = metadata.model_dump(exclude_none=True)
+    elif isinstance(metadata, dict):
+        raw_metadata = dict(metadata)
+    else:
+        raise TypeError("Portfolio metadata must serialize from an object payload.")
+
+    if not raw_metadata:
+        return PortfolioMetadata()
+
+    if strict:
+        validated = PortfolioMetadataInput.model_validate(raw_metadata)
+        return PortfolioMetadata.model_validate(
+            validated.model_dump(exclude_none=True)
+        )
+
+    return PortfolioMetadata.model_validate(raw_metadata)
+
+
+def _portfolio_metadata_dict(metadata: Any) -> Dict[str, Any]:
+    return _coerce_portfolio_metadata(metadata, strict=False).model_dump(
+        exclude_none=True
+    )
+
+
+def _extract_portfolio_state(metadata: Any) -> Dict[str, Any]:
+    metadata_dict = _portfolio_metadata_dict(metadata)
+    return {
+        field_name: metadata_dict[field_name]
+        for field_name in ("horizon", "conviction", "risk_tolerance")
+        if metadata_dict.get(field_name) is not None
+    }
+
+
 def _resolve_portfolio_weights(
     tickers: List[str],
-    metadata: Optional[Dict[str, Any]],
+    metadata: Optional[Any],
 ) -> Tuple[Dict[str, float], str, List[str]]:
     normalized_tickers = sorted(str(ticker or "").strip().upper() for ticker in tickers if str(ticker or "").strip())
     if not normalized_tickers:
         return {}, "empty_portfolio", []
 
     fallback_weights = _equal_weights(normalized_tickers)
-    metadata_dict = metadata if isinstance(metadata, dict) else {}
+    metadata_dict = _portfolio_metadata_dict(metadata)
     raw_weights = metadata_dict.get("weights")
     if raw_weights is None:
         raw_weights = metadata_dict.get("position_weights")
@@ -188,7 +352,10 @@ class Portfolio(BaseModel):
     tickers: List[str] = Field(default_factory=list, description="List of ticker symbols")
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: PortfolioMetadata = Field(
+        default_factory=PortfolioMetadata,
+        description="Additional portfolio-state metadata",
+    )
 
 
 class PortfolioPerformance(BaseModel):
@@ -240,10 +407,21 @@ class PortfolioService:
             try:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
-                    self.portfolios = {
-                        portfolio_id: Portfolio(**portfolio_data)
-                        for portfolio_id, portfolio_data in data.items()
-                    }
+                    self.portfolios = {}
+                    for portfolio_id, portfolio_data in data.items():
+                        try:
+                            payload = dict(portfolio_data)
+                            payload["metadata"] = _coerce_portfolio_metadata(
+                                payload.get("metadata"),
+                                strict=False,
+                            )
+                            self.portfolios[portfolio_id] = Portfolio(**payload)
+                        except Exception as exc:
+                            logger.warning(
+                                "Skipping invalid stored portfolio %s: %s",
+                                portfolio_id,
+                                exc,
+                            )
                 logger.info(f"Loaded {len(self.portfolios)} portfolios from storage")
             except Exception as e:
                 logger.error(f"Error loading portfolios: {str(e)}")
@@ -256,7 +434,7 @@ class PortfolioService:
         """Save portfolios to storage"""
         try:
             data = {
-                portfolio_id: portfolio.model_dump()
+                portfolio_id: portfolio.model_dump(exclude_none=True)
                 for portfolio_id, portfolio in self.portfolios.items()
             }
             with open(self.storage_path, 'w') as f:
@@ -294,7 +472,7 @@ class PortfolioService:
             name=name,
             description=description,
             tickers=tickers,
-            metadata=metadata or {}
+            metadata=_coerce_portfolio_metadata(metadata, strict=True),
         )
         
         self.portfolios[portfolio.id] = portfolio
@@ -352,7 +530,7 @@ class PortfolioService:
             # Normalize tickers
             portfolio.tickers = list(set(t.upper() for t in tickers))
         if metadata is not None:
-            portfolio.metadata = metadata
+            portfolio.metadata = _coerce_portfolio_metadata(metadata, strict=True)
         
         portfolio.updated_at = datetime.now(timezone.utc).isoformat()
         
@@ -554,6 +732,7 @@ class PortfolioService:
                 "tickers": tickers,
                 "tickers_count": len(tickers),
                 "updated_at": portfolio.updated_at,
+                "state": _extract_portfolio_state(portfolio.metadata),
             },
             benchmark=benchmark,
             weights=weights,

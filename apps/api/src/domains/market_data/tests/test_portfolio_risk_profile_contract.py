@@ -88,6 +88,43 @@ def test_portfolio_risk_profile_route_delegates_to_endpoint_service(monkeypatch)
     assert callable(captured["get_portfolio_service_fn"])
 
 
+def test_portfolio_create_and_update_validate_profile_metadata(monkeypatch, tmp_path):
+    service = portfolio_app.PortfolioService(
+        storage_path=str(tmp_path / "user_portfolios.json")
+    )
+    monkeypatch.setattr(portfolios_route, "get_portfolio_service", lambda: service)
+
+    create_response = _client().post(
+        "/api/portfolios",
+        json={
+            "name": "Retirement",
+            "tickers": ["msft", "aapl"],
+            "metadata": {
+                "weights": {"msft": 70, "aapl": 30},
+                "horizon": "1Y",
+                "conviction": "HIGH",
+                "risk_tolerance": "moderate",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()["data"]
+    assert created["metadata"] == {
+        "weights": {"MSFT": 70.0, "AAPL": 30.0},
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+
+    update_response = _client().put(
+        f"/api/portfolios/{created['id']}",
+        json={"metadata": {"unknown_flag": True}},
+    )
+
+    assert update_response.status_code == 422
+
+
 def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tmp_path):
     service = portfolio_app.PortfolioService(
         storage_path=str(tmp_path / "user_portfolios.json")
@@ -95,7 +132,12 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     portfolio = service.create_portfolio(
         name="Core",
         tickers=["MSFT", "AAPL"],
-        metadata={"weights": {"MSFT": 70, "AAPL": 30}},
+        metadata={
+            "weights": {"MSFT": 70, "AAPL": 30},
+            "horizon": "1y",
+            "conviction": "medium",
+            "risk_tolerance": "moderate",
+        },
     )
 
     class FakePerformanceService:
@@ -143,6 +185,11 @@ def test_portfolio_risk_profile_endpoint_returns_stable_contract(monkeypatch, tm
     assert payload["freshness"] == data["freshness"]
     assert data["portfolio"]["id"] == portfolio.id
     assert data["portfolio"]["tickers_count"] == 2
+    assert data["portfolio"]["state"] == {
+        "horizon": "1y",
+        "conviction": "medium",
+        "risk_tolerance": "moderate",
+    }
     assert data["risk_profile"] == "balanced"
     assert data["risk_level"] == "medium"
     assert data["risk"]["level"] == "medium"

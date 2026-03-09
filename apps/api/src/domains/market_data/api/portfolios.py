@@ -45,6 +45,7 @@ except Exception:  # pragma: no cover
 
 get_portfolio_service = _portfolio_module.get_portfolio_service
 Portfolio = _portfolio_module.Portfolio
+PortfolioMetadataInput = _portfolio_module.PortfolioMetadataInput
 PortfolioPerformance = _portfolio_module.PortfolioPerformance
 PortfolioRiskProfile = _portfolio_module.PortfolioRiskProfile
 
@@ -125,8 +126,9 @@ class PortfolioCreateRequest(BaseModel):
         description="Initial tickers (uppercased automatically)",
         example=["AAPL", "MSFT", "NVDA"],
     )
-    metadata: Optional[Dict[str, Any]] = Field(
-        default=None, description="Arbitrary metadata stored alongside the portfolio"
+    metadata: Optional[PortfolioMetadataInput] = Field(
+        default=None,
+        description="Validated portfolio-state metadata stored alongside the portfolio",
     )
 
 
@@ -138,8 +140,9 @@ class PortfolioUpdateRequest(BaseModel):
     tickers: Optional[List[str]] = Field(
         None, description="Full replacement list of tickers"
     )
-    metadata: Optional[Dict[str, Any]] = Field(
-        None, description="Replacement metadata object"
+    metadata: Optional[PortfolioMetadataInput] = Field(
+        None,
+        description="Replacement validated metadata object",
     )
 
 
@@ -152,7 +155,7 @@ class TickersRequest(BaseModel):
 
 
 def _serialize_portfolio(portfolio: Portfolio) -> Dict[str, Any]:
-    return portfolio.model_dump()
+    return portfolio.model_dump(exclude_none=True)
 
 
 def _serialize_performance(perf: PortfolioPerformance) -> Dict[str, Any]:
