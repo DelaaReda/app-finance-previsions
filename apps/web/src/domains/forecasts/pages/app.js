@@ -2663,19 +2663,24 @@ function applyLiveDashboardData(payload = {}) {
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
   const rawCopilotStart = data.copilotStart || data.copilot_start || window.copilotStart || null;
+  const copilotScopeTickers = Array.isArray(rawCopilotStart?.scope_tickers)
+    ? rawCopilotStart.scope_tickers
+    : toArray(data.scope_tickers, []);
   const copilotStartPayload = isObject(rawCopilotStart)
     ? {
       ...rawCopilotStart,
-      scope_tickers: Array.isArray(rawCopilotStart.scope_tickers)
-        ? rawCopilotStart.scope_tickers
-        : data.scope_tickers
+      scope_tickers: copilotScopeTickers
     }
     : rawCopilotStart;
   const copilotStart = sanitizeCopilotStart(copilotStartPayload);
-  const copilotStartState = buildCopilotStartState({
-    copilot_start: copilotStart,
-    scope_tickers: copilotStart.scope_tickers
-  });
+  const copilotStartState = rawCopilotStart
+    ? buildCopilotStartState({
+      data: {
+        copilot_start: copilotStart,
+        scope_tickers: copilotScopeTickers
+      }
+    })
+    : null;
   window.copilotStart = copilotStart;
   
   // Map story data from API (window.storyData set by apiConnector.js)
@@ -2707,7 +2712,7 @@ function applyLiveDashboardData(payload = {}) {
   }
 
   renderLiveDashboardWidgets();
-  if (rawCopilotStart) {
+  if (copilotStartState) {
     renderHeroCopilotBrief(copilotStartState);
   }
 }

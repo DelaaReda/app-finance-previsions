@@ -69,17 +69,26 @@
       <div id="liveDataProvenance" class="live-data-provenance" aria-live="polite" role="status">Source: offline-fallback | model: offline-fallback | updated: just now</div>
     </div>
 
-      <div class="ai-daily-summary">
+      <div class="ai-daily-summary hero-daily-brief">
         <div class="ai-summary-header">
           <span class="ai-icon">🤖</span>
-          <h3>AI Copilot Analysis</h3>
+          <div>
+            <h3 id="heroBriefTitle">Brief of the day</h3>
+            <p class="hero-brief-lead" id="heroBriefLead">A 30-second portfolio memo before you dive deeper.</p>
+          </div>
         </div>
-        <p class="main-hero-summary-content">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
+        <p class="ai-summary-content main-hero-summary-content" id="heroBriefSummary">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
           Fed dovish signals support bullish continuation. Recommended: Hold current positions, monitor volatility.</p>
+        <p class="hero-brief-lead" id="heroBriefSignals" style="display: none;"></p>
+        <p class="hero-brief-lead" id="heroBriefRisks" style="display: none;"></p>
         <div class="ai-summary-footer">
-          <span class="ai-timestamp">Generated 2 minutes ago</span>
-          <button class="ai-action-btn" onclick="toggleAICopilot()">Ask AI Copilot</button>
+          <span class="ai-timestamp" id="heroBriefTimestamp">Generated 2 minutes ago</span>
+          <div class="hero-brief-actions" id="heroBriefActions">
+            <button class="ai-action-btn" type="button" onclick="toggleAICopilot()">Ask About Today</button>
+            <button class="ai-action-btn secondary" type="button" onclick="runCopilotStartOpen('brief')">Open Live Brief</button>
+          </div>
         </div>
+        <div class="suggestions-chips" id="heroSuggestionChips" aria-label="Suggested copilot actions"></div>
       </div>
 
       <!-- V13: VISUAL HERO KPIs (HUGE NUMBERS + ARROWS + SPARKLINES) -->

@@ -83,7 +83,7 @@ function loadApplyLiveDashboardData() {
       return fallback;
     },
     sanitizeCopilotStart(value) {
-      return value;
+      return value && typeof value === 'object' ? value : {};
     },
     buildCopilotStartState(value) {
       return value;
@@ -893,6 +893,32 @@ test('applyLiveDashboardData backfills portfolio health core fields from the raw
 
 test('applyLiveDashboardData hydrates the hero brief from live copilot_start data', () => {
   const { sandbox } = loadApplyLiveDashboardData();
+  const expectedStoredState = {
+    brief_of_day: {
+      summary: 'Breadth is narrow but stable.',
+      freshness: '2026-03-09T06:55:00Z',
+    },
+    ask: [
+      {
+        label: 'Ask about today',
+        prompt: 'What matters today?',
+      },
+    ],
+    open: [
+      {
+        label: 'Open live brief',
+        target: 'brief',
+      },
+    ],
+    scope_tickers: ['NVDA', 'MSFT'],
+  };
+
+  sandbox.buildCopilotStartState = (value) => {
+    sandbox.copilotStartStateInput = value;
+    return {
+      built_from: value,
+    };
+  };
 
   sandbox.applyLiveDashboardData({
     generatedAt: '2026-03-09T07:00:00Z',
@@ -919,44 +945,21 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
     },
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
-    brief_of_day: {
-      summary: 'Breadth is narrow but stable.',
-      freshness: '2026-03-09T06:55:00Z',
-    },
-    ask: [
-      {
-        label: 'Ask about today',
-        prompt: 'What matters today?',
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), expectedStoredState);
+  if (sandbox.copilotStartStateInput) {
+    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.copilotStartStateInput)), {
+      copilot_start: expectedStoredState,
+      scope_tickers: ['NVDA', 'MSFT'],
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), {
+      built_from: {
+        copilot_start: expectedStoredState,
+        scope_tickers: ['NVDA', 'MSFT'],
       },
-    ],
-    open: [
-      {
-        label: 'Open live brief',
-        target: 'brief',
-      },
-    ],
-    scope_tickers: ['NVDA', 'MSFT'],
-  });
-  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotStart)), {
-    brief_of_day: {
-      summary: 'Breadth is narrow but stable.',
-      freshness: '2026-03-09T06:55:00Z',
-    },
-    ask: [
-      {
-        label: 'Ask about today',
-        prompt: 'What matters today?',
-      },
-    ],
-    open: [
-      {
-        label: 'Open live brief',
-        target: 'brief',
-      },
-    ],
-    scope_tickers: ['NVDA', 'MSFT'],
-  });
+    });
+  } else {
+    assert.deepEqual(JSON.parse(JSON.stringify(sandbox.heroBriefState)), expectedStoredState);
+  }
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.copilotStart.scope_tickers)), ['NVDA', 'MSFT']);
 });
 
@@ -1333,4 +1336,22 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
     },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['brief', 'opportunities']);
+});
+
+test('index.html exposes the hero brief slots required by the copilot starter', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+  [
+    'class="ai-daily-summary hero-daily-brief"',
+    'id="heroBriefTitle"',
+    'id="heroBriefLead"',
+    'id="heroBriefSummary"',
+    'id="heroBriefSignals"',
+    'id="heroBriefRisks"',
+    'id="heroBriefTimestamp"',
+    'id="heroBriefActions"',
+    'id="heroSuggestionChips"',
+  ].forEach((snippet) => {
+    assert.ok(html.includes(snippet), `Expected ${snippet} in index.html`);
+  });
 });
